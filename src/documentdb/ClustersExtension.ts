@@ -104,6 +104,7 @@ import { PlaygroundService } from './playground/PlaygroundService';
 import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
 import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
 import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
+import { PlaygroundSnippetSessionManager } from './query-language/playground-completions/PlaygroundSnippetSessionManager';
 import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
@@ -278,6 +279,11 @@ export class ClustersExtension implements vscode.Disposable {
                 // Provides inline docs for query operators, BSON constructors,
                 // and field names. Method hovers are handled by Layer 1 (TS Plugin).
                 ext.context.subscriptions.push(PlaygroundHoverProvider.register());
+
+                // Cancel snippet sessions when delimiter characters are typed in playground files.
+                // Mirrors the collection view's cancelSnippetSession behavior so that typing
+                // `,`, `}`, or `]` exits the tab-stop instead of leaving a "ghost selection".
+                ext.context.subscriptions.push(PlaygroundSnippetSessionManager.register());
 
                 // Ensure the TypeScript extension recognizes our plugin and restarts
                 // its TS server to load it. The TS extension may have started before our
