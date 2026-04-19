@@ -61,6 +61,9 @@ module.exports = (env, { mode }) => {
                 socks: 'commonjs socks',
                 aws4: 'commonjs aws4',
                 'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
+                /* Kubernetes client-node optional dependencies */
+                bufferutil: 'commonjs bufferutil',
+                'utf-8-validate': 'commonjs utf-8-validate',
                 /* @mongosh transitive optional dependencies */
                 electron: 'commonjs electron',
                 'os-dns-native': 'commonjs os-dns-native',

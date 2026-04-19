@@ -163,6 +163,7 @@
     "@azure/identity": "~4.13.0",
     "@fluentui/react-components": "~9.73.3",
     "@fluentui/react-icons": "~2.0.320",
+    "@kubernetes/client-node": "^1.4.0",
     "@microsoft/vscode-azext-azureauth": "~4.1.1",
     "@microsoft/vscode-azext-azureutils": "~3.4.5",
     "@microsoft/vscode-azext-utils": "~3.3.1",
@@ -793,19 +794,19 @@
         {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !(viewItem =~ /\\bkubernetesServiceLeaf\\b/i)",
           "group": "1@1"
         },
         {
           "//": "Copy connection string",
           "command": "vscode-documentdb.command.copyConnectionString",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !(viewItem =~ /\\bkubernetesServiceLeaf\\b/i)",
           "group": "2@1"
         },
         {
           "//": "[Account] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !(viewItem =~ /\\bkubernetesServiceLeaf\\b/i)",
           "group": "5@1"
         },
         {
@@ -865,7 +866,7 @@
         {
           "//": "[Cluster] Data Migration",
           "command": "vscode-documentdb.command.accessDataMigrationServices",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !(viewItem =~ /\\bkubernetesServiceLeaf\\b/i)",
           "group": "2@2"
         },
         {

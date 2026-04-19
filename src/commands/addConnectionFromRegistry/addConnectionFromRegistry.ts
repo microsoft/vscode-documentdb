@@ -65,7 +65,9 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
 
     return withConnectionsViewProgress(async () => {
         const credentials = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
-            context.telemetry.properties.experience = node.experience.api;
+            // Use optional chaining — node may be duck-typed (e.g. KubernetesServiceItem)
+            // and not a true ClusterItemBase subclass
+            context.telemetry.properties.experience = node.experience?.api ?? 'unknown';
 
             return node.getCredentials();
         });
@@ -153,6 +155,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
                 type: ItemType.Connection,
                 api: API.DocumentDB,
                 availableAuthMethods: credentials.availableAuthMethods,
+                selectedAuthMethod: credentials.selectedAuthMethod,
             },
             secrets: {
                 connectionString: parsedCS.toString(),
