@@ -167,16 +167,36 @@ describe('normalizeDirectCommands', () => {
         });
 
         it('rewrites use in the middle of multi-line code', () => {
-            // Normalization is scoped to the first non-empty statement line only,
-            // so a `use` that appears after other statements is left unchanged.
-            // This avoids collateral rewrites inside template literals, multi-line
-            // strings, or comment blocks that happen to contain "use <name>".
+            // With the AST-based implementation the rewrite covers every
+            // top-level `use`/`show` statement, not just the first line.
             const input = 'db.test.find()\nuse otherdb\ndb.other.find()';
-            expect(normalizeDirectCommands(input)).toBe(input);
+            const expected = 'db.test.find()\nuse("otherdb");\ndb.other.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites multiple top-level use/show statements in one block', () => {
+            const input = 'show dbs\nuse mydb\ndb.test.find()\nuse otherdb\ndb.other.find()';
+            const expected = 'show("dbs");\nuse("mydb");\ndb.test.find()\nuse("otherdb");\ndb.other.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
         });
 
         it('leaves matching lines inside template literals unchanged', () => {
             const input = 'const s = `\nuse mydb\n`;\nconsole.log(s)';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves matching lines inside block comments unchanged', () => {
+            const input = '/* use mydb\n   show dbs */\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves matching text inside line comments unchanged', () => {
+            const input = '// use mydb\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves matching text inside regex literals unchanged', () => {
+            const input = 'const x = /use mydb/;\ndb.test.find()';
             expect(normalizeDirectCommands(input)).toBe(input);
         });
 
