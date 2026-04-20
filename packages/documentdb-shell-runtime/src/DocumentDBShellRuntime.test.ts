@@ -159,8 +159,22 @@ describe('normalizeDirectCommands', () => {
         });
 
         it('rewrites use in the middle of multi-line code', () => {
+            // Normalization is scoped to the first non-empty statement line only,
+            // so a `use` that appears after other statements is left unchanged.
+            // This avoids collateral rewrites inside template literals, multi-line
+            // strings, or comment blocks that happen to contain "use <name>".
             const input = 'db.test.find()\nuse otherdb\ndb.other.find()';
-            const expected = 'db.test.find()\nuse("otherdb")\ndb.other.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves matching lines inside template literals unchanged', () => {
+            const input = 'const s = `\nuse mydb\n`;\nconsole.log(s)';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('rewrites first line even when preceded by blank lines', () => {
+            const input = '\n\n  use mydb\ndb.test.find()';
+            const expected = '\n\n  use("mydb")\ndb.test.find()';
             expect(normalizeDirectCommands(input)).toBe(expected);
         });
     });

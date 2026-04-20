@@ -19,18 +19,17 @@ import {
 } from './types';
 
 /**
- * Matches bare `use <name>` or `show <name>` direct shell commands on a line.
+ * Matches a bare `use <name>` or `show <name>` direct shell command on a
+ * single line (no `^`/`$` anchors — the caller applies this to an isolated
+ * line that has already been trimmed of its leading whitespace).
  *
  * These commands short-circuit the evaluation pipeline when they appear as the
  * first token of multi-line input, consuming the entire block and silently
  * discarding subsequent statements. Rewriting them to function-call form
  * (`use("name")` / `show("name")`) bypasses the short-circuit and lets the
  * full block go through the async rewriter and vm.runInContext().
- *
- * Pattern: start-of-line, optional whitespace, `use` or `show`, one or more
- * whitespace chars, a non-paren argument, optional trailing semicolon.
  */
-const BARE_DIRECT_COMMAND_RE = /^(\s*)(use|show)\s+([^(\s]\S*?)\s*;?\s*$/gm;
+const BARE_DIRECT_COMMAND_RE = /^(use|show)\s+([^(\s]\S*?)\s*;?\s*$/;
 
 const DEFAULT_OPTIONS: ShellRuntimeOptions = {
     productName: 'DocumentDB for VS Code',
@@ -321,8 +320,9 @@ export class DocumentDBShellRuntime {
 }
 
 /**
- * Rewrites bare `use <name>` and `show <name>` direct shell commands into
- * function-call form (`use("<name>")` / `show("<name")`).
+ * Rewrites a bare `use <name>` / `show <name>` direct shell command into
+ * function-call form (`use("<name>")` / `show("<name>")`) when it appears as
+ * the **first non-empty line** of a multi-line block.
  *
  * Direct shell commands like `use mydb` are detected by the evaluation
  * pipeline as special tokens. When they appear as the first line of a
@@ -330,6 +330,11 @@ export class DocumentDBShellRuntime {
  * and silently discards all subsequent statements. Converting to
  * function-call form avoids this short-circuit so the entire block is
  * evaluated normally.
+ *
+ * The rewrite is intentionally scoped to the first non-empty line only
+ * — that is the single observed failure mode. Scoping avoids collateral
+ * edits to lines that happen to match the pattern inside template literals,
+ * multi-line strings, or block comments elsewhere in the input.
  *
  * Single-line inputs (e.g. interactive shell) are left unchanged — the
  * direct command path works correctly when there is only one statement.
@@ -339,7 +344,28 @@ export function normalizeDirectCommands(code: string): string {
         return code;
     }
 
-    return code.replace(BARE_DIRECT_COMMAND_RE, (_match, indent: string, cmd: string, arg: string) => {
-        return `${indent}${cmd}(${JSON.stringify(arg)})`;
+    const lines = code.split('\n');
+    const firstIdx = lines.findIndex((line) => line.trim().length > 0);
+    if (firstIdx === -1) {
+        return code;
+    }
+
+    const original = lines[firstIdx];
+    // Split leading whitespace from the statement text so the regex can
+    // match purely on the command form.
+    const wsMatch = original.match(/^(\s*)(.*)$/);
+    if (!wsMatch) {
+        return code;
+    }
+    const [, indent, body] = wsMatch;
+
+    const rewritten = body.replace(BARE_DIRECT_COMMAND_RE, (_match, cmd: string, arg: string) => {
+        return `${cmd}(${JSON.stringify(arg)})`;
     });
+    if (rewritten === body) {
+        return code;
+    }
+
+    lines[firstIdx] = `${indent}${rewritten}`;
+    return lines.join('\n');
 }
