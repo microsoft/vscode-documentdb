@@ -212,7 +212,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should detect settings action line and return a settings link', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
-            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.timeout]`;
+            const actionLine = `${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -222,7 +222,7 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
-                settingKey: 'documentDB.timeout',
+                settingKey: 'documentDB.shell.initTimeout',
             });
         });
 
@@ -246,7 +246,7 @@ describe('ShellTerminalLinkProvider', () => {
         it('should not match settings line for non-shell terminals', () => {
             const context = {
                 terminal: { name: 'bash' } as unknown as vscode.Terminal,
-                line: `${SETTINGS_ACTION_PREFIX}[documentDB.timeout]`,
+                line: `${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]`,
             } as vscode.TerminalLinkContext;
 
             const links = provider.provideTerminalLinks(context);
@@ -260,14 +260,14 @@ describe('ShellTerminalLinkProvider', () => {
                 linkType: 'settings' as const,
                 startIndex: 0,
                 length: 40,
-                settingKey: 'documentDB.timeout',
+                settingKey: 'documentDB.shell.initTimeout',
             };
 
             provider.handleTerminalLink(link as Parameters<typeof provider.handleTerminalLink>[0]);
 
             return new Promise<void>((resolve) => {
                 setTimeout(() => {
-                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.timeout');
+                    expect(spy).toHaveBeenCalledWith('workbench.action.openSettings', 'documentDB.shell.initTimeout');
                     spy.mockRestore();
                     resolve();
                 }, 50);
