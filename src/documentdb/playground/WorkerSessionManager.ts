@@ -211,7 +211,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         // If init fails (bad credentials, unreachable host, etc.), tear down
         // the worker so the next call can respawn cleanly.
         try {
-            await this.sendRequest<void>(initMsg, initTimeoutMs);
+            await this.sendRequest<void>(initMsg, initTimeoutMs, 'documentDB.shell.initTimeout');
             this._workerState = 'ready';
         } catch (error) {
             this.terminateWorker();
@@ -229,8 +229,12 @@ export class WorkerSessionManager implements vscode.Disposable {
      *   Used for init and shutdown messages. Eval messages have no IPC timeout—
      *   the user cancels via Cancel button or Ctrl+C, and query-level timeouts
      *   are enforced by the database via maxTimeMS.
+     * @param timeoutSettingKey - Optional VS Code setting key used when building
+     *   the user-facing `SettingsHintError` on timeout. When omitted, a plain
+     *   `Error` is thrown (appropriate for internal/swallowed paths like
+     *   shutdown where no actionable user setting exists).
      */
-    private sendRequest<T>(msg: MainToWorkerMessage, timeoutMs?: number): Promise<T> {
+    private sendRequest<T>(msg: MainToWorkerMessage, timeoutMs?: number, timeoutSettingKey?: string): Promise<T> {
         if (!this._worker) {
             return Promise.reject(new Error(l10n.t('Worker is not running')));
         }
@@ -252,12 +256,18 @@ export class WorkerSessionManager implements vscode.Disposable {
                     if (pending) {
                         this._pendingRequests.delete(requestId);
                         this.killWorker();
+                        const message = l10n.t(
+                            'Operation timed out after {0} seconds.',
+                            String(Math.round(timeoutMs / 1000)),
+                        );
                         pending.reject(
-                            new SettingsHintError(
-                                l10n.t('Operation timed out after {0} seconds.', String(Math.round(timeoutMs / 1000))),
-                                'documentDB.shell.initTimeout',
-                                l10n.t('You can increase the timeout in Settings:'),
-                            ),
+                            timeoutSettingKey
+                                ? new SettingsHintError(
+                                      message,
+                                      timeoutSettingKey,
+                                      l10n.t('You can increase the timeout in Settings:'),
+                                  )
+                                : new Error(message),
                         );
                     }
                 }, timeoutMs);
