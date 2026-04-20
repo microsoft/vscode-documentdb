@@ -18,6 +18,20 @@ import {
     type ShellRuntimeOptions,
 } from './types';
 
+/**
+ * Matches bare `use <name>` or `show <name>` direct shell commands on a line.
+ *
+ * These commands short-circuit the evaluation pipeline when they appear as the
+ * first token of multi-line input, consuming the entire block and silently
+ * discarding subsequent statements. Rewriting them to function-call form
+ * (`use("name")` / `show("name")`) bypasses the short-circuit and lets the
+ * full block go through the async rewriter and vm.runInContext().
+ *
+ * Pattern: start-of-line, optional whitespace, `use` or `show`, one or more
+ * whitespace chars, a non-paren argument, optional trailing semicolon.
+ */
+const BARE_DIRECT_COMMAND_RE = /^(\s*)(use|show)\s+([^(\s]\S*?)\s*;?\s*$/gm;
+
 const DEFAULT_OPTIONS: ShellRuntimeOptions = {
     productName: 'DocumentDB for VS Code',
     productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
@@ -103,6 +117,13 @@ export class DocumentDBShellRuntime {
         if (intercepted) {
             return intercepted;
         }
+
+        // Normalize bare direct commands (`use dbName`, `show dbs`) into function-call
+        // form (`use("dbName")`, `show("dbs")`) so they go through the async rewriter
+        // instead of short-circuiting. Without this, a bare `use` as the first token
+        // of a multi-line block consumes the entire input and silently drops subsequent
+        // statements.
+        code = normalizeDirectCommands(code);
 
         this.log(
             'trace',
@@ -297,4 +318,28 @@ export class DocumentDBShellRuntime {
     private log(level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string): void {
         this._callbacks.onLog?.(level, message);
     }
+}
+
+/**
+ * Rewrites bare `use <name>` and `show <name>` direct shell commands into
+ * function-call form (`use("<name>")` / `show("<name")`).
+ *
+ * Direct shell commands like `use mydb` are detected by the evaluation
+ * pipeline as special tokens. When they appear as the first line of a
+ * multi-line code block, the pipeline processes only the direct command
+ * and silently discards all subsequent statements. Converting to
+ * function-call form avoids this short-circuit so the entire block is
+ * evaluated normally.
+ *
+ * Single-line inputs (e.g. interactive shell) are left unchanged — the
+ * direct command path works correctly when there is only one statement.
+ */
+export function normalizeDirectCommands(code: string): string {
+    if (!code.includes('\n')) {
+        return code;
+    }
+
+    return code.replace(BARE_DIRECT_COMMAND_RE, (_match, indent: string, cmd: string, arg: string) => {
+        return `${indent}${cmd}(${JSON.stringify(arg)})`;
+    });
 }

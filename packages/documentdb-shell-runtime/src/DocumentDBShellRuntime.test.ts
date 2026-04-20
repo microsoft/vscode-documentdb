@@ -5,7 +5,7 @@
 
 import { type MongoClient } from 'mongodb';
 import { DocumentDBServiceProvider } from './DocumentDBServiceProvider';
-import { DocumentDBShellRuntime } from './DocumentDBShellRuntime';
+import { DocumentDBShellRuntime, normalizeDirectCommands } from './DocumentDBShellRuntime';
 
 // Mock @mongosh modules to avoid needing a real database connection
 jest.mock('@mongosh/shell-api', () => ({
@@ -116,6 +116,91 @@ describe('DocumentDBShellRuntime', () => {
             runtime.dispose();
 
             await expect(runtime.evaluate('help', 'testDb')).rejects.toThrow('Shell runtime has been disposed');
+        });
+    });
+});
+
+describe('normalizeDirectCommands', () => {
+    describe('single-line input (no transformation)', () => {
+        it('leaves bare use unchanged', () => {
+            expect(normalizeDirectCommands('use mydb')).toBe('use mydb');
+        });
+
+        it('leaves bare show unchanged', () => {
+            expect(normalizeDirectCommands('show dbs')).toBe('show dbs');
+        });
+
+        it('leaves function-call form unchanged', () => {
+            expect(normalizeDirectCommands('use("mydb")')).toBe('use("mydb")');
+        });
+
+        it('leaves regular code unchanged', () => {
+            expect(normalizeDirectCommands('db.test.find()')).toBe('db.test.find()');
+        });
+    });
+
+    describe('multi-line input with bare use', () => {
+        it('rewrites bare use followed by a query', () => {
+            const input = 'use mydb\ndb.test.find()';
+            const expected = 'use("mydb")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites bare use with trailing semicolon', () => {
+            const input = 'use mydb;\ndb.test.find()';
+            const expected = 'use("mydb")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites bare use with leading whitespace', () => {
+            const input = '  use mydb\ndb.test.find()';
+            const expected = '  use("mydb")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites use in the middle of multi-line code', () => {
+            const input = 'db.test.find()\nuse otherdb\ndb.other.find()';
+            const expected = 'db.test.find()\nuse("otherdb")\ndb.other.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+    });
+
+    describe('multi-line input with bare show', () => {
+        it('rewrites bare show followed by a query', () => {
+            const input = 'show dbs\ndb.test.find()';
+            const expected = 'show("dbs")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites bare show collections', () => {
+            const input = 'show collections\ndb.test.find()';
+            const expected = 'show("collections")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+    });
+
+    describe('does not transform function-call form', () => {
+        it('leaves use("name") unchanged in multi-line', () => {
+            const input = 'use("mydb")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it("leaves use('name') unchanged in multi-line", () => {
+            const input = "use('mydb')\ndb.test.find()";
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves show("dbs") unchanged in multi-line', () => {
+            const input = 'show("dbs")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+    });
+
+    describe('escapes special characters in database names', () => {
+        it('escapes quotes in database name', () => {
+            const input = 'use my"db\ndb.test.find()';
+            const expected = 'use("my\\"db")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
         });
     });
 });

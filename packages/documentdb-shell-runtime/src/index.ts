@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 // Main runtime
-export { DocumentDBShellRuntime } from './DocumentDBShellRuntime';
+export { DocumentDBShellRuntime, normalizeDirectCommands } from './DocumentDBShellRuntime';
 
 // Components (exposed for advanced usage and testing)
 export { CommandInterceptor } from './CommandInterceptor';
