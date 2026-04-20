@@ -360,7 +360,11 @@ export function normalizeDirectCommands(code: string): string {
     const [, indent, body] = wsMatch;
 
     const rewritten = body.replace(BARE_DIRECT_COMMAND_RE, (_match, cmd: string, arg: string) => {
-        return `${cmd}(${JSON.stringify(arg)})`;
+        // Always append an explicit `;` so the rewritten statement is
+        // ASI-safe. Without it, a following line that begins with `[`,
+        // `(`, `+`, `-`, or `/` would bind to the call expression (e.g.
+        // `use("mydb")\n[1,2,3]...` parses as `use("mydb")[1,2,3]...`).
+        return `${cmd}(${JSON.stringify(arg)});`;
     });
     if (rewritten === body) {
         return code;

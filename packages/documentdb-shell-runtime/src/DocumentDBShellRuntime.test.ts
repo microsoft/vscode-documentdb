@@ -142,19 +142,27 @@ describe('normalizeDirectCommands', () => {
     describe('multi-line input with bare use', () => {
         it('rewrites bare use followed by a query', () => {
             const input = 'use mydb\ndb.test.find()';
-            const expected = 'use("mydb")\ndb.test.find()';
+            const expected = 'use("mydb");\ndb.test.find()';
             expect(normalizeDirectCommands(input)).toBe(expected);
         });
 
         it('rewrites bare use with trailing semicolon', () => {
             const input = 'use mydb;\ndb.test.find()';
-            const expected = 'use("mydb")\ndb.test.find()';
+            const expected = 'use("mydb");\ndb.test.find()';
             expect(normalizeDirectCommands(input)).toBe(expected);
         });
 
         it('rewrites bare use with leading whitespace', () => {
             const input = '  use mydb\ndb.test.find()';
-            const expected = '  use("mydb")\ndb.test.find()';
+            const expected = '  use("mydb");\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('appends a trailing semicolon to neutralize ASI hazards', () => {
+            // Without the trailing `;`, the next line starting with `[`
+            // would bind to the call expression as member access.
+            const input = 'use mydb\n[1, 2, 3].forEach((x) => x)';
+            const expected = 'use("mydb");\n[1, 2, 3].forEach((x) => x)';
             expect(normalizeDirectCommands(input)).toBe(expected);
         });
 
@@ -174,7 +182,7 @@ describe('normalizeDirectCommands', () => {
 
         it('rewrites first line even when preceded by blank lines', () => {
             const input = '\n\n  use mydb\ndb.test.find()';
-            const expected = '\n\n  use("mydb")\ndb.test.find()';
+            const expected = '\n\n  use("mydb");\ndb.test.find()';
             expect(normalizeDirectCommands(input)).toBe(expected);
         });
     });
@@ -182,13 +190,13 @@ describe('normalizeDirectCommands', () => {
     describe('multi-line input with bare show', () => {
         it('rewrites bare show followed by a query', () => {
             const input = 'show dbs\ndb.test.find()';
-            const expected = 'show("dbs")\ndb.test.find()';
+            const expected = 'show("dbs");\ndb.test.find()';
             expect(normalizeDirectCommands(input)).toBe(expected);
         });
 
         it('rewrites bare show collections', () => {
             const input = 'show collections\ndb.test.find()';
-            const expected = 'show("collections")\ndb.test.find()';
+            const expected = 'show("collections");\ndb.test.find()';
             expect(normalizeDirectCommands(input)).toBe(expected);
         });
     });
@@ -213,7 +221,7 @@ describe('normalizeDirectCommands', () => {
     describe('escapes special characters in database names', () => {
         it('escapes quotes in database name', () => {
             const input = 'use my"db\ndb.test.find()';
-            const expected = 'use("my\\"db")\ndb.test.find()';
+            const expected = 'use("my\\"db");\ndb.test.find()';
             expect(normalizeDirectCommands(input)).toBe(expected);
         });
     });
