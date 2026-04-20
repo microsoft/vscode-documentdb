@@ -70,7 +70,7 @@ export function extractErrorCode(errorMessage: string): ErrorCodeExtraction {
  * Formats shell evaluation results for terminal output.
  *
  * Handles EJSON deserialization, pretty-printing, and optional ANSI coloring
- * based on the `documentDB.shell.display.colorOutput` setting.
+ * based on the `documentDB.shell.display.colorSupport` setting.
  */
 export class ShellOutputFormatter {
     /**
@@ -330,6 +330,6 @@ export class ShellOutputFormatter {
 
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
-        return config.get<boolean>('documentDB.shell.display.colorOutput', true);
+        return config.get<boolean>('documentDB.shell.display.colorSupport', true);
     }
 }

@@ -243,7 +243,7 @@ describe('Shell Syntax Highlighting (integrated)', () => {
                 onLine: () => {},
                 onInterrupt: () => {},
                 onContinuation: () => {},
-                // Simulates the PTY callback when documentDB.shell.display.colorOutput = false
+                // Simulates the PTY callback when documentDB.shell.display.colorSupport = false
                 colorize: (input: string) => input,
             };
 

@@ -1065,6 +1065,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
-        return config.get<boolean>('documentDB.shell.display.colorOutput', true);
+        return config.get<boolean>('documentDB.shell.display.colorSupport', true);
     }
 }

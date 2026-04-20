@@ -1173,9 +1173,9 @@
             "default": 60,
             "minimum": 5
           },
-          "documentDB.shell.display.colorOutput": {
+          "documentDB.shell.display.colorSupport": {
             "type": "boolean",
-            "description": "Enable ANSI color-coded JSON output in the Interactive Shell. Disable for accessibility (screen readers) or piped output.",
+            "description": "Enable ANSI color support in the Interactive Shell for syntax highlighting and formatted output. Disable for accessibility (screen readers) or piped output.",
             "default": true
           },
           "documentDB.shell.display.autocompletion": {

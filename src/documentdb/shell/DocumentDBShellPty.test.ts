@@ -58,7 +58,7 @@ describe('DocumentDBShellPty', () => {
             return {
                 get: jest.fn((_key: string, defaultValue?: unknown) => {
                     if (section === undefined || section === '') {
-                        if (_key === 'documentDB.shell.display.colorOutput') {
+                        if (_key === 'documentDB.shell.display.colorSupport') {
                             return false; // Disable colors for easier test assertions
                         }
                     }
@@ -601,7 +601,7 @@ describe('DocumentDBShellPty', () => {
                             return vscodePasteWarning;
                         }
                         if (section === undefined || section === '') {
-                            if (_key === 'documentDB.shell.display.colorOutput') {
+                            if (_key === 'documentDB.shell.display.colorSupport') {
                                 return false;
                             }
                         }

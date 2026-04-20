@@ -17,7 +17,7 @@ describe('ShellOutputFormatter', () => {
         // Default: color enabled
         jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
             get: jest.fn((_key: string, defaultValue?: unknown) => {
-                if (_key === 'documentDB.shell.display.colorOutput') {
+                if (_key === 'documentDB.shell.display.colorSupport') {
                     return true;
                 }
                 return defaultValue;
@@ -169,7 +169,7 @@ describe('ShellOutputFormatter', () => {
         beforeEach(() => {
             jest.spyOn(vscode.workspace, 'getConfiguration').mockReturnValue({
                 get: jest.fn((_key: string, defaultValue?: unknown) => {
-                    if (_key === 'documentDB.shell.display.colorOutput') {
+                    if (_key === 'documentDB.shell.display.colorSupport') {
                         return false;
                     }
                     return defaultValue;
