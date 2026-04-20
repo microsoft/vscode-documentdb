@@ -138,7 +138,7 @@ const PLAYGROUND_LINE_PATTERN = /(?:\x1b\[\d+m)*\u{2197} Query Playground \[([^\
  * Regex to match the "Open Settings" action line.
  *
  * Captures:
- * - Group 1: the VS Code setting key (e.g., `documentDB.timeout`)
+ * - Group 1: the VS Code setting key (e.g., `documentDB.shell.initTimeout`)
  *
  * The pattern accounts for optional ANSI color codes that wrap the line.
  * The format is locale-independent.

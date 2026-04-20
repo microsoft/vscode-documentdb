@@ -10,6 +10,25 @@ import { extractErrorCode } from '../shell/ShellOutputFormatter';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
 
 /**
+ * Strips ANSI escape sequences (SGR codes) from a string.
+ * Error messages from the evaluation pipeline may contain terminal color codes
+ * that render correctly in the interactive shell (PTY) but appear as raw
+ * escape characters in the playground's read-only output panel.
+ */
+// eslint-disable-next-line no-control-regex
+const ANSI_SGR_RE = /\x1b\[[0-9;]*m/g;
+function stripAnsi(str: string): string {
+    return str.replace(ANSI_SGR_RE, '');
+}
+
+/**
+ * Detect query timeout errors from the DocumentDB API (error code 50).
+ */
+function isMaxTimeMSError(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50;
+}
+
+/**
  * Formats a query playground execution result for display in a read-only output panel.
  *
  * Output includes:
@@ -92,13 +111,20 @@ export function formatError(
     // Strip technical error codes for clean user-facing output;
     // the extracted code is preserved for future telemetry.
     const { message: errorMessage } = extractErrorCode(rawMessage);
-    lines.push(errorMessage);
+    // Strip ANSI color codes that are meant for terminal rendering
+    lines.push(stripAnsi(errorMessage));
 
     // Show a settings hint for timeout errors (mirrors the shell's clickable hint)
     if (error instanceof SettingsHintError) {
         lines.push('');
         lines.push(`// ${error.settingsHint}`);
         lines.push(`// Settings → '${error.settingKey}'`);
+    }
+
+    // Detect query timeout errors from the DocumentDB API (code 50: MaxTimeMSExpired / ExceededTimeLimit)
+    if (isMaxTimeMSError(error)) {
+        lines.push('');
+        lines.push(`// ${l10n.t('Tip: use .maxTimeMS() to increase the time limit for this query.')}`);
     }
 
     return lines.join('\n');

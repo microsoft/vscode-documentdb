@@ -5,7 +5,6 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ext } from '../../extensionVariables';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
@@ -539,8 +538,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     private async evaluateInput(input: string): Promise<void> {
         try {
-            const timeoutMs = this.getShellTimeoutMs();
-            const result = await this._sessionManager.evaluate(input, timeoutMs);
+            const result = await this._sessionManager.evaluate(input);
 
             // Stop the spinner before writing any output so the spinner
             // character doesn't collide with the result text.
@@ -598,6 +596,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     ),
                 );
             }
+
+            // Detect query timeout errors (error code 50: MaxTimeMSExpired / ExceededTimeLimit)
+            if (error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50) {
+                this.writeLine(
+                    this._outputFormatter.formatSystemMessage(
+                        l10n.t('Tip: use .maxTimeMS() to increase the time limit for this query.'),
+                    ),
+                );
+            }
         }
     }
 
@@ -614,8 +621,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         if (result.type === 'clear') {
-            // Write ANSI clear screen and cursor home
-            this._writeEmitter.fire('\x1b[2J\x1b[H');
+            // Clear visible display, scrollback buffer, and move cursor home
+            this._writeEmitter.fire('\x1b[2J\x1b[3J\x1b[H');
             return true;
         }
 
@@ -1055,12 +1062,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     // ─── Private: Settings ───────────────────────────────────────────────────
-
-    private getShellTimeoutMs(): number {
-        const config = vscode.workspace.getConfiguration();
-        const timeoutSec = config.get<number>(ext.settingsKeys.shellTimeout, 30);
-        return timeoutSec * 1000;
-    }
 
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();

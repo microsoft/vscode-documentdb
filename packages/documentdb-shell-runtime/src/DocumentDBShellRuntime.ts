@@ -18,6 +18,13 @@ import {
     type ShellRuntimeOptions,
 } from './types';
 
+/**
+ * Matches `<cmd> <arg>` on a single line. Used to extract the argument text
+ * after the scanner has already confirmed that `<cmd>` starts a real top-level
+ * `use`/`show` statement (not inside a string, comment, or regex literal).
+ */
+const DIRECT_COMMAND_LINE_RE = /^(\s*)(use|show)\s+([^(\s][^;]*?)\s*;?\s*$/;
+
 const DEFAULT_OPTIONS: ShellRuntimeOptions = {
     productName: 'DocumentDB for VS Code',
     productDocsLink: 'https://github.com/microsoft/vscode-documentdb',
@@ -103,6 +110,13 @@ export class DocumentDBShellRuntime {
         if (intercepted) {
             return intercepted;
         }
+
+        // Normalize bare direct commands (`use dbName`, `show dbs`) into function-call
+        // form (`use("dbName")`, `show("dbs")`) so they go through the async rewriter
+        // instead of short-circuiting. Without this, a bare `use` as the first token
+        // of a multi-line block consumes the entire input and silently drops subsequent
+        // statements.
+        code = normalizeDirectCommands(code);
 
         this.log(
             'trace',
@@ -297,4 +311,301 @@ export class DocumentDBShellRuntime {
     private log(level: 'trace' | 'debug' | 'info' | 'warn' | 'error', message: string): void {
         this._callbacks.onLog?.(level, message);
     }
+}
+
+/**
+ * Rewrites bare `use <name>` / `show <name>` direct shell commands into
+ * function-call form (`use("<name>");` / `show("<name>");`).
+ *
+ * ## Why this is needed
+ *
+ * Direct shell commands like `use mydb` are detected by the evaluation
+ * pipeline as special tokens. When they appear as the first line of a
+ * multi-line code block, the pipeline processes only the direct command
+ * and silently discards all subsequent statements. Converting them to
+ * function-call form bypasses that short-circuit so the entire block is
+ * evaluated normally.
+ *
+ * ## How it works
+ *
+ * A single linear scan of the input tracks whether each character sits in
+ * plain code, a `//` line comment, a `/* ... *\/` block comment, a `'...'`
+ * or `"..."` string literal, a `` `...` `` template literal (including
+ * `${...}` expression nesting), or a `/.../` regex literal. Only line
+ * starts that fall in the plain-code state are considered candidates for
+ * rewriting. The per-line regex extracts the argument once the context
+ * check has passed.
+ *
+ * This avoids the collateral rewrites a naive regex would produce in:
+ *
+ * - single- and double-quoted string literals
+ * - template literals (`` `use mydb` `` as string content)
+ * - line and block comments
+ * - regular-expression literals (`/use mydb/`)
+ *
+ * ### Scope note — why a scanner, not a parser
+ *
+ * This is a lexical scanner, not a syntactic parser. It recognizes the
+ * literal forms listed above, which covers every collateral-rewrite
+ * failure mode reported so far. It intentionally does **not** understand
+ * JavaScript statement structure, so a handful of exotic cases are not
+ * distinguished:
+ *
+ * - `use` / `show` as a declared identifier rather than a statement
+ *   starter (e.g. `const use = mydb; use` — runtime-invalid anyway).
+ * - `use mydb` nested inside a block such as `if (x) { use mydb }`
+ *   (the bare form was never valid inside a block either; rewriting it
+ *   to `use("mydb");` is still a legal expression statement).
+ * - Contextual keywords used where a regex is legal but the scanner
+ *   guessed division, or vice-versa.
+ *
+ * Getting 100% of these right would require a real JS parser (e.g.
+ * `acorn` / `acorn-loose`) or the TypeScript compiler. We deliberately
+ * avoid adding that dependency: `@microsoft/documentdb-vscode-shell-runtime`
+ * is intended to also ship as a lightweight standalone runtime for CLI
+ * tooling, and pulling in a full JS parser would dominate its footprint
+ * for an edge case that is not observed in real user input.
+ *
+ * ## ASI safety
+ *
+ * The emitted replacement always ends with `;` so a following line that
+ * begins with `[`, `(`, `+`, `-`, or `/` starts a fresh statement instead
+ * of binding to the call expression.
+ */
+export function normalizeDirectCommands(code: string): string {
+    if (!code.includes('\n')) {
+        return code;
+    }
+
+    // Cheap early exit: if neither token appears anywhere, skip scanning.
+    if (!/\b(use|show)\b/.test(code)) {
+        return code;
+    }
+
+    const candidateLineStarts = findCodeLineStarts(code);
+    if (candidateLineStarts.length === 0) {
+        return code;
+    }
+
+    type Edit = { lineStart: number; lineEnd: number; replacement: string };
+    const edits: Edit[] = [];
+
+    for (const lineStart of candidateLineStarts) {
+        const nextNewline = code.indexOf('\n', lineStart);
+        const lineEnd = nextNewline === -1 ? code.length : nextNewline;
+        const line = code.slice(lineStart, lineEnd);
+
+        const match = DIRECT_COMMAND_LINE_RE.exec(line);
+        if (!match) continue;
+
+        const [, indent, cmd, arg] = match;
+        edits.push({
+            lineStart,
+            lineEnd,
+            replacement: `${indent}${cmd}(${JSON.stringify(arg)});`,
+        });
+    }
+
+    if (edits.length === 0) {
+        return code;
+    }
+
+    // Apply right-to-left so earlier offsets stay valid.
+    edits.sort((a, b) => b.lineStart - a.lineStart);
+    let result = code;
+    for (const edit of edits) {
+        result = result.slice(0, edit.lineStart) + edit.replacement + result.slice(edit.lineEnd);
+    }
+    return result;
+}
+
+/**
+ * Scan `code` once and return the offsets of every line start that falls in
+ * plain-code state (i.e., outside any string, template, comment, or regex
+ * literal). The returned offsets are candidates for direct-command rewriting.
+ *
+ * The scanner covers exactly what we need to avoid false rewrites:
+ *
+ * - `//` line comments and `/* *\/` block comments
+ * - single- and double-quoted strings with `\` escapes
+ * - template literals, including nested `${ ... }` expressions (which are
+ *   themselves code and can contain further strings/templates)
+ * - regex literals, disambiguated from division by tracking whether a `/`
+ *   can begin an expression at its position
+ *
+ * It is **lexical** only; it does not build an AST or understand statement
+ * structure. A full parser (e.g. `acorn` / `acorn-loose`) would be needed
+ * for 100% syntactic accuracy — see the note on `normalizeDirectCommands`
+ * for why that trade-off is intentional here.
+ */
+function findCodeLineStarts(code: string): number[] {
+    const starts: number[] = [];
+    // `${...}` nesting inside template literals: each element counts the
+    // currently-open `{` inside that expression so we know when to pop back
+    // into template-literal state.
+    const templateStack: number[] = [];
+    let inLineComment = false;
+    let inBlockComment = false;
+    let stringQuote: '"' | "'" | null = null;
+    let inTemplate = false;
+    let inRegex = false;
+    let regexCharClass = false;
+    // Whether a `/` at the current cursor may start a regex literal.
+    let canRegex = true;
+    // True only at the FIRST offset of a line (offset 0, or the position
+    // right after a newline). Cleared as soon as we consume that offset,
+    // so we never record the same line twice.
+    let atLineStart = true;
+
+    const len = code.length;
+    for (let i = 0; i < len; i++) {
+        const ch = code[i];
+        const next = i + 1 < len ? code[i + 1] : '';
+
+        // Record plain-code line starts (at most once per line).
+        if (
+            atLineStart &&
+            !inLineComment &&
+            !inBlockComment &&
+            stringQuote === null &&
+            !inTemplate &&
+            !inRegex &&
+            templateStack.length === 0
+        ) {
+            starts.push(i);
+        }
+        atLineStart = false;
+
+        if (inLineComment) {
+            if (ch === '\n') {
+                inLineComment = false;
+                atLineStart = true;
+                canRegex = true;
+            }
+            continue;
+        }
+        if (inBlockComment) {
+            if (ch === '*' && next === '/') {
+                inBlockComment = false;
+                i++;
+                canRegex = true;
+            } else if (ch === '\n') {
+                atLineStart = true;
+            }
+            continue;
+        }
+        if (stringQuote !== null) {
+            if (ch === '\\' && next !== '') {
+                i++;
+                continue;
+            }
+            if (ch === stringQuote) {
+                stringQuote = null;
+                canRegex = false;
+            } else if (ch === '\n') {
+                // Unterminated string at newline: recover by exiting string
+                // state so we don't swallow the rest of the input.
+                stringQuote = null;
+                atLineStart = true;
+                canRegex = true;
+            }
+            continue;
+        }
+        if (inTemplate) {
+            if (ch === '\\' && next !== '') {
+                i++;
+                continue;
+            }
+            if (ch === '`') {
+                inTemplate = false;
+                canRegex = false;
+            } else if (ch === '$' && next === '{') {
+                templateStack.push(1);
+                inTemplate = false;
+                i++;
+                canRegex = true;
+            } else if (ch === '\n') {
+                atLineStart = true;
+            }
+            continue;
+        }
+        if (inRegex) {
+            if (ch === '\\' && next !== '') {
+                i++;
+                continue;
+            }
+            if (ch === '[') {
+                regexCharClass = true;
+            } else if (ch === ']') {
+                regexCharClass = false;
+            } else if (ch === '/' && !regexCharClass) {
+                inRegex = false;
+                // Consume optional flags.
+                while (i + 1 < len && /[a-z]/i.test(code[i + 1])) i++;
+                canRegex = false;
+            } else if (ch === '\n') {
+                // Unterminated regex: recover.
+                inRegex = false;
+                regexCharClass = false;
+                atLineStart = true;
+                canRegex = true;
+            }
+            continue;
+        }
+
+        // Plain-code state (outer) or template-expression state (inner).
+        if (ch === '/' && next === '/') {
+            inLineComment = true;
+            i++;
+            continue;
+        }
+        if (ch === '/' && next === '*') {
+            inBlockComment = true;
+            i++;
+            continue;
+        }
+        if (ch === '"' || ch === "'") {
+            stringQuote = ch as '"' | "'";
+            canRegex = false;
+            continue;
+        }
+        if (ch === '`') {
+            inTemplate = true;
+            canRegex = false;
+            continue;
+        }
+        if (ch === '/' && canRegex) {
+            inRegex = true;
+            regexCharClass = false;
+            continue;
+        }
+        if (ch === '{' && templateStack.length > 0) {
+            templateStack[templateStack.length - 1]++;
+        }
+        if (ch === '}' && templateStack.length > 0) {
+            templateStack[templateStack.length - 1]--;
+            if (templateStack[templateStack.length - 1] === 0) {
+                templateStack.pop();
+                inTemplate = true;
+                canRegex = false;
+                continue;
+            }
+        }
+        if (ch === '\n') {
+            atLineStart = true;
+            canRegex = true;
+            continue;
+        }
+
+        // Heuristic for the regex/division ambiguity: letters/digits/closers
+        // disallow a regex at the next `/`; other punctuation allows one.
+        // Adequate for line-start candidates, which is all we care about.
+        if (/[A-Za-z0-9_$)\]]/.test(ch)) {
+            canRegex = false;
+        } else if (!/\s/.test(ch)) {
+            canRegex = true;
+        }
+    }
+
+    return starts;
 }
