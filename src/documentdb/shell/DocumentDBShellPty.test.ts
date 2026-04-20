@@ -248,8 +248,8 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            // ANSI clear screen sequence
-            expect(written).toContain('\x1b[2J\x1b[H');
+            // ANSI clear screen + scrollback clear sequence
+            expect(written).toContain('\x1b[2J\x1b[3J\x1b[H');
         });
     });
 

@@ -614,8 +614,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         if (result.type === 'clear') {
-            // Write ANSI clear screen and cursor home
-            this._writeEmitter.fire('\x1b[2J\x1b[H');
+            // Clear visible display, scrollback buffer, and move cursor home
+            this._writeEmitter.fire('\x1b[2J\x1b[3J\x1b[H');
             return true;
         }
 
