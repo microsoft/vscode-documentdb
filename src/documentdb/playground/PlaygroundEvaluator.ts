@@ -5,7 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
@@ -156,8 +156,6 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
         // Send eval message and await result
         onProgress?.(l10n.t('Running query…'));
-        const timeoutSec = vscode.workspace.getConfiguration().get<number>(ext.settingsKeys.shellTimeout) ?? 30;
-        const timeoutMs = timeoutSec * 1000;
 
         this._sessionEvalCount++;
 
@@ -169,7 +167,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             displayBatchSize: getBatchSizeSetting(),
         };
 
-        const workerResult = await this._workerManager.sendEval(evalMsg, timeoutMs);
+        const workerResult = await this._workerManager.sendEval(evalMsg);
         return this.deserializeResult(workerResult.result);
     }
 

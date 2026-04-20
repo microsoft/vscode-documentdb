@@ -122,14 +122,11 @@ export class WorkerSessionManager implements vscode.Disposable {
      *
      * @returns The serializable execution result from the worker.
      */
-    async sendEval(
-        evalMsg: MainToWorkerMessage & { type: 'eval' },
-        timeoutMs: number,
-    ): Promise<{ result: SerializableExecutionResult }> {
+    async sendEval(evalMsg: MainToWorkerMessage & { type: 'eval' }): Promise<{ result: SerializableExecutionResult }> {
         this._workerState = 'executing';
 
         try {
-            const result = await this.sendRequest<{ result: SerializableExecutionResult }>(evalMsg, timeoutMs);
+            const result = await this.sendRequest<{ result: SerializableExecutionResult }>(evalMsg);
             return result;
         } finally {
             if (this._workerState === 'executing') {
@@ -227,8 +224,13 @@ export class WorkerSessionManager implements vscode.Disposable {
     /**
      * Send a message to the worker and return a promise that resolves
      * when the corresponding response arrives.
+     *
+     * @param timeoutMs - Optional timeout. When set, kills the worker on expiry.
+     *   Used for init and shutdown messages. Eval messages have no IPC timeout—
+     *   the user cancels via Cancel button or Ctrl+C, and query-level timeouts
+     *   are enforced by the database via maxTimeMS.
      */
-    private sendRequest<T>(msg: MainToWorkerMessage, timeoutMs: number): Promise<T> {
+    private sendRequest<T>(msg: MainToWorkerMessage, timeoutMs?: number): Promise<T> {
         if (!this._worker) {
             return Promise.reject(new Error(l10n.t('Worker is not running')));
         }
@@ -242,32 +244,35 @@ export class WorkerSessionManager implements vscode.Disposable {
                 reject,
             });
 
-            // Timeout — kills the worker for safety (infinite loop protection)
-            const timer = setTimeout(() => {
-                const pending = this._pendingRequests.get(requestId);
-                if (pending) {
-                    this._pendingRequests.delete(requestId);
-                    this.killWorker();
-                    pending.reject(
-                        new SettingsHintError(
-                            l10n.t('Operation timed out after {0} seconds.', String(Math.round(timeoutMs / 1000))),
-                            'documentDB.timeout',
-                            l10n.t('You can increase the timeout in Settings:'),
-                        ),
-                    );
-                }
-            }, timeoutMs);
+            // Optional timeout — used for init/shutdown, not for eval
+            let timer: ReturnType<typeof setTimeout> | undefined;
+            if (timeoutMs !== undefined) {
+                timer = setTimeout(() => {
+                    const pending = this._pendingRequests.get(requestId);
+                    if (pending) {
+                        this._pendingRequests.delete(requestId);
+                        this.killWorker();
+                        pending.reject(
+                            new SettingsHintError(
+                                l10n.t('Operation timed out after {0} seconds.', String(Math.round(timeoutMs / 1000))),
+                                'documentDB.shell.initTimeout',
+                                l10n.t('You can increase the timeout in Settings:'),
+                            ),
+                        );
+                    }
+                }, timeoutMs);
+            }
 
             // Wire up timer clearing on resolve/reject
             const entry = this._pendingRequests.get(requestId)!;
             const originalResolve = entry.resolve;
             const originalReject = entry.reject;
             entry.resolve = (value: unknown) => {
-                clearTimeout(timer);
+                if (timer) clearTimeout(timer);
                 originalResolve(value);
             };
             entry.reject = (error: Error) => {
-                clearTimeout(timer);
+                if (timer) clearTimeout(timer);
                 originalReject(error);
             };
 
@@ -306,9 +311,12 @@ export class WorkerSessionManager implements vscode.Disposable {
                 const pending = this._pendingRequests.get(msg.requestId);
                 if (pending) {
                     this._pendingRequests.delete(msg.requestId);
-                    const error = new Error(msg.error);
+                    const error: Error & { code?: number } = new Error(msg.error);
                     if (msg.stack) {
                         error.stack = msg.stack;
+                    }
+                    if (msg.code !== undefined) {
+                        error.code = msg.code;
                     }
                     pending.reject(error);
                 }

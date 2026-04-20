@@ -120,6 +120,8 @@ export type WorkerToMainMessage =
           readonly requestId: string;
           readonly error: string;
           readonly stack?: string;
+          /** Error code from the database (e.g. 50 for MaxTimeMSExpired). */
+          readonly code?: number;
       }
     | {
           readonly type: 'shutdownComplete';

@@ -72,11 +72,16 @@ parentPort.on('message', (msg: MainToWorkerMessage) => {
                 currentEvalRequestId = undefined;
                 const errorMessage = err instanceof Error ? err.message : String(err);
                 const stack = err instanceof Error ? err.stack : undefined;
+                const code =
+                    err instanceof Error && 'code' in err && typeof (err as { code: unknown }).code === 'number'
+                        ? (err as { code: number }).code
+                        : undefined;
                 const response: WorkerToMainMessage = {
                     type: 'evalError',
                     requestId: msg.requestId,
                     error: errorMessage,
                     stack,
+                    code,
                 };
                 parentPort!.postMessage(response);
             });

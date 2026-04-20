@@ -46,6 +46,20 @@ describe('resultFormatter', () => {
             expect(result).not.toContain('\x1b[');
             expect(result).toContain('Invalid operation');
         });
+        it('shows maxTimeMS hint for timeout errors with error code 50', () => {
+            const error: Error & { code?: number } = new Error('command timeout');
+            error.code = 50;
+            const result = formatError(error, 'db.test.find()', 30000, connection);
+
+            expect(result).toContain('.maxTimeMS()');
+        });
+
+        it('does not show maxTimeMS hint without error code 50', () => {
+            const error = new Error('some other error');
+            const result = formatError(error, 'db.test.find()', 30000, connection);
+
+            expect(result).not.toContain('.maxTimeMS()');
+        });
     });
 
     describe('formatResult', () => {

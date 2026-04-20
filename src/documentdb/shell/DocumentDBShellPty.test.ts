@@ -61,9 +61,6 @@ describe('DocumentDBShellPty', () => {
                         if (_key === 'documentDB.shell.display.colorOutput') {
                             return false; // Disable colors for easier test assertions
                         }
-                        if (_key === 'documentDB.timeout') {
-                            return 120;
-                        }
                     }
                     if (section === 'documentDB.shell' && _key === 'multiLinePasteBehavior') {
                         return 'runLineByLine'; // Default to line-by-line in tests for backward compat
@@ -171,7 +168,7 @@ describe('DocumentDBShellPty', () => {
             pty.handleInput('\r');
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find()', expect.any(Number));
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find()');
         });
 
         it('should display evaluation result', async () => {
@@ -511,7 +508,7 @@ describe('DocumentDBShellPty', () => {
 
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})', expect.any(Number));
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})');
         });
 
         it('should show database prompt after multi-line evaluation completes', async () => {
@@ -559,7 +556,7 @@ describe('DocumentDBShellPty', () => {
 
             await new Promise((resolve) => setTimeout(resolve, 10));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})', expect.any(Number));
+            expect(mockEvaluate).toHaveBeenCalledWith('db.test.find({\n  age: 25\n})');
         });
 
         it('should process sequential pasted commands via paste queue', async () => {
@@ -582,8 +579,8 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             expect(mockEvaluate).toHaveBeenCalledTimes(2);
-            expect(mockEvaluate).toHaveBeenNthCalledWith(1, 'show dbs', expect.any(Number));
-            expect(mockEvaluate).toHaveBeenNthCalledWith(2, 'use newdb', expect.any(Number));
+            expect(mockEvaluate).toHaveBeenNthCalledWith(1, 'show dbs');
+            expect(mockEvaluate).toHaveBeenNthCalledWith(2, 'use newdb');
         });
     });
 
@@ -603,13 +600,9 @@ describe('DocumentDBShellPty', () => {
                         if (section === 'terminal.integrated' && _key === 'enableMultiLinePasteWarning') {
                             return vscodePasteWarning;
                         }
-                        // Preserve base settings needed by the PTY
                         if (section === undefined || section === '') {
                             if (_key === 'documentDB.shell.display.colorOutput') {
                                 return false;
-                            }
-                            if (_key === 'documentDB.timeout') {
-                                return 120;
                             }
                         }
                         return defaultValue;
@@ -657,7 +650,7 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 100));
 
             // Lines starting with . should be joined directly (no space)
-            expect(mockEvaluate).toHaveBeenCalledWith('db.restaurants.find({}).limit(5);', expect.any(Number));
+            expect(mockEvaluate).toHaveBeenCalledWith('db.restaurants.find({}).limit(5);');
 
             showQuickPickSpy.mockRestore();
         });
@@ -675,7 +668,7 @@ describe('DocumentDBShellPty', () => {
 
             await new Promise((resolve) => setTimeout(resolve, 50));
 
-            expect(mockEvaluate).toHaveBeenCalledWith('var x = 42;', expect.any(Number));
+            expect(mockEvaluate).toHaveBeenCalledWith('var x = 42;');
         });
 
         it('should run line by line when behavior is "runLineByLine"', async () => {
@@ -718,7 +711,7 @@ describe('DocumentDBShellPty', () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             expect(showQuickPickSpy).not.toHaveBeenCalled();
-            expect(mockEvaluate).toHaveBeenCalledWith('show dbs', expect.any(Number));
+            expect(mockEvaluate).toHaveBeenCalledWith('show dbs');
 
             showQuickPickSpy.mockRestore();
         });

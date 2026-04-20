@@ -22,6 +22,13 @@ function stripAnsi(str: string): string {
 }
 
 /**
+ * Detect query timeout errors from the DocumentDB API (error code 50).
+ */
+function isMaxTimeMSError(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50;
+}
+
+/**
  * Formats a query playground execution result for display in a read-only output panel.
  *
  * Output includes:
@@ -112,6 +119,12 @@ export function formatError(
         lines.push('');
         lines.push(`// ${error.settingsHint}`);
         lines.push(`// Settings → '${error.settingKey}'`);
+    }
+
+    // Detect query timeout errors from the DocumentDB API (code 50: MaxTimeMSExpired / ExceededTimeLimit)
+    if (isMaxTimeMSError(error)) {
+        lines.push('');
+        lines.push(`// ${l10n.t('Tip: use .maxTimeMS() to increase the time limit for this query.')}`);
     }
 
     return lines.join('\n');
