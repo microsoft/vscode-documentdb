@@ -275,9 +275,29 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
                     await ClustersClient.deleteClient(this.cluster.clusterId);
 
+                    // Narrow try/catch to the connection attempt only so that errors
+                    // from credential persistence don't discard a successful connection.
+                    let retryClient: ClustersClient | undefined;
                     try {
-                        clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
+                        retryClient = await this.getClientWithProgress(this.cluster.clusterId);
+                    } catch (retryErr: unknown) {
+                        const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+                        ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
+                        context.telemetry.properties.urlDecodePasswordResult = 'failed';
 
+                        void vscode.window.showErrorMessage(
+                            l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+                            {
+                                modal: true,
+                                detail:
+                                    l10n.t('Revisit connection details and try again.') +
+                                    '\n\n' +
+                                    l10n.t('Error: {error}', { error: retryError.message }),
+                            },
+                        );
+                    }
+
+                    if (retryClient) {
                         ext.outputChannel.appendLine(
                             l10n.t('Connected to the cluster "{cluster}" using decoded password.', {
                                 cluster: this.cluster.name,
@@ -297,30 +317,24 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         );
 
                         if (saveChoice === updateButton) {
-                            connectionCredentials.secrets.nativeAuthConfig = {
-                                connectionUser: username ?? '',
-                                connectionPassword: decodedPassword,
-                            };
-                            await ConnectionStorageService.save(connectionType, connectionCredentials, true);
-                            context.telemetry.properties.urlDecodePasswordSaved = 'true';
+                            try {
+                                connectionCredentials.secrets.nativeAuthConfig = {
+                                    connectionUser: username ?? '',
+                                    connectionPassword: decodedPassword,
+                                };
+                                await ConnectionStorageService.save(connectionType, connectionCredentials, true);
+                                context.telemetry.properties.urlDecodePasswordSaved = 'true';
+                            } catch (saveErr: unknown) {
+                                const saveError = saveErr instanceof Error ? saveErr.message : String(saveErr);
+                                ext.outputChannel.appendLine(
+                                    l10n.t('Failed to save updated credentials: {error}', {
+                                        error: saveError,
+                                    }),
+                                );
+                            }
                         }
 
-                        return clustersClient;
-                    } catch (retryErr: unknown) {
-                        const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
-                        ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
-                        context.telemetry.properties.urlDecodePasswordResult = 'failed';
-
-                        void vscode.window.showErrorMessage(
-                            l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                            {
-                                modal: true,
-                                detail:
-                                    l10n.t('Revisit connection details and try again.') +
-                                    '\n\n' +
-                                    l10n.t('Error: {error}', { error: retryError.message }),
-                            },
-                        );
+                        return retryClient;
                     }
                 }
 
