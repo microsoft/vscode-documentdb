@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.7.4
+
+### New Features & Improvements
+
+- **URL-Encoded Password Detection**: When a connection attempt fails and the password contains URL-encoded characters, the extension now offers a "Retry with Decoded Password" option. If the retry succeeds, the decoded password can be saved. [#444](https://github.com/microsoft/vscode-documentdb/issues/444), [#594](https://github.com/microsoft/vscode-documentdb/pull/594)
+- **Rich Markdown Tooltips**: Cluster, database, and collection tree items in the Connections view now show rich markdown tooltips on hover, displaying useful details (host, auth method, document count, storage size) without requiring expansion or connection. [#579](https://github.com/microsoft/vscode-documentdb/issues/579), [#588](https://github.com/microsoft/vscode-documentdb/pull/588)
+- **Copy Reference Context Menu**: Adds a "Copy Reference…" right-click option to database, collection, and index nodes with a QuickPick format picker. Databases offer name, shell command (`use dbName`), or qualified name; collections offer name, namespace, shell reference, or `db.getCollection()` form; indexes offer name, key definition, or shell command. Names with special characters automatically use safe escaping. [#545](https://github.com/microsoft/vscode-documentdb/pull/545), [#587](https://github.com/microsoft/vscode-documentdb/pull/587)
+
+### Documentation
+
+- **Improved CONTRIBUTING.md**: Adds a PR submission checklist, corrects Node/npm version requirements, and adds multi-platform setup stubs. [#565](https://github.com/microsoft/vscode-documentdb/pull/565)
+
+### Dependencies
+
+- **Dependency Updates**: Bumps `handlebars` (4.7.8 → 4.7.9), `lodash` (4.17.23 → 4.18.1), `lodash` and `@microsoft/api-extractor` in `/api`, and `follow-redirects` (1.15.11 → 1.16.0). [#552](https://github.com/microsoft/vscode-documentdb/pull/552), [#556](https://github.com/microsoft/vscode-documentdb/pull/556), [#558](https://github.com/microsoft/vscode-documentdb/pull/558), [#586](https://github.com/microsoft/vscode-documentdb/pull/586)
+
 ## 0.7.3
 
 ### New Features

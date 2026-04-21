@@ -13,7 +13,14 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { nonNullProp } from '../../utils/nonNull';
 
-import { authMethodFromString, AuthMethodId, authMethodsFromString } from '../../documentdb/auth/AuthMethod';
+import {
+    authMethodFromString,
+    AuthMethodId,
+    authMethodsFromString,
+    getAuthMethod,
+    isSupportedAuthMethod,
+} from '../../documentdb/auth/AuthMethod';
+import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/auth/urlEncodedPassword';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -29,6 +36,14 @@ import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
 import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
+
+/**
+ * Escapes markdown special characters so user-provided text is always rendered
+ * as plain text rather than being interpreted as markdown formatting or links.
+ */
+function escapeMarkdown(text: string): string {
+    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+}
 
 export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterModel> implements TreeElementWithStorageId {
     public override readonly cluster: TreeCluster<ConnectionClusterModel>;
@@ -235,16 +250,93 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                void vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
-                );
+                // If the password looks URL-encoded (e.g. copy-pasted from a connection URL),
+                // offer a single, user-confirmed retry with the decoded value. We never
+                // silently decode-and-retry to avoid tripping server-side lockout policies.
+                const { decodedPassword } = await showConnectionFailedAndMaybeOfferDecodedRetry({
+                    clusterName: this.cluster.name,
+                    password,
+                    isNativeAuth: authMethod === AuthMethodId.NativeAuth,
+                    originalError: error,
+                    context,
+                });
+
+                if (decodedPassword) {
+                    context.valuesToMask.push(decodedPassword);
+
+                    CredentialCache.setAuthCredentials(
+                        this.cluster.clusterId,
+                        authMethod,
+                        connectionString.toString(),
+                        { connectionUser: username ?? '', connectionPassword: decodedPassword },
+                        this.cluster.emulatorConfiguration,
+                        connectionCredentials.secrets.entraIdAuthConfig,
+                    );
+
+                    await ClustersClient.deleteClient(this.cluster.clusterId);
+
+                    // Narrow try/catch to the connection attempt only so that errors
+                    // from credential persistence don't discard a successful connection.
+                    let retryClient: ClustersClient | undefined;
+                    try {
+                        retryClient = await this.getClientWithProgress(this.cluster.clusterId);
+                    } catch (retryErr: unknown) {
+                        const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
+                        ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
+                        context.telemetry.properties.urlDecodePasswordResult = 'failed';
+
+                        void vscode.window.showErrorMessage(
+                            l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+                            {
+                                modal: true,
+                                detail:
+                                    l10n.t('Revisit connection details and try again.') +
+                                    '\n\n' +
+                                    l10n.t('Error: {error}', { error: retryError.message }),
+                            },
+                        );
+                    }
+
+                    if (retryClient) {
+                        ext.outputChannel.appendLine(
+                            l10n.t('Connected to the cluster "{cluster}" using decoded password.', {
+                                cluster: this.cluster.name,
+                            }),
+                        );
+                        context.telemetry.properties.urlDecodePasswordResult = 'succeeded';
+
+                        // Offer to persist the corrected password so the user does not have to retry next time.
+                        const updateButton = l10n.t('Update Saved Password');
+                        const saveChoice = await vscode.window.showInformationMessage(
+                            l10n.t(
+                                'Connected to "{cluster}" using the decoded password. Would you like to update your saved credentials?',
+                                { cluster: this.cluster.name },
+                            ),
+                            { modal: false },
+                            updateButton,
+                        );
+
+                        if (saveChoice === updateButton) {
+                            try {
+                                connectionCredentials.secrets.nativeAuthConfig = {
+                                    connectionUser: username ?? '',
+                                    connectionPassword: decodedPassword,
+                                };
+                                await ConnectionStorageService.save(connectionType, connectionCredentials, true);
+                                context.telemetry.properties.urlDecodePasswordSaved = 'true';
+                            } catch (saveErr: unknown) {
+                                const saveError = saveErr instanceof Error ? saveErr.message : String(saveErr);
+                                ext.outputChannel.appendLine(
+                                    l10n.t('Failed to save updated credentials: {error}', {
+                                        error: saveError,
+                                    }),
+                                );
+                            }
+                        }
+
+                        return retryClient;
+                    }
+                }
 
                 // If connection fails, remove cached credentials
                 await ClustersClient.deleteClient(this.cluster.clusterId);
@@ -309,19 +401,12 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      */
     getTreeItem(): vscode.TreeItem {
         let description: string | undefined = undefined;
-        let tooltipMessage: string | undefined = undefined;
-
-        if (this.cluster.emulatorConfiguration?.isEmulator) {
-            // For emulator clusters, show TLS/SSL status if security is disabled
-            if (this.cluster.emulatorConfiguration?.disableEmulatorSecurity) {
-                description = l10n.t('⚠ TLS/SSL Disabled');
-                tooltipMessage = l10n.t('⚠️ **Security:** TLS/SSL Disabled');
-            } else {
-                tooltipMessage = l10n.t('✅ **Security:** TLS/SSL Enabled');
-            }
+        if (
+            this.cluster.emulatorConfiguration?.isEmulator &&
+            this.cluster.emulatorConfiguration?.disableEmulatorSecurity
+        ) {
+            description = l10n.t('⚠ TLS/SSL Disabled');
         }
-        // Note: ConnectionClusterModel doesn't include Azure-specific fields like SKU.
-        // For user-added connections, we only show basic cluster name without Azure metadata.
 
         return {
             id: this.id,
@@ -332,7 +417,66 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 ? new vscode.ThemeIcon('plug')
                 : new vscode.ThemeIcon('server-environment'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
-            tooltip: new vscode.MarkdownString(tooltipMessage),
+            tooltip: this.buildTooltip(),
         };
+    }
+
+    /**
+     * Builds a markdown tooltip showing the connection name, host, auth method,
+     * username (SCRAM only), and emulator security status.
+     *
+     * The cluster name is escaped so it always renders as plain text regardless
+     * of characters that might otherwise be interpreted as markdown links or formatting.
+     */
+    private buildTooltip(): vscode.MarkdownString {
+        const md = new vscode.MarkdownString();
+        md.isTrusted = false;
+
+        md.appendMarkdown(`### ${escapeMarkdown(this.cluster.name)}\n\n`);
+
+        // Host(s) from the connection string
+        const hosts = this.getHosts();
+        if (hosts.length > 0) {
+            const escapedHosts = hosts.map((host) => escapeMarkdown(host));
+            md.appendMarkdown(`**${l10n.t('Host')}:** ${escapedHosts.join(', ')}\n\n`);
+        }
+
+        // Auth method
+        const authMethodId = this.cluster.selectedAuthMethod;
+        if (authMethodId) {
+            const isSupported = isSupportedAuthMethod(authMethodId);
+            const authLabel = isSupported ? getAuthMethod(authMethodId).label : authMethodId;
+            md.appendMarkdown(`**${l10n.t('Auth')}:** ${escapeMarkdown(authLabel)}\n\n`);
+
+            if (isSupported && authMethodId === AuthMethodId.NativeAuth && this.cluster.connectionUser) {
+                md.appendMarkdown(`**${l10n.t('User')}:** ${escapeMarkdown(this.cluster.connectionUser)}\n\n`);
+            }
+        }
+
+        // Emulator security notice
+        if (this.cluster.emulatorConfiguration?.isEmulator) {
+            if (this.cluster.emulatorConfiguration.disableEmulatorSecurity) {
+                md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
+            } else {
+                md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
+            }
+        }
+
+        return md;
+    }
+
+    /**
+     * Extracts the host(s) from the connection string for display in the tooltip.
+     * Returns an empty array if the connection string is unavailable or unparseable.
+     */
+    private getHosts(): string[] {
+        if (!this.cluster.connectionString) {
+            return [];
+        }
+        try {
+            return new DocumentDBConnectionString(this.cluster.connectionString).hosts ?? [];
+        } catch {
+            return [];
+        }
     }
 }
