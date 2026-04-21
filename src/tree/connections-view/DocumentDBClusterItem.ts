@@ -20,6 +20,7 @@ import {
     getAuthMethod,
     isSupportedAuthMethod,
 } from '../../documentdb/auth/AuthMethod';
+import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/auth/urlEncodedPassword';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
@@ -249,45 +250,25 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                // URL-Encoding checks
-                let decodedPassword: string | undefined;
-                try {
-                    decodedPassword = password ? decodeURIComponent(password) : undefined;
-                } catch {
-                    decodedPassword = undefined;
-                }
+                // If the password looks URL-encoded (e.g. copy-pasted from a connection URL),
+                // offer a single, user-confirmed retry with the decoded value. We never
+                // silently decode-and-retry to avoid tripping server-side lockout policies.
+                const { decodedPassword } = await showConnectionFailedAndMaybeOfferDecodedRetry({
+                    clusterName: this.cluster.name,
+                    password,
+                    isNativeAuth: authMethod === AuthMethodId.NativeAuth,
+                    originalError: error,
+                    context,
+                });
 
-                const retryButton = l10n.t('Retry with Decoded Password');
-                const buttons: string[] = [];
-
-                let detailMessage: string =
-                    l10n.t('Revisit connection details and try again.') +
-                    '\n\n' +
-                    l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) });
-
-                const shouldOfferRetry =
-                    password && /%[0-9A-Fa-f]{2}/.test(password) && decodedPassword && password !== decodedPassword;
-
-                if (shouldOfferRetry) {
-                    detailMessage += '\n\n' + l10n.t('Your password appears to be URL-encoded.');
-                    buttons.push(retryButton);
-                }
-
-                // Offer a one-time retry using the decoded value
-                const result = await vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    { modal: true, detail: detailMessage },
-                    ...buttons,
-                );
-
-                if (result === retryButton && decodedPassword && username && authMethod) {
+                if (decodedPassword) {
                     context.valuesToMask.push(decodedPassword);
 
                     CredentialCache.setAuthCredentials(
                         this.cluster.clusterId,
                         authMethod,
                         connectionString.toString(),
-                        { connectionUser: username, connectionPassword: decodedPassword },
+                        { connectionUser: username ?? '', connectionPassword: decodedPassword },
                         this.cluster.emulatorConfiguration,
                         connectionCredentials.secrets.entraIdAuthConfig,
                     );
@@ -295,10 +276,11 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     await ClustersClient.deleteClient(this.cluster.clusterId);
 
                     try {
-                        clustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+                        clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
+                        // Persist the corrected password so the user does not have to retry next time.
                         connectionCredentials.secrets.nativeAuthConfig = {
-                            connectionUser: username,
+                            connectionUser: username ?? '',
                             connectionPassword: decodedPassword,
                         };
                         await ConnectionStorageService.save(connectionType, connectionCredentials, true);
@@ -308,12 +290,13 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                                 cluster: this.cluster.name,
                             }),
                         );
+                        context.telemetry.properties.urlDecodePasswordResult = 'succeeded';
                         return clustersClient;
                     } catch (retryErr: unknown) {
                         const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));
                         ext.outputChannel.appendLine(l10n.t('Retry Error: {error}', { error: retryError.message }));
+                        context.telemetry.properties.urlDecodePasswordResult = 'failed';
 
-                        // Show final error screen without the URL hint
                         void vscode.window.showErrorMessage(
                             l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
                             {
