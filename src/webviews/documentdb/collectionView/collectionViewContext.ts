@@ -98,6 +98,7 @@ export type CollectionViewContextType = {
             limit: number;
         };
         setJsonSchema(schema: object): Promise<void>; //monacoEditor.languages.json.DiagnosticsOptions, but we don't want to import monacoEditor here
+        setSort: (sort: string) => void;
     };
     isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
     queryInsights: QueryInsightsState; // Query insights state for progressive loading

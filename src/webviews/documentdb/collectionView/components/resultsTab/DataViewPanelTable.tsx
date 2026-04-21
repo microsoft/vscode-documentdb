@@ -72,8 +72,61 @@ export function DataViewPanelTable({ liveHeaders, liveData, handleStepIn }: Prop
             field: header,
             minWidth: 100,
             formatter: cellFormatter,
+            sortable: true,
+            // No-op comparer: server-side sort replaces the dataset, so we don't want
+            // SlickGrid's default field-value comparer to scramble our typed cell objects.
+            sorter: () => 0,
         };
     });
+
+    // Tracks the current sort state for tri-state cycling (asc -> desc -> none).
+    const sortStateRef = useRef<{ field: string | null; direction: 'asc' | 'desc' | null }>({
+        field: null,
+        direction: null,
+    });
+
+    const onSort = React.useCallback(
+        (event: CustomEvent<{ args: { sortCol?: { field?: string }; sortAsc?: boolean } }>): void => {
+            const sortCol = event.detail.args.sortCol;
+            const field = sortCol?.field;
+            if (!field) {
+                return;
+            }
+            const newAsc = event.detail.args.sortAsc !== false;
+            const prev = sortStateRef.current;
+
+            // Tri-state cycle: when SlickGrid wraps from desc back to asc on the same column, clear it.
+            let nextField: string | null;
+            let nextDir: 'asc' | 'desc' | null;
+            if (prev.field === field && prev.direction === 'desc' && newAsc) {
+                nextField = null;
+                nextDir = null;
+                // Clear SlickGrid's sort indicator
+                gridRef.current?.sortService?.clearSorting?.();
+            } else {
+                nextField = field;
+                nextDir = newAsc ? 'asc' : 'desc';
+            }
+            sortStateRef.current = { field: nextField, direction: nextDir };
+
+            const sortJson = nextField ? `{ "${nextField}": ${nextDir === 'asc' ? 1 : -1} }` : '{  }';
+
+            // Update the Sort input in the QueryEditor so the user sees what was applied.
+            currentContext.queryEditor?.setSort?.(sortJson);
+
+            // Trigger a refresh by updating activeQuery (mirrors the executeQuery flow).
+            setCurrentContext((prevCtx) => ({
+                ...prevCtx,
+                activeQuery: {
+                    ...prevCtx.activeQuery,
+                    sort: sortJson,
+                    pageNumber: 1,
+                    executionIntent: 'refresh',
+                },
+            }));
+        },
+        [currentContext.queryEditor, setCurrentContext],
+    );
 
     // Update grid columns ref whenever they change
     React.useEffect(() => {
@@ -138,6 +191,9 @@ export function DataViewPanelTable({ liveHeaders, liveData, handleStepIn }: Prop
 
         enableCellNavigation: true,
         enableTextSelectionOnCells: true,
+
+        enableSorting: true,
+        multiColumnSort: false,
 
         enableCheckboxSelector: false, // todo: [post MVP] this is failing, it looks like it happens when we're defining columns after the grid has been created.. we're deleting the 'checkbox' column. we  can work around it, but it needs a bit more attention to get it done right.
         enableRowSelection: true,
@@ -215,6 +271,9 @@ export function DataViewPanelTable({ liveHeaders, liveData, handleStepIn }: Prop
                 columns={gridColumns}
                 dataset={liveData}
                 onDblClick={(event) => onCellDblClick(event)}
+                onSort={(event) =>
+                    onSort(event as CustomEvent<{ args: { sortCol?: { field?: string }; sortAsc?: boolean } }>)
+                }
                 onSelectedRowsChanged={debounce(
                     (event: { detail: { eventData: unknown; args: OnSelectedRowsChangedEventArgs } }) =>
                         onSelectedRowsChanged(event.detail.eventData, event.detail.args),

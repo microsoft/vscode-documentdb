@@ -91,6 +91,9 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                  * any pending schema update is cancelled before a new one begins, guaranteeing
                  * a clean, predictable state and allowing the Monaco worker to initialize correctly.
                  */
+                setSort: (sort: string) => {
+                    setSortValue(sort);
+                },
                 setJsonSchema: async (schema) => {
                     // Use the ref to cancel the previous operation
                     if (schemaAbortControllerRef.current) {
