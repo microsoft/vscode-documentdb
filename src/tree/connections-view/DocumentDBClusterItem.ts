@@ -278,19 +278,33 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                     try {
                         clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
 
-                        // Persist the corrected password so the user does not have to retry next time.
-                        connectionCredentials.secrets.nativeAuthConfig = {
-                            connectionUser: username ?? '',
-                            connectionPassword: decodedPassword,
-                        };
-                        await ConnectionStorageService.save(connectionType, connectionCredentials, true);
-
                         ext.outputChannel.appendLine(
                             l10n.t('Connected to the cluster "{cluster}" using decoded password.', {
                                 cluster: this.cluster.name,
                             }),
                         );
                         context.telemetry.properties.urlDecodePasswordResult = 'succeeded';
+
+                        // Offer to persist the corrected password so the user does not have to retry next time.
+                        const updateButton = l10n.t('Update Saved Password');
+                        const saveChoice = await vscode.window.showInformationMessage(
+                            l10n.t(
+                                'Connected to "{cluster}" using the decoded password. Would you like to update your saved credentials?',
+                                { cluster: this.cluster.name },
+                            ),
+                            { modal: false },
+                            updateButton,
+                        );
+
+                        if (saveChoice === updateButton) {
+                            connectionCredentials.secrets.nativeAuthConfig = {
+                                connectionUser: username ?? '',
+                                connectionPassword: decodedPassword,
+                            };
+                            await ConnectionStorageService.save(connectionType, connectionCredentials, true);
+                            context.telemetry.properties.urlDecodePasswordSaved = 'true';
+                        }
+
                         return clustersClient;
                     } catch (retryErr: unknown) {
                         const retryError = retryErr instanceof Error ? retryErr : new Error(String(retryErr));

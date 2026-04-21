@@ -103,11 +103,15 @@ export async function showConnectionFailedAndMaybeOfferDecodedRetry(
         '\n\n' +
         l10n.t('Error: {error}', { error: errorMessage });
 
-    const retryButton = l10n.t('Retry with Decoded Password');
+    const retryButton = l10n.t('Try with Decoded Password');
     const buttons: string[] = [];
 
     if (canOfferRetry) {
-        detail += '\n\n' + l10n.t('Your password appears to be URL-encoded.');
+        detail +=
+            '\n\n' +
+            l10n.t(
+                '💡 Your password appears to contain URL-encoded characters (e.g. %40 instead of @). This often happens when copying a password from a connection string URL. Would you like to retry with the decoded version?',
+            );
         buttons.push(retryButton);
     }
 
