@@ -149,7 +149,13 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         }
 
         onProgress?.(l10n.t('Authenticating…'));
-        await this._workerManager.ensureWorker(connection.clusterId, initMsg);
+        await callWithTelemetryAndErrorHandling('playground.connect', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.errorHandling.rethrow = true;
+            context.telemetry.properties.authMethod = initMsg.authMechanism;
+            context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
+            await this._workerManager.ensureWorker(connection.clusterId, initMsg);
+        });
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
         // Reset console output counter for this eval run
