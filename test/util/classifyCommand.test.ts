@@ -68,6 +68,14 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
+    // ── runCommand ───────────────────────────────────────────────────────
+    it.each([
+        ['db.runCommand({ ping: 1 })', 'runCommand'],
+        ['db.runCommand({ serverStatus: 1 })', 'runCommand'],
+    ])('classifies "%s" as "%s"', (input, expected) => {
+        expect(classifyCommand(input)).toBe(expected);
+    });
+
     // ── Shell commands ───────────────────────────────────────────────────
     it.each([
         ['help', 'help'],

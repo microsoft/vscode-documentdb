@@ -16,6 +16,7 @@ export type CommandCategory =
     | 'aggregate'
     | 'count'
     | 'index'
+    | 'runCommand'
     | 'help'
     | 'show'
     | 'use'
@@ -49,6 +50,7 @@ const CLASSIFICATION_RULES: ReadonlyArray<{ pattern: RegExp; category: CommandCa
         pattern: /\.createIndex\b|\.dropIndex\b|\.dropIndexes\b|\.getIndexes\b|\.ensureIndex\b|\.reIndex\b/g,
         category: 'index',
     },
+    { pattern: /\.runCommand\b/g, category: 'runCommand' },
     { pattern: /\.help\b/g, category: 'help' },
 ];
 
