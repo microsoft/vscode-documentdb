@@ -7,6 +7,7 @@ import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
+import { ShellCommandIds } from '../../documentdb/shell/constants';
 
 /**
  * Opens the current playground code block in an Interactive Shell.
@@ -44,7 +45,7 @@ export async function playgroundOpenQueryInShell(
     // ── Telemetry: cross-feature navigation ──────────────────────────
     context.telemetry.properties.activationSource = 'playgroundCodeLens';
 
-    await vscode.commands.executeCommand('vscode-documentdb.command.shell.open.withInput', {
+    await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
         clusterId: connection.clusterId,
         clusterDisplayName: connection.clusterDisplayName,
         databaseName: connection.databaseName,

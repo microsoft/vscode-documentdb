@@ -11,6 +11,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
+import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
@@ -999,7 +1000,7 @@ export const collectionsViewRouter = router({
                 input.limit,
             );
 
-            await vscode.commands.executeCommand('vscode-documentdb.command.shell.open.withInput', {
+            await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
                 databaseName: myCtx.databaseName,

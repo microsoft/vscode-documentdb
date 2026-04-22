@@ -109,6 +109,7 @@ import { CollectionNameCache } from './query-language/playground-completions/Col
 import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
 import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
 import { PlaygroundSnippetSessionManager } from './query-language/playground-completions/PlaygroundSnippetSessionManager';
+import { ShellCommandIds } from './shell/constants';
 import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
@@ -614,23 +615,20 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.shell.open',
+                    ShellCommandIds.open,
                     withTreeNodeCommandCorrelation(openInteractiveShell),
                 );
 
                 // Inline button variant — same handler, different activationSource
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.shell.open.inline',
+                    ShellCommandIds.openInline,
                     withTreeNodeCommandCorrelation((context, node) => {
                         context.telemetry.properties.activationSource = 'treeNodeInline';
                         return openInteractiveShell(context, node as ClusterItemBase | DatabaseItem | CollectionItem);
                     }),
                 );
 
-                registerCommand(
-                    'vscode-documentdb.command.shell.open.withInput',
-                    withCommandCorrelation(openInteractiveShellWithInput),
-                );
+                registerCommand(ShellCommandIds.openWithInput, withCommandCorrelation(openInteractiveShellWithInput));
 
                 // Register the terminal link provider for "Open in Collection View" action lines
                 ext.context.subscriptions.push(
