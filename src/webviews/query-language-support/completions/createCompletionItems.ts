@@ -142,7 +142,7 @@ export function createCompletionItems(params: CreateCompletionItemsParams): mona
     // the completion category derived from the item's CompletionItemKind.
     if (completionCommandId) {
         for (const item of items) {
-            const category = completionKindToCategory(item.kind, monaco);
+            const category = completionKindToCategory(item.kind, item.sortText, monaco);
             item.command = { id: completionCommandId, title: '', arguments: [category] };
         }
     }
@@ -403,13 +403,17 @@ function getFieldCompletionItems(
  */
 function completionKindToCategory(
     kind: monacoEditor.languages.CompletionItemKind | undefined,
+    sortText: string | undefined,
     monaco: typeof monacoEditor,
 ): string {
     if (kind === undefined) return 'unknown';
     const kinds = monaco.languages.CompletionItemKind;
     if (kind === kinds.Field) return 'field';
     if (kind === kinds.Operator || kind === kinds.Function || kind === kinds.Method) return 'operator';
-    if (kind === kinds.Constructor) return 'bsonConstructor';
+    if (kind === kinds.Constructor) {
+        // JS globals use sortText '4_…', BSON constructors use '3_…'
+        return sortText?.startsWith('4_') ? 'jsGlobal' : 'bsonConstructor';
+    }
     if (kind === kinds.Value || kind === kinds.Snippet) return 'typeSuggestion';
     if (kind === kinds.Variable) return 'jsGlobal';
     return 'other';
