@@ -103,8 +103,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private readonly _shellSessionId: string = randomUUID();
     /** Running count of commands evaluated in this session (for commandIndex measurement). */
     private _commandCount: number = 0;
-    /** Count of errors encountered during this session. */
-    private _errorCount: number = 0;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
@@ -208,17 +206,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         // ── Telemetry: shell session ended ───────────────────────────────
+        // Lightweight close marker — NO summary properties.
+        // Session depth (commands, errors) is derived from per-eval events
+        // via MAX(commandIndex) GROUP BY shellSessionId.
+        // This event exists solely to measure start-vs-close ratio
+        // (how often users close cleanly vs. just killing VS Code).
         void callWithTelemetryAndErrorHandling('shell.sessionEnd', async (context) => {
             context.errorHandling.suppressDisplay = true;
             context.telemetry.properties.shellSessionId = this._shellSessionId;
-            context.telemetry.properties.authMethod = this._sessionManager.authMethod ?? 'unknown';
-            context.telemetry.measurements.totalCommands = this._commandCount;
-            context.telemetry.measurements.totalErrors = this._errorCount;
-
-            // Domain info for session-level aggregation
-            const domainProps: Record<string, string | undefined> = {};
-            this.collectShellDomainTelemetry(domainProps);
-            Object.assign(context.telemetry.properties, domainProps);
         });
 
         this._sessionManager.dispose();
@@ -664,8 +659,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         if (this._interrupted) {
             return;
         }
-
-        this._errorCount++;
 
         const rawMessage = error instanceof Error ? error.message : String(error);
         // Strip technical error codes for clean user-facing output;

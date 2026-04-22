@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
@@ -312,6 +313,17 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     // ─── Private: Session telemetry ──────────────────────────────────────────
 
     private resetSession(): void {
+        // Lightweight close marker — NO summary properties.
+        // Session depth is derived from per-eval events via MAX(sessionEvalCount).
+        // This event exists solely to measure start-vs-close ratio.
+        if (this._sessionId) {
+            const closingSessionId = this._sessionId;
+            void callWithTelemetryAndErrorHandling('playground.sessionEnd', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.sessionId = closingSessionId;
+            });
+        }
+
         this._sessionId = undefined;
         this._sessionEvalCount = 0;
         this._sessionAuthMethod = undefined;
