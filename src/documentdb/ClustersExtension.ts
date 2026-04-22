@@ -403,7 +403,6 @@ export class ClustersExtension implements vscode.Disposable {
                     (context: IActionContext, category?: string, source?: string) => {
                         context.telemetry.properties.completionCategory = category ?? 'unknown';
                         context.telemetry.properties.completionSource = source ?? 'unknown';
-                        context.telemetry.suppressIfSuccessful = true;
                     },
                 );
 
