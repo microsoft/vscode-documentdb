@@ -19,7 +19,7 @@ import { Views } from '../../documentdb/Views';
  *
  * Arguments: [uri: vscode.Uri, startLine: number, endLine: number]
  */
-export async function playgroundOpenInCollectionView(
+export async function playgroundOpenQueryInCollectionView(
     context: IActionContext,
     uri?: vscode.Uri,
     startLine?: number,

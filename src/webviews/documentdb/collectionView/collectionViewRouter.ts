@@ -939,7 +939,7 @@ export const collectionsViewRouter = router({
         return { success: true };
     }),
 
-    openInPlayground: publicProcedureWithTelemetry
+    openQueryInPlayground: publicProcedureWithTelemetry
         .input(
             z.object({
                 filter: z.string(),
@@ -965,7 +965,7 @@ export const collectionsViewRouter = router({
                 input.limit,
             );
 
-            await vscode.commands.executeCommand('vscode-documentdb.command.playground.newWithContent', {
+            await vscode.commands.executeCommand('vscode-documentdb.command.playground.new.withContent', {
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
                 databaseName: myCtx.databaseName,
@@ -974,7 +974,7 @@ export const collectionsViewRouter = router({
             });
         }),
 
-    openInShell: publicProcedureWithTelemetry
+    openQueryInShell: publicProcedureWithTelemetry
         .input(
             z.object({
                 filter: z.string(),
@@ -999,7 +999,7 @@ export const collectionsViewRouter = router({
                 input.limit,
             );
 
-            await vscode.commands.executeCommand('vscode-documentdb.command.openInteractiveShell.withInput', {
+            await vscode.commands.executeCommand('vscode-documentdb.command.shell.open.withInput', {
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
                 databaseName: myCtx.databaseName,

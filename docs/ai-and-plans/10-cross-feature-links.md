@@ -136,9 +136,9 @@ db.getCollection('orders').find({ status: 'active' }, { name: 1 }).sort({ create
 ### 1.3 "Open in Playground" Flow
 
 1. User clicks "Playground" button in Collection View
-2. Webview calls a new tRPC mutation: `openInPlayground`
+2. Webview calls a new tRPC mutation: `openQueryInPlayground`
 3. The mutation (server-side in `collectionViewRouter.ts`) calls a new command:
-   `vscode-documentdb.command.playground.newWithContent`
+   `vscode-documentdb.command.playground.new.withContent`
 4. This command is a variant of `newPlayground` that:
    - Accepts `{ clusterId, clusterDisplayName, databaseName, collectionName, content }`
    - Creates an untitled playground document with the provided content instead of the template
@@ -215,19 +215,19 @@ Copy the query to clipboard and show a notification: "Query copied to clipboard.
 Add two new mutations to `collectionViewRouter.ts`:
 
 ```typescript
-openInPlayground: baseProcedure.mutation(async ({ ctx }) => {
+openQueryInPlayground: baseProcedure.mutation(async ({ ctx }) => {
     // Read current query from session state
     const query = buildFindExpression(ctx.collectionName, filter, project, sort);
     await vscode.commands.executeCommand(
-        'vscode-documentdb.command.playground.newWithContent',
+        'vscode-documentdb.command.playground.new.withContent',
         { clusterId: ctx.clusterId, ..., content: query }
     );
 }),
 
-openInShell: baseProcedure.mutation(async ({ ctx }) => {
+openQueryInShell: baseProcedure.mutation(async ({ ctx }) => {
     const query = buildFindExpression(ctx.collectionName, filter, project, sort);
     await vscode.commands.executeCommand(
-        'vscode-documentdb.command.openInteractiveShell',
+        'vscode-documentdb.command.shell.open',
         { clusterId: ctx.clusterId, ..., initialInput: query }
     );
 }),
@@ -504,12 +504,12 @@ In `PlaygroundCodeLensProvider.ts`, add two new CodeLens items next to "Run Bloc
 lenses.push(
   new vscode.CodeLens(blockRange, {
     title: '$(link-external) Collection View',
-    command: 'vscode-documentdb.command.playground.openInCollectionView',
+    command: 'vscode-documentdb.command.playground.openQueryInCollectionView',
     arguments: [uri, blockRange],
   }),
   new vscode.CodeLens(blockRange, {
     title: '$(terminal) Shell',
-    command: 'vscode-documentdb.command.playground.openInShell',
+    command: 'vscode-documentdb.command.playground.openQueryInShell',
     arguments: [uri, blockRange],
   }),
 );
@@ -518,12 +518,12 @@ lenses.push(
 #### New commands
 
 ```typescript
-// playground.openInCollectionView
+// playground.openQueryInCollectionView
 // 1. Get the playground connection (cluster, database)
 // 2. Extract collection name from the code block (regex)
 // 3. Execute vscode-documentdb.command.internal.containerView.open
 
-// playground.openInShell
+// playground.openQueryInShell
 // 1. Get the playground connection (cluster, database)
 // 2. Get the code block text
 // 3. Open shell with initialInput = code block text
@@ -554,15 +554,15 @@ lenses.push(
 | File                                                        | Changes                                                   |
 | ----------------------------------------------------------- | --------------------------------------------------------- |
 | `src/webviews/.../toolbar/ToolbarMainView.tsx`              | Add "Playground" and "Shell" buttons                      |
-| `src/webviews/.../collectionViewRouter.ts`                  | Add `openInPlayground` and `openInShell` mutations        |
+| `src/webviews/.../collectionViewRouter.ts`                  | Add `openQueryInPlayground` and `openQueryInShell` mutations        |
 | `src/commands/playground/newPlayground.ts`                  | Add `newPlaygroundWithContent` function                   |
 | `src/documentdb/ClustersExtension.ts`                       | Register new commands                                     |
 | `src/documentdb/shell/DocumentDBShellPty.ts`                | Add `initialInput` support, update `maybeWriteActionLine` |
 | `src/documentdb/shell/ShellTerminalLinkProvider.ts`         | Add `PLAYGROUND_ACTION_PREFIX`, playground link type      |
 | `src/commands/openInteractiveShell/openInteractiveShell.ts` | Pass `initialInput` through                               |
 | `src/documentdb/playground/PlaygroundCodeLensProvider.ts`   | Add "Collection View" and "Shell" CodeLens                |
-| New: `src/commands/playground/openInCollectionView.ts`      | Extract collection name → open CV                         |
-| New: `src/commands/playground/openInShell.ts`               | Get code block → open shell with initial input            |
+| New: `src/commands/playground/openQueryInCollectionView.ts`      | Extract collection name → open CV                         |
+| New: `src/commands/playground/openQueryInShell.ts`               | Get code block → open shell with initial input            |
 
 ---
 

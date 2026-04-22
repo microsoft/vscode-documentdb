@@ -58,8 +58,8 @@ import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
 import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
-import { playgroundOpenInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
-import { playgroundOpenInShell } from '../commands/playground/playgroundOpenInShell';
+import { playgroundOpenQueryInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
+import { playgroundOpenQueryInShell } from '../commands/playground/playgroundOpenInShell';
 import { runAll } from '../commands/playground/runAll';
 import { runSelected } from '../commands/playground/runSelected';
 import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
@@ -392,10 +392,13 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Playground → Collection View / Shell navigation
                 registerCommand(
-                    PlaygroundCommandIds.openInCollectionView,
-                    withCommandCorrelation(playgroundOpenInCollectionView),
+                    PlaygroundCommandIds.openQueryInCollectionView,
+                    withCommandCorrelation(playgroundOpenQueryInCollectionView),
                 );
-                registerCommand(PlaygroundCommandIds.openInShell, withCommandCorrelation(playgroundOpenInShell));
+                registerCommand(
+                    PlaygroundCommandIds.openQueryInShell,
+                    withCommandCorrelation(playgroundOpenQueryInShell),
+                );
 
                 // Internal: telemetry for completion acceptance (playground + collection view)
                 registerCommand(
@@ -611,13 +614,13 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.openInteractiveShell',
+                    'vscode-documentdb.command.shell.open',
                     withTreeNodeCommandCorrelation(openInteractiveShell),
                 );
 
                 // Inline button variant — same handler, different activationSource
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.openInteractiveShell.inline',
+                    'vscode-documentdb.command.shell.open.inline',
                     withTreeNodeCommandCorrelation((context, node) => {
                         context.telemetry.properties.activationSource = 'treeNodeInline';
                         return openInteractiveShell(context, node as ClusterItemBase | DatabaseItem | CollectionItem);
@@ -625,7 +628,7 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommand(
-                    'vscode-documentdb.command.openInteractiveShell.withInput',
+                    'vscode-documentdb.command.shell.open.withInput',
                     withCommandCorrelation(openInteractiveShellWithInput),
                 );
 

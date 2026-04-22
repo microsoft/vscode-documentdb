@@ -149,13 +149,13 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
                     lenses.push(
                         new vscode.CodeLens(blockRange, {
                             title: `$(files)  ${l10n.t('Collection View')}`,
-                            command: PlaygroundCommandIds.openInCollectionView,
+                            command: PlaygroundCommandIds.openQueryInCollectionView,
                             arguments: [document.uri, activeBlock.startLine, activeBlock.endLine],
                             tooltip: l10n.t('Open this query in Collection View'),
                         }),
                         new vscode.CodeLens(blockRange, {
                             title: `$(terminal)  ${l10n.t('Shell')}`,
-                            command: PlaygroundCommandIds.openInShell,
+                            command: PlaygroundCommandIds.openQueryInShell,
                             arguments: [document.uri, activeBlock.startLine, activeBlock.endLine],
                             tooltip: l10n.t('Open this query in Interactive Shell'),
                         }),
