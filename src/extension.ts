@@ -94,10 +94,9 @@ export async function activateInternal(
 
         const enableAIQueryGeneration = vscode.workspace
             .getConfiguration()
-            .get<boolean>(ext.settingsKeys.enableAIQueryGeneration, false)
-            .toString();
+            .get<boolean>(ext.settingsKeys.enableAIQueryGeneration, false);
 
-        telemetryContext.telemetry.properties.enableAIQueryGeneration = enableAIQueryGeneration;
+        telemetryContext.telemetry.properties.enableAIQueryGeneration = enableAIQueryGeneration ? 'true' : 'false';
     });
 
     // Create the DocumentDB Extension API v0.2.0
