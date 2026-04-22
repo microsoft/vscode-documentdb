@@ -5,7 +5,6 @@
 
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
-import { nonNullValue } from './nonNull';
 
 export function getRootPath(): string | undefined {
     // if this is a multi-root workspace, return undefined
@@ -16,9 +15,5 @@ export function getRootPath(): string | undefined {
 
 export function getBatchSizeSetting(): number {
     const config: vscode.WorkspaceConfiguration = vscode.workspace.getConfiguration();
-    return nonNullValue(
-        config.get<number>(ext.settingsKeys.batchSize),
-        'config.get<number>(ext.settingsKeys.batchSize)',
-        'workspacUtils.ts',
-    );
+    return config.get<number>(ext.settingsKeys.batchSize, 50);
 }
