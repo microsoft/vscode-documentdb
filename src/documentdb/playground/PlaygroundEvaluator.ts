@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
@@ -148,7 +149,13 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         }
 
         onProgress?.(l10n.t('Authenticating…'));
-        await this._workerManager.ensureWorker(connection.clusterId, initMsg);
+        await callWithTelemetryAndErrorHandling('playground.connect', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.errorHandling.rethrow = true;
+            context.telemetry.properties.authMethod = initMsg.authMechanism;
+            context.telemetry.properties.needsSpawn = needsSpawn ? 'true' : 'false';
+            await this._workerManager.ensureWorker(connection.clusterId, initMsg);
+        });
         this._lastInitDurationMs = needsSpawn ? Date.now() - initStartTime : 0;
 
         // Reset console output counter for this eval run
@@ -312,6 +319,17 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     // ─── Private: Session telemetry ──────────────────────────────────────────
 
     private resetSession(): void {
+        // Lightweight close marker — NO summary properties.
+        // Session depth is derived from per-eval events via MAX(sessionEvalCount).
+        // This event exists solely to measure start-vs-close ratio.
+        if (this._sessionId) {
+            const closingSessionId = this._sessionId;
+            void callWithTelemetryAndErrorHandling('playground.sessionEnd', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.sessionId = closingSessionId;
+            });
+        }
+
         this._sessionId = undefined;
         this._sessionEvalCount = 0;
         this._sessionAuthMethod = undefined;

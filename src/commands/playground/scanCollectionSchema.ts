@@ -9,6 +9,7 @@ import { type Document, type WithId } from 'mongodb';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { SchemaStore } from '../../documentdb/SchemaStore';
+import { ext } from '../../extensionVariables';
 
 /** Maximum number of documents to sample for schema discovery. */
 const SCHEMA_SAMPLE_SIZE = 100;
@@ -23,7 +24,7 @@ const SCHEMA_SAMPLE_SIZE = 100;
  * @param collectionName Collection to sample
  */
 export async function scanCollectionSchema(
-    _context: IActionContext,
+    context: IActionContext,
     clusterId: string,
     databaseName: string,
     collectionName: string,
@@ -59,13 +60,28 @@ export async function scanCollectionSchema(
 
         const fieldCount = SchemaStore.getInstance().getKnownFields(clusterId, databaseName, collectionName).length;
 
+        // ── Telemetry: schema scan results ───────────────────────────
+        context.telemetry.measurements.fieldsDiscovered = fieldCount;
+        context.telemetry.measurements.documentsScanned = validDocs.length;
+
         void vscode.window.showInformationMessage(
             l10n.t('Schema scan complete: {0} fields discovered in "{1}".', String(fieldCount), collectionName),
         );
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(
-            l10n.t('Failed to scan schema for "{0}": {1}', collectionName, errorMessage),
-        );
+
+        // Log full details to the output channel for debugging
+        ext.outputChannel.error(`Schema scan failed for "${collectionName}": ${errorMessage}`);
+
+        void vscode.window
+            .showErrorMessage(l10n.t('Failed to scan schema for "{0}".', collectionName), l10n.t('Show Details'))
+            .then((choice) => {
+                if (choice === l10n.t('Show Details')) {
+                    ext.outputChannel.show();
+                }
+            });
+
+        // Re-throw so the telemetry framework captures the failure
+        throw error;
     }
 }

@@ -58,8 +58,8 @@ import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
 import { showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
 import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
-import { playgroundOpenInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
-import { playgroundOpenInShell } from '../commands/playground/playgroundOpenInShell';
+import { playgroundOpenQueryInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
+import { playgroundOpenQueryInShell } from '../commands/playground/playgroundOpenInShell';
 import { runAll } from '../commands/playground/runAll';
 import { runSelected } from '../commands/playground/runSelected';
 import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
@@ -85,12 +85,20 @@ import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotif
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
 import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
+import {
+    CompletionCommandIds,
+    normalizeCompletionCategory,
+    normalizeCompletionSource,
+} from '../telemetry/completionCategories';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
+import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
+import { type CollectionItem } from '../tree/documentdb/CollectionItem';
+import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
 import {
     registerCommandWithModalErrors,
@@ -106,6 +114,7 @@ import { CollectionNameCache } from './query-language/playground-completions/Col
 import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
 import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
 import { PlaygroundSnippetSessionManager } from './query-language/playground-completions/PlaygroundSnippetSessionManager';
+import { ShellCommandIds } from './shell/constants';
 import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
@@ -364,7 +373,16 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(newPlayground),
                 );
 
-                registerCommand(PlaygroundCommandIds.newWithContent, newPlaygroundWithContent);
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.playground.new.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return newPlayground(context, node as DatabaseItem | CollectionItem);
+                    }),
+                );
+
+                registerCommand(PlaygroundCommandIds.newWithContent, withCommandCorrelation(newPlaygroundWithContent));
 
                 registerCommand(PlaygroundCommandIds.showConnectionInfo, withCommandCorrelation(showConnectionInfo));
 
@@ -379,8 +397,35 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 // Playground → Collection View / Shell navigation
-                registerCommand(PlaygroundCommandIds.openInCollectionView, playgroundOpenInCollectionView);
-                registerCommand(PlaygroundCommandIds.openInShell, playgroundOpenInShell);
+                registerCommand(
+                    PlaygroundCommandIds.openQueryInCollectionView,
+                    withCommandCorrelation(playgroundOpenQueryInCollectionView),
+                );
+                registerCommand(
+                    PlaygroundCommandIds.openQueryInShell,
+                    withCommandCorrelation(playgroundOpenQueryInShell),
+                );
+
+                // Internal: telemetry for completion acceptance (playground + collection view)
+                registerCommand(
+                    CompletionCommandIds.completionAccepted,
+                    (context: IActionContext, category?: string, source?: string) => {
+                        const normalizedCategory = normalizeCompletionCategory(category);
+                        const normalizedSource = normalizeCompletionSource(source);
+                        if (normalizedCategory === 'unknown') {
+                            ext.outputChannel.appendLog(
+                                `Unknown completion category received: ${JSON.stringify(category)} (source: ${source ?? 'unknown'})`,
+                            );
+                        }
+                        if (normalizedSource === 'unknown') {
+                            ext.outputChannel.appendLog(
+                                `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
+                            );
+                        }
+                        context.telemetry.properties.completionCategory = normalizedCategory;
+                        context.telemetry.properties.completionSource = normalizedSource;
+                    },
+                );
 
                 registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
 
@@ -558,6 +603,15 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(openCollectionView),
                 );
 
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.containerView.open.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openCollectionView(context, node as CollectionItem);
+                    }),
+                );
+
                 registerCommand(
                     'vscode-documentdb.command.internal.documentView.open',
                     withCommandCorrelation(openDocumentView),
@@ -578,14 +632,20 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.openInteractiveShell',
+                    ShellCommandIds.open,
                     withTreeNodeCommandCorrelation(openInteractiveShell),
                 );
 
-                registerCommand(
-                    'vscode-documentdb.command.openInteractiveShell.withInput',
-                    openInteractiveShellWithInput,
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    ShellCommandIds.openInline,
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openInteractiveShell(context, node as ClusterItemBase | DatabaseItem | CollectionItem);
+                    }),
                 );
+
+                registerCommand(ShellCommandIds.openWithInput, withCommandCorrelation(openInteractiveShellWithInput));
 
                 // Register the terminal link provider for "Open in Collection View" action lines
                 ext.context.subscriptions.push(

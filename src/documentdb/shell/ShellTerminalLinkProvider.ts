@@ -287,9 +287,10 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
 
         if (link.linkType === 'playground') {
             void callWithTelemetryAndErrorHandling(
-                'vscode-documentdb.shell.terminalLink.openPlayground',
+                'vscode-documentdb.shell.terminalLink.openQueryInPlayground',
                 async (context: IActionContext) => {
                     context.telemetry.properties.linkType = 'playgroundActionLine';
+                    context.telemetry.properties.activationSource = 'shellActionLine';
 
                     const escaped = escapeJsString(link.collectionName);
                     const content = `db.getCollection('${escaped}').find({ })`;
@@ -306,9 +307,10 @@ export class ShellTerminalLinkProvider implements vscode.TerminalLinkProvider<Sh
         }
 
         void callWithTelemetryAndErrorHandling(
-            'vscode-documentdb.shell.terminalLink.openCollectionView',
+            'vscode-documentdb.shell.terminalLink.openQueryInCollectionView',
             async (context: IActionContext) => {
                 context.telemetry.properties.linkType = 'collectionActionLine';
+                context.telemetry.properties.activationSource = 'shellActionLine';
 
                 await vscode.commands.executeCommand('vscode-documentdb.command.internal.containerView.open', {
                     clusterId: link.clusterId,

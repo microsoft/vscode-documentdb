@@ -3,11 +3,18 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
+import { ClustersClient } from '../ClustersClient';
+import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
+import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
+import { addDomainInfoToProperties } from '../utils/getClusterMetadata';
 import { getClosingBrackets } from './bracketDepthCounter';
 import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SettingsHintError } from './SettingsHintError';
@@ -89,6 +96,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _ghostTextIsHint: boolean = false;
     /** Optional initial input to pre-fill after initialization. */
     private _initialInput: string | undefined;
+
+    // ─── Telemetry tracking ──────────────────────────────────────────────────
+
+    /** Unique session ID for correlating all events within this shell session. */
+    private readonly _shellSessionId: string = randomUUID();
+    /** Running count of commands evaluated in this session (for commandIndex measurement). */
+    private _commandCount: number = 0;
+    /** Whether the session was successfully initialized (for guarding sessionEnd emission). */
+    private _sessionStarted: boolean = false;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
@@ -190,6 +206,22 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             clearTimeout(this._ghostTextTimer);
             this._ghostTextTimer = undefined;
         }
+
+        // ── Telemetry: shell session ended ───────────────────────────────
+        // Lightweight close marker — NO summary properties.
+        // Session depth (commands, errors) is derived from per-eval events
+        // via MAX(commandIndex) GROUP BY shellSessionId.
+        // This event exists solely to measure start-vs-close ratio
+        // (how often users close cleanly vs. just killing VS Code).
+        // Only emit if the session was successfully started — otherwise
+        // we'd produce unpaired sessionEnd events on connection failure.
+        if (this._sessionStarted) {
+            void callWithTelemetryAndErrorHandling('shell.sessionEnd', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.shellSessionId = this._shellSessionId;
+            });
+        }
+
         this._sessionManager.dispose();
         this._writeEmitter.dispose();
         this._closeEmitter.dispose();
@@ -420,6 +452,31 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._spinner?.stop();
             this._spinner = undefined;
 
+            // ── Telemetry: shell session started ─────────────────────────
+            this._sessionStarted = true;
+            void callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.shellSessionId = this._shellSessionId;
+                context.telemetry.properties.authMethod = metadata.authMechanism;
+                context.telemetry.properties.isEmulator = metadata.isEmulator ? 'true' : 'false';
+                context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
+
+                // Link to server metadata via connectionCorrelationId
+                try {
+                    const client = ClustersClient.getExistingClient(this._connectionInfo.clusterId);
+                    if (client?.connectionCorrelationId) {
+                        context.telemetry.properties.connectionCorrelationId = client.connectionCorrelationId;
+                    }
+                } catch {
+                    // Best-effort — client may not exist yet
+                }
+
+                // Domain info — privacy-safe hashed host data
+                const domainProps: Record<string, string | undefined> = {};
+                this.collectShellDomainTelemetry(domainProps);
+                Object.assign(context.telemetry.properties, domainProps);
+            });
+
             // Display connection summary
             const authLabel = metadata.authMechanism === 'MicrosoftEntraID' ? 'Entra ID' : 'SCRAM';
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
@@ -511,6 +568,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         try {
             await this.evaluateInput(trimmed);
+        } catch (error: unknown) {
+            this.handleEvalError(error);
         } finally {
             // Stop the spinner before writing results or the next prompt.
             this._spinner?.stop();
@@ -537,8 +596,37 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     private async evaluateInput(input: string): Promise<void> {
-        try {
-            const result = await this._sessionManager.evaluate(input);
+        this._commandCount++;
+        const commandIndex = this._commandCount;
+        const commandCategory = classifyCommand(input);
+
+        // Wrap the entire eval in callWithTelemetryAndErrorHandling so the
+        // framework automatically captures duration, result, and error details
+        // in a single event — no need for separate success/failure blocks.
+        await callWithTelemetryAndErrorHandling('shell.eval', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.errorHandling.rethrow = true; // let the outer catch handle display
+
+            // ── Pre-eval telemetry ───────────────────────────────────────
+            context.telemetry.properties.shellSessionId = this._shellSessionId;
+            context.telemetry.properties.commandCategory = commandCategory;
+            context.telemetry.measurements.commandIndex = commandIndex;
+
+            if (commandCategory === 'runCommand') {
+                context.telemetry.properties.runCommandName = extractRunCommandName(input) ?? 'unknown';
+            }
+
+            let result: SerializableExecutionResult;
+            try {
+                result = await this._sessionManager.evaluate(input);
+            } catch (evalError) {
+                // Ctrl+C kills the worker, producing a "Worker terminated" error.
+                // Re-classify as user cancellation for accurate telemetry.
+                if (this._interrupted) {
+                    throw new UserCancelledError('shell.eval');
+                }
+                throw evalError;
+            }
 
             // Stop the spinner before writing any output so the spinner
             // character doesn't collide with the result text.
@@ -550,6 +638,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             if (this._interrupted) {
                 return;
             }
+
+            // ── Post-eval telemetry ──────────────────────────────────────
+            context.telemetry.properties.resultType = result.type ?? 'null';
 
             // Check for special result types (intercepted commands)
             if (this.handleSpecialResult(result)) {
@@ -572,39 +663,46 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // This runs asynchronously after output is displayed — schema feeding
             // is non-blocking and failure is non-critical.
             this.maybeFeedSchemaStore(result);
-        } catch (error: unknown) {
-            // Stop the spinner before writing error output.
-            this._spinner?.stop();
-            this._spinner = undefined;
+        });
+    }
 
-            // Suppress errors from intentional Ctrl+C cancellation — the interrupt
-            // handler already showed ^C and a new prompt.
-            if (this._interrupted) {
-                return;
-            }
-            const rawMessage = error instanceof Error ? error.message : String(error);
-            // Strip technical error codes for clean user-facing output;
-            // the extracted code is preserved for future telemetry.
-            const { message: errorMessage } = extractErrorCode(rawMessage);
-            this.writeLine(this._outputFormatter.formatError(errorMessage));
+    /**
+     * Handles display of eval errors in the terminal.
+     * Called by handleLineInput when evaluateInput throws.
+     */
+    private handleEvalError(error: unknown): void {
+        // Stop the spinner before writing error output.
+        this._spinner?.stop();
+        this._spinner = undefined;
 
-            // Show a hint line and clickable settings link for errors that reference a VS Code setting
-            if (error instanceof SettingsHintError) {
-                this.writeLine(
-                    this._outputFormatter.formatSystemMessage(
-                        `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
-                    ),
-                );
-            }
+        // Suppress errors from intentional Ctrl+C cancellation — the interrupt
+        // handler already showed ^C and a new prompt.
+        if (this._interrupted) {
+            return;
+        }
 
-            // Detect query timeout errors (error code 50: MaxTimeMSExpired / ExceededTimeLimit)
-            if (error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50) {
-                this.writeLine(
-                    this._outputFormatter.formatSystemMessage(
-                        l10n.t('Tip: use .maxTimeMS() to increase the time limit for this query.'),
-                    ),
-                );
-            }
+        const rawMessage = error instanceof Error ? error.message : String(error);
+        // Strip technical error codes for clean user-facing output;
+        // the extracted code is preserved for future telemetry.
+        const { message: errorMessage } = extractErrorCode(rawMessage);
+        this.writeLine(this._outputFormatter.formatError(errorMessage));
+
+        // Show a hint line and clickable settings link for errors that reference a VS Code setting
+        if (error instanceof SettingsHintError) {
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(
+                    `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
+                ),
+            );
+        }
+
+        // Detect query timeout errors (error code 50: MaxTimeMSExpired / ExceededTimeLimit)
+        if (error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50) {
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(
+                    l10n.t('Tip: use .maxTimeMS() to increase the time limit for this query.'),
+                ),
+            );
         }
     }
 
@@ -1066,5 +1164,24 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
         return config.get<boolean>('documentDB.shell.display.colorSupport', true);
+    }
+
+    // ─── Private: Telemetry helpers ──────────────────────────────────────────
+
+    /**
+     * Collect domain info from cached credentials for telemetry.
+     * Reuses the same hashing logic as the connection metadata telemetry.
+     */
+    private collectShellDomainTelemetry(properties: Record<string, string | undefined>): void {
+        try {
+            const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
+            if (!credentials?.connectionString) {
+                return;
+            }
+            const hosts = getHostsFromConnectionString(credentials.connectionString);
+            addDomainInfoToProperties(hosts, properties);
+        } catch {
+            // Domain info is best-effort — don't fail telemetry if parsing fails
+        }
     }
 }

@@ -217,3 +217,4 @@ For detailed patterns, see:
 
 - [instructions/typescript.instructions.md](instructions/typescript.instructions.md) - TypeScript patterns and anti-patterns
 - [instructions/wizard.instructions.md](instructions/wizard.instructions.md) - AzureWizard implementation details
+- [skills/telemetry-instrumentation/SKILL.md](skills/telemetry-instrumentation/SKILL.md) - Telemetry instrumentation patterns

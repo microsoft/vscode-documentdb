@@ -11,6 +11,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
+import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
@@ -38,6 +39,7 @@ import {
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
+import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
@@ -939,7 +941,7 @@ export const collectionsViewRouter = router({
         return { success: true };
     }),
 
-    openInPlayground: publicProcedureWithTelemetry
+    openQueryInPlayground: publicProcedureWithTelemetry
         .input(
             z.object({
                 filter: z.string(),
@@ -952,6 +954,11 @@ export const collectionsViewRouter = router({
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
+            myCtx.telemetry.properties.hasFilter =
+                input.filter && input.filter.replace(/\s/g, '') !== '{}' ? 'true' : 'false';
+
             const query = buildFindExpression(
                 myCtx.collectionName,
                 input.filter,
@@ -961,7 +968,7 @@ export const collectionsViewRouter = router({
                 input.limit,
             );
 
-            await vscode.commands.executeCommand('vscode-documentdb.command.playground.newWithContent', {
+            await vscode.commands.executeCommand('vscode-documentdb.command.playground.new.withContent', {
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
                 databaseName: myCtx.databaseName,
@@ -970,7 +977,7 @@ export const collectionsViewRouter = router({
             });
         }),
 
-    openInShell: publicProcedureWithTelemetry
+    openQueryInShell: publicProcedureWithTelemetry
         .input(
             z.object({
                 filter: z.string(),
@@ -983,6 +990,9 @@ export const collectionsViewRouter = router({
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
+
             const query = buildFindExpression(
                 myCtx.collectionName,
                 input.filter,
@@ -992,7 +1002,7 @@ export const collectionsViewRouter = router({
                 input.limit,
             );
 
-            await vscode.commands.executeCommand('vscode-documentdb.command.openInteractiveShell.withInput', {
+            await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
                 clusterId: myCtx.clusterId,
                 clusterDisplayName: myCtx.clusterDisplayName,
                 databaseName: myCtx.databaseName,
@@ -1055,4 +1065,21 @@ export const collectionsViewRouter = router({
             limit: parsed.limit,
         };
     }),
+
+    completionAccepted: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                category: z.enum([...COMPLETION_CATEGORIES, 'unknown']),
+            }),
+        )
+        .mutation(({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            if (input.category === 'unknown') {
+                ext.outputChannel.appendLog(
+                    `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
+                );
+            }
+            myCtx.telemetry.properties.completionCategory = input.category;
+            myCtx.telemetry.properties.completionSource = CompletionSources.CollectionView;
+        }),
 });

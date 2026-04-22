@@ -6,6 +6,7 @@
 import { UserCancelledError, callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { feedResultToSchemaStore } from '../../documentdb/feedResultToSchemaStore';
 import { PlaygroundEvaluator } from '../../documentdb/playground/PlaygroundEvaluator';
@@ -16,6 +17,7 @@ import { extractErrorCode } from '../../documentdb/shell/ShellOutputFormatter';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
+import { classifyCodeBlock } from '../../utils/classifyCommand';
 
 /** Per-cluster evaluator pool — one worker per cluster, lazily created. */
 const evaluators = new Map<string, PlaygroundEvaluator>();
@@ -124,15 +126,34 @@ export async function executePlaygroundCode(
 
         // ── Pre-execution telemetry (known before eval) ──────────────
         context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
-        context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+        context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
         context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
         context.telemetry.properties.runMode = runMode;
         context.telemetry.measurements.codeLineCount = code.split('\n').length;
+
+        // Command classification — understand what operations are being run
+        const classification = classifyCodeBlock(code);
+        context.telemetry.properties.primaryCommandCategory = classification.primaryCategory;
+        context.telemetry.measurements.totalCommandsInBlock = classification.totalCommands;
+        // Write per-category counts as individual measurements for aggregation
+        for (const [category, count] of Object.entries(classification.categoryCounts)) {
+            context.telemetry.measurements[`cmd_${category}`] = count;
+        }
 
         // Domain info — privacy-safe hashed host data for platform analytics
         const domainProps: Record<string, string | undefined> = {};
         collectDomainTelemetry(connection, domainProps);
         Object.assign(context.telemetry.properties, domainProps);
+
+        // Link to server metadata via connectionCorrelationId
+        try {
+            const existingClient = ClustersClient.getExistingClient(connection.clusterId);
+            if (existingClient?.connectionCorrelationId) {
+                context.telemetry.properties.connectionCorrelationId = existingClient.connectionCorrelationId;
+            }
+        } catch {
+            // Best-effort
+        }
 
         await vscode.window.withProgress(
             {
@@ -161,7 +182,7 @@ export async function executePlaygroundCode(
                     context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
                     // sessionId/sessionEvalCount may have changed after evaluate (if worker was spawned)
                     context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
-                    context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+                    context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
 
                     let formattedOutput = formatResult(result, code, connection);
@@ -181,7 +202,7 @@ export async function executePlaygroundCode(
                 } catch (error: unknown) {
                     // Update session telemetry even on failure (worker may have spawned before failing)
                     context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
-                    context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+                    context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
                     context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
 

@@ -286,9 +286,9 @@ const ToolbarSecondaryActions = (): JSX.Element => {
             });
     };
 
-    const handleOpenInPlayground = (): void => {
+    const handleOpenQueryInPlayground = (): void => {
         const query = getCurrentQuery();
-        void trpcClient.mongoClusters.collectionView.openInPlayground.mutate({
+        void trpcClient.mongoClusters.collectionView.openQueryInPlayground.mutate({
             filter: query.filter,
             project: query.project,
             sort: query.sort,
@@ -297,9 +297,9 @@ const ToolbarSecondaryActions = (): JSX.Element => {
         });
     };
 
-    const handleOpenInShell = (): void => {
+    const handleOpenQueryInShell = (): void => {
         const query = getCurrentQuery();
-        void trpcClient.mongoClusters.collectionView.openInShell.mutate({
+        void trpcClient.mongoClusters.collectionView.openQueryInShell.mutate({
             filter: query.filter,
             project: query.project,
             sort: query.sort,
@@ -382,7 +382,7 @@ const ToolbarSecondaryActions = (): JSX.Element => {
                         relationship="description"
                         withArrow
                     >
-                        <ToolbarButton icon={<KeyboardRegular />} onClick={handleOpenInPlayground}>
+                        <ToolbarButton icon={<KeyboardRegular />} onClick={handleOpenQueryInPlayground}>
                             {l10n.t('Playground')}
                         </ToolbarButton>
                     </Tooltip>
@@ -393,7 +393,7 @@ const ToolbarSecondaryActions = (): JSX.Element => {
                         relationship="description"
                         withArrow
                     >
-                        <ToolbarButton icon={<WindowConsoleRegular />} onClick={handleOpenInShell}>
+                        <ToolbarButton icon={<WindowConsoleRegular />} onClick={handleOpenQueryInShell}>
                             {l10n.t('Shell')}
                         </ToolbarButton>
                     </Tooltip>
@@ -406,8 +406,8 @@ const ToolbarSecondaryActions = (): JSX.Element => {
                     handleExportQueryResults={handleExportQueryResults}
                     handleCopyQuery={handleCopyQuery}
                     handlePasteQuery={handlePasteQuery}
-                    handleOpenInPlayground={handleOpenInPlayground}
-                    handleOpenInShell={handleOpenInShell}
+                    handleOpenQueryInPlayground={handleOpenQueryInPlayground}
+                    handleOpenQueryInShell={handleOpenQueryInShell}
                 />
             </Toolbar>
         </Overflow>
@@ -448,16 +448,16 @@ const OverflowMenuButton = ({
     handleExportQueryResults,
     handleCopyQuery,
     handlePasteQuery,
-    handleOpenInPlayground,
-    handleOpenInShell,
+    handleOpenQueryInPlayground,
+    handleOpenQueryInShell,
 }: {
     handleImportFromJson: () => void;
     handleExportEntireCollection: () => void;
     handleExportQueryResults: () => void;
     handleCopyQuery: () => void;
     handlePasteQuery: () => void;
-    handleOpenInPlayground: () => void;
-    handleOpenInShell: () => void;
+    handleOpenQueryInPlayground: () => void;
+    handleOpenQueryInShell: () => void;
 }): JSX.Element | null => {
     const { ref, overflowCount, isOverflowing } = useOverflowMenu<HTMLButtonElement>();
     const dataGroupVisible = useIsOverflowGroupVisible('data');
@@ -512,12 +512,12 @@ const OverflowMenuButton = ({
                         </MenuItem>
                     </OverflowMenuItem>
                     <OverflowMenuItem id="playground">
-                        <MenuItem icon={<KeyboardRegular />} onClick={handleOpenInPlayground}>
+                        <MenuItem icon={<KeyboardRegular />} onClick={handleOpenQueryInPlayground}>
                             {l10n.t('Open in Playground')}
                         </MenuItem>
                     </OverflowMenuItem>
                     <OverflowMenuItem id="shell">
-                        <MenuItem icon={<WindowConsoleRegular />} onClick={handleOpenInShell}>
+                        <MenuItem icon={<WindowConsoleRegular />} onClick={handleOpenQueryInShell}>
                             {l10n.t('Open in Shell')}
                         </MenuItem>
                     </OverflowMenuItem>

@@ -19,8 +19,8 @@ import { Views } from '../../documentdb/Views';
  *
  * Arguments: [uri: vscode.Uri, startLine: number, endLine: number]
  */
-export async function playgroundOpenInCollectionView(
-    _context: IActionContext,
+export async function playgroundOpenQueryInCollectionView(
+    context: IActionContext,
     uri?: vscode.Uri,
     startLine?: number,
     endLine?: number,
@@ -48,6 +48,10 @@ export async function playgroundOpenInCollectionView(
 
     // Try to extract filter/project/sort from the code block for a richer handoff
     const parsed = parseFindExpression(blockText);
+
+    // ── Telemetry: cross-feature navigation context ──────────────────
+    context.telemetry.properties.activationSource = 'playgroundCodeLens';
+    context.telemetry.properties.hasFilter = parsed.filter ? 'true' : 'false';
 
     await vscode.commands.executeCommand('vscode-documentdb.command.internal.containerView.open', {
         clusterId: connection.clusterId,

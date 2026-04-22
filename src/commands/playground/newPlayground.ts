@@ -24,13 +24,19 @@ import { escapeJsString } from '../../utils/escapeJsString';
  * Each new playground gets its own connection — multiple playgrounds can
  * be open simultaneously, each connected to different servers.
  */
-export async function newPlayground(_context: IActionContext, node?: DatabaseItem | CollectionItem): Promise<void> {
+export async function newPlayground(context: IActionContext, node?: DatabaseItem | CollectionItem): Promise<void> {
     if (!node) {
         void vscode.window.showInformationMessage(
             l10n.t('Right-click a database or collection in the DocumentDB panel to create a new Query Playground.'),
         );
         return;
     }
+
+    // ── Telemetry: activation source & context ───────────────────────
+    context.telemetry.properties.activationSource ??= 'treeNode';
+    context.telemetry.properties.nodeType = isCollectionItem(node) ? 'collection' : 'database';
+    context.telemetry.properties.viewId = node.cluster.viewId ?? 'unknown';
+    context.telemetry.properties.experience = node.experience.api;
 
     // Build template — customize when launched from a collection node
     const collectionName = isCollectionItem(node) ? escapeJsString(node.collectionInfo.name) : 'collectionName';
@@ -74,12 +80,15 @@ export interface NewPlaygroundWithContentParams {
  * (e.g., opening a query from Collection View or Interactive Shell in a playground).
  */
 export async function newPlaygroundWithContent(
-    _context: IActionContext,
+    context: IActionContext,
     params?: NewPlaygroundWithContentParams,
 ): Promise<void> {
     if (!params) {
         return;
     }
+
+    // ── Telemetry: cross-feature activation ──────────────────────────
+    context.telemetry.properties.activationSource = 'crossFeature';
 
     const template = [
         `// Query Playground: ${params.clusterDisplayName}`,

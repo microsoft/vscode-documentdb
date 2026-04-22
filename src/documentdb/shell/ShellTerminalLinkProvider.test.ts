@@ -335,7 +335,7 @@ describe('ShellTerminalLinkProvider', () => {
             return new Promise<void>((resolve) => {
                 setTimeout(() => {
                     expect(spy).toHaveBeenCalledWith(
-                        'vscode-documentdb.command.playground.newWithContent',
+                        'vscode-documentdb.command.playground.new.withContent',
                         expect.objectContaining({
                             clusterId: 'my-cluster',
                             databaseName: 'mydb',

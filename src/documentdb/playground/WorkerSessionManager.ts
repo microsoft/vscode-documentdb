@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as path from 'path';
@@ -55,6 +56,12 @@ export class WorkerSessionManager implements vscode.Disposable {
     private _workerClusterId: string | undefined;
     /** Set before intentional worker termination to suppress the onWorkerExit callback. */
     private _terminatingIntentionally = false;
+
+    // ─── Telemetry tracking ──────────────────────────────────────────────────
+    /** Number of workers spawned during this manager's lifetime. */
+    private _spawnCount: number = 0;
+    /** Timestamp of the last worker spawn (for lifetime measurement). */
+    private _lastSpawnTime: number = 0;
 
     /** Pending request correlation map: requestId → { resolve, reject } */
     private readonly _pendingRequests = new Map<
@@ -175,6 +182,8 @@ export class WorkerSessionManager implements vscode.Disposable {
         initTimeoutMs: number,
     ): Promise<void> {
         this._workerState = 'spawning';
+        this._spawnCount++;
+        this._lastSpawnTime = Date.now();
 
         // Resolve worker script path (same directory as the main bundle in dist/)
         const workerPath = path.join(__dirname, 'playgroundWorker.js');
@@ -366,11 +375,15 @@ export class WorkerSessionManager implements vscode.Disposable {
     // ─── Private: Worker cleanup ─────────────────────────────────────────────
 
     private terminateWorker(): void {
+        const wasAlive = !!this._worker;
+
         if (this._worker) {
             this._terminatingIntentionally = true;
             void this._worker.terminate();
             this._worker = undefined;
         }
+
+        const reason = this._terminatingIntentionally ? 'intentional' : 'forced';
         this._workerState = 'idle';
         this._workerClusterId = undefined;
 
@@ -379,9 +392,33 @@ export class WorkerSessionManager implements vscode.Disposable {
             entry.reject(new Error('Worker terminated'));
         }
         this._pendingRequests.clear();
+
+        // ── Telemetry: worker terminated ─────────────────────────────────
+        if (wasAlive) {
+            void callWithTelemetryAndErrorHandling('worker.terminated', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.reason = reason;
+                context.telemetry.measurements.spawnCount = this._spawnCount;
+                if (this._lastSpawnTime > 0) {
+                    context.telemetry.measurements.lifetimeMs = Date.now() - this._lastSpawnTime;
+                }
+            });
+        }
     }
 
     private handleWorkerExit(): void {
+        // Only emit unexpected exit when the worker was NOT intentionally terminated.
+        // Intentional exits (dispose, shutdown, cluster switch) are tracked by worker.terminated.
+        if (!this._terminatingIntentionally) {
+            void callWithTelemetryAndErrorHandling('worker.unexpectedExit', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.measurements.spawnCount = this._spawnCount;
+                if (this._lastSpawnTime > 0) {
+                    context.telemetry.measurements.lifetimeMs = Date.now() - this._lastSpawnTime;
+                }
+            });
+        }
+
         this._worker = undefined;
         this._workerState = 'idle';
         this._workerClusterId = undefined;
