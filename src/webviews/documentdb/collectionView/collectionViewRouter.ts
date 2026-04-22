@@ -1062,4 +1062,12 @@ export const collectionsViewRouter = router({
             limit: parsed.limit,
         };
     }),
+
+    completionAccepted: publicProcedureWithTelemetry
+        .input(z.object({ category: z.string() }))
+        .mutation(({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            myCtx.telemetry.properties.completionCategory = input.category;
+            myCtx.telemetry.properties.completionSource = 'collectionView';
+        }),
 });

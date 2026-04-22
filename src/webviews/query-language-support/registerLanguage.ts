@@ -40,21 +40,30 @@ let registrationPromise: Promise<void> | undefined;
 /** Callback used to open external URLs via the extension host. */
 let openUrlHandler: ((url: string) => void) | undefined;
 
+/** Callback used to track completion acceptance via the extension host. */
+let completionAcceptedHandler: ((category: string) => void) | undefined;
+
+/** Monaco command ID for completion acceptance tracking. */
+const COMPLETION_ACCEPTED_COMMAND = 'documentdb.internal.completionAccepted';
+
 /**
  * Registers the `documentdb-query` language with Monaco.
  *
  * Safe to call multiple times — concurrent calls coalesce into one registration.
- * The `openUrl` callback is updated on every call so the tRPC client reference
- * stays current even after hot-reloads.
+ * The `openUrl` and `onCompletionAccepted` callbacks are updated on every call so
+ * the tRPC client reference stays current even after hot-reloads.
  *
  * @param monaco - the Monaco editor API instance
  * @param openUrl - callback to open a URL via the extension host (avoids webview sandbox restrictions)
+ * @param onCompletionAccepted - callback to track completion acceptance via the extension host
  */
 export function registerDocumentDBQueryLanguage(
     monaco: typeof monacoEditor,
     openUrl?: (url: string) => void,
+    onCompletionAccepted?: (category: string) => void,
 ): Promise<void> {
     openUrlHandler = openUrl ?? openUrlHandler;
+    completionAcceptedHandler = onCompletionAccepted ?? completionAcceptedHandler;
     if (!registrationPromise) {
         registrationPromise = doRegisterLanguage(monaco);
     }
@@ -91,6 +100,13 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
             }
             return true;
         },
+    });
+
+    // Register a Monaco command for tracking completion acceptance.
+    // Completion items reference this command ID — when the user accepts an item,
+    // Monaco executes this command, which routes to the extension host via tRPC.
+    monaco.editor.registerCommand(COMPLETION_ACCEPTED_COMMAND, (_accessor, category: string) => {
+        completionAcceptedHandler?.(category);
     });
 
     // Step 4: Register the completion provider
@@ -161,6 +177,7 @@ async function doRegisterLanguage(monaco: typeof monacoEditor): Promise<void> {
                 monaco,
                 cursorContext,
                 needsWrapping,
+                completionCommandId: COMPLETION_ACCEPTED_COMMAND,
             });
 
             return { suggestions: items };

@@ -58,6 +58,12 @@ export interface CreateCompletionItemsParams {
      * (fields, operators, BSON constructors, and JS globals).
      */
     cursorContext?: CursorContext;
+    /**
+     * Optional Monaco command ID to attach to each completion item.
+     * When provided, accepting a completion fires this command with the
+     * completion category as argument — used for acceptance tracking telemetry.
+     */
+    completionCommandId?: string;
 }
 
 // KEY_POSITION_OPERATORS is imported from ./completionKnowledge
@@ -95,37 +101,53 @@ export function getMetaTagsForEditorType(editorType: EditorType | undefined): re
  * - **unknown** (ambiguous): all completions — full discovery fallback
  */
 export function createCompletionItems(params: CreateCompletionItemsParams): monacoEditor.languages.CompletionItem[] {
-    const { editorType, sessionId, range, monaco, fieldBsonTypes, cursorContext, needsWrapping } = params;
+    const { editorType, sessionId, range, monaco, fieldBsonTypes, cursorContext, needsWrapping, completionCommandId } =
+        params;
+
+    let items: monacoEditor.languages.CompletionItem[];
 
     if (!cursorContext || cursorContext.position === 'unknown') {
         if (needsWrapping) {
-            // EMPTY editor — no braces present. Show key-position completions
-            // (fields + root operators) with { } wrapping so inserted items
-            // produce valid syntax.
-            return createEmptyEditorCompletions(editorType, sessionId, range, monaco);
+            items = createEmptyEditorCompletions(editorType, sessionId, range, monaco);
+        } else {
+            items = createAllCompletions(editorType, sessionId, range, monaco);
         }
-        // Genuinely UNKNOWN — show all completions as a discovery fallback.
-        return createAllCompletions(editorType, sessionId, range, monaco);
+    } else {
+        switch (cursorContext.position) {
+            case 'key':
+            case 'array-element':
+                items = createKeyPositionCompletions(editorType, sessionId, range, monaco);
+                break;
+
+            case 'value': {
+                const fieldBsonType = cursorContext.fieldBsonType;
+                items = createValuePositionCompletions(editorType, range, monaco, fieldBsonType);
+                break;
+            }
+
+            case 'operator': {
+                const bsonTypes = cursorContext.fieldBsonType ? [cursorContext.fieldBsonType] : fieldBsonTypes;
+                items = createOperatorPositionCompletions(editorType, range, monaco, bsonTypes);
+                break;
+            }
+
+            default:
+                items = createAllCompletions(editorType, sessionId, range, monaco);
+                break;
+        }
     }
 
-    switch (cursorContext.position) {
-        case 'key':
-        case 'array-element':
-            return createKeyPositionCompletions(editorType, sessionId, range, monaco);
-
-        case 'value': {
-            const fieldBsonType = cursorContext.fieldBsonType;
-            return createValuePositionCompletions(editorType, range, monaco, fieldBsonType);
+    // Attach acceptance tracking command to all items (if configured).
+    // When the user accepts a completion, Monaco fires this command with
+    // the completion category derived from the item's CompletionItemKind.
+    if (completionCommandId) {
+        for (const item of items) {
+            const category = completionKindToCategory(item.kind, monaco);
+            item.command = { id: completionCommandId, title: '', arguments: [category] };
         }
-
-        case 'operator': {
-            const bsonTypes = cursorContext.fieldBsonType ? [cursorContext.fieldBsonType] : fieldBsonTypes;
-            return createOperatorPositionCompletions(editorType, range, monaco, bsonTypes);
-        }
-
-        default:
-            return createAllCompletions(editorType, sessionId, range, monaco);
     }
+
+    return items;
 }
 
 // ---------- Context-specific completion builders ----------
@@ -374,4 +396,21 @@ function getFieldCompletionItems(
         }
     }
     return fieldItems;
+}
+
+/**
+ * Maps a Monaco CompletionItemKind to a telemetry-safe category string.
+ */
+function completionKindToCategory(
+    kind: monacoEditor.languages.CompletionItemKind | undefined,
+    monaco: typeof monacoEditor,
+): string {
+    if (kind === undefined) return 'unknown';
+    const kinds = monaco.languages.CompletionItemKind;
+    if (kind === kinds.Field) return 'field';
+    if (kind === kinds.Operator || kind === kinds.Function || kind === kinds.Method) return 'operator';
+    if (kind === kinds.Constructor) return 'bsonConstructor';
+    if (kind === kinds.Value || kind === kinds.Snippet) return 'typeSuggestion';
+    if (kind === kinds.Variable) return 'jsGlobal';
+    return 'other';
 }
