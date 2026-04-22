@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
@@ -103,6 +103,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private readonly _shellSessionId: string = randomUUID();
     /** Running count of commands evaluated in this session (for commandIndex measurement). */
     private _commandCount: number = 0;
+    /** Whether the session was successfully initialized (for guarding sessionEnd emission). */
+    private _sessionStarted: boolean = false;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
@@ -211,10 +213,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // via MAX(commandIndex) GROUP BY shellSessionId.
         // This event exists solely to measure start-vs-close ratio
         // (how often users close cleanly vs. just killing VS Code).
-        void callWithTelemetryAndErrorHandling('shell.sessionEnd', async (context) => {
-            context.errorHandling.suppressDisplay = true;
-            context.telemetry.properties.shellSessionId = this._shellSessionId;
-        });
+        // Only emit if the session was successfully started — otherwise
+        // we'd produce unpaired sessionEnd events on connection failure.
+        if (this._sessionStarted) {
+            void callWithTelemetryAndErrorHandling('shell.sessionEnd', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.shellSessionId = this._shellSessionId;
+            });
+        }
 
         this._sessionManager.dispose();
         this._writeEmitter.dispose();
@@ -447,6 +453,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._spinner = undefined;
 
             // ── Telemetry: shell session started ─────────────────────────
+            this._sessionStarted = true;
             void callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
                 context.errorHandling.suppressDisplay = true;
                 context.telemetry.properties.shellSessionId = this._shellSessionId;
@@ -605,7 +612,17 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             context.telemetry.properties.commandCategory = commandCategory;
             context.telemetry.measurements.commandIndex = commandIndex;
 
-            const result = await this._sessionManager.evaluate(input);
+            let result: SerializableExecutionResult;
+            try {
+                result = await this._sessionManager.evaluate(input);
+            } catch (evalError) {
+                // Ctrl+C kills the worker, producing a "Worker terminated" error.
+                // Re-classify as user cancellation for accurate telemetry.
+                if (this._interrupted) {
+                    throw new UserCancelledError('shell.eval');
+                }
+                throw evalError;
+            }
 
             // Stop the spinner before writing any output so the spinner
             // character doesn't collide with the result text.
