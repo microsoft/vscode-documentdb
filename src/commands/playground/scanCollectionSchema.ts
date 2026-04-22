@@ -23,7 +23,7 @@ const SCHEMA_SAMPLE_SIZE = 100;
  * @param collectionName Collection to sample
  */
 export async function scanCollectionSchema(
-    _context: IActionContext,
+    context: IActionContext,
     clusterId: string,
     databaseName: string,
     collectionName: string,
@@ -58,6 +58,10 @@ export async function scanCollectionSchema(
         SchemaStore.getInstance().addDocuments(clusterId, databaseName, collectionName, validDocs);
 
         const fieldCount = SchemaStore.getInstance().getKnownFields(clusterId, databaseName, collectionName).length;
+
+        // ── Telemetry: schema scan results ───────────────────────────
+        context.telemetry.measurements.fieldsDiscovered = fieldCount;
+        context.telemetry.measurements.documentsScanned = validDocs.length;
 
         void vscode.window.showInformationMessage(
             l10n.t('Schema scan complete: {0} fields discovered in "{1}".', String(fieldCount), collectionName),

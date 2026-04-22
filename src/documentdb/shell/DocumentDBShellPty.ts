@@ -3,11 +3,17 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { classifyCommand } from '../../utils/classifyCommand';
+import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { SchemaStore } from '../SchemaStore';
+import { getHostsFromConnectionString } from '../utils/connectionStringHelpers';
+import { addDomainInfoToProperties } from '../utils/getClusterMetadata';
 import { getClosingBrackets } from './bracketDepthCounter';
 import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SettingsHintError } from './SettingsHintError';
@@ -89,6 +95,15 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _ghostTextIsHint: boolean = false;
     /** Optional initial input to pre-fill after initialization. */
     private _initialInput: string | undefined;
+
+    // ─── Telemetry tracking ──────────────────────────────────────────────────
+
+    /** Unique session ID for correlating all events within this shell session. */
+    private readonly _shellSessionId: string = randomUUID();
+    /** Running count of commands evaluated in this session (for commandIndex measurement). */
+    private _commandCount: number = 0;
+    /** Count of errors encountered during this session. */
+    private _errorCount: number = 0;
 
     constructor(options: DocumentDBShellPtyOptions) {
         this._connectionInfo = options.connectionInfo;
@@ -190,6 +205,21 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             clearTimeout(this._ghostTextTimer);
             this._ghostTextTimer = undefined;
         }
+
+        // ── Telemetry: shell session ended ───────────────────────────────
+        void callWithTelemetryAndErrorHandling('shell.sessionEnd', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.telemetry.properties.shellSessionId = this._shellSessionId;
+            context.telemetry.properties.authMethod = this._sessionManager.authMethod ?? 'unknown';
+            context.telemetry.measurements.totalCommands = this._commandCount;
+            context.telemetry.measurements.totalErrors = this._errorCount;
+
+            // Domain info for session-level aggregation
+            const domainProps: Record<string, string | undefined> = {};
+            this.collectShellDomainTelemetry(domainProps);
+            Object.assign(context.telemetry.properties, domainProps);
+        });
+
         this._sessionManager.dispose();
         this._writeEmitter.dispose();
         this._closeEmitter.dispose();
@@ -420,6 +450,20 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._spinner?.stop();
             this._spinner = undefined;
 
+            // ── Telemetry: shell session started ─────────────────────────
+            void callWithTelemetryAndErrorHandling('shell.sessionStart', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.shellSessionId = this._shellSessionId;
+                context.telemetry.properties.authMethod = metadata.authMechanism;
+                context.telemetry.properties.isEmulator = metadata.isEmulator ? 'true' : 'false';
+                context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
+
+                // Domain info — privacy-safe hashed host data
+                const domainProps: Record<string, string | undefined> = {};
+                this.collectShellDomainTelemetry(domainProps);
+                Object.assign(context.telemetry.properties, domainProps);
+            });
+
             // Display connection summary
             const authLabel = metadata.authMechanism === 'MicrosoftEntraID' ? 'Entra ID' : 'SCRAM';
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
@@ -537,6 +581,11 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     private async evaluateInput(input: string): Promise<void> {
+        this._commandCount++;
+        const commandIndex = this._commandCount;
+        const commandCategory = classifyCommand(input);
+        const evalStartTime = Date.now();
+
         try {
             const result = await this._sessionManager.evaluate(input);
 
@@ -550,6 +599,17 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             if (this._interrupted) {
                 return;
             }
+
+            // ── Telemetry: successful eval ───────────────────────────────
+            void callWithTelemetryAndErrorHandling('shell.eval', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.shellSessionId = this._shellSessionId;
+                context.telemetry.properties.commandCategory = commandCategory;
+                context.telemetry.properties.resultType = result.type ?? 'null';
+                context.telemetry.properties.isError = 'false';
+                context.telemetry.measurements.commandIndex = commandIndex;
+                context.telemetry.measurements.evalDurationMs = Date.now() - evalStartTime;
+            });
 
             // Check for special result types (intercepted commands)
             if (this.handleSpecialResult(result)) {
@@ -582,6 +642,23 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             if (this._interrupted) {
                 return;
             }
+
+            this._errorCount++;
+
+            // ── Telemetry: failed eval ───────────────────────────────────
+            void callWithTelemetryAndErrorHandling('shell.eval', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.properties.shellSessionId = this._shellSessionId;
+                context.telemetry.properties.commandCategory = commandCategory;
+                context.telemetry.properties.resultType = 'error';
+                context.telemetry.properties.isError = 'true';
+                context.telemetry.measurements.commandIndex = commandIndex;
+                context.telemetry.measurements.evalDurationMs = Date.now() - evalStartTime;
+
+                // Rethrow so the framework captures error details automatically
+                throw error;
+            });
+
             const rawMessage = error instanceof Error ? error.message : String(error);
             // Strip technical error codes for clean user-facing output;
             // the extracted code is preserved for future telemetry.
@@ -1066,5 +1143,24 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private isColorEnabled(): boolean {
         const config = vscode.workspace.getConfiguration();
         return config.get<boolean>('documentDB.shell.display.colorSupport', true);
+    }
+
+    // ─── Private: Telemetry helpers ──────────────────────────────────────────
+
+    /**
+     * Collect domain info from cached credentials for telemetry.
+     * Reuses the same hashing logic as the connection metadata telemetry.
+     */
+    private collectShellDomainTelemetry(properties: Record<string, string | undefined>): void {
+        try {
+            const credentials = CredentialCache.getCredentials(this._connectionInfo.clusterId);
+            if (!credentials?.connectionString) {
+                return;
+            }
+            const hosts = getHostsFromConnectionString(credentials.connectionString);
+            addDomainInfoToProperties(hosts, properties);
+        } catch {
+            // Domain info is best-effort — don't fail telemetry if parsing fails
+        }
     }
 }

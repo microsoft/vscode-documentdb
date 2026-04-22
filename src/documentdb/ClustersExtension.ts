@@ -364,7 +364,7 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(newPlayground),
                 );
 
-                registerCommand(PlaygroundCommandIds.newWithContent, newPlaygroundWithContent);
+                registerCommand(PlaygroundCommandIds.newWithContent, withCommandCorrelation(newPlaygroundWithContent));
 
                 registerCommand(PlaygroundCommandIds.showConnectionInfo, withCommandCorrelation(showConnectionInfo));
 
@@ -379,8 +379,11 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 // Playground → Collection View / Shell navigation
-                registerCommand(PlaygroundCommandIds.openInCollectionView, playgroundOpenInCollectionView);
-                registerCommand(PlaygroundCommandIds.openInShell, playgroundOpenInShell);
+                registerCommand(
+                    PlaygroundCommandIds.openInCollectionView,
+                    withCommandCorrelation(playgroundOpenInCollectionView),
+                );
+                registerCommand(PlaygroundCommandIds.openInShell, withCommandCorrelation(playgroundOpenInShell));
 
                 registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
 
@@ -584,7 +587,7 @@ export class ClustersExtension implements vscode.Disposable {
 
                 registerCommand(
                     'vscode-documentdb.command.openInteractiveShell.withInput',
-                    openInteractiveShellWithInput,
+                    withCommandCorrelation(openInteractiveShellWithInput),
                 );
 
                 // Register the terminal link provider for "Open in Collection View" action lines

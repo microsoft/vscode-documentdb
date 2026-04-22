@@ -16,6 +16,7 @@ import { extractErrorCode } from '../../documentdb/shell/ShellOutputFormatter';
 import { getHostsFromConnectionString } from '../../documentdb/utils/connectionStringHelpers';
 import { addDomainInfoToProperties } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
+import { classifyCodeBlock } from '../../utils/classifyCommand';
 
 /** Per-cluster evaluator pool — one worker per cluster, lazily created. */
 const evaluators = new Map<string, PlaygroundEvaluator>();
@@ -128,6 +129,15 @@ export async function executePlaygroundCode(
         context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
         context.telemetry.properties.runMode = runMode;
         context.telemetry.measurements.codeLineCount = code.split('\n').length;
+
+        // Command classification — understand what operations are being run
+        const classification = classifyCodeBlock(code);
+        context.telemetry.properties.primaryCommandCategory = classification.primaryCategory;
+        context.telemetry.measurements.totalCommandsInBlock = classification.totalCommands;
+        // Write per-category counts as individual measurements for aggregation
+        for (const [category, count] of Object.entries(classification.categoryCounts)) {
+            context.telemetry.measurements[`cmd_${category}`] = count;
+        }
 
         // Domain info — privacy-safe hashed host data for platform analytics
         const domainProps: Record<string, string | undefined> = {};

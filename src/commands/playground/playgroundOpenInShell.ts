@@ -17,7 +17,7 @@ import { PlaygroundService } from '../../documentdb/playground/PlaygroundService
  * Arguments: [uri: vscode.Uri, startLine: number, endLine: number]
  */
 export async function playgroundOpenInShell(
-    _context: IActionContext,
+    context: IActionContext,
     uri?: vscode.Uri,
     startLine?: number,
     endLine?: number,
@@ -40,6 +40,9 @@ export async function playgroundOpenInShell(
     if (!blockText) {
         return;
     }
+
+    // ── Telemetry: cross-feature navigation ──────────────────────────
+    context.telemetry.properties.activationSource = 'playgroundCodeLens';
 
     await vscode.commands.executeCommand('vscode-documentdb.command.openInteractiveShell.withInput', {
         clusterId: connection.clusterId,

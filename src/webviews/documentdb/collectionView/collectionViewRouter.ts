@@ -952,6 +952,10 @@ export const collectionsViewRouter = router({
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
+            myCtx.telemetry.properties.hasFilter = input.filter && input.filter !== '{}' ? 'true' : 'false';
+
             const query = buildFindExpression(
                 myCtx.collectionName,
                 input.filter,
@@ -982,6 +986,9 @@ export const collectionsViewRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
 
             const query = buildFindExpression(
                 myCtx.collectionName,

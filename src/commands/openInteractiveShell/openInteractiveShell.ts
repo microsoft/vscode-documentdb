@@ -61,6 +61,8 @@ export async function openInteractiveShell(
 
     context.telemetry.properties.experience = node.experience.api;
     context.telemetry.properties.nodeType = getNodeType(node);
+    context.telemetry.properties.activationSource = 'treeNode';
+    context.telemetry.properties.viewId = node.cluster.viewId ?? 'unknown';
 
     const pty = new DocumentDBShellPty({ connectionInfo });
 
@@ -83,7 +85,7 @@ export async function openInteractiveShell(
  * Unlike {@link openInteractiveShell}, this does not require a tree node.
  */
 export async function openInteractiveShellWithInput(
-    _context: IActionContext,
+    context: IActionContext,
     params?: OpenShellWithInputParams,
 ): Promise<void> {
     if (!params) {
@@ -103,6 +105,9 @@ export async function openInteractiveShellWithInput(
         );
         return;
     }
+
+    context.telemetry.properties.activationSource = 'crossFeature';
+    context.telemetry.properties.hasInitialInput = params.initialInput ? 'true' : 'false';
 
     const pty = new DocumentDBShellPty({
         connectionInfo,
