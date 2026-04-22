@@ -376,13 +376,14 @@ export class WorkerSessionManager implements vscode.Disposable {
 
     private terminateWorker(): void {
         const wasAlive = !!this._worker;
-        const reason = this._terminatingIntentionally ? 'intentional' : 'forced';
 
         if (this._worker) {
             this._terminatingIntentionally = true;
             void this._worker.terminate();
             this._worker = undefined;
         }
+
+        const reason = this._terminatingIntentionally ? 'intentional' : 'forced';
         this._workerState = 'idle';
         this._workerClusterId = undefined;
 
@@ -406,14 +407,17 @@ export class WorkerSessionManager implements vscode.Disposable {
     }
 
     private handleWorkerExit(): void {
-        // ── Telemetry: unexpected worker exit ────────────────────────────
-        void callWithTelemetryAndErrorHandling('worker.unexpectedExit', async (context) => {
-            context.errorHandling.suppressDisplay = true;
-            context.telemetry.measurements.spawnCount = this._spawnCount;
-            if (this._lastSpawnTime > 0) {
-                context.telemetry.measurements.lifetimeMs = Date.now() - this._lastSpawnTime;
-            }
-        });
+        // Only emit unexpected exit when the worker was NOT intentionally terminated.
+        // Intentional exits (dispose, shutdown, cluster switch) are tracked by worker.terminated.
+        if (!this._terminatingIntentionally) {
+            void callWithTelemetryAndErrorHandling('worker.unexpectedExit', async (context) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.measurements.spawnCount = this._spawnCount;
+                if (this._lastSpawnTime > 0) {
+                    context.telemetry.measurements.lifetimeMs = Date.now() - this._lastSpawnTime;
+                }
+            });
+        }
 
         this._worker = undefined;
         this._workerState = 'idle';
