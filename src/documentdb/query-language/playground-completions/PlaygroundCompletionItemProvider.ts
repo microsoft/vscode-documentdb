@@ -6,6 +6,11 @@
 import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
 import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
+import {
+    CompletionCommandIds,
+    CompletionSources,
+    type CompletionCategory,
+} from '../../../telemetry/completionCategories';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';
 import { SchemaStore } from '../../SchemaStore';
@@ -604,10 +609,10 @@ export function collectionNameToCompletionItem(name: string): vscode.CompletionI
  * Creates a VS Code command descriptor for tracking completion acceptance.
  * Fires the internal telemetry command when the user selects this completion item.
  */
-function completionAcceptedCommand(category: string): vscode.Command {
+function completionAcceptedCommand(category: CompletionCategory): vscode.Command {
     return {
-        command: 'vscode-documentdb.command.internal.completionAccepted',
+        command: CompletionCommandIds.completionAccepted,
         title: '',
-        arguments: [category, 'playground'],
+        arguments: [category, CompletionSources.Playground],
     };
 }

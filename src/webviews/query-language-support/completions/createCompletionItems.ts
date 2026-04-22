@@ -20,6 +20,7 @@ import {
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { KEY_POSITION_OPERATORS } from '../../../documentdb/query-language/shared/completionKnowledge';
 import { type CursorContext } from '../../../documentdb/query-language/shared/cursorContext';
+import { type CompletionCategory } from '../../../telemetry/completionCategories';
 import { getCompletionContext } from '../completionStore';
 import { EditorType } from '../languageConfig';
 import { createJsGlobalCompletionItems } from './jsGlobals';
@@ -400,12 +401,13 @@ function getFieldCompletionItems(
 
 /**
  * Maps a Monaco CompletionItemKind to a telemetry-safe category string.
+ * Valid return values are defined in `src/telemetry/completionCategories.ts`.
  */
 function completionKindToCategory(
     kind: monacoEditor.languages.CompletionItemKind | undefined,
     sortText: string | undefined,
     monaco: typeof monacoEditor,
-): string {
+): CompletionCategory | 'unknown' {
     if (kind === undefined) return 'unknown';
     const kinds = monaco.languages.CompletionItemKind;
     if (kind === kinds.Field) return 'field';

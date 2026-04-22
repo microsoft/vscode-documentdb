@@ -39,6 +39,7 @@ import {
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
+import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
@@ -1068,21 +1069,17 @@ export const collectionsViewRouter = router({
     completionAccepted: publicProcedureWithTelemetry
         .input(
             z.object({
-                category: z.enum([
-                    'field',
-                    'operator',
-                    'bsonConstructor',
-                    'typeSuggestion',
-                    'jsGlobal',
-                    'collectionName',
-                    'other',
-                    'unknown',
-                ]),
+                category: z.enum([...COMPLETION_CATEGORIES, 'unknown']),
             }),
         )
         .mutation(({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            if (input.category === 'unknown') {
+                ext.outputChannel.appendLog(
+                    `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
+                );
+            }
             myCtx.telemetry.properties.completionCategory = input.category;
-            myCtx.telemetry.properties.completionSource = 'collectionView';
+            myCtx.telemetry.properties.completionSource = CompletionSources.CollectionView;
         }),
 });

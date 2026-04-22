@@ -85,6 +85,11 @@ import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotif
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
 import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
+import {
+    CompletionCommandIds,
+    normalizeCompletionCategory,
+    normalizeCompletionSource,
+} from '../telemetry/completionCategories';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
@@ -402,21 +407,23 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 // Internal: telemetry for completion acceptance (playground + collection view)
-                const VALID_COMPLETION_CATEGORIES = new Set([
-                    'field',
-                    'operator',
-                    'bsonConstructor',
-                    'typeSuggestion',
-                    'jsGlobal',
-                    'collectionName',
-                    'other',
-                ]);
                 registerCommand(
-                    'vscode-documentdb.command.internal.completionAccepted',
+                    CompletionCommandIds.completionAccepted,
                     (context: IActionContext, category?: string, source?: string) => {
-                        context.telemetry.properties.completionCategory =
-                            category && VALID_COMPLETION_CATEGORIES.has(category) ? category : 'unknown';
-                        context.telemetry.properties.completionSource = source ?? 'unknown';
+                        const normalizedCategory = normalizeCompletionCategory(category);
+                        const normalizedSource = normalizeCompletionSource(source);
+                        if (normalizedCategory === 'unknown') {
+                            ext.outputChannel.appendLog(
+                                `Unknown completion category received: ${JSON.stringify(category)} (source: ${source ?? 'unknown'})`,
+                            );
+                        }
+                        if (normalizedSource === 'unknown') {
+                            ext.outputChannel.appendLog(
+                                `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
+                            );
+                        }
+                        context.telemetry.properties.completionCategory = normalizedCategory;
+                        context.telemetry.properties.completionSource = normalizedSource;
                     },
                 );
 

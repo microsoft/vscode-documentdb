@@ -25,6 +25,7 @@ import { type CollectionViewWebviewConfigurationType } from '../../collectionVie
 import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
+import { normalizeCompletionCategory } from '../../../../../telemetry/completionCategories';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
 import { CollectionViewContext } from '../../collectionViewContext';
@@ -237,7 +238,10 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         void registerDocumentDBQueryLanguage(
             monaco,
             (url) => void trpcClient.common.openUrl.mutate({ url }),
-            (category) => void trpcClient.mongoClusters.collectionView.completionAccepted.mutate({ category }),
+            (category) =>
+                void trpcClient.mongoClusters.collectionView.completionAccepted.mutate({
+                    category: normalizeCompletionCategory(category),
+                }),
         );
 
         // Create model with URI scheme for contextual completions
