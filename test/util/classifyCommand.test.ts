@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { classifyCodeBlock, classifyCommand } from '../../src/utils/classifyCommand';
+import { classifyCodeBlock, classifyCommand, extractRunCommandName } from '../../src/utils/classifyCommand';
 
 describe('classifyCommand', () => {
     // ── Find ─────────────────────────────────────────────────────────────
@@ -142,5 +142,30 @@ describe('classifyCodeBlock', () => {
         expect(result.categoryCounts.aggregate).toBe(1);
         expect(result.categoryCounts.delete).toBe(1);
         expect(result.categoryCounts.update).toBe(1);
+    });
+});
+
+describe('extractRunCommandName', () => {
+    it.each([
+        ['db.runCommand({ ping: 1 })', 'ping'],
+        ['db.runCommand({ serverStatus: 1 })', 'serverStatus'],
+        ['db.runCommand({ listCollections: 1 })', 'listCollections'],
+        ['db.runCommand({ aggregate: "col", pipeline: [] })', 'aggregate'],
+        ['db.runCommand({"ping": 1})', 'ping'],
+        ["db.runCommand({'ping': 1})", 'ping'],
+        ['db.runCommand({ myCustomThing: 1 })', 'myCustomThing'],
+    ])('extracts "%s" → "%s"', (input, expected) => {
+        expect(extractRunCommandName(input)).toBe(expected);
+    });
+
+    it('returns undefined for non-runCommand input', () => {
+        expect(extractRunCommandName('db.col.find({})')).toBeUndefined();
+        expect(extractRunCommandName('help')).toBeUndefined();
+    });
+
+    it('truncates long command names to 50 characters', () => {
+        const longName = 'a'.repeat(100);
+        const result = extractRunCommandName(`db.runCommand({ ${longName}: 1 })`);
+        expect(result).toBe('a'.repeat(50));
     });
 });

@@ -89,6 +89,26 @@ export function classifyCommand(input: string): CommandCategory {
 }
 
 /**
+ * Extracts the command name from a `db.runCommand({ <name>: ... })` call.
+ *
+ * Returns the first key of the argument object (which is the command name
+ * per the DocumentDB API wire protocol), truncated to 50 characters.
+ * Returns `undefined` if the input doesn't match the pattern.
+ *
+ * The regex only captures `\w+` (ASCII letters, digits, underscore),
+ * and the result is further sanitized before being sent as telemetry.
+ */
+const RUN_COMMAND_PATTERN = /\.runCommand\s*\(\s*\{\s*["']?(\w+)["']?\s*:/;
+const SAFE_TELEMETRY_VALUE = /^[a-zA-Z0-9_]+$/;
+
+export function extractRunCommandName(input: string): string | undefined {
+    const match = RUN_COMMAND_PATTERN.exec(input);
+    if (!match) return undefined;
+    const name = match[1].slice(0, 50);
+    return SAFE_TELEMETRY_VALUE.test(name) ? name : undefined;
+}
+
+/**
  * Classifies all commands in a code block (e.g., a full playground script).
  *
  * Scans the entire input for all matching patterns and returns a summary

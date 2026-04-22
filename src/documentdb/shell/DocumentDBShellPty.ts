@@ -7,7 +7,7 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
-import { classifyCommand } from '../../utils/classifyCommand';
+import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
 import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
@@ -611,6 +611,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             context.telemetry.properties.shellSessionId = this._shellSessionId;
             context.telemetry.properties.commandCategory = commandCategory;
             context.telemetry.measurements.commandIndex = commandIndex;
+
+            if (commandCategory === 'runCommand') {
+                context.telemetry.properties.runCommandName = extractRunCommandName(input) ?? 'unknown';
+            }
 
             let result: SerializableExecutionResult;
             try {
