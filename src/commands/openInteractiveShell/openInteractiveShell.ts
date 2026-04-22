@@ -61,7 +61,7 @@ export async function openInteractiveShell(
 
     context.telemetry.properties.experience = node.experience.api;
     context.telemetry.properties.nodeType = getNodeType(node);
-    context.telemetry.properties.activationSource = 'treeNode';
+    context.telemetry.properties.activationSource ??= 'treeNode';
     context.telemetry.properties.viewId = node.cluster.viewId ?? 'unknown';
 
     const pty = new DocumentDBShellPty({ connectionInfo });

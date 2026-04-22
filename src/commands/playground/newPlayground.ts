@@ -33,7 +33,7 @@ export async function newPlayground(context: IActionContext, node?: DatabaseItem
     }
 
     // ── Telemetry: activation source & context ───────────────────────
-    context.telemetry.properties.activationSource = 'treeNode';
+    context.telemetry.properties.activationSource ??= 'treeNode';
     context.telemetry.properties.nodeType = isCollectionItem(node) ? 'collection' : 'database';
     context.telemetry.properties.viewId = node.cluster.viewId ?? 'unknown';
     context.telemetry.properties.experience = node.experience.api;
