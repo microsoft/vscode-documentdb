@@ -271,7 +271,7 @@ export const collectionsViewRouter = router({
             void callWithTelemetryAndErrorHandling('documentDB.query.executionIntent', (telemetryCtx) => {
                 telemetryCtx.errorHandling.suppressDisplay = true;
                 telemetryCtx.telemetry.properties.intent = executionIntent;
-                telemetryCtx.telemetry.properties.pageNumber = input.pageNumber.toString();
+                telemetryCtx.telemetry.measurements.pageNumber = input.pageNumber;
                 telemetryCtx.telemetry.measurements.documentCount = size;
             });
 
