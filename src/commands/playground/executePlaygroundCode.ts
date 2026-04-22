@@ -126,7 +126,7 @@ export async function executePlaygroundCode(
 
         // ── Pre-execution telemetry (known before eval) ──────────────
         context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
-        context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+        context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
         context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
         context.telemetry.properties.runMode = runMode;
         context.telemetry.measurements.codeLineCount = code.split('\n').length;
@@ -182,7 +182,7 @@ export async function executePlaygroundCode(
                     context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
                     // sessionId/sessionEvalCount may have changed after evaluate (if worker was spawned)
                     context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
-                    context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+                    context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
 
                     let formattedOutput = formatResult(result, code, connection);
@@ -202,7 +202,7 @@ export async function executePlaygroundCode(
                 } catch (error: unknown) {
                     // Update session telemetry even on failure (worker may have spawned before failing)
                     context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
-                    context.telemetry.properties.sessionEvalCount = String(evaluator!.sessionEvalCount);
+                    context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
                     context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
                     context.telemetry.measurements.initDurationMs = evaluator!.lastInitDurationMs;
 
