@@ -14,7 +14,7 @@ The `@microsoft/vscode-azext-utils` library **automatically captures** these —
 | Auto-captured           | Details                                                            |
 | ----------------------- | ------------------------------------------------------------------ |
 | **Duration**            | `measurements.duration` — wall-clock ms from callback start to end |
-| **Result**              | `properties.result` — `"Succeeded"`, `"Failed"`, or `"Canceled"`  |
+| **Result**              | `properties.result` — `"Succeeded"`, `"Failed"`, or `"Canceled"`   |
 | **Error info**          | `properties.error` (name), `properties.errorMessage` (message)     |
 | **Cancel detection**    | `UserCancelledError` sets result to `"Canceled"` automatically     |
 | **Machine/session IDs** | `VSCodeMachineId`, `VSCodeSessionId` — always present              |
@@ -26,15 +26,22 @@ The `@microsoft/vscode-azext-utils` library **automatically captures** these —
 
 ### `callWithTelemetryAndErrorHandling(eventId, callback)`
 
-The primary wrapper. Creates a telemetry event, runs the callback, reports result + duration + errors.
+The primary wrapper. Creates a telemetry event, runs the callback, reports result + duration + errors. The callback's return value is passed through, so you can wrap any function call directly:
 
 ```typescript
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 
+// Simple — wrap logic, telemetry is automatic
 await callWithTelemetryAndErrorHandling('myFeature.doSomething', async (context) => {
   context.telemetry.properties.someProperty = 'value';
   context.telemetry.measurements.itemCount = items.length;
   // ... your logic — errors are caught and reported automatically
+});
+
+// With return value — no need for intermediate variables
+const result = await callWithTelemetryAndErrorHandling('myFeature.query', async (context) => {
+  context.telemetry.properties.queryType = 'find';
+  return doWork(); // return value passes through to the caller
 });
 ```
 
@@ -297,6 +304,101 @@ Mark startup/initialization telemetry so it can be filtered out of active-usage 
 
 ```typescript
 context.telemetry.properties.isActivationEvent = 'true';
+```
+
+## Common Mistakes to Avoid
+
+### ❌ Don't measure duration manually — the framework does it
+
+The framework auto-captures `measurements.duration` for every `callWithTelemetryAndErrorHandling` event. Never add `Date.now()` tracking for the same purpose:
+
+```typescript
+// ❌ Wrong — redundant manual timing
+const startTime = Date.now();
+await callWithTelemetryAndErrorHandling('myEvent', async (context) => {
+  await doWork();
+  context.telemetry.measurements.durationMs = Date.now() - startTime; // duplicates framework
+});
+
+// ✅ Correct — framework captures duration automatically
+await callWithTelemetryAndErrorHandling('myEvent', async (context) => {
+  await doWork();
+  // duration is auto-captured — no manual timing needed
+});
+```
+
+**Exception**: sub-durations within a single event (e.g., "time spent on init vs. time on eval") are valid because they measure a _phase_, not the total.
+
+### ❌ Don't create separate success/failure telemetry blocks
+
+Wrap the operation in a single `callWithTelemetryAndErrorHandling`. The framework sets `result=Succeeded` or `result=Failed` automatically:
+
+```typescript
+// ❌ Wrong — two fire-and-forget blocks, error rethrow inside void is swallowed
+try {
+  const result = await doWork();
+  void callWithTelemetryAndErrorHandling('myEvent', async (ctx) => {
+    ctx.telemetry.properties.isError = 'false';
+  });
+} catch (error) {
+  void callWithTelemetryAndErrorHandling('myEvent', async (ctx) => {
+    ctx.telemetry.properties.isError = 'true';
+    throw error; // ⚠️ swallowed — void discards the promise
+  });
+}
+
+// ✅ Correct — single wrapper, framework handles success/failure
+await callWithTelemetryAndErrorHandling('myEvent', async (context) => {
+  context.errorHandling.suppressDisplay = true;
+  context.errorHandling.rethrow = true; // let caller handle display
+  context.telemetry.properties.someProperty = 'value';
+  const result = await doWork(); // errors auto-set result=Failed
+  context.telemetry.properties.resultType = result.type;
+});
+```
+
+### ❌ Don't use `suppressIfSuccessful` on events you want to measure
+
+`suppressIfSuccessful = true` means the event is **only emitted on error**. Never use it on events where you need to count successful occurrences:
+
+```typescript
+// ❌ Wrong — successful completions are silently dropped
+registerCommand('completionAccepted', (context) => {
+  context.telemetry.properties.category = category;
+  context.telemetry.suppressIfSuccessful = true; // BUG: won't emit on success
+});
+
+// ✅ Correct — every acceptance is tracked
+registerCommand('completionAccepted', (context) => {
+  context.telemetry.properties.category = category;
+  // no suppress — we want to count every acceptance
+});
+```
+
+**When `suppressIfSuccessful` IS correct**: high-frequency background operations where you only care about failures (e.g., keystroke handlers, document change listeners, periodic health checks).
+
+### ❌ Don't throw errors inside `void callWithTelemetryAndErrorHandling`
+
+When using fire-and-forget (`void`) telemetry, thrown errors are swallowed because nobody awaits the promise. The framework captures the error in telemetry properties but the throw has no effect on the calling code:
+
+```typescript
+// ❌ Wrong — throw inside void is swallowed, no effect on caller
+void callWithTelemetryAndErrorHandling('myEvent', async (context) => {
+  throw error; // captured in telemetry but NOT re-thrown to caller
+});
+// code continues here regardless
+
+// ✅ Correct for fire-and-forget — just set properties, don't throw
+void callWithTelemetryAndErrorHandling('myEvent', async (context) => {
+  context.telemetry.properties.shellSessionId = sessionId;
+  // fire-and-forget: no throw, no await needed
+});
+
+// ✅ Correct when you need error propagation — use await
+await callWithTelemetryAndErrorHandling('myEvent', async (context) => {
+  context.errorHandling.rethrow = true;
+  await riskyOperation(); // error propagates to caller via rethrow
+});
 ```
 
 ## Masking Sensitive Data
