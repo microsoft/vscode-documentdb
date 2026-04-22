@@ -91,6 +91,9 @@ import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-vie
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
+import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
+import { type CollectionItem } from '../tree/documentdb/CollectionItem';
+import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
 import {
     registerCommandWithModalErrors,
@@ -364,6 +367,15 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(newPlayground),
                 );
 
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.playground.new.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return newPlayground(context, node as DatabaseItem | CollectionItem);
+                    }),
+                );
+
                 registerCommand(PlaygroundCommandIds.newWithContent, withCommandCorrelation(newPlaygroundWithContent));
 
                 registerCommand(PlaygroundCommandIds.showConnectionInfo, withCommandCorrelation(showConnectionInfo));
@@ -384,6 +396,16 @@ export class ClustersExtension implements vscode.Disposable {
                     withCommandCorrelation(playgroundOpenInCollectionView),
                 );
                 registerCommand(PlaygroundCommandIds.openInShell, withCommandCorrelation(playgroundOpenInShell));
+
+                // Internal: telemetry for completion acceptance (playground + collection view)
+                registerCommand(
+                    'vscode-documentdb.command.internal.completionAccepted',
+                    (context: IActionContext, category?: string, source?: string) => {
+                        context.telemetry.properties.completionCategory = category ?? 'unknown';
+                        context.telemetry.properties.completionSource = source ?? 'unknown';
+                        context.telemetry.suppressIfSuccessful = true;
+                    },
+                );
 
                 registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
 
@@ -561,6 +583,15 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(openCollectionView),
                 );
 
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.containerView.open.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openCollectionView(context, node as CollectionItem);
+                    }),
+                );
+
                 registerCommand(
                     'vscode-documentdb.command.internal.documentView.open',
                     withCommandCorrelation(openDocumentView),
@@ -583,6 +614,15 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.openInteractiveShell',
                     withTreeNodeCommandCorrelation(openInteractiveShell),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.openInteractiveShell.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openInteractiveShell(context, node as ClusterItemBase | DatabaseItem | CollectionItem);
+                    }),
                 );
 
                 registerCommand(

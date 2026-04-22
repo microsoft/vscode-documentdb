@@ -6,6 +6,7 @@
 import { UserCancelledError, callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { feedResultToSchemaStore } from '../../documentdb/feedResultToSchemaStore';
 import { PlaygroundEvaluator } from '../../documentdb/playground/PlaygroundEvaluator';
@@ -143,6 +144,16 @@ export async function executePlaygroundCode(
         const domainProps: Record<string, string | undefined> = {};
         collectDomainTelemetry(connection, domainProps);
         Object.assign(context.telemetry.properties, domainProps);
+
+        // Link to server metadata via connectionCorrelationId
+        try {
+            const existingClient = ClustersClient.getExistingClient(connection.clusterId);
+            if (existingClient?.connectionCorrelationId) {
+                context.telemetry.properties.connectionCorrelationId = existingClient.connectionCorrelationId;
+            }
+        } catch {
+            // Best-effort
+        }
 
         await vscode.window.withProgress(
             {

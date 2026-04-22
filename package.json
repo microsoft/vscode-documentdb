@@ -549,9 +549,23 @@
         "icon": "$(terminal)"
       },
       {
+        "//": "Open Interactive Shell (inline button)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.openInteractiveShell.inline",
+        "title": "Open Interactive Shell",
+        "icon": "$(terminal)"
+      },
+      {
         "//": "Open Container View",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.containerView.open",
+        "title": "Open Collection",
+        "icon": "$(files)"
+      },
+      {
+        "//": "Open Container View (inline button)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.containerView.open.inline",
         "title": "Open Collection",
         "icon": "$(files)"
       },
@@ -571,6 +585,13 @@
         "//": "[Query Playground] New Query Playground",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.playground.new",
+        "title": "New Query Playground",
+        "icon": "$(keyboard)"
+      },
+      {
+        "//": "[Query Playground] New Query Playground (inline button)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.new.inline",
         "title": "New Query Playground",
         "icon": "$(keyboard)"
       },
@@ -812,7 +833,7 @@
         },
         {
           "//": "[Database] Open Interactive Shell (inline)",
-          "command": "vscode-documentdb.command.openInteractiveShell",
+          "command": "vscode-documentdb.command.openInteractiveShell.inline",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "inline@1"
         },
@@ -878,19 +899,19 @@
         },
         {
           "//": "[Collection] Open Collection (inline)",
-          "command": "vscode-documentdb.command.containerView.open",
+          "command": "vscode-documentdb.command.containerView.open.inline",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "inline@1"
         },
         {
           "//": "[Collection] Open Interactive Shell (inline)",
-          "command": "vscode-documentdb.command.openInteractiveShell",
+          "command": "vscode-documentdb.command.openInteractiveShell.inline",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "inline@3"
         },
         {
           "//": "[Collection] New Query Playground (inline)",
-          "command": "vscode-documentdb.command.playground.new",
+          "command": "vscode-documentdb.command.playground.new.inline",
           "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "inline@2"
         },
@@ -1068,7 +1089,19 @@
           "when": "never"
         },
         {
+          "command": "vscode-documentdb.command.openInteractiveShell.inline",
+          "when": "never"
+        },
+        {
           "command": "vscode-documentdb.command.containerView.open",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.containerView.open.inline",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.new.inline",
           "when": "never"
         },
         {

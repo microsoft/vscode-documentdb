@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { classifyCommand } from '../../utils/classifyCommand';
+import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
 import { deserializeResultForSchema, feedResultToSchemaStore } from '../feedResultToSchemaStore';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
@@ -458,6 +459,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 context.telemetry.properties.isEmulator = metadata.isEmulator ? 'true' : 'false';
                 context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
 
+                // Link to server metadata via connectionCorrelationId
+                try {
+                    const client = ClustersClient.getExistingClient(this._connectionInfo.clusterId);
+                    if (client?.connectionCorrelationId) {
+                        context.telemetry.properties.connectionCorrelationId = client.connectionCorrelationId;
+                    }
+                } catch {
+                    // Best-effort — client may not exist yet
+                }
+
                 // Domain info — privacy-safe hashed host data
                 const domainProps: Record<string, string | undefined> = {};
                 this.collectShellDomainTelemetry(domainProps);
@@ -555,6 +566,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         try {
             await this.evaluateInput(trimmed);
+        } catch (error: unknown) {
+            this.handleEvalError(error);
         } finally {
             // Stop the spinner before writing results or the next prompt.
             this._spinner?.stop();
@@ -584,9 +597,19 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._commandCount++;
         const commandIndex = this._commandCount;
         const commandCategory = classifyCommand(input);
-        const evalStartTime = Date.now();
 
-        try {
+        // Wrap the entire eval in callWithTelemetryAndErrorHandling so the
+        // framework automatically captures duration, result, and error details
+        // in a single event — no need for separate success/failure blocks.
+        await callWithTelemetryAndErrorHandling('shell.eval', async (context) => {
+            context.errorHandling.suppressDisplay = true;
+            context.errorHandling.rethrow = true; // let the outer catch handle display
+
+            // ── Pre-eval telemetry ───────────────────────────────────────
+            context.telemetry.properties.shellSessionId = this._shellSessionId;
+            context.telemetry.properties.commandCategory = commandCategory;
+            context.telemetry.measurements.commandIndex = commandIndex;
+
             const result = await this._sessionManager.evaluate(input);
 
             // Stop the spinner before writing any output so the spinner
@@ -600,16 +623,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 return;
             }
 
-            // ── Telemetry: successful eval ───────────────────────────────
-            void callWithTelemetryAndErrorHandling('shell.eval', async (context) => {
-                context.errorHandling.suppressDisplay = true;
-                context.telemetry.properties.shellSessionId = this._shellSessionId;
-                context.telemetry.properties.commandCategory = commandCategory;
-                context.telemetry.properties.resultType = result.type ?? 'null';
-                context.telemetry.properties.isError = 'false';
-                context.telemetry.measurements.commandIndex = commandIndex;
-                context.telemetry.measurements.evalDurationMs = Date.now() - evalStartTime;
-            });
+            // ── Post-eval telemetry ──────────────────────────────────────
+            context.telemetry.properties.resultType = result.type ?? 'null';
 
             // Check for special result types (intercepted commands)
             if (this.handleSpecialResult(result)) {
@@ -632,56 +647,48 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // This runs asynchronously after output is displayed — schema feeding
             // is non-blocking and failure is non-critical.
             this.maybeFeedSchemaStore(result);
-        } catch (error: unknown) {
-            // Stop the spinner before writing error output.
-            this._spinner?.stop();
-            this._spinner = undefined;
+        });
+    }
 
-            // Suppress errors from intentional Ctrl+C cancellation — the interrupt
-            // handler already showed ^C and a new prompt.
-            if (this._interrupted) {
-                return;
-            }
+    /**
+     * Handles display of eval errors in the terminal.
+     * Called by handleLineInput when evaluateInput throws.
+     */
+    private handleEvalError(error: unknown): void {
+        // Stop the spinner before writing error output.
+        this._spinner?.stop();
+        this._spinner = undefined;
 
-            this._errorCount++;
+        // Suppress errors from intentional Ctrl+C cancellation — the interrupt
+        // handler already showed ^C and a new prompt.
+        if (this._interrupted) {
+            return;
+        }
 
-            // ── Telemetry: failed eval ───────────────────────────────────
-            void callWithTelemetryAndErrorHandling('shell.eval', async (context) => {
-                context.errorHandling.suppressDisplay = true;
-                context.telemetry.properties.shellSessionId = this._shellSessionId;
-                context.telemetry.properties.commandCategory = commandCategory;
-                context.telemetry.properties.resultType = 'error';
-                context.telemetry.properties.isError = 'true';
-                context.telemetry.measurements.commandIndex = commandIndex;
-                context.telemetry.measurements.evalDurationMs = Date.now() - evalStartTime;
+        this._errorCount++;
 
-                // Rethrow so the framework captures error details automatically
-                throw error;
-            });
+        const rawMessage = error instanceof Error ? error.message : String(error);
+        // Strip technical error codes for clean user-facing output;
+        // the extracted code is preserved for future telemetry.
+        const { message: errorMessage } = extractErrorCode(rawMessage);
+        this.writeLine(this._outputFormatter.formatError(errorMessage));
 
-            const rawMessage = error instanceof Error ? error.message : String(error);
-            // Strip technical error codes for clean user-facing output;
-            // the extracted code is preserved for future telemetry.
-            const { message: errorMessage } = extractErrorCode(rawMessage);
-            this.writeLine(this._outputFormatter.formatError(errorMessage));
+        // Show a hint line and clickable settings link for errors that reference a VS Code setting
+        if (error instanceof SettingsHintError) {
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(
+                    `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
+                ),
+            );
+        }
 
-            // Show a hint line and clickable settings link for errors that reference a VS Code setting
-            if (error instanceof SettingsHintError) {
-                this.writeLine(
-                    this._outputFormatter.formatSystemMessage(
-                        `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
-                    ),
-                );
-            }
-
-            // Detect query timeout errors (error code 50: MaxTimeMSExpired / ExceededTimeLimit)
-            if (error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50) {
-                this.writeLine(
-                    this._outputFormatter.formatSystemMessage(
-                        l10n.t('Tip: use .maxTimeMS() to increase the time limit for this query.'),
-                    ),
-                );
-            }
+        // Detect query timeout errors (error code 50: MaxTimeMSExpired / ExceededTimeLimit)
+        if (error instanceof Error && 'code' in error && (error as { code: unknown }).code === 50) {
+            this.writeLine(
+                this._outputFormatter.formatSystemMessage(
+                    l10n.t('Tip: use .maxTimeMS() to increase the time limit for this query.'),
+                ),
+            );
         }
     }
 

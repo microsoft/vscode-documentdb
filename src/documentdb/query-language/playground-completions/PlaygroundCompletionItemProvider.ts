@@ -304,6 +304,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
                 item.detail = `${displayType}${field.isSparse ? ' (sparse)' : ''}`;
                 item.insertText = new vscode.SnippetString(`${insertName}: $1`);
                 item.sortText = `!00_${field.path}`;
+                item.command = completionAcceptedCommand('field');
                 items.push(item);
             }
         }
@@ -320,6 +321,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
                 }
                 item.sortText = `!1_${op.value}`;
                 item.range = replaceRange;
+                item.command = completionAcceptedCommand('operator');
                 if (op.link) {
                     item.documentation = new vscode.MarkdownString(`${op.description}\n\n[Documentation](${op.link})`);
                 }
@@ -356,6 +358,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
             if (def.documentation) {
                 item.documentation = new vscode.MarkdownString(def.documentation);
             }
+            item.command = completionAcceptedCommand('typeSuggestion');
             items.push(item);
         }
 
@@ -372,6 +375,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
             }
             item.sortText = `${getVscodeOperatorSortPrefix(op, fieldBsonTypes)}${op.value}`;
             item.range = replaceRange;
+            item.command = completionAcceptedCommand('operator');
             if (op.link) {
                 item.documentation = new vscode.MarkdownString(`${op.description}\n\n[Documentation](${op.link})`);
             }
@@ -387,6 +391,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
                 item.insertText = new vscode.SnippetString(escapeSnippetDollars(bson.snippet));
             }
             item.sortText = `!3_${bson.value}`;
+            item.command = completionAcceptedCommand('bsonConstructor');
             items.push(item);
         }
     }
@@ -412,6 +417,7 @@ export class PlaygroundCompletionItemProvider implements vscode.CompletionItemPr
             }
             item.sortText = `${getVscodeOperatorSortPrefix(op, fieldBsonTypes)}${op.value}`;
             item.range = replaceRange;
+            item.command = completionAcceptedCommand('operator');
             if (op.link) {
                 item.documentation = new vscode.MarkdownString(`${op.description}\n\n[Documentation](${op.link})`);
             }
@@ -580,6 +586,7 @@ export function collectionNameToCompletionItem(name: string): vscode.CompletionI
     const item = new vscode.CompletionItem(name, vscode.CompletionItemKind.Module);
     item.detail = 'discovered collection';
     item.sortText = `!0_${name}`;
+    item.command = completionAcceptedCommand('collectionName');
 
     if (needsGetCollection) {
         // Escape single quotes and backslashes inside the collection name
@@ -591,4 +598,16 @@ export function collectionNameToCompletionItem(name: string): vscode.CompletionI
     }
 
     return item;
+}
+
+/**
+ * Creates a VS Code command descriptor for tracking completion acceptance.
+ * Fires the internal telemetry command when the user selects this completion item.
+ */
+function completionAcceptedCommand(category: string): vscode.Command {
+    return {
+        command: 'vscode-documentdb.command.internal.completionAccepted',
+        title: '',
+        arguments: [category, 'playground'],
+    };
 }
