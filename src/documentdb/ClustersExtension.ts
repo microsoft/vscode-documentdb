@@ -402,10 +402,20 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 // Internal: telemetry for completion acceptance (playground + collection view)
+                const VALID_COMPLETION_CATEGORIES = new Set([
+                    'field',
+                    'operator',
+                    'bsonConstructor',
+                    'typeSuggestion',
+                    'jsGlobal',
+                    'collectionName',
+                    'other',
+                ]);
                 registerCommand(
                     'vscode-documentdb.command.internal.completionAccepted',
                     (context: IActionContext, category?: string, source?: string) => {
-                        context.telemetry.properties.completionCategory = category ?? 'unknown';
+                        context.telemetry.properties.completionCategory =
+                            category && VALID_COMPLETION_CATEGORIES.has(category) ? category : 'unknown';
                         context.telemetry.properties.completionSource = source ?? 'unknown';
                     },
                 );

@@ -955,7 +955,8 @@ export const collectionsViewRouter = router({
 
             // ── Telemetry: activation source for cross-feature analytics ──
             myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
-            myCtx.telemetry.properties.hasFilter = input.filter && input.filter !== '{}' ? 'true' : 'false';
+            myCtx.telemetry.properties.hasFilter =
+                input.filter && input.filter.replace(/\s/g, '') !== '{}' ? 'true' : 'false';
 
             const query = buildFindExpression(
                 myCtx.collectionName,
@@ -1065,7 +1066,20 @@ export const collectionsViewRouter = router({
     }),
 
     completionAccepted: publicProcedureWithTelemetry
-        .input(z.object({ category: z.string() }))
+        .input(
+            z.object({
+                category: z.enum([
+                    'field',
+                    'operator',
+                    'bsonConstructor',
+                    'typeSuggestion',
+                    'jsGlobal',
+                    'collectionName',
+                    'other',
+                    'unknown',
+                ]),
+            }),
+        )
         .mutation(({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
             myCtx.telemetry.properties.completionCategory = input.category;
