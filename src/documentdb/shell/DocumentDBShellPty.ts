@@ -27,9 +27,9 @@ import { type ShellConnectionInfo, type ShellSessionCallbacks, ShellSessionManag
 import { ShellSpinner } from './ShellSpinner';
 import {
     ACTION_LINE_PREFIX,
+    getRegisteredShellTerminals,
     PLAYGROUND_ACTION_PREFIX,
     SETTINGS_ACTION_PREFIX,
-    getRegisteredShellTerminals,
     type ShellTerminalInfo,
     unregisterShellTerminal,
 } from './ShellTerminalLinkProvider';

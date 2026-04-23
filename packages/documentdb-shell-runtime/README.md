@@ -57,7 +57,7 @@ const result = await playground.evaluate('db.users.find({})', 'myDatabase');
 const shell = new DocumentDBShellRuntime(
   mongoClient,
   { onConsoleOutput: (output) => console.log(output) }, // callbacks
-  { persistent: true },                                   // options
+  { persistent: true }, // options
 );
 await shell.evaluate('const x = 1', 'myDatabase');
 await shell.evaluate('x + 1', 'myDatabase'); // returns 2 — variable survived

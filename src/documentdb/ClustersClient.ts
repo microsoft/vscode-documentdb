@@ -18,7 +18,6 @@ import {
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
-import { SilentCatchMeter } from '../utils/silentCatchMeter';
 import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
@@ -39,6 +38,7 @@ import {
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
+import { SilentCatchMeter } from '../utils/silentCatchMeter';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';

@@ -6,8 +6,8 @@
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
-import { type SerializableExecutionResult } from '../playground/workerTypes';
 import { SilentCatchMeter } from '../../utils/silentCatchMeter';
+import { type SerializableExecutionResult } from '../playground/workerTypes';
 
 /**
  * ANSI color codes for terminal output.

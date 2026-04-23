@@ -15,7 +15,6 @@ import {
     type SerializableMongoClientOptions,
     type WorkerToMainMessage,
 } from '../playground/workerTypes';
-import { SettingsHintError } from './SettingsHintError';
 
 /**
  * Connection parameters for a shell session.
@@ -161,31 +160,7 @@ export class ShellSessionManager implements vscode.Disposable {
         const initMsg = this.buildInitMessage();
 
         const timeoutMs = this.getInitTimeoutMs();
-        let timerId: ReturnType<typeof setTimeout> | undefined;
-        const timeoutPromise = new Promise<never>((_resolve, reject) => {
-            timerId = setTimeout(
-                () =>
-                    reject(
-                        new SettingsHintError(
-                            l10n.t('Shell initialization timed out after {0} seconds.', timeoutMs / 1000),
-                            ext.settingsKeys.shellInitTimeout,
-                            l10n.t('You can increase the timeout in Settings:'),
-                        ),
-                    ),
-                timeoutMs,
-            );
-        });
-
-        try {
-            await Promise.race([
-                this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg),
-                timeoutPromise,
-            ]);
-        } finally {
-            if (timerId !== undefined) {
-                clearTimeout(timerId);
-            }
-        }
+        await this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg, timeoutMs);
         this._initialized = true;
         this._authMethod = initMsg.authMechanism;
 
