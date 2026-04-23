@@ -7,6 +7,8 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../ClustersClient';
 import { SchemaStore } from '../../SchemaStore';
 import { PlaygroundService } from '../../playground/PlaygroundService';
+import { ext } from '../../../extensionVariables';
+import { SilentCatchMeter } from '../../../utils/silentCatchMeter';
 
 /**
  * Provides collection names for query playground completions.
@@ -129,8 +131,11 @@ export class CollectionNameCache implements vscode.Disposable {
                 const client = await ClustersClient.getClient(clusterId);
                 // This call populates ClustersClient._collectionsCache
                 await client.listCollections(databaseName);
-            } catch {
-                // Non-critical — completions degrade gracefully to SchemaStore-only
+            } catch (error) {
+                SilentCatchMeter.hit('CollectionNameCache_listCollections');
+                ext.outputChannel?.trace(
+                    `[CollectionNameCache] Failed to fetch collections for ${databaseName}: ${error instanceof Error ? error.message : String(error)}`,
+                );
             } finally {
                 this._pendingFetches.delete(key);
             }
