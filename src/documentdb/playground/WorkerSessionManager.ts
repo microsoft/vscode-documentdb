@@ -119,7 +119,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             ext.outputChannel?.trace(
                 `[WorkerSessionManager] Cluster changed (${String(this._workerClusterId)} → ${clusterId}), terminating old worker`,
             );
-            this.terminateWorker();
+            this.terminateWorker('intentional');
         }
 
         // If no worker exists, spawn one
@@ -162,7 +162,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             // Shutdown timed out or failed — force-kill
         }
 
-        this.terminateWorker();
+        this.terminateWorker('intentional');
     }
 
     /**
@@ -170,11 +170,11 @@ export class WorkerSessionManager implements vscode.Disposable {
      * Used for infinite loop recovery (timeout) and cancellation.
      */
     killWorker(): void {
-        this.terminateWorker();
+        this.terminateWorker('forced');
     }
 
     dispose(): void {
-        this.terminateWorker();
+        this.terminateWorker('intentional');
     }
 
     // ─── Private: Worker lifecycle ───────────────────────────────────────────
@@ -229,7 +229,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             await this.sendRequest<void>(initMsg, initTimeoutMs, 'documentDB.shell.initTimeout');
             this._workerState = 'ready';
         } catch (error) {
-            this.terminateWorker();
+            this.terminateWorker('intentional');
             throw error;
         }
     }
@@ -380,7 +380,7 @@ export class WorkerSessionManager implements vscode.Disposable {
 
     // ─── Private: Worker cleanup ─────────────────────────────────────────────
 
-    private terminateWorker(): void {
+    private terminateWorker(reason: 'intentional' | 'forced'): void {
         const wasAlive = !!this._worker;
 
         if (this._worker) {
@@ -389,7 +389,6 @@ export class WorkerSessionManager implements vscode.Disposable {
             this._worker = undefined;
         }
 
-        const reason = this._terminatingIntentionally ? 'intentional' : 'forced';
         this._workerState = 'idle';
         this._workerClusterId = undefined;
 
