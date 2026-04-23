@@ -1,0 +1,122 @@
+name: Seed / Verify Build Size Cache
+
+# Manual workflow to seed the build-sizes cache for a branch,
+# or to verify that a cache entry already exists.
+#
+# Usage:
+#   - "seed":   Build the selected branch and save its VSIX + webview sizes to the cache.
+#   - "verify": Check whether a cache entry exists for the selected branch (no build needed).
+
+on:
+    workflow_dispatch:
+        inputs:
+            mode:
+                description: 'Action to perform'
+                required: true
+                type: choice
+                options:
+                    - seed
+                    - verify
+                default: seed
+
+jobs:
+    seed:
+        name: Seed build size cache
+        runs-on: ubuntu-latest
+        if: inputs.mode == 'seed'
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@v4
+
+            - name: 🛠 Setup Node.js Environment (with cache)
+              uses: actions/setup-node@v4
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
+
+            - name: 📦 Install Dependencies
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+            - name: 🏗 Build Project
+              run: npm run build
+
+            - name: 📦 Package Distributables
+              run: npm run package
+
+            - name: 📐 Collect build sizes
+              id: sizes
+              run: |
+                  VSIX_FILE=$(find . -maxdepth 1 -name '*.vsix' | head -1)
+                  VSIX_SIZE=$(stat --format=%s "$VSIX_FILE")
+                  WEBVIEW_SIZE=$(stat --format=%s dist/views.js 2>/dev/null || echo 0)
+                  CACHE_KEY="build-sizes-${{ github.ref_name }}-${{ github.sha }}"
+                  echo "{\"vsixSize\": $VSIX_SIZE, \"webviewSize\": $WEBVIEW_SIZE}" > build-sizes.json
+                  echo "### 📐 Build Sizes for \`${{ github.ref_name }}\`" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "| Metric | Size |" >> $GITHUB_STEP_SUMMARY
+                  echo "|--------|------|" >> $GITHUB_STEP_SUMMARY
+                  echo "| VSIX (\`$(basename "$VSIX_FILE")\`) | $(numfmt --to=iec --suffix=B $VSIX_SIZE) |" >> $GITHUB_STEP_SUMMARY
+                  echo "| Webview bundle (\`views.js\`) | $(numfmt --to=iec --suffix=B $WEBVIEW_SIZE) |" >> $GITHUB_STEP_SUMMARY
+                  echo "" >> $GITHUB_STEP_SUMMARY
+                  echo "Cache key: \`$CACHE_KEY\`" >> $GITHUB_STEP_SUMMARY
+
+            - name: 💾 Save to cache
+              uses: actions/cache/save@v4
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
+
+            - name: ✅ Done
+              run: echo "Cache seeded for ${{ github.ref_name }} @ ${{ github.sha }}"
+
+    verify:
+        name: Verify build size cache
+        runs-on: ubuntu-latest
+        if: inputs.mode == 'verify'
+        steps:
+            - name: 📥 Attempt exact cache restore
+              id: exact
+              uses: actions/cache/restore@v4
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
+                  lookup-only: true
+
+            - name: 📥 Attempt prefix cache restore
+              id: prefix
+              uses: actions/cache/restore@v4
+              with:
+                  path: build-sizes-prefix.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}-impossible
+                  restore-keys: |
+                      build-sizes-${{ github.ref_name }}-
+                  lookup-only: true
+
+            - name: 📋 Report results
+              uses: actions/github-script@v7
+              with:
+                  script: |
+                      const branch  = '${{ github.ref_name }}';
+                      const sha     = '${{ github.sha }}';
+                      const exactHit   = '${{ steps.exact.outputs.cache-matched-key }}';
+                      const prefixHit  = '${{ steps.prefix.outputs.cache-matched-key }}';
+
+                      const lines = [
+                        `### 🔍 Cache Verification for \`${branch}\``,
+                        '',
+                        `| Check | Result |`,
+                        `|-------|--------|`,
+                        `| Exact match (\`build-sizes-${branch}-${sha.slice(0,8)}…\`) | ${exactHit ? '✅ Hit: `' + exactHit + '`' : '❌ Miss'} |`,
+                        `| Prefix match (\`build-sizes-${branch}-*\`) | ${prefixHit ? '✅ Hit: `' + prefixHit + '`' : '❌ Miss'} |`,
+                      ];
+
+                      if (!exactHit && !prefixHit) {
+                        lines.push('', '> ⚠️ No cache exists for this branch. Run this workflow again with **seed** mode.');
+                      } else if (!exactHit && prefixHit) {
+                        lines.push('', `> ℹ️ No exact SHA match, but a previous cache entry exists. PRs will use this as the baseline.`);
+                      } else {
+                        lines.push('', '> ✅ Cache is up to date for the current HEAD.');
+                      }
+
+                      await core.summary.addRaw(lines.join('\n')).write();
