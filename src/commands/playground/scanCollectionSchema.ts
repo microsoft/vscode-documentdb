@@ -30,6 +30,10 @@ export async function scanCollectionSchema(
     collectionName: string,
 ): Promise<void> {
     try {
+        ext.outputChannel?.trace(
+            `[scanCollectionSchema] Starting schema scan for ${databaseName}.${collectionName} on cluster ${clusterId}`,
+        );
+
         const client = await ClustersClient.getClient(clusterId);
         const collection = client.getMongoClient().db(databaseName).collection(collectionName);
 
@@ -63,6 +67,10 @@ export async function scanCollectionSchema(
         // ── Telemetry: schema scan results ───────────────────────────
         context.telemetry.measurements.fieldsDiscovered = fieldCount;
         context.telemetry.measurements.documentsScanned = validDocs.length;
+
+        ext.outputChannel?.trace(
+            `[scanCollectionSchema] Scan complete: ${String(validDocs.length)} docs sampled, ${String(fieldCount)} fields discovered for ${databaseName}.${collectionName}`,
+        );
 
         void vscode.window.showInformationMessage(
             l10n.t('Schema scan complete: {0} fields discovered in "{1}".', String(fieldCount), collectionName),
