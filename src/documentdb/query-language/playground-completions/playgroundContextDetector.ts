@@ -336,16 +336,25 @@ export function detectMethodArgContext(text: string, offset: number): MethodCall
 // ---------------------------------------------------------------------------
 
 function detectStringContext(text: string, offset: number): PlaygroundContext | null {
-    // Simple heuristic: count unescaped quotes before cursor
+    // Count unescaped quotes before cursor, properly handling escaped backslashes.
+    // A quote is escaped only when preceded by an odd number of backslashes.
     let inSingle = false;
     let inDouble = false;
     let inTemplate = false;
 
     for (let i = 0; i < offset; i++) {
         const ch = text[i];
-        const prev = i > 0 ? text[i - 1] : '';
 
-        if (prev === '\\') continue;
+        // Count consecutive backslashes preceding this character
+        let backslashes = 0;
+        let checkPos = i - 1;
+        while (checkPos >= 0 && text[checkPos] === '\\') {
+            backslashes++;
+            checkPos--;
+        }
+
+        // If preceded by an odd number of backslashes, this character is escaped
+        if (backslashes % 2 !== 0) continue;
 
         if (ch === "'" && !inDouble && !inTemplate) inSingle = !inSingle;
         else if (ch === '"' && !inSingle && !inTemplate) inDouble = !inDouble;
