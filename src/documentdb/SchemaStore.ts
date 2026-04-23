@@ -58,6 +58,7 @@ export class SchemaStore implements vscode.Disposable {
     private _maxTotalDocuments = 0;
     private _maxTotalFields = 0;
     private _statsChanged = false;
+    private _addDocumentsCalls = 0;
 
     /** Fires when schema data changes for any collection (debounced, 1 second). */
     public readonly onDidChangeSchema: vscode.Event<SchemaChangeEvent> = this._onDidChangeSchema.event;
@@ -165,6 +166,16 @@ export class SchemaStore implements vscode.Disposable {
             ctx.telemetry.measurements.currentCollectionCount = stats.collectionCount;
             ctx.telemetry.measurements.currentTotalDocuments = stats.totalDocuments;
             ctx.telemetry.measurements.currentTotalFields = stats.totalFields;
+
+            // Distinct cluster count
+            const clusterIds = new Set<string>();
+            for (const key of this._analyzers.keys()) {
+                const clusterId = key.split('::')[0];
+                if (clusterId) {
+                    clusterIds.add(clusterId);
+                }
+            }
+            ctx.telemetry.measurements.distinctClusterCount = clusterIds.size;
         });
     }
 
@@ -199,6 +210,12 @@ export class SchemaStore implements vscode.Disposable {
         analyzer.addDocuments(documents);
         this._updateMaxStats();
         this._fireSchemaChanged(key, { clusterId, databaseName: db, collectionName: coll });
+
+        // Report telemetry periodically: every call for the first 10, then every 5th
+        this._addDocumentsCalls++;
+        if (this._addDocumentsCalls <= 10 || this._addDocumentsCalls % 5 === 0) {
+            this._reportTelemetry();
+        }
     }
 
     // ── Lifecycle ──
