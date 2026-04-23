@@ -14,7 +14,7 @@ import { ShellSpinner } from './ShellSpinner';
 // rethrow check — it hits an error state first and calls sendHandlerFailedEvent() instead.
 // This mock runs the callback transparently so errors propagate correctly to callers.
 jest.mock('@microsoft/vscode-azext-utils', () => {
-    const actual = jest.requireActual<typeof import('@microsoft/vscode-azext-utils')>('@microsoft/vscode-azext-utils');
+    const actual = jest.requireActual('@microsoft/vscode-azext-utils');
     return {
         ...actual,
         callWithTelemetryAndErrorHandling: jest.fn(
