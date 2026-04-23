@@ -40,12 +40,12 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
-import { TelemetryAccumulator } from '../../../utils/telemetryAccumulator';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
+import { TelemetryAccumulator } from '../../../utils/telemetryAccumulator';
 import { type BaseRouterContext } from '../../api/configuration/appRouter';
 import { type QueryInsightsStage3Response } from './types/queryInsights';
 

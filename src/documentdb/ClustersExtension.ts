@@ -90,7 +90,6 @@ import {
     normalizeCompletionCategory,
     normalizeCompletionSource,
 } from '../telemetry/completionCategories';
-import { TelemetryAccumulator } from '../utils/telemetryAccumulator';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
@@ -107,6 +106,7 @@ import {
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
 import { registerDoubleClickCommand } from '../utils/registerDoubleClickCommand';
+import { TelemetryAccumulator } from '../utils/telemetryAccumulator';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
