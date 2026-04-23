@@ -25,6 +25,11 @@ export function isExpressionIncomplete(text: string): boolean {
     let inDoubleQuote = false;
     let inTemplateLiteral = false;
 
+    // Template expression nesting: each entry is the bracket depth at which
+    // a `${` was entered. When `}` is encountered at that depth, we return
+    // to the enclosing template literal instead of decrementing depth.
+    const templateExprStack: number[] = [];
+
     // Comment state
     let inLineComment = false;
     let inBlockComment = false;
@@ -74,11 +79,14 @@ export function isExpressionIncomplete(text: string): boolean {
         if (inTemplateLiteral) {
             if (ch === '\\') {
                 i++; // skip escaped character
+            } else if (ch === '$' && next === '{') {
+                // Enter template expression — brackets inside are real code
+                templateExprStack.push(depth);
+                inTemplateLiteral = false;
+                i++; // skip '{'
             } else if (ch === '`') {
                 inTemplateLiteral = false;
             }
-            // Note: We intentionally don't recurse into ${} expressions.
-            // This keeps the scanner simple and handles the common cases.
             continue;
         }
 
@@ -114,7 +122,17 @@ export function isExpressionIncomplete(text: string): boolean {
         if (ch === '(' || ch === '[' || ch === '{') {
             depth++;
         } else if (ch === ')' || ch === ']' || ch === '}') {
-            depth--;
+            // Check if this closing brace returns us to a template literal
+            if (
+                ch === '}' &&
+                templateExprStack.length > 0 &&
+                depth === templateExprStack[templateExprStack.length - 1]
+            ) {
+                templateExprStack.pop();
+                inTemplateLiteral = true;
+            } else {
+                depth--;
+            }
         }
     }
 
@@ -141,6 +159,11 @@ export function getClosingBrackets(text: string): string {
     let inSingleQuote = false;
     let inDoubleQuote = false;
     let inTemplateLiteral = false;
+
+    // Template expression nesting: each entry is the stack length at which
+    // a `${` was entered. When `}` is encountered at that depth, we return
+    // to the enclosing template literal instead of popping the stack.
+    const templateExprStack: number[] = [];
 
     // Comment state
     let inLineComment = false;
@@ -191,6 +214,11 @@ export function getClosingBrackets(text: string): string {
         if (inTemplateLiteral) {
             if (ch === '\\') {
                 i++; // skip escaped character
+            } else if (ch === '$' && next === '{') {
+                // Enter template expression — brackets inside are real code
+                templateExprStack.push(stack.length);
+                inTemplateLiteral = false;
+                i++; // skip '{'
             } else if (ch === '`') {
                 inTemplateLiteral = false;
             }
@@ -229,7 +257,15 @@ export function getClosingBrackets(text: string): string {
         if (ch === '(' || ch === '[' || ch === '{') {
             stack.push(ch);
         } else if (ch === ')' || ch === ']' || ch === '}') {
-            if (stack.length > 0) {
+            // Check if this closing brace returns us to a template literal
+            if (
+                ch === '}' &&
+                templateExprStack.length > 0 &&
+                stack.length === templateExprStack[templateExprStack.length - 1]
+            ) {
+                templateExprStack.pop();
+                inTemplateLiteral = true;
+            } else if (stack.length > 0) {
                 stack.pop();
             }
         }
