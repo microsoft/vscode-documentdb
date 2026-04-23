@@ -40,6 +40,7 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
 import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
+import { TelemetryAccumulator } from '../../../utils/telemetryAccumulator';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
 import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
@@ -47,6 +48,9 @@ import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../api/configuration/appRouter';
 import { type QueryInsightsStage3Response } from './types/queryInsights';
+
+/** Shared accumulator for collection view completion acceptance telemetry. */
+const cvCompletionCounter = new TelemetryAccumulator('completion.accepted.cv');
 
 export type RouterContext = BaseRouterContext & {
     sessionId: string;
@@ -1074,12 +1078,17 @@ export const collectionsViewRouter = router({
         )
         .mutation(({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            // Suppress per-call tRPC telemetry — we accumulate instead
+            myCtx.telemetry.suppressAll = true;
+
             if (input.category === 'unknown') {
                 ext.outputChannel.appendLog(
                     `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
                 );
             }
-            myCtx.telemetry.properties.completionCategory = input.category;
-            myCtx.telemetry.properties.completionSource = CompletionSources.CollectionView;
+            cvCompletionCounter.record({
+                completionCategory: input.category,
+                completionSource: CompletionSources.CollectionView,
+            });
         }),
 });

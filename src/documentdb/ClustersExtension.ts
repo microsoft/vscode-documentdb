@@ -90,6 +90,7 @@ import {
     normalizeCompletionCategory,
     normalizeCompletionSource,
 } from '../telemetry/completionCategories';
+import { TelemetryAccumulator } from '../utils/telemetryAccumulator';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
@@ -407,9 +408,13 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 // Internal: telemetry for completion acceptance (playground + collection view)
+                const completionAcceptedCounter = new TelemetryAccumulator('completion.accepted');
                 registerCommand(
                     CompletionCommandIds.completionAccepted,
                     (context: IActionContext, category?: string, source?: string) => {
+                        // Suppress the per-call telemetry from registerCommand — we accumulate instead
+                        context.telemetry.suppressAll = true;
+
                         const normalizedCategory = normalizeCompletionCategory(category);
                         const normalizedSource = normalizeCompletionSource(source);
                         if (normalizedCategory === 'unknown') {
@@ -422,8 +427,10 @@ export class ClustersExtension implements vscode.Disposable {
                                 `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
                             );
                         }
-                        context.telemetry.properties.completionCategory = normalizedCategory;
-                        context.telemetry.properties.completionSource = normalizedSource;
+                        completionAcceptedCounter.record({
+                            completionCategory: normalizedCategory,
+                            completionSource: normalizedSource,
+                        });
                     },
                 );
 
