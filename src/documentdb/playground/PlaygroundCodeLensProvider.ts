@@ -176,14 +176,27 @@ export class PlaygroundCodeLensProvider implements vscode.CodeLensProvider, vsco
         for (let i = block.startLine; i <= block.endLine; i++) {
             const trimmed = document.lineAt(i).text.trim();
             if (inBlockComment) {
-                if (trimmed.includes('*/')) {
+                const closeIdx = trimmed.indexOf('*/');
+                if (closeIdx !== -1) {
                     inBlockComment = false;
+                    // Check if there's code after the closing */
+                    const afterComment = trimmed.substring(closeIdx + 2).trim();
+                    if (afterComment.length > 0 && !afterComment.startsWith('//')) {
+                        return true;
+                    }
                 }
                 continue;
             }
             if (trimmed.startsWith('/*')) {
-                if (!trimmed.includes('*/')) {
+                const closeIdx = trimmed.indexOf('*/', 2);
+                if (closeIdx === -1) {
                     inBlockComment = true;
+                    continue;
+                }
+                // Inline block comment — check if there's code after */
+                const afterComment = trimmed.substring(closeIdx + 2).trim();
+                if (afterComment.length > 0 && !afterComment.startsWith('//')) {
+                    return true;
                 }
                 continue;
             }
