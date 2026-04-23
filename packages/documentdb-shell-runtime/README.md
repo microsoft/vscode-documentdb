@@ -41,6 +41,12 @@ import { DocumentDBShellRuntime } from '@microsoft/documentdb-vscode-shell-runti
 const mongoClient = new MongoClient(connectionString);
 await mongoClient.connect();
 
+// Constructor signature:
+//   new DocumentDBShellRuntime(mongoClient, callbacks?, options?)
+//
+//   callbacks: { onConsoleOutput?, onLog? }
+//   options:   { persistent?, productName?, displayBatchSize? }
+
 // Fresh context (playground mode — default)
 const playground = new DocumentDBShellRuntime(mongoClient, {
   onConsoleOutput: (output) => console.log(output),
@@ -48,9 +54,11 @@ const playground = new DocumentDBShellRuntime(mongoClient, {
 const result = await playground.evaluate('db.users.find({})', 'myDatabase');
 
 // Persistent context (interactive shell mode)
-const shell = new DocumentDBShellRuntime(mongoClient, callbacks, {
-  persistent: true,
-});
+const shell = new DocumentDBShellRuntime(
+  mongoClient,
+  { onConsoleOutput: (output) => console.log(output) }, // callbacks
+  { persistent: true },                                   // options
+);
 await shell.evaluate('const x = 1', 'myDatabase');
 await shell.evaluate('x + 1', 'myDatabase'); // returns 2 — variable survived
 
