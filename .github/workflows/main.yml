@@ -104,27 +104,29 @@ jobs:
                         prettier: 'Run `npm run prettier-fix` to auto-format, then commit.',
                       };
 
-                      const failed = Object.keys(results).filter(k => results[k] === 'failure');
                       const marker = '<!-- code-quality-report -->';
-                      let body;
+                      const failed = Object.keys(results).filter(k => results[k] === 'failure');
+                      const rows = Object.keys(results).map(k => {
+                        const ok = results[k] === 'success';
+                        const status = ok ? '✅ Passed' : '❌ Failed';
+                        const hint = ok ? '' : hints[k];
+                        return `| ${labels[k]} | ${status} | ${hint} |`;
+                      }).join('\n');
 
-                      if (failed.length === 0) {
-                        body = `${marker}\n✅ **All code quality checks passed.**`;
-                      } else {
-                        const rows = failed
-                          .map(k => `| ${labels[k]} | ❌ Failed | ${hints[k]} |`)
-                          .join('\n');
-                        body = [
-                          marker,
-                          '## ⚠️ Code Quality Issues',
-                          '',
-                          '| Check | Status | How to fix |',
-                          '|-------|--------|------------|',
-                          rows,
-                          '',
-                          '_This comment is updated automatically on each push._',
-                        ].join('\n');
-                      }
+                      const title = failed.length === 0
+                        ? '## ✅ Code Quality Checks'
+                        : '## ⚠️ Code Quality Issues';
+
+                      const body = [
+                        marker,
+                        title,
+                        '',
+                        '| Check | Status | How to fix |',
+                        '|-------|--------|------------|',
+                        rows,
+                        '',
+                        '_This comment is updated automatically on each push._',
+                      ].join('\n');
 
                       const { data: comments } = await github.rest.issues.listComments({
                         owner: context.repo.owner,
@@ -133,20 +135,18 @@ jobs:
                       });
                       const existing = comments.find(c => c.body && c.body.includes(marker));
                       if (existing) {
-                        await github.rest.issues.updateComment({
+                        await github.rest.issues.deleteComment({
                           owner: context.repo.owner,
                           repo: context.repo.repo,
                           comment_id: existing.id,
-                          body,
-                        });
-                      } else {
-                        await github.rest.issues.createComment({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          issue_number: context.issue.number,
-                          body,
                         });
                       }
+                      await github.rest.issues.createComment({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                        body,
+                      });
 
             - name: ❌ Fail if code quality checks failed
               if: steps.l10n.outcome == 'failure' || steps.lint.outcome == 'failure' || steps.prettier.outcome == 'failure'
@@ -337,17 +337,15 @@ jobs:
                       });
                       const existing = comments.find(c => c.body && c.body.includes(marker));
                       if (existing) {
-                        await github.rest.issues.updateComment({
+                        await github.rest.issues.deleteComment({
                           owner: context.repo.owner,
                           repo: context.repo.repo,
                           comment_id: existing.id,
-                          body,
-                        });
-                      } else {
-                        await github.rest.issues.createComment({
-                          owner: context.repo.owner,
-                          repo: context.repo.repo,
-                          issue_number: context.issue.number,
-                          body,
                         });
                       }
+                      await github.rest.issues.createComment({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                        body,
+                      });
