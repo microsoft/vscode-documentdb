@@ -5,7 +5,8 @@
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "typeDefs"
   ],
   "scripts": {
     "build": "tsc -p . && tsc -p tsconfig.scripts.json --noEmit",
