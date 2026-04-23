@@ -1,19 +1,16 @@
 name: Node PR Lint, Build and Test
 
-# This workflow handles four scenarios:
+# This workflow handles the following scenarios:
 #
-# 1. Push to `next`, `dev/*`, or `feature/*` branches:
-#    - Runs `code-quality-and-tests`
-#    - Skips `integration-tests` and `build-and-package` to save resources and focus on code quality
+# 1. Push to `main` or `next`:
+#    - Runs all jobs: code checks, tests, packaging, and caches build sizes
+#      for PR comparisons
 #
-# 2. Pull Requests to `main` or `next`:
+# 2. Pull Requests to `main`, `next`, `dev/*`, or `feature/*`:
 #    - Runs all jobs: code checks, tests, integration tests, and packaging
-#    - Ensures complete validation including artifact generation before merge
+#    - Posts PR comments with code quality report and build size comparison
 #
-# 3. Push to `main`:
-#    - Runs full workflow for release validation and artifact generation
-#
-# 4. Manual run via `workflow_dispatch`:
+# 3. Manual run via `workflow_dispatch`:
 #    - Optional `enforce_full_run` input forces integration tests and packaging on any branch
 
 on:
@@ -29,8 +26,6 @@ on:
         branches:
             - main
             - next
-            - dev/*
-            - feature/*
 
     pull_request:
         branches:
@@ -47,6 +42,8 @@ jobs:
     code-quality-and-tests:
         name: Code Quality & Tests
         runs-on: ubuntu-latest
+        permissions:
+            pull-requests: write
         defaults:
             run:
                 working-directory: '.'
@@ -68,16 +65,94 @@ jobs:
               run: npm run build --workspaces --if-present
 
             - name: 🌐 Check Localization Files
+              id: l10n
+              continue-on-error: true
               run: npm run l10n:check
 
             - name: 🧹 Run ESLint
+              id: lint
+              continue-on-error: true
               run: npm run lint
 
             - name: 🎨 Check Code Formatting (Prettier)
+              id: prettier
+              continue-on-error: true
               run: npm run prettier
 
             - name: 🧪 Run Unit Tests (Jest)
               run: npm run jesttest
+
+            - name: 💬 Post PR Code Quality Report
+              if: github.event_name == 'pull_request'
+              uses: actions/github-script@v7
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const results = {
+                        l10n:     '${{ steps.l10n.outcome }}',
+                        lint:     '${{ steps.lint.outcome }}',
+                        prettier: '${{ steps.prettier.outcome }}',
+                      };
+                      const labels = {
+                        l10n:     'Localization (`l10n`)',
+                        lint:     'ESLint',
+                        prettier: 'Prettier formatting',
+                      };
+                      const hints = {
+                        l10n:     'Run `npm run l10n` and commit the updated files.',
+                        lint:     'Run `npm run lint` and fix the reported issues.',
+                        prettier: 'Run `npm run prettier-fix` to auto-format, then commit.',
+                      };
+
+                      const failed = Object.keys(results).filter(k => results[k] === 'failure');
+                      const marker = '<!-- code-quality-report -->';
+                      let body;
+
+                      if (failed.length === 0) {
+                        body = `${marker}\n✅ **All code quality checks passed.**`;
+                      } else {
+                        const rows = failed
+                          .map(k => `| ${labels[k]} | ❌ Failed | ${hints[k]} |`)
+                          .join('\n');
+                        body = [
+                          marker,
+                          '## ⚠️ Code Quality Issues',
+                          '',
+                          '| Check | Status | How to fix |',
+                          '|-------|--------|------------|',
+                          rows,
+                          '',
+                          '_This comment is updated automatically on each push._',
+                        ].join('\n');
+                      }
+
+                      const { data: comments } = await github.rest.issues.listComments({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                      });
+                      const existing = comments.find(c => c.body && c.body.includes(marker));
+                      if (existing) {
+                        await github.rest.issues.updateComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          comment_id: existing.id,
+                          body,
+                        });
+                      } else {
+                        await github.rest.issues.createComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: context.issue.number,
+                          body,
+                        });
+                      }
+
+            - name: ❌ Fail if code quality checks failed
+              if: steps.l10n.outcome == 'failure' || steps.lint.outcome == 'failure' || steps.prettier.outcome == 'failure'
+              run: |
+                  echo "One or more code quality checks failed (l10n=${{ steps.l10n.outcome }}, lint=${{ steps.lint.outcome }}, prettier=${{ steps.prettier.outcome }})"
+                  exit 1
 
     integration-tests:
         name: Integration Tests
@@ -86,6 +161,7 @@ jobs:
         if: |
             (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
             github.ref == 'refs/heads/main' ||
+            github.ref == 'refs/heads/next' ||
             (startsWith(github.ref, 'refs/pull/') && (
               github.base_ref == 'main' ||
               github.base_ref == 'next'
@@ -110,15 +186,17 @@ jobs:
             - name: 🔄 Run Integration Tests (Headless UI)
               run: xvfb-run -a npm test
 
-    # Run only on push to `main` or for PRs to main or next
-    # Skip on direct pushes to `next`, `dev/*`, and `feature/*` branches
+    # Run on push to `main`/`next` (for cache seeding) and for PRs to main/next
     build-and-package:
         name: Build & Package Artifacts
         runs-on: ubuntu-latest
         needs: [code-quality-and-tests]
+        permissions:
+            pull-requests: write
         if: |
             (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
             github.ref == 'refs/heads/main' ||
+            github.ref == 'refs/heads/next' ||
             (startsWith(github.ref, 'refs/pull/') && (
               github.base_ref == 'main' ||
               github.base_ref == 'next'
@@ -146,6 +224,18 @@ jobs:
             - name: 📦 Package Distributables (vsix/tgz)
               run: npm run package
 
+            - name: 📐 Collect build sizes
+              id: sizes
+              run: |
+                  VSIX_FILE=$(find . -maxdepth 1 -name '*.vsix' | head -1)
+                  VSIX_SIZE=$(stat --format=%s "$VSIX_FILE")
+                  WEBVIEW_SIZE=$(stat --format=%s dist/views.js 2>/dev/null || echo 0)
+                  echo "vsix_file=$(basename "$VSIX_FILE")" >> $GITHUB_OUTPUT
+                  echo "vsix_size=$VSIX_SIZE" >> $GITHUB_OUTPUT
+                  echo "webview_size=$WEBVIEW_SIZE" >> $GITHUB_OUTPUT
+                  echo "{\"vsixSize\": $VSIX_SIZE, \"webviewSize\": $WEBVIEW_SIZE}" > build-sizes.json
+                  echo "VSIX: $VSIX_FILE ($VSIX_SIZE bytes), Webview: $WEBVIEW_SIZE bytes"
+
             - name: 📤 Upload Artifacts
               uses: actions/upload-artifact@v4
               with:
@@ -154,3 +244,110 @@ jobs:
                       **/*.vsix
                       **/*.tgz
                       !**/node_modules
+
+            - name: 💾 Cache build sizes (push only)
+              if: github.event_name == 'push'
+              uses: actions/cache/save@v4
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
+
+            - name: 📥 Restore base branch sizes (PR only)
+              if: github.event_name == 'pull_request'
+              id: base-cache
+              uses: actions/cache/restore@v4
+              with:
+                  path: build-sizes.json
+                  key: build-sizes-${{ github.event.pull_request.base.ref }}-${{ github.event.pull_request.base.sha }}
+                  restore-keys: |
+                      build-sizes-${{ github.event.pull_request.base.ref }}-
+
+            - name: 📐 Prepare base sizes for comparison
+              if: github.event_name == 'pull_request' && steps.base-cache.outputs.cache-matched-key
+              run: |
+                  # Cache restore overwrites build-sizes.json with base branch data.
+                  # Rename it so the PR comment step can read base vs PR separately.
+                  mv build-sizes.json base-sizes.json
+
+            - name: 💬 Post PR Build Size Report
+              if: github.event_name == 'pull_request'
+              uses: actions/github-script@v7
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const fs = require('fs');
+
+                      const prVsix    = parseInt('${{ steps.sizes.outputs.vsix_size }}', 10);
+                      const prWebview = parseInt('${{ steps.sizes.outputs.webview_size }}', 10);
+                      const vsixFile  = '${{ steps.sizes.outputs.vsix_file }}';
+
+                      const fmt = (bytes) => {
+                        if (bytes >= 1024 * 1024) return (bytes / 1024 / 1024).toFixed(2) + ' MB';
+                        return Math.round(bytes / 1024).toLocaleString() + ' KB';
+                      };
+                      const delta = (pr, base) => {
+                        const diff = pr - base;
+                        const pct  = base > 0 ? ((diff / base) * 100).toFixed(1) : '∞';
+                        const sign = diff > 0 ? '+' : '';
+                        const icon = diff > 0 ? '⬆️' : diff < 0 ? '⬇️' : '✅';
+                        return `${icon} ${sign}${fmt(diff)} (${sign}${pct}%)`;
+                      };
+
+                      let baseSizes = null;
+                      try {
+                        baseSizes = JSON.parse(fs.readFileSync('base-sizes.json', 'utf8'));
+                      } catch (_) { /* no cache */ }
+
+                      const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+                      const marker = '<!-- build-size-report -->';
+                      let body;
+
+                      if (baseSizes) {
+                        body = [
+                          marker,
+                          '## 📦 Build Size Report',
+                          '',
+                          '| Metric | Base (`${{ github.event.pull_request.base.ref }}`) | PR | Delta |',
+                          '|--------|------|-----|-------|',
+                          `| VSIX (\`${vsixFile}\`) | ${fmt(baseSizes.vsixSize)} | ${fmt(prVsix)} | ${delta(prVsix, baseSizes.vsixSize)} |`,
+                          `| Webview bundle (\`views.js\`) | ${fmt(baseSizes.webviewSize)} | ${fmt(prWebview)} | ${delta(prWebview, baseSizes.webviewSize)} |`,
+                          '',
+                          `_[Download artifact](${runUrl}) · updated automatically on each push._`,
+                        ].join('\n');
+                      } else {
+                        body = [
+                          marker,
+                          '## 📦 Build Size Report',
+                          '',
+                          '| Metric | Size |',
+                          '|--------|------|',
+                          `| VSIX (\`${vsixFile}\`) | ${fmt(prVsix)} |`,
+                          `| Webview bundle (\`views.js\`) | ${fmt(prWebview)} |`,
+                          '',
+                          `> ⚠️ No baseline cached for \`${{ github.event.pull_request.base.ref }}\` yet — delta will appear after the next push to that branch.`,
+                          '',
+                          `_[Download artifact](${runUrl}) · updated automatically on each push._`,
+                        ].join('\n');
+                      }
+
+                      const { data: comments } = await github.rest.issues.listComments({
+                        owner: context.repo.owner,
+                        repo: context.repo.repo,
+                        issue_number: context.issue.number,
+                      });
+                      const existing = comments.find(c => c.body && c.body.includes(marker));
+                      if (existing) {
+                        await github.rest.issues.updateComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          comment_id: existing.id,
+                          body,
+                        });
+                      } else {
+                        await github.rest.issues.createComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: context.issue.number,
+                          body,
+                        });
+                      }
