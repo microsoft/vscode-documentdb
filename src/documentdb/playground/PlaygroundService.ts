@@ -5,6 +5,7 @@
 
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { ext } from '../../extensionVariables';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
 import { type PlaygroundConnection } from './types';
 
@@ -103,11 +104,15 @@ export class PlaygroundService implements vscode.Disposable {
     // ── Connection management ──────────────────────────────────────────
 
     setConnection(uri: vscode.Uri, connection: PlaygroundConnection): void {
+        ext.outputChannel?.trace(
+            `[PlaygroundService] setConnection: ${uri.toString()} → cluster=${connection.clusterId}, db=${connection.databaseName}`,
+        );
         this._connections.set(uri.toString(), connection);
         this._onDidChangeState.fire();
     }
 
     removeConnection(uri: vscode.Uri): void {
+        ext.outputChannel?.trace(`[PlaygroundService] removeConnection: ${uri.toString()}`);
         this._connections.delete(uri.toString());
         this._onDidChangeState.fire();
     }

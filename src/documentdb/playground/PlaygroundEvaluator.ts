@@ -136,6 +136,9 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         const needsSpawn = !this._workerManager.isConnectedTo(connection.clusterId);
         if (needsSpawn) {
             onProgress?.(l10n.t('Initializing…'));
+            ext.outputChannel?.trace(
+                `[PlaygroundEvaluator] Spawning new worker for cluster=${connection.clusterId}, db=${connection.databaseName}`,
+            );
         }
 
         const initStartTime = Date.now();
@@ -183,6 +186,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
      * Returns after the worker has confirmed shutdown or after a timeout.
      */
     async shutdown(): Promise<void> {
+        ext.outputChannel?.trace('[PlaygroundEvaluator] Shutting down worker');
         await this._workerManager.shutdown();
         this.resetSession();
     }

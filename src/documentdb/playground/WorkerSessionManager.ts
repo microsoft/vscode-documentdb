@@ -9,6 +9,7 @@ import { randomUUID } from 'crypto';
 import * as path from 'path';
 import type * as vscode from 'vscode';
 import { Worker } from 'worker_threads';
+import { ext } from '../../extensionVariables';
 import { SettingsHintError } from '../shell/SettingsHintError';
 import { type MainToWorkerMessage, type SerializableExecutionResult, type WorkerToMainMessage } from './workerTypes';
 
@@ -115,11 +116,15 @@ export class WorkerSessionManager implements vscode.Disposable {
     ): Promise<void> {
         // If worker is alive but connected to a different cluster, shut it down
         if (this._worker && this._workerClusterId !== clusterId) {
+            ext.outputChannel?.trace(
+                `[WorkerSessionManager] Cluster changed (${String(this._workerClusterId)} → ${clusterId}), terminating old worker`,
+            );
             this.terminateWorker();
         }
 
         // If no worker exists, spawn one
         if (!this._worker || this._workerState === 'idle') {
+            ext.outputChannel?.trace(`[WorkerSessionManager] Spawning worker for cluster=${clusterId}`);
             await this.spawnWorker(clusterId, initMsg, initTimeoutMs);
         }
     }
@@ -150,6 +155,7 @@ export class WorkerSessionManager implements vscode.Disposable {
             return;
         }
 
+        ext.outputChannel?.trace('[WorkerSessionManager] Graceful shutdown requested');
         try {
             await this.sendRequest<void>({ type: 'shutdown', requestId: '' }, 5000);
         } catch {
@@ -410,6 +416,7 @@ export class WorkerSessionManager implements vscode.Disposable {
         // Only emit unexpected exit when the worker was NOT intentionally terminated.
         // Intentional exits (dispose, shutdown, cluster switch) are tracked by worker.terminated.
         if (!this._terminatingIntentionally) {
+            ext.outputChannel?.warn('[WorkerSessionManager] Unexpected worker exit detected');
             void callWithTelemetryAndErrorHandling('worker.unexpectedExit', async (context) => {
                 context.errorHandling.suppressDisplay = true;
                 context.telemetry.measurements.spawnCount = this._spawnCount;
