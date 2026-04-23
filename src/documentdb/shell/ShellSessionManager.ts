@@ -161,8 +161,9 @@ export class ShellSessionManager implements vscode.Disposable {
         const initMsg = this.buildInitMessage();
 
         const timeoutMs = this.getInitTimeoutMs();
+        let timerId: ReturnType<typeof setTimeout> | undefined;
         const timeoutPromise = new Promise<never>((_resolve, reject) => {
-            setTimeout(
+            timerId = setTimeout(
                 () =>
                     reject(
                         new SettingsHintError(
@@ -175,7 +176,16 @@ export class ShellSessionManager implements vscode.Disposable {
             );
         });
 
-        await Promise.race([this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg), timeoutPromise]);
+        try {
+            await Promise.race([
+                this._workerManager.ensureWorker(this._connectionInfo.clusterId, initMsg),
+                timeoutPromise,
+            ]);
+        } finally {
+            if (timerId !== undefined) {
+                clearTimeout(timerId);
+            }
+        }
         this._initialized = true;
         this._authMethod = initMsg.authMechanism;
 
