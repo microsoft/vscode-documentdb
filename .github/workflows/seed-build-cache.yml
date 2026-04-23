@@ -1,4 +1,4 @@
-name: Seed / Verify Build Size Cache
+name: Build Size Cache
 
 # Manual workflow to seed the build-sizes cache for a branch,
 # or to verify that a cache entry already exists.

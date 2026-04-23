@@ -1,4 +1,4 @@
-name: Node PR Lint, Build and Test
+name: CI
 
 # This workflow handles the following scenarios:
 #
@@ -189,7 +189,7 @@ jobs:
 
     # Run on push to `main`/`next` (for cache seeding) and for PRs to main/next
     build-and-package:
-        name: Build & Package Artifacts
+        name: Build & Package
         runs-on: ubuntu-latest
         needs: [code-quality-and-tests]
         permissions:
