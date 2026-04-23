@@ -7,6 +7,35 @@ import * as vscode from 'vscode';
 import { DocumentDBShellPty, type DocumentDBShellPtyOptions } from './DocumentDBShellPty';
 import { ShellSpinner } from './ShellSpinner';
 
+// callWithTelemetryAndErrorHandling from @microsoft/vscode-azext-utils silently swallows
+// errors in the Jest environment because its internal error handling relies on extension
+// infrastructure (ext._internalReporter, etc.) that is not initialized in unit tests.
+// With rethrow=true set by the callback, the framework's handleError() never reaches the
+// rethrow check — it hits an error state first and calls sendHandlerFailedEvent() instead.
+// This mock runs the callback transparently so errors propagate correctly to callers.
+jest.mock('@microsoft/vscode-azext-utils', () => {
+    const actual = jest.requireActual<typeof import('@microsoft/vscode-azext-utils')>('@microsoft/vscode-azext-utils');
+    return {
+        ...actual,
+        callWithTelemetryAndErrorHandling: jest.fn(
+            async (_callbackId: string, callback: (ctx: unknown) => Promise<unknown>) => {
+                const ctx = {
+                    telemetry: {
+                        properties: {} as Record<string, string | undefined>,
+                        measurements: {} as Record<string, number | undefined>,
+                        suppressIfSuccessful: false,
+                        suppressAll: false,
+                    },
+                    errorHandling: { suppressDisplay: false, rethrow: false, issueProperties: {} },
+                    valuesToMask: [] as string[],
+                    ui: undefined,
+                };
+                return callback(ctx);
+            },
+        ),
+    };
+});
+
 // Mock ShellSessionManager
 const mockInitialize = jest.fn().mockResolvedValue({
     host: 'test-host.documents.azure.com:10255',
