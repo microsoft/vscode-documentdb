@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
+import { SilentCatchMeter } from '../../utils/silentCatchMeter';
 
 /**
  * ANSI color codes for terminal output.
@@ -201,9 +202,11 @@ export class ShellOutputFormatter {
         try {
             return EJSON.stringify(value, undefined, 2, { relaxed: true });
         } catch {
+            SilentCatchMeter.hit('ShellOutputFormatter_ejson');
             try {
                 return JSON.stringify(value, undefined, 2);
             } catch {
+                SilentCatchMeter.hit('ShellOutputFormatter_json');
                 return String(value);
             }
         }

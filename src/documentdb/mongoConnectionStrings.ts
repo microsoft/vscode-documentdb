@@ -7,6 +7,7 @@ import { appendExtensionUserAgent, parseError, type IParsedError } from '@micros
 import { type MongoClient } from 'mongodb';
 import { ParsedConnectionString } from '../ParsedConnectionString';
 import { nonNullValue } from '../utils/nonNull';
+import { SilentCatchMeter } from '../utils/silentCatchMeter';
 import { connectToClient } from './connectToClient';
 
 // Connection strings follow the following format (https://docs.mongodb.com/manual/reference/connection-string/):
@@ -33,6 +34,7 @@ export function getDatabaseNameFromConnectionString(connectionString: string): s
         );
         return databaseName;
     } catch {
+        SilentCatchMeter.hit('mongoConnectionStrings_getDatabaseName');
         // Shouldn't happen, but ignore if does
     }
 
@@ -43,6 +45,7 @@ export function addDatabaseToAccountConnectionString(connectionString: string, d
     try {
         return connectionString.replace(mongoConnectionStringRegExp, `$1/${encodeURIComponent(databaseName)}`);
     } catch {
+        SilentCatchMeter.hit('mongoConnectionStrings_addDatabase');
         // Shouldn't happen, but ignore if does. Original connection string could be in a format we don't expect, but might already have the db name or might still work without it
         return connectionString;
     }

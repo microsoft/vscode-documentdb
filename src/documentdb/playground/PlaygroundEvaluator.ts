@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { SilentCatchMeter } from '../../utils/silentCatchMeter';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
@@ -267,10 +268,12 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             const { EJSON } = await import('bson');
             printable = EJSON.parse(serResult.printable, { relaxed: false });
         } catch {
+            SilentCatchMeter.hit('PlaygroundEvaluator_ejson');
             // Fallback to JSON.parse if EJSON fails, then raw string
             try {
                 printable = JSON.parse(serResult.printable) as unknown;
             } catch {
+                SilentCatchMeter.hit('PlaygroundEvaluator_json');
                 printable = serResult.printable;
             }
         }

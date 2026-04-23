@@ -18,6 +18,7 @@ import {
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
+import { SilentCatchMeter } from '../utils/silentCatchMeter';
 import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
@@ -651,6 +652,7 @@ export class ClustersClient {
                 fields: index.fields as unknown[] | undefined,
             }));
         } catch {
+            SilentCatchMeter.hit('ClustersClient_listSearchIndexes');
             // $listSearchIndexes not supported on this platform (e.g., non-Atlas deployments)
             // Return empty array silently
             return [];
