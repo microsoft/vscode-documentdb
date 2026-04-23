@@ -136,7 +136,7 @@ function buildFindExpression(
     const hasProject = project && project.trim() !== '{}' && project.trim() !== '{  }' && project.trim() !== '';
     const hasSort = sort && sort.trim() !== '{}' && sort.trim() !== '{  }' && sort.trim() !== '';
 
-    const filterArg = filter || '{}';
+    const filterArg = filter.trim() || '{}';
 
     const escaped = escapeJsString(collectionName);
 
