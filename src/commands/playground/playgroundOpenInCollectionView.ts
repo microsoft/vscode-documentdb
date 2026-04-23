@@ -72,8 +72,6 @@ export async function playgroundOpenQueryInCollectionView(
         });
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(
-            l10n.t('Failed to open Collection View: {0}', errorMessage),
-        );
+        void vscode.window.showErrorMessage(l10n.t('Failed to open Collection View: {0}', errorMessage));
     }
 }

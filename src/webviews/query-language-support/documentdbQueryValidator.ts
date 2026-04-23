@@ -238,7 +238,10 @@ export function validateExpression(code: string): Diagnostic[] {
                             startOffset,
                             endOffset,
                             severity: 'error',
-                            message: l10n.t("Unknown function '{0}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, Math).", name),
+                            message: l10n.t(
+                                "Unknown function '{0}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, Math).",
+                                name,
+                            ),
                         });
                     }
                 }
@@ -273,7 +276,10 @@ export function validateExpression(code: string): Diagnostic[] {
                             startOffset,
                             endOffset,
                             severity: 'error',
-                            message: l10n.t("Unknown identifier '{0}'. Expected a known global (e.g., Date, Math).", objName),
+                            message: l10n.t(
+                                "Unknown identifier '{0}'. Expected a known global (e.g., Date, Math).",
+                                objName,
+                            ),
                         });
                     }
                 }
@@ -307,7 +313,10 @@ export function validateExpression(code: string): Diagnostic[] {
                             startOffset,
                             endOffset,
                             severity: 'error',
-                            message: l10n.t("Unknown constructor '{0}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, RegExp).", name),
+                            message: l10n.t(
+                                "Unknown constructor '{0}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, RegExp).",
+                                name,
+                            ),
                         });
                     }
                 }

@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { WorkerSessionManager, type WorkerSessionCallbacks } from './WorkerSessionManager';
-import type { MainToWorkerMessage } from './workerTypes';
+import { type MainToWorkerMessage } from './workerTypes';
 
 // Mock worker_threads — the WorkerSessionManager creates Worker instances
 jest.mock('worker_threads', () => {
@@ -293,12 +293,12 @@ describe('WorkerSessionManager', () => {
             replyInitSuccess(worker1);
             await init1;
 
-            const spawnCount = (WorkerMock as jest.Mock).mock.calls.length;
+            const spawnCount = WorkerMock.mock.calls.length;
 
             // Same cluster — should not spawn
             await manager.ensureWorker('cluster-A', makeInitMsg('cluster-A'));
 
-            expect((WorkerMock as jest.Mock).mock.calls.length).toBe(spawnCount);
+            expect(WorkerMock.mock.calls.length).toBe(spawnCount);
 
             manager.dispose();
         });

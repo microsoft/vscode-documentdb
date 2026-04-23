@@ -4,11 +4,11 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { ext } from '../../../extensionVariables';
+import { SilentCatchMeter } from '../../../utils/silentCatchMeter';
 import { ClustersClient } from '../../ClustersClient';
 import { SchemaStore } from '../../SchemaStore';
 import { PlaygroundService } from '../../playground/PlaygroundService';
-import { ext } from '../../../extensionVariables';
-import { SilentCatchMeter } from '../../../utils/silentCatchMeter';
 
 /**
  * Provides collection names for query playground completions.
