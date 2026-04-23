@@ -29,6 +29,7 @@ import {
     ACTION_LINE_PREFIX,
     PLAYGROUND_ACTION_PREFIX,
     SETTINGS_ACTION_PREFIX,
+    getRegisteredShellTerminals,
     type ShellTerminalInfo,
     unregisterShellTerminal,
 } from './ShellTerminalLinkProvider';
@@ -460,6 +461,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 context.telemetry.properties.authMethod = metadata.authMechanism;
                 context.telemetry.properties.isEmulator = metadata.isEmulator ? 'true' : 'false';
                 context.telemetry.properties.hasInitialInput = this._initialInput ? 'true' : 'false';
+                context.telemetry.measurements.activeShellSessionCount = getRegisteredShellTerminals().length;
 
                 // Link to server metadata via connectionCorrelationId
                 try {
