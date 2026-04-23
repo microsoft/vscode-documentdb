@@ -53,20 +53,27 @@ export async function playgroundOpenQueryInCollectionView(
     context.telemetry.properties.activationSource = 'playgroundCodeLens';
     context.telemetry.properties.hasFilter = parsed.filter ? 'true' : 'false';
 
-    await vscode.commands.executeCommand('vscode-documentdb.command.internal.containerView.open', {
-        clusterId: connection.clusterId,
-        clusterDisplayName: connection.clusterDisplayName,
-        viewId: connection.viewId ?? Views.ConnectionsView,
-        databaseName: connection.databaseName,
-        collectionName,
-        initialQuery: parsed.filter
-            ? {
-                  filter: parsed.filter,
-                  project: parsed.project,
-                  sort: parsed.sort,
-                  skip: parsed.skip,
-                  limit: parsed.limit,
-              }
-            : undefined,
-    });
+    try {
+        await vscode.commands.executeCommand('vscode-documentdb.command.internal.containerView.open', {
+            clusterId: connection.clusterId,
+            clusterDisplayName: connection.clusterDisplayName,
+            viewId: connection.viewId ?? Views.ConnectionsView,
+            databaseName: connection.databaseName,
+            collectionName,
+            initialQuery: parsed.filter
+                ? {
+                      filter: parsed.filter,
+                      project: parsed.project,
+                      sort: parsed.sort,
+                      skip: parsed.skip,
+                      limit: parsed.limit,
+                  }
+                : undefined,
+        });
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        void vscode.window.showErrorMessage(
+            l10n.t('Failed to open Collection View: {0}', errorMessage),
+        );
+    }
 }
