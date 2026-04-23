@@ -55,8 +55,12 @@ export async function runAll(_context: IActionContext): Promise<void> {
         );
 
         if (!confirmed) {
+            _context.telemetry.properties.runAllDialogConfirmed = 'false';
             return;
         }
+        _context.telemetry.properties.runAllDialogConfirmed = 'true';
+    } else {
+        _context.telemetry.properties.runAllDialogConfirmed = 'skipped';
     }
 
     await executePlaygroundCode(code, 'runAll', editor.document.uri);

@@ -34,19 +34,23 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
     }
 
     let codeToRun: string;
+    let selectionSource: string;
 
     if (startLine !== undefined && endLine !== undefined) {
         // Invoked from CodeLens with explicit block range
+        selectionSource = 'codeLens';
         const range = new vscode.Range(startLine, 0, endLine, editor.document.lineAt(endLine).text.length);
         codeToRun = editor.document.getText(range);
     } else {
         // Run current block at cursor, fall back to preceding block.
         // Any active selection (e.g. from autocomplete) is intentionally
         // ignored so we always execute the full block.
+        selectionSource = 'cursor';
         codeToRun = detectCurrentBlock(editor.document, editor.selection.active);
         if (!codeToRun.trim()) {
             // Cursor is on a blank line — fall back to the nearest preceding block
             // (same behavior as CodeLens resolveActiveBlock)
+            selectionSource = 'fallback';
             const blocks = detectBlocks(editor.document);
             const cursorLine = editor.selection.active.line;
             for (let i = blocks.length - 1; i >= 0; i--) {
@@ -63,6 +67,10 @@ export async function runSelected(_context: IActionContext, startLine?: number, 
             }
         }
     }
+
+    _context.telemetry.properties.selectionSource = selectionSource;
+    const blocks = detectBlocks(editor.document);
+    _context.telemetry.measurements.blockCount = blocks.length;
 
     if (!codeToRun.trim()) {
         void vscode.window.showInformationMessage(l10n.t('No code to run. Place the cursor in a code block.'));
