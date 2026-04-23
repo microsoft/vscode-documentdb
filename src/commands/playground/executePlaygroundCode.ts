@@ -108,6 +108,7 @@ export async function executePlaygroundCode(
 
     // Get or create the evaluator for this cluster
     let evaluator = evaluators.get(connection.clusterId);
+    const isNewEvaluator = !evaluator;
     if (!evaluator) {
         evaluator = new PlaygroundEvaluator();
         evaluators.set(connection.clusterId, evaluator);
@@ -128,6 +129,8 @@ export async function executePlaygroundCode(
         context.telemetry.properties.sessionId = evaluator!.sessionId ?? 'none';
         context.telemetry.measurements.sessionEvalCount = evaluator!.sessionEvalCount;
         context.telemetry.properties.authMethod = evaluator!.sessionAuthMethod ?? 'unknown';
+        context.telemetry.properties.isNewEvaluator = isNewEvaluator ? 'true' : 'false';
+        context.telemetry.measurements.activeEvaluatorCount = evaluators.size;
         context.telemetry.properties.runMode = runMode;
         context.telemetry.measurements.codeLineCount = code.split('\n').length;
 
