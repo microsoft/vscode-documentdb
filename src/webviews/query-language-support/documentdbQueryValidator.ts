@@ -16,6 +16,7 @@
  */
 
 import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
+import * as l10n from '@vscode/l10n';
 import * as acorn from 'acorn';
 import * as walk from 'acorn-walk';
 
@@ -229,7 +230,7 @@ export function validateExpression(code: string): Diagnostic[] {
                             startOffset,
                             endOffset,
                             severity: 'warning',
-                            message: `Did you mean '${nearMiss.match}'?`,
+                            message: l10n.t("Did you mean '{0}'?", nearMiss.match),
                         });
                     } else {
                         // No near-miss found — unknown function call will fail at runtime
@@ -237,7 +238,7 @@ export function validateExpression(code: string): Diagnostic[] {
                             startOffset,
                             endOffset,
                             severity: 'error',
-                            message: `Unknown function '${name}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, Math).`,
+                            message: l10n.t("Unknown function '{0}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, Math).", name),
                         });
                     }
                 }
@@ -264,7 +265,7 @@ export function validateExpression(code: string): Diagnostic[] {
                             startOffset,
                             endOffset,
                             severity: 'warning',
-                            message: `Did you mean '${nearMiss.match}'?`,
+                            message: l10n.t("Did you mean '{0}'?", nearMiss.match),
                         });
                     } else {
                         // No near-miss found — unknown object will fail at runtime
@@ -272,7 +273,7 @@ export function validateExpression(code: string): Diagnostic[] {
                             startOffset,
                             endOffset,
                             severity: 'error',
-                            message: `Unknown identifier '${objName}'. Expected a known global (e.g., Date, Math).`,
+                            message: l10n.t("Unknown identifier '{0}'. Expected a known global (e.g., Date, Math).", objName),
                         });
                     }
                 }
@@ -299,14 +300,14 @@ export function validateExpression(code: string): Diagnostic[] {
                             startOffset,
                             endOffset,
                             severity: 'warning',
-                            message: `Did you mean '${nearMiss.match}'?`,
+                            message: l10n.t("Did you mean '{0}'?", nearMiss.match),
                         });
                     } else {
                         diagnostics.push({
                             startOffset,
                             endOffset,
                             severity: 'error',
-                            message: `Unknown constructor '${name}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, RegExp).`,
+                            message: l10n.t("Unknown constructor '{0}'. Expected a BSON constructor (e.g., ObjectId, ISODate) or a known global (e.g., Date, RegExp).", name),
                         });
                     }
                 }
