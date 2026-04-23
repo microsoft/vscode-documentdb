@@ -65,7 +65,10 @@ export function registerDocumentDBQueryLanguage(
     openUrlHandler = openUrl ?? openUrlHandler;
     completionAcceptedHandler = onCompletionAccepted ?? completionAcceptedHandler;
     if (!registrationPromise) {
-        registrationPromise = doRegisterLanguage(monaco);
+        registrationPromise = doRegisterLanguage(monaco).catch((err) => {
+            registrationPromise = undefined; // allow retry on next call
+            throw err;
+        });
     }
     return registrationPromise;
 }
