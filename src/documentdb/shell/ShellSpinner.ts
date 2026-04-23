@@ -85,6 +85,7 @@ export class ShellSpinner {
      * it waits {@link _delayMs} first.
      */
     start(): void {
+        this.stop();
         this._stopped = false;
         this._active = true;
         this._delayTimer = setTimeout(() => {
