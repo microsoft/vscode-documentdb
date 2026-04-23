@@ -24,6 +24,9 @@ jobs:
         name: Seed build size cache
         runs-on: ubuntu-latest
         if: inputs.mode == 'seed'
+        permissions:
+            contents: read
+            actions: write
         steps:
             - name: ✅ Checkout Repository
               uses: actions/checkout@v4
@@ -74,6 +77,8 @@ jobs:
         name: Verify build size cache
         runs-on: ubuntu-latest
         if: inputs.mode == 'verify'
+        permissions:
+            actions: read
         steps:
             - name: 📥 Attempt exact cache restore
               id: exact
