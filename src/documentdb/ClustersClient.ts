@@ -37,8 +37,8 @@ import {
 } from 'mongodb';
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
+import { meterSilentCatch } from '../utils/callWithAccumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
-import { SilentCatchMeter } from '../utils/silentCatchMeter';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
@@ -652,7 +652,7 @@ export class ClustersClient {
                 fields: index.fields as unknown[] | undefined,
             }));
         } catch {
-            SilentCatchMeter.hit('ClustersClient_listSearchIndexes');
+            meterSilentCatch('ClustersClient_listSearchIndexes');
             // $listSearchIndexes not supported on this platform (e.g., non-Atlas deployments)
             // Return empty array silently
             return [];

@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { SilentCatchMeter } from '../../../utils/silentCatchMeter';
+import { meterSilentCatch } from '../../../utils/callWithAccumulatingTelemetry';
 import { ClustersClient } from '../../ClustersClient';
 import { SchemaStore } from '../../SchemaStore';
 import { PlaygroundService } from '../../playground/PlaygroundService';
@@ -132,7 +132,7 @@ export class CollectionNameCache implements vscode.Disposable {
                 // This call populates ClustersClient._collectionsCache
                 await client.listCollections(databaseName);
             } catch (error) {
-                SilentCatchMeter.hit('CollectionNameCache_listCollections');
+                meterSilentCatch('CollectionNameCache_listCollections');
                 ext.outputChannel?.trace(
                     `[CollectionNameCache] Failed to fetch collections for ${databaseName}: ${error instanceof Error ? error.message : String(error)}`,
                 );

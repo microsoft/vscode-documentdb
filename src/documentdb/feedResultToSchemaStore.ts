@@ -14,7 +14,7 @@
  */
 
 import { type Document, type WithId } from 'mongodb';
-import { SilentCatchMeter } from '../utils/silentCatchMeter';
+import { meterSilentCatch } from '../utils/callWithAccumulatingTelemetry';
 import { SchemaStore } from './SchemaStore';
 
 /**
@@ -131,12 +131,12 @@ export async function deserializeResultForSchema(serResult: {
         const { EJSON } = await import('bson');
         printable = EJSON.parse(serResult.printable, { relaxed: false });
     } catch {
-        SilentCatchMeter.hit('feedResultToSchemaStore_ejson');
+        meterSilentCatch('feedResultToSchemaStore_ejson');
         // Fallback to JSON.parse if EJSON fails, then raw string
         try {
             printable = JSON.parse(serResult.printable) as unknown;
         } catch {
-            SilentCatchMeter.hit('feedResultToSchemaStore_json');
+            meterSilentCatch('feedResultToSchemaStore_json');
             printable = serResult.printable;
         }
     }

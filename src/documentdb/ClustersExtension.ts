@@ -100,13 +100,13 @@ import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
+import { callWithAccumulatingTelemetry } from '../utils/callWithAccumulatingTelemetry';
 import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
 import { registerDoubleClickCommand } from '../utils/registerDoubleClickCommand';
-import { TelemetryAccumulator } from '../utils/telemetryAccumulator';
 import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
 import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
 import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
@@ -408,7 +408,6 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 // Internal: telemetry for completion acceptance (playground + collection view)
-                const completionAcceptedCounter = new TelemetryAccumulator('completion.accepted');
                 registerCommand(
                     CompletionCommandIds.completionAccepted,
                     (context: IActionContext, category?: string, source?: string) => {
@@ -427,9 +426,8 @@ export class ClustersExtension implements vscode.Disposable {
                                 `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
                             );
                         }
-                        completionAcceptedCounter.record({
-                            completionCategory: normalizedCategory,
-                            completionSource: normalizedSource,
+                        void callWithAccumulatingTelemetry('completion.accepted', (accCtx) => {
+                            accCtx.telemetry.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
                         });
                     },
                 );

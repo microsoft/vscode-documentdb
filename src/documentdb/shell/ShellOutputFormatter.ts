@@ -6,7 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
-import { SilentCatchMeter } from '../../utils/silentCatchMeter';
+import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 
 /**
@@ -202,11 +202,11 @@ export class ShellOutputFormatter {
         try {
             return EJSON.stringify(value, undefined, 2, { relaxed: true });
         } catch {
-            SilentCatchMeter.hit('ShellOutputFormatter_ejson');
+            meterSilentCatch('ShellOutputFormatter_ejson');
             try {
                 return JSON.stringify(value, undefined, 2);
             } catch {
-                SilentCatchMeter.hit('ShellOutputFormatter_json');
+                meterSilentCatch('ShellOutputFormatter_json');
                 return String(value);
             }
         }
