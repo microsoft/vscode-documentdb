@@ -48,7 +48,7 @@ When the extension connects to a full API-compatible instance (not DocumentDB), 
 
 **Priority:** P2 | **Effort:** 1–2 days
 
-Extend `documentdb-constants` (or create a sibling package) with shell API method metadata — which `db.*`, `db.collection.*`, and cursor methods are supported on DocumentDB. Enables `DocumentDBServiceProvider` to accurately block unsupported operations.
+Extend `operator-registry` (or create a sibling package) with shell API method metadata — which `db.*`, `db.collection.*`, and cursor methods are supported on DocumentDB. Enables `DocumentDBServiceProvider` to accurately block unsupported operations.
 
 ---
 

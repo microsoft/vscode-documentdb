@@ -23,7 +23,7 @@ Full context-aware completions inside aggregation pipeline arrays. The completio
 
 ### Architecture
 
-The `documentdb-constants` package already has the meta tag hierarchy needed:
+The `operator-registry` package already has the meta tag hierarchy needed:
 
 - `STAGE_COMPLETION_META` — for top-level stage selection
 - `FILTER_COMPLETION_META` — reused inside `$match` stages
@@ -34,7 +34,7 @@ The three-category stage mapping (an established pattern in MongoDB API tooling)
 
 ### What Exists Today
 
-- `documentdb-constants` has all operator entries with correct meta tags
+- `operator-registry` has all operator entries with correct meta tags
 - The webview `CompletionItemProvider` infrastructure handles `documentdb-query` language
 - `cursorContext.ts` detects cursor position within query objects
 - The Query Playground's `CompletionItemProvider` has `provideMethodArgumentCompletions()` with an `argCtx.methodName` that can route on method type

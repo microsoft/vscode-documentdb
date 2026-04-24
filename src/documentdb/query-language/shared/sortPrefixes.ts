@@ -11,7 +11,7 @@
  * (query playground) completion providers.
  */
 
-import { type OperatorEntry } from '@vscode-documentdb/documentdb-constants';
+import { type OperatorEntry } from '@documentdb-js/operator-registry';
 
 /**
  * The subset of OperatorEntry properties needed for sort prefix computation.

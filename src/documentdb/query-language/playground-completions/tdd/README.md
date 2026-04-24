@@ -22,7 +22,7 @@ autocompletion system. These tests define the expected behavior contract.
 | `hoverAndEdgeCases.test.ts`         | HoverProvider content, edge case context detection |
 
 Note: Completion registry tests (`playgroundCompletionBehavior.test.ts`) were
-removed — the static registry was replaced by the `@vscode-documentdb/documentdb-shell-api-types`
+removed — the static registry was replaced by the `@documentdb-js/shell-api-types`
 package and the TS Server Plugin (Layer 1). The package has its own tests.
 
 ## Specification

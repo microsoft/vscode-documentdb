@@ -8,7 +8,7 @@
  *
  * This module provides the `documentdb-query` custom language that reuses
  * the JavaScript Monarch tokenizer for syntax highlighting while providing
- * custom completions from the `documentdb-constants` package.
+ * custom completions from the `operator-registry` package.
  *
  * Usage:
  * ```typescript

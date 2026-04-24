@@ -7,16 +7,16 @@
  * Hover provider for DocumentDB query playground files.
  *
  * Provides inline documentation when hovering over:
- * - Query operators ($gt, $regex, $match, etc.) — from documentdb-constants
- * - BSON constructors (ObjectId, ISODate, etc.) — from documentdb-constants
+ * - Query operators ($gt, $regex, $match, etc.) — from operator-registry
+ * - BSON constructors (ObjectId, ISODate, etc.) — from operator-registry
  * - Known field names — type info from SchemaStore
  *
  * Method/cursor hovers are handled by Layer 1 (TS Server Plugin via JSDoc in .d.ts).
  * This provider handles only DocumentDB-specific items the TS service doesn't know about.
  */
 
-import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
-import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
+import { getAllCompletions } from '@documentdb-js/operator-registry';
+import { BSONTypes, type FieldEntry } from '@documentdb-js/schema-analyzer';
 import * as vscode from 'vscode';
 import { PLAYGROUND_LANGUAGE_ID } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';

@@ -1,4 +1,4 @@
-# @microsoft/documentdb-vscode-shell-runtime
+# @documentdb-js/shell-runtime
 
 Shell runtime for the DocumentDB VS Code extension — provides sandboxed JavaScript evaluation, shell command handling, and result formatting for both the **Query Playground** (scratchpad) and the **Interactive Shell** (REPL).
 
@@ -34,7 +34,7 @@ The runtime supports two modes via the `persistent` option:
 
 ```typescript
 import { MongoClient } from 'mongodb';
-import { DocumentDBShellRuntime } from '@microsoft/documentdb-vscode-shell-runtime';
+import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
 
 // The caller owns the MongoClient — create, connect, and close it yourself.
 // The runtime never opens or closes the connection.

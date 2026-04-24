@@ -1,4 +1,4 @@
-# @vscode-documentdb/documentdb-constants
+# @documentdb-js/operator-registry
 
 Static operator metadata for all DocumentDB-supported operators, aggregation stages, accumulators, update operators, BSON type constructors, and system variables.
 
@@ -38,7 +38,7 @@ import {
   getAllCompletions,
   FILTER_COMPLETION_META,
   STAGE_COMPLETION_META,
-} from '@vscode-documentdb/documentdb-constants';
+} from '@documentdb-js/operator-registry';
 
 // Get operators for a filter/query context
 const filterOps = getFilteredCompletions({ meta: FILTER_COMPLETION_META });
@@ -58,7 +58,7 @@ const stages = getFilteredCompletions({ meta: STAGE_COMPLETION_META });
 The operator data is sourced from the official DocumentDB documentation. To re-scrape:
 
 ```bash
-npm run scrape --workspace=@vscode-documentdb/documentdb-constants
+npm run scrape --workspace=@documentdb-js/operator-registry
 ```
 
 This runs the scraper and then formats the output with Prettier. The scraper:

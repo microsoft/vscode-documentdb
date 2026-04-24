@@ -1,24 +1,25 @@
 {
-  "name": "@vscode-documentdb/documentdb-shell-api-types",
+  "name": "@documentdb-js/operator-registry",
   "version": "1.0.0",
-  "description": "Shell API type definitions and method-to-command mapping for DocumentDB query playground IntelliSense",
+  "description": "Static operator metadata for DocumentDB-supported operators, stages, accumulators, and BSON constructors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist",
-    "typeDefs"
+    "dist"
   ],
   "scripts": {
     "build": "tsc -p . && tsc -p tsconfig.scripts.json --noEmit",
     "clean": "rimraf dist tsconfig.tsbuildinfo",
     "test": "jest --config jest.config.js",
     "prettier-fix": "prettier -w \"(scripts|src)/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\"",
-    "verify": "ts-node scripts/verify-compatibility.ts"
+    "scrape": "ts-node scripts/scrape-operator-docs.ts && prettier --write resources/scraped/operator-reference.md",
+    "generate": "ts-node scripts/generate-from-reference.ts",
+    "evaluate": "ts-node scripts/evaluate-overrides.ts"
   },
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/vscode-documentdb",
-    "directory": "packages/documentdb-shell-api-types"
+    "directory": "packages/documentdb-js-operator-registry"
   },
   "license": "MIT"
 }

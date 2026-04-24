@@ -9,7 +9,7 @@
  * The `documentdb-query` language uses `@mongodb-js/shell-bson-parser` to
  * execute queries. That parser runs in a sandboxed scope that exposes a
  * limited set of JavaScript globals beyond the BSON constructors (which are
- * already registered in `documentdb-constants`).
+ * already registered in `operator-registry`).
  *
  * This module provides the data definitions for those JS globals.
  * Platform-specific mappers (Monaco/VS Code) convert them to CompletionItems.
@@ -35,7 +35,7 @@ export interface JsGlobalDef {
  *
  * These are the class expressions and global values that the parser's
  * sandboxed eval supports. BSON constructors (ObjectId, ISODate, etc.)
- * are already provided by `documentdb-constants` and are NOT duplicated here.
+ * are already provided by `operator-registry` and are NOT duplicated here.
  */
 export const JS_GLOBALS: readonly JsGlobalDef[] = [
     // -- Class constructors --

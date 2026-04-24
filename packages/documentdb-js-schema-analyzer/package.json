@@ -1,5 +1,5 @@
 {
-  "name": "@vscode-documentdb/schema-analyzer",
+  "name": "@documentdb-js/schema-analyzer",
   "version": "1.0.0",
   "description": "Incremental JSON Schema analyzer for DocumentDB API / MongoDB API documents with statistical extensions",
   "main": "dist/index.js",
@@ -15,7 +15,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/vscode-documentdb",
-    "directory": "packages/schema-analyzer"
+    "directory": "packages/documentdb-js-schema-analyzer"
   },
   "license": "MIT",
   "peerDependencies": {

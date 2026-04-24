@@ -1,4 +1,4 @@
-# @vscode-documentdb/documentdb-shell-api-types
+# @documentdb-js/shell-api-types
 
 TypeScript type definitions and method-to-command mapping for the DocumentDB
 shell API, used by the
@@ -77,7 +77,7 @@ import {
   SHELL_API_METHODS,
   getRequiredServerCommands,
   getMethodsByTarget,
-} from '@vscode-documentdb/documentdb-shell-api-types';
+} from '@documentdb-js/shell-api-types';
 
 // Get the .d.ts content as a string (for TS server plugin injection)
 const dtsContent = getShellApiDtsContent();

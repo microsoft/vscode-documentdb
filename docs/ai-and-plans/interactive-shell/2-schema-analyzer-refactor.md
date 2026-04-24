@@ -4,19 +4,19 @@
 
 ## Summary
 
-Extracted the `SchemaAnalyzer` from a utility file inside the extension source tree into a standalone npm workspace package at `packages/schema-analyzer/`. Enriched `FieldEntry` with BSON type information to support type-aware completions in later steps.
+Extracted the `SchemaAnalyzer` from a utility file inside the extension source tree into a standalone npm workspace package at `packages/documentdb-js-schema-analyzer/`. Enriched `FieldEntry` with BSON type information to support type-aware completions in later steps.
 
 ## Motivation
 
 The extension already had a capable schema analyzer — it powered table column headers and basic field name extraction in the Collection View. However, the implementation was tightly coupled to the extension source tree and its `FieldEntry` type lacked BSON type information, which future completion providers needed for type-aware operator ordering (e.g., prioritizing `$regex` for string fields, `$size` for array fields).
 
-### Why SchemaAnalyzer Before `documentdb-constants`
+### Why SchemaAnalyzer Before `operator-registry`
 
-The original plan proposed building `documentdb-constants` first. After deeper analysis, SchemaAnalyzer refactoring came first because:
+The original plan proposed building `operator-registry` first. After deeper analysis, SchemaAnalyzer refactoring came first because:
 
 1. The `FieldEntry` enhancement (adding `bsonType`) determines how `CompletionItemProvider` receives type information. This interface had to be settled before building the provider that consumes both constants and field entries.
 2. The SchemaAnalyzer had an array element stats bug that silently overwrote data across documents — this needed fixing before building on top of it.
-3. `documentdb-constants` is purely static data and has no runtime dependency on schema. It could be built in parallel once the interfaces were settled.
+3. `operator-registry` is purely static data and has no runtime dependency on schema. It could be built in parallel once the interfaces were settled.
 
 ## Key Decisions
 
@@ -32,7 +32,7 @@ The `SchemaAnalyzer` tracks 24 BSON types via its type inference system — Int3
 
 ### Package Extraction
 
-The analyzer was extracted to `packages/schema-analyzer/` as a zero-dependency npm workspace package. This ensures:
+The analyzer was extracted to `packages/documentdb-js-schema-analyzer/` as a zero-dependency npm workspace package. This ensures:
 
 - Independent versioning and testing
 - No VS Code imports (the package works in any Node.js or browser context)
@@ -42,7 +42,7 @@ The analyzer was extracted to `packages/schema-analyzer/` as a zero-dependency n
 
 | Before                                      | After                                                            |
 | ------------------------------------------- | ---------------------------------------------------------------- |
-| `src/utils/json/mongo/SchemaAnalyzer.ts`    | `packages/schema-analyzer/src/SchemaAnalyzer.ts`                 |
+| `src/utils/json/mongo/SchemaAnalyzer.ts`    | `packages/documentdb-js-schema-analyzer/src/SchemaAnalyzer.ts`                 |
 | `MongoBSONTypes` enum                       | Renamed to `BSONTypes`                                           |
 | `src/utils/json/mongo/` directory           | Renamed to `src/utils/json/data-api/`                            |
 | `FieldEntry` — no type info                 | `FieldEntry` — with `bsonType`, `bsonTypes`, `arrayItemBsonType` |

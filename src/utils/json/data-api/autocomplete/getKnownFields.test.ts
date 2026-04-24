@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type FieldEntry, getKnownFields, SchemaAnalyzer } from '@vscode-documentdb/schema-analyzer';
+import { type FieldEntry, getKnownFields, SchemaAnalyzer } from '@documentdb-js/schema-analyzer';
 import { ObjectId } from 'bson';
 
 describe('getKnownFields', () => {

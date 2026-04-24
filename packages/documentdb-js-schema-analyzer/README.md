@@ -1,4 +1,4 @@
-# @vscode-documentdb/schema-analyzer
+# @documentdb-js/schema-analyzer
 
 Incremental JSON Schema analyzer for DocumentDB API and MongoDB API documents. Processes documents one at a time (or in batches) and produces an extended JSON Schema with statistical metadata — field occurrence counts, BSON type distributions, min/max values, and array length stats.
 
@@ -28,7 +28,7 @@ Key capabilities:
 ## Usage
 
 ```typescript
-import { SchemaAnalyzer } from '@vscode-documentdb/schema-analyzer';
+import { SchemaAnalyzer } from '@documentdb-js/schema-analyzer';
 
 // Create an analyzer and feed it documents
 const analyzer = new SchemaAnalyzer();
