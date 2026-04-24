@@ -35,19 +35,11 @@ export async function showAbout(context: IActionContext): Promise<void> {
         }
     })();
 
-    // List registered migration providers
-    const migrationProviders = MigrationService.listProviders();
-    const migrationProviderNames =
-        migrationProviders.length > 0
-            ? '\n' + migrationProviders.map((p) => `  • ${p.label}`).join('\n')
-            : `\n  • ${vscode.l10n.t('None')}`;
+    const toBulletList = (labels: string[]): string =>
+        labels.length > 0 ? '\n' + labels.map((label) => `  • ${label}`).join('\n') : `\n  • ${vscode.l10n.t('None')}`;
 
-    // List registered discovery plugins
-    const discoveryProviders = DiscoveryService.listProviders();
-    const discoveryProviderNames =
-        discoveryProviders.length > 0
-            ? '\n' + discoveryProviders.map((p) => `  • ${p.label}`).join('\n')
-            : `\n  • ${vscode.l10n.t('None')}`;
+    const migrationProviderNames = toBulletList(MigrationService.listProviders().map((p) => p.label));
+    const discoveryProviderNames = toBulletList(DiscoveryService.listProviders().map((p) => p.label));
 
     const details = [
         vscode.l10n.t('{0}: v{1}', extensionName, extensionVersion),
