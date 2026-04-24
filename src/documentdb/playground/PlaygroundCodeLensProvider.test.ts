@@ -1,0 +1,115 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import type * as vscode from 'vscode';
+import { PlaygroundCodeLensProvider } from './PlaygroundCodeLensProvider';
+import { PlaygroundService } from './PlaygroundService';
+import { PlaygroundCommandIds } from './constants';
+
+/**
+ * Helper to create a mock TextDocument from a multiline string.
+ */
+function mockDocument(text: string): vscode.TextDocument {
+    const lines = text.split('\n');
+    const uri = { toString: () => 'untitled:playground-test.documentdb.js' } as vscode.Uri;
+    return {
+        uri,
+        lineCount: lines.length,
+        lineAt(lineNumber: number) {
+            return { text: lines[lineNumber] ?? '' };
+        },
+        getText() {
+            return text;
+        },
+    } as unknown as vscode.TextDocument;
+}
+
+describe('PlaygroundCodeLensProvider', () => {
+    let provider: PlaygroundCodeLensProvider;
+    let service: PlaygroundService;
+
+    beforeEach(() => {
+        service = PlaygroundService.getInstance();
+        provider = new PlaygroundCodeLensProvider();
+    });
+
+    afterEach(() => {
+        provider.dispose();
+        service.dispose();
+    });
+
+    it('provides connection status lens at line 0 when disconnected', () => {
+        const doc = mockDocument('db.test.find({})');
+        const lenses = provider.provideCodeLenses(doc);
+
+        // First lens should be connection status
+        const connectionLens = lenses[0];
+        expect(connectionLens.command?.command).toBe(PlaygroundCommandIds.showConnectionInfo);
+        expect(connectionLens.command?.title).toContain('Not connected');
+        expect(connectionLens.range.start.line).toBe(0);
+    });
+
+    it('provides connection status lens showing cluster name when connected', () => {
+        const doc = mockDocument('db.test.find({})');
+        service.setConnection(doc.uri, {
+            clusterId: 'test-id',
+            clusterDisplayName: 'MyCluster',
+            databaseName: 'orders',
+        });
+
+        const lenses = provider.provideCodeLenses(doc);
+
+        const connectionLens = lenses[0];
+        expect(connectionLens.command?.title).toContain('MyCluster / orders');
+    });
+
+    it('provides Run All lens at line 0', () => {
+        const doc = mockDocument('db.test.find({})');
+        const lenses = provider.provideCodeLenses(doc);
+
+        const runAllLens = lenses[1];
+        expect(runAllLens.command?.command).toBe(PlaygroundCommandIds.runAll);
+        expect(runAllLens.command?.title).toContain('Run All');
+        expect(runAllLens.range.start.line).toBe(0);
+    });
+
+    it('provides only top-level lenses when no active editor (per-block lens follows cursor)', () => {
+        const doc = mockDocument('db.users.find({});\n\ndb.orders.find({});');
+        const lenses = provider.provideCodeLenses(doc);
+
+        // Only 2 top lenses (connection + Run All) — per-block lens requires active editor
+        expect(lenses.length).toBe(2);
+    });
+
+    it('shows running state when cluster is executing', () => {
+        const doc = mockDocument('db.test.find({})');
+        service.setConnection(doc.uri, {
+            clusterId: 'test-cluster',
+            clusterDisplayName: 'TestCluster',
+            databaseName: 'testdb',
+        });
+        service.setExecuting('test-cluster', true);
+        const lenses = provider.provideCodeLenses(doc);
+
+        const runAllLens = lenses[1];
+        expect(runAllLens.command?.title).toContain('Running');
+        expect(runAllLens.command?.tooltip).toContain('worker');
+    });
+
+    it('does not show running state for a different cluster', () => {
+        const doc = mockDocument('db.test.find({})');
+        service.setConnection(doc.uri, {
+            clusterId: 'cluster-A',
+            clusterDisplayName: 'ClusterA',
+            databaseName: 'dbA',
+        });
+        service.setExecuting('cluster-B', true);
+        const lenses = provider.provideCodeLenses(doc);
+
+        const runAllLens = lenses[1];
+        expect(runAllLens.command?.title).toContain('Run All');
+        expect(runAllLens.command?.title).not.toContain('Running');
+    });
+});

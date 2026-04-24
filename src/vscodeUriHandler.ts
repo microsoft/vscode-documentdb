@@ -458,6 +458,7 @@ async function openDedicatedView(
     // URI handler always opens from Connections View since connections are added there
     return openCollectionViewInternal(context, {
         clusterId: storageId, // ✅ storageId is the stable clusterId for Connections View
+        clusterDisplayName: storageId, // URI handler has no display name available
         viewId: Views.ConnectionsView,
         databaseName: nonNullValue(database, 'database', 'vscodeUriHandler.ts'),
         collectionName: nonNullValue(collection, 'collection', 'vscodeUriHandler.ts'),

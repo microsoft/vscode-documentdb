@@ -189,9 +189,8 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         // Add copy-paste specific telemetry properties
         if (context) {
             context.telemetry.properties.onConflict = this.config.onConflict;
-            context.telemetry.properties.isCrossConnection = (
-                this.config.source.clusterId !== this.config.target.clusterId
-            ).toString();
+            context.telemetry.properties.isCrossConnection =
+                this.config.source.clusterId !== this.config.target.clusterId ? 'true' : 'false';
 
             // Collect cluster metadata for source and target connections and await their completion (non-blocking for errors)
             const metadataPromises = [this.collectClusterMetadata(this.config.source.clusterId, 'source', context)];
@@ -229,7 +228,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
 
             // Add telemetry about whether the target was created
             if (context) {
-                context.telemetry.properties.targetWasCreated = ensureTargetResult.targetWasCreated.toString();
+                context.telemetry.properties.targetWasCreated = ensureTargetResult.targetWasCreated ? 'true' : 'false';
             }
         } catch (error) {
             throw new Error(vscode.l10n.t('Failed to ensure the target collection exists.'), {

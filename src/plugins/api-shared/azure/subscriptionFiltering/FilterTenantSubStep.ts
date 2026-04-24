@@ -79,10 +79,9 @@ export class FilterTenantSubStep extends AzureWizardPromptStep<FilteringWizardCo
         const totalTenants = context.availableTenants?.length ?? 0;
         context.telemetry.measurements.selectedTenantsForFilteringCount = selectedItems.length;
         context.telemetry.measurements.unselectedTenantsForFilteringCount = totalTenants - selectedItems.length;
-        context.telemetry.properties.allTenantsSelectedForFiltering = (
-            selectedItems.length === totalTenants
-        ).toString();
-        context.telemetry.properties.noTenantsSelectedForFiltering = (selectedItems.length === 0).toString();
+        context.telemetry.properties.allTenantsSelectedForFiltering =
+            selectedItems.length === totalTenants ? 'true' : 'false';
+        context.telemetry.properties.noTenantsSelectedForFiltering = selectedItems.length === 0 ? 'true' : 'false';
     }
 
     public shouldPrompt(): boolean {

@@ -150,7 +150,7 @@ Follow these strict instructions (must obey):
 
 6. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use \`db.getCollection("{collectionName}")\` to reference the collection (replace \`{collectionName}\` with the actual name from \`collectionStats\`).
 7. **Modify operations format** — for any \`modify\` action (e.g., hiding/unhiding indexes, modifying index properties), you MUST use the \`db.getCollection('<collectionName>').operation()\` pattern (e.g., \`db.getCollection('users').hideIndex('index_name')\`). Do NOT use \`db.runCommand()\` format for modify actions. If the modify operation cannot be expressed in this format, set \`action\` to \`"none"\` and explain the limitation in the \`analysis\` field.
-8. **Index identification for drop/modify** — for \`drop\` and \`modify\` actions, you MUST use the index **name** (e.g., \`'age_1'\`, \`'name_1_email_1'\`) rather than the index fields/specification. The \`mongoShell\` command should reference the index by name (e.g., \`db.getCollection('users').dropIndex('age_1')\` or \`db.getCollection('users').hideIndex('age_1')\`).
+8. **Index identification for drop/modify** — for \`drop\` and \`modify\` actions, you MUST use the index **name** (e.g., \`'age_1'\`, \`'name_1_email_1'\`) rather than the index fields/specification. The \`shellCommand\` command should reference the index by name (e.g., \`db.getCollection('users').dropIndex('age_1')\` or \`db.getCollection('users').hideIndex('age_1')\`).
 9. **Justify every index command** — each \`create\`/\`drop\` recommendation must include a one-sentence justification that references concrete fields/metrics from \`executionStats\` or \`indexStats\`.
 10. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
 11. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
@@ -212,7 +212,7 @@ Output JSON schema (required shape; **adhere exactly**):
       "indexSpec": { "<field>": 1|-1, ... },
       "indexOptions": {  },
       "indexName": "<string>",
-      "mongoShell": "db.getCollection(\\"{collectionName}\\").createIndex({...}, {...})" ,
+      "shellCommand": "db.getCollection(\\"{collectionName}\\").createIndex({...}, {...})" ,
       "justification": "<one-sentence justification referencing executionStats/indexStats>",
       "priority": "high" | "medium" | "low",
       "risks": "<short risk note or null>"
@@ -231,7 +231,7 @@ Additional rules for the JSON:
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
 - \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each stage from the execution plan individually with its specific metrics.
 - \`analysis\` must be a Markdown string following the fixed template structure with three sections: **Performance Summary**, **Key Issues**, and **Recommendations**. Use proper markdown headings (###) and concise, actionable content.
-- \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
+- \`shellCommand\` commands must **only** use double quotes and valid JS object notation.
 - \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
 ${CRITICAL_JSON_REMINDER}
 `;
@@ -295,7 +295,7 @@ Follow these strict instructions (must obey):
 
 6. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use \`db.getCollection("{collectionName}")\` to reference the collection (replace \`{collectionName}\` with the actual name from \`collectionStats\`).
 7. **Modify operations format** — for any \`modify\` action (e.g., hiding/unhiding indexes, modifying index properties), you MUST use the \`db.getCollection('<collectionName>').operation()\` pattern (e.g., \`db.getCollection('users').hideIndex('index_name')\`). Do NOT use \`db.runCommand()\` format for modify actions. If the modify operation cannot be expressed in this format, set \`action\` to \`"none"\` and explain the limitation in the \`analysis\` field.
-8. **Index identification for drop/modify** — for \`drop\` and \`modify\` actions, you MUST use the index **name** (e.g., \`'age_1'\`, \`'name_1_email_1'\`) rather than the index fields/specification. The \`mongoShell\` command should reference the index by name (e.g., \`db.getCollection('users').dropIndex('age_1')\` or \`db.getCollection('users').hideIndex('age_1')\`).
+8. **Index identification for drop/modify** — for \`drop\` and \`modify\` actions, you MUST use the index **name** (e.g., \`'age_1'\`, \`'name_1_email_1'\`) rather than the index fields/specification. The \`shellCommand\` command should reference the index by name (e.g., \`db.getCollection('users').dropIndex('age_1')\` or \`db.getCollection('users').hideIndex('age_1')\`).
 9. **Justify every index command** — each \`create\`/\`drop\` recommendation must include a one-sentence justification that references concrete fields/metrics from \`executionStats\` or \`indexStats\`.
 10. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
 11. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
@@ -363,7 +363,7 @@ Output JSON schema (required shape; adhere exactly):
       "indexSpec": { "<field>": 1|-1, ... },
       "indexOptions": {  },
       "indexName": "<string>",
-      "mongoShell": "db.getCollection(\\"{collectionName}\\").createIndex({...}, {...})" ,
+      "shellCommand": "db.getCollection(\\"{collectionName}\\").createIndex({...}, {...})" ,
       "justification": "<one-sentence justification referencing executionStats/indexStats>",
       "priority": "high" | "medium" | "low",
       "risks": "<short risk note or null>"
@@ -381,7 +381,7 @@ Additional rules for the JSON:
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
 - \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each pipeline stage from the execution plan individually with its specific metrics and purpose.
 - \`analysis\` must be a Markdown string following the fixed template structure with three sections: **Performance Summary**, **Key Issues**, and **Recommendations**. Use proper markdown headings (###) and concise, actionable content.
-- \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
+- \`shellCommand\` commands must **only** use double quotes and valid JS object notation.
 - \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
 ${CRITICAL_JSON_REMINDER}
 `;
@@ -445,7 +445,7 @@ Follow these strict instructions (must obey):
 
 6. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use \`db.getCollection("{collectionName}")\` to reference the collection (replace \`{collectionName}\` with the actual name from \`collectionStats\`).
 7. **Modify operations format** — for any \`modify\` action (e.g., hiding/unhiding indexes, modifying index properties), you MUST use the \`db.getCollection('<collectionName>').operation()\` pattern (e.g., \`db.getCollection('users').hideIndex('index_name')\`). Do NOT use \`db.runCommand()\` format for modify actions. If the modify operation cannot be expressed in this format, set \`action\` to \`"none"\` and explain the limitation in the \`analysis\` field.
-8. **Index identification for drop/modify** — for \`drop\` and \`modify\` actions, you MUST use the index **name** (e.g., \`'age_1'\`, \`'name_1_email_1'\`) rather than the index fields/specification. The \`mongoShell\` command should reference the index by name (e.g., \`db.getCollection('users').dropIndex('age_1')\` or \`db.getCollection('users').hideIndex('age_1')\`).
+8. **Index identification for drop/modify** — for \`drop\` and \`modify\` actions, you MUST use the index **name** (e.g., \`'age_1'\`, \`'name_1_email_1'\`) rather than the index fields/specification. The \`shellCommand\` command should reference the index by name (e.g., \`db.getCollection('users').dropIndex('age_1')\` or \`db.getCollection('users').hideIndex('age_1')\`).
 9. **Justify every index command** — each \`create\`/\`drop\` recommendation must include a one-sentence justification that references concrete fields/metrics from \`executionStats\` or \`indexStats\`.
 10. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
 11. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
@@ -490,7 +490,7 @@ Output JSON schema (required shape; adhere exactly):
       "indexSpec": { "<field>": 1|-1, ... },
       "indexOptions": {  },
       "indexName": "<string>",
-      "mongoShell": "db.getCollection(\\"{collectionName}\\").createIndex({...}, {...})" ,
+      "shellCommand": "db.getCollection(\\"{collectionName}\\").createIndex({...}, {...})" ,
       "justification": "<one-sentence justification referencing executionStats/indexStats>",
       "priority": "high" | "medium" | "low",
       "risks": "<short risk note or null>"
@@ -508,7 +508,7 @@ Additional rules for the JSON:
 - \`derived.totalKeysExamined\`, \`derived.totalDocsExamined\`, and \`derived.keysToDocsRatio\` should be filled from \`executionStats\` if present, otherwise \`null\`. \`keysToDocsRatio\` = \`totalKeysExamined / max(1, totalDocsExamined)\`.
 - \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each stage from the execution plan individually with its specific metrics and purpose in the count operation.
 - \`analysis\` must be a Markdown string following the fixed template structure with three sections: **Performance Summary**, **Key Issues**, and **Recommendations**. Use proper markdown headings (###) and concise, actionable content.
-- \`mongoShell\` commands must **only** use double quotes and valid JS object notation.
+- \`shellCommand\` commands must **only** use double quotes and valid JS object notation.
 - \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
 ${CRITICAL_JSON_REMINDER}
 `;

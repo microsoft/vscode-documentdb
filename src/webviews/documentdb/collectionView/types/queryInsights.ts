@@ -237,7 +237,7 @@ export interface ImprovementCard {
 
     // Additional info
     details: string; // Risks or additional considerations
-    mongoShellCommand: string; // The mongoShell command to execute
+    shellCommand: string; // The shell command to execute
 
     // Action buttons with complete context for execution (both optional)
     primaryButton?: ActionButton;
@@ -311,7 +311,7 @@ export interface CreateIndexPayload {
     action: 'create';
     indexSpec: Record<string, number>;
     indexOptions?: Record<string, unknown>;
-    mongoShell: string;
+    shellCommand: string;
 }
 
 /**
@@ -323,7 +323,7 @@ export interface DropIndexPayload {
     collectionName: string;
     action: 'drop';
     indexSpec: Record<string, number>;
-    mongoShell: string;
+    shellCommand: string;
 }
 
 /**

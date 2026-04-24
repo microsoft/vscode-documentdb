@@ -12,6 +12,7 @@ import { Announcer } from '../../api/webview-client/accessibility';
 import { useConfiguration } from '../../api/webview-client/useConfiguration';
 import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
 import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
+import { setCompletionContext } from '../../query-language-support';
 import './collectionView.scss';
 import {
     CollectionViewContext,
@@ -83,6 +84,39 @@ export const CollectionView = (): JSX.Element => {
     }));
 
     useSelectiveContextMenuPrevention();
+
+    // Apply initial query from cross-feature navigation (e.g., Playground → Collection View)
+    useEffect(() => {
+        if (configuration.initialQuery) {
+            const iq = configuration.initialQuery;
+
+            // Populate the query editors with the initial values
+            setCurrentContext((prev) => ({
+                ...prev,
+                pendingPaste: {
+                    filter: iq.filter,
+                    project: iq.project,
+                    sort: iq.sort,
+                    skip: iq.skip,
+                    limit: iq.limit,
+                },
+                // Execute the query immediately
+                activeQuery: {
+                    ...prev.activeQuery,
+                    queryText: iq.filter ?? prev.activeQuery.queryText,
+                    filter: iq.filter ?? prev.activeQuery.filter,
+                    project: iq.project ?? prev.activeQuery.project,
+                    sort: iq.sort ?? prev.activeQuery.sort,
+                    skip: iq.skip ?? prev.activeQuery.skip,
+                    limit: iq.limit ?? prev.activeQuery.limit,
+                    pageNumber: 1,
+                    executionIntent: 'initial',
+                },
+            }));
+        }
+        // Only run on mount — configuration is stable after creation
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, []);
 
     // that's the local view of query results
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
@@ -265,17 +299,24 @@ export const CollectionView = (): JSX.Element => {
     }
 
     function updateAutoCompletionData(): void {
-        trpcClient.mongoClusters.collectionView.getAutocompletionSchema
+        trpcClient.mongoClusters.collectionView.getFieldCompletionData
             .query()
-            .then(async (schema) => {
-                void (await currentContextRef.current.queryEditor?.setJsonSchema(schema));
+            .then((fields) => {
+                setCompletionContext(configuration.sessionId, { fields });
             })
             .catch((error) => {
-                void trpcClient.common.displayErrorMessage.mutate({
-                    message: l10n.t('Error while loading the autocompletion data'),
-                    modal: false,
-                    cause: error instanceof Error ? error.message : String(error),
-                });
+                console.debug('Failed to update field completion data:', error);
+                // Non-blocking — completion will work without fields
+                trpcClient.common.reportEvent
+                    .mutate({
+                        eventName: 'fieldCompletionDataFetchFailed',
+                        properties: {
+                            error: error instanceof Error ? error.message : String(error),
+                        },
+                    })
+                    .catch(() => {
+                        // best-effort telemetry, swallow errors
+                    });
             });
     }
 

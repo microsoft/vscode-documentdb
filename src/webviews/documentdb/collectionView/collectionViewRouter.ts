@@ -4,15 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { type JSONSchema } from 'vscode-json-languageservice';
 import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
+import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { getKnownFields, type FieldEntry } from '../../../utils/json/mongo/autocomplete/getKnownFields';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';
@@ -23,6 +23,7 @@ import {
 } from '../../../commands/llmEnhancedCommands/queryGenerationCommands';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
+import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import {
     ExplainPlanAnalyzer,
     type ExecutionStatsAnalysis,
@@ -38,10 +39,11 @@ import {
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
+import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
-// eslint-disable-next-line import/no-internal-modules
-import basicFindQuerySchema from '../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
-import { generateMongoFindJsonSchema } from '../../../utils/json/mongo/autocomplete/generateMongoFindJsonSchema';
+import { callWithAccumulatingTelemetry } from '../../../utils/callWithAccumulatingTelemetry';
+import { escapeJsString } from '../../../utils/escapeJsString';
+import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../api/configuration/appRouter';
@@ -57,6 +59,10 @@ export type RouterContext = BaseRouterContext & {
      * For Azure/Discovery Views: This is the Azure Resource ID (already a valid tree path)
      */
     clusterId: string;
+    /**
+     * Human-readable cluster display name for use in Playground headers and Shell titles.
+     */
+    clusterDisplayName: string;
     /**
      * Identifies which tree view this cluster belongs to.
      *
@@ -109,6 +115,48 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
         );
         return null;
     }
+}
+
+/**
+ * Build a `db.getCollection('name').find(filter, project).sort(sort)` expression
+ * from the Collection View's current query state. Used by cross-feature navigation
+ * to carry the query to Playground or Shell.
+ */
+function buildFindExpression(
+    collectionName: string,
+    filter: string,
+    project: string | undefined,
+    sort: string | undefined,
+    skip: number | undefined,
+    limit: number | undefined,
+): string {
+    const hasProject = project && project.trim() !== '{}' && project.trim() !== '{  }' && project.trim() !== '';
+    const hasSort = sort && sort.trim() !== '{}' && sort.trim() !== '{  }' && sort.trim() !== '';
+
+    const filterArg = filter.trim() || '{}';
+
+    const escaped = escapeJsString(collectionName);
+
+    let expr: string;
+    if (hasProject) {
+        expr = `db.getCollection('${escaped}').find(${filterArg}, ${project})`;
+    } else {
+        expr = `db.getCollection('${escaped}').find(${filterArg})`;
+    }
+
+    if (hasSort) {
+        expr += `.sort(${sort})`;
+    }
+
+    if (skip && skip > 0) {
+        expr += `.skip(${skip})`;
+    }
+
+    if (limit && limit > 0) {
+        expr += `.limit(${limit})`;
+    }
+
+    return expr;
 }
 
 // Helper function to find the collection node based on context
@@ -226,7 +274,7 @@ export const collectionsViewRouter = router({
             void callWithTelemetryAndErrorHandling('documentDB.query.executionIntent', (telemetryCtx) => {
                 telemetryCtx.errorHandling.suppressDisplay = true;
                 telemetryCtx.telemetry.properties.intent = executionIntent;
-                telemetryCtx.telemetry.properties.pageNumber = input.pageNumber.toString();
+                telemetryCtx.telemetry.measurements.pageNumber = input.pageNumber;
                 telemetryCtx.telemetry.measurements.documentCount = size;
             });
 
@@ -234,25 +282,16 @@ export const collectionsViewRouter = router({
 
             return { documentCount: size };
         }),
-    getAutocompletionSchema: publicProcedureWithTelemetry
+    getFieldCompletionData: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
-            const _currentJsonSchema = session.getCurrentSchema();
-            const autoCompletionData: FieldEntry[] = getKnownFields(_currentJsonSchema);
+            const fieldEntries: FieldEntry[] = session.getKnownFields();
 
-            let querySchema: JSONSchema;
-
-            if (autoCompletionData.length > 0) {
-                querySchema = generateMongoFindJsonSchema(autoCompletionData);
-            } else {
-                querySchema = basicFindQuerySchema;
-            }
-
-            return querySchema;
+            return toFieldCompletionItems(fieldEntries);
         }),
     getCurrentPageAsTable: publicProcedureWithTelemetry
         // parameters
@@ -902,4 +941,150 @@ export const collectionsViewRouter = router({
 
         return { success: true };
     }),
+
+    openQueryInPlayground: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
+            myCtx.telemetry.properties.hasFilter =
+                input.filter && input.filter.replace(/\s/g, '') !== '{}' ? 'true' : 'false';
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+
+            await vscode.commands.executeCommand('vscode-documentdb.command.playground.new.withContent', {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                content: query,
+                viewId: myCtx.viewId,
+            });
+        }),
+
+    openQueryInShell: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+
+            await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                viewId: myCtx.viewId,
+                initialInput: query,
+            });
+        }),
+
+    copyQueryToClipboard: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+            await vscode.env.clipboard.writeText(query);
+            void vscode.window.showInformationMessage(l10n.t('Query copied to clipboard'));
+        }),
+
+    pasteQueryFromClipboard: publicProcedureWithTelemetry.mutation(async () => {
+        const text = await vscode.env.clipboard.readText();
+
+        if (!text.trim()) {
+            throw new Error(l10n.t('Clipboard is empty.'));
+        }
+
+        const parsed = parseFindExpression(text);
+
+        // Require at least one transferable query component before reporting success
+        if (
+            !parsed.filter &&
+            !parsed.project &&
+            !parsed.sort &&
+            parsed.skip === undefined &&
+            parsed.limit === undefined
+        ) {
+            throw new Error(l10n.t('Clipboard does not contain a recognizable find() query.'));
+        }
+
+        return {
+            success: true as const,
+            filter: parsed.filter,
+            project: parsed.project,
+            sort: parsed.sort,
+            skip: parsed.skip,
+            limit: parsed.limit,
+        };
+    }),
+
+    completionAccepted: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                category: z.enum([...COMPLETION_CATEGORIES, 'unknown']),
+            }),
+        )
+        .mutation(({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            // Suppress per-call tRPC telemetry — we accumulate instead
+            myCtx.telemetry.suppressAll = true;
+
+            if (input.category === 'unknown') {
+                ext.outputChannel.appendLog(
+                    `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
+                );
+            }
+            void callWithAccumulatingTelemetry('completion.accepted.cv', (accCtx) => {
+                accCtx.telemetry.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
+            });
+        }),
 });
