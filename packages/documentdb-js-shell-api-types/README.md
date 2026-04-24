@@ -1,17 +1,17 @@
 # @documentdb-js/shell-api-types
 
-TypeScript type definitions and method-to-command mapping for the DocumentDB
-shell API, used by the
-[Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb)
-to provide IntelliSense in query playground files.
+TypeScript type definitions and a structured method-to-command registry for the DocumentDB shell API. Provides everything needed to build IntelliSense, documentation tooling, or compatibility checks for the [Azure DocumentDB](https://learn.microsoft.com/en-us/azure/documentdb/) shell surface.
 
-## What this package provides
+> **Pre-1.0 notice** — The API may change between minor versions until `1.0.0` is released.
+> If you depend on this package and need stability guarantees sooner, please
+> [open an issue](https://github.com/microsoft/vscode-documentdb/issues) and let us know.
+
+## What This Package Provides
 
 1. **`documentdb-shell-api.d.ts`** — TypeScript declarations for the DocumentDB
    shell API surface (database methods, collection methods, cursor methods, BSON
-   constructors, and shell globals). Used by the extension's TS Server Plugin to
-   inject type information into query playground files for autocompletion, hover
-   documentation, and signature help.
+   constructors, and shell globals). Can be injected into a TS Server Plugin
+   for autocompletion, hover documentation, and signature help.
 
 2. **Method registry** — A structured mapping of every shell method to its
    underlying DocumentDB server command(s). Methods that are client-side only
@@ -22,7 +22,7 @@ to provide IntelliSense in query playground files.
    [Azure DocumentDB compatibility documentation](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language)
    to detect when the upstream support matrix changes.
 
-## How the API surface was determined
+## How the API Surface Was Determined
 
 Azure DocumentDB is a fully managed database service that uses the MongoDB wire
 protocol. As stated in the
@@ -34,40 +34,18 @@ protocol. As stated in the
 > compatible with Azure DocumentDB."
 
 The methods in this package were **manually selected** to provide a productive
-query playground editing experience. Each method maps to a server-side command listed
+shell editing experience. Each method maps to a server-side command listed
 as supported in the Azure DocumentDB compatibility matrix. All JSDoc
 descriptions are original writing.
 
 See [`typeDefs/README.md`](typeDefs/README.md) for the full list of reference
 documentation pages.
 
-## Scripts
+## Installation
 
-| Script | Description |
-|---|---|
-| `npm run build` | Compile TypeScript sources |
-| `npm run test` | Run unit tests (method registry) |
-| `npm run verify` | Check method registry against official DocumentDB compatibility docs |
-
-### Verification (`npm run verify`)
-
-The `verify` script fetches the official Azure DocumentDB compatibility page,
-extracts the Database Commands table, and checks that every server command
-referenced by the shell API is still marked as supported.
-
-**Output keys** (for CI `grep`/`contains` checks):
-
-| Key | Meaning |
-|---|---|
-| `[SHELL-API-COMPATIBLE]` | All server commands verified as supported — no action needed |
-| `[SHELL-API-INCOMPATIBLE]` | A referenced command is no longer supported — update the `.d.ts` |
-| `[SHELL-API-UNSUPPORTED-COMMAND]` | Per-command detail for each incompatible command |
-| `[SHELL-API-MISSING-COMMAND]` | A referenced command was not found in the docs table |
-| `[SHELL-API-NEW-COMMANDS]` | New supported commands found that could be added to the API |
-
-The script also generates a full report at
-`resources/scraped/compatibility-commands.md` with supported/unsupported command
-tables and the complete method-to-command mapping.
+```bash
+npm install @documentdb-js/shell-api-types
+```
 
 ## Usage
 
@@ -89,6 +67,38 @@ const collectionMethods = getMethodsByTarget('collection');
 const serverCommands = getRequiredServerCommands();
 ```
 
+## Scripts
+
+| Script           | Description                                                          |
+| ---------------- | -------------------------------------------------------------------- |
+| `npm run build`  | Compile TypeScript sources                                           |
+| `npm run test`   | Run unit tests (method registry)                                     |
+| `npm run verify` | Check method registry against official DocumentDB compatibility docs |
+
+### Verification (`npm run verify`)
+
+The `verify` script fetches the official Azure DocumentDB compatibility page,
+extracts the Database Commands table, and checks that every server command
+referenced by the shell API is still marked as supported.
+
+**Output keys** (for CI `grep`/`contains` checks):
+
+| Key                               | Meaning                                                          |
+| --------------------------------- | ---------------------------------------------------------------- |
+| `[SHELL-API-COMPATIBLE]`          | All server commands verified as supported — no action needed     |
+| `[SHELL-API-INCOMPATIBLE]`        | A referenced command is no longer supported — update the `.d.ts` |
+| `[SHELL-API-UNSUPPORTED-COMMAND]` | Per-command detail for each incompatible command                 |
+| `[SHELL-API-MISSING-COMMAND]`     | A referenced command was not found in the docs table             |
+| `[SHELL-API-NEW-COMMANDS]`        | New supported commands found that could be added to the API      |
+
+The script also generates a full report at
+`resources/scraped/compatibility-commands.md` with supported/unsupported command
+tables and the complete method-to-command mapping.
+
+## Origin
+
+This package was developed as part of the [Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which uses it to provide IntelliSense in query playground files. The extension remains the primary consumer, but the package is designed to be useful in any tooling that needs DocumentDB shell API type information or method metadata.
+
 ## License
 
-MIT — See [LICENSE.md](../../LICENSE.md) in the repository root.
+[MIT](LICENSE.md)

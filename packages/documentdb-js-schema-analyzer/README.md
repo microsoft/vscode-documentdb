@@ -2,28 +2,25 @@
 
 Incremental JSON Schema analyzer for DocumentDB API and MongoDB API documents. Processes documents one at a time (or in batches) and produces an extended JSON Schema with statistical metadata — field occurrence counts, BSON type distributions, min/max values, and array length stats.
 
-> **Monorepo package** — this package is part of the `vscode-documentdb` workspace.
-> Dev dependencies (Jest, ts-jest, Prettier, TypeScript, etc.) are provided by the
-> root `package.json`. Always install from the repository root:
->
-> ```bash
-> cd <repo-root>
-> npm install
-> ```
->
-> **Note:** This package is not yet published to npm. We plan to publish it once the API stabilizes. For now, it is consumed internally via npm workspaces within the [vscode-documentdb](https://github.com/microsoft/vscode-documentdb) repository.
+> **Pre-1.0 notice** — The API may change between minor versions until `1.0.0` is released.
+> If you depend on this package and need stability guarantees sooner, please
+> [open an issue](https://github.com/microsoft/vscode-documentdb/issues) and let us know.
 
-## Overview
-
-The `SchemaAnalyzer` incrementally builds a JSON Schema by inspecting DocumentDB API / MongoDB API documents. It is designed for scenarios where documents arrive over time (streaming, pagination) and the schema needs to evolve as new documents are observed.
-
-Key capabilities:
+## Features
 
 - **Incremental analysis** — add documents one at a time or in batches; the schema updates in place.
 - **BSON type awareness** — recognizes BSON types defined by the MongoDB API (`ObjectId`, `Decimal128`, `Binary`, `UUID`, etc.) and annotates them with `x-bsonType`.
 - **Statistical extensions** — tracks field occurrence (`x-occurrence`), type frequency (`x-typeOccurrence`), min/max values, string lengths, array sizes, and document counts (`x-documentsInspected`).
 - **Known fields extraction** — derives a flat list of known field paths with their types and occurrence probabilities, useful for autocomplete and UI rendering.
 - **Version tracking & caching** — a monotonic version counter enables efficient cache invalidation for derived data like `getKnownFields()`.
+
+## Installation
+
+```bash
+npm install @documentdb-js/schema-analyzer
+```
+
+Requires `mongodb` ≥ 6.0.0 as a peer dependency.
 
 ## Usage
 
@@ -42,11 +39,10 @@ const schema = analyzer.getSchema();
 const fields = analyzer.getKnownFields();
 ```
 
-## Requirements
+## Origin
 
-- **Node.js** ≥ 18
-- **mongodb** driver ≥ 6.0.0 (peer dependency)
+This package was developed as part of the [Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which uses it to power schema-aware features like field autocompletion and collection schema views. The extension remains the primary consumer, but the analyzer is designed to work with any JSON/BSON documents and can be used independently in other tooling.
 
 ## License
 
-[MIT](../../LICENSE.md)
+[MIT](LICENSE.md)

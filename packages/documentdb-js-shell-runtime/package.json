@@ -1,7 +1,7 @@
 {
   "name": "@documentdb-js/shell-runtime",
   "version": "1.0.0",
-  "description": "Shell runtime for the DocumentDB VS Code extension — sandboxed JavaScript evaluation, shell commands, and result formatting for Query Playground and Interactive Shell",
+  "description": "Sandboxed JavaScript evaluation engine for Azure DocumentDB — shell command handling, result transformation, and help generation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [

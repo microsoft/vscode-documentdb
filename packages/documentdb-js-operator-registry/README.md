@@ -1,34 +1,23 @@
 # @documentdb-js/operator-registry
 
-Static operator metadata for all DocumentDB-supported operators, aggregation stages, accumulators, update operators, BSON type constructors, and system variables.
+A reference catalog of operators, aggregation stages, accumulators, update operators, BSON type constructors, and system variables supported by [Azure DocumentDB](https://learn.microsoft.com/en-us/azure/documentdb/). Each entry includes a description, code snippet, documentation link, and filterable meta-tags — making it easy to build context-aware autocompletion, reference panels, and documentation tooling.
 
-> **Monorepo package** — this package is part of the `vscode-documentdb` workspace.
-> Dev dependencies (Jest, ts-jest, Prettier, ts-node, etc.) are provided by the
-> root `package.json`. Always install from the repository root:
->
-> ```bash
-> cd <repo-root>
-> npm install
-> ```
+> **Pre-1.0 notice** — The API may change between minor versions until `1.0.0` is released.
+> If you depend on this package and need stability guarantees sooner, please
+> [open an issue](https://github.com/microsoft/vscode-documentdb/issues) and let us know.
 
-## Purpose
-
-This package is the **single source of truth** for operator metadata when the connected database is DocumentDB. It provides:
+## Features
 
 - `OperatorEntry` objects with value, description, snippet, documentation link, and type metadata
 - Meta-tag based filtering (`getFilteredCompletions()`) for context-aware autocompletion
 - Convenience presets for common completion contexts (filter bar, aggregation pipeline, etc.)
 - Documentation URL generation (`getDocLink()`)
 
-## Data Source
+## Installation
 
-All operator data is derived from the official DocumentDB documentation:
-
-- **Compatibility reference:** [DocumentDB Query Language Compatibility](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language) — lists every operator with its support status across DocumentDB versions 5.0–8.0.
-- **Per-operator docs:** [DocumentDB Operators](https://learn.microsoft.com/en-us/azure/documentdb/operators/) — individual pages with descriptions and syntax for each operator.
-- **Source repository:** [MicrosoftDocs/azure-databases-docs](https://github.com/MicrosoftDocs/azure-databases-docs) — the GitHub repo containing the raw Markdown source for all documentation pages above (under `articles/documentdb/`).
-
-The scraper (`scripts/scrape-operator-docs.ts`) fetches data from these sources and generates the `resources/scraped/operator-reference.md` dump file that serves as the contract between the documentation and the TypeScript implementation.
+```bash
+npm install @documentdb-js/operator-registry
+```
 
 ## Usage
 
@@ -53,7 +42,15 @@ const stringOps = getFilteredCompletions({
 const stages = getFilteredCompletions({ meta: STAGE_COMPLETION_META });
 ```
 
-## Scraper
+## Data Source
+
+All operator data is derived from the official DocumentDB documentation:
+
+- **Compatibility reference:** [DocumentDB Query Language Compatibility](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language) — lists every operator with its support status across DocumentDB versions 5.0–8.0.
+- **Per-operator docs:** [DocumentDB Operators](https://learn.microsoft.com/en-us/azure/documentdb/operators/) — individual pages with descriptions and syntax for each operator.
+- **Source repository:** [MicrosoftDocs/azure-databases-docs](https://github.com/MicrosoftDocs/azure-databases-docs) — the GitHub repo containing the raw Markdown source for all documentation pages above (under `articles/documentdb/`).
+
+### Scraper
 
 The operator data is sourced from the official DocumentDB documentation. To re-scrape:
 
@@ -61,7 +58,7 @@ The operator data is sourced from the official DocumentDB documentation. To re-s
 npm run scrape --workspace=@documentdb-js/operator-registry
 ```
 
-This runs the scraper and then formats the output with Prettier. The scraper:
+The scraper:
 
 1. **Verifies** upstream doc structure (early fail-fast)
 2. **Extracts** all operators from the [compatibility page](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language)
@@ -83,3 +80,11 @@ The dump serves as the authoritative reference for the TypeScript implementation
 | `resources/overrides/operator-overrides.md` | Hand-maintained overrides                    |
 | `resources/overrides/operator-snippets.md`  | Snippet templates per category               |
 | `scripts/scrape-operator-docs.ts`           | Scraper script                               |
+
+## Origin
+
+This package was developed as part of the [Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which uses it to power autocompletion and operator reference features. The extension remains the primary consumer, but the package is designed to be useful in any tooling that needs structured DocumentDB operator metadata.
+
+## License
+
+[MIT](LICENSE.md)
