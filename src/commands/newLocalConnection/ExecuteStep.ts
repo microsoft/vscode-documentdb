@@ -15,9 +15,8 @@ import {
     ConnectionType,
     ItemType,
 } from '../../services/connectionStorageService';
-import { revealConnectionsViewElement } from '../../tree/api/revealConnectionsViewElement';
 import {
-    buildConnectionsViewTreePath,
+    buildFullTreePath,
     focusAndRevealInConnectionsView,
     refreshParentInConnectionsView,
     withConnectionsViewProgress,
@@ -92,9 +91,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
         });
 
         if (existingDuplicateConnection) {
-            // Reveal the existing duplicate connection
-            const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, true);
-            await revealConnectionsViewElement(context, connectionPath, {
+            // Reveal the existing duplicate connection.
+            // Use buildFullTreePath to correctly handle connections inside folders —
+            // buildConnectionsViewTreePath produces a flat path that omits folder ancestors,
+            // causing findNodeById to fail silently when the connection is in a folder.
+            const connectionPath = await buildFullTreePath(existingDuplicateConnection.id, ConnectionType.Emulators);
+            await focusAndRevealInConnectionsView(context, connectionPath, {
                 select: true,
                 focus: false,
                 expand: false, // Don't expand to avoid login prompts
