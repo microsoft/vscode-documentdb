@@ -1,6 +1,6 @@
 {
   "name": "@documentdb-js/shell-api-types",
-  "version": "1.0.0",
+  "version": "0.8.0",
   "description": "TypeScript type definitions and method-to-command registry for the Azure DocumentDB shell API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

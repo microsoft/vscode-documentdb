@@ -1,6 +1,6 @@
 {
   "name": "@documentdb-js/operator-registry",
-  "version": "1.0.0",
+  "version": "0.8.0",
   "description": "Static operator metadata for DocumentDB-supported operators, stages, accumulators, and BSON constructors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

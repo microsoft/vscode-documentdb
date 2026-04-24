@@ -1,6 +1,6 @@
 {
   "name": "@documentdb-js/shell-runtime",
-  "version": "1.0.0",
+  "version": "0.8.0",
   "description": "Sandboxed JavaScript evaluation engine for Azure DocumentDB — shell command handling, result transformation, and help generation",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
