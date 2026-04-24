@@ -119,7 +119,7 @@ export class InitializeFilteringStep extends AzureWizardPromptStep<FilteringWiza
         // Determine the flow based on tenant count, but let's look at the actual subscriptions,
         // so that in case of a tenant without subscriptions, we don't bother the user with these.
         const uniqueTenants = this.getUniqueTenants(context.allSubscriptions);
-        context.telemetry.properties.tenantCountFromSubscriptions = uniqueTenants.length.toString();
+        context.telemetry.measurements.tenantCountFromSubscriptions = uniqueTenants.length;
 
         if (uniqueTenants.length > 1) {
             context.telemetry.properties.filteringFlow = 'multiTenant';

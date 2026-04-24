@@ -1,0 +1,248 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { type MongoClient } from 'mongodb';
+import { DocumentDBServiceProvider } from './DocumentDBServiceProvider';
+import { DocumentDBShellRuntime, normalizeDirectCommands } from './DocumentDBShellRuntime';
+
+// Mock @mongosh modules to avoid needing a real database connection
+jest.mock('@mongosh/shell-api', () => ({
+    ShellInstanceState: jest.fn().mockImplementation(() => ({
+        displayBatchSizeFromDBQuery: 50,
+        setCtx: jest.fn(),
+        setEvaluationListener: jest.fn(),
+        close: jest.fn().mockResolvedValue(undefined),
+    })),
+}));
+
+jest.mock('@mongosh/shell-evaluator', () => ({
+    ShellEvaluator: jest.fn().mockImplementation(() => ({
+        customEval: jest.fn().mockResolvedValue({
+            type: 'Document',
+            printable: { _id: 1 },
+        }),
+    })),
+}));
+
+jest.mock('./DocumentDBServiceProvider', () => ({
+    DocumentDBServiceProvider: {
+        createForDocumentDB: jest.fn().mockReturnValue({
+            serviceProvider: {},
+            bus: { on: jest.fn(), emit: jest.fn() },
+        }),
+    },
+}));
+
+const mockCreateForDocumentDB = DocumentDBServiceProvider.createForDocumentDB as jest.MockedFunction<
+    typeof DocumentDBServiceProvider.createForDocumentDB
+>;
+
+describe('DocumentDBShellRuntime', () => {
+    let mockClient: MongoClient;
+
+    beforeEach(() => {
+        mockClient = {} as MongoClient;
+        jest.clearAllMocks();
+    });
+
+    describe('persistent: false (default)', () => {
+        it('creates fresh @mongosh context per evaluate() call', async () => {
+            const runtime = new DocumentDBShellRuntime(mockClient);
+
+            await runtime.evaluate('db.test.find()', 'testDb');
+            await runtime.evaluate('db.test.find()', 'testDb');
+
+            // Each evaluate() should create a new service provider
+            expect(mockCreateForDocumentDB).toHaveBeenCalledTimes(2);
+        });
+
+        it('returns intercepted results without creating context', async () => {
+            const runtime = new DocumentDBShellRuntime(mockClient);
+
+            const result = await runtime.evaluate('help', 'testDb');
+
+            expect(result.type).toBe('Help');
+            expect(mockCreateForDocumentDB).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('persistent: true', () => {
+        it('creates @mongosh context only once across multiple evaluate() calls', async () => {
+            const runtime = new DocumentDBShellRuntime(mockClient, undefined, {
+                persistent: true,
+            });
+
+            await runtime.evaluate('db.test.find()', 'testDb');
+            await runtime.evaluate('db.test.find()', 'testDb');
+            await runtime.evaluate('db.test.find()', 'testDb');
+
+            // Only the first evaluate() should create the service provider
+            expect(mockCreateForDocumentDB).toHaveBeenCalledTimes(1);
+        });
+
+        it('returns intercepted results without creating context', async () => {
+            const runtime = new DocumentDBShellRuntime(mockClient, undefined, {
+                persistent: true,
+            });
+
+            const result = await runtime.evaluate('help', 'testDb');
+
+            expect(result.type).toBe('Help');
+            expect(mockCreateForDocumentDB).not.toHaveBeenCalled();
+        });
+
+        it('clears persistent state on dispose()', async () => {
+            const runtime = new DocumentDBShellRuntime(mockClient, undefined, {
+                persistent: true,
+            });
+
+            await runtime.evaluate('db.test.find()', 'testDb');
+            expect(mockCreateForDocumentDB).toHaveBeenCalledTimes(1);
+
+            runtime.dispose();
+
+            // After dispose, evaluate should throw
+            await expect(runtime.evaluate('db.test.find()', 'testDb')).rejects.toThrow(
+                'Shell runtime has been disposed',
+            );
+        });
+    });
+
+    describe('dispose', () => {
+        it('throws on evaluate() after dispose', async () => {
+            const runtime = new DocumentDBShellRuntime(mockClient);
+            runtime.dispose();
+
+            await expect(runtime.evaluate('help', 'testDb')).rejects.toThrow('Shell runtime has been disposed');
+        });
+    });
+});
+
+describe('normalizeDirectCommands', () => {
+    describe('single-line input (no transformation)', () => {
+        it('leaves bare use unchanged', () => {
+            expect(normalizeDirectCommands('use mydb')).toBe('use mydb');
+        });
+
+        it('leaves bare show unchanged', () => {
+            expect(normalizeDirectCommands('show dbs')).toBe('show dbs');
+        });
+
+        it('leaves function-call form unchanged', () => {
+            expect(normalizeDirectCommands('use("mydb")')).toBe('use("mydb")');
+        });
+
+        it('leaves regular code unchanged', () => {
+            expect(normalizeDirectCommands('db.test.find()')).toBe('db.test.find()');
+        });
+    });
+
+    describe('multi-line input with bare use', () => {
+        it('rewrites bare use followed by a query', () => {
+            const input = 'use mydb\ndb.test.find()';
+            const expected = 'use("mydb");\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites bare use with trailing semicolon', () => {
+            const input = 'use mydb;\ndb.test.find()';
+            const expected = 'use("mydb");\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites bare use with leading whitespace', () => {
+            const input = '  use mydb\ndb.test.find()';
+            const expected = '  use("mydb");\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('appends a trailing semicolon to neutralize ASI hazards', () => {
+            // Without the trailing `;`, the next line starting with `[`
+            // would bind to the call expression as member access.
+            const input = 'use mydb\n[1, 2, 3].forEach((x) => x)';
+            const expected = 'use("mydb");\n[1, 2, 3].forEach((x) => x)';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites use in the middle of multi-line code', () => {
+            // With the AST-based implementation the rewrite covers every
+            // top-level `use`/`show` statement, not just the first line.
+            const input = 'db.test.find()\nuse otherdb\ndb.other.find()';
+            const expected = 'db.test.find()\nuse("otherdb");\ndb.other.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites multiple top-level use/show statements in one block', () => {
+            const input = 'show dbs\nuse mydb\ndb.test.find()\nuse otherdb\ndb.other.find()';
+            const expected = 'show("dbs");\nuse("mydb");\ndb.test.find()\nuse("otherdb");\ndb.other.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('leaves matching lines inside template literals unchanged', () => {
+            const input = 'const s = `\nuse mydb\n`;\nconsole.log(s)';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves matching lines inside block comments unchanged', () => {
+            const input = '/* use mydb\n   show dbs */\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves matching text inside line comments unchanged', () => {
+            const input = '// use mydb\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves matching text inside regex literals unchanged', () => {
+            const input = 'const x = /use mydb/;\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('rewrites first line even when preceded by blank lines', () => {
+            const input = '\n\n  use mydb\ndb.test.find()';
+            const expected = '\n\n  use("mydb");\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+    });
+
+    describe('multi-line input with bare show', () => {
+        it('rewrites bare show followed by a query', () => {
+            const input = 'show dbs\ndb.test.find()';
+            const expected = 'show("dbs");\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+
+        it('rewrites bare show collections', () => {
+            const input = 'show collections\ndb.test.find()';
+            const expected = 'show("collections");\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+    });
+
+    describe('does not transform function-call form', () => {
+        it('leaves use("name") unchanged in multi-line', () => {
+            const input = 'use("mydb")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it("leaves use('name') unchanged in multi-line", () => {
+            const input = "use('mydb')\ndb.test.find()";
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+
+        it('leaves show("dbs") unchanged in multi-line', () => {
+            const input = 'show("dbs")\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(input);
+        });
+    });
+
+    describe('escapes special characters in database names', () => {
+        it('escapes quotes in database name', () => {
+            const input = 'use my"db\ndb.test.find()';
+            const expected = 'use("my\\"db");\ndb.test.find()';
+            expect(normalizeDirectCommands(input)).toBe(expected);
+        });
+    });
+});

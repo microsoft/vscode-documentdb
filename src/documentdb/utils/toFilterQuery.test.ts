@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { MaxKey, MinKey, UUID } from 'mongodb';
+import { Binary, Decimal128, Int32, Long, ObjectId, Timestamp } from 'bson';
+import { MaxKey, MinKey } from 'mongodb';
 import { QueryError } from '../errors/QueryError';
 import { toFilterQueryObj } from './toFilterQuery';
 
@@ -29,163 +30,164 @@ jest.mock('../../extensionVariables', () => ({
     },
 }));
 
-// Basic query examples
-const basicQueries = [
-    { input: '{ }', expected: {} },
-    { input: '{ "name": "John" }', expected: { name: 'John' } },
-    { input: '{ "name": "John", "age": { "$gt": 30 } }', expected: { name: 'John', age: { $gt: 30 } } },
-];
-
-// BSON function examples with different variations
-const bsonFunctionTestCases = [
-    // UUID cases
-    {
-        type: 'UUID',
-        input: '{ "id": UUID("123e4567-e89b-12d3-a456-426614174000") }',
-        property: 'id',
-        expectedClass: UUID,
-        expectedValue: '123e4567-e89b-12d3-a456-426614174000',
-    },
-    {
-        type: 'UUID with new',
-        input: '{ "userId": new UUID("550e8400-e29b-41d4-a716-446655440000") }',
-        property: 'userId',
-        expectedClass: UUID,
-        expectedValue: '550e8400-e29b-41d4-a716-446655440000',
-    },
-    {
-        type: 'UUID with single quotes',
-        input: '{ "id": UUID(\'123e4567-e89b-12d3-a456-426614174000\') }',
-        property: 'id',
-        expectedClass: UUID,
-        expectedValue: '123e4567-e89b-12d3-a456-426614174000',
-    },
-    // MinKey cases
-    {
-        type: 'MinKey',
-        input: '{ "start": MinKey() }',
-        property: 'start',
-        expectedClass: MinKey,
-    },
-    {
-        type: 'MinKey with new',
-        input: '{ "min": new MinKey() }',
-        property: 'min',
-        expectedClass: MinKey,
-    },
-    // MaxKey cases
-    {
-        type: 'MaxKey',
-        input: '{ "end": MaxKey() }',
-        property: 'end',
-        expectedClass: MaxKey,
-    },
-    {
-        type: 'MaxKey with new',
-        input: '{ "max": new MaxKey() }',
-        property: 'max',
-        expectedClass: MaxKey,
-    },
-    // Date cases
-    {
-        type: 'Date',
-        input: '{ "created": new Date("2023-01-01") }',
-        property: 'created',
-        expectedClass: Date,
-        expectedValue: '2023-01-01T00:00:00.000Z',
-    },
-    {
-        type: 'Date without new',
-        input: '{ "updated": Date("2023-12-31T23:59:59.999Z") }',
-        property: 'updated',
-        expectedClass: Date,
-        expectedValue: '2023-12-31T23:59:59.999Z',
-    },
-];
-
-// Examples of mixed BSON types
-const mixedQuery =
-    '{ "id": UUID("123e4567-e89b-12d3-a456-426614174000"), "start": MinKey(), "end": MaxKey(), "created": new Date("2023-01-01") }';
-
-// Complex nested query
-const complexQuery =
-    '{ "range": { "start": MinKey(), "end": MaxKey() }, "timestamp": new Date("2023-01-01"), "ids": [UUID("123e4567-e89b-12d3-a456-426614174000")] }';
-
-// String that contains BSON function syntax but should be treated as plain text
-const textWithFunctionSyntax = '{ "userName": "A user with UUID()name and Date() format", "status": "active" }';
-
-// Error test cases
-const errorTestCases = [
-    { description: 'invalid JSON', input: '{ invalid json }' },
-    { description: 'invalid UUID', input: '{ "id": UUID("invalid-uuid") }' },
-    { description: 'invalid Date', input: '{ "date": new Date("invalid-date") }' },
-    { description: 'missing parameter', input: '{ "key": UUID() }' },
-];
-
 describe('toFilterQuery', () => {
-    it('converts basic query strings to objects', () => {
-        basicQueries.forEach((testCase) => {
-            expect(toFilterQueryObj(testCase.input)).toEqual(testCase.expected);
+    describe('basic queries', () => {
+        test('empty string returns empty object', () => {
+            expect(toFilterQueryObj('')).toEqual({});
+        });
+
+        test('whitespace-only returns empty object', () => {
+            expect(toFilterQueryObj('   ')).toEqual({});
+        });
+
+        test('empty object returns empty object', () => {
+            expect(toFilterQueryObj('{ }')).toEqual({});
+        });
+
+        test('simple string filter', () => {
+            expect(toFilterQueryObj('{ "name": "John" }')).toEqual({ name: 'John' });
+        });
+
+        test('filter with query operator', () => {
+            expect(toFilterQueryObj('{ "age": { "$gt": 30 } }')).toEqual({ age: { $gt: 30 } });
+        });
+
+        test('combined filter', () => {
+            expect(toFilterQueryObj('{ "name": "John", "age": { "$gt": 30 } }')).toEqual({
+                name: 'John',
+                age: { $gt: 30 },
+            });
         });
     });
 
-    describe('BSON function support', () => {
-        test.each(bsonFunctionTestCases)('converts $type', ({ input, property, expectedClass, expectedValue }) => {
-            const result = toFilterQueryObj(input);
+    describe('relaxed syntax (new with shell-bson-parser)', () => {
+        test('unquoted keys', () => {
+            expect(toFilterQueryObj('{ count: 42 }')).toEqual({ count: 42 });
+        });
 
-            expect(result).toHaveProperty(property);
-            expect(result[property]).toBeInstanceOf(expectedClass);
+        test('single-quoted strings', () => {
+            expect(toFilterQueryObj("{ name: 'Alice' }")).toEqual({ name: 'Alice' });
+        });
 
-            if (expectedValue) {
-                if (result[property] instanceof UUID) {
-                    // eslint-disable-next-line jest/no-conditional-expect
-                    expect(result[property].toString()).toBe(expectedValue);
-                } else if (result[property] instanceof Date) {
-                    // eslint-disable-next-line jest/no-conditional-expect
-                    expect(result[property].toISOString()).toBe(expectedValue);
-                }
-            }
+        test('Math.min expression', () => {
+            const result = toFilterQueryObj('{ rating: Math.min(1.7, 2) }');
+            expect(result).toEqual({ rating: 1.7 });
+        });
+
+        test('unquoted keys with nested operators', () => {
+            expect(toFilterQueryObj('{ age: { $gt: 25 } }')).toEqual({ age: { $gt: 25 } });
+        });
+
+        test('mixed quoted and unquoted keys', () => {
+            expect(toFilterQueryObj('{ name: "Alice", "age": 30 }')).toEqual({ name: 'Alice', age: 30 });
         });
     });
 
-    it('handles mixed BSON types in the same query', () => {
-        const result = toFilterQueryObj(mixedQuery);
+    describe('BSON constructor support', () => {
+        test('UUID constructor', () => {
+            const result = toFilterQueryObj('{ id: UUID("123e4567-e89b-12d3-a456-426614174000") }');
+            expect(result).toHaveProperty('id');
+            // shell-bson-parser returns Binary subtype 4 for UUID
+            expect(result.id).toBeInstanceOf(Binary);
+            expect((result.id as Binary).sub_type).toBe(Binary.SUBTYPE_UUID);
+        });
 
-        expect(result.id).toBeInstanceOf(UUID);
-        expect(result.start).toBeInstanceOf(MinKey);
-        expect(result.end).toBeInstanceOf(MaxKey);
-        expect(result.created).toBeInstanceOf(Date);
+        test('UUID with new keyword', () => {
+            const result = toFilterQueryObj('{ userId: new UUID("550e8400-e29b-41d4-a716-446655440000") }');
+            expect(result).toHaveProperty('userId');
+            expect(result.userId).toBeInstanceOf(Binary);
+            expect((result.userId as Binary).sub_type).toBe(Binary.SUBTYPE_UUID);
+        });
 
-        expect((result.id as UUID).toString()).toBe('123e4567-e89b-12d3-a456-426614174000');
-        expect((result.created as Date).toISOString()).toBe('2023-01-01T00:00:00.000Z');
+        test('MinKey constructor', () => {
+            const result = toFilterQueryObj('{ start: MinKey() }');
+            expect(result).toHaveProperty('start');
+            expect(result.start).toBeInstanceOf(MinKey);
+        });
+
+        test('MaxKey constructor', () => {
+            const result = toFilterQueryObj('{ end: MaxKey() }');
+            expect(result).toHaveProperty('end');
+            expect(result.end).toBeInstanceOf(MaxKey);
+        });
+
+        test('Date constructor', () => {
+            const result = toFilterQueryObj('{ created: new Date("2023-01-01") }');
+            expect(result).toHaveProperty('created');
+            expect(result.created).toBeInstanceOf(Date);
+            expect((result.created as Date).toISOString()).toBe('2023-01-01T00:00:00.000Z');
+        });
+
+        test('ObjectId constructor', () => {
+            const result = toFilterQueryObj('{ _id: ObjectId("507f1f77bcf86cd799439011") }');
+            expect(result).toHaveProperty('_id');
+            expect(result._id).toBeInstanceOf(ObjectId);
+        });
+
+        test('ISODate constructor', () => {
+            const result = toFilterQueryObj('{ ts: ISODate("2024-01-01") }');
+            expect(result).toHaveProperty('ts');
+            expect(result.ts).toBeInstanceOf(Date);
+        });
+
+        test('Decimal128 constructor', () => {
+            const result = toFilterQueryObj('{ val: Decimal128("1.23") }');
+            expect(result).toHaveProperty('val');
+            expect(result.val).toBeInstanceOf(Decimal128);
+        });
+
+        test('NumberInt constructor', () => {
+            const result = toFilterQueryObj('{ n: NumberInt(42) }');
+            expect(result).toHaveProperty('n');
+            expect(result.n).toBeInstanceOf(Int32);
+        });
+
+        test('NumberLong constructor', () => {
+            const result = toFilterQueryObj('{ n: NumberLong(42) }');
+            expect(result).toHaveProperty('n');
+            expect(result.n).toBeInstanceOf(Long);
+        });
+
+        test('Timestamp constructor', () => {
+            const result = toFilterQueryObj('{ ts: Timestamp(1, 1) }');
+            expect(result).toHaveProperty('ts');
+            expect(result.ts).toBeInstanceOf(Timestamp);
+        });
     });
 
-    it('handles complex nested queries with multiple BSON types', () => {
-        const result = toFilterQueryObj(complexQuery);
+    describe('mixed BSON types', () => {
+        test('multiple BSON constructors in one query', () => {
+            const result = toFilterQueryObj(
+                '{ id: UUID("123e4567-e89b-12d3-a456-426614174000"), start: MinKey(), end: MaxKey(), created: new Date("2023-01-01") }',
+            );
 
-        expect(result.range.start).toBeInstanceOf(MinKey);
-        expect(result.range.end).toBeInstanceOf(MaxKey);
-        expect(result.timestamp).toBeInstanceOf(Date);
-        expect(result.ids[0]).toBeInstanceOf(UUID);
-    });
+            expect(result.id).toBeInstanceOf(Binary);
+            expect((result.id as Binary).sub_type).toBe(Binary.SUBTYPE_UUID);
+            expect(result.start).toBeInstanceOf(MinKey);
+            expect(result.end).toBeInstanceOf(MaxKey);
+            expect(result.created).toBeInstanceOf(Date);
+        });
 
-    it('does not process BSON function calls within string values', () => {
-        const result = toFilterQueryObj(textWithFunctionSyntax);
-        expect(result).toEqual({
-            userName: 'A user with UUID()name and Date() format',
-            status: 'active',
+        test('nested BSON constructors', () => {
+            const result = toFilterQueryObj(
+                '{ range: { start: MinKey(), end: MaxKey() }, timestamp: new Date("2023-01-01") }',
+            );
+
+            expect(result.range.start).toBeInstanceOf(MinKey);
+            expect(result.range.end).toBeInstanceOf(MaxKey);
+            expect(result.timestamp).toBeInstanceOf(Date);
         });
     });
 
     describe('error handling', () => {
-        test.each(errorTestCases)('throws QueryError for $description', ({ input }) => {
-            expect(() => toFilterQueryObj(input)).toThrow(QueryError);
+        test('throws QueryError for invalid syntax', () => {
+            expect(() => toFilterQueryObj('{ invalid json }')).toThrow(QueryError);
         });
 
-        it('throws QueryError with INVALID_FILTER code for invalid JSON', () => {
+        test('throws QueryError with INVALID_FILTER code', () => {
             let thrownError: QueryError | undefined;
             try {
-                toFilterQueryObj('{ invalid json }');
+                toFilterQueryObj('not valid at all');
             } catch (error) {
                 thrownError = error as QueryError;
             }
@@ -194,22 +196,10 @@ describe('toFilterQuery', () => {
             expect(thrownError?.code).toBe('INVALID_FILTER');
         });
 
-        it('throws QueryError with INVALID_FILTER code for invalid UUID', () => {
+        test('error message contains "Invalid filter syntax"', () => {
             let thrownError: QueryError | undefined;
             try {
-                toFilterQueryObj('{ "id": UUID("invalid-uuid") }');
-            } catch (error) {
-                thrownError = error as QueryError;
-            }
-            expect(thrownError).toBeDefined();
-            expect(thrownError?.name).toBe('QueryError');
-            expect(thrownError?.code).toBe('INVALID_FILTER');
-        });
-
-        it('includes original error message in QueryError message', () => {
-            let thrownError: QueryError | undefined;
-            try {
-                toFilterQueryObj('{ invalid json }');
+                toFilterQueryObj('not valid');
             } catch (error) {
                 thrownError = error as QueryError;
             }
@@ -217,16 +207,15 @@ describe('toFilterQuery', () => {
             expect(thrownError?.message).toContain('Invalid filter syntax');
         });
 
-        it('includes helpful JSON example in error message', () => {
+        test('error message contains helpful example', () => {
             let thrownError: QueryError | undefined;
             try {
-                toFilterQueryObj('{ invalid json }');
+                toFilterQueryObj('not valid');
             } catch (error) {
                 thrownError = error as QueryError;
             }
             expect(thrownError).toBeDefined();
-            expect(thrownError?.message).toContain('Please use valid JSON');
-            expect(thrownError?.message).toContain('"name": "value"');
+            expect(thrownError?.message).toContain('name: "value"');
         });
     });
 });

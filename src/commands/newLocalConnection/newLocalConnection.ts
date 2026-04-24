@@ -33,7 +33,7 @@ async function executeLocalConnectionWizard(
     parentTreeElementId: string,
     parentStorageId?: string,
 ): Promise<void> {
-    const portString = vscode.workspace.getConfiguration().get(ext.settingsKeys.localPort);
+    const portString = vscode.workspace.getConfiguration().get<number>(ext.settingsKeys.localPort, 10260);
     const portNumber = Number(portString);
 
     const wizardContext: NewLocalConnectionWizardContext = {

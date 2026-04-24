@@ -17,6 +17,8 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import { type AzExtResourceType, getAzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
+import * as fs from 'fs';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { accessDataMigrationServices } from '../commands/accessDataMigrationServices/accessDataMigrationServices';
 import { addConnectionFromRegistry } from '../commands/addConnectionFromRegistry/addConnectionFromRegistry';
@@ -43,21 +45,36 @@ import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { dropIndex } from '../commands/index.dropIndex/dropIndex';
 import { hideIndex } from '../commands/index.hideIndex/hideIndex';
 import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
-import { launchShell } from '../commands/launchShell/launchShell';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
+import {
+    openInteractiveShell,
+    openInteractiveShellWithInput,
+} from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
+import { showConnectionInfo } from '../commands/playground/connectDatabase';
+import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
+import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
+import { playgroundOpenQueryInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
+import { playgroundOpenQueryInShell } from '../commands/playground/playgroundOpenInShell';
+import { runAll } from '../commands/playground/runAll';
+import { runSelected } from '../commands/playground/runSelected';
+import { scanCollectionSchema } from '../commands/playground/scanCollectionSchema';
 import { refreshTreeElement } from '../commands/refreshTreeElement/refreshTreeElement';
 import { refreshView } from '../commands/refreshView/refreshView';
 import { removeConnection } from '../commands/removeConnection/removeConnection';
 import { removeDiscoveryRegistry } from '../commands/removeDiscoveryRegistry/removeDiscoveryRegistry';
 import { retryAuthentication } from '../commands/retryAuthentication/retryAuthentication';
 import { revealView } from '../commands/revealView/revealView';
+import { clearSchemaCache } from '../commands/schemaStore/clearSchemaCache';
+import { showSchemaStoreStats } from '../commands/schemaStore/showSchemaStoreStats';
+import { showWorkerStats } from '../commands/showWorkerStats/showWorkerStats';
 import { updateConnectionString } from '../commands/updateConnectionString/updateConnectionString';
 import { updateCredentials } from '../commands/updateCredentials/updateCredentials';
+import { doubleClickDebounceDelay } from '../constants';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
@@ -68,19 +85,38 @@ import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotif
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
 import { TaskProgressReportingService } from '../services/taskService/UI/taskProgressReportingService';
+import {
+    CompletionCommandIds,
+    normalizeCompletionCategory,
+    normalizeCompletionSource,
+} from '../telemetry/completionCategories';
 import { VCoreBranchDataProvider } from '../tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { RUBranchDataProvider } from '../tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
+import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
+import { type CollectionItem } from '../tree/documentdb/CollectionItem';
+import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
+import { callWithAccumulatingTelemetry } from '../utils/callWithAccumulatingTelemetry';
 import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
 } from '../utils/commandErrorHandling';
 import { withCommandCorrelation, withTreeNodeCommandCorrelation } from '../utils/commandTelemetry';
-import { registerScrapbookCommands } from './scrapbook/registerScrapbookCommands';
+import { registerDoubleClickCommand } from '../utils/registerDoubleClickCommand';
+import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './playground/constants';
+import { PlaygroundBlockHighlighter } from './playground/PlaygroundBlockHighlighter';
+import { PlaygroundCodeLensProvider } from './playground/PlaygroundCodeLensProvider';
+import { PlaygroundService } from './playground/PlaygroundService';
+import { CollectionNameCache } from './query-language/playground-completions/CollectionNameCache';
+import { PlaygroundCompletionItemProvider } from './query-language/playground-completions/PlaygroundCompletionItemProvider';
+import { PlaygroundHoverProvider } from './query-language/playground-completions/PlaygroundHoverProvider';
+import { PlaygroundSnippetSessionManager } from './query-language/playground-completions/PlaygroundSnippetSessionManager';
+import { ShellCommandIds } from './shell/constants';
+import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
@@ -192,6 +228,218 @@ export class ClustersExtension implements vscode.Disposable {
 
                 // Initialize TaskService and TaskProgressReportingService
                 TaskProgressReportingService.attach(TaskService);
+
+                // Initialize PlaygroundService (connection state + StatusBarItem)
+                const playgroundService = PlaygroundService.getInstance();
+                ext.context.subscriptions.push(playgroundService);
+
+                // Register evaluator disposal for clean worker shutdown on deactivation
+                ext.context.subscriptions.push({ dispose: disposeEvaluators });
+
+                // Shut down playground workers when their last document closes
+                ext.context.subscriptions.push(
+                    playgroundService.onDidChangeState(() => {
+                        shutdownOrphanedEvaluators();
+                    }),
+                );
+
+                // Shut down the query playground worker when the last .documentdb.js editor closes
+                ext.context.subscriptions.push(
+                    vscode.window.tabGroups.onDidChangeTabs((event) => {
+                        // Only react when tabs are closed
+                        if (event.closed.length === 0) {
+                            return;
+                        }
+
+                        // Check if any closed tab was a query playground
+                        const closedPlayground = event.closed.some((tab) => {
+                            const input = tab.input;
+                            return (
+                                input instanceof vscode.TabInputText &&
+                                input.uri.path.endsWith(PLAYGROUND_FILE_EXTENSION)
+                            );
+                        });
+
+                        if (!closedPlayground) {
+                            return;
+                        }
+
+                        // Shut down evaluators whose cluster has no remaining playgrounds
+                        shutdownOrphanedEvaluators();
+                    }),
+                );
+
+                // Register CodeLens provider for query playground files
+                const codeLensProvider = new PlaygroundCodeLensProvider();
+                ext.context.subscriptions.push(codeLensProvider);
+                ext.context.subscriptions.push(
+                    vscode.languages.registerCodeLensProvider({ language: PLAYGROUND_LANGUAGE_ID }, codeLensProvider),
+                );
+
+                // Register block highlighter for query playground files
+                const blockHighlighter = new PlaygroundBlockHighlighter(ext.context.extensionPath);
+                ext.context.subscriptions.push(blockHighlighter);
+
+                // Register completion provider for query playground files (Layer 2).
+                // Provides query operators, field names, collection names, and BSON
+                // constructors that the TypeScript service (Layer 1) doesn't know about.
+                ext.context.subscriptions.push(CollectionNameCache.getInstance());
+                ext.context.subscriptions.push(PlaygroundCompletionItemProvider.register());
+
+                // Register hover provider for query playground files.
+                // Provides inline docs for query operators, BSON constructors,
+                // and field names. Method hovers are handled by Layer 1 (TS Plugin).
+                ext.context.subscriptions.push(PlaygroundHoverProvider.register());
+
+                // Cancel snippet sessions when delimiter characters are typed in playground files.
+                // Mirrors the collection view's cancelSnippetSession behavior so that typing
+                // `,`, `}`, or `]` exits the tab-stop instead of leaving a "ghost selection".
+                ext.context.subscriptions.push(PlaygroundSnippetSessionManager.register());
+
+                // Ensure the TypeScript extension recognizes our plugin and restarts
+                // its TS server to load it. The TS extension may have started before our
+                // extension was discovered, so its TS server might not include our plugin.
+                // We restart it once when the first query playground file is opened.
+                let tsRestarted = false;
+
+                const ensureTsRestart = async (): Promise<void> => {
+                    if (tsRestarted) {
+                        return;
+                    }
+                    tsRestarted = true;
+                    try {
+                        // TODO: Remove this runtime stub once the TS plugin is published
+                        // as a standalone npm package with its own release pipeline.
+                        // The official VS Code docs say TS server plugins should be normal
+                        // npm `dependencies`. Our plugin is currently bundled inline by
+                        // webpack, and vsce hardcodes `ignore: 'node_modules/**'` in its
+                        // file collection, so the stub can't ship in the VSIX. We create
+                        // it at runtime instead (same pattern as Vue/Volar).
+                        // Tracked by: https://github.com/microsoft/vscode-documentdb/issues/548
+                        const stubDir = path.join(
+                            ext.context.extensionPath,
+                            'node_modules',
+                            'documentdb-playground-ts-plugin',
+                        );
+                        const stubEntry = path.join(stubDir, 'index.js');
+                        if (!fs.existsSync(stubEntry)) {
+                            fs.mkdirSync(stubDir, { recursive: true });
+                            // Point to the bundled plugin at the extension root
+                            fs.writeFileSync(stubEntry, 'module.exports = require("../../playgroundTsPlugin.js");\n');
+                        }
+
+                        const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
+                        if (tsExt) {
+                            if (!tsExt.isActive) {
+                                await tsExt.activate();
+                            }
+                            // Wait a moment for the TS server to fully initialize before
+                            // restarting it. Without this delay, the restart command can
+                            // arrive while the server is still starting, causing a crash.
+                            await new Promise((resolve) => setTimeout(resolve, 2000));
+                            // Restart the TS server so it picks up our plugin from
+                            // contributes.typescriptServerPlugins. Without this, the server
+                            // may have started before our extension was loaded and won't
+                            // have our plugin in --globalPlugins.
+                            await vscode.commands.executeCommand('typescript.restartTsServer');
+                        }
+                    } catch (error) {
+                        const message = error instanceof Error ? error.message : String(error);
+                        ext.outputChannel.debug(`[Playground] TS server restart failed: ${message}`);
+                    }
+                };
+
+                ext.context.subscriptions.push(
+                    vscode.workspace.onDidOpenTextDocument((doc) => {
+                        if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
+                            void ensureTsRestart();
+                        }
+                    }),
+                );
+
+                // If a query playground file was already open before the extension activated
+                // (e.g., restored by hot-exit), the onDidOpenTextDocument event will not
+                // fire. Check existing documents to cover that path.
+                const hasPlaygroundOpen = vscode.workspace.textDocuments.some(
+                    (doc) => doc.languageId === PLAYGROUND_LANGUAGE_ID,
+                );
+                if (hasPlaygroundOpen) {
+                    void ensureTsRestart();
+                }
+
+                //// Playground Commands:
+
+                registerCommandWithTreeNodeUnwrapping(
+                    PlaygroundCommandIds.new,
+                    withTreeNodeCommandCorrelation(newPlayground),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.playground.new.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return newPlayground(context, node as DatabaseItem | CollectionItem);
+                    }),
+                );
+
+                registerCommand(PlaygroundCommandIds.newWithContent, withCommandCorrelation(newPlaygroundWithContent));
+
+                registerCommand(PlaygroundCommandIds.showConnectionInfo, withCommandCorrelation(showConnectionInfo));
+
+                registerCommand(PlaygroundCommandIds.runAll, withCommandCorrelation(runAll));
+
+                registerCommand(PlaygroundCommandIds.runSelected, withCommandCorrelation(runSelected));
+
+                // Register scan schema command (triggered by "Discover Fields" completion item)
+                registerCommand(
+                    PlaygroundCommandIds.scanCollectionSchema,
+                    withCommandCorrelation(scanCollectionSchema),
+                );
+
+                // Playground → Collection View / Shell navigation
+                registerCommand(
+                    PlaygroundCommandIds.openQueryInCollectionView,
+                    withCommandCorrelation(playgroundOpenQueryInCollectionView),
+                );
+                registerCommand(
+                    PlaygroundCommandIds.openQueryInShell,
+                    withCommandCorrelation(playgroundOpenQueryInShell),
+                );
+
+                // Internal: telemetry for completion acceptance (playground + collection view)
+                registerCommand(
+                    CompletionCommandIds.completionAccepted,
+                    (context: IActionContext, category?: string, source?: string) => {
+                        // Suppress the per-call telemetry from registerCommand — we accumulate instead
+                        context.telemetry.suppressAll = true;
+
+                        const normalizedCategory = normalizeCompletionCategory(category);
+                        const normalizedSource = normalizeCompletionSource(source);
+                        if (normalizedCategory === 'unknown') {
+                            ext.outputChannel.appendLog(
+                                `Unknown completion category received: ${JSON.stringify(category)} (source: ${source ?? 'unknown'})`,
+                            );
+                        }
+                        if (normalizedSource === 'unknown') {
+                            ext.outputChannel.appendLog(
+                                `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
+                            );
+                        }
+                        void callWithAccumulatingTelemetry('completion.accepted', (accCtx) => {
+                            accCtx.telemetry.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
+                        });
+                    },
+                );
+
+                registerCommand('vscode-documentdb.command.clearSchemaCache', withCommandCorrelation(clearSchemaCache));
+
+                registerCommand(
+                    'vscode-documentdb.command.showSchemaStoreStats',
+                    withCommandCorrelation(showSchemaStoreStats),
+                );
+
+                registerCommand('vscode-documentdb.command.showWorkerStats', withCommandCorrelation(showWorkerStats));
 
                 //// General Commands:
 
@@ -350,9 +598,23 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.internal.containerView.open',
                     withCommandCorrelation(openCollectionViewInternal),
                 );
+                registerDoubleClickCommand(
+                    'vscode-documentdb.command.internal.containerView.openFromTree',
+                    withCommandCorrelation(openCollectionViewInternal),
+                    doubleClickDebounceDelay,
+                );
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.containerView.open',
                     withTreeNodeCommandCorrelation(openCollectionView),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.containerView.open.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openCollectionView(context, node as CollectionItem);
+                    }),
                 );
 
                 registerCommand(
@@ -375,8 +637,24 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.launchShell',
-                    withTreeNodeCommandCorrelation(launchShell),
+                    ShellCommandIds.open,
+                    withTreeNodeCommandCorrelation(openInteractiveShell),
+                );
+
+                // Inline button variant — same handler, different activationSource
+                registerCommandWithTreeNodeUnwrapping(
+                    ShellCommandIds.openInline,
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openInteractiveShell(context, node as ClusterItemBase | DatabaseItem | CollectionItem);
+                    }),
+                );
+
+                registerCommand(ShellCommandIds.openWithInput, withCommandCorrelation(openInteractiveShellWithInput));
+
+                // Register the terminal link provider for "Open in Collection View" action lines
+                ext.context.subscriptions.push(
+                    vscode.window.registerTerminalLinkProvider(new ShellTerminalLinkProvider()),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
@@ -420,8 +698,6 @@ export class ClustersExtension implements vscode.Disposable {
                     'vscode-documentdb.command.importDocuments',
                     withTreeNodeCommandCorrelation(importDocuments),
                 );
-
-                registerScrapbookCommands();
 
                 /**
                  * Here, exporting documents is done in two ways: one is accessible from the tree view

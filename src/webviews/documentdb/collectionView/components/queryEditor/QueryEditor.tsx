@@ -10,19 +10,52 @@ import { useContext, useEffect, useRef, useState, type JSX } from 'react';
 import { InputWithProgress } from '../../../../components/InputWithProgress';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
-// eslint-disable-next-line import/no-internal-modules
-import basicFindQuerySchema from '../../../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
 import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
+import {
+    buildEditorUri,
+    clearCompletionContext,
+    EditorType,
+    LANGUAGE_ID,
+    registerDocumentDBQueryLanguage,
+    validateExpression,
+    type Diagnostic,
+} from '../../../../query-language-support';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 
 import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from '@fluentui/react-icons';
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
+import { normalizeCompletionCategory } from '../../../../../telemetry/completionCategories';
 import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
 import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import './queryEditor.scss';
+
+/**
+ * Convert a Diagnostic from the documentdb-query validator to a Monaco marker.
+ */
+function toMonacoMarker(
+    diagnostic: Diagnostic,
+    model: monacoEditor.editor.ITextModel,
+    monaco: typeof monacoEditor,
+): monacoEditor.editor.IMarkerData {
+    const startPos = model.getPositionAt(diagnostic.startOffset);
+    const endPos = model.getPositionAt(diagnostic.endOffset);
+    return {
+        severity:
+            diagnostic.severity === 'error'
+                ? monaco.MarkerSeverity.Error
+                : diagnostic.severity === 'warning'
+                  ? monaco.MarkerSeverity.Warning
+                  : monaco.MarkerSeverity.Info,
+        message: diagnostic.message,
+        startLineNumber: startPos.lineNumber,
+        startColumn: startPos.column,
+        endLineNumber: endPos.lineNumber,
+        endColumn: endPos.column,
+    };
+}
 
 interface QueryEditorProps {
     onExecuteRequest: () => void;
@@ -46,7 +79,6 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     // AI prompt history (survives hide/show of AI input)
     const [aiPromptHistory, setAiPromptHistory] = useState<string[]>([]);
 
-    const schemaAbortControllerRef = useRef<AbortController | null>(null);
     const aiGenerationAbortControllerRef = useRef<AbortController | null>(null);
     const aiInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -57,11 +89,169 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
 
     const hideScrollbarsTemporarily = useHideScrollbarsDuringResize();
 
-    const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
-        editor.setValue('{  }');
+    /**
+     * Creates a Monaco model with a URI scheme for the given editor type.
+     * This enables the completion provider to identify which editor the request is for.
+     */
+    const createEditorModel = (
+        editor: monacoEditor.editor.IStandaloneCodeEditor,
+        monaco: typeof monacoEditor,
+        editorType: EditorType,
+        initialValue: string,
+    ): monacoEditor.editor.ITextModel => {
+        const uri = monaco.Uri.parse(buildEditorUri(editorType, configuration.sessionId));
+        let model = monaco.editor.getModel(uri);
+        if (!model) {
+            model = monaco.editor.createModel(initialValue, LANGUAGE_ID, uri);
+        }
+        editor.setModel(model);
+        return model;
+    };
 
+    /**
+     * Sets up debounced validation on editor content changes.
+     * Returns a cleanup function to clear any pending timeout.
+     */
+    const setupValidation = (
+        editor: monacoEditor.editor.IStandaloneCodeEditor,
+        monaco: typeof monacoEditor,
+        model: monacoEditor.editor.ITextModel,
+    ): (() => void) => {
+        let validationTimeout: ReturnType<typeof setTimeout>;
+        const disposable = editor.onDidChangeModelContent(() => {
+            clearTimeout(validationTimeout);
+            validationTimeout = setTimeout(() => {
+                const diagnostics = validateExpression(editor.getValue());
+                const markers = diagnostics.map((d) => toMonacoMarker(d, model, monaco));
+                monaco.editor.setModelMarkers(model, 'documentdb-query', markers);
+            }, 300);
+        });
+        return () => {
+            clearTimeout(validationTimeout);
+            disposable.dispose();
+        };
+    };
+
+    /**
+     * Cancels any active snippet session on the given editor.
+     *
+     * After a snippet completion (e.g., `fieldName: $1`), Monaco keeps the
+     * snippet session alive and highlights the tab-stop placeholder. If the
+     * user continues typing, the highlight grows — the "ghost selection"
+     * bug. Calling this function ends the snippet session cleanly.
+     */
+    const cancelSnippetSession = (editor: monacoEditor.editor.IStandaloneCodeEditor): void => {
+        const controller = editor.getContribution('snippetController2') as { cancel: () => void } | null | undefined;
+        controller?.cancel();
+    };
+
+    /** Characters that signal the end of a field-value pair and should exit snippet mode. */
+    const SNIPPET_EXIT_CHARS = new Set([',', '}', ']']);
+
+    /**
+     * Sets up pattern-based auto-trigger of completions.
+     * When a content change results in a trigger character followed by a
+     * space (`: `, `, `, `{ `, `[ `) at the end of the inserted text,
+     * completions are triggered automatically after a short delay. This
+     * handles both manual typing and completion acceptance.
+     *
+     * Also cancels any active snippet session when a delimiter character
+     * (`,`, `}`, `]`) is typed, preventing the "ghost selection" bug
+     * where the tab-stop highlight expands as the user continues typing.
+     *
+     * Returns a cleanup function.
+     */
+    const setupSmartTrigger = (editor: monacoEditor.editor.IStandaloneCodeEditor): (() => void) => {
+        let triggerTimeout: ReturnType<typeof setTimeout>;
+        const contentDisposable = editor.onDidChangeModelContent((e) => {
+            clearTimeout(triggerTimeout);
+
+            const change = e.changes[0];
+            if (!change || change.text.length === 0) return;
+
+            // Cancel snippet session when the user *types* a delimiter character.
+            // Only applies to single-character edits (user keystrokes), not to
+            // multi-character completion insertions which may legitimately
+            // contain commas or braces as part of the snippet text.
+            if (change.text.length === 1 && SNIPPET_EXIT_CHARS.has(change.text)) {
+                cancelSnippetSession(editor);
+            }
+
+            const model = editor.getModel();
+            if (!model) return;
+
+            // Calculate the offset at the end of the inserted text in the new model
+            const endOffset = change.rangeOffset + change.text.length;
+
+            // We need at least 2 chars to check for ": " or ", "
+            if (endOffset < 2) return;
+
+            const fullText = model.getValue();
+            const lastTwo = fullText.substring(endOffset - 2, endOffset);
+            if (lastTwo === ': ' || lastTwo === ', ' || lastTwo === '{ ' || lastTwo === '[ ') {
+                triggerTimeout = setTimeout(() => {
+                    editor.trigger('smart-trigger', 'editor.action.triggerSuggest', {});
+                }, 50);
+            }
+        });
+
+        // Cancel snippet session when the editor loses focus (Option D).
+        // If the user clicks away while a tab-stop is highlighted, the
+        // highlight should not persist when they return.
+        const blurDisposable = editor.onDidBlurEditorText(() => {
+            cancelSnippetSession(editor);
+        });
+
+        // Cancel snippet session on Enter or Ctrl+Enter / Cmd+Enter.
+        // Enter commits the current line and should exit snippet mode.
+        // Ctrl+Enter triggers query execution and should also exit snippet mode
+        // so the tab-stop highlight doesn't persist after running a query.
+        const keyDownDisposable = editor.onKeyDown((e) => {
+            if (e.browserEvent.key === 'Enter') {
+                cancelSnippetSession(editor);
+            }
+        });
+
+        return () => {
+            clearTimeout(triggerTimeout);
+            contentDisposable.dispose();
+            blurDisposable.dispose();
+            keyDownDisposable.dispose();
+        };
+    };
+
+    // Track validation cleanup functions
+    const filterValidationCleanupRef = useRef<(() => void) | null>(null);
+    const projectValidationCleanupRef = useRef<(() => void) | null>(null);
+    const sortValidationCleanupRef = useRef<(() => void) | null>(null);
+    const filterSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
+    const projectSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
+    const sortSmartTriggerCleanupRef = useRef<(() => void) | null>(null);
+    const handleEditorDidMount = (editor: monacoEditor.editor.IStandaloneCodeEditor, monaco: typeof monacoEditor) => {
         // Store the filter editor reference
         filterEditorRef.current = editor;
+
+        // Register the documentdb-query language (idempotent — safe to call on every mount).
+        // Pass the tRPC openUrl handler so hover links can be opened via the extension host,
+        // bypassing the webview sandbox's popup restrictions.
+        // Pass the completionAccepted handler so we can track which completions users accept.
+        void registerDocumentDBQueryLanguage(
+            monaco,
+            (url) => void trpcClient.common.openUrl.mutate({ url }),
+            (category) =>
+                void trpcClient.mongoClusters.collectionView.completionAccepted.mutate({
+                    category: normalizeCompletionCategory(category),
+                }),
+        );
+
+        // Create model with URI scheme for contextual completions
+        const model = createEditorModel(editor, monaco, EditorType.Filter, '{  }');
+
+        // Set up debounced validation
+        filterValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
+        // Set up smart-trigger for completions after ": " and ", "
+        filterSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
 
         const getCurrentQueryFunction = () => ({
             filter: filterValue,
@@ -76,78 +266,8 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
             ...prev,
             queryEditor: {
                 getCurrentQuery: getCurrentQueryFunction,
-                /**
-                 * Dynamically sets the JSON schema for the Monaco editor's validation and autocompletion.
-                 *
-                 * NOTE: This function can encounter network errors if called immediately after the
-                 * editor mounts, as the underlying JSON web worker may not have finished loading.
-                 * To mitigate this, a delay is introduced before attempting to set the schema.
-                 *
-                 * A more robust long-term solution should be implemented to programmatically
-                 * verify that the JSON worker is initialized before this function proceeds.
-                 *
-                 * An AbortController is used to prevent race conditions when this function is
-                 * called in quick succession (e.g., rapid "refresh" clicks). It ensures that
-                 * any pending schema update is cancelled before a new one begins, guaranteeing
-                 * a clean, predictable state and allowing the Monaco worker to initialize correctly.
-                 */
-                setJsonSchema: async (schema) => {
-                    // Use the ref to cancel the previous operation
-                    if (schemaAbortControllerRef.current) {
-                        schemaAbortControllerRef.current.abort();
-                    }
-
-                    // Create and store the new AbortController in the ref
-                    const abortController = new AbortController();
-                    schemaAbortControllerRef.current = abortController;
-                    const signal = abortController.signal;
-
-                    try {
-                        // Wait for 2 seconds to give the worker time to initialize
-                        await new Promise((resolve) => setTimeout(resolve, 2000));
-
-                        // If the operation was cancelled during the delay, abort early
-                        if (signal.aborted) {
-                            return;
-                        }
-
-                        // Check if JSON language features are available and set the schema
-                        if (monaco.languages.json?.jsonDefaults) {
-                            monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-                                validate: false,
-                                schemas: [
-                                    {
-                                        uri: 'mongodb-filter-query-schema.json',
-                                        fileMatch: ['*'],
-                                        schema: schema,
-                                    },
-                                ],
-                            });
-                        }
-                    } catch (error) {
-                        // The error is likely an uncaught exception in the worker,
-                        // but we catch here just in case.
-                        console.warn('Error setting JSON schema:', error);
-                    }
-                },
             },
         }));
-
-        // initialize the monaco editor with the schema that's basic
-        // as we don't know the schema of the collection available
-        // this is a fallback for the case when the autocompletion feature fails.
-        monaco.languages.json.jsonDefaults.setDiagnosticsOptions({
-            validate: true,
-            schemas: [
-                {
-                    uri: 'mongodb-filter-query-schema.json', // Unique identifier
-                    fileMatch: ['*'], // Apply to all JSON files or specify as needed
-
-                    schema: basicFindQuerySchema,
-                    // schema: generateMongoFindJsonSchema(fieldEntries)
-                },
-            ],
-        });
     };
 
     const monacoOptions: editor.IStandaloneEditorConstructionOptions = {
@@ -173,19 +293,58 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
         automaticLayout: false,
     };
 
+    // Intercept link clicks in Monaco hover tooltips.
+    // Monaco renders hover markdown links as <a> tags, but the webview CSP
+    // blocks direct navigation. Capture clicks and route through tRPC.
+    const editorContainerRef = useRef<HTMLDivElement | null>(null);
+    useEffect(() => {
+        const container = editorContainerRef.current;
+        if (!container) return;
+
+        const handleLinkClick = (e: MouseEvent): void => {
+            const target = e.target as HTMLElement;
+            const anchor = target.closest('a');
+            if (!anchor) return;
+
+            const href = anchor.getAttribute('href');
+            if (href && (href.startsWith('https://') || href.startsWith('http://'))) {
+                e.preventDefault();
+                e.stopPropagation();
+                void trpcClient.common.openUrl.mutate({ url: href });
+            }
+        };
+
+        container.addEventListener('click', handleLinkClick, true);
+        return () => container.removeEventListener('click', handleLinkClick, true);
+    }, [trpcClient]);
+
     // Cleanup any pending operations when component unmounts
     useEffect(() => {
         return () => {
-            if (schemaAbortControllerRef.current) {
-                schemaAbortControllerRef.current.abort();
-                schemaAbortControllerRef.current = null;
-            }
             if (aiGenerationAbortControllerRef.current) {
                 aiGenerationAbortControllerRef.current.abort();
                 aiGenerationAbortControllerRef.current = null;
             }
+
+            // Clean up validation timeouts
+            filterValidationCleanupRef.current?.();
+            projectValidationCleanupRef.current?.();
+            sortValidationCleanupRef.current?.();
+
+            // Clean up smart-trigger listeners
+            filterSmartTriggerCleanupRef.current?.();
+            projectSmartTriggerCleanupRef.current?.();
+            sortSmartTriggerCleanupRef.current?.();
+
+            // Dispose Monaco models
+            filterEditorRef.current?.getModel()?.dispose();
+            projectEditorRef.current?.getModel()?.dispose();
+            sortEditorRef.current?.getModel()?.dispose();
+
+            // Clear completion store for this session
+            clearCompletionContext(configuration.sessionId);
         };
-    }, []);
+    }, [configuration.sessionId]);
 
     // Update getCurrentQuery function whenever state changes
     useEffect(() => {
@@ -205,6 +364,52 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                 : prev.queryEditor,
         }));
     }, [filterValue, projectValue, sortValue, skipValue, limitValue, setCurrentContext]);
+
+    // Apply pasted query values to the editors when pendingPaste is set
+    useEffect(() => {
+        const paste = currentContext.pendingPaste;
+        if (!paste) {
+            return;
+        }
+
+        if (paste.filter) {
+            setFilterValue(paste.filter);
+            filterEditorRef.current?.setValue(paste.filter);
+        }
+        if (paste.project) {
+            setProjectValue(paste.project);
+            projectEditorRef.current?.setValue(paste.project);
+            // Expand enhanced query mode to show the project/sort editors
+            if (!isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+        }
+        if (paste.sort) {
+            setSortValue(paste.sort);
+            sortEditorRef.current?.setValue(paste.sort);
+            if (!isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+        }
+        if (paste.skip !== undefined) {
+            setSkipValue(paste.skip);
+            if (!isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+        }
+        if (paste.limit !== undefined) {
+            setLimitValue(paste.limit);
+            if (!isEnhancedQueryMode) {
+                setIsEnhancedQueryMode(true);
+            }
+        }
+
+        // Clear the pending paste
+        setCurrentContext((prev) => ({
+            ...prev,
+            pendingPaste: undefined,
+        }));
+    }, [currentContext.pendingPaste, setCurrentContext]);
 
     // Focus AI input when AI row becomes visible
     useEffect(() => {
@@ -342,7 +547,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
     };
 
     return (
-        <div className="queryEditor">
+        <div className="queryEditor" ref={editorContainerRef}>
             {/* Optional AI prompt row */}
             <Collapse visible={configuration.enableAIQueryGeneration && currentContext.isAiRowVisible} unmountOnExit>
                 <div className={`aiRow${isAiActive ? ' ai-active' : ''}`}>
@@ -397,7 +602,7 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                     <MonacoAutoHeight
                         height={'100%'}
                         width={'100%'}
-                        language="json"
+                        language={LANGUAGE_ID}
                         adaptiveHeight={{
                             enabled: true,
                             maxLines: 10,
@@ -409,14 +614,14 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                         }}
                         onMount={(editor, monaco) => {
                             handleEditorDidMount(editor, monaco);
-                            // Sync initial value
+                            // Sync editor content to state
                             editor.onDidChangeModelContent(() => {
                                 setFilterValue(editor.getValue());
                             });
                         }}
                         options={{
                             ...monacoOptions,
-                            ariaLabel: l10n.t('Filter: Enter the DocumentDB query filter in JSON format'),
+                            ariaLabel: l10n.t('Filter: Enter the DocumentDB query filter'),
                         }}
                     />
                 </div>
@@ -508,16 +713,31 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
-                                language="json"
+                                language={LANGUAGE_ID}
                                 adaptiveHeight={{
                                     enabled: true,
                                     maxLines: 5,
                                     minLines: 1,
                                     lineHeight: 19,
                                 }}
-                                onMount={(editor) => {
+                                onMount={(editor, monaco) => {
+                                    // Register language (idempotent)
+                                    void registerDocumentDBQueryLanguage(
+                                        monaco,
+                                        (url) => void trpcClient.common.openUrl.mutate({ url }),
+                                    );
+
                                     projectEditorRef.current = editor;
-                                    editor.setValue(projectValue);
+
+                                    // Create model with URI scheme for project completions
+                                    const model = createEditorModel(editor, monaco, EditorType.Project, projectValue);
+
+                                    // Set up validation
+                                    projectValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
+                                    // Set up smart-trigger
+                                    projectSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
+
                                     editor.onDidChangeModelContent(() => {
                                         setProjectValue(editor.getValue());
                                     });
@@ -539,16 +759,31 @@ export const QueryEditor = ({ onExecuteRequest }: QueryEditorProps): JSX.Element
                             <MonacoAutoHeight
                                 height={'100%'}
                                 width={'100%'}
-                                language="json"
+                                language={LANGUAGE_ID}
                                 adaptiveHeight={{
                                     enabled: true,
                                     maxLines: 5,
                                     minLines: 1,
                                     lineHeight: 19,
                                 }}
-                                onMount={(editor) => {
+                                onMount={(editor, monaco) => {
+                                    // Register language (idempotent)
+                                    void registerDocumentDBQueryLanguage(
+                                        monaco,
+                                        (url) => void trpcClient.common.openUrl.mutate({ url }),
+                                    );
+
                                     sortEditorRef.current = editor;
-                                    editor.setValue(sortValue);
+
+                                    // Create model with URI scheme for sort completions
+                                    const model = createEditorModel(editor, monaco, EditorType.Sort, sortValue);
+
+                                    // Set up validation
+                                    sortValidationCleanupRef.current = setupValidation(editor, monaco, model);
+
+                                    // Set up smart-trigger
+                                    sortSmartTriggerCleanupRef.current = setupSmartTrigger(editor);
+
                                     editor.onDidChangeModelContent(() => {
                                         setSortValue(editor.getValue());
                                     });

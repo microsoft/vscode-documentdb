@@ -7,7 +7,7 @@ import { type IAzExtLogOutputChannel, type TreeElementStateManager } from '@micr
 import { type AzureResourcesExtensionApiWithActivity } from '@microsoft/vscode-azext-utils/activity';
 import type * as vscode from 'vscode';
 import { type DatabasesFileSystem } from './DatabasesFileSystem';
-import { type MongoDBLanguageClient } from './documentdb/scrapbook/languageClient';
+import { type PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
 import { type VCoreBranchDataProvider } from './tree/azure-resources-view/documentdb/VCoreBranchDataProvider';
 import { type RUBranchDataProvider } from './tree/azure-resources-view/mongo-ru/RUBranchDataProvider';
 import { type ClustersWorkspaceBranchDataProvider } from './tree/azure-workspace-view/ClustersWorkbenchBranchDataProvider';
@@ -24,11 +24,12 @@ import { type TreeElement } from './tree/TreeElement';
 export namespace ext {
     export let context: vscode.ExtensionContext;
     export let outputChannel: IAzExtLogOutputChannel;
+    export let playgroundOutputChannel: vscode.OutputChannel;
+    export let playgroundResultProvider: PlaygroundResultProvider;
     export let isBundle: boolean | undefined;
     export let secretStorage: vscode.SecretStorage;
     export const prefix: string = 'documentDB';
     export let fileSystem: DatabasesFileSystem;
-    export let mongoLanguageClient: MongoDBLanguageClient;
 
     // TODO: TN improve this: This is a temporary solution to get going.
     export let copiedCollectionNode: CollectionItem | undefined;
@@ -62,10 +63,8 @@ export namespace ext {
     export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
 
     export namespace settingsKeys {
-        export const shellPath = 'documentDB.mongoShell.path';
-        export const shellArgs = 'documentDB.mongoShell.args';
-        export const shellTimeout = 'documentDB.mongoShell.timeout';
-        export const batchSize = 'documentDB.mongoShell.batchSize';
+        export const batchSize = 'documentDB.batchSize';
+        export const shellInitTimeout = 'documentDB.shell.initTimeout';
         export const confirmationStyle = 'documentDB.confirmations.confirmationStyle';
         export const showOperationSummaries = 'documentDB.userInterface.ShowOperationSummaries';
         export const showUrlHandlingConfirmations = 'documentDB.confirmations.showUrlHandlingConfirmations';
@@ -73,6 +72,7 @@ export namespace ext {
         export const largeCollectionWarningThreshold = 'documentDB.copyPaste.largeCollectionWarningThreshold';
         export const localPort = 'documentDB.local.port';
         export const collectionViewDefaultPageSize = 'documentDB.collectionView.defaultPageSize';
+        export const playgroundConfirmRunAll = 'documentDB.playground.confirmRunAll';
         export const enableAIQueryGeneration = 'documentDB.experimental.enableAIQueryGeneration';
 
         export namespace vsCode {

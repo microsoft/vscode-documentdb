@@ -22,16 +22,12 @@ export { AzureAccountTreeItemBase, createAzureClient } from '@microsoft/vscode-a
 // eslint-disable-next-line no-restricted-imports -- bundle intentionally re-exports many helpers for tests; nonNull helpers are provided locally in this repo
 export * from '@microsoft/vscode-azext-utils';
 export { isWindows, wellKnownEmulatorPassword } from './src/constants';
-export { connectToClient, isCosmosEmulatorConnectionString } from './src/documentdb/scrapbook/connectToClient';
-export { MongoCommand } from './src/documentdb/scrapbook/MongoCommand';
+export { connectToClient, isCosmosEmulatorConnectionString } from './src/documentdb/connectToClient';
 export {
     addDatabaseToAccountConnectionString,
     encodeMongoConnectionString,
     getDatabaseNameFromConnectionString,
-} from './src/documentdb/scrapbook/mongoConnectionStrings';
-export * from './src/documentdb/scrapbook/registerScrapbookCommands';
-export { findCommandAtPosition, getAllCommandsFromText } from './src/documentdb/scrapbook/ScrapbookHelpers';
-export { ShellScriptRunner as MongoShell } from './src/documentdb/scrapbook/ShellScriptRunner';
+} from './src/documentdb/mongoConnectionStrings';
 export { activateInternal, deactivateInternal } from './src/extension';
 export { ext } from './src/extensionVariables';
 export { SettingUtils } from './src/services/SettingsService';
