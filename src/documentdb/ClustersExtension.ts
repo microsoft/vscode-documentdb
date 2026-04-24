@@ -41,6 +41,7 @@ import { filterProviderContent } from '../commands/discoveryService.filterProvid
 import { manageCredentials } from '../commands/discoveryService.manageCredentials/manageCredentials';
 import { exportEntireCollection, exportQueryResults } from '../commands/exportDocuments/exportDocuments';
 import { openHelpAndFeedbackUrl } from '../commands/helpAndFeedback.openUrl/openUrl';
+import { showAbout } from '../commands/helpAndFeedback.showAbout/showAbout';
 import { importDocuments } from '../commands/importDocuments/importDocuments';
 import { dropIndex } from '../commands/index.dropIndex/dropIndex';
 import { hideIndex } from '../commands/index.hideIndex/hideIndex';
@@ -625,6 +626,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(
                     'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                     withCommandCorrelation(openHelpAndFeedbackUrl),
+                );
+
+                registerCommand(
+                    'vscode-documentdb.command.internal.helpAndFeedback.showAbout',
+                    withCommandCorrelation(showAbout),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
