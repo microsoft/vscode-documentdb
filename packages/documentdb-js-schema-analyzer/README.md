@@ -1,6 +1,8 @@
 # @documentdb-js/schema-analyzer
 
-Incremental JSON Schema analyzer for DocumentDB API and MongoDB API documents. Processes documents one at a time (or in batches) and produces an extended JSON Schema with statistical metadata — field occurrence counts, BSON type distributions, min/max values, and array length stats.
+[DocumentDB](https://documentdb.io/) is an open-source document database built on PostgreSQL, with native BSON support, rich indexing, and vector search. It uses the MongoDB-compatible wire protocol, runs locally with Docker, and is MIT licensed.
+
+This package is an incremental JSON Schema analyzer for DocumentDB and MongoDB API documents. Processes documents one at a time (or in batches) and produces an extended JSON Schema with statistical metadata — field occurrence counts, BSON type distributions, min/max values, and array length stats.
 
 > **Pre-1.0 notice** — The API may change between minor versions until `1.0.0` is released.
 > If you depend on this package and need stability guarantees sooner, please
@@ -41,7 +43,7 @@ const fields = analyzer.getKnownFields();
 
 ## Origin
 
-This package was developed as part of the [Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which uses it to power schema-aware features like field autocompletion and collection schema views. The extension remains the primary consumer, but the analyzer is designed to work with any JSON/BSON documents and can be used independently in other tooling.
+This package was developed while building features for the [DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which remains the primary consumer. The analyzer is designed to work with any JSON/BSON documents and can be used independently in other tooling.
 
 ## License
 

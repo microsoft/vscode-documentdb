@@ -1,6 +1,8 @@
 # @documentdb-js/operator-registry
 
-A reference catalog of operators, aggregation stages, accumulators, update operators, BSON type constructors, and system variables supported by [Azure DocumentDB](https://learn.microsoft.com/en-us/azure/documentdb/). Each entry includes a description, code snippet, documentation link, and filterable meta-tags — making it easy to build context-aware autocompletion, reference panels, and documentation tooling.
+[DocumentDB](https://documentdb.io/) is an open-source document database built on PostgreSQL, with native BSON support, rich indexing, and vector search. It uses the MongoDB-compatible wire protocol, runs locally with Docker, and is MIT licensed.
+
+This package is a reference catalog of operators, aggregation stages, accumulators, update operators, BSON type constructors, and system variables supported by DocumentDB. Each entry includes a description, code snippet, documentation link, and filterable meta-tags — making it easy to build context-aware autocompletion, reference panels, and documentation tooling.
 
 > **Pre-1.0 notice** — The API may change between minor versions until `1.0.0` is released.
 > If you depend on this package and need stability guarantees sooner, please
@@ -83,7 +85,7 @@ The dump serves as the authoritative reference for the TypeScript implementation
 
 ## Origin
 
-This package was developed as part of the [Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which uses it to power autocompletion and operator reference features. The extension remains the primary consumer, but the package is designed to be useful in any tooling that needs structured DocumentDB operator metadata.
+This package was developed while building features for the [DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which remains the primary consumer. The package is designed to be useful in any tooling that needs structured DocumentDB operator metadata.
 
 ## License
 

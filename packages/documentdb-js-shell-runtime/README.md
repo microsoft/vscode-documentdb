@@ -1,6 +1,8 @@
 # @documentdb-js/shell-runtime
 
-Sandboxed JavaScript evaluation engine for [Azure DocumentDB](https://learn.microsoft.com/en-us/azure/documentdb/) — provides shell command handling, result transformation, and help generation. Supports both single-shot evaluation (playground/scratchpad style) and persistent REPL sessions (interactive shell style).
+[DocumentDB](https://documentdb.io/) is an open-source document database built on PostgreSQL, with native BSON support, rich indexing, and vector search. It uses the MongoDB-compatible wire protocol, runs locally with Docker, and is MIT licensed.
+
+This package is a sandboxed JavaScript evaluation engine for DocumentDB — provides shell command handling, result transformation, and help generation. Supports both single-shot evaluation (playground/scratchpad style) and persistent REPL sessions (interactive shell style).
 
 > **Pre-1.0 notice** — The API may change between minor versions until `1.0.0` is released.
 > If you depend on this package and need stability guarantees sooner, please
@@ -85,7 +87,7 @@ await mongoClient.close();
 
 ## Origin
 
-This package was developed as part of the [Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which uses it to power the Query Playground and Interactive Shell features. The extension remains the primary consumer, but the runtime is designed to work with any Node.js application that has a `MongoClient` and needs to evaluate shell-style JavaScript against a DocumentDB database.
+This package was developed while building features for the [DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which remains the primary consumer. The runtime is designed to work with any Node.js application that has a `MongoClient` and needs to evaluate shell-style JavaScript against a DocumentDB database.
 
 ## License
 

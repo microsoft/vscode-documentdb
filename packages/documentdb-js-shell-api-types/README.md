@@ -1,6 +1,8 @@
 # @documentdb-js/shell-api-types
 
-TypeScript type definitions and a structured method-to-command registry for the DocumentDB shell API. Provides everything needed to build IntelliSense, documentation tooling, or compatibility checks for the [Azure DocumentDB](https://learn.microsoft.com/en-us/azure/documentdb/) shell surface.
+[DocumentDB](https://documentdb.io/) is an open-source document database built on PostgreSQL, with native BSON support, rich indexing, and vector search. It uses the MongoDB-compatible wire protocol, runs locally with Docker, and is MIT licensed.
+
+This package provides TypeScript type definitions and a structured method-to-command registry for the DocumentDB shell API — everything needed to build IntelliSense, documentation tooling, or compatibility checks for the DocumentDB shell surface.
 
 > **Pre-1.0 notice** — The API may change between minor versions until `1.0.0` is released.
 > If you depend on this package and need stability guarantees sooner, please
@@ -19,13 +21,12 @@ TypeScript type definitions and a structured method-to-command registry for the 
 
 3. **Compatibility verification** — A script that checks the method registry
    against the official
-   [Azure DocumentDB compatibility documentation](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language)
+   [DocumentDB compatibility documentation](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language)
    to detect when the upstream support matrix changes.
 
 ## How the API Surface Was Determined
 
-Azure DocumentDB is a fully managed database service that uses the MongoDB wire
-protocol. As stated in the
+DocumentDB uses the MongoDB wire protocol. As stated in the
 [official compatibility documentation](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language):
 
 > "Client-side wrapper functions, such as `deleteMany()` and `updateMany()`,
@@ -35,7 +36,7 @@ protocol. As stated in the
 
 The methods in this package were **manually selected** to provide a productive
 shell editing experience. Each method maps to a server-side command listed
-as supported in the Azure DocumentDB compatibility matrix. All JSDoc
+as supported in the DocumentDB compatibility matrix. All JSDoc
 descriptions are original writing.
 
 See [`typeDefs/README.md`](typeDefs/README.md) for the full list of reference
@@ -77,7 +78,7 @@ const serverCommands = getRequiredServerCommands();
 
 ### Verification (`npm run verify`)
 
-The `verify` script fetches the official Azure DocumentDB compatibility page,
+The `verify` script fetches the official DocumentDB compatibility page,
 extracts the Database Commands table, and checks that every server command
 referenced by the shell API is still marked as supported.
 
@@ -97,7 +98,7 @@ tables and the complete method-to-command mapping.
 
 ## Origin
 
-This package was developed as part of the [Azure DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which uses it to provide IntelliSense in query playground files. The extension remains the primary consumer, but the package is designed to be useful in any tooling that needs DocumentDB shell API type information or method metadata.
+This package was developed while building features for the [DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which remains the primary consumer. The package is designed to be useful in any tooling that needs DocumentDB shell API type information or method metadata.
 
 ## License
 
