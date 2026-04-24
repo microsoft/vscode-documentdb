@@ -46,7 +46,10 @@ export interface VersionCheckResult {
     shouldShowNotification: boolean;
     /** The normalized current version (major.minor.0) */
     currentMajorMinor: string;
-    /** The normalized stored version (major.minor.0), or '0.0.0' for pre-0.7.0 upgrades */
+    /**
+     * The normalized stored version (major.minor.0), or '0.0.0' for pre-0.7.0 upgrades.
+     * Empty string ('') when `isPrerelease` is true (function returns early without reading storage).
+     */
     storedMajorMinor: string;
     /** Whether this is a first-time install */
     isFirstInstall: boolean;
