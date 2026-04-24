@@ -23,12 +23,17 @@ export async function showAbout(context: IActionContext): Promise<void> {
     const vscodeVersion = vscode.version;
     const nodeVersion = process.version;
     const osInfo = `${os.type()} ${os.arch()} ${os.release()}`;
-    const extensionMode =
-        ext.context.extensionMode === vscode.ExtensionMode.Production
-            ? 'Production'
-            : ext.context.extensionMode === vscode.ExtensionMode.Development
-              ? 'Development'
-              : 'Test';
+    const extensionMode = (() => {
+        switch (ext.context.extensionMode) {
+            case vscode.ExtensionMode.Production:
+                return vscode.l10n.t('Production');
+            case vscode.ExtensionMode.Development:
+                return vscode.l10n.t('Development');
+            case vscode.ExtensionMode.Test:
+            default:
+                return vscode.l10n.t('Test');
+        }
+    })();
 
     // List registered migration providers
     const migrationProviders = MigrationService.listProviders();
