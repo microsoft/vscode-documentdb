@@ -12,6 +12,16 @@ export const STORAGE_KEY = 'ms-azuretools.vscode-documentdb.releaseNotes/lastSho
 export const WELCOME_SCREEN_KEY = 'welcomeScreenShown_v0_4_0';
 
 /**
+ * One-time migration key for users who had a 0.8.0-bugbash prerelease installed.
+ * Those users got '0.8.0' stored in STORAGE_KEY, which would prevent the official
+ * 0.8.0 release notification from showing. This migration resets their stored
+ * version to '0.7.0' so the notification fires correctly.
+ *
+ * Can be removed once 0.8.0 has been released and most users have updated.
+ */
+const BUGBASH_MIGRATION_KEY = 'ms-azuretools.vscode-documentdb.releaseNotes/bugbashMigrationDone';
+
+/**
  * In-memory flag to defer the notification until next VS Code session.
  * When true, the notification will not be shown again in this session.
  */
@@ -36,12 +46,17 @@ export interface VersionCheckResult {
     shouldShowNotification: boolean;
     /** The normalized current version (major.minor.0) */
     currentMajorMinor: string;
-    /** The normalized stored version (major.minor.0), or '0.0.0' for pre-0.7.0 upgrades */
+    /**
+     * The normalized stored version (major.minor.0), or '0.0.0' for pre-0.7.0 upgrades.
+     * Empty string ('') when `isPrerelease` is true (function returns early without reading storage).
+     */
     storedMajorMinor: string;
     /** Whether this is a first-time install */
     isFirstInstall: boolean;
     /** Whether this is an upgrade from a pre-0.7.0 version (transitional) */
     isUpgradeFromPre070: boolean;
+    /** Whether the current version is a prerelease build (notification skipped, nothing stored) */
+    isPrerelease: boolean;
     /** Whether version parsing failed */
     parseError: boolean;
 }
@@ -66,6 +81,7 @@ export function checkVersionForNotification(
         storedMajorMinor: '',
         isFirstInstall: false,
         isUpgradeFromPre070: false,
+        isPrerelease: false,
         parseError: false,
     };
 
@@ -76,6 +92,14 @@ export function checkVersionForNotification(
     }
 
     result.currentMajorMinor = `${currentVersion.major}.${currentVersion.minor}.0`;
+
+    // Prerelease builds (e.g., 0.8.0-bugbash, 0.9.0-preview) should never show the
+    // notification and never update stored state. This prevents prerelease builds from
+    // "consuming" the notification slot for the official release.
+    if (currentVersion.prerelease.length > 0) {
+        result.isPrerelease = true;
+        return result;
+    }
 
     const storedVersion = storedVersionString ? semver.parse(storedVersionString) : null;
 
@@ -149,6 +173,27 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
                 releaseNotesUrl?: string;
             };
 
+            // ====================================================================================
+            // ONE-TIME MIGRATION: Fix stored version for 0.8.0-bugbash prerelease users
+            // ====================================================================================
+            // Users who installed a 0.8.0-bugbash build had '0.8.0' written to STORAGE_KEY.
+            // Without this migration, the official 0.8.0 release would not trigger the
+            // notification (0.8.0 is not > 0.8.0). Reset their stored version to '0.7.0'.
+            // Can be removed once 0.8.0 has been released and most users have updated.
+            // ====================================================================================
+            const migrationDone = ext.context.globalState.get<boolean>(BUGBASH_MIGRATION_KEY, false);
+            if (!migrationDone) {
+                const existingStored = ext.context.globalState.get<string>(STORAGE_KEY);
+                if (existingStored === '0.8.0') {
+                    await ext.context.globalState.update(STORAGE_KEY, '0.7.0');
+                    ext.outputChannel.info('Release notes: Migrated stored version from 0.8.0 (bugbash) to 0.7.0');
+                }
+                await ext.context.globalState.update(BUGBASH_MIGRATION_KEY, true);
+            }
+            // ====================================================================================
+            // END ONE-TIME MIGRATION
+            // ====================================================================================
+
             const storedVersionString = ext.context.globalState.get<string>(STORAGE_KEY);
             const welcomeScreenShown = ext.context.globalState.get<boolean>(WELCOME_SCREEN_KEY, false);
 
@@ -167,6 +212,14 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
 
             context.telemetry.properties.currentVersion = versionCheck.currentMajorMinor;
             context.telemetry.properties.storedVersion = versionCheck.storedMajorMinor;
+
+            if (versionCheck.isPrerelease) {
+                ext.outputChannel.trace(
+                    `Release notes: Prerelease build detected (${packageJSON.version}), skipping notification`,
+                );
+                context.telemetry.properties.prerelease = 'true';
+                return;
+            }
 
             if (versionCheck.isFirstInstall) {
                 await ext.context.globalState.update(STORAGE_KEY, versionCheck.currentMajorMinor);
