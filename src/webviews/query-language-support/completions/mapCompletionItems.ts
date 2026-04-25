@@ -10,7 +10,7 @@
  * has been extracted to `src/documentdb/query-language/shared/sortPrefixes.ts`.
  */
 
-import { type OperatorEntry } from '@vscode-documentdb/documentdb-constants';
+import { type OperatorEntry } from '@documentdb-js/operator-registry';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { escapeSnippetDollars, stripOuterBraces } from '../../../documentdb/query-language/shared/snippetUtils';
@@ -37,7 +37,7 @@ export function getCompletionKindForMeta(
 }
 
 /**
- * Maps an OperatorEntry from documentdb-constants to a Monaco CompletionItem.
+ * Maps an OperatorEntry from operator-registry to a Monaco CompletionItem.
  *
  * Pure function — safe for unit testing without a Monaco runtime.
  *

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BSONTypes, valueToDisplayString } from '@vscode-documentdb/schema-analyzer';
+import { BSONTypes, valueToDisplayString } from '@documentdb-js/schema-analyzer';
 import { type Document, type ObjectId, type WithId } from 'mongodb';
 
 /**

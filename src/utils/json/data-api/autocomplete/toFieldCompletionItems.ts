@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
+import { BSONTypes, type FieldEntry } from '@documentdb-js/schema-analyzer';
 
 /**
  * Completion-ready data for a single field entry.

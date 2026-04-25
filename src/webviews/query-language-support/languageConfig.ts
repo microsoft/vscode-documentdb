@@ -8,7 +8,7 @@
  *
  * This language reuses the JavaScript Monarch tokenizer for syntax highlighting
  * but does NOT attach the TypeScript/JavaScript language service worker.
- * Completions are driven entirely by custom providers using `documentdb-constants`.
+ * Completions are driven entirely by custom providers using `operator-registry`.
  */
 
 /** The language identifier registered with Monaco. */

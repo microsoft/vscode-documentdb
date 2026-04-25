@@ -171,7 +171,7 @@ Move the lock deeper, into `ensureWorker()`, so all callers are protected.
 | **Reporters** | Claude (C3)                                                               |
 | **Severity**  | 🔴 Critical                                                               |
 | **Verified**  | ✅ Confirmed in code                                                      |
-| **File**      | `packages/documentdb-shell-runtime/src/DocumentDBShellRuntime.ts:122-160` |
+| **File**      | `packages/documentdb-js-shell-runtime/src/DocumentDBShellRuntime.ts:122-160` |
 
 **Evidence:** `evaluateFresh()` creates `DocumentDBServiceProvider`, `ShellInstanceState`, `ShellEvaluator`, and `vm.Context` — **none are disposed after use**. Each playground run in fresh mode leaks resources.
 
@@ -354,7 +354,7 @@ Add validation in the Collection View webview before submitting queries.
 | **Reporters** | GPT (Finding 4), Gemini, Copilot PR reviewer (CP4)     |
 | **Severity**  | 🟠 High (UX — Misleading content)                      |
 | **Verified**  | ✅ Confirmed in code                                   |
-| **File**      | `packages/documentdb-constants/src/updateOperators.ts` |
+| **File**      | `packages/documentdb-js-operator-registry/src/updateOperators.ts` |
 
 **Evidence:** Multiple update-operator entries have descriptions and links from the wrong category:
 
@@ -871,7 +871,7 @@ catch (error) {
 | **Reporters** | Claude (C5)                                                               |
 | **Severity**  | 🟡 Medium (was Critical, downgraded)                                      |
 | **Verified**  | ✅ Confirmed — `!` assertions used                                        |
-| **File**      | `packages/documentdb-shell-runtime/src/DocumentDBShellRuntime.ts:197-226` |
+| **File**      | `packages/documentdb-js-shell-runtime/src/DocumentDBShellRuntime.ts:197-226` |
 
 **Evidence:** Multiple `!` assertions on `_persistentInstanceState!`, `_persistentEvaluator!`, `_persistentVmContext!`. If initialization partially fails (e.g., error between assigning `_persistentInstanceState` and setting `_persistentInitialized = true`), retry would use incomplete state.
 
@@ -1016,7 +1016,7 @@ Replace space check with `/\b/` or common separator set (`.`, `_`, `-`, `(`, `)`
 | **Reporters** | Claude (M9)                                                      |
 | **Severity**  | 🟢 Low                                                           |
 | **Verified**  | ✅ Confirmed                                                     |
-| **File**      | `packages/documentdb-shell-runtime/src/CommandInterceptor.ts:24` |
+| **File**      | `packages/documentdb-js-shell-runtime/src/CommandInterceptor.ts:24` |
 
 **Analysis:** `` help`\ndb.dropDatabase()` `` would be intercepted as help instead of evaluated. However, this is an extremely unlikely user input pattern. **No action needed** unless reported.
 
@@ -1165,7 +1165,7 @@ Based on this review, the following new TDD contracts would add the most protect
 1. **Zero `any` types** across the entire PR — exceptional TypeScript discipline
 2. **Worker isolation architecture** is well-designed: separate threads for eval, IPC with typed messages, UUID-based request correlation
 3. **Legacy cleanup is thorough** — no dangling references to removed scrapbook/ANTLR code
-4. **Completion data pipeline** is elegant: `documentdb-constants` → CompletionStore → CompletionItemProvider with URI-based routing
+4. **Completion data pipeline** is elegant: `operator-registry` → CompletionStore → CompletionItemProvider with URI-based routing
 5. **Schema sharing** via `SchemaStore` singleton with debounced notifications is a solid pattern
 6. **Credential handling** is secure — credentials never logged, tokens requested via VS Code auth API
 7. **EJSON serialization** across worker boundary preserves BSON types correctly

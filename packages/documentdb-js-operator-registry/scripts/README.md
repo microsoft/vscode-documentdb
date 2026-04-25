@@ -1,6 +1,6 @@
 # Scripts
 
-Helper scripts for maintaining the `@vscode-documentdb/documentdb-constants` package.
+Helper scripts for maintaining the `@documentdb-js/operator-registry` package.
 
 ## scrape-operator-docs.ts
 

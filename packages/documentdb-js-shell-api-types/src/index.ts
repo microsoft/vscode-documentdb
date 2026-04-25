@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * @vscode-documentdb/documentdb-shell-api-types
+ * @documentdb-js/shell-api-types
  *
  * Shell API type definitions and method-to-command mapping for DocumentDB
  * query playground IntelliSense. This package provides:

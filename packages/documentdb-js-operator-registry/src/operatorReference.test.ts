@@ -11,7 +11,7 @@
  * enforcing contract between "what does DocumentDB support?" (the dump)
  * and "what does our code provide?" (the implementation).
  *
- * See §2.3.3 of docs/plan/03-documentdb-constants.md for design rationale.
+ * See §2.3.3 of docs/plan/03-operator-registry.md for design rationale.
  */
 
 import * as fs from 'fs';

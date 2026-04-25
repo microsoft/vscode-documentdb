@@ -93,7 +93,7 @@ Has field type info?
 
 ### `completionKnowledge.ts`
 
-Curated domain rules that go beyond the auto-generated operator registry in `documentdb-constants`. Contains:
+Curated domain rules that go beyond the auto-generated operator registry in `operator-registry`. Contains:
 
 - **`KEY_POSITION_OPERATORS`** — operators valid only at query root level (`$and`, `$or`, etc.)
 - **`LABEL_PLACEHOLDER`** — the `…` character used in display labels
@@ -101,7 +101,7 @@ Curated domain rules that go beyond the auto-generated operator registry in `doc
 
 ### Snippet handling
 
-Operator snippets in `documentdb-constants` include outer braces: `{ $gt: ${1:value} }`.
+Operator snippets in `operator-registry` include outer braces: `{ $gt: ${1:value} }`.
 
 - **Empty position**: operators keep full braces (user has no braces); fields wrapped with `{ ... }`
 - **Value position**: inserted as-is (user is replacing the entire value)
