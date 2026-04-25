@@ -2,6 +2,12 @@
 
 Static operator metadata for all DocumentDB-supported operators, aggregation stages, accumulators, update operators, BSON type constructors, and system variables.
 
+> **⚠️ Pre-1.0 — API subject to change**
+>
+> This package is published as part of the [DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb) project. All versions below `1.0.0` should be considered **unstable** — the API may change between minor releases without notice.
+>
+> We are actively working toward a stable `1.0.0` release, but will prioritize API stabilization based on community demand. If you are interested in using this package in your own project, please [open an issue](https://github.com/microsoft/vscode-documentdb/issues) to let us know — it helps us prioritize.
+
 > **Monorepo package** — this package is part of the `vscode-documentdb` workspace.
 > Dev dependencies (Jest, ts-jest, Prettier, ts-node, etc.) are provided by the
 > root `package.json`. Always install from the repository root:

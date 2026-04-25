@@ -15,8 +15,8 @@
  * This provider handles only DocumentDB-specific items the TS service doesn't know about.
  */
 
+import { BSONTypes, type FieldEntry } from '@microsoft/vscode-documentdb-schema-analyzer';
 import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
-import { BSONTypes, type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as vscode from 'vscode';
 import { PLAYGROUND_LANGUAGE_ID } from '../../playground/constants';
 import { PlaygroundService } from '../../playground/PlaygroundService';
