@@ -13,6 +13,7 @@ import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
 import { SchemaStore } from './SchemaStore';
+import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export type TableDataEntry = {
@@ -424,13 +425,17 @@ export class ClusterSession {
         }
 
         // Execute explain("queryPlanner") using QueryInsightsApis from ClustersClient
-        const explainResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
+        const rawResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
             verbosity: 'queryPlanner',
             sort: options?.sort,
             projection: options?.projection,
             skip: options?.skip,
             limit: options?.limit,
         });
+
+        // Apply Azure DocumentDB explain fixup (see fixupDocumentDbExplain for details)
+        const clusterMetadata = await this._client.getClusterMetadata();
+        const explainResult = fixupDocumentDbExplain(rawResult, clusterMetadata) ?? rawResult;
 
         // Cache result
         this._queryPlannerCache = {
@@ -445,7 +450,7 @@ export class ClusterSession {
      * Gets execution statistics - uses explain with appropriate verbosity based on cluster type
      * Re-runs the query with execution stats and caches the result
      *
-     * For Azure Cosmos DB vCore clusters: uses "allPlansExecution" verbosity for richer plan data
+     * For Azure DocumentDB clusters: uses "allPlansExecution" verbosity for richer plan data
      * For other clusters: uses "executionStats" verbosity
      *
      * Note: This method intentionally excludes skip/limit to get insights for the full query scope,
@@ -474,7 +479,7 @@ export class ClusterSession {
         }
 
         // Determine verbosity based on cluster type
-        // vCore clusters support allPlansExecution for richer plan data
+        // Azure DocumentDB clusters support allPlansExecution for richer plan data
         const clusterMetadata = await this._client.getClusterMetadata();
         const verbosity =
             clusterMetadata.domainInfo_isAzure === 'true' && clusterMetadata.domainInfo_api === 'vCore'
@@ -483,13 +488,16 @@ export class ClusterSession {
 
         // Execute explain using QueryInsightsApis from ClustersClient
         // This re-runs the query to get authoritative execution metrics
-        const explainResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
+        const rawResult = await this._client.queryInsightsApis.explainFind(databaseName, collectionName, filter, {
             verbosity,
             sort: options?.sort,
             projection: options?.projection,
             skip: options?.skip,
             limit: options?.limit,
         });
+
+        // Apply Azure DocumentDB explain fixup (see fixupDocumentDbExplain for details)
+        const explainResult = fixupDocumentDbExplain(rawResult, clusterMetadata) ?? rawResult;
 
         // Cache result
         this._executionStatsCache = {
