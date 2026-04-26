@@ -16,7 +16,6 @@ import {
     type QueryObject,
     type QueryOptimizationContext,
 } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
-import { type FindQueryParams } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type IndexSpecification } from '../../documentdb/LlmEnhancedFeatureApis';
 import { ext } from '../../extensionVariables';
@@ -63,7 +62,8 @@ export class QueryInsightsAIService {
      * Gets optimization recommendations for a query
      *
      * @param sessionId - Session Id for accessing cached data
-     * @param query - The query string
+     * @param query - Either a parsed QueryObject (for find queries) or a raw query string
+     *                (kept for forward compatibility with non-find command types).
      * @param databaseName - Target database name
      * @param collectionName - Target collection name
      * @param executionPlan - Optional pre-loaded execution plan
@@ -71,7 +71,7 @@ export class QueryInsightsAIService {
      */
     public async getOptimizationRecommendations(
         sessionId: string,
-        query: string | FindQueryParams,
+        query: string | QueryObject,
         databaseName: string,
         collectionName: string,
         executionPlan?: unknown,
@@ -83,13 +83,11 @@ export class QueryInsightsAIService {
                 // Prepare query optimization context
                 let queryContext: QueryOptimizationContext;
                 if (typeof query !== 'string') {
-                    // Convert FindQueryParams to QueryObject
-                    const queryObject = this.convertFindParamsToQueryObject(query);
                     queryContext = {
                         sessionId,
                         databaseName,
                         collectionName,
-                        queryObject,
+                        queryObject: query,
                         commandType: CommandType.Find,
                         executionPlan,
                         signal,
@@ -189,49 +187,6 @@ export class QueryInsightsAIService {
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(l10n.t('Failed to parse AI optimization response. {error}', { error: errorMessage }));
         }
-    }
-
-    /**
-     * Converts FindQueryParams to QueryObject
-     * TODO: Later should support other command types as well
-     * @param params - FindQueryParams with string filter, sort, project
-     * @returns QueryObject with parsed Document objects
-     */
-    private convertFindParamsToQueryObject(params: FindQueryParams): QueryObject {
-        const result: QueryObject = {};
-
-        try {
-            if (params.filter) {
-                result.filter = JSON.parse(params.filter) as Document;
-            }
-
-            if (params.project) {
-                const projection = JSON.parse(params.project) as Document;
-                if (Object.keys(projection).length > 0) {
-                    result.projection = projection;
-                }
-            }
-
-            if (params.sort) {
-                const sort = JSON.parse(params.sort) as Document;
-                if (Object.keys(sort).length > 0) {
-                    result.sort = sort;
-                }
-            }
-
-            if (params.limit !== undefined) {
-                result.limit = params.limit;
-            }
-
-            if (params.skip !== undefined) {
-                result.skip = params.skip;
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(l10n.t('Failed to convert query parameters: {error}', { error: errorMessage }));
-        }
-
-        return result;
     }
 
     /**

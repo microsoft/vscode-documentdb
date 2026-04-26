@@ -16,6 +16,7 @@ import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmat
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';
+import { type QueryObject } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import {
     generateQuery,
     QueryGenerationType,
@@ -805,8 +806,18 @@ export const collectionsViewRouter = router({
             const clusterMetadata = await session.getClient().getClusterMetadata();
             ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
 
-            // Get query parameters from session (current query)
-            const queryParams = session.getCurrentFindQueryParams();
+            // Get parsed query parameters from session.
+            // Using the parsed variant (rather than raw strings) ensures we apply the same relaxed
+            // BSON parsing used everywhere else in the collection view (handles unquoted keys,
+            // single quotes, ObjectId()/UUID()/Date()/MinKey()/MaxKey() constructors, etc.).
+            const parsedQueryParams = session.getCurrentFindQueryParamsWithObjects();
+            const queryObject: QueryObject = {
+                filter: parsedQueryParams.filterObj,
+                sort: parsedQueryParams.sortObj,
+                projection: parsedQueryParams.projectionObj,
+                skip: parsedQueryParams.skip,
+                limit: parsedQueryParams.limit,
+            };
 
             // Get cached execution plan from Stage 2
             const cachedExecutionPlan = session.getRawExplainOutput(databaseName, collectionName);
@@ -825,7 +836,7 @@ export const collectionsViewRouter = router({
             const aiServiceStart = Date.now();
             const aiRecommendations = await aiService.getOptimizationRecommendations(
                 sessionId,
-                queryParams,
+                queryObject,
                 databaseName,
                 collectionName,
                 cachedExecutionPlan ?? undefined,
