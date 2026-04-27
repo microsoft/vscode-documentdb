@@ -83,7 +83,6 @@ describe('promptTemplates', () => {
         });
 
         it('should contain JSON output schema', () => {
-            expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('"metadata"');
             expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('"educationalContent"');
             expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('"analysis"');
             expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('"improvements"');
@@ -95,11 +94,11 @@ describe('promptTemplates', () => {
         });
 
         it('should reference the find query role', () => {
-            expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('MongoDB Index Advisor assistant');
+            expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('DocumentDB API / MongoDB API Query Performance Analyst');
         });
 
-        it('should include low-selectivity guidance', () => {
-            expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('Low-selectivity fields');
+        it('should include high return ratio guidance', () => {
+            expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('High return ratio');
         });
 
         it('should include small collection guidance', () => {
@@ -163,7 +162,6 @@ describe('promptTemplates', () => {
         });
 
         it('should contain JSON output schema', () => {
-            expect(AGGREGATE_QUERY_PROMPT_TEMPLATE).toContain('"metadata"');
             expect(AGGREGATE_QUERY_PROMPT_TEMPLATE).toContain('"improvements"');
         });
 
@@ -200,7 +198,6 @@ describe('promptTemplates', () => {
         });
 
         it('should contain JSON output schema', () => {
-            expect(COUNT_QUERY_PROMPT_TEMPLATE).toContain('"metadata"');
             expect(COUNT_QUERY_PROMPT_TEMPLATE).toContain('"improvements"');
         });
 
@@ -309,9 +306,8 @@ describe('promptTemplates', () => {
                 });
 
                 it('should contain the JSON output schema block', () => {
-                    expect(template).toContain('"collectionName"');
-                    expect(template).toContain('"derived"');
-                    expect(template).toContain('"totalKeysExamined"');
+                    expect(template).toContain('"improvements"');
+                    expect(template).toContain('"analysis"');
                 });
 
                 it('should include numbered instruction items', () => {
