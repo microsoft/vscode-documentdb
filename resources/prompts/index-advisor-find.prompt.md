@@ -21,7 +21,7 @@ Follow these strict instructions (must obey):
 6. **Analysis with fixed structure** — the `analysis` field must be a Markdown-formatted string following this exact structure:
 
    ### Performance Summary
-   [1-2 sentences summarizing the overall query performance (excellent/good/poor) and primary bottleneck]
+   [1-2 sentences summarizing the overall query performance using the same scale as the static analysis: Excellent, Good, Fair, or Poor. Reference the primary bottleneck.]
 
    ### Key Issues
    [Bullet points listing 2-3 most critical performance problems identified, each with specific metrics from execution stats]
@@ -44,11 +44,12 @@ Follow these strict instructions (must obey):
    [2-3 sentences explaining which indexes were used (if any), why they were chosen, or why a collection scan occurred. Mention the specific index name and key pattern if applicable.]
 
    ### Performance Metrics
-   [Analyze key performance indicators using bullet points:
-   - **Documents Examined vs Returned**: [specific numbers and efficiency ratio]
-   - **Keys Examined**: [number for index scans, if applicable]
-   - **Inefficiencies Detected**: [list any issues like in-memory sorts, excessive document fetches, blocking operations, etc.]
-   Keep each bullet point concise but specific with actual metrics from the execution plan.]
+   [Analyze key performance indicators using bullet points. These align with the metrics the user already sees in the static analysis:
+   - **Selectivity**: [percentage of collection returned — low (<5%) is highly selective, high (>20%) means the query is broad]
+   - **Fetch Overhead**: [how documents were retrieved — covered query (best), direct fetch (normal), collection scan (worst), multikey expansion (array overhead)]
+   - **In-Memory Sort**: [whether the database sorted in RAM instead of using index order — Yes means a compound index covering sort fields could help]
+   - **Efficiency Ratio**: [documents returned vs documents examined — ratio close to 1.0 is ideal, <<1 means many documents were examined but not returned]
+   Keep each bullet point concise but specific with actual numbers from the execution plan.]
 
    ### Key Findings
    [1-2 sentences summarizing the most critical performance bottlenecks or optimization opportunities identified]

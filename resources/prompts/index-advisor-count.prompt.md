@@ -21,7 +21,7 @@ Follow these strict instructions (must obey):
 6. **Analysis with fixed structure** — the `analysis` field must be a Markdown-formatted string following this exact structure:
 
    ### Performance Summary
-   [1-2 sentences summarizing the overall count operation performance (excellent/good/poor) and primary bottleneck]
+   [1-2 sentences summarizing the overall count operation performance using the same scale as the static analysis: Excellent, Good, Fair, or Poor. Reference the primary bottleneck.]
 
    ### Key Issues
    [Bullet points listing 2-3 most critical count performance problems identified, each with specific metrics from execution stats]
@@ -44,10 +44,10 @@ Follow these strict instructions (must obey):
    [2-3 sentences explaining which indexes were used for the count operation (if any), why they were chosen, or why a collection scan occurred. Mention the specific index name and key pattern if applicable. Note whether the count could be satisfied by index-only scan.]
 
    ### Performance Metrics
-   [Analyze key performance indicators using bullet points:
-   - **Documents Examined**: [total number examined for the count operation]
-   - **Index-Only Count**: [whether count was satisfied without fetching documents]
-   - **Operation Efficiency**: [ratio of documents examined vs collection size, scan type used]
+   [Analyze key performance indicators using bullet points. These align with the metrics the user already sees in the static analysis:
+   - **Selectivity**: [percentage of collection matched by the count filter]
+   - **Index-Only Count**: [whether count was satisfied without fetching documents — covered count is most efficient]
+   - **Efficiency Ratio**: [documents examined vs collection size — ratio close to the selectivity means the index is working well]
    Keep each bullet point concise but specific with actual metrics from the execution plan.]
 
    ### Key Findings

@@ -21,7 +21,7 @@ Follow these strict instructions (must obey):
 6. **Analysis with fixed structure** — the `analysis` field must be a Markdown-formatted string following this exact structure:
 
    ### Performance Summary
-   [1-2 sentences summarizing the overall pipeline performance (excellent/good/poor) and primary bottleneck]
+   [1-2 sentences summarizing the overall pipeline performance using the same scale as the static analysis: Excellent, Good, Fair, or Poor. Reference the primary bottleneck.]
 
    ### Key Issues
    [Bullet points listing 2-3 most critical pipeline performance problems identified, each with specific metrics from execution stats]
@@ -44,10 +44,11 @@ Follow these strict instructions (must obey):
    [2-3 sentences explaining which indexes were used in early pipeline stages (if any), why they were chosen, or why a collection scan occurred. Mention the specific index name and key pattern if applicable.]
 
    ### Performance Metrics
-   [Analyze key performance indicators using bullet points:
+   [Analyze key performance indicators using bullet points. These align with the metrics the user already sees in the static analysis:
+   - **Selectivity**: [percentage of collection returned — indicates how broad the pipeline's initial filtering is]
    - **Pipeline Efficiency**: [documents processed at each stage vs final results]
-   - **Index Effectiveness**: [how well indexes reduced the working set in early stages]
-   - **Blocking Operations**: [list any inefficiencies like large in-memory sorts, blocking stages, memory-intensive operations, etc.]
+   - **Blocking Operations**: [list any in-memory sorts, large $group stages, or memory-intensive operations]
+   - **Index Effectiveness**: [how well indexes reduced the working set in early stages ($match, initial scan)]
    Keep each bullet point concise but specific with actual metrics from the execution plan.]
 
    ### Key Findings
