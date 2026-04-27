@@ -124,6 +124,7 @@ export class ClusterSession {
     private _queryPlannerCache?: { result: Document; timestamp: number };
     private _executionStatsCache?: { result: Document; timestamp: number };
     private _aiRecommendationsCache?: { result: unknown; timestamp: number };
+    private _stage2ResponseCache?: { response: unknown; totalCollectionDocs?: number };
 
     /**
      * Last query execution time in milliseconds
@@ -207,6 +208,7 @@ export class ClusterSession {
         this._queryPlannerCache = undefined;
         this._executionStatsCache = undefined;
         this._aiRecommendationsCache = undefined;
+        this._stage2ResponseCache = undefined;
     }
 
     /**
@@ -616,6 +618,21 @@ export class ClusterSession {
 
         // No cached data available
         return null;
+    }
+
+    /**
+     * Caches the transformed Stage 2 response and total collection docs
+     * for use by Stage 3 when building the static analysis summary.
+     */
+    public setStage2Response(response: unknown, totalCollectionDocs?: number): void {
+        this._stage2ResponseCache = { response, totalCollectionDocs };
+    }
+
+    /**
+     * Gets the cached Stage 2 response, or null if not available.
+     */
+    public getStage2Response(): { response: unknown; totalCollectionDocs?: number } | null {
+        return this._stage2ResponseCache ?? null;
     }
 
     /**

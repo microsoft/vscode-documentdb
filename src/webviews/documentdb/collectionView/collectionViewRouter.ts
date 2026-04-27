@@ -31,6 +31,7 @@ import {
     type QueryPlannerAnalysis,
 } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
 import { StagePropertyExtractor } from '../../../documentdb/queryInsights/StagePropertyExtractor';
+import { buildStaticAnalysisSummary } from '../../../documentdb/queryInsights/staticAnalysisSummary';
 import {
     createFailedQueryResponse,
     transformAIResponseForUI,
@@ -779,6 +780,12 @@ export const collectionsViewRouter = router({
         ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
         const transformed = transformStage2Response(analyzed, totalCollectionDocs);
 
+        // Cache the Stage 2 response for Stage 3's static analysis context
+        if (!debugData) {
+            const session: ClusterSession = ClusterSession.getSession(sessionId);
+            session.setStage2Response(transformed, totalCollectionDocs);
+        }
+
         ext.outputChannel.trace(
             l10n.t(
                 '[Query Insights Stage 2] Completed: execTime={time}ms, returned={ret}, examined={ex}, ratio={ratio}',
@@ -849,6 +856,39 @@ export const collectionsViewRouter = router({
             // Create AI service instance
             const aiService = new QueryInsightsAIService();
 
+            // Build static analysis summary from cached Stage 2 response
+            let staticAnalysisSummary: string | undefined;
+            const stage2Cache = session.getStage2Response();
+            if (stage2Cache?.response) {
+                try {
+                    const stage2Response =
+                        stage2Cache.response as import('./types/queryInsights').QueryInsightsStage2Response;
+                    staticAnalysisSummary = buildStaticAnalysisSummary(
+                        stage2Response,
+                        stage2Cache.totalCollectionDocs,
+                    );
+                    ext.outputChannel.trace(
+                        l10n.t(
+                            '[Query Insights Stage 3] Static analysis summary built ({len} chars, requestKey: {key})',
+                            {
+                                len: staticAnalysisSummary.length.toString(),
+                                key: requestKey,
+                            },
+                        ),
+                    );
+                } catch {
+                    // Non-critical: proceed without summary if it fails
+                    ext.outputChannel.trace(
+                        l10n.t(
+                            '[Query Insights Stage 3] Failed to build static analysis summary (requestKey: {key})',
+                            {
+                                key: requestKey,
+                            },
+                        ),
+                    );
+                }
+            }
+
             // Call AI service with execution plan
             const aiServiceStart = Date.now();
             const aiRecommendations = await aiService.getOptimizationRecommendations(
@@ -858,6 +898,7 @@ export const collectionsViewRouter = router({
                 collectionName,
                 cachedExecutionPlan ?? undefined,
                 myCtx.signal,
+                staticAnalysisSummary,
             );
             const aiServiceDuration = Date.now() - aiServiceStart;
             ext.outputChannel.trace(

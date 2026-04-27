@@ -66,6 +66,8 @@ export interface QueryOptimizationContext {
     collectionStats?: CollectionStats;
     // Pre-loaded index stat
     indexStats?: IndexStats[];
+    // Static analysis summary from Stage 2 (what the user has already been shown)
+    staticAnalysisSummary?: string;
     // Preferred LLM model for optimization
     preferredModel?: string;
     // Fallback LLM models
@@ -304,6 +306,7 @@ async function fillPromptTemplate(
     indexes: IndexStats[] | undefined,
     executionStats: string,
     clusterInfo: ClusterMetadata,
+    staticAnalysisSummary?: string,
 ): Promise<FilledPromptResult> {
     // Get the template for this command type
     const craftedPrompt = await getPromptTemplate(templateType);
@@ -323,7 +326,7 @@ async function fillPromptTemplate(
 - **Indexes_Stats**: ${indexes ? JSON.stringify(indexes, null, 2) : 'N/A'}
 
 ## Query Execution Stats
-- **Execution_Stats**: ${executionStats}`;
+- **Execution_Stats**: ${executionStats}${staticAnalysisSummary ? `\n\n${staticAnalysisSummary}` : ''}`;
 
     return { craftedPrompt, userQuery, contextData };
 }
@@ -592,6 +595,7 @@ export async function optimizeQuery(
         // sanitizedExecutionStats,
         JSON.stringify(explainResult, null, 2),
         clusterInfo,
+        queryContext.staticAnalysisSummary,
     );
 
     // Send to Copilot with configured models
