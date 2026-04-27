@@ -74,12 +74,16 @@ export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'mu
  * This response contains two `concerns` arrays that serve different purposes:
  * 1. Top-level `concerns: string[]` - Query-level warnings about performance issues
  *    (e.g., "Collection scan detected", "In-memory sort required")
- * 2. `efficiencyAnalysis.performanceRating.concerns: string[]` - Rating-specific concerns
- *    (e.g., "Very low selectivity", "Needs index optimization")
+ * 2. `efficiencyAnalysis.performanceRating.diagnostics` - Detailed diagnostic badges
+ *    explaining scoring factors (e.g., efficiency ratio, index usage, execution time)
  *
  * The `examinedToReturnedRatio` appears in two forms:
  * - Top-level `examinedToReturnedRatio: number` - Raw ratio for calculations (e.g., 50.5)
- * - `efficiencyAnalysis.examinedReturnedRatio: string` - Formatted for display (e.g., "50:1")
+ *
+ * Efficiency analysis metrics:
+ * - `efficiencyAnalysis.selectivity: string | null` - Percentage of collection returned
+ * - `efficiencyAnalysis.fetchOverhead: string` - Localized display label for fetch state
+ * - `efficiencyAnalysis.fetchOverheadKind: FetchOverheadKind` - Stable key for UI branching
  */
 export interface QueryInsightsStage2Response {
     executionTimeMs: number;
