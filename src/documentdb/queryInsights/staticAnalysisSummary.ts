@@ -37,7 +37,7 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
 
     // Performance rating
     const rating = stage2.efficiencyAnalysis.performanceRating;
-    lines.push(`### Performance Rating: ${rating.score.toUpperCase()}`);
+    lines.push(`### Performance Rating: ${rating.score.toUpperCase()} (scale: Excellent > Good > Fair > Poor)`);
     lines.push('');
 
     // Summary indicators

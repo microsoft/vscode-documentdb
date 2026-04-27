@@ -79,7 +79,7 @@ describe('buildStaticAnalysisSummary', () => {
 
     it('should include performance rating', () => {
         const summary = buildStaticAnalysisSummary(makeStage2Response());
-        expect(summary).toContain('### Performance Rating: GOOD');
+        expect(summary).toContain('### Performance Rating: GOOD (scale: Excellent > Good > Fair > Poor)');
     });
 
     it('should include all four summary indicators', () => {
@@ -213,7 +213,7 @@ describe('buildStaticAnalysisSummary', () => {
             },
         });
         const summary = buildStaticAnalysisSummary(stage2, 60000);
-        expect(summary).toContain('Performance Rating: POOR');
+        expect(summary).toContain('Performance Rating: POOR (scale: Excellent > Good > Fair > Poor)');
         expect(summary).toContain('Total documents in collection: 60,000');
         expect(summary).toContain('Documents returned by query: 5');
         expect(summary).toContain('[-] **Very low efficiency ratio**');
@@ -247,7 +247,7 @@ describe('buildStaticAnalysisSummary', () => {
             },
         });
         const summary = buildStaticAnalysisSummary(stage2, 10000);
-        expect(summary).toContain('Performance Rating: EXCELLENT');
+        expect(summary).toContain('Performance Rating: EXCELLENT (scale: Excellent > Good > Fair > Poor)');
         expect(summary).toContain('Covered query (covered)');
     });
 
