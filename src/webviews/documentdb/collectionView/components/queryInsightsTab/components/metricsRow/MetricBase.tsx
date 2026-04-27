@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Card, SkeletonItem, Tooltip } from '@fluentui/react-components';
-import { DataUsageRegular, InfoRegular } from '@fluentui/react-icons';
+import { DataUsageRegular } from '@fluentui/react-icons';
 import type * as React from 'react';
 import { useRef } from 'react';
 import './MetricsRow.scss';
@@ -95,9 +95,6 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
         >
             <div className="dataHeader" aria-hidden="true">
                 {label}
-                {tooltipExplanation && (
-                    <InfoRegular style={{ fontSize: '12px', opacity: 0.6, marginLeft: '4px' }} />
-                )}
             </div>
             <div className="dataValue" aria-hidden="true">
                 {renderValue()}

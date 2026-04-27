@@ -83,7 +83,7 @@ export const CellBase: React.FC<CellBaseProps> = ({
                 content={{
                     children: (
                         <div style={{ padding: '8px' }}>
-                            <div style={{ fontWeight: 600, marginBottom: '8px', fontSize: '14px' }}>{label}</div>
+                            <div style={{ fontWeight: 600, marginBottom: '12px', fontSize: '16px' }}>{label}</div>
                             <div style={{ whiteSpace: 'pre-line' }}>{tooltipExplanation}</div>
                         </div>
                     ),

@@ -36,8 +36,6 @@
     // Reference base styles from queryInsights.scss
     .dataHeader {
         @extend .baseDataHeader;
-        display: inline-flex;
-        align-items: center;
     }
 
     .dataValue {

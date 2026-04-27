@@ -884,23 +884,23 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 const selectivity = queryInsightsState.stage2Data?.efficiencyAnalysis.selectivity;
                                 if (!selectivity) {
                                     return l10n.t(
-                                        'What percentage of your collection this query returns. Could not be determined for this query.',
+                                        'The percentage of your collection this query returns. Could not be determined for this query.',
                                     );
                                 }
                                 const pct = parseFloat(selectivity);
                                 if (pct < 1) {
                                     return l10n.t(
-                                        'Your query returns {0} of the collection. This is highly selective: only a small slice of data is touched.',
+                                        'This query returns {0} of your collection.\n\nThis is highly selective: only a small fraction of documents pass the filter. The database does minimal work to produce results.',
                                         selectivity,
                                     );
                                 } else if (pct < 20) {
                                     return l10n.t(
-                                        'Your query returns {0} of the collection. This is a reasonable level of selectivity.',
+                                        'This query returns {0} of your collection.\n\nThis is a reasonable level of selectivity. The filter narrows results to a manageable portion of the data.',
                                         selectivity,
                                     );
                                 } else {
                                     return l10n.t(
-                                        'Your query returns {0} of the collection. This is a broad query that touches a large portion of data. Consider adding more specific filters.',
+                                        'This query returns {0} of your collection.\n\nThis is a broad query that returns a large portion of the data. Consider adding more specific filters to narrow the results.',
                                         selectivity,
                                     );
                                 }
@@ -917,12 +917,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 const indexUsed = queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed;
                                 if (indexUsed) {
                                     return l10n.t(
-                                        'Your query uses the "{0}" index to locate matching documents directly, without scanning the entire collection.',
-                                        indexUsed,
+                                        'The name of the index used to look up matching documents.\n\nThe database used this index to locate matching documents directly, without scanning the entire collection.',
                                     );
                                 }
                                 return l10n.t(
-                                    'No index was used for this query. The database scanned every document in the collection to find matches. Adding an index on the filtered fields would improve performance.',
+                                    'No index was used for this query.\n\nThe database scanned every document in the collection to find matches. Adding an index on the filtered fields would allow the database to locate documents directly.',
                                 );
                             })()}
                         />
@@ -935,22 +934,24 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead ?? '';
                                 if (fetchOverhead.includes('Covered')) {
                                     return l10n.t(
-                                        'All the data your query needs was already stored in the index. The database did not need to load the actual documents, making this the most efficient retrieval method.',
+                                        'The database retrieved your documents using a covered query.\n\nAll the data your query needs was already stored in the index. The database did not need to load the actual documents, making this the most efficient retrieval method.',
                                     );
                                 } else if (fetchOverhead.includes('Collection scan')) {
                                     return l10n.t(
-                                        'Every document in the collection was read sequentially because no supporting index was available. This is the slowest retrieval method for filtered queries.',
+                                        'The database retrieved your documents using a collection scan.\n\nEvery document was read sequentially because no supporting index was available. This is the slowest retrieval method for filtered queries.',
                                     );
                                 } else if (fetchOverhead.includes('Multikey')) {
                                     return l10n.t(
-                                        'An index on an array field was used. Each array element creates a separate index entry, so the database examined more index keys than documents. This is expected for array indexes but adds overhead.',
+                                        'The database retrieved your documents through a multikey index.\n\nAn index on an array field was used. Each array element creates a separate index entry, so the database examined more index keys than documents. This is expected for array indexes but adds overhead.',
                                     );
                                 } else if (fetchOverhead.includes('No matches')) {
-                                    return l10n.t('The query returned no documents. No document fetching was needed.');
+                                    return l10n.t(
+                                        'The query returned no documents.\n\nNo document fetching was needed because no documents matched the filter criteria.',
+                                    );
                                 }
                                 // Default: "Direct fetch"
                                 return l10n.t(
-                                    'The index identified matching documents, which were then loaded from storage. This is the normal, efficient retrieval path.',
+                                    'The database retrieved your documents using a direct fetch.\n\nThe index pointed to matching documents, which were then loaded from storage. This is the normal, efficient path.',
                                 );
                             })()}
                         />
@@ -967,11 +968,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort ?? false;
                                 if (hasSort) {
                                     return l10n.t(
-                                        'The database loaded results into memory to sort them. This uses RAM and can fail for very large result sets.\n\nConsider adding a compound index that includes your sort fields to avoid in-memory sorting.',
+                                        'The database sorted results in memory.\n\nThis uses RAM and can fail for very large result sets. Consider adding a compound index that includes your sort fields to let the database skip this step.',
                                     );
                                 }
                                 return l10n.t(
-                                    'Results came back in the correct order without needing an in-memory sort. Either the index provided the right ordering, or no sort was requested.',
+                                    'The database did not sort data in memory.\n\nResults came back in the right order naturally, either from the index or because no sort was requested.',
                                 );
                             })()}
                         />
