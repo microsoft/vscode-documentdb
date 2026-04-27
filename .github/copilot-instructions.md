@@ -29,8 +29,16 @@ Before finishing work on a PR, agents **must** run the following steps in order:
    ```bash
    npm run lint
    ```
+4. **Tests** — Run the full Jest test suite to confirm no regressions:
+   ```bash
+   npx jest --no-coverage
+   ```
+5. **Build** — Run the TypeScript build to confirm there are no type errors:
+   ```bash
+   npm run build
+   ```
 
-> ⚠️ **An agent must not finish or terminate until all three steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
+> ⚠️ **An agent must not finish or terminate until all five steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
 
 ## Git Safety
 
@@ -185,6 +193,7 @@ For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replace
 See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-simplification-plan.md` for details.
 
 - [skills/telemetry-instrumentation/SKILL.md](skills/telemetry-instrumentation/SKILL.md) - Telemetry instrumentation patterns
+
 ## Terminology
 
 This is a **DocumentDB** extension that uses the **MongoDB-compatible wire protocol**.

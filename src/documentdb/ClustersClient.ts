@@ -58,6 +58,7 @@ import {
 } from './LlmEnhancedFeatureApis';
 import { SchemaStore } from './SchemaStore';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
+import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
@@ -1113,7 +1114,9 @@ export class ClustersClient {
         if (!this._llmEnhancedFeatureApis) {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
-        return this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity, options);
+        const result = await this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity, options);
+        const metadata = await this.getClusterMetadata();
+        return (fixupDocumentDbExplain(result, metadata) as ExplainResult) ?? result;
     }
 
     /**
@@ -1127,7 +1130,9 @@ export class ClustersClient {
         if (!this._llmEnhancedFeatureApis) {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
-        return this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
+        const result = await this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
+        const metadata = await this.getClusterMetadata();
+        return (fixupDocumentDbExplain(result, metadata) as ExplainResult) ?? result;
     }
 
     /**
@@ -1141,7 +1146,9 @@ export class ClustersClient {
         if (!this._llmEnhancedFeatureApis) {
             throw new Error('LLM Enhanced Feature APIs not initialized. Ensure the client is connected.');
         }
-        return this._llmEnhancedFeatureApis.explainCount(databaseName, collectionName, filter);
+        const result = await this._llmEnhancedFeatureApis.explainCount(databaseName, collectionName, filter);
+        const metadata = await this.getClusterMetadata();
+        return fixupDocumentDbExplain(result, metadata) ?? result;
     }
 
     /**

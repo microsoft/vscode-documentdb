@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
 import { type AIIndexRecommendation, type AIOptimizationResponse } from '../../services/ai/types';
 import {
+    type FetchOverheadKind,
     type ImprovementCard,
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
@@ -251,9 +252,13 @@ export function transformStage1Response(
  * Transforms execution stats analysis to Stage 2 response format
  *
  * @param analyzed - Execution stats analysis from ExplainPlanAnalyzer
+ * @param totalCollectionDocs - Estimated total documents in the collection (optional, for selectivity)
  * @returns Stage 2 response ready for UI
  */
-export function transformStage2Response(analyzed: ExecutionStatsAnalysis): QueryInsightsStage2Response {
+export function transformStage2Response(
+    analyzed: ExecutionStatsAnalysis,
+    totalCollectionDocs?: number,
+): QueryInsightsStage2Response {
     // Check if this is a sharded query
     const shardedInfo = extractShardedInfoFromDocument(analyzed.rawStats, true);
 
@@ -279,9 +284,9 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
             isCoveringQuery: analyzed.isCovered,
             concerns: buildConcernsForShardedQuery(shardedInfo.shards, examinedToReturnedRatio),
             efficiencyAnalysis: {
-                executionStrategy: 'Sharded Query',
+                selectivity: computeSelectivity(analyzed.nReturned, totalCollectionDocs),
                 indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
-                examinedReturnedRatio: formatRatioForDisplay(examinedToReturnedRatio),
+                ...computeFetchOverhead(analyzed),
                 hasInMemorySort: shardedInfo.shards.some((s) => s.hasBlockedSort || false),
                 performanceRating: analyzed.performanceRating,
             },
@@ -329,9 +334,6 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
         );
     }
 
-    // Format examined-to-returned ratio for display
-    const examinedReturnedRatioFormatted = formatRatioForDisplay(examinedToReturnedRatio);
-
     return {
         executionTimeMs: analyzed.executionTimeMillis,
         totalKeysExamined: analyzed.totalKeysExamined,
@@ -347,9 +349,9 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
         isCoveringQuery: analyzed.isCovered,
         concerns,
         efficiencyAnalysis: {
-            executionStrategy,
+            selectivity: computeSelectivity(analyzed.nReturned, totalCollectionDocs),
             indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
-            examinedReturnedRatio: examinedReturnedRatioFormatted,
+            ...computeFetchOverhead(analyzed),
             hasInMemorySort: analyzed.hasInMemorySort,
             performanceRating: analyzed.performanceRating,
         },
@@ -360,6 +362,51 @@ export function transformStage2Response(analyzed: ExecutionStatsAnalysis): Query
         rawExecutionStats: analyzed.rawStats,
         extendedStageInfo: analyzed.extendedStageInfo, // Pass through extended stage properties for UI
     };
+}
+
+/**
+ * Computes selectivity as a percentage of the collection returned by the query.
+ *
+ * @param nReturned          - Number of documents returned
+ * @param totalCollectionDocs - Estimated total documents in the collection
+ * @returns Formatted percentage string (e.g., "33.2%") or null if unavailable
+ */
+function computeSelectivity(nReturned: number, totalCollectionDocs: number | undefined): string | null {
+    if (!totalCollectionDocs || totalCollectionDocs <= 0 || nReturned === undefined) {
+        return null;
+    }
+    const ratio = Math.min(nReturned / totalCollectionDocs, 1);
+    return `${(ratio * 100).toFixed(1)}%`;
+}
+
+/**
+ * Computes the fetch overhead label and stable kind based on query execution characteristics.
+ * First match wins.
+ *
+ * @param analyzed - Execution stats analysis
+ * @returns Object with localized `fetchOverhead` label and stable `fetchOverheadKind` identifier
+ */
+function computeFetchOverhead(analyzed: ExecutionStatsAnalysis): {
+    fetchOverhead: string;
+    fetchOverheadKind: FetchOverheadKind;
+} {
+    if (analyzed.nReturned === 0) {
+        return { fetchOverhead: l10n.t('No matches'), fetchOverheadKind: 'noMatches' };
+    }
+    if (analyzed.isCovered && analyzed.totalDocsExamined === 0 && analyzed.nReturned > 0) {
+        return { fetchOverhead: l10n.t('Covered query'), fetchOverheadKind: 'covered' };
+    }
+    if (analyzed.isCollectionScan) {
+        return { fetchOverhead: l10n.t('Collection scan'), fetchOverheadKind: 'collectionScan' };
+    }
+    if (analyzed.totalKeysExamined > analyzed.totalDocsExamined && analyzed.totalDocsExamined > 0) {
+        const ratio = analyzed.totalKeysExamined / analyzed.totalDocsExamined;
+        if (ratio > 10) {
+            return { fetchOverhead: l10n.t('Multikey expansion (>10×)'), fetchOverheadKind: 'multikey' };
+        }
+        return { fetchOverhead: l10n.t('Multikey expansion ({0}×)', ratio.toFixed(1)), fetchOverheadKind: 'multikey' };
+    }
+    return { fetchOverhead: l10n.t('Direct fetch'), fetchOverheadKind: 'directFetch' };
 }
 
 /**
@@ -415,22 +462,6 @@ export function extractStagesFromDocument(explainResult: Document): StageInfo[] 
 
     traverseStage(executionStages);
     return stages;
-}
-
-/**
- * Formats a ratio for display in the UI
- *
- * @param ratio - The numeric ratio (e.g., 50.5)
- * @returns Formatted string (e.g., "50 : 1", "1 : 1", "∞")
- */
-function formatRatioForDisplay(ratio: number): string {
-    if (!isFinite(ratio)) {
-        return '∞';
-    }
-    if (ratio < 1) {
-        return '1 : 1';
-    }
-    return `${Math.round(ratio)} : 1`;
 }
 
 /**
@@ -737,12 +768,10 @@ export function createFailedQueryResponse(
             `Error Code: ${analyzed.executionError?.errorCode || 'N/A'}`,
         ],
         efficiencyAnalysis: {
-            executionStrategy: `Failed at ${analyzed.executionError?.failedStage?.stage || 'Unknown'} stage`,
+            selectivity: null,
             indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
-            examinedReturnedRatio:
-                examinedToReturnedRatio === Infinity
-                    ? 'N/A (query failed)'
-                    : `${Math.round(examinedToReturnedRatio)}:1`,
+            fetchOverhead: l10n.t('Query failed'),
+            fetchOverheadKind: 'noMatches' as FetchOverheadKind,
             hasInMemorySort: analyzed.hasInMemorySort,
             performanceRating: analyzed.performanceRating,
         },

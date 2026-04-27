@@ -64,6 +64,9 @@ export interface QueryInsightsStage1Response {
 // Stage 2: Detailed Execution Analysis Types
 // ============================================================================
 
+/** Stable identifier for the fetch overhead state, independent of locale. */
+export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'multikey' | 'directFetch';
+
 /**
  * Response from Stage 2 - Detailed execution statistics
  *
@@ -71,12 +74,16 @@ export interface QueryInsightsStage1Response {
  * This response contains two `concerns` arrays that serve different purposes:
  * 1. Top-level `concerns: string[]` - Query-level warnings about performance issues
  *    (e.g., "Collection scan detected", "In-memory sort required")
- * 2. `efficiencyAnalysis.performanceRating.concerns: string[]` - Rating-specific concerns
- *    (e.g., "Very low selectivity", "Needs index optimization")
+ * 2. `efficiencyAnalysis.performanceRating.diagnostics` - Detailed diagnostic badges
+ *    explaining scoring factors (e.g., efficiency ratio, index usage, execution time)
  *
  * The `examinedToReturnedRatio` appears in two forms:
  * - Top-level `examinedToReturnedRatio: number` - Raw ratio for calculations (e.g., 50.5)
- * - `efficiencyAnalysis.examinedReturnedRatio: string` - Formatted for display (e.g., "50:1")
+ *
+ * Efficiency analysis metrics:
+ * - `efficiencyAnalysis.selectivity: string | null` - Percentage of collection returned
+ * - `efficiencyAnalysis.fetchOverhead: string` - Localized display label for fetch state
+ * - `efficiencyAnalysis.fetchOverheadKind: FetchOverheadKind` - Stable key for UI branching
  */
 export interface QueryInsightsStage2Response {
     executionTimeMs: number;
@@ -95,10 +102,13 @@ export interface QueryInsightsStage2Response {
     /** Top-level query warnings (collection scan, in-memory sort, etc.) */
     concerns: string[];
     efficiencyAnalysis: {
-        executionStrategy: string;
+        /** Selectivity: percentage of collection returned (e.g., "33.2%"), or null if unknown */
+        selectivity: string | null;
         indexUsed: string | null;
-        /** Formatted ratio for display (e.g., "50:1") */
-        examinedReturnedRatio: string;
+        /** Fetch overhead state label (e.g., "Direct fetch", "Covered query", "Collection scan") */
+        fetchOverhead: string;
+        /** Stable identifier for the fetch overhead state, used for tooltip branching */
+        fetchOverheadKind: FetchOverheadKind;
         hasInMemorySort: boolean;
         /** Performance rating with detailed reasons and rating-specific concerns */
         performanceRating: PerformanceRating;
@@ -155,6 +165,8 @@ export interface QueryInsightsErrorResponse {
  * Diagnostic detail about query performance
  */
 export interface PerformanceDiagnostic {
+    /** Stable identifier for filtering and matching (e.g., 'high_efficiency_ratio') */
+    diagnosticId: string;
     type: 'positive' | 'negative' | 'neutral';
     /** Short message for badge text (e.g., "Low efficiency ratio") */
     message: string;
