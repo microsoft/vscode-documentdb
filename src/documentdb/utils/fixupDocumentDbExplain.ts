@@ -26,10 +26,12 @@ export function isAzureDocumentDb(metadata: ClusterMetadata | undefined): boolea
 }
 
 /**
- * Patches the explain result to correct `totalKeysExamined` / `keysExamined` for
- * Azure DocumentDB when no index is used.
+ * Patches the explain result **in place** to correct `totalKeysExamined` / `keysExamined`
+ * for Azure DocumentDB when no index is used.
  *
- * @returns The (potentially mutated) explain result, or undefined if input was undefined.
+ * The input document is mutated directly; the return value is the same reference.
+ *
+ * @returns The mutated explain result, or undefined if input was undefined.
  */
 export function fixupDocumentDbExplain(
     explainResult: Document | undefined,

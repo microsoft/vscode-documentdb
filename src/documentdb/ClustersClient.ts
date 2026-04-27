@@ -1116,7 +1116,7 @@ export class ClustersClient {
         }
         const result = await this._llmEnhancedFeatureApis.explainFind(databaseName, collectionName, verbosity, options);
         const metadata = await this.getClusterMetadata();
-        return (fixupDocumentDbExplain(result, metadata) as ExplainResult | undefined) ?? result;
+        return (fixupDocumentDbExplain(result, metadata) as ExplainResult) ?? result;
     }
 
     /**
@@ -1132,7 +1132,7 @@ export class ClustersClient {
         }
         const result = await this._llmEnhancedFeatureApis.explainAggregate(databaseName, collectionName, pipeline);
         const metadata = await this.getClusterMetadata();
-        return (fixupDocumentDbExplain(result, metadata) as ExplainResult | undefined) ?? result;
+        return (fixupDocumentDbExplain(result, metadata) as ExplainResult) ?? result;
     }
 
     /**
