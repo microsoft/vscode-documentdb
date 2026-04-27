@@ -61,16 +61,26 @@ Follow these strict instructions (must obey):
 9. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use `db.getCollection("{collectionName}")` to reference the collection (replace `{collectionName}` with the actual name from `collectionStats`).
 10. **Modify operations format** — for any `modify` action (e.g., hiding/unhiding indexes, modifying index properties), you MUST use the `db.getCollection('<collectionName>').operation()` pattern (e.g., `db.getCollection('users').hideIndex('index_name')`). Do NOT use `db.runCommand()` format for modify actions. If the modify operation cannot be expressed in this format, set `action` to `"none"` and explain the limitation in the `analysis` field.
 11. **Index identification for drop/modify** — for `drop` and `modify` actions, you MUST use the index **name** (e.g., `'age_1'`, `'name_1_email_1'`) rather than the index fields/specification. The `shellCommand` command should reference the index by name (e.g., `db.getCollection('users').dropIndex('age_1')` or `db.getCollection('users').hideIndex('age_1')`).
-12. **Justify every index command** — each `create`/`drop` recommendation must include a one-sentence justification that references concrete fields/metrics from `executionStats` or `indexStats`.
+12. **Justify every index command** — each `create`/`drop`/`modify` recommendation must include a 2–3 sentence `justification` that explains **why** this change helps. Reference concrete fields and metrics from `executionStats` or `indexStats`. For create: explain which query pattern benefits and how the new index improves selectivity or avoids a scan. For hide/drop: explain why the index is low-value (e.g., what fraction of the collection it returns, why the cardinality is too low to be useful). When multiple recommendations appear together, each justification should make sense on its own so the user understands the reasoning without cross-referencing other recommendations.
 13. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
 14. **Include priority** — each suggested improvement must include a `priority` (`high`/`medium`/`low`) so an engineer can triage.
 15. **Priority of modify and drop actions** — priority of modify and drop actions should always be set to `low`.
 16. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
 17. **Verification array requirement** — the `verification` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing ```javascript code blocks``` with valid mongosh commands to verify that specific improvement. If `improvements` is an empty array, `verification` must also be an empty array.
 18. **Do not drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
-19. **It is OK to recommend nothing** — if no index change would meaningfully improve this query, return empty `improvements` and `verification` arrays. Explain in the analysis why no changes are needed.
-20. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics."
-21. **Markdown compatibility (react-markdown/CommonMark only)** — `analysis` and `educationalContent` must be **CommonMark only** (react-markdown, no plugins).
+
+19. **MANDATORY — Bitmap single-field index hide** — When the explain plan has an `IXSCAN` with `isBitmap: true` **and** the index is single-field (only one key in its `key`/`keyPattern` from Indexes_Stats), you **MUST** emit an improvement entry even if the query rating is Excellent:
+    - `action`: `"modify"`, `priority`: `"low"`
+    - `shellCommand`: `db.getCollection("<collectionName>").hideIndex("<indexName>")`
+    - `justification`: contrast ongoing write/storage cost against the minimal read benefit (e.g., "Bitmap index on a low-cardinality field — write/storage cost outweighs the marginal read benefit for queries that return a large fraction of the collection").
+    - `risks`: always include a note that hiding makes the index unavailable to other queries that may rely on it; recommend verifying no other workload depends on it.
+    - **Guard rails:** do NOT suggest hiding if the index is clearly load-bearing (efficiency ratio ≈ 1.0 AND selectivity < 5%).
+    - **Exception:** never suggest hiding compound indexes (multiple keys in `key`/`keyPattern`).
+
+20. **Additional low-value single-field hide suggestions (optional)** — you MAY also suggest hiding a non-bitmap single-field index (one key in `key`/`keyPattern`) when: (a) the field is boolean or very low cardinality AND the query returns >20% of the collection, or (b) `estimatedEntryCount` exceeds 20% of collection size. Same `modify`/`hideIndex`/`priority: "low"` shape. Never suggest hiding compound indexes or clearly load-bearing indexes (selectivity <5% and high cardinality).
+21. **It is OK to recommend nothing** — if no index change would meaningfully improve this query, return empty `improvements` and `verification` arrays. Explain in the analysis why no changes are needed. (The mandatory bitmap-hide rule 19 still applies independently.)
+22. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics."
+23. **Markdown compatibility (react-markdown/CommonMark only)** — `analysis` and `educationalContent` must be **CommonMark only** (react-markdown, no plugins).
   - Allowed: `###` headings, paragraphs, lists, blockquotes, `---` rules, links, inline code, fenced code blocks (triple backticks).
   - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (`$`/`$$`), mermaid/diagrams, callouts/admonitions (`> [!NOTE]`, `:::`).
 
@@ -84,6 +94,7 @@ Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Write cost tradeoff**: Avoid over-indexing — recommend only indexes that materially improve count query performance or prevent full collection scans.
 - If you identify indexes related to the query that have **not been accessed for a long time** or **are not selective**, consider recommending **dropping** them to reduce write and storage overhead.
 - - **Small collection**: If you identify query is on a **small collection** (e.g., <1000 documents), do not recommend creating new indexes.
+- **Runtime filter removal signal**: If the execution plan shows `runtimeFilterSet` in `queryPlanner` or `totalDocsRemovedByRuntimeFilter` in `executionStages`, this means a filter condition was NOT pushed into the index scan and is instead applied post-fetch. A large `totalDocsRemovedByRuntimeFilter` value (relative to `nReturned`) is a strong signal that a compound index placing the runtime-filtered field(s) as the **leading key** would dramatically reduce documents examined. Even if the currently-used index is flagged as bitmap/low-cardinality, the compound index should lead with the **higher-cardinality** field from the runtime filter.
 - If the **Azure_Cluster_Type** is "vCore" and a **composite index** is being created, include in `indexOptions` the setting: `"storageEngine": { "enableOrderedIndex": true }`.
 Output JSON schema (required shape; adhere exactly):
 ```
