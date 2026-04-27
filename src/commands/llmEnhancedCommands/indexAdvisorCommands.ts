@@ -312,7 +312,7 @@ async function fillPromptTemplate(
     const craftedPrompt = await getPromptTemplate(templateType);
 
     // User's original query
-    const userQuery = context.query || 'N/A';
+    const userQuery = context.query || (context.queryObject ? JSON.stringify(context.queryObject, null, 2) : 'N/A');
 
     // System-retrieved context data
     const contextData = `## Cluster Information
