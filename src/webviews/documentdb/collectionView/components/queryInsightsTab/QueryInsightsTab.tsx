@@ -876,24 +876,25 @@ export const QueryInsightsMain = (): JSX.Element => {
                     {/* Query Efficiency Analysis */}
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
-                            label={l10n.t('Execution Strategy')}
+                            label={l10n.t('Selectivity')}
                             value={getCellValue(
-                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.executionStrategy,
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.selectivity,
                             )}
+                            nullValuePlaceholder="—"
                             loadingPlaceholder="skeleton"
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
                             value={getCellValue(
                                 () => queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed,
-                                l10n.t('None'),
+                                l10n.t('None (collection scan)'),
                             )}
                             loadingPlaceholder="skeleton"
                         />
                         <GenericCell
-                            label={l10n.t('Examined-to-Returned Ratio')}
+                            label={l10n.t('Fetch Overhead')}
                             value={getCellValue(
-                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.examinedReturnedRatio,
+                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead,
                             )}
                             loadingPlaceholder="skeleton"
                         />
