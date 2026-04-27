@@ -922,14 +922,21 @@ export const collectionsViewRouter = router({
                             },
                         ),
                     );
-                } catch {
+                } catch (error) {
                     ctx.telemetry.properties.hasStaticAnalysisSummary = 'false';
                     ctx.telemetry.properties.staticAnalysisSummaryError = 'true';
+                    ctx.telemetry.properties.staticAnalysisSummaryErrorKind =
+                        error instanceof Error ? error.constructor.name : 'unknown';
+                    const errorMessage = error instanceof Error ? error.message : String(error);
                     // Non-critical: proceed without summary if it fails
-                    ext.outputChannel.trace(
-                        l10n.t('[Query Insights Stage 3] Failed to build static analysis summary (requestKey: {key})', {
-                            key: requestKey,
-                        }),
+                    ext.outputChannel.error(
+                        l10n.t(
+                            '[Query Insights Stage 3] Failed to build static analysis summary (requestKey: {key}): {error}',
+                            {
+                                key: requestKey,
+                                error: errorMessage,
+                            },
+                        ),
                     );
                 }
             } else {
