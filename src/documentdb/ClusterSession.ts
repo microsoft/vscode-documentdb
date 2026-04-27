@@ -11,9 +11,9 @@ import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
 import { ext } from '../extensionVariables';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
+import { type QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
 import { SchemaStore } from './SchemaStore';
-import type { QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
