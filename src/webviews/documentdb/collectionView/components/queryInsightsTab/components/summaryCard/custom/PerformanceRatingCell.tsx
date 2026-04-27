@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, Text, tokens, Tooltip } from '@fluentui/react-components';
-import { InfoRegular } from '@fluentui/react-icons';
+import { InfoRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
@@ -115,13 +115,6 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         (a, b) => (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1),
     );
 
-    // Step 3 — Badge color helper
-    const getBadgeColor = (type: string): 'success' | 'informative' | 'warning' => {
-        if (type === 'positive') return 'success';
-        if (type === 'negative') return 'warning';
-        return 'informative';
-    };
-
     if (rating === null) {
         // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
         customContent = null;
@@ -164,8 +157,12 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                                         fontWeight: 600,
                                                         marginBottom: '12px',
                                                         fontSize: '16px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
                                                     }}
                                                 >
+                                                    {diagnostic.type === 'negative' && <WarningRegular />}
                                                     {diagnostic.message}
                                                 </div>
                                                 <div style={{ whiteSpace: 'pre-line' }}>{diagnostic.details}</div>
@@ -180,10 +177,10 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                         Screen readers announce: "message. details" instead of just "message" */}
                                     <Badge
                                         appearance="tint"
-                                        color={getBadgeColor(diagnostic.type)}
+                                        color={diagnostic.type === 'positive' ? 'success' : 'informative'}
                                         size="small"
                                         shape="rounded"
-                                        icon={<InfoRegular />}
+                                        icon={diagnostic.type === 'negative' ? <WarningRegular /> : <InfoRegular />}
                                         tabIndex={0}
                                         className="focusableBadge"
                                         aria-label={`${diagnostic.message}. ${diagnostic.details}`}
