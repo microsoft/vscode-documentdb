@@ -163,7 +163,7 @@ export function setLastPromptSource(source: 'resource-file' | 'inline-fallback' 
     lastPromptSource = source;
 }
 
-const INDEX_ADVISOR_ROLE = 'MongoDB Index Advisor assistant';
+const INDEX_ADVISOR_ROLE = 'MongoDB API Query Performance Analyst and Index Advisor';
 const QUERY_GENERATOR_ROLE = 'MongoDB Query Generator assistant';
 
 const INDEX_ADVISOR_TASK_FIND =
