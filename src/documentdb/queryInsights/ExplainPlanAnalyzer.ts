@@ -730,6 +730,27 @@ export class ExplainPlanAnalyzer {
     }
 
     /**
+     * Returns true if any boolean primitive appears anywhere in the filter tree.
+     * Recurses into operator objects (`$eq`, `$ne`, `$in` arrays), logical
+     * operators (`$and`, `$or`, `$nor`), and nested document equality shapes.
+     */
+    private static filterContainsBoolean(value: unknown): boolean {
+        if (typeof value === 'boolean') {
+            return true;
+        }
+
+        if (Array.isArray(value)) {
+            return value.some((item) => this.filterContainsBoolean(item));
+        }
+
+        if (value !== null && typeof value === 'object') {
+            return Object.values(value as Record<string, unknown>).some((v) => this.filterContainsBoolean(v));
+        }
+
+        return false;
+    }
+
+    /**
      * Detects whether the query uses a low-cardinality index, meaning
      * the index doesn't differentiate well between documents.
      *
@@ -757,14 +778,11 @@ export class ExplainPlanAnalyzer {
             reasons.push('Bitmap index detected: typically used for low-cardinality fields');
         }
 
-        // Signal 2: Boolean literal in query filter
-        if (queryFilter) {
-            for (const value of Object.values(queryFilter)) {
-                if (typeof value === 'boolean') {
-                    reasons.push('Query filters on a boolean field, which has only two distinct values');
-                    break;
-                }
-            }
+        // Signal 2: Boolean literal anywhere in the query filter tree.
+        // Walks top-level values, $and/$or/$nor arrays, and operator objects
+        // like { $eq: true } or { $in: [true, false] }.
+        if (queryFilter && this.filterContainsBoolean(queryFilter)) {
+            reasons.push('Query filters on a boolean field, which has only two distinct values');
         }
 
         // Signal 3: estimatedEntryCount from scanKeys strings (DocumentDB-specific)
