@@ -26,13 +26,13 @@ VS Code's Terminal Suggest feature (IntelliSense popup in terminals) is stable s
 | `db.`                     | Known collection names                                   | `SchemaStore`                     |
 | `db.<collection>.`        | Method names (`find`, `insertOne`, etc.)                 | Shell API type definitions        |
 | `db.<collection>.find({ ` | Field names from schema                                  | `SchemaStore`                     |
-| Inside `{ $`              | DocumentDB API query operators                           | `documentdb-constants`            |
+| Inside `{ $`              | DocumentDB API query operators                           | `operator-registry`            |
 
 ### Action When API Finalizes
 
 1. Check the final API shape
 2. Add to `enabledApiProposals` if needed
-3. Implement provider using existing `documentdb-constants` and `SchemaStore` data
+3. Implement provider using existing `operator-registry` and `SchemaStore` data
 4. Register with trigger characters `.` and ` ` (space)
 5. Filter to DocumentDB shell terminals only
 

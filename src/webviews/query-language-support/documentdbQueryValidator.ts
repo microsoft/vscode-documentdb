@@ -15,7 +15,7 @@
  * The mapping from Diagnostic[] to Monaco markers happens in the editor mount handler.
  */
 
-import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
+import { getAllCompletions } from '@documentdb-js/operator-registry';
 import * as l10n from '@vscode/l10n';
 import * as acorn from 'acorn';
 import * as walk from 'acorn-walk';
@@ -64,7 +64,7 @@ const KNOWN_GLOBALS = new Set([
     'isFinite',
 ]);
 
-// Add all BSON constructors from documentdb-constants
+// Add all BSON constructors from operator-registry
 let bsonConstructorsLoaded = false;
 
 function ensureBsonConstructors(): void {
@@ -112,7 +112,7 @@ export function levenshteinDistance(a: string, b: string): number {
  * Finds the closest known identifier (BSON constructor or known global) to a given name.
  * Returns the match and distance if within threshold, otherwise undefined.
  *
- * Searches both BSON constructor entries (from documentdb-constants) and
+ * Searches both BSON constructor entries (from operator-registry) and
  * KNOWN_GLOBALS (Date, Math, RegExp, etc.) for near-misses.
  */
 function findNearMissKnownIdentifier(name: string): { match: string; distance: number } | undefined {

@@ -10,7 +10,7 @@
 /**
  * Strips the outermost `{ ` and ` }` from an operator snippet.
  *
- * Operator snippets in documentdb-constants are designed for value position
+ * Operator snippets in operator-registry are designed for value position
  * (e.g., `{ $gt: ${1:value} }`). At operator position, the user is already
  * inside braces, so the outer wrapping must be removed to avoid double-nesting.
  *

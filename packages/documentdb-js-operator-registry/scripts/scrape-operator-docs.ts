@@ -10,7 +10,7 @@
  * to generate the resources/scraped/operator-reference.md dump file.
  *
  * Usage:
- *   npx ts-node packages/documentdb-constants/scripts/scrape-operator-docs.ts
+ *   npx ts-node packages/documentdb-js-operator-registry/scripts/scrape-operator-docs.ts
  *
  * The scraper has three phases:
  *   Phase 1: Fetch and parse the compatibility page (operator list + support status)

@@ -361,7 +361,7 @@ export class DocumentDBShellRuntime {
  *
  * Getting 100% of these right would require a real JS parser (e.g.
  * `acorn` / `acorn-loose`) or the TypeScript compiler. We deliberately
- * avoid adding that dependency: `@microsoft/documentdb-vscode-shell-runtime`
+ * avoid adding that dependency: `@documentdb-js/shell-runtime`
  * is intended to also ship as a lightweight standalone runtime for CLI
  * tooling, and pulling in a full JS parser would dominate its footprint
  * for an edge case that is not observed in real user input.

@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { BSONTypes, type JSONSchema } from '@vscode-documentdb/schema-analyzer';
+import { BSONTypes, type JSONSchema } from '@documentdb-js/schema-analyzer';
 import Denque from 'denque';
 
 /**

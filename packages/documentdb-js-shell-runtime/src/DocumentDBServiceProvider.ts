@@ -30,7 +30,7 @@ export interface ServiceProviderWithBus {
  *   with clear "Not supported by DocumentDB" error messages
  * - Override methods to provide DocumentDB-specific behavior
  *
- * @see future-work.md §"documentdb-constants.methods" for the planned
+ * @see future-work.md §"operator-registry.methods" for the planned
  *   unsupported-method blocking via a static method registry.
  */
 export class DocumentDBServiceProvider extends NodeDriverServiceProvider {

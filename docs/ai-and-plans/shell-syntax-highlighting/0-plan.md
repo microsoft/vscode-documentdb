@@ -65,7 +65,7 @@ Modified files:
    BinData, UUID, Timestamp, MinKey, MaxKey
    ```
 
-   These names come from `packages/documentdb-constants/src/bsonConstructors.ts`.
+   These names come from `packages/documentdb-js-operator-registry/src/bsonConstructors.ts`.
    In the `common` state, the existing `[/[A-Z][\w\$]*/, "type.identifier"]` rule already matches these PascalCase names. Add a `cases` branch that checks `@bsonConstructors` and emits `"bson.constructor"` instead of `"type.identifier"`.
 
 2. **Shell commands** — A `shellCommands` string array: `["show", "use", "it", "exit", "quit", "cls", "clear", "help"]`. Add a `cases` branch in the lowercase identifier rule (`/#?[a-z_$][\w$]*/`) so `@shellCommands -> "shell.command"` is checked before `@keywords`.

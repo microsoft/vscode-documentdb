@@ -18,7 +18,7 @@
  * whether to update the spec or fix the implementation.
  */
 
-import { type OperatorEntry } from '@vscode-documentdb/documentdb-constants';
+import { type OperatorEntry } from '@documentdb-js/operator-registry';
 import { KEY_POSITION_OPERATORS } from '../completionKnowledge';
 import { JS_GLOBALS } from '../jsGlobalDefs';
 import { escapeSnippetDollars, stripOuterBraces } from '../snippetUtils';
@@ -298,7 +298,7 @@ describe('TDD: JS_GLOBALS — JavaScript global completion definitions', () => {
         expect(labels).toContain('undefined');
     });
 
-    it('does NOT include BSON constructors (those come from documentdb-constants)', () => {
+    it('does NOT include BSON constructors (those come from operator-registry)', () => {
         const labels = JS_GLOBALS.map((g) => g.label);
         expect(labels).not.toContain('ObjectId');
         expect(labels).not.toContain('ISODate');
