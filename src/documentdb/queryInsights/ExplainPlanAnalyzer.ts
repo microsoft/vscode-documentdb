@@ -768,6 +768,9 @@ export class ExplainPlanAnalyzer {
         }
 
         // Signal 3: estimatedEntryCount from scanKeys strings (DocumentDB-specific)
+        // Only applies to single-key indexes. For compound indexes (multiple scanKeys),
+        // individual key cardinality is not meaningful — the key combination handles
+        // selectivity (e.g., boolean prefix + selective range is a valid pattern).
         if (totalCollectionDocs && totalCollectionDocs > 0) {
             const executionStages = (explainResult.executionStats as Document | undefined)?.executionStages as
                 | Document
@@ -777,18 +780,17 @@ export class ExplainPlanAnalyzer {
 
             if (indexUsage) {
                 for (const usage of indexUsage) {
-                    if (usage.scanKeys) {
-                        for (const scanKey of usage.scanKeys) {
-                            // Parse: "key N: [(isInequality: false, estimatedEntryCount: 22074)]"
-                            const match = /estimatedEntryCount:\s*(\d+)/.exec(scanKey);
-                            if (match) {
-                                const entryCount = parseInt(match[1], 10);
-                                if (entryCount >= CARDINALITY_PER_KEY_RATIO * totalCollectionDocs) {
-                                    reasons.push(
-                                        `Index key covers ${((entryCount / totalCollectionDocs) * 100).toFixed(0)}% of the collection per bucket`,
-                                    );
-                                    break;
-                                }
+                    // Skip compound indexes — per-key cardinality check is not meaningful
+                    if (usage.scanKeys && usage.scanKeys.length === 1) {
+                        const scanKey = usage.scanKeys[0];
+                        // Parse: "key N: [(isInequality: false, estimatedEntryCount: 22074)]"
+                        const match = /estimatedEntryCount:\s*(\d+)/.exec(scanKey);
+                        if (match) {
+                            const entryCount = parseInt(match[1], 10);
+                            if (entryCount >= CARDINALITY_PER_KEY_RATIO * totalCollectionDocs) {
+                                reasons.push(
+                                    `Index key covers ${((entryCount / totalCollectionDocs) * 100).toFixed(0)}% of the collection per bucket`,
+                                );
                             }
                         }
                     }
@@ -842,7 +844,10 @@ export class ExplainPlanAnalyzer {
         }
 
         // --- Low-cardinality index badge (gated on index scan) ---
-        if (analysis.isIndexScan) {
+        // Skip when efficiency is high (≥90%) — the index is clearly working well
+        // regardless of individual key cardinality (e.g., compound indexes with a
+        // low-cardinality prefix followed by selective fields).
+        if (analysis.isIndexScan && analysis.efficiencyRatio < 0.9) {
             const queryFilter = (explainResult.command as Document | undefined)?.filter as Document | undefined;
             const cardinalityResult = this.detectLowCardinalityIndex(explainResult, totalCollectionDocs, queryFilter);
 
