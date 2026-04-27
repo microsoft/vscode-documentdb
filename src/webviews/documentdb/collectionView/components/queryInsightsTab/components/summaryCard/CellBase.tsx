@@ -82,9 +82,9 @@ export const CellBase: React.FC<CellBaseProps> = ({
             <Tooltip
                 content={{
                     children: (
-                        <div style={{ padding: '8px' }}>
-                            <div style={{ fontWeight: 600, marginBottom: '12px', fontSize: '16px' }}>{label}</div>
-                            <div style={{ whiteSpace: 'pre-line' }}>{tooltipExplanation}</div>
+                        <div className="tooltipContainer">
+                            <div className="tooltipTitle">{label}</div>
+                            <div className="tooltipBody">{tooltipExplanation}</div>
                         </div>
                     ),
                 }}
@@ -95,7 +95,7 @@ export const CellBase: React.FC<CellBaseProps> = ({
                 <div className={`${cellClassName} cellWithTooltip`} tabIndex={0}>
                     <div className="cellLabel cellLabelWithTooltip">
                         {label}
-                        <InfoRegular style={{ fontSize: '12px', opacity: 0.6, marginLeft: '4px' }} />
+                        <InfoRegular className="tooltipInfoIcon" />
                     </div>
                     {renderValue()}
                 </div>
