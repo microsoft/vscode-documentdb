@@ -71,6 +71,7 @@ tooltip that explains the current value in context.
 **What it shows:** The percentage of the collection returned by the query.
 
 **Computation:**
+
 ```
   selectivity = nReturned / totalCollectionDocs * 100
 ```
@@ -78,20 +79,20 @@ tooltip that explains the current value in context.
 **Possible values:**
 
 | Value   | Meaning                                           |
-|---------|---------------------------------------------------|
-| `0.1%`  | Highly selective, small slice of data              |
-| `3.0%`  | Reasonable selectivity                             |
-| `85.0%` | Broad query, most documents returned               |
-| `—`     | Collection size unknown (could not be determined)  |
+| ------- | ------------------------------------------------- |
+| `0.1%`  | Highly selective, small slice of data             |
+| `3.0%`  | Reasonable selectivity                            |
+| `85.0%` | Broad query, most documents returned              |
+| `—`     | Collection size unknown (could not be determined) |
 
 **Tooltip logic (dynamic):**
 
-| Condition     | First paragraph                                     | Second paragraph                                                                    |
-|---------------|-----------------------------------------------------|-------------------------------------------------------------------------------------|
-| `< 1%`        | "This query returns X% of your collection."         | "Highly selective: only a small fraction of documents pass the filter."              |
-| `1% - 19%`    | "This query returns X% of your collection."         | "Reasonable level of selectivity."                                                  |
-| `>= 20%`      | "This query returns X% of your collection."         | "Broad query. Consider adding more specific filters."                               |
-| `null`        | "Could not be determined for this query."            | (none)                                                                              |
+| Condition  | First paragraph                             | Second paragraph                                                        |
+| ---------- | ------------------------------------------- | ----------------------------------------------------------------------- |
+| `< 1%`     | "This query returns X% of your collection." | "Highly selective: only a small fraction of documents pass the filter." |
+| `1% - 19%` | "This query returns X% of your collection." | "Reasonable level of selectivity."                                      |
+| `>= 20%`   | "This query returns X% of your collection." | "Broad query. Consider adding more specific filters."                   |
+| `null`     | "Could not be determined for this query."   | (none)                                                                  |
 
 ### 2. Index Used
 
@@ -99,17 +100,17 @@ tooltip that explains the current value in context.
 
 **Possible values:**
 
-| Value                       | Meaning                                        |
-|-----------------------------|------------------------------------------------|
-| `rating_1`                  | A specific index was used                      |
-| `status_1_createdAt_-1`    | A compound index was used                      |
-| `None (collection scan)`   | No index; every document was scanned           |
+| Value                    | Meaning                              |
+| ------------------------ | ------------------------------------ |
+| `rating_1`               | A specific index was used            |
+| `status_1_createdAt_-1`  | A compound index was used            |
+| `None (collection scan)` | No index; every document was scanned |
 
 **Tooltip logic (dynamic):**
 
-| Condition         | Tooltip content                                                                  |
-|-------------------|----------------------------------------------------------------------------------|
-| Index name exists | "The database used this index to locate matching documents directly."            |
+| Condition         | Tooltip content                                                                       |
+| ----------------- | ------------------------------------------------------------------------------------- |
+| Index name exists | "The database used this index to locate matching documents directly."                 |
 | No index          | "No index was used. The database scanned every document. Adding an index would help." |
 
 ### 3. Fetch Overhead
@@ -128,13 +129,13 @@ tooltip that explains the current value in context.
 
 **Possible values and tooltips:**
 
-| Value                        | Tooltip summary                                                                  |
-|------------------------------|----------------------------------------------------------------------------------|
-| **Direct fetch**             | Index pointed to documents, which were loaded from storage. Normal, efficient.   |
-| **Covered query**            | All data was in the index. No document loading needed. Most efficient.           |
-| **Collection scan**          | Every document read sequentially. Slowest for filtered queries.                  |
-| **Multikey expansion (N×)**  | Array index produced multiple entries per document. Expected but adds overhead.  |
-| **No matches**               | Zero results. No fetching needed.                                                |
+| Value                       | Tooltip summary                                                                 |
+| --------------------------- | ------------------------------------------------------------------------------- |
+| **Direct fetch**            | Index pointed to documents, which were loaded from storage. Normal, efficient.  |
+| **Covered query**           | All data was in the index. No document loading needed. Most efficient.          |
+| **Collection scan**         | Every document read sequentially. Slowest for filtered queries.                 |
+| **Multikey expansion (N×)** | Array index produced multiple entries per document. Expected but adds overhead. |
+| **No matches**              | Zero results. No fetching needed.                                               |
 
 ### 4. In-Memory Sort
 
@@ -142,10 +143,10 @@ tooltip that explains the current value in context.
 
 **Possible values and tooltips:**
 
-| Value  | Tooltip summary                                                                      |
-|--------|--------------------------------------------------------------------------------------|
-| **No** | Results came back in the right order naturally (from index or no sort requested).     |
-| **Yes**| Database sorted in memory. Uses RAM, can fail for large sets. Add a compound index.  |
+| Value   | Tooltip summary                                                                     |
+| ------- | ----------------------------------------------------------------------------------- |
+| **No**  | Results came back in the right order naturally (from index or no sort requested).   |
+| **Yes** | Database sorted in memory. Uses RAM, can fail for large sets. Add a compound index. |
 
 ---
 
@@ -165,31 +166,31 @@ These always appear (one per dimension):
   efficiency = nReturned / totalDocsExamined
 ```
 
-| diagnosticId               | Condition              | Type     | Message                       |
-|----------------------------|------------------------|----------|-------------------------------|
-| `no_matching_documents`    | efficiency === 0       | neutral  | No matching documents         |
-| `high_efficiency_ratio`    | efficiency >= 50%      | positive | High efficiency ratio         |
-| `moderate_efficiency_ratio`| efficiency 10% - 49%   | neutral  | Moderate efficiency ratio     |
-| `low_efficiency_ratio`     | efficiency 1% - 9%     | negative | Low efficiency ratio          |
-| `very_low_efficiency_ratio`| efficiency < 1%        | negative | Very low efficiency ratio     |
+| diagnosticId                | Condition            | Type     | Message                   |
+| --------------------------- | -------------------- | -------- | ------------------------- |
+| `no_matching_documents`     | efficiency === 0     | neutral  | No matching documents     |
+| `high_efficiency_ratio`     | efficiency >= 50%    | positive | High efficiency ratio     |
+| `moderate_efficiency_ratio` | efficiency 10% - 49% | neutral  | Moderate efficiency ratio |
+| `low_efficiency_ratio`      | efficiency 1% - 9%   | negative | Low efficiency ratio      |
+| `very_low_efficiency_ratio` | efficiency < 1%      | negative | Very low efficiency ratio |
 
 #### Execution Time
 
-| diagnosticId             | Condition        | Type     | Message                     |
-|--------------------------|------------------|----------|-----------------------------|
-| `fast_execution`         | < 100ms          | positive | Fast execution              |
-| `acceptable_execution`   | 100ms - 499ms    | neutral  | Acceptable execution time   |
-| `slow_execution`         | 500ms - 1999ms   | negative | Slow execution              |
-| `very_slow_execution`    | >= 2000ms        | negative | Very slow execution         |
+| diagnosticId           | Condition      | Type     | Message                   |
+| ---------------------- | -------------- | -------- | ------------------------- |
+| `fast_execution`       | < 100ms        | positive | Fast execution            |
+| `acceptable_execution` | 100ms - 499ms  | neutral  | Acceptable execution time |
+| `slow_execution`       | 500ms - 1999ms | negative | Slow execution            |
+| `very_slow_execution`  | >= 2000ms      | negative | Very slow execution       |
 
 #### Index Usage
 
-| diagnosticId             | Condition                           | Type     | Message               |
-|--------------------------|-------------------------------------|----------|-----------------------|
-| `index_used`             | Index scan used                     | positive | Index used            |
-| `full_collection_scan`   | Collection scan, no filter          | neutral  | Full collection scan  |
-| `full_collection_scan`   | Collection scan, filter present     | negative | Full collection scan  |
-| `no_index_used`          | No index, no collection scan        | neutral  | No index used         |
+| diagnosticId           | Condition                       | Type     | Message              |
+| ---------------------- | ------------------------------- | -------- | -------------------- |
+| `index_used`           | Index scan used                 | positive | Index used           |
+| `full_collection_scan` | Collection scan, no filter      | neutral  | Full collection scan |
+| `full_collection_scan` | Collection scan, filter present | negative | Full collection scan |
+| `no_index_used`        | No index, no collection scan    | neutral  | No index used        |
 
 **Empty query detection:** The `queryFilter` parameter is passed directly
 from the user's parsed filter (via `ClusterSession`), not extracted from the
@@ -199,11 +200,11 @@ explain result. See [Design Decision 2](#2-empty-query-detection).
 
 Only emitted when sorting is detected (via `$sort` in command or SORT stage):
 
-| diagnosticId             | Condition           | Type     | Message                  |
-|--------------------------|---------------------|----------|--------------------------|
-| `in_memory_sort`         | In-memory sort      | negative | In-memory sort required  |
-| `efficient_sorting`      | Index-based sort    | positive | Efficient sorting        |
-| `no_sorting_required`    | No sorting needed   | neutral  | No sorting required      |
+| diagnosticId          | Condition         | Type     | Message                 |
+| --------------------- | ----------------- | -------- | ----------------------- |
+| `in_memory_sort`      | In-memory sort    | negative | In-memory sort required |
+| `efficient_sorting`   | Index-based sort  | positive | Efficient sorting       |
+| `no_sorting_required` | No sorting needed | neutral  | No sorting required     |
 
 ### Advisory Badges (from `addIndexStrategyAdvisories`)
 
@@ -213,10 +214,10 @@ These are appended after scoring. All are informational.
 
 Gated on: `isIndexScan === true` AND `totalCollectionDocs` available.
 
-| diagnosticId                    | Condition         | Type    | Message                          |
-|---------------------------------|-------------------|---------|----------------------------------|
-| `returns_majority_of_collection`| coverage >= 50%   | neutral | Returns majority of collection   |
-| `low_filter_selectivity`        | coverage 20%-49%  | neutral | Low filter selectivity           |
+| diagnosticId                     | Condition        | Type    | Message                        |
+| -------------------------------- | ---------------- | ------- | ------------------------------ |
+| `returns_majority_of_collection` | coverage >= 50%  | neutral | Returns majority of collection |
+| `low_filter_selectivity`         | coverage 20%-49% | neutral | Low filter selectivity         |
 
 #### Low-Cardinality Index
 
@@ -224,15 +225,15 @@ Gated on: `isIndexScan === true` AND `efficiencyRatio < 0.9`.
 
 Three independent signals (any one is sufficient):
 
-| Signal | Source                     | Condition                                             |
-|--------|----------------------------|-------------------------------------------------------|
-| 1      | `queryPlanner.winningPlan` | `isBitmap === true` on the IXSCAN stage               |
-| 2      | User's query filter        | Any filter value is a boolean literal                  |
+| Signal | Source                     | Condition                                                    |
+| ------ | -------------------------- | ------------------------------------------------------------ |
+| 1      | `queryPlanner.winningPlan` | `isBitmap === true` on the IXSCAN stage                      |
+| 2      | User's query filter        | Any filter value is a boolean literal                        |
 | 3      | `executionStats` scanKeys  | `estimatedEntryCount >= 20%` of collection (single-key only) |
 
-| diagnosticId           | Type    | Message                |
-|------------------------|---------|------------------------|
-| `low_cardinality_index`| neutral | Low-cardinality index  |
+| diagnosticId            | Type    | Message               |
+| ----------------------- | ------- | --------------------- |
+| `low_cardinality_index` | neutral | Low-cardinality index |
 
 See [Design Decision 3](#3-compound-index-cardinality) for why Signal 3
 skips compound indexes and why the badge is gated on efficiency.
@@ -241,10 +242,10 @@ skips compound indexes and why the badge is gated on efficiency.
 
 Not gated on index scan (relevant regardless).
 
-| diagnosticId                | Condition   | Type     | Message                      | Score effect     |
-|-----------------------------|-------------|----------|------------------------------|------------------|
+| diagnosticId                | Condition        | Type     | Message                   | Score effect      |
+| --------------------------- | ---------------- | -------- | ------------------------- | ----------------- |
 | `severe_multikey_expansion` | >= 20× keys/docs | negative | Severe multikey expansion | Demoted one level |
-| `high_multikey_expansion`   | 5× - 19×   | neutral  | High multikey expansion      | None             |
+| `high_multikey_expansion`   | 5× - 19×         | neutral  | High multikey expansion   | None              |
 
 Score demotion: Excellent -> Good -> Fair -> Poor (one step down).
 
@@ -311,6 +312,7 @@ negative badges are always shown.
 ```
 
 Hidden positive badges (still in data for AI Stage 3):
+
 - `efficient_sorting` (expected behavior, low signal value)
 - `no_sorting_required` (expected behavior, low signal value)
 
@@ -323,11 +325,11 @@ informational advisories, then problems.
 
 ### Step 3: Color
 
-| Type     | Fluent UI Badge color | Visual              |
-|----------|----------------------|---------------------|
-| positive | `success`            | Green               |
-| neutral  | `informative`        | Blue/gray           |
-| negative | `warning`            | Orange/yellow       |
+| Type     | Fluent UI Badge color | Visual        |
+| -------- | --------------------- | ------------- |
+| positive | `success`             | Green         |
+| neutral  | `informative`         | Blue/gray     |
+| negative | `warning`             | Orange/yellow |
 
 ---
 
@@ -445,15 +447,15 @@ when you asked for everything is expected behavior.
 
 ## Glossary
 
-| Term               | Meaning                                                                          |
-|--------------------|----------------------------------------------------------------------------------|
-| Collection scan    | Database reads every document in the collection sequentially                     |
-| Covered query      | All requested data is in the index; no document fetch needed                     |
-| Efficiency ratio   | Documents returned / documents examined (higher is better)                       |
-| In-memory sort     | Database sorts results in RAM instead of using index order                        |
-| Index scan         | Database uses an index to locate matching documents efficiently                   |
-| Multikey index     | Index on an array field; one document produces multiple index entries             |
-| Selectivity        | Fraction of the collection that passes the query filter                           |
-| Fetch overhead     | How documents are retrieved after the index identifies matches                    |
-| Bitmap index       | Index strategy used by DocumentDB for low-cardinality fields                      |
-| Compound index     | Index on multiple fields (e.g., `{status: 1, createdAt: -1}`)                   |
+| Term             | Meaning                                                               |
+| ---------------- | --------------------------------------------------------------------- |
+| Collection scan  | Database reads every document in the collection sequentially          |
+| Covered query    | All requested data is in the index; no document fetch needed          |
+| Efficiency ratio | Documents returned / documents examined (higher is better)            |
+| In-memory sort   | Database sorts results in RAM instead of using index order            |
+| Index scan       | Database uses an index to locate matching documents efficiently       |
+| Multikey index   | Index on an array field; one document produces multiple index entries |
+| Selectivity      | Fraction of the collection that passes the query filter               |
+| Fetch overhead   | How documents are retrieved after the index identifies matches        |
+| Bitmap index     | Index strategy used by DocumentDB for low-cardinality fields          |
+| Compound index   | Index on multiple fields (e.g., `{status: 1, createdAt: -1}`)         |
