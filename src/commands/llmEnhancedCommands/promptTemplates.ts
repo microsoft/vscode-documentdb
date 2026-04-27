@@ -124,20 +124,43 @@ export function buildIndexAdvisorPrompt(
 ): string {
     const resourceFile = INDEX_ADVISOR_PROMPT_RESOURCE_FILES[commandType];
     if (!resourceFile) {
+        lastPromptSource = 'inline-fallback';
         return inlineFallback;
     }
 
     const body = loadPromptBody(resourceFile);
     if (!body) {
+        lastPromptSource = 'inline-fallback';
         return inlineFallback;
     }
 
+    lastPromptSource = 'resource-file';
     return `
 ${createPriorityDeclaration(role)}
 
 ${createSecurityInstructions(messages, task)}
 
 ${body}`;
+}
+
+/**
+ * Tracks the source of the last prompt template loaded.
+ * Used by telemetry to monitor whether resource files or inline fallbacks are in use.
+ */
+let lastPromptSource: 'resource-file' | 'inline-fallback' | 'custom-file' | 'unknown' = 'unknown';
+
+/**
+ * Returns the source of the last prompt template loaded by buildIndexAdvisorPrompt().
+ */
+export function getLastPromptSource(): string {
+    return lastPromptSource;
+}
+
+/**
+ * Sets the prompt source (called by PromptTemplateService when loading custom templates).
+ */
+export function setLastPromptSource(source: 'resource-file' | 'inline-fallback' | 'custom-file'): void {
+    lastPromptSource = source;
 }
 
 const INDEX_ADVISOR_ROLE = 'MongoDB Index Advisor assistant';

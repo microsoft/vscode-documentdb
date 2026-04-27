@@ -16,6 +16,7 @@ import {
     FIND_QUERY_PROMPT_TEMPLATE,
     SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE,
     buildIndexAdvisorPrompt,
+    setLastPromptSource,
 } from '../commands/llmEnhancedCommands/promptTemplates';
 import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenerationCommands';
 
@@ -56,6 +57,7 @@ export class PromptTemplateService {
             try {
                 // Load custom template from file
                 template = await this.loadTemplateFromFile(customTemplatePath, commandType.toString());
+                setLastPromptSource('custom-file');
                 void vscode.window.showInformationMessage(
                     l10n.t('Using custom prompt template for {type} query: {path}', {
                         type: commandType,

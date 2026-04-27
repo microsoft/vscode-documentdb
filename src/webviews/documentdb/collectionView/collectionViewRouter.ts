@@ -786,6 +786,55 @@ export const collectionsViewRouter = router({
             session.setStage2Response(transformed, totalCollectionDocs);
         }
 
+        // --- Stage 2 telemetry ---
+        // Performance metrics (safe to aggregate, no PII/OII)
+        ctx.telemetry.properties.performanceScore = transformed.efficiencyAnalysis.performanceRating.score;
+        ctx.telemetry.properties.executionStrategy = transformed.executionStrategy;
+        ctx.telemetry.properties.indexUsed = transformed.indexUsed ? 'true' : 'false';
+        ctx.telemetry.properties.hadCollectionScan = transformed.hadCollectionScan ? 'true' : 'false';
+        ctx.telemetry.properties.hadInMemorySort = transformed.hadInMemorySort ? 'true' : 'false';
+        ctx.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
+        ctx.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
+        ctx.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
+
+        ctx.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
+        ctx.telemetry.measurements.documentsReturned = transformed.documentsReturned;
+        ctx.telemetry.measurements.totalDocsExamined = transformed.totalDocsExamined;
+        ctx.telemetry.measurements.totalKeysExamined = transformed.totalKeysExamined;
+        ctx.telemetry.measurements.examinedToReturnedRatio = transformed.examinedToReturnedRatio;
+        ctx.telemetry.measurements.diagnosticBadgeCount =
+            transformed.efficiencyAnalysis.performanceRating.diagnostics.length;
+
+        if (totalCollectionDocs !== undefined) {
+            ctx.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
+        }
+
+        // Selectivity as a number (strip the '%' if present)
+        if (transformed.efficiencyAnalysis.selectivity) {
+            const selectivityNum = parseFloat(transformed.efficiencyAnalysis.selectivity);
+            if (!isNaN(selectivityNum)) {
+                ctx.telemetry.measurements.selectivityPercent = selectivityNum;
+            }
+        }
+
+        // Badge IDs (safe categorical data, no PII)
+        const diagnosticIds = transformed.efficiencyAnalysis.performanceRating.diagnostics
+            .map((d) => d.diagnosticId)
+            .join(',');
+        ctx.telemetry.properties.diagnosticBadgeIds = diagnosticIds;
+
+        // Count badges by type
+        const badgesByType = transformed.efficiencyAnalysis.performanceRating.diagnostics.reduce(
+            (acc, d) => {
+                acc[d.type] = (acc[d.type] || 0) + 1;
+                return acc;
+            },
+            {} as Record<string, number>,
+        );
+        ctx.telemetry.measurements.positiveBadgeCount = badgesByType['positive'] ?? 0;
+        ctx.telemetry.measurements.neutralBadgeCount = badgesByType['neutral'] ?? 0;
+        ctx.telemetry.measurements.negativeBadgeCount = badgesByType['negative'] ?? 0;
+
         ext.outputChannel.trace(
             l10n.t(
                 '[Query Insights Stage 2] Completed: execTime={time}ms, returned={ret}, examined={ex}, ratio={ratio}',
@@ -861,9 +910,10 @@ export const collectionsViewRouter = router({
             const stage2Cache = session.getStage2Response();
             if (stage2Cache?.response) {
                 try {
-                    const stage2Response =
-                        stage2Cache.response as QueryInsightsStage2Response;
+                    const stage2Response = stage2Cache.response as QueryInsightsStage2Response;
                     staticAnalysisSummary = buildStaticAnalysisSummary(stage2Response, stage2Cache.totalCollectionDocs);
+                    ctx.telemetry.properties.hasStaticAnalysisSummary = 'true';
+                    ctx.telemetry.measurements.staticAnalysisSummaryLength = staticAnalysisSummary.length;
                     ext.outputChannel.trace(
                         l10n.t(
                             '[Query Insights Stage 3] Static analysis summary built ({len} chars, requestKey: {key})',
@@ -874,6 +924,8 @@ export const collectionsViewRouter = router({
                         ),
                     );
                 } catch {
+                    ctx.telemetry.properties.hasStaticAnalysisSummary = 'false';
+                    ctx.telemetry.properties.staticAnalysisSummaryError = 'true';
                     // Non-critical: proceed without summary if it fails
                     ext.outputChannel.trace(
                         l10n.t('[Query Insights Stage 3] Failed to build static analysis summary (requestKey: {key})', {
@@ -881,7 +933,11 @@ export const collectionsViewRouter = router({
                         }),
                     );
                 }
+            } else {
+                ctx.telemetry.properties.hasStaticAnalysisSummary = 'false';
             }
+
+            ctx.telemetry.properties.hasCachedExecutionPlan = cachedExecutionPlan ? 'true' : 'false';
 
             // Call AI service with execution plan
             const aiServiceStart = Date.now();

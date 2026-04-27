@@ -14,7 +14,7 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import { FALLBACK_MODELS, PREFERRED_MODEL, type FilledPromptResult } from './promptTemplates';
+import { FALLBACK_MODELS, PREFERRED_MODEL, getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -597,6 +597,10 @@ export async function optimizeQuery(
         clusterInfo,
         queryContext.staticAnalysisSummary,
     );
+
+    // Track prompt source and static analysis inclusion
+    context.telemetry.properties.promptSource = getLastPromptSource();
+    context.telemetry.properties.hasStaticAnalysisSummary = queryContext.staticAnalysisSummary ? 'true' : 'false';
 
     // Send to Copilot with configured models
     const preferredModelToUse = queryContext.preferredModel || PREFERRED_MODEL;
