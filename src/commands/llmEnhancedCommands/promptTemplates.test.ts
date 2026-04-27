@@ -8,9 +8,11 @@ import {
     COUNT_QUERY_PROMPT_TEMPLATE,
     CRITICAL_JSON_REMINDER,
     FIND_QUERY_PROMPT_TEMPLATE,
+    buildIndexAdvisorPrompt,
     createPriorityDeclaration,
     createSecurityInstructions,
     getQueryTypeConfig,
+    loadPromptBody,
 } from './promptTemplates';
 
 describe('promptTemplates', () => {
@@ -247,6 +249,57 @@ describe('promptTemplates', () => {
 
         it('should throw for unsupported query type', () => {
             expect(() => getQueryTypeConfig('InvalidType')).toThrow();
+        });
+    });
+
+    describe('Snapshot tests (detect any accidental content change)', () => {
+        it('FIND_QUERY_PROMPT_TEMPLATE matches snapshot', () => {
+            expect(FIND_QUERY_PROMPT_TEMPLATE).toMatchSnapshot();
+        });
+
+        it('AGGREGATE_QUERY_PROMPT_TEMPLATE matches snapshot', () => {
+            expect(AGGREGATE_QUERY_PROMPT_TEMPLATE).toMatchSnapshot();
+        });
+
+        it('COUNT_QUERY_PROMPT_TEMPLATE matches snapshot', () => {
+            expect(COUNT_QUERY_PROMPT_TEMPLATE).toMatchSnapshot();
+        });
+
+        it('CRITICAL_JSON_REMINDER matches snapshot', () => {
+            expect(CRITICAL_JSON_REMINDER).toMatchSnapshot();
+        });
+    });
+
+    describe('loadPromptBody', () => {
+        it('should return undefined when extension context is not available', () => {
+            // In test environment, ext.context is undefined
+            const result = loadPromptBody('index-advisor-find.prompt.md');
+            expect(result).toBeUndefined();
+        });
+    });
+
+    describe('buildIndexAdvisorPrompt', () => {
+        it('should return inline fallback when resource file cannot be loaded', () => {
+            // ext.context is undefined in test environment, so resource loading fails
+            const result = buildIndexAdvisorPrompt(
+                'find',
+                'Test Role',
+                ['msg1'],
+                'task',
+                'INLINE_FALLBACK',
+            );
+            expect(result).toBe('INLINE_FALLBACK');
+        });
+
+        it('should return inline fallback for unknown command type', () => {
+            const result = buildIndexAdvisorPrompt(
+                'unknown',
+                'Test Role',
+                ['msg1'],
+                'task',
+                'INLINE_FALLBACK',
+            );
+            expect(result).toBe('INLINE_FALLBACK');
         });
     });
 

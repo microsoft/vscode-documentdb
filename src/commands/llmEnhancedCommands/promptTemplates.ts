@@ -4,6 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { l10n } from 'vscode';
+import * as fs from 'fs';
+import * as path from 'path';
+import { ext } from '../../extensionVariables';
 
 /**
  * Preferred language model for index optimization
@@ -52,6 +55,89 @@ export interface FilledPromptResult {
     readonly craftedPrompt: string;
     readonly userQuery: string;
     readonly contextData: string;
+}
+
+/**
+ * Resource file names for index advisor prompt bodies.
+ * The bodies are loaded from `resources/prompts/` at runtime and composed with
+ * the dynamic header (PRIORITY DECLARATION + SECURITY INSTRUCTIONS).
+ */
+const INDEX_ADVISOR_PROMPT_RESOURCE_FILES: Record<string, string> = {
+    find: 'index-advisor-find.prompt.md',
+    aggregate: 'index-advisor-aggregate.prompt.md',
+    count: 'index-advisor-count.prompt.md',
+};
+
+/**
+ * Cache for loaded prompt bodies to avoid re-reading files on every call.
+ */
+const promptBodyCache: Map<string, string> = new Map();
+
+/**
+ * Loads a prompt body from a resource file in `resources/prompts/`.
+ * Returns the file contents, or `undefined` if the file cannot be read.
+ *
+ * @param resourceFileName - The filename within `resources/prompts/`
+ * @returns The file contents or undefined
+ */
+export function loadPromptBody(resourceFileName: string): string | undefined {
+    const cached = promptBodyCache.get(resourceFileName);
+    if (cached !== undefined) {
+        return cached;
+    }
+
+    try {
+        const extensionPath = ext.context?.extensionPath;
+        if (!extensionPath) {
+            return undefined;
+        }
+        const filePath = path.join(extensionPath, 'resources', 'prompts', resourceFileName);
+        const content = fs.readFileSync(filePath, 'utf-8');
+        if (content && content.trim().length > 0) {
+            promptBodyCache.set(resourceFileName, content);
+            return content;
+        }
+    } catch {
+        // Fall through to return undefined — caller should use inline fallback
+    }
+    return undefined;
+}
+
+/**
+ * Builds a complete index advisor prompt by composing the dynamic header
+ * (PRIORITY DECLARATION + SECURITY INSTRUCTIONS) with the body loaded from
+ * a resource file. Falls back to the inline constant if the file cannot be loaded.
+ *
+ * @param commandType - 'find' | 'aggregate' | 'count'
+ * @param role - The role string for the priority declaration
+ * @param messages - The message descriptions for security instructions
+ * @param task - The task description for security instructions
+ * @param inlineFallback - The full inline template constant to use as fallback
+ * @returns The composed prompt template
+ */
+export function buildIndexAdvisorPrompt(
+    commandType: string,
+    role: string,
+    messages: string[],
+    task: string,
+    inlineFallback: string,
+): string {
+    const resourceFile = INDEX_ADVISOR_PROMPT_RESOURCE_FILES[commandType];
+    if (!resourceFile) {
+        return inlineFallback;
+    }
+
+    const body = loadPromptBody(resourceFile);
+    if (!body) {
+        return inlineFallback;
+    }
+
+    return `
+${createPriorityDeclaration(role)}
+
+${createSecurityInstructions(messages, task)}
+
+${body}`;
 }
 
 const INDEX_ADVISOR_ROLE = 'MongoDB Index Advisor assistant';
