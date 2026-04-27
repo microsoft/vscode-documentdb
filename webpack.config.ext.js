@@ -191,7 +191,7 @@ module.exports = (env, { mode }) => {
                         toType: 'file',
                     },
                     {
-                        from: './packages/documentdb-shell-api-types/typeDefs',
+                        from: './packages/documentdb-js-shell-api-types/typeDefs',
                         to: 'typeDefs',
                     },
                     {

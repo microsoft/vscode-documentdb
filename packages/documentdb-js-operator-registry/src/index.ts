@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * @vscode-documentdb/documentdb-constants
+ * @documentdb-js/operator-registry
  *
  * Static operator metadata for DocumentDB-supported operators, stages,
  * accumulators, update operators, BSON constructors, and system variables.
@@ -84,7 +84,7 @@ import { loadWindowOperators } from './windowOperators';
  * Loads all built-in operator data into the registry.
  *
  * Called automatically at module import time so that consumers using
- * `import { getFilteredCompletions } from '@vscode-documentdb/documentdb-constants'`
+ * `import { getFilteredCompletions } from '@documentdb-js/operator-registry'`
  * get all operators without any additional setup.
  *
  * Can also be called explicitly (e.g. in workers or tests) — the call is

@@ -13,8 +13,8 @@
  * - Static lists for top-level commands and `show` subcommands
  * - `ClustersClient` cached data for database/collection names
  * - `SchemaStore` for field names and schema-derived collection names
- * - `documentdb-constants` for query operators and BSON constructors
- * - `documentdb-shell-api-types` for shell API method names
+ * - `operator-registry` for query operators and BSON constructors
+ * - `shell-api-types` for shell API method names
  */
 
 import {
@@ -24,8 +24,8 @@ import {
     type OperatorEntry,
     STAGE_COMPLETION_META,
     UPDATE_COMPLETION_META,
-} from '@vscode-documentdb/documentdb-constants';
-import { getMethodsByTarget } from '@vscode-documentdb/documentdb-shell-api-types';
+} from '@documentdb-js/operator-registry';
+import { getMethodsByTarget } from '@documentdb-js/shell-api-types';
 import { ClustersClient } from '../ClustersClient';
 import { SchemaStore } from '../SchemaStore';
 import { detectCursorContext, type FieldTypeLookup } from '../query-language/shared/cursorContext';
@@ -816,7 +816,7 @@ export class ShellCompletionProvider {
     }
 
     /**
-     * Add operator candidates from documentdb-constants.
+     * Add operator candidates from operator-registry.
      */
     private addOperatorCandidates(candidates: CompletionCandidate[], metaFilter: readonly string[]): void {
         const operators: readonly OperatorEntry[] = getFilteredCompletions({ meta: metaFilter });

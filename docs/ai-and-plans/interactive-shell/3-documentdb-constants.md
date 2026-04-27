@@ -1,10 +1,10 @@
-# Step 3 — `documentdb-constants` Package
+# Step 3 — `operator-registry` Package
 
 **PR:** [#513](https://github.com/microsoft/vscode-documentdb/pull/513)
 
 ## Summary
 
-Created a standalone npm workspace package (`packages/documentdb-constants/`) that provides static metadata for all DocumentDB-supported operators — query operators, update operators, aggregation stages, accumulators, expression operators, BSON type constructors, and system variables. This package is the single source of truth for operator metadata across all autocompletion surfaces.
+Created a standalone npm workspace package (`packages/documentdb-js-operator-registry/`) that provides static metadata for all DocumentDB-supported operators — query operators, update operators, aggregation stages, accumulators, expression operators, BSON type constructors, and system variables. This package is the single source of truth for operator metadata across all autocompletion surfaces.
 
 ## Motivation
 

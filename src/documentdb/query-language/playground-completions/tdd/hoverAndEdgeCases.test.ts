@@ -17,7 +17,7 @@
  * whether to update the spec or fix the implementation.
  */
 
-import { getAllCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
+import { getAllCompletions, loadOperators } from '@documentdb-js/operator-registry';
 import { getPlaygroundHoverContent } from '../PlaygroundHoverProvider';
 
 // Ensure operators are loaded before tests

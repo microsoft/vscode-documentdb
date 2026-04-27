@@ -4,7 +4,7 @@
 
 ## Summary
 
-Replaced the old JSON Schema autocomplete pipeline with a custom Monaco `CompletionItemProvider` for the `documentdb-query` language. This gives the Collection View query editors (filter, project, sort) context-aware completions from `documentdb-constants` (static operators) and `SchemaAnalyzer` (dynamic field names), plus a `HoverProvider` for inline operator documentation and `acorn`-based validation for syntax errors and identifier typos.
+Replaced the old JSON Schema autocomplete pipeline with a custom Monaco `CompletionItemProvider` for the `documentdb-query` language. This gives the Collection View query editors (filter, project, sort) context-aware completions from `operator-registry` (static operators) and `SchemaAnalyzer` (dynamic field names), plus a `HoverProvider` for inline operator documentation and `acorn`-based validation for syntax errors and identifier typos.
 
 ## What Was Built
 
@@ -23,7 +23,7 @@ Replaced the old JSON Schema autocomplete pipeline with a custom Monaco `Complet
 
 | Removed                                       | Replacement                                                |
 | --------------------------------------------- | ---------------------------------------------------------- |
-| `generateMongoFindJsonSchema()` (271 lines)   | `documentdb-constants` (308 operators)                     |
+| `generateMongoFindJsonSchema()` (271 lines)   | `operator-registry` (308 operators)                     |
 | `basicMongoFindFilterSchema.json` (173 lines) | Not needed — custom language has no JSON service           |
 | `getAutocompletionSchema` tRPC endpoint       | `getFieldCompletionData` returning `FieldCompletionData[]` |
 | `toFilterQuery.ts` (230 lines, regex parser)  | `@mongodb-js/shell-bson-parser` (battle-tested)            |
@@ -62,7 +62,7 @@ The validator handles both direct calls (`ObjctId("abc")`) and member expression
 │  Validator (acorn parse + walk, 300ms debounce)          │
 └───────────┬──────────────────────────┬───────────────────┘
             ↑                          ↑
-    documentdb-constants        completionStore
+    operator-registry        completionStore
     (308 operators)             (Map<sessionId, FieldCompletionData[]>)
                                 ← tRPC push after query execution
 ```

@@ -8,7 +8,7 @@ import {
     getFilteredCompletions,
     PROJECTION_COMPLETION_META,
     type OperatorEntry,
-} from '@vscode-documentdb/documentdb-constants';
+} from '@documentdb-js/operator-registry';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { type CursorContext } from '../../documentdb/query-language/shared/cursorContext';
@@ -250,7 +250,7 @@ describe('documentdbQueryCompletionProvider', () => {
             clearAllCompletionContexts();
         });
 
-        test('returns items for filter context using documentdb-constants', () => {
+        test('returns items for filter context using operator-registry', () => {
             const items = createCompletionItems({
                 editorType: EditorType.Filter,
                 sessionId: undefined,
@@ -259,7 +259,7 @@ describe('documentdbQueryCompletionProvider', () => {
                 monaco: mockMonaco,
             });
 
-            // Should return the filter completions from documentdb-constants
+            // Should return the filter completions from operator-registry
             expect(items.length).toBeGreaterThan(0);
 
             // All items should have required CompletionItem properties

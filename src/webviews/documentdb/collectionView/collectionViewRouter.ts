@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type FieldEntry } from '@documentdb-js/schema-analyzer';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type FieldEntry } from '@vscode-documentdb/schema-analyzer';
 import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';

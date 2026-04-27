@@ -12,8 +12,8 @@ module.exports = {
                 '^.+\\.tsx?$': ['ts-jest', {}],
             },
         },
-        '<rootDir>/packages/schema-analyzer',
-        '<rootDir>/packages/documentdb-constants',
-        '<rootDir>/packages/documentdb-shell-runtime',
+        '<rootDir>/packages/documentdb-js-schema-analyzer',
+        '<rootDir>/packages/documentdb-js-operator-registry',
+        '<rootDir>/packages/documentdb-js-shell-runtime',
     ],
 };

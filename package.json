@@ -177,9 +177,9 @@
     "@mongosh/shell-evaluator": "^5.1.4",
     "@trpc/client": "~11.10.0",
     "@trpc/server": "~11.10.0",
-    "@vscode-documentdb/documentdb-constants": "*",
-    "@microsoft/documentdb-vscode-shell-runtime": "*",
-    "@vscode-documentdb/schema-analyzer": "*",
+    "@documentdb-js/operator-registry": "*",
+    "@documentdb-js/shell-runtime": "*",
+    "@documentdb-js/schema-analyzer": "*",
     "@vscode/l10n": "~0.0.18",
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
@@ -201,10 +201,11 @@
     "vscode-uri": "~3.1.0",
     "zod": "~4.3.6"
   },
-  "//overrides": "Pin transitive dependencies: glob 12 for latest, test-exclude 7 for compatibility",
+  "//overrides": "Pin transitive dependencies: glob 12 for latest, test-exclude 7 for compatibility, applicationinsights-web-basic 3.3.x to retain applicationinsights-common needed by @vscode/extension-telemetry (see https://github.com/microsoft/vscode-extension-telemetry/issues/244, fixed in 1.5.2 but not yet released)",
   "overrides": {
     "glob": "~12.0.0",
-    "test-exclude": "~7.0.1"
+    "test-exclude": "~7.0.1",
+    "@microsoft/applicationinsights-web-basic": "~3.3.4"
   },
   "extensionDependencies": [],
   "contributes": {

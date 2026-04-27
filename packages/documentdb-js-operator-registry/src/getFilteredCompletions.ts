@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Primary consumer API for the documentdb-constants package.
+ * Primary consumer API for the operator-registry package.
  *
  * Provides filtered access to the operator entries based on meta tags
  * and optional BSON type constraints.

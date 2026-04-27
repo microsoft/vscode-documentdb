@@ -7,11 +7,11 @@
  * Hover provider logic for the `documentdb-query` language.
  *
  * Provides inline documentation when hovering over operators,
- * BSON constructors, and field names. Uses `documentdb-constants` for
+ * BSON constructors, and field names. Uses `operator-registry` for
  * the operator registry and the completion store for field type info.
  */
 
-import { getAllCompletions } from '@vscode-documentdb/documentdb-constants';
+import { getAllCompletions } from '@documentdb-js/operator-registry';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { type FieldCompletionData } from '../../utils/json/data-api/autocomplete/toFieldCompletionItems';

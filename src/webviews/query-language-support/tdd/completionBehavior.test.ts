@@ -18,7 +18,7 @@
  * whether to update the spec or fix the implementation.
  *
  * Tests are category-based (not specific-operator-based) to be resilient to
- * changes in documentdb-constants. Categories come from the `description`
+ * changes in operator-registry. Categories come from the `description`
  * field in CompletionItemLabel (e.g., "comparison", "logical", "bson").
  *
  * See: readme.completionBehavior.md for the full specification.

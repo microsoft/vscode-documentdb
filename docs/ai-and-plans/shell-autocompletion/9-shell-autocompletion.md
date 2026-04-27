@@ -75,8 +75,8 @@ Both dot notation (`db.collection`) and bracket notation (`db['collection']`) ar
 | Static lists                 | Top-level commands, show subcommands                         | Hardcoded                                         |
 | `ClustersClient`             | Database names, collection names                             | Synchronous cache read; background fetch if empty |
 | `SchemaStore`                | Collection names (from queries), field names + types         | Synchronous singleton                             |
-| `documentdb-constants`       | Query operators, BSON constructors, update operators, stages | `getFilteredCompletions()`                        |
-| `documentdb-shell-api-types` | Shell API methods by target (database, collection, cursor)   | `getMethodsByTarget()`                            |
+| `operator-registry`       | Query operators, BSON constructors, update operators, stages | `getFilteredCompletions()`                        |
+| `shell-api-types` | Shell API methods by target (database, collection, cursor)   | `getMethodsByTarget()`                            |
 
 All reads are **synchronous from caches** — Tab never blocks on network I/O. If a cache is empty, a background fetch is triggered so subsequent Tab presses have data.
 
@@ -182,8 +182,8 @@ The terminal completions reuse significant infrastructure from the Collection Vi
 - **`cursorContext.ts`** — Shared cursor position detection (key / value / operator positions within query objects)
 - **`completionKnowledge.ts`** — `KEY_POSITION_OPERATORS` set for context-aware filtering
 - **`SchemaStore`** — Same singleton schema cache shared across Collection View, Playground, and Terminal
-- **`documentdb-constants`** — Same operator metadata package
-- **`documentdb-shell-api-types`** — `getMethodsByTarget()` for method name lookups
+- **`operator-registry`** — Same operator metadata package
+- **`shell-api-types`** — `getMethodsByTarget()` for method name lookups
 
 The `ShellCompletionProvider` is modeled after `PlaygroundCompletionItemProvider` (Layer 2) but simplified: it doesn't need Monaco/VS Code CompletionItem mapping, and the terminal's single-expression context is simpler than a full playground file.
 

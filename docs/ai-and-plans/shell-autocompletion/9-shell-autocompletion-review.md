@@ -192,13 +192,13 @@ void client.listCollections(context.databaseName).catch(() => {
 
 ---
 
-### #9 — ~~`DATABASE_METHODS` set is hardcoded, not derived from `documentdb-shell-api-types`~~ ✅ RESOLVED
+### #9 — ~~`DATABASE_METHODS` set is hardcoded, not derived from `shell-api-types`~~ ✅ RESOLVED
 
 **Severity: S4 — Low**
 **File:** `src/documentdb/shell/ShellCompletionProvider.ts`, line ~130
 **Resolved:** [`795f52f`](https://github.com/microsoft/vscode-documentdb/commit/795f52f) — Derived from `getMethodsByTarget('database')` at module load time.
 
-`DATABASE_METHODS` is a hardcoded `Set` (14 entries) used to distinguish `db.<method>()` from `db.<collection>.`. Meanwhile, database method names are also available from `getMethodsByTarget('database')` in `documentdb-shell-api-types`.
+`DATABASE_METHODS` is a hardcoded `Set` (14 entries) used to distinguish `db.<method>()` from `db.<collection>.`. Meanwhile, database method names are also available from `getMethodsByTarget('database')` in `shell-api-types`.
 
 **Impact:** If a new database method is added to the shell API types package, `DATABASE_METHODS` won't know about it. The completion provider would then treat `db.newMethod` as a collection named `newMethod`, offering collection method completions instead of nothing.
 

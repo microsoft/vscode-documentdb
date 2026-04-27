@@ -7,12 +7,12 @@
  * Completion knowledge — curated domain rules for the completion provider.
  *
  * This file centralises "knowledge" that is **not** part of the generic
- * DocumentDB operator registry (`documentdb-constants`) but is essential for
+ * DocumentDB operator registry (`operator-registry`) but is essential for
  * producing high-quality, context-sensitive completions in the query editor.
  *
  * ### Why this file exists
  *
- * The `documentdb-constants` package is auto-generated from the official
+ * The `operator-registry` package is auto-generated from the official
  * operator reference and is intentionally kept generic — it describes *what*
  * operators exist, not *where* they are syntactically valid.
  *

@@ -15,7 +15,7 @@ The legacy scrapbook was a multi-component system built on fundamentally differe
 - **`mongosh` child process** spawned per execution via `ShellScriptRunner`
 - **TextMate grammars** for syntax highlighting
 
-This predated the architecture decisions in Steps 3–4.5. The new approach (Steps 6+) uses `@mongosh` packages for in-process evaluation, `documentdb-constants` for operator metadata, and the `documentdb-query` completion provider framework. None of the legacy components were reusable.
+This predated the architecture decisions in Steps 3–4.5. The new approach (Steps 6+) uses `@mongosh` packages for in-process evaluation, `operator-registry` for operator metadata, and the `documentdb-query` completion provider framework. None of the legacy components were reusable.
 
 ## What Was Preserved
 

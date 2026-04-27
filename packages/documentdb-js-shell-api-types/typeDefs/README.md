@@ -10,8 +10,7 @@ service.
 
 ## How the API surface was determined
 
-Azure DocumentDB is a fully managed database service that uses the MongoDB wire
-protocol for compatibility. As stated in the
+DocumentDB uses the MongoDB wire protocol for compatibility. As stated in the
 [official compatibility documentation](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language):
 
 > "Client-side wrapper functions, such as `deleteMany()` and `updateMany()`,
@@ -23,7 +22,7 @@ The methods included in this file were **manually selected** to provide a
 productive query playground editing experience. The selection criteria:
 
 1. **Server command support**: Each method maps to a server-side command listed
-   as supported (✅) in the Azure DocumentDB compatibility matrix. For example,
+   as supported (✅) in the DocumentDB compatibility matrix. For example,
    `collection.find()` maps to the `find` command, `collection.insertOne()` maps
    to `insert`, `collection.updateOne()` maps to `update`, etc.
 
@@ -38,7 +37,7 @@ productive query playground editing experience. The selection criteria:
 
 ## Reference documentation
 
-The following Azure DocumentDB compatibility pages were used as the source of
+The following DocumentDB compatibility pages were used as the source of
 truth for determining supported operations:
 
 - **MQL compatibility (operators, commands, indexes)**:
@@ -58,6 +57,6 @@ DocumentDB terminology.
 
 ## Maintenance
 
-When Azure DocumentDB adds support for new operations or deprecates existing
+When DocumentDB adds support for new operations or deprecates existing
 ones, this file should be updated to match. Refer to the compatibility pages
 listed above for the current support matrix.

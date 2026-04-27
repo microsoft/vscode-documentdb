@@ -15,7 +15,7 @@ import {
     FILTER_COMPLETION_META,
     getFilteredCompletions,
     PROJECTION_COMPLETION_META,
-} from '@vscode-documentdb/documentdb-constants';
+} from '@documentdb-js/operator-registry';
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { KEY_POSITION_OPERATORS } from '../../../documentdb/query-language/shared/completionKnowledge';

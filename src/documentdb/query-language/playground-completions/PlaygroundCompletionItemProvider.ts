@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getFilteredCompletions, loadOperators } from '@vscode-documentdb/documentdb-constants';
-import { BSONTypes } from '@vscode-documentdb/schema-analyzer';
+import { getFilteredCompletions, loadOperators } from '@documentdb-js/operator-registry';
+import { BSONTypes } from '@documentdb-js/schema-analyzer';
 import * as vscode from 'vscode';
 import {
     CompletionCommandIds,

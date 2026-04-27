@@ -14,7 +14,7 @@
  * See workerTypes.ts for the message protocol.
  */
 
-import { DocumentDBShellRuntime } from '@microsoft/documentdb-vscode-shell-runtime';
+import { DocumentDBShellRuntime } from '@documentdb-js/shell-runtime';
 import { randomUUID } from 'crypto';
 import { type MongoClientOptions, type MongoClient as MongoClientType } from 'mongodb';
 import { parentPort } from 'worker_threads';
