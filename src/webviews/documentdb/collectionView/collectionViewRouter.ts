@@ -910,7 +910,10 @@ export const collectionsViewRouter = router({
             const stage2Cache = session.getStage2Response();
             if (stage2Cache?.response) {
                 try {
-                    staticAnalysisSummary = buildStaticAnalysisSummary(stage2Cache.response, stage2Cache.totalCollectionDocs);
+                    staticAnalysisSummary = buildStaticAnalysisSummary(
+                        stage2Cache.response,
+                        stage2Cache.totalCollectionDocs,
+                    );
                     ctx.telemetry.properties.hasStaticAnalysisSummary = 'true';
                     ctx.telemetry.measurements.staticAnalysisSummaryLength = staticAnalysisSummary.length;
                     ext.outputChannel.trace(
