@@ -54,27 +54,27 @@ Follow these strict instructions (must obey):
    ### Key Findings
    [1-2 sentences summarizing the most critical performance bottlenecks or optimization opportunities identified]
 
-8. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use `db.getCollection("{collectionName}")` to reference the collection (replace `{collectionName}` with the actual name from `collectionStats`).
-9. **Modify operations format** — for any `modify` action (e.g., hiding/unhiding indexes, modifying index properties), you MUST use the `db.getCollection('<collectionName>').operation()` pattern (e.g., `db.getCollection('users').hideIndex('index_name')`). Do NOT use `db.runCommand()` format for modify actions. If the modify operation cannot be expressed in this format, set `action` to `"none"` and explain the limitation in the `analysis` field.
-10. **Index identification for drop/modify** — for `drop` and `modify` actions, you MUST use the index **name** (e.g., `'age_1'`, `'name_1_email_1'`) rather than the index fields/specification. The `shellCommand` command should reference the index by name (e.g., `db.getCollection('users').dropIndex('age_1')` or `db.getCollection('users').hideIndex('age_1')`).
-11. **Justify every index command** — each `create`/`drop` recommendation must include a one-sentence justification that references concrete fields/metrics from `executionStats` or `indexStats`.
-12. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
-13. **Include priority** — each suggested improvement must include a `priority` (`high`/`medium`/`low`) so an engineer can triage.
-14. **Priority of modify and drop actions** — priority of modify and drop actions should always be set to `low`.
-15. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
-16. **Verification array requirement** — the `verification` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing ```javascript code blocks``` with valid mongosh commands to verify that specific improvement. If `improvements` is an empty array, `verification` must also be an empty array.
-17. **Do not change input objects** — echo input objects only under `metadata`; do not mutate `{collectionStats}`, `{indexStats}`, or `{executionStats}`—just include them as-is (and add computed helper fields if needed).
-18. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
-19. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics.
-"
-20. **Markdown compatibility (react-markdown/CommonMark only)** — `analysis` and `educationalContent` must be **CommonMark only** (react-markdown, no plugins).
-  - Allowed: `###` headings, paragraphs, lists, blockquotes, `---` rules, links, inline code, fenced code blocks (triple backticks).
-  - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (`$`/`$$`), mermaid/diagrams, callouts/admonitions (`> [!NOTE]`, `:::`).
-21. **Static analysis alignment** — The Static Analysis Results section (if present in the context data) describes what the user has already been told about query performance. The static analysis is heuristic-based and limited to execution statistics; your analysis uses deeper inspection of the full execution plan, index structure, and collection statistics.
+8. **Static analysis alignment** — The Static Analysis Results section (if present in the context data) describes what the user has already been told about query performance. The static analysis is heuristic-based and limited to execution statistics; your analysis may differ based on deeper inspection of the full execution plan, index structure, and collection statistics.
   - If your assessment **agrees** with the static analysis, briefly affirm it (e.g., "The initial analysis correctly identified…").
   - If your assessment **differs** from the static analysis, you MUST explain why in the Performance Summary section. Use a format like: "The initial analysis showed [X], but after deeper inspection of the execution plan, [Y] because [Z]." Do NOT silently contradict the static analysis.
   - When the static analysis shows a positive rating (Excellent/Good) but you identify issues, explain what the heuristic missed.
   - When the static analysis shows a negative rating (Fair/Poor) but the situation is actually acceptable, explain why the heuristic was too strict.
+9. **Runnable shell commands** — any index changes you recommend must be provided as **mongosh/mongo shell** commands (runnable). Use `db.getCollection("{collectionName}")` to reference the collection (replace `{collectionName}` with the actual name from `collectionStats`).
+10. **Modify operations format** — for any `modify` action (e.g., hiding/unhiding indexes, modifying index properties), you MUST use the `db.getCollection('<collectionName>').operation()` pattern (e.g., `db.getCollection('users').hideIndex('index_name')`). Do NOT use `db.runCommand()` format for modify actions. If the modify operation cannot be expressed in this format, set `action` to `"none"` and explain the limitation in the `analysis` field.
+11. **Index identification for drop/modify** — for `drop` and `modify` actions, you MUST use the index **name** (e.g., `'age_1'`, `'name_1_email_1'`) rather than the index fields/specification. The `shellCommand` command should reference the index by name (e.g., `db.getCollection('users').dropIndex('age_1')` or `db.getCollection('users').hideIndex('age_1')`).
+12. **Justify every index command** — each `create`/`drop` recommendation must include a one-sentence justification that references concrete fields/metrics from `executionStats` or `indexStats`.
+13. **Prefer minimal, safe changes** — prefer a single, high-impact index over many small ones; avoid suggesting drops unless the benefit is clear and justified.
+14. **Include priority** — each suggested improvement must include a `priority` (`high`/`medium`/`low`) so an engineer can triage.
+15. **Priority of modify and drop actions** — priority of modify and drop actions should always be set to `low`.
+16. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
+17. **Verification array requirement** — the `verification` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing ```javascript code blocks``` with valid mongosh commands to verify that specific improvement. If `improvements` is an empty array, `verification` must also be an empty array.
+18. **Do not change input objects** — echo input objects only under `metadata`; do not mutate `{collectionStats}`, `{indexStats}`, or `{executionStats}`—just include them as-is (and add computed helper fields if needed).
+19. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
+20. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics.
+"
+21. **Markdown compatibility (react-markdown/CommonMark only)** — `analysis` and `educationalContent` must be **CommonMark only** (react-markdown, no plugins).
+  - Allowed: `###` headings, paragraphs, lists, blockquotes, `---` rules, links, inline code, fenced code blocks (triple backticks).
+  - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (`$`/`$$`), mermaid/diagrams, callouts/admonitions (`> [!NOTE]`, `:::`).
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **\$match priority**: Place match stages early and check if indexes can accelerate filtering.
