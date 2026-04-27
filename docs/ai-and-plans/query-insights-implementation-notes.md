@@ -10,10 +10,10 @@ with the following additions and changes:
 
 ### New Messages (not in original plan)
 
-| Message                     | Context                        | Reason                                                                          |
-|-----------------------------|--------------------------------|---------------------------------------------------------------------------------|
-| `'Query failed'`           | Fetch Overhead cell (failed)   | `createFailedQueryResponse` needed a fetchOverhead value for the new cell shape |
-| `'None (collection scan)'` | Index Used cell (null fallback)| More descriptive than the previous `'None'` when no index is used              |
+| Message                    | Context                         | Reason                                                                          |
+| -------------------------- | ------------------------------- | ------------------------------------------------------------------------------- |
+| `'Query failed'`           | Fetch Overhead cell (failed)    | `createFailedQueryResponse` needed a fetchOverhead value for the new cell shape |
+| `'None (collection scan)'` | Index Used cell (null fallback) | More descriptive than the previous `'None'` when no index is used               |
 
 ### Unchanged Messages
 

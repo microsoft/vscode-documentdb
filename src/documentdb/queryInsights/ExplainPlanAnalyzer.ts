@@ -268,7 +268,7 @@ export class ExplainPlanAnalyzer {
                 diagnosticId: 'low_efficiency_ratio',
                 type: 'negative',
                 message: 'Low efficiency ratio',
-                details: `You return only ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis indicates poor query selectivity - the database examines many documents that don't match your query criteria.\n\nConsider adding more selective indexes or refining your query filters.`,
+                details: `You return only ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis indicates poor query selectivity: the database examines many documents that do not match your query criteria.\n\nConsider adding more selective indexes or refining your query filters.`,
             });
         } else {
             diagnostics.push({
@@ -753,7 +753,7 @@ export class ExplainPlanAnalyzer {
         const winningPlan = (explainResult.queryPlanner as Document | undefined)?.winningPlan as Document | undefined;
         const ixscanStage = this.findStageInPlan(winningPlan, 'IXSCAN');
         if (ixscanStage?.isBitmap === true) {
-            reasons.push('Bitmap index detected — typically used for low-cardinality fields');
+            reasons.push('Bitmap index detected: typically used for low-cardinality fields');
         }
 
         // Signal 2: Boolean literal in query filter
@@ -846,11 +846,12 @@ export class ExplainPlanAnalyzer {
             const cardinalityResult = this.detectLowCardinalityIndex(explainResult, totalCollectionDocs, queryFilter);
 
             if (cardinalityResult.isLowCardinality) {
+                const reasonsList = cardinalityResult.reasons.map((r) => `• ${r}`).join('\n');
                 diagnostics.push({
                     diagnosticId: 'low_cardinality_index',
                     type: 'neutral',
                     message: 'Low-cardinality index',
-                    details: `The index used has low cardinality — it doesn't differentiate well between documents.\n\n${cardinalityResult.reasons.join('\n')}\n\nConsider using a more selective index field or a compound index that includes high-cardinality fields.`,
+                    details: `The index used has low cardinality: it does not differentiate well between documents.\n\n${reasonsList}\n\nConsider using a more selective index field or a compound index that includes high-cardinality fields.`,
                 });
             }
         }
