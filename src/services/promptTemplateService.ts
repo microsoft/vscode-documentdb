@@ -195,10 +195,7 @@ export class PromptTemplateService {
      */
     private static getBuiltInIndexAdvisorTemplate(commandType: CommandType): string {
         // Configuration for building prompts from resource files
-        const promptConfigs: Record<
-            string,
-            { role: string; messages: string[]; task: string; fallback: string }
-        > = {
+        const promptConfigs: Record<string, { role: string; messages: string[]; task: string; fallback: string }> = {
             [CommandType.Find]: {
                 role: 'MongoDB Index Advisor assistant',
                 messages: [

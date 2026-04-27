@@ -49,7 +49,7 @@ import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplet
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../api/configuration/appRouter';
-import { type QueryInsightsStage3Response } from './types/queryInsights';
+import { type QueryInsightsStage2Response, type QueryInsightsStage3Response } from './types/queryInsights';
 
 export type RouterContext = BaseRouterContext & {
     sessionId: string;
@@ -862,11 +862,8 @@ export const collectionsViewRouter = router({
             if (stage2Cache?.response) {
                 try {
                     const stage2Response =
-                        stage2Cache.response as import('./types/queryInsights').QueryInsightsStage2Response;
-                    staticAnalysisSummary = buildStaticAnalysisSummary(
-                        stage2Response,
-                        stage2Cache.totalCollectionDocs,
-                    );
+                        stage2Cache.response as QueryInsightsStage2Response;
+                    staticAnalysisSummary = buildStaticAnalysisSummary(stage2Response, stage2Cache.totalCollectionDocs);
                     ext.outputChannel.trace(
                         l10n.t(
                             '[Query Insights Stage 3] Static analysis summary built ({len} chars, requestKey: {key})',
@@ -879,12 +876,9 @@ export const collectionsViewRouter = router({
                 } catch {
                     // Non-critical: proceed without summary if it fails
                     ext.outputChannel.trace(
-                        l10n.t(
-                            '[Query Insights Stage 3] Failed to build static analysis summary (requestKey: {key})',
-                            {
-                                key: requestKey,
-                            },
-                        ),
+                        l10n.t('[Query Insights Stage 3] Failed to build static analysis summary (requestKey: {key})', {
+                            key: requestKey,
+                        }),
                     );
                 }
             }

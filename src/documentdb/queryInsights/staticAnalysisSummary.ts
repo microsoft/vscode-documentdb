@@ -15,10 +15,7 @@ import { type QueryInsightsStage2Response } from '../../webviews/documentdb/coll
  * @param totalCollectionDocs - Total documents in the collection (if available)
  * @returns A structured text summary suitable for inclusion in an LLM prompt
  */
-export function buildStaticAnalysisSummary(
-    stage2: QueryInsightsStage2Response,
-    totalCollectionDocs?: number,
-): string {
+export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, totalCollectionDocs?: number): string {
     const lines: string[] = [];
 
     lines.push('## Static Analysis Results (already shown to user)');
@@ -47,7 +44,9 @@ export function buildStaticAnalysisSummary(
     lines.push('### Summary Indicators (4 cells shown to user)');
     lines.push(`- **Selectivity**: ${stage2.efficiencyAnalysis.selectivity ?? 'Unknown'}`);
     lines.push(`- **Index Used**: ${stage2.efficiencyAnalysis.indexUsed ?? 'None (collection scan)'}`);
-    lines.push(`- **Fetch Overhead**: ${stage2.efficiencyAnalysis.fetchOverhead} (${stage2.efficiencyAnalysis.fetchOverheadKind})`);
+    lines.push(
+        `- **Fetch Overhead**: ${stage2.efficiencyAnalysis.fetchOverhead} (${stage2.efficiencyAnalysis.fetchOverheadKind})`,
+    );
     lines.push(`- **In-Memory Sort**: ${stage2.efficiencyAnalysis.hasInMemorySort ? 'Yes' : 'No'}`);
     lines.push('');
 

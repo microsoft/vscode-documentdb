@@ -3,9 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { l10n } from 'vscode';
 import * as fs from 'fs';
 import * as path from 'path';
+import { l10n } from 'vscode';
 import { ext } from '../../extensionVariables';
 
 /**

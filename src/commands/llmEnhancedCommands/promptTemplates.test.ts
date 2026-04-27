@@ -281,24 +281,12 @@ describe('promptTemplates', () => {
     describe('buildIndexAdvisorPrompt', () => {
         it('should return inline fallback when resource file cannot be loaded', () => {
             // ext.context is undefined in test environment, so resource loading fails
-            const result = buildIndexAdvisorPrompt(
-                'find',
-                'Test Role',
-                ['msg1'],
-                'task',
-                'INLINE_FALLBACK',
-            );
+            const result = buildIndexAdvisorPrompt('find', 'Test Role', ['msg1'], 'task', 'INLINE_FALLBACK');
             expect(result).toBe('INLINE_FALLBACK');
         });
 
         it('should return inline fallback for unknown command type', () => {
-            const result = buildIndexAdvisorPrompt(
-                'unknown',
-                'Test Role',
-                ['msg1'],
-                'task',
-                'INLINE_FALLBACK',
-            );
+            const result = buildIndexAdvisorPrompt('unknown', 'Test Role', ['msg1'], 'task', 'INLINE_FALLBACK');
             expect(result).toBe('INLINE_FALLBACK');
         });
     });
