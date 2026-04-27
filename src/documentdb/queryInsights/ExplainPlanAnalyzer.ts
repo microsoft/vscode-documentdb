@@ -240,7 +240,16 @@ export class ExplainPlanAnalyzer {
         const isEmptyQuery = !queryFilter || Object.keys(queryFilter).length === 0;
 
         // 1. Efficiency Ratio Assessment (always included)
-        if (efficiencyRatio >= 0.5) {
+        if (efficiencyRatio === 0) {
+            // nReturned=0 but documents were examined — ratio concept doesn't apply
+            diagnostics.push({
+                diagnosticId: 'no_matching_documents',
+                type: 'neutral',
+                message: 'No matching documents',
+                details:
+                    "Your query examined documents but found no matches.\n\nIf this is unexpected, verify your filter criteria. The query's resource usage is better assessed by the index usage and execution time badges.",
+            });
+        } else if (efficiencyRatio >= 0.5) {
             diagnostics.push({
                 diagnosticId: 'high_efficiency_ratio',
                 type: 'positive',

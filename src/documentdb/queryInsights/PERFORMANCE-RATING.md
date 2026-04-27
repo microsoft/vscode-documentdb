@@ -63,12 +63,19 @@ badge so you can see exactly what contributed to the score.
   Efficiency = Documents Returned ÷ Documents Examined
 ```
 
-| Efficiency     | Badge                       | Type     |
-|----------------|-----------------------------|----------|
-| ≥ 50%          | **High efficiency ratio**   | Positive |
-| 10% – 49%     | Moderate efficiency ratio   | Neutral  |
-| 1% – 9%       | Low efficiency ratio        | Negative |
-| < 1%           | Very low efficiency ratio   | Negative |
+| Efficiency | Badge                     | Type     |
+| ---------- | ------------------------- | -------- |
+| 0 returned | No matching documents     | Neutral  |
+| ≥ 50%      | **High efficiency ratio** | Positive |
+| 10% – 49%  | Moderate efficiency ratio | Neutral  |
+| 1% – 9%    | Low efficiency ratio      | Negative |
+| < 1%       | Very low efficiency ratio | Negative |
+
+**Special case — zero results:** When the query returns zero documents,
+the efficiency ratio concept doesn't apply (you can't measure "per result"
+when there are no results). Instead, a neutral "No matching documents"
+badge appears. The actual performance concern (e.g., collection scan) is
+captured by the index usage badge separately.
 
 **Example:** Your query returns 500 documents but the database examined
 10,000. That's 5% efficiency — you'll see a "Low efficiency ratio" badge.
@@ -77,23 +84,23 @@ badge so you can see exactly what contributed to the score.
 
 > How long did the query take?
 
-| Time               | Badge                     | Type     |
-|--------------------|---------------------------|----------|
-| < 100 ms           | **Fast execution**        | Positive |
-| 100 ms – 499 ms    | Acceptable execution time | Neutral  |
-| 500 ms – 1,999 ms  | Slow execution            | Negative |
-| ≥ 2,000 ms         | Very slow execution       | Negative |
+| Time              | Badge                     | Type     |
+| ----------------- | ------------------------- | -------- |
+| < 100 ms          | **Fast execution**        | Positive |
+| 100 ms – 499 ms   | Acceptable execution time | Neutral  |
+| 500 ms – 1,999 ms | Slow execution            | Negative |
+| ≥ 2,000 ms        | Very slow execution       | Negative |
 
 ### 3. Index Usage
 
 > Did the query use an index?
 
-| Situation                                  | Badge                     | Type     |
-|-------------------------------------------|---------------------------|----------|
-| Index scan used                           | **Index used**            | Positive |
-| Collection scan, no filter (all docs)     | Full collection scan      | Neutral  |
-| Collection scan, filter present           | Full collection scan      | Negative |
-| No index, no collection scan              | No index used             | Neutral  |
+| Situation                             | Badge                | Type     |
+| ------------------------------------- | -------------------- | -------- |
+| Index scan used                       | **Index used**       | Positive |
+| Collection scan, no filter (all docs) | Full collection scan | Neutral  |
+| Collection scan, filter present       | Full collection scan | Negative |
+| No index, no collection scan          | No index used        | Neutral  |
 
 **Note:** A collection scan on a query with no filter (e.g., `db.users.find({})`)
 is expected — there's nothing to index against. This is treated as neutral.
@@ -102,11 +109,11 @@ is expected — there's nothing to index against. This is treated as neutral.
 
 > If sorting was requested, how was it done?
 
-| Situation                     | Badge                  | Type     |
-|-------------------------------|------------------------|----------|
-| Sorting uses index ordering   | Efficient sorting      | Positive |
-| Sorting done in memory (RAM)  | In-memory sort required| Negative |
-| No sorting needed             | No sorting required    | Neutral  |
+| Situation                    | Badge                   | Type     |
+| ---------------------------- | ----------------------- | -------- |
+| Sorting uses index ordering  | Efficient sorting       | Positive |
+| Sorting done in memory (RAM) | In-memory sort required | Negative |
+| No sorting needed            | No sorting required     | Neutral  |
 
 > **Note:** The "Efficient sorting" and "No sorting required" badges are
 > hidden from the UI to reduce clutter — they are still present in the data
@@ -165,13 +172,13 @@ The name of the index used (e.g., `status_1_createdAt_-1`), or
 
 Describes how efficiently documents were fetched. First match wins:
 
-| State                  | When                                                     |
-|------------------------|----------------------------------------------------------|
-| No matches             | Query returned zero documents                           |
-| Covered query          | All data came from the index — no document fetch needed |
-| Collection scan        | Every document was scanned sequentially                 |
-| Multikey expansion (N×)| Index on array field — multiple keys per document        |
-| Direct fetch           | Normal index lookup followed by document fetch          |
+| State                   | When                                                    |
+| ----------------------- | ------------------------------------------------------- |
+| No matches              | Query returned zero documents                           |
+| Covered query           | All data came from the index — no document fetch needed |
+| Collection scan         | Every document was scanned sequentially                 |
+| Multikey expansion (N×) | Index on array field — multiple keys per document       |
+| Direct fetch            | Normal index lookup followed by document fetch          |
 
 ### In-Memory Sort
 
@@ -192,10 +199,10 @@ patterns and adds **informational badges** (neutral or negative).
 > providing much benefit because the query returns a large portion of
 > the collection.
 
-| Coverage of Collection | Badge                           | Type    |
-|------------------------|---------------------------------|---------|
-| ≥ 50%                  | Returns majority of collection  | Neutral |
-| 20% – 49%             | Low filter selectivity          | Neutral |
+| Coverage of Collection | Badge                          | Type    |
+| ---------------------- | ------------------------------ | ------- |
+| ≥ 50%                  | Returns majority of collection | Neutral |
+| 20% – 49%              | Low filter selectivity         | Neutral |
 
 **Example:** Your collection has 100,000 documents and the query returns
 60,000. Even though an index is used, it has to look up 60% of the
@@ -222,10 +229,10 @@ documents. The index must still scan most of the collection.
   Multiplier = Keys Examined ÷ Documents Examined
 ```
 
-| Multiplier | Badge                         | Type     | Effect          |
-|------------|-------------------------------|----------|-----------------|
-| ≥ 20×     | Severe multikey expansion     | Negative | Score demoted   |
-| 5× – 19×  | High multikey expansion       | Neutral  | Informational   |
+| Multiplier | Badge                     | Type     | Effect        |
+| ---------- | ------------------------- | -------- | ------------- |
+| ≥ 20×      | Severe multikey expansion | Negative | Score demoted |
+| 5× – 19×   | High multikey expansion   | Neutral  | Informational |
 
 **Score demotion:** Severe multikey expansion (≥20×) demotes the score by
 one level (e.g., Excellent → Good, Good → Fair).
@@ -241,16 +248,16 @@ indexed as a multikey index. A query examining 1,000 documents may examine
 Not all badges are shown in the UI. Some positive badges are hidden to
 reduce visual noise — only the most actionable ones appear:
 
-| Badge                       | Shown? | Reason                              |
-|-----------------------------|--------|-------------------------------------|
-| **High efficiency ratio**   | ✓      | Key positive signal                 |
-| **Fast execution**          | ✓      | Key positive signal                 |
-| **Index used**              | ✓      | Key positive signal                 |
-| Efficient sorting           | ✗      | Expected behavior, low signal value |
-| No sorting required         | ✗      | Expected behavior, low signal value |
-| Moderate efficiency ratio   | ✓      | Always shown (neutral)              |
-| All negative badges         | ✓      | Always shown (actionable)           |
-| All advisory badges         | ✓      | Always shown (informational)        |
+| Badge                     | Shown? | Reason                              |
+| ------------------------- | ------ | ----------------------------------- |
+| **High efficiency ratio** | ✓      | Key positive signal                 |
+| **Fast execution**        | ✓      | Key positive signal                 |
+| **Index used**            | ✓      | Key positive signal                 |
+| Efficient sorting         | ✗      | Expected behavior, low signal value |
+| No sorting required       | ✗      | Expected behavior, low signal value |
+| Moderate efficiency ratio | ✓      | Always shown (neutral)              |
+| All negative badges       | ✓      | Always shown (actionable)           |
+| All advisory badges       | ✓      | Always shown (informational)        |
 
 ### Badge Ordering
 
@@ -260,11 +267,11 @@ informational advisories, then highlighting problems.
 
 ### Badge Colors
 
-| Type     | Fluent UI Color | Visual            |
-|----------|----------------|-------------------|
-| Positive | `success`      | Green badge       |
-| Neutral  | `informative`  | Blue/gray badge   |
-| Negative | `warning`      | Orange/yellow badge |
+| Type     | Fluent UI Color | Visual              |
+| -------- | --------------- | ------------------- |
+| Positive | `success`       | Green badge         |
+| Neutral  | `informative`   | Blue/gray badge     |
+| Negative | `warning`       | Orange/yellow badge |
 
 ---
 
@@ -289,11 +296,13 @@ Index:   { status: 1, customerId: 1 }
 **Score:** `Excellent`
 
 **Visible Badges:**
+
 - ✓ High efficiency ratio (positive, green)
 - ✓ Fast execution (positive, green)
 - ✓ Index used (positive, green)
 
 **Summary Card:**
+
 - Selectivity: `0.0%`
 - Index Used: `status_1_customerId_1`
 - Fetch Overhead: `Direct fetch`
@@ -318,12 +327,14 @@ Index:   none
 **Score:** `Poor`
 
 **Visible Badges:**
+
 - ⚠ Low efficiency ratio (negative, orange)
 - ⚠ Slow execution (negative, orange)
 - ⚠ Full collection scan (negative, orange)
 - ⚠ In-memory sort required (negative, orange)
 
 **Summary Card:**
+
 - Selectivity: `5.0%`
 - Index Used: `None (collection scan)`
 - Fetch Overhead: `Collection scan`
@@ -348,6 +359,7 @@ Index:   { isActive: 1 }
 **Score:** `Good`
 
 **Visible Badges:**
+
 - ✓ High efficiency ratio (positive, green)
 - ✓ Index used (positive, green)
 - ● Returns majority of collection (neutral, blue)
@@ -373,6 +385,7 @@ Index:   { tags: 1 }     (multikey)
 **Score:** `Good` (demoted from Excellent due to severe multikey)
 
 **Visible Badges:**
+
 - ✓ High efficiency ratio (positive, green)
 - ✓ Fast execution (positive, green)
 - ✓ Index used (positive, green)
@@ -382,13 +395,13 @@ Index:   { tags: 1 }     (multikey)
 
 ## Glossary
 
-| Term               | Meaning                                                                          |
-|--------------------|----------------------------------------------------------------------------------|
-| Collection scan    | Database reads every document in the collection sequentially                     |
-| Covered query      | All requested data is in the index — no need to fetch the actual documents       |
-| Efficiency ratio   | Documents returned ÷ documents examined (higher is better)                       |
-| In-memory sort     | Database sorts results in RAM instead of using index order                        |
-| Index scan         | Database uses an index to locate matching documents efficiently                   |
-| Multikey index     | Index on an array field — one document produces multiple index entries            |
-| Selectivity        | How narrowly a query filters — percentage of collection returned                  |
-| Fetch overhead     | How the database retrieves document data after finding matches in the index       |
+| Term             | Meaning                                                                     |
+| ---------------- | --------------------------------------------------------------------------- |
+| Collection scan  | Database reads every document in the collection sequentially                |
+| Covered query    | All requested data is in the index — no need to fetch the actual documents  |
+| Efficiency ratio | Documents returned ÷ documents examined (higher is better)                  |
+| In-memory sort   | Database sorts results in RAM instead of using index order                  |
+| Index scan       | Database uses an index to locate matching documents efficiently             |
+| Multikey index   | Index on an array field — one document produces multiple index entries      |
+| Selectivity      | How narrowly a query filters — percentage of collection returned            |
+| Fetch overhead   | How the database retrieves document data after finding matches in the index |
