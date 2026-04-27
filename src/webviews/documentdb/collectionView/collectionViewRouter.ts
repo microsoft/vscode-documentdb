@@ -774,7 +774,8 @@ export const collectionsViewRouter = router({
                 analyzed,
                 totalCollectionDocs,
                 explainResult,
-                queryParams.filterObj,
+                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+                queryParams.filterObj as Document | undefined,
             );
         }
 

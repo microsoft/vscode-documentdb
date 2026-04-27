@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
+import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
 import { type ExtendedStageInfo } from '../../webviews/documentdb/collectionView/types/queryInsights';
 
@@ -245,37 +246,50 @@ export class ExplainPlanAnalyzer {
             diagnostics.push({
                 diagnosticId: 'no_matching_documents',
                 type: 'neutral',
-                message: 'No matching documents',
-                details:
+                message: l10n.t('No matching documents'),
+                details: l10n.t(
                     "Your query examined documents but found no matches.\n\nIf this is unexpected, verify your filter criteria. The query's resource usage is better assessed by the index usage and execution time badges.",
+                ),
             });
         } else if (efficiencyRatio >= 0.5) {
             diagnostics.push({
                 diagnosticId: 'high_efficiency_ratio',
                 type: 'positive',
-                message: 'High efficiency ratio',
-                details: `You return ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis indicates excellent query selectivity and optimal index usage.`,
+                message: l10n.t('High efficiency ratio'),
+                details: l10n.t(
+                    'You return {0}% of examined documents.\n\nThis indicates excellent query selectivity and optimal index usage.',
+                    (efficiencyRatio * 100).toFixed(1),
+                ),
             });
         } else if (efficiencyRatio >= 0.1) {
             diagnostics.push({
                 diagnosticId: 'moderate_efficiency_ratio',
                 type: 'neutral',
-                message: 'Moderate efficiency ratio',
-                details: `You return ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis is acceptable but could be improved with better index coverage or more selective filters.`,
+                message: l10n.t('Moderate efficiency ratio'),
+                details: l10n.t(
+                    'You return {0}% of examined documents.\n\nThis is acceptable but could be improved with better index coverage or more selective filters.',
+                    (efficiencyRatio * 100).toFixed(1),
+                ),
             });
         } else if (efficiencyRatio >= 0.01) {
             diagnostics.push({
                 diagnosticId: 'low_efficiency_ratio',
                 type: 'negative',
-                message: 'Low efficiency ratio',
-                details: `You return only ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis indicates poor query selectivity: the database examines many documents that do not match your query criteria.\n\nConsider adding more selective indexes or refining your query filters.`,
+                message: l10n.t('Low efficiency ratio'),
+                details: l10n.t(
+                    'You return only {0}% of examined documents.\n\nThis indicates poor query selectivity: the database examines many documents that do not match your query criteria.\n\nConsider adding more selective indexes or refining your query filters.',
+                    (efficiencyRatio * 100).toFixed(1),
+                ),
             });
         } else {
             diagnostics.push({
                 diagnosticId: 'very_low_efficiency_ratio',
                 type: 'negative',
-                message: 'Very low efficiency ratio',
-                details: `You return only ${(efficiencyRatio * 100).toFixed(2)}% of examined documents.\n\nThis is extremely inefficient - the database examines thousands of documents for each result returned.\n\nThis severely impacts performance and should be addressed with better indexing strategies.`,
+                message: l10n.t('Very low efficiency ratio'),
+                details: l10n.t(
+                    'You return only {0}% of examined documents.\n\nThis is extremely inefficient - the database examines thousands of documents for each result returned.\n\nThis severely impacts performance and should be addressed with better indexing strategies.',
+                    (efficiencyRatio * 100).toFixed(2),
+                ),
             });
         }
 
@@ -284,29 +298,41 @@ export class ExplainPlanAnalyzer {
             diagnostics.push({
                 diagnosticId: 'fast_execution',
                 type: 'positive',
-                message: 'Fast execution',
-                details: `Query completed in ${executionTimeMs.toFixed(1)}ms.\n\nThis is excellent performance and provides a responsive user experience.`,
+                message: l10n.t('Fast execution'),
+                details: l10n.t(
+                    'Query completed in {0}ms.\n\nThis is excellent performance and provides a responsive user experience.',
+                    executionTimeMs.toFixed(1),
+                ),
             });
         } else if (executionTimeMs < 500) {
             diagnostics.push({
                 diagnosticId: 'acceptable_execution',
                 type: 'neutral',
-                message: 'Acceptable execution time',
-                details: `Query completed in ${executionTimeMs.toFixed(1)}ms.\n\nThis is acceptable for most use cases, though optimization could improve responsiveness.`,
+                message: l10n.t('Acceptable execution time'),
+                details: l10n.t(
+                    'Query completed in {0}ms.\n\nThis is acceptable for most use cases, though optimization could improve responsiveness.',
+                    executionTimeMs.toFixed(1),
+                ),
             });
         } else if (executionTimeMs < 2000) {
             diagnostics.push({
                 diagnosticId: 'slow_execution',
                 type: 'negative',
-                message: 'Slow execution',
-                details: `Query took ${executionTimeMs.toFixed(1)}ms to complete.\n\nThis may impact user experience.\n\nConsider adding indexes or optimizing your query structure.`,
+                message: l10n.t('Slow execution'),
+                details: l10n.t(
+                    'Query took {0}ms to complete.\n\nThis may impact user experience.\n\nConsider adding indexes or optimizing your query structure.',
+                    executionTimeMs.toFixed(1),
+                ),
             });
         } else {
             diagnostics.push({
                 diagnosticId: 'very_slow_execution',
                 type: 'negative',
-                message: 'Very slow execution',
-                details: `Query took ${(executionTimeMs / 1000).toFixed(2)}s to complete.\n\nThis significantly impacts performance and user experience.\n\nImmediate optimization is recommended.`,
+                message: l10n.t('Very slow execution'),
+                details: l10n.t(
+                    'Query took {0}s to complete.\n\nThis significantly impacts performance and user experience.\n\nImmediate optimization is recommended.',
+                    (executionTimeMs / 1000).toFixed(2),
+                ),
             });
         }
 
@@ -315,9 +341,10 @@ export class ExplainPlanAnalyzer {
             diagnostics.push({
                 diagnosticId: 'index_used',
                 type: 'positive',
-                message: 'Index used',
-                details:
+                message: l10n.t('Index used'),
+                details: l10n.t(
                     'Your query uses an index.\n\nThis allows the database to efficiently locate matching documents without scanning the entire collection.',
+                ),
             });
         } else if (isCollectionScan) {
             if (isEmptyQuery) {
@@ -325,27 +352,30 @@ export class ExplainPlanAnalyzer {
                 diagnostics.push({
                     diagnosticId: 'full_collection_scan',
                     type: 'neutral',
-                    message: 'Full collection scan',
-                    details:
+                    message: l10n.t('Full collection scan'),
+                    details: l10n.t(
                         'Your query retrieves all documents, so a full collection scan is expected.\n\nConsider adding filters if you only need a subset of documents.',
+                    ),
                 });
             } else {
                 // Filter exists but no supporting index
                 diagnostics.push({
                     diagnosticId: 'full_collection_scan',
                     type: 'negative',
-                    message: 'Full collection scan',
-                    details:
+                    message: l10n.t('Full collection scan'),
+                    details: l10n.t(
                         'Your query has filter criteria but no supporting index. The database scanned every document in the collection to find matches.\n\nAdding an index on the filtered fields would allow the database to locate matching documents directly.',
+                    ),
                 });
             }
         } else {
             diagnostics.push({
                 diagnosticId: 'no_index_used',
                 type: 'neutral',
-                message: 'No index used',
-                details:
+                message: l10n.t('No index used'),
+                details: l10n.t(
                     'Your query does not use an index.\n\nWhile not necessarily a problem for small collections, adding appropriate indexes can significantly improve query performance.',
+                ),
             });
         }
 
@@ -355,17 +385,19 @@ export class ExplainPlanAnalyzer {
                 diagnostics.push({
                     diagnosticId: 'in_memory_sort',
                     type: 'negative',
-                    message: 'In-memory sort required',
-                    details:
+                    message: l10n.t('In-memory sort required'),
+                    details: l10n.t(
                         'Your query requires sorting data in memory, which is limited by available RAM and can fail for large result sets.\n\nConsider adding a compound index that includes your sort fields to enable index-based sorting.',
+                    ),
                 });
             } else {
                 diagnostics.push({
                     diagnosticId: 'efficient_sorting',
                     type: 'positive',
-                    message: 'Efficient sorting',
-                    details:
+                    message: l10n.t('Efficient sorting'),
+                    details: l10n.t(
                         'Your query uses index-based sorting, which is efficient and avoids memory constraints.\n\nThis improves performance by leveraging the natural order of the index.',
+                    ),
                 });
             }
         } else {
@@ -373,8 +405,8 @@ export class ExplainPlanAnalyzer {
             diagnostics.push({
                 diagnosticId: 'no_sorting_required',
                 type: 'neutral',
-                message: 'No sorting required',
-                details: 'Your query does not require sorting, which avoids additional processing overhead.',
+                message: l10n.t('No sorting required'),
+                details: l10n.t('Your query does not require sorting, which avoids additional processing overhead.'),
             });
         }
 
@@ -524,7 +556,7 @@ export class ExplainPlanAnalyzer {
         return {
             failed: true,
             executionSuccess: false,
-            errorMessage: errorMessage || 'Query execution failed (no error message provided)',
+            errorMessage: errorMessage || l10n.t('Query execution failed (no error message provided)'),
             errorCode,
             failedStage,
             partialStats: {
@@ -627,8 +659,11 @@ export class ExplainPlanAnalyzer {
         diagnostics.push({
             diagnosticId: 'query_execution_failed',
             type: 'negative',
-            message: 'Query execution failed',
-            details: `${error.errorMessage}\n\nThe query did not complete successfully. Performance metrics shown are partial and measured up to the failure point.`,
+            message: l10n.t('Query execution failed'),
+            details: l10n.t(
+                '{0}\n\nThe query did not complete successfully. Performance metrics shown are partial and measured up to the failure point.',
+                error.errorMessage,
+            ),
         });
 
         // Stage-specific diagnostics
@@ -667,14 +702,12 @@ export class ExplainPlanAnalyzer {
             return {
                 diagnosticId: 'sort_exceeded_memory_limit',
                 type: 'negative',
-                message: 'Sort exceeded memory limit',
-                details:
-                    `The SORT stage exceeded the ${memLimitMB}MB memory limit.\n\n` +
-                    `**Solutions:**\n` +
-                    `1. Add .allowDiskUse(true) to allow disk-based sorting for large result sets\n` +
-                    `2. Create an index matching the sort pattern: ${JSON.stringify(sortPattern)}\n` +
-                    `3. Add filters to reduce the number of documents being sorted\n` +
-                    `4. Increase server memory limit (requires server configuration)`,
+                message: l10n.t('Sort exceeded memory limit'),
+                details: l10n.t(
+                    'The SORT stage exceeded the {0}MB memory limit.\n\n**Solutions:**\n1. Add .allowDiskUse(true) to allow disk-based sorting for large result sets\n2. Create an index matching the sort pattern: {1}\n3. Add filters to reduce the number of documents being sorted\n4. Increase server memory limit (requires server configuration)',
+                    memLimitMB,
+                    JSON.stringify(sortPattern),
+                ),
             };
         }
 
@@ -682,8 +715,11 @@ export class ExplainPlanAnalyzer {
         return {
             diagnosticId: 'stage_failed',
             type: 'negative',
-            message: `${stage} stage failed`,
-            details: `The ${stage} stage could not complete execution.\n\nReview the error message and query structure for potential issues.`,
+            message: l10n.t('{0} stage failed', stage),
+            details: l10n.t(
+                'The {0} stage could not complete execution.\n\nReview the error message and query structure for potential issues.',
+                stage,
+            ),
         };
     }
 
@@ -775,14 +811,14 @@ export class ExplainPlanAnalyzer {
         const winningPlan = (explainResult.queryPlanner as Document | undefined)?.winningPlan as Document | undefined;
         const ixscanStage = this.findStageInPlan(winningPlan, 'IXSCAN');
         if (ixscanStage?.isBitmap === true) {
-            reasons.push('Bitmap index detected: typically used for low-cardinality fields');
+            reasons.push(l10n.t('Bitmap index detected: typically used for low-cardinality fields'));
         }
 
         // Signal 2: Boolean literal anywhere in the query filter tree.
         // Walks top-level values, $and/$or/$nor arrays, and operator objects
         // like { $eq: true } or { $in: [true, false] }.
         if (queryFilter && this.filterContainsBoolean(queryFilter)) {
-            reasons.push('Query filters on a boolean field, which has only two distinct values');
+            reasons.push(l10n.t('Query filters on a boolean field, which has only two distinct values'));
         }
 
         // Signal 3: estimatedEntryCount from scanKeys strings (DocumentDB-specific)
@@ -807,7 +843,10 @@ export class ExplainPlanAnalyzer {
                             const entryCount = parseInt(match[1], 10);
                             if (entryCount >= CARDINALITY_PER_KEY_RATIO * totalCollectionDocs) {
                                 reasons.push(
-                                    `Index key covers ${((entryCount / totalCollectionDocs) * 100).toFixed(0)}% of the collection per bucket`,
+                                    l10n.t(
+                                        'Index key covers {0}% of the collection per bucket',
+                                        ((entryCount / totalCollectionDocs) * 100).toFixed(0),
+                                    ),
                                 );
                             }
                         }
@@ -852,15 +891,21 @@ export class ExplainPlanAnalyzer {
                 diagnostics.push({
                     diagnosticId: 'returns_majority_of_collection',
                     type: 'neutral',
-                    message: 'Returns majority of collection',
-                    details: `Your query returns ${(coverage * 100).toFixed(1)}% of the collection.\n\nWhen returning more than half the documents, a collection scan may actually be faster than an index lookup because sequential reads are more efficient than random index-pointer chasing.`,
+                    message: l10n.t('Returns majority of collection'),
+                    details: l10n.t(
+                        'Your query returns {0}% of the collection.\n\nWhen returning more than half the documents, a collection scan may actually be faster than an index lookup because sequential reads are more efficient than random index-pointer chasing.',
+                        (coverage * 100).toFixed(1),
+                    ),
                 });
             } else if (coverage >= COVERAGE_LOW_SELECTIVITY) {
                 diagnostics.push({
                     diagnosticId: 'low_filter_selectivity',
                     type: 'neutral',
-                    message: 'Low filter selectivity',
-                    details: `Your query returns ${(coverage * 100).toFixed(1)}% of the collection.\n\nA more selective filter would narrow results further and let the index skip more documents.`,
+                    message: l10n.t('Low filter selectivity'),
+                    details: l10n.t(
+                        'Your query returns {0}% of the collection.\n\nA more selective filter would narrow results further and let the index skip more documents.',
+                        (coverage * 100).toFixed(1),
+                    ),
                 });
             }
         }
@@ -879,8 +924,11 @@ export class ExplainPlanAnalyzer {
                 diagnostics.push({
                     diagnosticId: 'low_cardinality_index',
                     type: 'neutral',
-                    message: 'Low-cardinality index',
-                    details: `The index used has low cardinality: it does not differentiate well between documents.\n\n${reasonsList}\n\nConsider using a more selective index field or a compound index that includes high-cardinality fields.`,
+                    message: l10n.t('Low-cardinality index'),
+                    details: l10n.t(
+                        'The index used has low cardinality: it does not differentiate well between documents.\n\n{0}\n\nConsider using a more selective index field or a compound index that includes high-cardinality fields.',
+                        reasonsList,
+                    ),
                 });
             }
         }
@@ -893,8 +941,11 @@ export class ExplainPlanAnalyzer {
                 diagnostics.push({
                     diagnosticId: 'severe_multikey_expansion',
                     type: 'negative',
-                    message: 'Severe multikey expansion',
-                    details: `The index examined ${multikeyMultiplier.toFixed(1)}× more keys than documents.\n\nThis typically happens with indexes on array fields where each array element generates a separate index entry. The database must examine many index keys for each document.\n\nConsider restructuring the data to avoid indexing large arrays, or use a different query pattern.`,
+                    message: l10n.t('Severe multikey expansion'),
+                    details: l10n.t(
+                        'The index examined {0}× more keys than documents.\n\nThis typically happens with indexes on array fields where each array element generates a separate index entry. The database must examine many index keys for each document.\n\nConsider restructuring the data to avoid indexing large arrays, or use a different query pattern.',
+                        multikeyMultiplier.toFixed(1),
+                    ),
                 });
 
                 // Demote score by one level for severe multikey
@@ -912,8 +963,11 @@ export class ExplainPlanAnalyzer {
                 diagnostics.push({
                     diagnosticId: 'high_multikey_expansion',
                     type: 'neutral',
-                    message: 'High multikey expansion',
-                    details: `The index examined ${multikeyMultiplier.toFixed(1)}× more keys than documents.\n\nThis is common with indexes on array fields. Each array element generates a separate index entry, increasing the number of keys the database must examine.\n\nThis is usually acceptable but can become a concern as array sizes grow.`,
+                    message: l10n.t('High multikey expansion'),
+                    details: l10n.t(
+                        'The index examined {0}× more keys than documents.\n\nThis is common with indexes on array fields. Each array element generates a separate index entry, increasing the number of keys the database must examine.\n\nThis is usually acceptable but can become a concern as array sizes grow.',
+                        multikeyMultiplier.toFixed(1),
+                    ),
                 });
             }
         }
