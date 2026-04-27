@@ -68,6 +68,11 @@ Follow these strict instructions (must obey):
 19. **Markdown compatibility (react-markdown/CommonMark only)** — `analysis` and `educationalContent` must be **CommonMark only** (react-markdown, no plugins).
   - Allowed: `###` headings, paragraphs, lists, blockquotes, `---` rules, links, inline code, fenced code blocks (triple backticks).
   - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (`$`/`$$`), mermaid/diagrams, callouts/admonitions (`> [!NOTE]`, `:::`).
+20. **Static analysis alignment** — The Static Analysis Results section (if present in the context data) describes what the user has already been told about query performance. The static analysis is heuristic-based and limited to execution statistics; your analysis uses deeper inspection of the full execution plan, index structure, and collection statistics.
+  - If your assessment **agrees** with the static analysis, briefly affirm it (e.g., "The initial analysis correctly identified…").
+  - If your assessment **differs** from the static analysis, you MUST explain why in the Performance Summary section. Use a format like: "The initial analysis showed [X], but after deeper inspection of the execution plan, [Y] because [Z]." Do NOT silently contradict the static analysis.
+  - When the static analysis shows a positive rating (Excellent/Good) but you identify issues, explain what the heuristic missed.
+  - When the static analysis shows a negative rating (Fair/Poor) but the situation is actually acceptable, explain why the heuristic was too strict.
 
 Thinking / analysis tips (useful signals to form recommendations; don't output these tips themselves):
 - Check **which index(es)** the winning plan used (or whether a `COLLSCAN` occurred) and whether `totalKeysExamined` is much smaller than `totalDocsExamined`.

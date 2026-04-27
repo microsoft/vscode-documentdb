@@ -251,6 +251,11 @@ Follow these strict instructions (must obey):
 19. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
   - Allowed: \`###\` headings, paragraphs, lists, blockquotes, \`---\` rules, links, inline code, fenced code blocks (triple backticks).
   - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (\`$\`/\`$$\`), mermaid/diagrams, callouts/admonitions (\`> [!NOTE]\`, \`:::\`).
+20. **Static analysis alignment** — The Static Analysis Results section (if present in the context data) describes what the user has already been told about query performance. The static analysis is heuristic-based and limited to execution statistics; your analysis uses deeper inspection of the full execution plan, index structure, and collection statistics.
+  - If your assessment **agrees** with the static analysis, briefly affirm it (e.g., "The initial analysis correctly identified…").
+  - If your assessment **differs** from the static analysis, you MUST explain why in the Performance Summary section. Use a format like: "The initial analysis showed [X], but after deeper inspection of the execution plan, [Y] because [Z]." Do NOT silently contradict the static analysis.
+  - When the static analysis shows a positive rating (Excellent/Good) but you identify issues, explain what the heuristic missed.
+  - When the static analysis shows a negative rating (Fair/Poor) but the situation is actually acceptable, explain why the heuristic was too strict.
 
 Thinking / analysis tips (useful signals to form recommendations; don't output these tips themselves):
 - Check **which index(es)** the winning plan used (or whether a \`COLLSCAN\` occurred) and whether \`totalKeysExamined\` is much smaller than \`totalDocsExamined\`.
@@ -398,6 +403,11 @@ Follow these strict instructions (must obey):
 18. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
   - Allowed: \`###\` headings, paragraphs, lists, blockquotes, \`---\` rules, links, inline code, fenced code blocks (triple backticks).
   - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (\`$\`/\`$$\`), mermaid/diagrams, callouts/admonitions (\`> [!NOTE]\`, \`:::\`).
+19. **Static analysis alignment** — The Static Analysis Results section (if present in the context data) describes what the user has already been told about query performance. The static analysis is heuristic-based and limited to execution statistics; your analysis uses deeper inspection of the full execution plan, index structure, and collection statistics.
+  - If your assessment **agrees** with the static analysis, briefly affirm it (e.g., "The initial analysis correctly identified…").
+  - If your assessment **differs** from the static analysis, you MUST explain why in the Performance Summary section. Use a format like: "The initial analysis showed [X], but after deeper inspection of the execution plan, [Y] because [Z]." Do NOT silently contradict the static analysis.
+  - When the static analysis shows a positive rating (Excellent/Good) but you identify issues, explain what the heuristic missed.
+  - When the static analysis shows a negative rating (Fair/Poor) but the situation is actually acceptable, explain why the heuristic was too strict.
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **\\$match priority**: Place match stages early and check if indexes can accelerate filtering.
@@ -548,6 +558,11 @@ Follow these strict instructions (must obey):
 15. **Do not change input objects** — echo input objects only under \`metadata\`; do not mutate \`{collectionStats}\`, \`{indexStats}\`, or \`{executionStats}\`—just include them as-is (and add computed helper fields if needed).
 16. **Be brave to say no** — if you confirm an index change is not beneficial, or not relates to the query, feel free to return empty improvements.
 17. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics.\n"
+18. **Static analysis alignment** — The Static Analysis Results section (if present in the context data) describes what the user has already been told about query performance. The static analysis is heuristic-based and limited to execution statistics; your analysis uses deeper inspection of the full execution plan, index structure, and collection statistics.
+  - If your assessment **agrees** with the static analysis, briefly affirm it (e.g., "The initial analysis correctly identified…").
+  - If your assessment **differs** from the static analysis, you MUST explain why in the Performance Summary section. Use a format like: "The initial analysis showed [X], but after deeper inspection of the execution plan, [Y] because [Z]." Do NOT silently contradict the static analysis.
+  - When the static analysis shows a positive rating (Excellent/Good) but you identify issues, explain what the heuristic missed.
+  - When the static analysis shows a negative rating (Fair/Poor) but the situation is actually acceptable, explain why the heuristic was too strict.
 
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Index-only optimization**: The best count performance occurs when all filter fields are indexed, allowing a covered query that avoids document fetches entirely.
