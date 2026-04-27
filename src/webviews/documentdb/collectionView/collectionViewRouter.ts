@@ -700,6 +700,7 @@ export const collectionsViewRouter = router({
 
         // Check for debug override file first
         const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
+        let queryFilter: Document | undefined;
         if (debugData) {
             ext.outputChannel.trace(l10n.t('[Query Insights Stage 2] Using debug data file'));
             // Use debug data - analyze it the same way as real data
@@ -738,6 +739,7 @@ export const collectionsViewRouter = router({
             // Analyze with ExplainPlanAnalyzer (pass the user's actual filter for empty-query detection)
             analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult, queryParams.filterObj);
             explainResult = executionStatsResult;
+            queryFilter = queryParams.filterObj as Document | undefined;
 
             // Fetch total collection docs for index-strategy advisories and selectivity cell
             try {
@@ -774,8 +776,7 @@ export const collectionsViewRouter = router({
                 analyzed,
                 totalCollectionDocs,
                 explainResult,
-                // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
-                queryParams.filterObj as Document | undefined,
+                queryFilter,
             );
         }
 

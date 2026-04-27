@@ -33,8 +33,12 @@ Before finishing work on a PR, agents **must** run the following steps in order:
    ```bash
    npx jest --no-coverage
    ```
+5. **Build** — Run the TypeScript build to confirm there are no type errors:
+   ```bash
+   npm run build
+   ```
 
-> ⚠️ **An agent must not finish or terminate until all four steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
+> ⚠️ **An agent must not finish or terminate until all five steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
 
 ## Git Safety
 

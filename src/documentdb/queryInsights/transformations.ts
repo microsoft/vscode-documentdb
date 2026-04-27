@@ -286,7 +286,7 @@ export function transformStage2Response(
             efficiencyAnalysis: {
                 selectivity: computeSelectivity(analyzed.nReturned, totalCollectionDocs),
                 indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
-                fetchOverhead: computeFetchOverhead(analyzed),
+                ...computeFetchOverhead(analyzed),
                 hasInMemorySort: shardedInfo.shards.some((s) => s.hasBlockedSort || false),
                 performanceRating: analyzed.performanceRating,
             },
@@ -771,6 +771,7 @@ export function createFailedQueryResponse(
             selectivity: null,
             indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
             fetchOverhead: l10n.t('Query failed'),
+            fetchOverheadKind: 'noMatches' as FetchOverheadKind,
             hasInMemorySort: analyzed.hasInMemorySort,
             performanceRating: analyzed.performanceRating,
         },
