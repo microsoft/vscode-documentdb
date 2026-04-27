@@ -268,10 +268,10 @@ describe('promptTemplates', () => {
     });
 
     describe('loadPromptBody', () => {
-        it('should return undefined when extension context is not available', () => {
+        it('should return fallback reason when extension context is not available', () => {
             // In test environment, ext.context is undefined
             const result = loadPromptBody('index-advisor-find.prompt.md');
-            expect(result).toBeUndefined();
+            expect(result).toEqual({ fallbackReason: 'no-context' });
         });
     });
 

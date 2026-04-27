@@ -80,27 +80,27 @@ const promptBodyCache: Map<string, string> = new Map();
  * @param resourceFileName - The filename within `resources/prompts/`
  * @returns The file contents or undefined
  */
-export function loadPromptBody(resourceFileName: string): string | undefined {
+export function loadPromptBody(resourceFileName: string): { body: string } | { fallbackReason: 'no-context' | 'read-error' } {
     const cached = promptBodyCache.get(resourceFileName);
     if (cached !== undefined) {
-        return cached;
+        return { body: cached };
     }
 
     try {
         const extensionPath = ext.context?.extensionPath;
         if (!extensionPath) {
-            return undefined;
+            return { fallbackReason: 'no-context' };
         }
         const filePath = path.join(extensionPath, 'resources', 'prompts', resourceFileName);
         const content = fs.readFileSync(filePath, 'utf-8');
         if (content && content.trim().length > 0) {
             promptBodyCache.set(resourceFileName, content);
-            return content;
+            return { body: content };
         }
     } catch {
-        // Fall through to return undefined — caller should use inline fallback
+        // Fall through to return fallback reason — caller should use inline fallback
     }
-    return undefined;
+    return { fallbackReason: 'read-error' };
 }
 
 /**
@@ -128,9 +128,9 @@ export function buildIndexAdvisorPrompt(
         return inlineFallback;
     }
 
-    const body = loadPromptBody(resourceFile);
-    if (!body) {
-        lastPromptSource = 'inline-fallback';
+    const result = loadPromptBody(resourceFile);
+    if ('fallbackReason' in result) {
+        lastPromptSource = `inline-fallback-${result.fallbackReason}`;
         return inlineFallback;
     }
 
@@ -140,14 +140,20 @@ ${createPriorityDeclaration(role)}
 
 ${createSecurityInstructions(messages, task)}
 
-${body}`;
+${result.body}`;
 }
 
 /**
  * Tracks the source of the last prompt template loaded.
  * Used by telemetry to monitor whether resource files or inline fallbacks are in use.
  */
-let lastPromptSource: 'resource-file' | 'inline-fallback' | 'custom-file' | 'unknown' = 'unknown';
+let lastPromptSource:
+    | 'resource-file'
+    | 'inline-fallback'
+    | 'inline-fallback-no-context'
+    | 'inline-fallback-read-error'
+    | 'custom-file'
+    | 'unknown' = 'unknown';
 
 /**
  * Returns the source of the last prompt template loaded by buildIndexAdvisorPrompt().
