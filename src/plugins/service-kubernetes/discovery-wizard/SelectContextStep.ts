@@ -7,13 +7,12 @@ import { AzureWizardPromptStep, UserCancelledError, type IAzureQuickPickItem } f
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../extensionVariables';
-import { CUSTOM_KUBECONFIG_PATH_KEY, ENABLED_CONTEXTS_KEY } from '../config';
-import { getContexts, loadKubeConfig, type KubeContextInfo } from '../kubernetesClient';
+import { ENABLED_CONTEXTS_KEY, HIDDEN_CONTEXTS_KEY, resolveEnabledContextNames } from '../config';
+import { getContexts, loadConfiguredKubeConfig, type KubeContextInfo } from '../kubernetesClient';
 
 export enum KubernetesWizardProperties {
     AvailableContexts = 'k8sAvailableContexts',
     SelectedContext = 'k8sSelectedContext',
-    SelectedNamespace = 'k8sSelectedNamespace',
     SelectedService = 'k8sSelectedService',
 }
 
@@ -22,18 +21,27 @@ export enum KubernetesWizardProperties {
  */
 export class SelectContextStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const customPath = ext.context.globalState.get<string>(CUSTOM_KUBECONFIG_PATH_KEY);
-        const enabledContextNames = ext.context.globalState.get<string[]>(ENABLED_CONTEXTS_KEY, []);
+        const configuredEnabledContextNames = ext.context.globalState.get<string[] | undefined>(ENABLED_CONTEXTS_KEY);
+        const hiddenContextNames = ext.context.globalState.get<string[]>(HIDDEN_CONTEXTS_KEY, []);
 
-        const kubeConfig = await loadKubeConfig(customPath);
+        const kubeConfig = await loadConfiguredKubeConfig();
         const allContexts = getContexts(kubeConfig);
+        const enabledContextNames = new Set(
+            resolveEnabledContextNames(
+                allContexts.map((ctx) => ctx.name),
+                configuredEnabledContextNames,
+            ),
+        );
 
-        // Filter to enabled contexts
-        const contexts = allContexts.filter((ctx) => enabledContextNames.includes(ctx.name));
+        const contexts = allContexts.filter(
+            (ctx) => enabledContextNames.has(ctx.name) && !hiddenContextNames.includes(ctx.name),
+        );
 
         if (contexts.length === 0) {
             void vscode.window.showWarningMessage(
-                vscode.l10n.t('No Kubernetes contexts are configured. Use "Manage Credentials" to set up contexts.'),
+                vscode.l10n.t(
+                    'No visible Kubernetes contexts remain. Use Filter to show hidden contexts or Manage Credentials to enable contexts.',
+                ),
             );
             throw new UserCancelledError();
         }

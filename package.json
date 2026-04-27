@@ -738,18 +738,13 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\b(treeitem_documentdbcluster|documentdbTargetLeaf)\\b/i",
           "group": "0@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /\\brootItem\\b/i",
           "group": "2@1"
-        },
-        {
-          "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
-          "group": "0@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.manageCredentials",
@@ -763,7 +758,7 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\b(treeitem_documentdbcluster|documentdbTargetLeaf)\\b/i",
           "group": "inline"
         },
         {

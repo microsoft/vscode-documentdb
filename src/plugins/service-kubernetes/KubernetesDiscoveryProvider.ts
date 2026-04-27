@@ -12,12 +12,12 @@ import { DISCOVERY_PROVIDER_ID, ICON_PATH, getDescription, getLabel, getWizardTi
 import { KubernetesRootItem } from './discovery-tree/KubernetesRootItem';
 import { KubernetesExecuteStep } from './discovery-wizard/KubernetesExecuteStep';
 import { SelectContextStep } from './discovery-wizard/SelectContextStep';
-import { SelectNamespaceStep } from './discovery-wizard/SelectNamespaceStep';
 import { SelectServiceStep } from './discovery-wizard/SelectServiceStep';
 
 export class KubernetesDiscoveryProvider implements DiscoveryProvider {
     id = DISCOVERY_PROVIDER_ID;
     iconPath = ICON_PATH;
+    configureCredentialsOnActivation = true;
 
     get label(): string {
         return getLabel();
@@ -34,14 +34,14 @@ export class KubernetesDiscoveryProvider implements DiscoveryProvider {
     getDiscoveryWizard(_context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext> {
         return {
             title: getWizardTitle(),
-            promptSteps: [new SelectContextStep(), new SelectNamespaceStep(), new SelectServiceStep()],
+            promptSteps: [new SelectContextStep(), new SelectServiceStep()],
             executeSteps: [new KubernetesExecuteStep()],
             showLoadingPrompt: true,
         };
     }
 
     getLearnMoreUrl(): string | undefined {
-        return 'https://aka.ms/vscode-documentdb-discovery-providers-kubernetes';
+        return 'https://documentdb.io/documentdb-kubernetes-operator/latest/preview/';
     }
 
     async configureTreeItemFilter(context: IActionContext, node: TreeElement): Promise<void> {
@@ -58,12 +58,22 @@ export class KubernetesDiscoveryProvider implements DiscoveryProvider {
         context.telemetry.properties.nodeProvided = node ? 'true' : 'false';
 
         const { configureKubernetesCredentials } = await import('./credentials/configureKubernetesCredentials');
-        await configureKubernetesCredentials(context);
+        const result = await configureKubernetesCredentials(context, { resetFilters: node === undefined });
+
+        if (result.kubeconfigChanged) {
+            const { PortForwardTunnelManager } = await import('./portForwardTunnel');
+            PortForwardTunnelManager.getInstance().stopAll();
+        }
 
         if (node) {
             ext.discoveryBranchDataProvider.refresh(node);
         } else {
             ext.discoveryBranchDataProvider.refresh();
         }
+    }
+
+    async deactivate(_context: IActionContext): Promise<void> {
+        const { PortForwardTunnelManager } = await import('./portForwardTunnel');
+        PortForwardTunnelManager.getInstance().stopAll();
     }
 }

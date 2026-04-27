@@ -31,7 +31,13 @@ import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/Provi
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
+import { getKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
+import {
+    ConnectionStorageService,
+    ConnectionType,
+    isConnection,
+    type ConnectionItem,
+} from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
@@ -66,6 +72,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         if (!connectionCredentials || !isConnection(connectionCredentials)) {
             return undefined;
         }
+
+        await this.ensureKubernetesPortForwardIfNeeded(connectionCredentials);
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
@@ -109,6 +117,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             if (!connectionCredentials || !isConnection(connectionCredentials)) {
                 return null;
             }
+
+            await this.ensureKubernetesPortForwardIfNeeded(connectionCredentials);
 
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
@@ -357,6 +367,28 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             return clustersClient;
         });
         return result ?? null;
+    }
+
+    protected override async beforeCachedClientConnect(): Promise<void> {
+        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
+            ? ConnectionType.Emulators
+            : ConnectionType.Clusters;
+        const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
+
+        if (connectionCredentials && isConnection(connectionCredentials)) {
+            await this.ensureKubernetesPortForwardIfNeeded(connectionCredentials);
+        }
+    }
+
+    private async ensureKubernetesPortForwardIfNeeded(connectionCredentials: ConnectionItem): Promise<void> {
+        const metadata = getKubernetesPortForwardMetadata(connectionCredentials.properties);
+        if (!metadata) {
+            return;
+        }
+
+        const { ensureKubernetesPortForward } =
+            await import('../../plugins/service-kubernetes/ensureKubernetesPortForward');
+        await ensureKubernetesPortForward(metadata);
     }
 
     /**

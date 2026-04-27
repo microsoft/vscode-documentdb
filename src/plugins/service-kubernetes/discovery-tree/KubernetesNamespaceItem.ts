@@ -9,11 +9,12 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
-import { CUSTOM_KUBECONFIG_PATH_KEY, DISCOVERY_PROVIDER_ID } from '../config';
+import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
+import { DISCOVERY_PROVIDER_ID } from '../config';
 import {
     createCoreApi,
     listDocumentDBServices,
-    loadKubeConfig,
+    loadConfiguredKubeConfig,
     type KubeContextInfo,
     type KubeServiceInfo,
 } from '../kubernetesClient';
@@ -28,6 +29,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
         public readonly contextInfo: KubeContextInfo,
         public readonly namespace: string,
         private readonly journeyCorrelationId: string,
+        private readonly preloadedServices?: readonly KubeServiceInfo[],
     ) {
         this.id = `${parentId}/${namespace}`;
     }
@@ -41,24 +43,46 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                 context.telemetry.properties.view = Views.DiscoveryView;
                 context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
 
-                const customPath = ext.context.globalState.get<string>(CUSTOM_KUBECONFIG_PATH_KEY);
-
-                let services: KubeServiceInfo[];
+                let services: readonly KubeServiceInfo[];
                 try {
-                    const kubeConfig = await loadKubeConfig(customPath);
-                    const coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
-                    services = await listDocumentDBServices(coreApi, this.namespace, kubeConfig);
+                    if (this.preloadedServices !== undefined) {
+                        services = this.preloadedServices;
+                    } else {
+                        const kubeConfig = await loadConfiguredKubeConfig();
+                        const coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
+                        services = await listDocumentDBServices(coreApi, this.namespace, kubeConfig);
+                    }
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     ext.outputChannel.error(
                         `[KubernetesDiscovery] Failed to list services in "${this.contextInfo.name}/${this.namespace}": ${errorMessage}`,
                     );
                     context.telemetry.properties.serviceFetchError = 'true';
-                    return [];
+                    return [
+                        createGenericElementWithContext({
+                            contextValue: 'error',
+                            id: `${this.id}/retry`,
+                            label: vscode.l10n.t('Failed to list services. Click to retry.'),
+                            iconPath: new vscode.ThemeIcon('refresh'),
+                            commandId: 'vscode-documentdb.command.internal.retry',
+                            commandArgs: [this],
+                        }),
+                    ];
                 }
 
                 context.telemetry.measurements.discoveryResourcesCount = services.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
+
+                if (services.length === 0) {
+                    return [
+                        createGenericElementWithContext({
+                            contextValue: 'informational',
+                            id: `${this.id}/no-services`,
+                            label: vscode.l10n.t('No DocumentDB services found in this namespace.'),
+                            iconPath: new vscode.ThemeIcon('info'),
+                        }),
+                    ];
+                }
 
                 return services.map(
                     (svc) => new KubernetesServiceItem(this.journeyCorrelationId, this.contextInfo, svc, this.id),
@@ -68,12 +92,28 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
     }
 
     public getTreeItem(): vscode.TreeItem {
+        const preloadedServiceCount = this.preloadedServices?.length;
+        let description: string | undefined;
+        if (preloadedServiceCount !== undefined) {
+            if (preloadedServiceCount === 0) {
+                description = vscode.l10n.t('No DocumentDB targets');
+            } else if (preloadedServiceCount === 1) {
+                description = vscode.l10n.t('1 DocumentDB target');
+            } else {
+                description = vscode.l10n.t('{0} DocumentDB targets', String(preloadedServiceCount));
+            }
+        }
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.namespace,
+            description,
             iconPath: new vscode.ThemeIcon('archive'),
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            collapsibleState:
+                preloadedServiceCount === 0
+                    ? vscode.TreeItemCollapsibleState.None
+                    : vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
 }

@@ -13,8 +13,8 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
-import { CONTEXT_ALIASES_KEY, CUSTOM_KUBECONFIG_PATH_KEY, ENABLED_CONTEXTS_KEY, HIDDEN_CONTEXTS_KEY } from '../config';
-import { getContexts, loadKubeConfig, type KubeContextInfo } from '../kubernetesClient';
+import { ENABLED_CONTEXTS_KEY, HIDDEN_CONTEXTS_KEY, resolveEnabledContextNames } from '../config';
+import { getContexts, loadConfiguredKubeConfig, type KubeContextInfo } from '../kubernetesClient';
 import { KubernetesContextItem } from './KubernetesContextItem';
 
 export class KubernetesRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
@@ -29,32 +29,11 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
     async getChildren(): Promise<ExtTreeElementBase[]> {
         const journeyCorrelationId = randomUUID();
 
-        const enabledContextNames = ext.context.globalState.get<string[]>(ENABLED_CONTEXTS_KEY, []);
         const hiddenContextNames = ext.context.globalState.get<string[]>(HIDDEN_CONTEXTS_KEY, []);
 
-        if (!enabledContextNames || enabledContextNames.length === 0) {
-            const configureResult = await this.askToConfigureCredentials();
-            if (configureResult === 'configure') {
-                void vscode.commands.executeCommand('vscode-documentdb.command.discoveryView.manageCredentials', this);
-            }
-
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/retry`,
-                    label: vscode.l10n.t('Click here to retry'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
-        }
-
-        // Load kubeconfig
-        const customPath = ext.context.globalState.get<string>(CUSTOM_KUBECONFIG_PATH_KEY);
         let allContexts: KubeContextInfo[];
         try {
-            const kubeConfig = await loadKubeConfig(customPath);
+            const kubeConfig = await loadConfiguredKubeConfig();
             allContexts = getContexts(kubeConfig);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
@@ -72,20 +51,12 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
             ];
         }
 
-        // Get aliases for display
-        const aliases = ext.context.globalState.get<Record<string, string>>(CONTEXT_ALIASES_KEY, {});
-
-        // Filter to enabled contexts only, excluding hidden ones
-        const matchedContexts = allContexts.filter(
-            (ctx) => enabledContextNames.includes(ctx.name) && !hiddenContextNames.includes(ctx.name),
-        );
-
-        if (matchedContexts.length === 0) {
+        if (allContexts.length === 0) {
             return [
                 createGenericElementWithContext({
                     contextValue: 'error',
                     id: `${this.id}/retry`,
-                    label: vscode.l10n.t('No enabled contexts found in kubeconfig. Click to reconfigure.'),
+                    label: vscode.l10n.t('No Kubernetes contexts found in the configured kubeconfig. Click to retry.'),
                     iconPath: new vscode.ThemeIcon('refresh'),
                     commandId: 'vscode-documentdb.command.internal.retry',
                     commandArgs: [this],
@@ -93,9 +64,46 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
             ];
         }
 
-        return matchedContexts
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-            .map((ctx) => new KubernetesContextItem(this.id, ctx, aliases[ctx.name], journeyCorrelationId));
+        const configuredEnabledContextNames = ext.context.globalState.get<string[] | undefined>(ENABLED_CONTEXTS_KEY);
+        const enabledContextNames = new Set(
+            resolveEnabledContextNames(
+                allContexts.map((ctx) => ctx.name),
+                configuredEnabledContextNames,
+            ),
+        );
+
+        // Filter to enabled contexts only, excluding hidden ones; sort for stable order
+        const visibleContexts = allContexts
+            .filter((ctx) => enabledContextNames.has(ctx.name) && !hiddenContextNames.includes(ctx.name))
+            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+        if (enabledContextNames.size === 0) {
+            return [
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/retry`,
+                    label: vscode.l10n.t('No enabled contexts found in kubeconfig. Click to reconfigure.'),
+                    iconPath: new vscode.ThemeIcon('refresh'),
+                    commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+                    commandArgs: [this],
+                }),
+            ];
+        }
+
+        if (visibleContexts.length === 0) {
+            return [
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/retry`,
+                    label: vscode.l10n.t('All Kubernetes contexts are hidden by Filter. Use Filter to show contexts.'),
+                    iconPath: new vscode.ThemeIcon('filter'),
+                    commandId: 'vscode-documentdb.command.discoveryView.filterProviderContent',
+                    commandArgs: [this],
+                }),
+            ];
+        }
+
+        return visibleContexts.map((ctx) => new KubernetesContextItem(this.id, ctx, journeyCorrelationId));
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
@@ -112,15 +120,5 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
             iconPath: new vscode.ThemeIcon('symbol-namespace'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
-    }
-
-    private async askToConfigureCredentials(): Promise<'configure' | 'cancel'> {
-        const configure = vscode.l10n.t('Configure Credentials');
-        const result = await vscode.window.showInformationMessage(
-            vscode.l10n.t('No Kubernetes contexts are configured. Would you like to set up Kubernetes discovery?'),
-            { modal: false },
-            configure,
-        );
-        return result === configure ? 'configure' : 'cancel';
     }
 }

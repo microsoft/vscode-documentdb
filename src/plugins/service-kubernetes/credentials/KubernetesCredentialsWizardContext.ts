@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type KubeconfigSource } from '../config';
 import { type KubeContextInfo } from '../kubernetesClient';
 
 /**
@@ -13,12 +14,25 @@ export interface KubernetesCredentialsWizardContext extends IActionContext {
     /** All contexts available in the kubeconfig file */
     availableContexts: KubeContextInfo[];
 
-    /** Context names selected/enabled by the user */
-    selectedContextNames: string[];
+    /**
+     * Context names selected/enabled by the user.
+     * `undefined` means "never explicitly configured" (show all by default).
+     * `[]` means "explicitly zero contexts selected" (all disabled).
+     */
+    selectedContextNames: string[] | undefined;
 
     /** Custom kubeconfig path (empty string for default) */
     customKubeconfigPath: string;
 
-    /** Aliases for contexts (context name → display alias) */
-    contextAliases: Record<string, string>;
+    /** Kubeconfig source selection */
+    kubeconfigSource: KubeconfigSource;
+
+    /** Pasted kubeconfig YAML when using inline source */
+    inlineKubeconfigYaml: string;
+
+    /** Reset context and namespace visibility filters after credentials are saved. */
+    resetFilters: boolean;
+
+    /** Whether the selected kubeconfig source, path, or inline content changed. */
+    kubeconfigChanged: boolean;
 }

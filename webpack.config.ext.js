@@ -97,6 +97,8 @@ module.exports = (env, { mode }) => {
                         options: {
                             module: {
                                 type: 'commonjs',
+                                // Preserve dynamic import() so webpack can split lazy runtime dependencies.
+                                ignoreDynamic: true,
                             },
                             isModule: true,
                             sourceMaps: isDev,

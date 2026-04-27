@@ -14,7 +14,4 @@ export interface KubernetesFilterWizardContext extends IActionContext {
 
     /** Context names selected to be visible after filtering */
     visibleContextNames: string[];
-
-    /** Namespace visibility map: context name → array of hidden namespace names */
-    hiddenNamespaces: Record<string, string[]>;
 }

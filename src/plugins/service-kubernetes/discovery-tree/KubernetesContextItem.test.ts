@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type KubeContextInfo, type KubeServiceInfo } from '../kubernetesClient';
+import { type KubeContextInfo } from '../kubernetesClient';
 import { KubernetesContextItem } from './KubernetesContextItem';
 
 // --- Telemetry mock context ---
@@ -77,12 +77,12 @@ jest.mock('../../../extensionVariables', () => ({
 }));
 
 // --- Mock kubernetesClient functions ---
-const mockLoadKubeConfig = jest.fn();
+const mockLoadConfiguredKubeConfig = jest.fn();
 const mockCreateCoreApi = jest.fn();
 const mockListNamespaces = jest.fn();
 const mockListDocumentDBServices = jest.fn();
 jest.mock('../kubernetesClient', () => ({
-    loadKubeConfig: (...args: unknown[]) => mockLoadKubeConfig(...args),
+    loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
     createCoreApi: (...args: unknown[]) => mockCreateCoreApi(...args),
     listNamespaces: (...args: unknown[]) => mockListNamespaces(...args),
     listDocumentDBServices: (...args: unknown[]) => mockListDocumentDBServices(...args),
@@ -96,6 +96,14 @@ jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
         contextValue: opts.contextValue,
     })),
 }));
+
+function getNamespaceName(child: unknown): string {
+    return (child as { namespace: string }).namespace;
+}
+
+function getCollapsibleState(child: unknown): unknown {
+    return (child as { getTreeItem(): { collapsibleState?: unknown } }).getTreeItem().collapsibleState;
+}
 
 describe('KubernetesContextItem', () => {
     const baseContextInfo: KubeContextInfo = {
@@ -115,7 +123,7 @@ describe('KubernetesContextItem', () => {
 
     describe('getTreeItem', () => {
         it('should return correct tree item with valid server URL', () => {
-            const item = new KubernetesContextItem('parent', baseContextInfo, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-context');
@@ -125,22 +133,13 @@ describe('KubernetesContextItem', () => {
             expect(treeItem.collapsibleState).toBe(1);
         });
 
-        it('should use alias as label when alias is provided', () => {
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'Production K8s', 'corr-1');
-            const treeItem = item.getTreeItem();
-
-            expect(treeItem.label).toBe('Production K8s');
-            // Description should still show the host
-            expect(treeItem.description).toBe('(k8s.example.com:6443)');
-        });
-
         it('should handle malformed server URL gracefully', () => {
             const malformedContext: KubeContextInfo = {
                 ...baseContextInfo,
                 server: 'not-a-valid-url',
             };
 
-            const item = new KubernetesContextItem('parent', malformedContext, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', malformedContext, 'corr-1');
 
             // The current code may throw on malformed URL; Ripley's fix wraps in try/catch.
             // After the fix, the description should use the raw URL on parse failure.
@@ -165,7 +164,7 @@ describe('KubernetesContextItem', () => {
                 server: '',
             };
 
-            const item = new KubernetesContextItem('parent', emptyServerContext, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', emptyServerContext, 'corr-1');
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-context');
@@ -179,7 +178,7 @@ describe('KubernetesContextItem', () => {
                 name: 'arn:aws:eks:us-east-1:123456/my-cluster',
             };
 
-            const item = new KubernetesContextItem('parent', slashContext, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', slashContext, 'corr-1');
             expect(item.id).toBe('parent/arn:aws:eks:us-east-1:123456_my-cluster');
             expect(item.id).not.toContain('//');
         });
@@ -190,47 +189,35 @@ describe('KubernetesContextItem', () => {
         const mockCoreApi = {};
 
         beforeEach(() => {
-            mockLoadKubeConfig.mockResolvedValue(mockKubeConfig);
+            mockLoadConfiguredKubeConfig.mockResolvedValue(mockKubeConfig);
             mockCreateCoreApi.mockResolvedValue(mockCoreApi);
         });
 
-        it('should return namespace items for context with DocumentDB services', async () => {
+        it('should make namespaces with DocumentDB targets expandable and empty namespaces non-expandable', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'production']);
-            mockListDocumentDBServices.mockImplementation((_api: unknown, ns: string) => {
-                if (ns === 'default') {
-                    return Promise.resolve([
-                        { name: 'mongo-svc', namespace: 'default', type: 'ClusterIP', port: 27017 } as KubeServiceInfo,
-                    ]);
-                }
-                if (ns === 'production') {
-                    return Promise.resolve([
-                        {
-                            name: 'mongo-prod',
-                            namespace: 'production',
-                            type: 'LoadBalancer',
-                            port: 27017,
-                        } as KubeServiceInfo,
-                    ]);
-                }
-                return Promise.resolve([]);
-            });
+            mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) =>
+                namespace === 'production'
+                    ? [{ name: 'documentdb-service', namespace, type: 'ClusterIP', port: 10260 }]
+                    : [],
+            );
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
             expect(children).toHaveLength(2);
-            // Children should be KubernetesNamespaceItem instances
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![0] as any).namespace).toBe('default');
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![1] as any).namespace).toBe('production');
+            expect(getNamespaceName(children![0])).toBe('production');
+            expect(getCollapsibleState(children![0])).toBe(1);
+            expect(getNamespaceName(children![1])).toBe('default');
+            expect(getCollapsibleState(children![1])).toBe(0);
+
+            expect(mockListDocumentDBServices).toHaveBeenCalledTimes(2);
         });
 
         it('should return error/retry node when kubeconfig load fails', async () => {
-            mockLoadKubeConfig.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+            mockLoadConfiguredKubeConfig.mockRejectedValue(new Error('ENOENT: no such file or directory'));
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -243,16 +230,9 @@ describe('KubernetesContextItem', () => {
             expect(mockOutputChannelError).toHaveBeenCalled();
         });
 
-        it('should filter out hidden namespaces based on globalState', async () => {
+        it('should ignore stale hidden namespace filters from earlier builds', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'kube-system', 'production']);
-            mockListDocumentDBServices.mockImplementation((_api: unknown, ns: string) => {
-                // All namespaces have services
-                return Promise.resolve([
-                    { name: `svc-${ns}`, namespace: ns, type: 'ClusterIP', port: 27017 } as KubeServiceInfo,
-                ]);
-            });
 
-            // Mock globalState.get to return hidden namespaces for this context
             mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
                 if (key === 'kubernetes-discovery.filteredNamespaces') {
                     return { 'my-context': ['kube-system'] };
@@ -260,37 +240,69 @@ describe('KubernetesContextItem', () => {
                 return defaultValue;
             });
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const children = await item.getChildren();
+
+            expect(children).toBeDefined();
+            expect(children).toHaveLength(3);
+            const namespaceNames = children!.map((child) => getNamespaceName(child));
+            expect(namespaceNames).toContain('default');
+            expect(namespaceNames).toContain('kube-system');
+            expect(namespaceNames).toContain('production');
+        });
+
+        it('should sort namespaces with DocumentDB targets before namespaces without targets', async () => {
+            mockListNamespaces.mockResolvedValue(['default', 'staging']);
+            mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) =>
+                namespace === 'staging' ? [{ name: 'svc-a', namespace, type: 'ClusterIP', port: 10260 }] : [],
+            );
+
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
             expect(children).toHaveLength(2);
-            // kube-system should be filtered out
-            const namespaceNames = children!.map(
-                // eslint-disable-next-line @typescript-eslint/no-explicit-any
-                (child) => (child as any).namespace,
-            );
-            expect(namespaceNames).toContain('default');
-            expect(namespaceNames).toContain('production');
-            expect(namespaceNames).not.toContain('kube-system');
+            expect(getNamespaceName(children![0])).toBe('staging');
+            expect(getNamespaceName(children![1])).toBe('default');
         });
 
-        it('should return empty array when no namespaces have DocumentDB services', async () => {
-            mockListNamespaces.mockResolvedValue(['default', 'staging']);
-            // No namespace has any DocumentDB services
-            mockListDocumentDBServices.mockResolvedValue([]);
+        it('should limit concurrent namespace service pre-scans', async () => {
+            mockListNamespaces.mockResolvedValue(
+                Array.from({ length: 12 }, (_value, index) => `namespace-${String(index + 1)}`),
+            );
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, undefined, 'corr-1');
+            let activeScans = 0;
+            let maxActiveScans = 0;
+            mockListDocumentDBServices.mockImplementation(async () => {
+                activeScans++;
+                maxActiveScans = Math.max(maxActiveScans, activeScans);
+                await new Promise((resolve) => setTimeout(resolve, 10));
+                activeScans--;
+                return [];
+            });
+
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            await item.getChildren();
+
+            expect(maxActiveScans).toBeLessThanOrEqual(5);
+        });
+
+        it('should show informational child when no namespaces exist', async () => {
+            mockListNamespaces.mockResolvedValue([]);
+
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(0);
+            expect(children).toHaveLength(1);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            expect((children![0] as any).contextValue).toBe('informational');
         });
 
         it('should return error node when createCoreApi fails', async () => {
             mockCreateCoreApi.mockRejectedValue(new Error('context not found'));
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -300,40 +312,35 @@ describe('KubernetesContextItem', () => {
             expect(mockOutputChannelError).toHaveBeenCalled();
         });
 
-        it('should skip namespaces where service listing throws', async () => {
+        it('should keep namespaces expandable when service pre-scan throws', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'broken-ns', 'working-ns']);
-            mockListDocumentDBServices.mockImplementation((_api: unknown, ns: string) => {
-                if (ns === 'broken-ns') {
-                    return Promise.reject(new Error('RBAC denied'));
+            mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) => {
+                if (namespace === 'broken-ns') {
+                    throw new Error('forbidden');
                 }
-                if (ns === 'working-ns') {
-                    return Promise.resolve([
-                        { name: 'svc', namespace: ns, type: 'ClusterIP', port: 27017 } as KubeServiceInfo,
-                    ]);
-                }
-                return Promise.resolve([]);
+
+                return namespace === 'working-ns' ? [{ name: 'svc-a', namespace, type: 'ClusterIP', port: 10260 }] : [];
             });
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            // Only working-ns should appear (default has no services, broken-ns threw)
-            expect(children).toHaveLength(1);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![0] as any).namespace).toBe('working-ns');
+            expect(children).toHaveLength(3);
+            const brokenNamespace = children!.find((child) => getNamespaceName(child) === 'broken-ns');
+            expect(getCollapsibleState(brokenNamespace)).toBe(1);
+            expect(telemetryContextMock.telemetry.properties).toHaveProperty('namespaceServiceFetchError', 'true');
         });
 
-        it('should set namespacesCount telemetry measurement', async () => {
+        it('should set namespacesCount telemetry to all visible namespace count', async () => {
             mockListNamespaces.mockResolvedValue(['default']);
-            mockListDocumentDBServices.mockResolvedValue([
-                { name: 'svc', namespace: 'default', type: 'ClusterIP', port: 27017 } as KubeServiceInfo,
-            ]);
+            mockListDocumentDBServices.mockResolvedValue([]);
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, undefined, 'corr-1');
+            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
             await item.getChildren();
 
             expect(telemetryContextMock.telemetry.measurements).toHaveProperty('namespacesCount', 1);
+            expect(telemetryContextMock.telemetry.measurements).toHaveProperty('documentDbNamespacesCount', 0);
         });
     });
 });

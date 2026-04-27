@@ -6,31 +6,39 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { ENABLED_CONTEXTS_KEY, FILTERED_NAMESPACES_KEY, HIDDEN_CONTEXTS_KEY } from '../config';
+import {
+    ENABLED_CONTEXTS_KEY,
+    FILTERED_NAMESPACES_KEY,
+    HIDDEN_CONTEXTS_KEY,
+    resolveEnabledContextNames,
+} from '../config';
+import { getContexts, loadConfiguredKubeConfig } from '../kubernetesClient';
 import { FilterContextsStep } from './FilterContextsStep';
-import { FilterNamespacesStep } from './FilterNamespacesStep';
 import { type KubernetesFilterWizardContext } from './KubernetesFilterWizardContext';
 
 /**
- * Configures Kubernetes discovery filters (contexts and namespaces visibility).
+ * Configures Kubernetes discovery context visibility.
  */
 export async function configureKubernetesFilter(context: IActionContext): Promise<void> {
     context.telemetry.properties.filterAction = 'configure';
 
-    const enabledContextNames = ext.context.globalState.get<string[]>(ENABLED_CONTEXTS_KEY, []);
-    const existingHiddenNamespaces = ext.context.globalState.get<Record<string, string[]>>(FILTERED_NAMESPACES_KEY, {});
+    const configuredEnabledContextNames = ext.context.globalState.get<string[] | undefined>(ENABLED_CONTEXTS_KEY);
     const existingHiddenContexts = ext.context.globalState.get<string[]>(HIDDEN_CONTEXTS_KEY, []);
+    const kubeConfig = await loadConfiguredKubeConfig();
+    const enabledContextNames = resolveEnabledContextNames(
+        getContexts(kubeConfig).map((ctx) => ctx.name),
+        configuredEnabledContextNames,
+    );
 
     const wizardContext: KubernetesFilterWizardContext = {
         ...context,
         enabledContextNames,
         visibleContextNames: enabledContextNames.filter((name) => !existingHiddenContexts.includes(name)),
-        hiddenNamespaces: { ...existingHiddenNamespaces },
     };
 
     const wizard = new AzureWizard(wizardContext, {
         title: vscode.l10n.t('Configure Kubernetes Discovery Filters'),
-        promptSteps: [new FilterContextsStep(), new FilterNamespacesStep()],
+        promptSteps: [new FilterContextsStep()],
     });
 
     await wizard.prompt();
@@ -41,8 +49,8 @@ export async function configureKubernetesFilter(context: IActionContext): Promis
     );
     await ext.context.globalState.update(HIDDEN_CONTEXTS_KEY, hiddenContextNames);
 
-    // Persist namespace filters
-    await ext.context.globalState.update(FILTERED_NAMESPACES_KEY, wizardContext.hiddenNamespaces);
+    // Namespace filtering is no longer prompted anywhere; clear stale filters from earlier builds.
+    await ext.context.globalState.update(FILTERED_NAMESPACES_KEY, {});
 
     ext.outputChannel.appendLine(vscode.l10n.t('Kubernetes discovery filters updated.'));
 }

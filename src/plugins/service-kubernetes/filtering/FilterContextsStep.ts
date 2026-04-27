@@ -23,13 +23,13 @@ export class FilterContextsStep extends AzureWizardPromptStep<KubernetesFilterWi
         const picks: IAzureQuickPickItem<string>[] = context.enabledContextNames.map((name) => ({
             label: name,
             data: name,
-            picked: context.visibleContextNames.includes(name),
         }));
 
         const selected = await context.ui.showQuickPick(picks, {
             placeHolder: vscode.l10n.t('Select contexts to show in the discovery tree'),
             canPickMany: true,
             suppressPersistence: true,
+            isPickSelected: (pick) => context.visibleContextNames.includes((pick as IAzureQuickPickItem<string>).data),
         });
 
         context.visibleContextNames = selected.map((item) => item.data);

@@ -109,6 +109,11 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
             description,
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('folder-library'),
+            command: {
+                title: l10n.t('Open Collection'),
+                command: 'vscode-documentdb.command.containerView.open',
+                arguments: [this],
+            },
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }

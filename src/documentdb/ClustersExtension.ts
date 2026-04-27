@@ -122,8 +122,10 @@ import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
-    dispose(): Promise<void> {
-        return Promise.resolve();
+    async dispose(): Promise<void> {
+        // Clean up any active port-forward tunnels
+        const { PortForwardTunnelManager } = await import('../plugins/service-kubernetes/portForwardTunnel');
+        PortForwardTunnelManager.getInstance().dispose();
     }
 
     registerDiscoveryServices(_activateContext: IActionContext) {

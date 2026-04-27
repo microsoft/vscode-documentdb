@@ -7,42 +7,60 @@ import { AzureWizardPromptStep, UserCancelledError, type IAzureQuickPickItem } f
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../extensionVariables';
-import { CUSTOM_KUBECONFIG_PATH_KEY } from '../config';
 import {
     createCoreApi,
     listDocumentDBServices,
-    loadKubeConfig,
+    listNamespaces,
+    loadConfiguredKubeConfig,
     type KubeContextInfo,
     type KubeServiceInfo,
 } from '../kubernetesClient';
 import { KubernetesWizardProperties } from './SelectContextStep';
 
 /**
- * Wizard step for selecting a DocumentDB-compatible service within a namespace.
+ * Wizard step for selecting a discovered DocumentDB target in the selected context.
  */
 export class SelectServiceStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const selectedContext = context.properties[KubernetesWizardProperties.SelectedContext] as
             | KubeContextInfo
             | undefined;
-        const selectedNamespace = context.properties[KubernetesWizardProperties.SelectedNamespace] as
-            | string
-            | undefined;
 
-        if (!selectedContext || !selectedNamespace) {
-            throw new Error('Kubernetes context or namespace not selected.');
+        if (!selectedContext) {
+            throw new Error('Kubernetes context not selected.');
         }
 
-        const customPath = ext.context.globalState.get<string>(CUSTOM_KUBECONFIG_PATH_KEY);
-        const kubeConfig = await loadKubeConfig(customPath);
+        const kubeConfig = await loadConfiguredKubeConfig();
         const coreApi = await createCoreApi(kubeConfig, selectedContext.name);
-        const services = await listDocumentDBServices(coreApi, selectedNamespace);
+        const namespaceNames = await listNamespaces(coreApi);
+
+        if (namespaceNames.length === 0) {
+            void vscode.window.showWarningMessage(
+                vscode.l10n.t('No namespaces found in context "{0}".', selectedContext.name),
+            );
+            throw new UserCancelledError();
+        }
+
+        const servicesByNamespace = await Promise.all(
+            namespaceNames.map(async (namespace): Promise<KubeServiceInfo[]> => {
+                try {
+                    return await listDocumentDBServices(coreApi, namespace, kubeConfig);
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    ext.outputChannel.warn(
+                        `[KubernetesDiscovery] Could not list DocumentDB targets in "${selectedContext.name}/${namespace}": ${errorMessage}`,
+                    );
+                    return [];
+                }
+            }),
+        );
+        const services = servicesByNamespace.flat();
 
         if (services.length === 0) {
             void vscode.window.showWarningMessage(
                 vscode.l10n.t(
-                    'No DocumentDB-compatible services found in namespace "{0}". Services must expose port 27017, 27018, or 27019.',
-                    selectedNamespace,
+                    'No DocumentDB targets were found in context "{0}". DKO resources are preferred, and generic fallback currently looks for DocumentDB gateway services.',
+                    selectedContext.name,
                 ),
             );
             throw new UserCancelledError();
@@ -53,14 +71,20 @@ export class SelectServiceStep extends AzureWizardPromptStep<NewConnectionWizard
                 svc.type === 'NodePort' && svc.nodePort ? `:${String(svc.nodePort)}` : `:${String(svc.port)}`;
 
             return {
-                label: svc.name,
-                description: `[${svc.type} ${portDisplay}]`,
+                label: svc.displayName,
+                description: `[${svc.namespace}] [${svc.sourceKind === 'dko' ? 'DKO' : 'Generic'}] [${svc.type} ${portDisplay}]`,
+                detail:
+                    svc.sourceKind === 'dko' && svc.status
+                        ? vscode.l10n.t('Status: {0}', svc.status)
+                        : svc.sourceKind === 'generic'
+                          ? vscode.l10n.t('Service-based fallback target')
+                          : undefined,
                 data: svc,
             };
         });
 
         const selected = await context.ui.showQuickPick(picks, {
-            placeHolder: vscode.l10n.t('Select a service to connect to'),
+            placeHolder: vscode.l10n.t('Select a DocumentDB target to connect to'),
             suppressPersistence: true,
         });
 
