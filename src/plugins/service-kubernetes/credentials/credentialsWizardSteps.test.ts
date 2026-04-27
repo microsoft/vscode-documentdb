@@ -20,6 +20,7 @@ import { SelectKubeconfigSourceStep } from './SelectKubeconfigSourceStep';
 
 const mockShowOpenDialog = jest.fn();
 const mockShowWarningMessage = jest.fn();
+const mockShowInformationMessage = jest.fn();
 const mockClipboardReadText = jest.fn();
 const mockGlobalStateGet = jest.fn((_key: string, defaultValue?: unknown) => defaultValue);
 const mockGlobalStateUpdate = jest.fn((_key?: string, _value?: unknown) => Promise.resolve());
@@ -66,6 +67,7 @@ jest.mock('vscode', () => ({
     window: {
         showOpenDialog: (...args: unknown[]) => mockShowOpenDialog(...args),
         showWarningMessage: (...args: unknown[]) => mockShowWarningMessage(...args),
+        showInformationMessage: (...args: unknown[]) => mockShowInformationMessage(...args),
     },
     env: {
         clipboard: {
@@ -148,6 +150,21 @@ describe('Kubernetes credential wizard steps', () => {
         jest.clearAllMocks();
         mockGlobalStateGet.mockImplementation((_key: string, defaultValue?: unknown) => defaultValue);
         mockSecretGet.mockResolvedValue(undefined);
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([
+            {
+                name: 'ctx-a',
+                cluster: 'cluster-a',
+                user: 'user-a',
+                server: 'https://ctx-a.example.com',
+            },
+            {
+                name: 'ctx-b',
+                cluster: 'cluster-b',
+                user: 'user-b',
+                server: 'https://ctx-b.example.com',
+            },
+        ]);
         latestAzureWizardOptions = undefined;
     });
 
@@ -246,7 +263,71 @@ describe('Kubernetes credential wizard steps', () => {
             expect(mockSecretStore).toHaveBeenCalledWith(INLINE_KUBECONFIG_SECRET_KEY, 'apiVersion: v1');
             expect(mockSecretDelete).not.toHaveBeenCalled();
             expect(context.kubeconfigChanged).toBe(true);
+            expect(context.availableContexts).toHaveLength(2);
+            expect(context.telemetry.measurements.kubeconfigContextsCount).toBe(2);
             expect(context.telemetry.properties.credentialsManagementResult).toBe('Succeeded');
+            expect(mockShowInformationMessage).toHaveBeenCalledWith(
+                'Kubernetes discovery configured. Found 2 context(s) in the selected kubeconfig.',
+            );
+        });
+
+        it('validates default kubeconfig before storing settings', async () => {
+            const step = new ExecuteStep();
+            const context = createWizardContext({
+                kubeconfigSource: 'default',
+            });
+
+            await step.execute(context);
+
+            expect(mockLoadKubeConfig).toHaveBeenCalledWith();
+            expect(mockGetContexts).toHaveBeenCalledWith({});
+            expect(mockGlobalStateUpdate).toHaveBeenCalledWith(ENABLED_CONTEXTS_KEY, undefined);
+        });
+
+        it('validates custom kubeconfig before storing settings', async () => {
+            const step = new ExecuteStep();
+            const context = createWizardContext({
+                kubeconfigSource: 'customFile',
+                customKubeconfigPath: '/home/user/.kube/documentdb',
+            });
+
+            await step.execute(context);
+
+            expect(mockLoadKubeConfig).toHaveBeenCalledWith('/home/user/.kube/documentdb');
+            expect(mockGlobalStateUpdate).toHaveBeenCalledWith(KUBECONFIG_SOURCE_KEY, 'customFile');
+        });
+
+        it('does not persist settings when kubeconfig validation fails', async () => {
+            mockLoadKubeConfig.mockRejectedValue(new Error('No Kubernetes kubeconfig was found.'));
+            const step = new ExecuteStep();
+            const context = createWizardContext({
+                kubeconfigSource: 'default',
+            });
+
+            await expect(step.execute(context)).rejects.toThrow('No Kubernetes kubeconfig was found.');
+
+            expect(mockGlobalStateUpdate).not.toHaveBeenCalled();
+            expect(mockSecretStore).not.toHaveBeenCalled();
+            expect(mockSecretDelete).not.toHaveBeenCalled();
+            expect(context.telemetry.properties.credentialsManagementResult).toBe('FailedValidation');
+        });
+
+        it('does not persist settings when the selected kubeconfig has no contexts', async () => {
+            mockGetContexts.mockReturnValue([]);
+            const step = new ExecuteStep();
+            const context = createWizardContext({
+                kubeconfigSource: 'inline',
+                inlineKubeconfigYaml: 'apiVersion: v1',
+            });
+
+            await expect(step.execute(context)).rejects.toThrow(
+                'No Kubernetes contexts were found in the selected kubeconfig. Choose a different kubeconfig source or update the file and try again.',
+            );
+
+            expect(mockLoadKubeConfig).toHaveBeenCalledWith(undefined, 'apiVersion: v1');
+            expect(mockGlobalStateUpdate).not.toHaveBeenCalled();
+            expect(mockSecretStore).not.toHaveBeenCalled();
+            expect(context.telemetry.properties.credentialsManagementResult).toBe('FailedValidation');
         });
 
         it('stores empty context list when user explicitly selects zero contexts', async () => {

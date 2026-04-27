@@ -15,6 +15,7 @@ import {
     KUBECONFIG_SOURCE_KEY,
     type KubeconfigSource,
 } from '../config';
+import { getContexts, loadKubeConfig, type KubeContextInfo } from '../kubernetesClient';
 import { type KubernetesCredentialsWizardContext } from './KubernetesCredentialsWizardContext';
 
 /**
@@ -27,6 +28,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<KubernetesCredentialsWiz
     public priority: number = 100;
 
     public async execute(context: KubernetesCredentialsWizardContext): Promise<void> {
+        const availableContexts = await this.validateSelectedKubeconfig(context);
+        context.availableContexts = availableContexts;
+        context.telemetry.measurements.kubeconfigContextsCount = availableContexts.length;
+
         // undefined = never configured (default all-enabled)
         // []        = explicitly zero (all disabled)
         // string[]  = explicit selection
@@ -96,9 +101,59 @@ export class ExecuteStep extends AzureWizardExecuteStep<KubernetesCredentialsWiz
         }
 
         context.telemetry.properties.credentialsManagementResult = 'Succeeded';
+        void vscode.window.showInformationMessage(
+            vscode.l10n.t(
+                'Kubernetes discovery configured. Found {0} context(s) in the selected kubeconfig.',
+                String(availableContexts.length),
+            ),
+        );
     }
 
     public shouldExecute(_context: KubernetesCredentialsWizardContext): boolean {
         return true;
+    }
+
+    private async validateSelectedKubeconfig(context: KubernetesCredentialsWizardContext): Promise<KubeContextInfo[]> {
+        let kubeConfig: Awaited<ReturnType<typeof loadKubeConfig>>;
+        try {
+            kubeConfig = await this.loadSelectedKubeconfig(context);
+        } catch (error) {
+            context.telemetry.properties.credentialsManagementResult = 'FailedValidation';
+            throw error;
+        }
+
+        const contexts = getContexts(kubeConfig);
+        if (contexts.length === 0) {
+            context.telemetry.properties.credentialsManagementResult = 'FailedValidation';
+            throw new Error(
+                vscode.l10n.t(
+                    'No Kubernetes contexts were found in the selected kubeconfig. Choose a different kubeconfig source or update the file and try again.',
+                ),
+            );
+        }
+
+        return contexts;
+    }
+
+    private async loadSelectedKubeconfig(
+        context: KubernetesCredentialsWizardContext,
+    ): Promise<Awaited<ReturnType<typeof loadKubeConfig>>> {
+        switch (context.kubeconfigSource) {
+            case 'customFile':
+                if (!context.customKubeconfigPath) {
+                    context.telemetry.properties.credentialsManagementResult = 'FailedValidation';
+                    throw new Error(vscode.l10n.t('No custom kubeconfig file was selected.'));
+                }
+                return await loadKubeConfig(context.customKubeconfigPath);
+            case 'inline':
+                if (context.inlineKubeconfigYaml.trim().length === 0) {
+                    context.telemetry.properties.credentialsManagementResult = 'FailedValidation';
+                    throw new Error(vscode.l10n.t('No kubeconfig YAML was provided.'));
+                }
+                return await loadKubeConfig(undefined, context.inlineKubeconfigYaml);
+            case 'default':
+            default:
+                return await loadKubeConfig();
+        }
     }
 }

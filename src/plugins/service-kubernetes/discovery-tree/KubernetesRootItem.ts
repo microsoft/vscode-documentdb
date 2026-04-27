@@ -39,29 +39,17 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
             const errorMessage = error instanceof Error ? error.message : String(error);
             ext.outputChannel.error(`[KubernetesDiscovery] Failed to load kubeconfig: ${errorMessage}`);
 
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/retry`,
-                    label: vscode.l10n.t('Failed to load kubeconfig. Click to retry.'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
+            return this.createKubeconfigRecoveryChildren(
+                vscode.l10n.t('Failed to load Kubernetes kubeconfig. Configure kubeconfig or retry.'),
+            );
         }
 
         if (allContexts.length === 0) {
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/retry`,
-                    label: vscode.l10n.t('No Kubernetes contexts found in the configured kubeconfig. Click to retry.'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
+            return this.createKubeconfigRecoveryChildren(
+                vscode.l10n.t(
+                    'No Kubernetes contexts found in the configured kubeconfig. Configure kubeconfig or retry.',
+                ),
+            );
         }
 
         const configuredEnabledContextNames = ext.context.globalState.get<string[] | undefined>(ENABLED_CONTEXTS_KEY);
@@ -81,12 +69,19 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
             return [
                 createGenericElementWithContext({
                     contextValue: 'error',
-                    id: `${this.id}/retry`,
-                    label: vscode.l10n.t('No enabled contexts found in kubeconfig. Click to reconfigure.'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
+                    id: `${this.id}/no-enabled-contexts`,
+                    label: vscode.l10n.t('No Kubernetes contexts are enabled. Configure kubeconfig or retry.'),
+                    iconPath: new vscode.ThemeIcon('warning'),
+                }),
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/configure-kubeconfig`,
+                    label: vscode.l10n.t('Configure kubeconfig'),
+                    iconPath: new vscode.ThemeIcon('key'),
                     commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
                     commandArgs: [this],
                 }),
+                this.createRetryChild(),
             ];
         }
 
@@ -94,12 +89,27 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
             return [
                 createGenericElementWithContext({
                     contextValue: 'error',
-                    id: `${this.id}/retry`,
-                    label: vscode.l10n.t('All Kubernetes contexts are hidden by Filter. Use Filter to show contexts.'),
+                    id: `${this.id}/all-contexts-hidden`,
+                    label: vscode.l10n.t('All Kubernetes contexts are hidden by Filter. Manage Filter or retry.'),
+                    iconPath: new vscode.ThemeIcon('warning'),
+                }),
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/manage-filter`,
+                    label: vscode.l10n.t('Manage Filter'),
                     iconPath: new vscode.ThemeIcon('filter'),
                     commandId: 'vscode-documentdb.command.discoveryView.filterProviderContent',
                     commandArgs: [this],
                 }),
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/configure-kubeconfig`,
+                    label: vscode.l10n.t('Configure kubeconfig'),
+                    iconPath: new vscode.ThemeIcon('key'),
+                    commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+                    commandArgs: [this],
+                }),
+                this.createRetryChild(),
             ];
         }
 
@@ -120,5 +130,44 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
             iconPath: new vscode.ThemeIcon('symbol-namespace'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    private createKubeconfigRecoveryChildren(message: string): ExtTreeElementBase[] {
+        return [
+            createGenericElementWithContext({
+                contextValue: 'error',
+                id: `${this.id}/kubeconfig-error`,
+                label: message,
+                iconPath: new vscode.ThemeIcon('warning'),
+            }),
+            createGenericElementWithContext({
+                contextValue: 'error',
+                id: `${this.id}/configure-kubeconfig`,
+                label: vscode.l10n.t('Configure kubeconfig'),
+                iconPath: new vscode.ThemeIcon('key'),
+                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+                commandArgs: [this],
+            }),
+            createGenericElementWithContext({
+                contextValue: 'error',
+                id: `${this.id}/open-docs`,
+                label: vscode.l10n.t('Open Kubernetes discovery docs'),
+                iconPath: new vscode.ThemeIcon('book'),
+                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
+                commandArgs: [this],
+            }),
+            this.createRetryChild(),
+        ];
+    }
+
+    private createRetryChild(): ExtTreeElementBase {
+        return createGenericElementWithContext({
+            contextValue: 'error',
+            id: `${this.id}/retry`,
+            label: vscode.l10n.t('Retry'),
+            iconPath: new vscode.ThemeIcon('refresh'),
+            commandId: 'vscode-documentdb.command.internal.retry',
+            commandArgs: [this],
+        });
     }
 }

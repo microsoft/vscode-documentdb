@@ -17,7 +17,7 @@ You can use Kubernetes discovery from either:
 2. Select **+** and choose **Kubernetes**.
 3. Choose a kubeconfig source.
 
-By default, all contexts from the selected kubeconfig are enabled, matching the Azure DocumentDB discovery behavior where adding the provider does not ask for per-context aliases, context selection, or namespace selection. After activation, use **Manage Credentials** on the Kubernetes provider to change the kubeconfig source. Use **Filter** separately when you want to hide contexts.
+The selected kubeconfig is validated before it is saved. If the file cannot be loaded or does not contain any contexts, the setup flow fails immediately so you can choose a different source. By default, all contexts from the selected kubeconfig are enabled, matching the Azure DocumentDB discovery behavior where adding the provider does not ask for per-context aliases, context selection, or namespace selection. After activation, use **Manage Credentials** on the Kubernetes provider to change the kubeconfig source. Use **Filter** separately when you want to hide contexts.
 
 Reconfiguring Kubernetes credentials stops active Kubernetes port-forward tunnels automatically. Tunnels are recreated when you connect to ClusterIP targets again.
 
@@ -29,7 +29,7 @@ Reconfiguring Kubernetes credentials stops active Kubernetes port-forward tunnel
 | **Custom kubeconfig file** | Lets you browse to a kubeconfig file. The selected file path is stored in extension global state. |
 | **Pasted kubeconfig YAML** | Reads kubeconfig YAML from the clipboard and stores it in VS Code Secret Storage. |
 
-If a configured kubeconfig cannot be loaded later, the Kubernetes tree shows a retry/error item and asks you to reconfigure credentials.
+If a configured kubeconfig cannot be loaded later, the Kubernetes tree shows recovery actions to configure kubeconfig, open Kubernetes discovery documentation, or retry.
 
 ## Contexts and Filters
 
@@ -56,7 +56,7 @@ Kubernetes discovery keeps context loading lightweight while making namespace br
 4. Namespaces without DocumentDB targets remain visible as non-expandable leaf items with a "No DocumentDB targets" description.
 5. Expanding a DocumentDB namespace lists the targets in that namespace.
 
-If kubeconfig, namespace listing, or service listing fails, the tree shows a retry/error item and writes diagnostics to the DocumentDB output channel.
+If kubeconfig loading fails, no contexts are available, or filters hide every context, the tree shows recovery actions such as **Configure kubeconfig**, **Manage Filter**, **Open Kubernetes discovery docs**, and **Retry**. Namespace or service listing failures still show retry items and write diagnostics to the DocumentDB output channel.
 
 ## New Connection Wizard Behavior
 

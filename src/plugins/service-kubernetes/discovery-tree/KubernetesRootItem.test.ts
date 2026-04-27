@@ -180,12 +180,26 @@ describe('KubernetesRootItem', () => {
         const item = new KubernetesRootItem('discoveryView');
         const children = await item.getChildren();
 
-        expect(children).toHaveLength(1);
-        expect(children[0]).toMatchObject({
-            contextValue: 'error',
-            id: 'discoveryView/kubernetes-discovery/retry',
-            label: 'Failed to load kubeconfig. Click to retry.',
-        });
+        expect(children).toHaveLength(4);
+        expect(children).toMatchObject([
+            {
+                contextValue: 'error',
+                id: 'discoveryView/kubernetes-discovery/kubeconfig-error',
+                label: 'Failed to load Kubernetes kubeconfig. Configure kubeconfig or retry.',
+            },
+            {
+                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+                label: 'Configure kubeconfig',
+            },
+            {
+                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
+                label: 'Open Kubernetes discovery docs',
+            },
+            {
+                commandId: 'vscode-documentdb.command.internal.retry',
+                label: 'Retry',
+            },
+        ]);
         expect(mockOutputChannelError).toHaveBeenCalledWith(expect.stringContaining('Failed to load kubeconfig'));
     });
 
@@ -195,12 +209,26 @@ describe('KubernetesRootItem', () => {
         const item = new KubernetesRootItem('discoveryView');
         const children = await item.getChildren();
 
-        expect(children).toHaveLength(1);
-        expect(children[0]).toMatchObject({
-            contextValue: 'error',
-            id: 'discoveryView/kubernetes-discovery/retry',
-            label: 'No Kubernetes contexts found in the configured kubeconfig. Click to retry.',
-        });
+        expect(children).toHaveLength(4);
+        expect(children).toMatchObject([
+            {
+                contextValue: 'error',
+                id: 'discoveryView/kubernetes-discovery/kubeconfig-error',
+                label: 'No Kubernetes contexts found in the configured kubeconfig. Configure kubeconfig or retry.',
+            },
+            {
+                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+                label: 'Configure kubeconfig',
+            },
+            {
+                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
+                label: 'Open Kubernetes discovery docs',
+            },
+            {
+                commandId: 'vscode-documentdb.command.internal.retry',
+                label: 'Retry',
+            },
+        ]);
     });
 
     it('returns a retry node when all enabled contexts are hidden', async () => {
@@ -218,12 +246,25 @@ describe('KubernetesRootItem', () => {
         const item = new KubernetesRootItem('discoveryView');
         const children = await item.getChildren();
 
-        expect(children).toHaveLength(1);
-        expect(children[0]).toMatchObject({
-            contextValue: 'error',
-            commandId: 'vscode-documentdb.command.discoveryView.filterProviderContent',
-            label: 'All Kubernetes contexts are hidden by Filter. Use Filter to show contexts.',
-        });
+        expect(children).toHaveLength(4);
+        expect(children).toMatchObject([
+            {
+                contextValue: 'error',
+                label: 'All Kubernetes contexts are hidden by Filter. Manage Filter or retry.',
+            },
+            {
+                commandId: 'vscode-documentdb.command.discoveryView.filterProviderContent',
+                label: 'Manage Filter',
+            },
+            {
+                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+                label: 'Configure kubeconfig',
+            },
+            {
+                commandId: 'vscode-documentdb.command.internal.retry',
+                label: 'Retry',
+            },
+        ]);
     });
 
     it('returns a retry node when no contexts are enabled', async () => {
@@ -240,11 +281,20 @@ describe('KubernetesRootItem', () => {
         const item = new KubernetesRootItem('discoveryView');
         const children = await item.getChildren();
 
-        expect(children).toHaveLength(1);
-        expect(children[0]).toMatchObject({
-            contextValue: 'error',
-            commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
-            label: 'No enabled contexts found in kubeconfig. Click to reconfigure.',
-        });
+        expect(children).toHaveLength(3);
+        expect(children).toMatchObject([
+            {
+                contextValue: 'error',
+                label: 'No Kubernetes contexts are enabled. Configure kubeconfig or retry.',
+            },
+            {
+                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+                label: 'Configure kubeconfig',
+            },
+            {
+                commandId: 'vscode-documentdb.command.internal.retry',
+                label: 'Retry',
+            },
+        ]);
     });
 });
