@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { SkeletonItem } from '@fluentui/react-components';
+import { SkeletonItem, Tooltip } from '@fluentui/react-components';
+import { InfoRegular } from '@fluentui/react-icons';
 import type * as React from 'react';
 import './SummaryCard.scss';
 
@@ -40,6 +41,9 @@ export interface CellBaseProps {
 
     /** Column spanning: 'single' (1 column) or 'full' (2 columns) */
     span?: 'single' | 'full';
+
+    /** Optional tooltip explanation shown when hovering the label */
+    tooltipExplanation?: string;
 }
 
 /**
@@ -52,6 +56,7 @@ export const CellBase: React.FC<CellBaseProps> = ({
     loadingPlaceholder = 'skeleton',
     nullValuePlaceholder = 'N/A',
     span = 'single',
+    tooltipExplanation,
 }) => {
     const renderValue = () => {
         // Explicit null means data is unavailable (e.g., error state, not supported)
@@ -71,6 +76,32 @@ export const CellBase: React.FC<CellBaseProps> = ({
     };
 
     const cellClassName = span === 'full' ? 'summaryCell cellSpanFull' : 'summaryCell';
+
+    if (tooltipExplanation) {
+        return (
+            <Tooltip
+                content={{
+                    children: (
+                        <div style={{ padding: '8px' }}>
+                            <div style={{ fontWeight: 600, marginBottom: '8px', fontSize: '14px' }}>{label}</div>
+                            <div style={{ whiteSpace: 'pre-line' }}>{tooltipExplanation}</div>
+                        </div>
+                    ),
+                }}
+                positioning="above-start"
+                relationship="description"
+            >
+                {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+                <div className={`${cellClassName} cellWithTooltip`} tabIndex={0}>
+                    <div className="cellLabel cellLabelWithTooltip">
+                        {label}
+                        <InfoRegular style={{ fontSize: '12px', opacity: 0.6, marginLeft: '4px' }} />
+                    </div>
+                    {renderValue()}
+                </div>
+            </Tooltip>
+        );
+    }
 
     return (
         <div className={cellClassName}>

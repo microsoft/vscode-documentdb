@@ -80,6 +80,9 @@ export interface GenericCellProps {
 
     /** What to display when value is explicitly null (data unavailable) */
     nullValuePlaceholder?: string;
+
+    /** Optional tooltip explanation shown when hovering the label */
+    tooltipExplanation?: string;
 }
 
 export const GenericCell: React.FC<GenericCellProps> = ({
@@ -87,6 +90,7 @@ export const GenericCell: React.FC<GenericCellProps> = ({
     value,
     loadingPlaceholder = 'skeleton',
     nullValuePlaceholder = 'N/A',
+    tooltipExplanation,
 }) => {
     // Preserve null vs undefined distinction
     // - null → passes null to CellBase (shows nullValuePlaceholder)
@@ -101,6 +105,7 @@ export const GenericCell: React.FC<GenericCellProps> = ({
             value={displayValue}
             loadingPlaceholder={loadingPlaceholder}
             nullValuePlaceholder={nullValuePlaceholder}
+            tooltipExplanation={tooltipExplanation}
             span="single"
         />
     );

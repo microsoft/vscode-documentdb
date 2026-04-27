@@ -880,6 +880,31 @@ export const QueryInsightsMain = (): JSX.Element => {
                             value={getCellValue(() => queryInsightsState.stage2Data?.efficiencyAnalysis.selectivity)}
                             nullValuePlaceholder="—"
                             loadingPlaceholder="skeleton"
+                            tooltipExplanation={(() => {
+                                const selectivity = queryInsightsState.stage2Data?.efficiencyAnalysis.selectivity;
+                                if (!selectivity) {
+                                    return l10n.t(
+                                        'What percentage of your collection this query returns. Could not be determined for this query.',
+                                    );
+                                }
+                                const pct = parseFloat(selectivity);
+                                if (pct < 1) {
+                                    return l10n.t(
+                                        'Your query returns {0} of the collection. This is highly selective: only a small slice of data is touched.',
+                                        selectivity,
+                                    );
+                                } else if (pct < 20) {
+                                    return l10n.t(
+                                        'Your query returns {0} of the collection. This is a reasonable level of selectivity.',
+                                        selectivity,
+                                    );
+                                } else {
+                                    return l10n.t(
+                                        'Your query returns {0} of the collection. This is a broad query that touches a large portion of data. Consider adding more specific filters.',
+                                        selectivity,
+                                    );
+                                }
+                            })()}
                         />
                         <GenericCell
                             label={l10n.t('Index Used')}
@@ -888,11 +913,46 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 l10n.t('None (collection scan)'),
                             )}
                             loadingPlaceholder="skeleton"
+                            tooltipExplanation={(() => {
+                                const indexUsed = queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed;
+                                if (indexUsed) {
+                                    return l10n.t(
+                                        'Your query uses the "{0}" index to locate matching documents directly, without scanning the entire collection.',
+                                        indexUsed,
+                                    );
+                                }
+                                return l10n.t(
+                                    'No index was used for this query. The database scanned every document in the collection to find matches. Adding an index on the filtered fields would improve performance.',
+                                );
+                            })()}
                         />
                         <GenericCell
                             label={l10n.t('Fetch Overhead')}
                             value={getCellValue(() => queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead)}
                             loadingPlaceholder="skeleton"
+                            tooltipExplanation={(() => {
+                                const fetchOverhead =
+                                    queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead ?? '';
+                                if (fetchOverhead.includes('Covered')) {
+                                    return l10n.t(
+                                        'All the data your query needs was already stored in the index. The database did not need to load the actual documents, making this the most efficient retrieval method.',
+                                    );
+                                } else if (fetchOverhead.includes('Collection scan')) {
+                                    return l10n.t(
+                                        'Every document in the collection was read sequentially because no supporting index was available. This is the slowest retrieval method for filtered queries.',
+                                    );
+                                } else if (fetchOverhead.includes('Multikey')) {
+                                    return l10n.t(
+                                        'An index on an array field was used. Each array element creates a separate index entry, so the database examined more index keys than documents. This is expected for array indexes but adds overhead.',
+                                    );
+                                } else if (fetchOverhead.includes('No matches')) {
+                                    return l10n.t('The query returned no documents. No document fetching was needed.');
+                                }
+                                // Default: "Direct fetch"
+                                return l10n.t(
+                                    'The index identified matching documents, which were then loaded from storage. This is the normal, efficient retrieval path.',
+                                );
+                            })()}
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
@@ -902,6 +962,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     : l10n.t('No'),
                             )}
                             loadingPlaceholder="skeleton"
+                            tooltipExplanation={(() => {
+                                const hasSort =
+                                    queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort ?? false;
+                                if (hasSort) {
+                                    return l10n.t(
+                                        'The database loaded results into memory to sort them. This uses RAM and can fail for very large result sets.\n\nConsider adding a compound index that includes your sort fields to avoid in-memory sorting.',
+                                    );
+                                }
+                                return l10n.t(
+                                    'Results came back in the correct order without needing an in-memory sort. Either the index provided the right ordering, or no sort was requested.',
+                                );
+                            })()}
                         />
                         <PerformanceRatingCell
                             label={l10n.t('Performance Rating')}
