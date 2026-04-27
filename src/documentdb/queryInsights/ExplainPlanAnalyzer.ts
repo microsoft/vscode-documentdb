@@ -676,6 +676,213 @@ export class ExplainPlanAnalyzer {
             details: `The ${stage} stage could not complete execution.\n\nReview the error message and query structure for potential issues.`,
         };
     }
+
+    // ========================================================================
+    // Index strategy advisory helpers (Tasks 3–5)
+    // ========================================================================
+
+    /**
+     * Recursively searches a plan tree for the first stage matching `stageName`.
+     * Works on both `queryPlanner.winningPlan` and `executionStats.executionStages` trees.
+     *
+     * @param plan  - Root node of the plan tree (or undefined)
+     * @param stageName - Stage name to match (e.g., 'IXSCAN', 'COLLSCAN')
+     * @returns The matching stage document, or undefined
+     */
+    public static findStageInPlan(plan: Document | undefined, stageName: string): Document | undefined {
+        if (!plan) {
+            return undefined;
+        }
+
+        if ((plan.stage as string) === stageName) {
+            return plan;
+        }
+
+        // Traverse single child
+        if (plan.inputStage) {
+            const found = this.findStageInPlan(plan.inputStage as Document, stageName);
+            if (found) {
+                return found;
+            }
+        }
+
+        // Traverse multiple children
+        if (Array.isArray(plan.inputStages)) {
+            for (const child of plan.inputStages) {
+                const found = this.findStageInPlan(child as Document, stageName);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+
+        return undefined;
+    }
+
+    /**
+     * Detects whether the query uses a low-cardinality index, meaning
+     * the index doesn't differentiate well between documents.
+     *
+     * Three independent signals:
+     *  1. `isBitmap === true` on the IXSCAN stage (DocumentDB bitmap index)
+     *  2. Boolean literal in the query filter (`true`/`false` values)
+     *  3. High `estimatedEntryCount` in `scanKeys` relative to collection size
+     *
+     * @param explainResult       - Raw explain result document
+     * @param totalCollectionDocs - Estimated total documents in collection (optional)
+     * @param queryFilter         - The query filter document (optional)
+     * @returns Detection result with reasons
+     */
+    public static detectLowCardinalityIndex(
+        explainResult: Document,
+        totalCollectionDocs: number | undefined,
+        queryFilter?: Document,
+    ): { isLowCardinality: boolean; reasons: string[] } {
+        const reasons: string[] = [];
+
+        // Signal 1: isBitmap flag on the IXSCAN stage (from queryPlanner.winningPlan)
+        const winningPlan = (explainResult.queryPlanner as Document | undefined)?.winningPlan as Document | undefined;
+        const ixscanStage = this.findStageInPlan(winningPlan, 'IXSCAN');
+        if (ixscanStage?.isBitmap === true) {
+            reasons.push('Bitmap index detected — typically used for low-cardinality fields');
+        }
+
+        // Signal 2: Boolean literal in query filter
+        if (queryFilter) {
+            for (const value of Object.values(queryFilter)) {
+                if (typeof value === 'boolean') {
+                    reasons.push('Query filters on a boolean field, which has only two distinct values');
+                    break;
+                }
+            }
+        }
+
+        // Signal 3: estimatedEntryCount from scanKeys strings (DocumentDB-specific)
+        if (totalCollectionDocs && totalCollectionDocs > 0) {
+            const executionStages = (explainResult.executionStats as Document | undefined)?.executionStages as
+                | Document
+                | undefined;
+            const ixscanExec = this.findStageInPlan(executionStages, 'IXSCAN');
+            const indexUsage = ixscanExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+
+            if (indexUsage) {
+                for (const usage of indexUsage) {
+                    if (usage.scanKeys) {
+                        for (const scanKey of usage.scanKeys) {
+                            // Parse: "key N: [(isInequality: false, estimatedEntryCount: 22074)]"
+                            const match = /estimatedEntryCount:\s*(\d+)/.exec(scanKey);
+                            if (match) {
+                                const entryCount = parseInt(match[1], 10);
+                                if (entryCount >= CARDINALITY_PER_KEY_RATIO * totalCollectionDocs) {
+                                    reasons.push(
+                                        `Index key covers ${((entryCount / totalCollectionDocs) * 100).toFixed(0)}% of the collection per bucket`,
+                                    );
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return { isLowCardinality: reasons.length > 0, reasons };
+    }
+
+    /**
+     * Appends index-strategy advisory diagnostics to an existing analysis.
+     * Called **after** `calculatePerformanceRating` has run so that scoring
+     * diagnostics are already present; this method adds informational badges.
+     *
+     * All advisories are gated on `analysis.isIndexScan === true` (except
+     * multikey, which is relevant regardless of index type).
+     *
+     * Mutates `analysis.performanceRating.diagnostics` in place.
+     *
+     * @param analysis            - The execution stats analysis (will be mutated)
+     * @param totalCollectionDocs - Estimated total documents in the collection (or undefined)
+     * @param explainResult       - Raw explain result document
+     */
+    public static addIndexStrategyAdvisories(
+        analysis: ExecutionStatsAnalysis,
+        totalCollectionDocs: number | undefined,
+        explainResult: Document,
+    ): void {
+        const diagnostics = analysis.performanceRating.diagnostics;
+
+        // --- Coverage badges (gated on index scan) ---
+        if (analysis.isIndexScan && totalCollectionDocs && totalCollectionDocs > 0) {
+            const coverage = analysis.nReturned / totalCollectionDocs;
+
+            if (coverage >= COVERAGE_HIGH_RETURN) {
+                diagnostics.push({
+                    diagnosticId: 'returns_majority_of_collection',
+                    type: 'neutral',
+                    message: 'Returns majority of collection',
+                    details: `Your query returns ${(coverage * 100).toFixed(1)}% of the collection.\n\nWhen returning more than half the documents, a collection scan may actually be faster than an index lookup because sequential reads are more efficient than random index-pointer chasing.`,
+                });
+            } else if (coverage >= COVERAGE_LOW_SELECTIVITY) {
+                diagnostics.push({
+                    diagnosticId: 'low_filter_selectivity',
+                    type: 'neutral',
+                    message: 'Low filter selectivity',
+                    details: `Your query returns ${(coverage * 100).toFixed(1)}% of the collection.\n\nA more selective filter would narrow results further and let the index skip more documents.`,
+                });
+            }
+        }
+
+        // --- Low-cardinality index badge (gated on index scan) ---
+        if (analysis.isIndexScan) {
+            const queryFilter = (explainResult.command as Document | undefined)?.filter as Document | undefined;
+            const cardinalityResult = this.detectLowCardinalityIndex(
+                explainResult,
+                totalCollectionDocs,
+                queryFilter,
+            );
+
+            if (cardinalityResult.isLowCardinality) {
+                diagnostics.push({
+                    diagnosticId: 'low_cardinality_index',
+                    type: 'neutral',
+                    message: 'Low-cardinality index',
+                    details: `The index used has low cardinality — it doesn't differentiate well between documents.\n\n${cardinalityResult.reasons.join('\n')}\n\nConsider using a more selective index field or a compound index that includes high-cardinality fields.`,
+                });
+            }
+        }
+
+        // --- Multikey expansion badges (not gated on index scan) ---
+        if (analysis.totalKeysExamined > 0 && analysis.totalDocsExamined > 0) {
+            const multikeyMultiplier = analysis.totalKeysExamined / analysis.totalDocsExamined;
+
+            if (multikeyMultiplier >= MULTIKEY_SEVERE_THRESHOLD) {
+                diagnostics.push({
+                    diagnosticId: 'severe_multikey_expansion',
+                    type: 'negative',
+                    message: 'Severe multikey expansion',
+                    details: `The index examined ${multikeyMultiplier.toFixed(1)}× more keys than documents.\n\nThis typically happens with indexes on array fields where each array element generates a separate index entry. The database must examine many index keys for each document.\n\nConsider restructuring the data to avoid indexing large arrays, or use a different query pattern.`,
+                });
+
+                // Demote score by one level for severe multikey
+                const scoreOrder: Array<ExecutionStatsAnalysis['performanceRating']['score']> = [
+                    'excellent',
+                    'good',
+                    'fair',
+                    'poor',
+                ];
+                const currentIndex = scoreOrder.indexOf(analysis.performanceRating.score);
+                if (currentIndex >= 0 && currentIndex < scoreOrder.length - 1) {
+                    analysis.performanceRating.score = scoreOrder[currentIndex + 1];
+                }
+            } else if (multikeyMultiplier >= MULTIKEY_WARN_THRESHOLD) {
+                diagnostics.push({
+                    diagnosticId: 'high_multikey_expansion',
+                    type: 'neutral',
+                    message: 'High multikey expansion',
+                    details: `The index examined ${multikeyMultiplier.toFixed(1)}× more keys than documents.\n\nThis is common with indexes on array fields. Each array element generates a separate index entry, increasing the number of keys the database must examine.\n\nThis is usually acceptable but can become a concern as array sizes grow.`,
+                });
+            }
+        }
+    }
 }
 
 /**
