@@ -64,6 +64,9 @@ export interface QueryInsightsStage1Response {
 // Stage 2: Detailed Execution Analysis Types
 // ============================================================================
 
+/** Stable identifier for the fetch overhead state, independent of locale. */
+export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'multikey' | 'directFetch';
+
 /**
  * Response from Stage 2 - Detailed execution statistics
  *
@@ -100,6 +103,8 @@ export interface QueryInsightsStage2Response {
         indexUsed: string | null;
         /** Fetch overhead state label (e.g., "Direct fetch", "Covered query", "Collection scan") */
         fetchOverhead: string;
+        /** Stable identifier for the fetch overhead state, used for tooltip branching */
+        fetchOverheadKind: FetchOverheadKind;
         hasInMemorySort: boolean;
         /** Performance rating with detailed reasons and rating-specific concerns */
         performanceRating: PerformanceRating;

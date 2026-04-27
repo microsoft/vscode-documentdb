@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { type Document } from 'mongodb';
 import { type AIIndexRecommendation, type AIOptimizationResponse } from '../../services/ai/types';
 import {
+    type FetchOverheadKind,
     type ImprovementCard,
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
@@ -350,7 +351,7 @@ export function transformStage2Response(
         efficiencyAnalysis: {
             selectivity: computeSelectivity(analyzed.nReturned, totalCollectionDocs),
             indexUsed: analyzed.usedIndexes.length > 0 ? analyzed.usedIndexes[0] : null,
-            fetchOverhead: computeFetchOverhead(analyzed),
+            ...computeFetchOverhead(analyzed),
             hasInMemorySort: analyzed.hasInMemorySort,
             performanceRating: analyzed.performanceRating,
         },
@@ -378,30 +379,33 @@ function computeSelectivity(nReturned: number, totalCollectionDocs: number | und
 }
 
 /**
- * Computes the fetch overhead label based on query execution characteristics.
+ * Computes the fetch overhead label and stable kind based on query execution characteristics.
  * First match wins.
  *
  * @param analyzed - Execution stats analysis
- * @returns Human-readable fetch overhead state label
+ * @returns Object with localized `fetchOverhead` label and stable `fetchOverheadKind` identifier
  */
-function computeFetchOverhead(analyzed: ExecutionStatsAnalysis): string {
+function computeFetchOverhead(analyzed: ExecutionStatsAnalysis): {
+    fetchOverhead: string;
+    fetchOverheadKind: FetchOverheadKind;
+} {
     if (analyzed.nReturned === 0) {
-        return l10n.t('No matches');
+        return { fetchOverhead: l10n.t('No matches'), fetchOverheadKind: 'noMatches' };
     }
     if (analyzed.isCovered && analyzed.totalDocsExamined === 0 && analyzed.nReturned > 0) {
-        return l10n.t('Covered query');
+        return { fetchOverhead: l10n.t('Covered query'), fetchOverheadKind: 'covered' };
     }
     if (analyzed.isCollectionScan) {
-        return l10n.t('Collection scan');
+        return { fetchOverhead: l10n.t('Collection scan'), fetchOverheadKind: 'collectionScan' };
     }
     if (analyzed.totalKeysExamined > analyzed.totalDocsExamined && analyzed.totalDocsExamined > 0) {
         const ratio = analyzed.totalKeysExamined / analyzed.totalDocsExamined;
         if (ratio > 10) {
-            return l10n.t('Multikey expansion (>10×)');
+            return { fetchOverhead: l10n.t('Multikey expansion (>10×)'), fetchOverheadKind: 'multikey' };
         }
-        return l10n.t('Multikey expansion ({0}×)', ratio.toFixed(1));
+        return { fetchOverhead: l10n.t('Multikey expansion ({0}×)', ratio.toFixed(1)), fetchOverheadKind: 'multikey' };
     }
-    return l10n.t('Direct fetch');
+    return { fetchOverhead: l10n.t('Direct fetch'), fetchOverheadKind: 'directFetch' };
 }
 
 /**

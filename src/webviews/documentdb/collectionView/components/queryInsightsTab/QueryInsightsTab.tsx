@@ -930,21 +930,22 @@ export const QueryInsightsMain = (): JSX.Element => {
                             value={getCellValue(() => queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead)}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
-                                const fetchOverhead =
-                                    queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead ?? '';
-                                if (fetchOverhead.includes('Covered')) {
+                                const kind =
+                                    queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverheadKind ??
+                                    'directFetch';
+                                if (kind === 'covered') {
                                     return l10n.t(
                                         'The database retrieved your documents using a covered query.\n\nAll the data your query needs was already stored in the index. The database did not need to load the actual documents, making this the most efficient retrieval method.',
                                     );
-                                } else if (fetchOverhead.includes('Collection scan')) {
+                                } else if (kind === 'collectionScan') {
                                     return l10n.t(
                                         'The database retrieved your documents using a collection scan.\n\nEvery document was read sequentially because no supporting index was available. This is the slowest retrieval method for filtered queries.',
                                     );
-                                } else if (fetchOverhead.includes('Multikey')) {
+                                } else if (kind === 'multikey') {
                                     return l10n.t(
                                         'The database retrieved your documents through a multikey index.\n\nAn index on an array field was used. Each array element creates a separate index entry, so the database examined more index keys than documents. This is expected for array indexes but adds overhead.',
                                     );
-                                } else if (fetchOverhead.includes('No matches')) {
+                                } else if (kind === 'noMatches') {
                                     return l10n.t(
                                         'The query returned no documents.\n\nNo document fetching was needed because no documents matched the filter criteria.',
                                     );
