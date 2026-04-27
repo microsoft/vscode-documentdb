@@ -814,11 +814,15 @@ export class ExplainPlanAnalyzer {
      * @param analysis            - The execution stats analysis (will be mutated)
      * @param totalCollectionDocs - Estimated total documents in the collection (or undefined)
      * @param explainResult       - Raw explain result document
+     * @param queryFilter         - The user's original query filter (from ClusterSession).
+     *   Preferred over `explainResult.command.filter` because DocumentDB may return
+     *   `command` as a string rather than a document.
      */
     public static addIndexStrategyAdvisories(
         analysis: ExecutionStatsAnalysis,
         totalCollectionDocs: number | undefined,
         explainResult: Document,
+        queryFilter?: Document,
     ): void {
         const diagnostics = analysis.performanceRating.diagnostics;
 
@@ -848,8 +852,9 @@ export class ExplainPlanAnalyzer {
         // regardless of individual key cardinality (e.g., compound indexes with a
         // low-cardinality prefix followed by selective fields).
         if (analysis.isIndexScan && analysis.efficiencyRatio < 0.9) {
-            const queryFilter = (explainResult.command as Document | undefined)?.filter as Document | undefined;
-            const cardinalityResult = this.detectLowCardinalityIndex(explainResult, totalCollectionDocs, queryFilter);
+            const filter =
+                queryFilter ?? ((explainResult.command as Document | undefined)?.filter as Document | undefined);
+            const cardinalityResult = this.detectLowCardinalityIndex(explainResult, totalCollectionDocs, filter);
 
             if (cardinalityResult.isLowCardinality) {
                 const reasonsList = cardinalityResult.reasons.map((r) => `• ${r}`).join('\n');
