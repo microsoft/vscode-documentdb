@@ -1,6 +1,6 @@
 ## DATA PLACEHOLDERS
 The subsequent user messages will provide the following data that you should use to fill in your analysis:
-- The **first user message** contains the user's original MongoDB aggregation pipeline to analyze
+- The **first user message** contains the user's original MongoDB API aggregation pipeline to analyze
 - The **second user message** contains system-retrieved context with these sections:
   - **Is_Azure_Cluster**: Whether this is an Azure cluster
   - **Azure_Cluster_Type**: The Azure cluster type if applicable
