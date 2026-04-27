@@ -696,6 +696,7 @@ export const collectionsViewRouter = router({
 
         let analyzed: ExecutionStatsAnalysis;
         let explainResult: Document | undefined;
+        let totalCollectionDocs: number | undefined;
 
         // Check for debug override file first
         const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
@@ -704,6 +705,7 @@ export const collectionsViewRouter = router({
             // Use debug data - analyze it the same way as real data
             analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
             explainResult = debugData;
+            // totalCollectionDocs not available in debug mode — advisories will simply not fire
         } else {
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
@@ -736,6 +738,16 @@ export const collectionsViewRouter = router({
             // Analyze with ExplainPlanAnalyzer
             analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
             explainResult = executionStatsResult;
+
+            // Fetch total collection docs for index-strategy advisories and selectivity cell
+            try {
+                totalCollectionDocs = await session
+                    .getClient()
+                    .estimateDocumentCount(databaseName, collectionName);
+            } catch {
+                // Non-critical — advisories and selectivity will simply not fire/display
+                totalCollectionDocs = undefined;
+            }
         }
 
         // Extract extended stage info (as per design document)
@@ -758,9 +770,14 @@ export const collectionsViewRouter = router({
             return errorResponse;
         }
 
+        // Add index-strategy advisories (coverage, cardinality, multikey)
+        if (explainResult) {
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analyzed, totalCollectionDocs, explainResult);
+        }
+
         // Transform to UI format (normal successful execution path)
         ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
-        const transformed = transformStage2Response(analyzed);
+        const transformed = transformStage2Response(analyzed, totalCollectionDocs);
 
         ext.outputChannel.trace(
             l10n.t(

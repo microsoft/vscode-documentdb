@@ -95,10 +95,11 @@ export interface QueryInsightsStage2Response {
     /** Top-level query warnings (collection scan, in-memory sort, etc.) */
     concerns: string[];
     efficiencyAnalysis: {
-        executionStrategy: string;
+        /** Selectivity: percentage of collection returned (e.g., "33.2%"), or null if unknown */
+        selectivity: string | null;
         indexUsed: string | null;
-        /** Formatted ratio for display (e.g., "50:1") */
-        examinedReturnedRatio: string;
+        /** Fetch overhead state label (e.g., "Direct fetch", "Covered query", "Collection scan") */
+        fetchOverhead: string;
         hasInMemorySort: boolean;
         /** Performance rating with detailed reasons and rating-specific concerns */
         performanceRating: PerformanceRating;
