@@ -80,7 +80,9 @@ const promptBodyCache: Map<string, string> = new Map();
  * @param resourceFileName - The filename within `resources/prompts/`
  * @returns The file contents or undefined
  */
-export function loadPromptBody(resourceFileName: string): { body: string } | { fallbackReason: 'no-context' | 'read-error' } {
+export function loadPromptBody(
+    resourceFileName: string,
+): { body: string } | { fallbackReason: 'no-context' | 'read-error' } {
     const cached = promptBodyCache.get(resourceFileName);
     if (cached !== undefined) {
         return { body: cached };
@@ -169,7 +171,7 @@ export function setLastPromptSource(source: 'resource-file' | 'inline-fallback' 
     lastPromptSource = source;
 }
 
-const INDEX_ADVISOR_ROLE = 'MongoDB API Query Performance Analyst and Index Advisor';
+const INDEX_ADVISOR_ROLE = 'MongoDB API Index Advisor assistant';
 const QUERY_GENERATOR_ROLE = 'MongoDB Query Generator assistant';
 
 const INDEX_ADVISOR_TASK_FIND =
