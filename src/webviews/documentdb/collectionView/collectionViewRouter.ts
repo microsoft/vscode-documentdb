@@ -756,6 +756,13 @@ export const collectionsViewRouter = router({
         const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
         if (executionStages) {
             analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
+
+            // Enrich with properties from queryPlanner (e.g., isBitmap is only in queryPlanner stages)
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            const winningPlan = explainResult?.queryPlanner?.winningPlan as Document | undefined;
+            if (winningPlan) {
+                StagePropertyExtractor.enrichWithQueryPlannerInfo(analyzed.extendedStageInfo, winningPlan);
+            }
         }
 
         // Check for execution error and return error response if found

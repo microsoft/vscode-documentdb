@@ -219,6 +219,18 @@ Gated on: `isIndexScan === true` AND `totalCollectionDocs` available.
 | `returns_majority_of_collection` | coverage >= 50%  | neutral | Returns majority of collection |
 | `low_filter_selectivity`         | coverage 20%-49% | neutral | Low filter selectivity         |
 
+#### Bitmap Index
+
+Gated on: `isIndexScan === true`. **Not** gated on efficiency ratio.
+
+Fires when the `queryPlanner.winningPlan` IXSCAN stage has `isBitmap === true`.
+This is a direct engine assertion and is always surfaced regardless of query
+efficiency, unlike the heuristic-based low-cardinality badge.
+
+| diagnosticId   | Type    | Message      | Score effect |
+| -------------- | ------- | ------------ | ------------ |
+| `bitmap_index` | neutral | Bitmap index | None         |
+
 #### Low-Cardinality Index
 
 Gated on: `isIndexScan === true` AND `efficiencyRatio < 0.9`.
