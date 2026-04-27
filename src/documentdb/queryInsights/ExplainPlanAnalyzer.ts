@@ -132,15 +132,15 @@ export class ExplainPlanAnalyzer {
      * Provides comprehensive execution metrics and performance analysis
      *
      * @param explainResult - Raw explain output with executionStats
+     * @param queryFilter - The user's original query filter (from ClusterSession, not from explain output).
+     *   Pass `undefined` or `{}` for unfiltered queries (e.g., `find({})`).
+     *   This is preferred over extracting from `explainResult.command` because DocumentDB
+     *   may return `command` as a string rather than a document.
      * @returns Analysis object with execution statistics and performance rating
      */
-    public static analyzeExecutionStats(explainResult: Document): ExecutionStatsAnalysis {
+    public static analyzeExecutionStats(explainResult: Document, queryFilter?: Document): ExecutionStatsAnalysis {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any, @typescript-eslint/no-unsafe-argument
         const explainPlan = new ExplainPlan(explainResult as any);
-
-        // Extract query filter from command (for empty query detection)
-        const command = explainResult.command as Document | undefined;
-        const queryFilter = command?.filter as Document | undefined;
 
         // STEP 1: Check for execution errors FIRST
         const executionStats = explainResult.executionStats as Document | undefined;
@@ -320,22 +320,23 @@ export class ExplainPlanAnalyzer {
                     'Your query uses an index.\n\nThis allows the database to efficiently locate matching documents without scanning the entire collection.',
             });
         } else if (isCollectionScan) {
-            // For empty queries (no filter), collection scan is expected and neutral
             if (isEmptyQuery) {
+                // No filter — collection scan is expected
                 diagnostics.push({
                     diagnosticId: 'full_collection_scan',
                     type: 'neutral',
                     message: 'Full collection scan',
                     details:
-                        'Your query performs a full collection scan since no filter criteria are specified.\n\nThis is expected behavior for queries that retrieve all documents. Consider adding filters if you only need a subset of documents.',
+                        'Your query retrieves all documents, so a full collection scan is expected.\n\nConsider adding filters if you only need a subset of documents.',
                 });
             } else {
+                // Filter exists but no supporting index
                 diagnostics.push({
                     diagnosticId: 'full_collection_scan',
                     type: 'negative',
                     message: 'Full collection scan',
                     details:
-                        'Your query performs a full collection scan, examining every document in the collection.\n\nThis is inefficient and slow, especially for large collections.\n\nAdd an index on the queried fields to improve performance.',
+                        'Your query has filter criteria but no supporting index. The database scanned every document in the collection to find matches.\n\nAdding an index on the filtered fields would allow the database to locate matching documents directly.',
                 });
             }
         } else {

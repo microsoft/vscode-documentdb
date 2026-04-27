@@ -735,8 +735,8 @@ export const collectionsViewRouter = router({
                 }),
             );
 
-            // Analyze with ExplainPlanAnalyzer
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
+            // Analyze with ExplainPlanAnalyzer (pass the user's actual filter for empty-query detection)
+            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult, queryParams.filterObj);
             explainResult = executionStatsResult;
 
             // Fetch total collection docs for index-strategy advisories and selectivity cell
