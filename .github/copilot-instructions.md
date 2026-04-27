@@ -193,6 +193,7 @@ For Discovery View, both `treeId` and `clusterId` are sanitized (all `/` replace
 See `src/tree/models/BaseClusterModel.ts` and `docs/analysis/08-cluster-model-simplification-plan.md` for details.
 
 - [skills/telemetry-instrumentation/SKILL.md](skills/telemetry-instrumentation/SKILL.md) - Telemetry instrumentation patterns
+
 ## Terminology
 
 This is a **DocumentDB** extension that uses the **MongoDB-compatible wire protocol**.

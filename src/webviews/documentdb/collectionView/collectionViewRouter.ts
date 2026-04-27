@@ -772,12 +772,7 @@ export const collectionsViewRouter = router({
 
         // Add index-strategy advisories (coverage, cardinality, multikey)
         if (explainResult) {
-            ExplainPlanAnalyzer.addIndexStrategyAdvisories(
-                analyzed,
-                totalCollectionDocs,
-                explainResult,
-                queryFilter,
-            );
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analyzed, totalCollectionDocs, explainResult, queryFilter);
         }
 
         // Transform to UI format (normal successful execution path)
