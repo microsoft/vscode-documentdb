@@ -13,6 +13,7 @@ import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
 import { SchemaStore } from './SchemaStore';
+import type { QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
@@ -124,7 +125,7 @@ export class ClusterSession {
     private _queryPlannerCache?: { result: Document; timestamp: number };
     private _executionStatsCache?: { result: Document; timestamp: number };
     private _aiRecommendationsCache?: { result: unknown; timestamp: number };
-    private _stage2ResponseCache?: { response: unknown; totalCollectionDocs?: number };
+    private _stage2ResponseCache?: { response: QueryInsightsStage2Response; totalCollectionDocs?: number };
 
     /**
      * Last query execution time in milliseconds
@@ -624,14 +625,14 @@ export class ClusterSession {
      * Caches the transformed Stage 2 response and total collection docs
      * for use by Stage 3 when building the static analysis summary.
      */
-    public setStage2Response(response: unknown, totalCollectionDocs?: number): void {
+    public setStage2Response(response: QueryInsightsStage2Response, totalCollectionDocs?: number): void {
         this._stage2ResponseCache = { response, totalCollectionDocs };
     }
 
     /**
      * Gets the cached Stage 2 response, or null if not available.
      */
-    public getStage2Response(): { response: unknown; totalCollectionDocs?: number } | null {
+    public getStage2Response(): { response: QueryInsightsStage2Response; totalCollectionDocs?: number } | null {
         return this._stage2ResponseCache ?? null;
     }
 
