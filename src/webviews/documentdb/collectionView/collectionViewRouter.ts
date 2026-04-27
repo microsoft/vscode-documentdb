@@ -741,9 +741,7 @@ export const collectionsViewRouter = router({
 
             // Fetch total collection docs for index-strategy advisories and selectivity cell
             try {
-                totalCollectionDocs = await session
-                    .getClient()
-                    .estimateDocumentCount(databaseName, collectionName);
+                totalCollectionDocs = await session.getClient().estimateDocumentCount(databaseName, collectionName);
             } catch {
                 // Non-critical — advisories and selectivity will simply not fire/display
                 totalCollectionDocs = undefined;

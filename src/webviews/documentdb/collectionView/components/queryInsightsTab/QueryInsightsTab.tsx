@@ -877,9 +877,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Selectivity')}
-                            value={getCellValue(
-                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.selectivity,
-                            )}
+                            value={getCellValue(() => queryInsightsState.stage2Data?.efficiencyAnalysis.selectivity)}
                             nullValuePlaceholder="—"
                             loadingPlaceholder="skeleton"
                         />
@@ -893,9 +891,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('Fetch Overhead')}
-                            value={getCellValue(
-                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead,
-                            )}
+                            value={getCellValue(() => queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead)}
                             loadingPlaceholder="skeleton"
                         />
                         <GenericCell

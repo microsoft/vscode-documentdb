@@ -834,11 +834,7 @@ export class ExplainPlanAnalyzer {
         // --- Low-cardinality index badge (gated on index scan) ---
         if (analysis.isIndexScan) {
             const queryFilter = (explainResult.command as Document | undefined)?.filter as Document | undefined;
-            const cardinalityResult = this.detectLowCardinalityIndex(
-                explainResult,
-                totalCollectionDocs,
-                queryFilter,
-            );
+            const cardinalityResult = this.detectLowCardinalityIndex(explainResult, totalCollectionDocs, queryFilter);
 
             if (cardinalityResult.isLowCardinality) {
                 diagnostics.push({
