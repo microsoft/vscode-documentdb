@@ -155,6 +155,8 @@ export interface QueryInsightsErrorResponse {
  * Diagnostic detail about query performance
  */
 export interface PerformanceDiagnostic {
+    /** Stable identifier for filtering and matching (e.g., 'high_efficiency_ratio') */
+    diagnosticId: string;
     type: 'positive' | 'negative' | 'neutral';
     /** Short message for badge text (e.g., "Low efficiency ratio") */
     message: string;

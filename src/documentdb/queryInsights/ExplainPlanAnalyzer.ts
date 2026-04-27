@@ -7,10 +7,27 @@ import { ExplainPlan } from '@mongodb-js/explain-plan-helper';
 import { type Document } from 'mongodb';
 import { type ExtendedStageInfo } from '../../webviews/documentdb/collectionView/types/queryInsights';
 
+// ============================================================================
+// Index strategy advisory thresholds
+// ============================================================================
+
+/** Collection coverage: query returning ≥20% of collection has low selectivity */
+const COVERAGE_LOW_SELECTIVITY = 0.2;
+/** Collection coverage: query returning ≥50% of collection returns majority */
+const COVERAGE_HIGH_RETURN = 0.5;
+/** Index cardinality: ≥20% of collection per key bucket signals low-cardinality index */
+const CARDINALITY_PER_KEY_RATIO = 0.2;
+/** Multikey expansion: ≥5× keys-to-docs ratio triggers informational advisory */
+const MULTIKEY_WARN_THRESHOLD = 5;
+/** Multikey expansion: ≥20× keys-to-docs ratio triggers severe warning + score demotion */
+const MULTIKEY_SEVERE_THRESHOLD = 20;
+
 /**
  * Diagnostic detail about query performance
  */
 export interface PerformanceDiagnostic {
+    /** Stable identifier for filtering and matching (e.g., 'high_efficiency_ratio') */
+    diagnosticId: string;
     type: 'positive' | 'negative' | 'neutral';
     /** Short message for badge text (e.g., "Low efficiency ratio") */
     message: string;
@@ -225,24 +242,28 @@ export class ExplainPlanAnalyzer {
         // 1. Efficiency Ratio Assessment (always included)
         if (efficiencyRatio >= 0.5) {
             diagnostics.push({
+                diagnosticId: 'high_efficiency_ratio',
                 type: 'positive',
                 message: 'High efficiency ratio',
                 details: `You return ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis indicates excellent query selectivity and optimal index usage.`,
             });
         } else if (efficiencyRatio >= 0.1) {
             diagnostics.push({
+                diagnosticId: 'moderate_efficiency_ratio',
                 type: 'neutral',
                 message: 'Moderate efficiency ratio',
                 details: `You return ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis is acceptable but could be improved with better index coverage or more selective filters.`,
             });
         } else if (efficiencyRatio >= 0.01) {
             diagnostics.push({
+                diagnosticId: 'low_efficiency_ratio',
                 type: 'negative',
                 message: 'Low efficiency ratio',
                 details: `You return only ${(efficiencyRatio * 100).toFixed(1)}% of examined documents.\n\nThis indicates poor query selectivity - the database examines many documents that don't match your query criteria.\n\nConsider adding more selective indexes or refining your query filters.`,
             });
         } else {
             diagnostics.push({
+                diagnosticId: 'very_low_efficiency_ratio',
                 type: 'negative',
                 message: 'Very low efficiency ratio',
                 details: `You return only ${(efficiencyRatio * 100).toFixed(2)}% of examined documents.\n\nThis is extremely inefficient - the database examines thousands of documents for each result returned.\n\nThis severely impacts performance and should be addressed with better indexing strategies.`,
@@ -252,24 +273,28 @@ export class ExplainPlanAnalyzer {
         // 2. Execution Time Assessment (always included)
         if (executionTimeMs < 100) {
             diagnostics.push({
+                diagnosticId: 'fast_execution',
                 type: 'positive',
                 message: 'Fast execution',
                 details: `Query completed in ${executionTimeMs.toFixed(1)}ms.\n\nThis is excellent performance and provides a responsive user experience.`,
             });
         } else if (executionTimeMs < 500) {
             diagnostics.push({
+                diagnosticId: 'acceptable_execution',
                 type: 'neutral',
                 message: 'Acceptable execution time',
                 details: `Query completed in ${executionTimeMs.toFixed(1)}ms.\n\nThis is acceptable for most use cases, though optimization could improve responsiveness.`,
             });
         } else if (executionTimeMs < 2000) {
             diagnostics.push({
+                diagnosticId: 'slow_execution',
                 type: 'negative',
                 message: 'Slow execution',
                 details: `Query took ${executionTimeMs.toFixed(1)}ms to complete.\n\nThis may impact user experience.\n\nConsider adding indexes or optimizing your query structure.`,
             });
         } else {
             diagnostics.push({
+                diagnosticId: 'very_slow_execution',
                 type: 'negative',
                 message: 'Very slow execution',
                 details: `Query took ${(executionTimeMs / 1000).toFixed(2)}s to complete.\n\nThis significantly impacts performance and user experience.\n\nImmediate optimization is recommended.`,
@@ -279,6 +304,7 @@ export class ExplainPlanAnalyzer {
         // 3. Index Usage Assessment (always included)
         if (isIndexScan) {
             diagnostics.push({
+                diagnosticId: 'index_used',
                 type: 'positive',
                 message: 'Index used',
                 details:
@@ -288,6 +314,7 @@ export class ExplainPlanAnalyzer {
             // For empty queries (no filter), collection scan is expected and neutral
             if (isEmptyQuery) {
                 diagnostics.push({
+                    diagnosticId: 'full_collection_scan',
                     type: 'neutral',
                     message: 'Full collection scan',
                     details:
@@ -295,6 +322,7 @@ export class ExplainPlanAnalyzer {
                 });
             } else {
                 diagnostics.push({
+                    diagnosticId: 'full_collection_scan',
                     type: 'negative',
                     message: 'Full collection scan',
                     details:
@@ -303,6 +331,7 @@ export class ExplainPlanAnalyzer {
             }
         } else {
             diagnostics.push({
+                diagnosticId: 'no_index_used',
                 type: 'neutral',
                 message: 'No index used',
                 details:
@@ -314,6 +343,7 @@ export class ExplainPlanAnalyzer {
         if (hasSorting) {
             if (hasInMemorySort) {
                 diagnostics.push({
+                    diagnosticId: 'in_memory_sort',
                     type: 'negative',
                     message: 'In-memory sort required',
                     details:
@@ -321,6 +351,7 @@ export class ExplainPlanAnalyzer {
                 });
             } else {
                 diagnostics.push({
+                    diagnosticId: 'efficient_sorting',
                     type: 'positive',
                     message: 'Efficient sorting',
                     details:
@@ -330,6 +361,7 @@ export class ExplainPlanAnalyzer {
         } else {
             // No sorting required - add neutral diagnostic
             diagnostics.push({
+                diagnosticId: 'no_sorting_required',
                 type: 'neutral',
                 message: 'No sorting required',
                 details: 'Your query does not require sorting, which avoids additional processing overhead.',
@@ -583,6 +615,7 @@ export class ExplainPlanAnalyzer {
 
         // Primary diagnostic: Query failed
         diagnostics.push({
+            diagnosticId: 'query_execution_failed',
             type: 'negative',
             message: 'Query execution failed',
             details: `${error.errorMessage}\n\nThe query did not complete successfully. Performance metrics shown are partial and measured up to the failure point.`,
@@ -622,6 +655,7 @@ export class ExplainPlanAnalyzer {
             const memLimitMB = memLimit ? (memLimit / (1024 * 1024)).toFixed(1) : 'unknown';
 
             return {
+                diagnosticId: 'sort_exceeded_memory_limit',
                 type: 'negative',
                 message: 'Sort exceeded memory limit',
                 details:
@@ -636,6 +670,7 @@ export class ExplainPlanAnalyzer {
 
         // Generic stage failure
         return {
+            diagnosticId: 'stage_failed',
             type: 'negative',
             message: `${stage} stage failed`,
             details: `The ${stage} stage could not complete execution.\n\nReview the error message and query structure for potential issues.`,
