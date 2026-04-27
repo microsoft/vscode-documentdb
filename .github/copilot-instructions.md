@@ -29,8 +29,12 @@ Before finishing work on a PR, agents **must** run the following steps in order:
    ```bash
    npm run lint
    ```
+4. **Tests** — Run the full Jest test suite to confirm no regressions:
+   ```bash
+   npx jest --no-coverage
+   ```
 
-> ⚠️ **An agent must not finish or terminate until all three steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
+> ⚠️ **An agent must not finish or terminate until all four steps above have been run and pass successfully.** Skipping these steps leads to CI failures.
 
 ## Git Safety
 
