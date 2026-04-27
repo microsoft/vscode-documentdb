@@ -375,7 +375,8 @@ function computeSelectivity(nReturned: number, totalCollectionDocs: number | und
     if (!totalCollectionDocs || totalCollectionDocs <= 0 || nReturned === undefined) {
         return null;
     }
-    return `${((nReturned / totalCollectionDocs) * 100).toFixed(1)}%`;
+    const ratio = Math.min(nReturned / totalCollectionDocs, 1);
+    return `${(ratio * 100).toFixed(1)}%`;
 }
 
 /**

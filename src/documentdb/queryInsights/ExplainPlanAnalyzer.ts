@@ -846,7 +846,7 @@ export class ExplainPlanAnalyzer {
 
         // --- Coverage badges (gated on index scan) ---
         if (analysis.isIndexScan && totalCollectionDocs && totalCollectionDocs > 0) {
-            const coverage = analysis.nReturned / totalCollectionDocs;
+            const coverage = Math.min(analysis.nReturned / totalCollectionDocs, 1);
 
             if (coverage >= COVERAGE_HIGH_RETURN) {
                 diagnostics.push({
