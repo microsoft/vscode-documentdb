@@ -27,6 +27,56 @@ export class StagePropertyExtractor {
     }
 
     /**
+     * Enriches already-extracted stage info with properties from the queryPlanner tree.
+     * Some properties (e.g., `isBitmap`) only appear in `queryPlanner.winningPlan` stages,
+     * not in `executionStats.executionStages`. This method cross-references by stage name
+     * and index name to annotate the matching ExtendedStageInfo entries.
+     *
+     * @param stageInfoList - The extracted stage info from executionStages (mutated in place)
+     * @param winningPlan   - The queryPlanner.winningPlan document
+     */
+    public static enrichWithQueryPlannerInfo(stageInfoList: ExtendedStageInfo[], winningPlan: Document): void {
+        const plannerStages: Document[] = [];
+        this.collectPlannerStages(winningPlan, plannerStages);
+
+        for (const info of stageInfoList) {
+            if (info.stageName !== 'IXSCAN' && info.stageName !== 'EXPRESS_IXSCAN') {
+                continue;
+            }
+
+            // Find matching planner stage by stage name + index name
+            const indexName = info.properties['Index Name'] as string | undefined;
+            const match = plannerStages.find(
+                (ps) => ps.stage === info.stageName && (!indexName || ps.indexName === indexName),
+            );
+
+            if (match?.isBitmap === true) {
+                info.properties['Bitmap'] = 'Yes';
+            }
+        }
+    }
+
+    /**
+     * Collects all stages from the queryPlanner winning plan tree into a flat array.
+     */
+    private static collectPlannerStages(stage: Document, accumulator: Document[]): void {
+        if (!stage || !stage.stage) {
+            return;
+        }
+
+        accumulator.push(stage);
+
+        if (stage.inputStage) {
+            this.collectPlannerStages(stage.inputStage as Document, accumulator);
+        }
+        if (stage.inputStages) {
+            (stage.inputStages as Document[]).forEach((child: Document) => {
+                this.collectPlannerStages(child, accumulator);
+            });
+        }
+    }
+
+    /**
      * Recursively traverses execution stages and extracts properties
      * Handles single inputStage, multiple inputStages, and sharded queries
      *

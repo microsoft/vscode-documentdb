@@ -7,17 +7,30 @@ import { type Document } from 'mongodb';
 import { type ClusterMetadata } from './getClusterMetadata';
 
 /**
- * TEMPORARY WORKAROUND (connector-side).
+ * TEMPORARY WORKAROUNDS (connector-side).
  *
- * When connected to Azure DocumentDB, the explain plan data for queries that do not
- * use an index (COLLSCAN) reports `totalKeysExamined` equal to `totalDocsExamined`.
- * The expected value is 0 since no index keys were examined. This issue has been
- * reported and this fix will remain here until it is fixed server-side.
+ * 1. **keysExamined for COLLSCAN**: When connected to Azure DocumentDB, the explain plan data for
+ *    queries that do not use an index (COLLSCAN) reports `totalKeysExamined` equal to
+ *    `totalDocsExamined`. The expected value is 0 since no index keys were examined.
+ *
+ * 2. **docsExamined with SORT**: When a SORT stage wraps the execution plan, the
+ *    top-level `executionStats.totalDocsExamined` is incorrectly set to `nReturned`
+ *    (documents returned) instead of the actual number of documents scanned by the
+ *    underlying stage (e.g. COLLSCAN/FETCH). The correct value is found deeper in the
+ *    stage tree.
+ *
+ * 3. **keysExamined with SORT+IXSCAN**: When a SORT stage wraps an IXSCAN, the
+ *    top-level `executionStats.totalKeysExamined` is incorrectly set to `nReturned`
+ *    instead of the actual number of index keys scanned by the IXSCAN stage. The
+ *    correct value is found in the innermost IXSCAN execution stage.
+ *
+ * These issues have been reported and these fixes will remain here until they are
+ * fixed server-side.
  *
  * This function patches the explain result in flight so downstream UI and LLM
  * consumers see accurate metrics.
  *
- * No-op for non-DocumentDB clusters and for plans that use an index scan.
+ * No-op for non-DocumentDB clusters.
  */
 
 /** Returns true when connected to Azure DocumentDB. */
@@ -26,8 +39,9 @@ export function isAzureDocumentDb(metadata: ClusterMetadata | undefined): boolea
 }
 
 /**
- * Patches the explain result **in place** to correct `totalKeysExamined` / `keysExamined`
- * for Azure DocumentDB when no index is used.
+ * Patches the explain result **in place** to correct known Azure DocumentDB issues:
+ * - `totalKeysExamined` / `keysExamined` for COLLSCAN plans
+ * - `totalDocsExamined` when a SORT stage hides the real scan count
  *
  * The input document is mutated directly; the return value is the same reference.
  *
@@ -46,12 +60,18 @@ export function fixupDocumentDbExplain(
         return explainResult;
     }
 
-    if (!planUsesNoIndex(queryPlanner.winningPlan as Document | undefined)) {
-        return explainResult;
+    const usesNoIndex = planUsesNoIndex(queryPlanner.winningPlan as Document | undefined);
+
+    if (usesNoIndex) {
+        // Zero out keysExamined in executionStats (top-level for unsharded, nested for sharded)
+        zeroOutKeysExamined(explainResult.executionStats as Document | undefined);
+    } else {
+        // Fix totalKeysExamined when a SORT stage hides the actual IXSCAN key count
+        fixupTotalKeysExamined(explainResult.executionStats as Document | undefined);
     }
 
-    // Zero out keysExamined in executionStats (top-level for unsharded, nested for sharded)
-    zeroOutKeysExamined(explainResult.executionStats as Document | undefined);
+    // Fix totalDocsExamined when a SORT stage hides the actual scan count
+    fixupTotalDocsExamined(explainResult.executionStats as Document | undefined);
 
     return explainResult;
 }
@@ -91,6 +111,88 @@ function zeroOutKeysExamined(stats: Document | undefined): void {
             zeroOutKeysExamined(shard);
         }
     }
+}
+
+/**
+ * Corrects `totalKeysExamined` when a SORT stage causes the top-level value
+ * to be set to `nReturned` instead of the actual keys scanned by IXSCAN.
+ *
+ * Walks the execution stage tree and uses the maximum `totalKeysExamined` found
+ * at any stage. This is safe because:
+ * - Without SORT, the IXSCAN value already matches the top-level (no change).
+ * - With SORT, the IXSCAN stage deeper in the tree has the true count.
+ *
+ * Only called for index-scan plans (COLLSCAN plans are handled by zeroOutKeysExamined).
+ */
+function fixupTotalKeysExamined(stats: Document | undefined): void {
+    if (!stats) return;
+
+    const stages = stats.executionStages as Document | undefined;
+    if (stages) {
+        const maxKeys = findMaxKeysExamined(stages);
+        if (typeof stats.totalKeysExamined === 'number' && maxKeys > stats.totalKeysExamined) {
+            stats.totalKeysExamined = maxKeys;
+        }
+    }
+
+    // Sharded clusters nest per-shard executionStats
+    const shards = stats.shards as Document[] | undefined;
+    if (Array.isArray(shards)) {
+        for (const shard of shards) {
+            fixupTotalKeysExamined(shard);
+        }
+    }
+}
+
+/**
+ * Corrects `totalDocsExamined` when a SORT stage causes the top-level value
+ * to be set to `nReturned` instead of the actual documents scanned.
+ *
+ * Walks the execution stage tree and uses the maximum `totalDocsExamined` found
+ * at any stage. This is safe because:
+ * - Without SORT, the leaf stage value already matches the top-level (no change).
+ * - With SORT, the deeper scan stage (COLLSCAN/FETCH) has the true count.
+ */
+function fixupTotalDocsExamined(stats: Document | undefined): void {
+    if (!stats) return;
+
+    const stages = stats.executionStages as Document | undefined;
+    if (stages) {
+        const maxDocs = findMaxDocsExamined(stages);
+        if (typeof stats.totalDocsExamined === 'number' && maxDocs > stats.totalDocsExamined) {
+            stats.totalDocsExamined = maxDocs;
+        }
+    }
+
+    // Sharded clusters nest per-shard executionStats
+    const shards = stats.shards as Document[] | undefined;
+    if (Array.isArray(shards)) {
+        for (const shard of shards) {
+            fixupTotalDocsExamined(shard);
+        }
+    }
+}
+
+/** Walks the stage tree and returns the maximum `totalKeysExamined` found. */
+function findMaxKeysExamined(node: Document | undefined): number {
+    let max = 0;
+    walkStages(node, (stage) => {
+        if (typeof stage.totalKeysExamined === 'number' && stage.totalKeysExamined > max) {
+            max = stage.totalKeysExamined;
+        }
+    });
+    return max;
+}
+
+/** Walks the stage tree and returns the maximum `totalDocsExamined` found. */
+function findMaxDocsExamined(node: Document | undefined): number {
+    let max = 0;
+    walkStages(node, (stage) => {
+        if (typeof stage.totalDocsExamined === 'number' && stage.totalDocsExamined > max) {
+            max = stage.totalDocsExamined;
+        }
+    });
+    return max;
 }
 
 function walkStages(node: Document | undefined, visit: (stage: Document) => void): void {

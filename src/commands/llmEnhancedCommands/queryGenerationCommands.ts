@@ -256,7 +256,6 @@ export async function generateQuery(
     );
 
     // Send to Copilot with configured models
-    const llmCallStart = Date.now();
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Calling Copilot (model: {model})...', {
             model: PREFERRED_MODEL || 'default',
@@ -273,10 +272,10 @@ export async function generateQuery(
             fallbackModels: FALLBACK_MODELS,
         },
     );
-    context.telemetry.measurements.llmCallDurationMs = Date.now() - llmCallStart;
+    context.telemetry.measurements.llmCallDurationMs = response.durationMs;
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Copilot response received in {ms}ms (model: {model})', {
-            ms: context.telemetry.measurements.llmCallDurationMs.toString(),
+            ms: response.durationMs.toString(),
             model: response.modelUsed,
         }),
     );

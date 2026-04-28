@@ -102,12 +102,56 @@ describe('fixupDocumentDbExplain', () => {
             expect(result.executionStats.executionStages.docsExamined).toBe(2400);
         });
 
-        it('does not modify IXSCAN plans', () => {
+        it('does not modify IXSCAN plans without SORT', () => {
             const explain = makeIxscanExplain(50, 50);
             const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
 
             expect(result.executionStats.totalKeysExamined).toBe(50);
             expect(result.executionStats.executionStages.inputStage.keysExamined).toBe(50);
+        });
+
+        it('fixes totalKeysExamined when SORT wraps IXSCAN (the keys are hidden by SORT stage)', () => {
+            // Mirrors the Azure DocumentDB bug: SORT+FETCH+IXSCAN plan where the top-level
+            // totalKeysExamined is set to nReturned (68) instead of the IXSCAN value (3875).
+            const explain: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'SORT',
+                        inputStage: {
+                            stage: 'FETCH',
+                            inputStage: {
+                                stage: 'IXSCAN',
+                                indexName: 'cuisine_1',
+                            },
+                        },
+                    },
+                },
+                executionStats: {
+                    nReturned: 68,
+                    totalKeysExamined: 68, // wrong: should be 3875
+                    totalDocsExamined: 3875,
+                    executionStages: {
+                        stage: 'SORT',
+                        totalKeysExamined: 68,
+                        totalDocsExamined: 68,
+                        inputStage: {
+                            stage: 'FETCH',
+                            totalKeysExamined: 68,
+                            totalDocsExamined: 3875,
+                            inputStage: {
+                                stage: 'IXSCAN',
+                                totalKeysExamined: 3875, // the real value
+                                totalDocsExamined: 3875,
+                            },
+                        },
+                    },
+                },
+            };
+
+            const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
+            expect(result.executionStats.totalKeysExamined).toBe(3875);
+            // totalDocsExamined should remain correct (already 3875)
+            expect(result.executionStats.totalDocsExamined).toBe(3875);
         });
 
         it('handles SORT with COLLSCAN inputStage', () => {
@@ -220,6 +264,175 @@ describe('fixupDocumentDbExplain', () => {
             const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
             expect(result).toBeDefined();
             expect(result.executionStats).toBeUndefined();
+        });
+    });
+
+    describe('totalDocsExamined fixup with SORT stage', () => {
+        it('corrects totalDocsExamined when SORT hides the real COLLSCAN count', () => {
+            const explain: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'SORT',
+                        inputStage: {
+                            stage: 'COLLSCAN',
+                        },
+                    },
+                },
+                executionStats: {
+                    nReturned: 19336,
+                    totalDocsExamined: 19336,
+                    totalKeysExamined: 0,
+                    executionStages: {
+                        stage: 'SORT',
+                        totalDocsExamined: 19336,
+                        totalKeysExamined: 19336,
+                        inputStage: {
+                            stage: 'COLLSCAN',
+                            totalDocsExamined: 64616,
+                            totalKeysExamined: 19336,
+                        },
+                    },
+                },
+            };
+
+            const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
+            expect(result.executionStats.totalDocsExamined).toBe(64616);
+        });
+
+        it('does not change totalDocsExamined when there is no SORT (values already match)', () => {
+            const explain = makeCollscanExplain(2400, 2400);
+            const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
+            expect(result.executionStats.totalDocsExamined).toBe(2400);
+        });
+
+        it('corrects totalDocsExamined with SORT over FETCH over IXSCAN', () => {
+            const explain: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'SORT',
+                        inputStage: {
+                            stage: 'FETCH',
+                            inputStage: {
+                                stage: 'IXSCAN',
+                                keyPattern: { status: 1 },
+                            },
+                        },
+                    },
+                },
+                executionStats: {
+                    nReturned: 100,
+                    totalDocsExamined: 100,
+                    totalKeysExamined: 150,
+                    executionStages: {
+                        stage: 'SORT',
+                        totalDocsExamined: 100,
+                        inputStage: {
+                            stage: 'FETCH',
+                            totalDocsExamined: 500,
+                            inputStage: {
+                                stage: 'IXSCAN',
+                                totalDocsExamined: 0,
+                            },
+                        },
+                    },
+                },
+            };
+
+            const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
+            expect(result.executionStats.totalDocsExamined).toBe(500);
+        });
+
+        it('corrects totalDocsExamined per shard in sharded clusters', () => {
+            const explain: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'SORT',
+                        inputStage: {
+                            stage: 'COLLSCAN',
+                        },
+                    },
+                },
+                executionStats: {
+                    totalDocsExamined: 200,
+                    totalKeysExamined: 0,
+                    shards: [
+                        {
+                            totalDocsExamined: 100,
+                            executionStages: {
+                                stage: 'SORT',
+                                totalDocsExamined: 100,
+                                inputStage: {
+                                    stage: 'COLLSCAN',
+                                    totalDocsExamined: 5000,
+                                },
+                            },
+                        },
+                        {
+                            totalDocsExamined: 100,
+                            executionStages: {
+                                stage: 'SORT',
+                                totalDocsExamined: 100,
+                                inputStage: {
+                                    stage: 'COLLSCAN',
+                                    totalDocsExamined: 3000,
+                                },
+                            },
+                        },
+                    ],
+                },
+            };
+
+            const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
+            // Per-shard values corrected
+            expect(result.executionStats.shards[0].totalDocsExamined).toBe(5000);
+            expect(result.executionStats.shards[1].totalDocsExamined).toBe(3000);
+        });
+
+        it('does not reduce totalDocsExamined if top-level is already correct', () => {
+            const explain: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'COLLSCAN',
+                    },
+                },
+                executionStats: {
+                    totalDocsExamined: 64616,
+                    totalKeysExamined: 0,
+                    executionStages: {
+                        stage: 'COLLSCAN',
+                        totalDocsExamined: 64616,
+                    },
+                },
+            };
+
+            const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
+            expect(result.executionStats.totalDocsExamined).toBe(64616);
+        });
+
+        it('does not apply totalDocsExamined fixup for non-Azure clusters', () => {
+            const explain: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'SORT',
+                        inputStage: { stage: 'COLLSCAN' },
+                    },
+                },
+                executionStats: {
+                    totalDocsExamined: 100,
+                    totalKeysExamined: 0,
+                    executionStages: {
+                        stage: 'SORT',
+                        totalDocsExamined: 100,
+                        inputStage: {
+                            stage: 'COLLSCAN',
+                            totalDocsExamined: 5000,
+                        },
+                    },
+                },
+            };
+
+            const result = fixupDocumentDbExplain(explain, nonAzureMetadata)!;
+            expect(result.executionStats.totalDocsExamined).toBe(100);
         });
     });
 });

@@ -277,4 +277,51 @@ describe('StagePropertyExtractor', () => {
             expect(collscan?.stageName).toBe('COLLSCAN');
         });
     });
+
+    describe('enrichWithQueryPlannerInfo', () => {
+        it('sets Bitmap property on IXSCAN stages when isBitmap is true in queryPlanner', () => {
+            const explain = loadExample('query-insights-stage2-allplans.json');
+            const executionStats = explain['executionStats'] as Record<string, unknown>;
+            const executionStages = executionStats['executionStages'] as Document;
+            const queryPlanner = explain['queryPlanner'] as Record<string, unknown>;
+            const winningPlan = queryPlanner['winningPlan'] as Document;
+
+            const infos = extractStagesFromPlan(executionStages);
+            StagePropertyExtractor.enrichWithQueryPlannerInfo(infos, winningPlan);
+
+            const ixscan = infos.find((i) => i.stageName === 'IXSCAN');
+            expect(ixscan).toBeDefined();
+            expect(ixscan?.properties['Bitmap']).toBe('Yes');
+        });
+
+        it('does not set Bitmap property when isBitmap is absent in queryPlanner', () => {
+            const explain = loadExample('query-insights-stage2.json');
+            const executionStats = explain['executionStats'] as Record<string, unknown>;
+            const executionStages = executionStats['executionStages'] as Document;
+            const queryPlanner = explain['queryPlanner'] as Record<string, unknown>;
+            const winningPlan = queryPlanner['winningPlan'] as Document;
+
+            const infos = extractStagesFromPlan(executionStages);
+            StagePropertyExtractor.enrichWithQueryPlannerInfo(infos, winningPlan);
+
+            const ixscan = infos.find((i) => i.stageName === 'IXSCAN');
+            expect(ixscan).toBeDefined();
+            expect(ixscan?.properties['Bitmap']).toBeUndefined();
+        });
+
+        it('does not affect non-IXSCAN stages', () => {
+            const explain = loadExample('query-insights-stage2-allplans.json');
+            const executionStats = explain['executionStats'] as Record<string, unknown>;
+            const executionStages = executionStats['executionStages'] as Document;
+            const queryPlanner = explain['queryPlanner'] as Record<string, unknown>;
+            const winningPlan = queryPlanner['winningPlan'] as Document;
+
+            const infos = extractStagesFromPlan(executionStages);
+            StagePropertyExtractor.enrichWithQueryPlannerInfo(infos, winningPlan);
+
+            const fetch = infos.find((i) => i.stageName === 'FETCH');
+            expect(fetch).toBeDefined();
+            expect(fetch?.properties['Bitmap']).toBeUndefined();
+        });
+    });
 });

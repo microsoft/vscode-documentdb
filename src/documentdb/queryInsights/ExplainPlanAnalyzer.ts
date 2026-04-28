@@ -910,6 +910,26 @@ export class ExplainPlanAnalyzer {
             }
         }
 
+        // --- Bitmap index badge (gated on index scan, NOT gated on efficiency) ---
+        // isBitmap is a direct engine assertion — always surface it when present.
+        // This is purely informational; it does not affect scoring.
+        if (analysis.isIndexScan) {
+            const winningPlan = (explainResult.queryPlanner as Document | undefined)?.winningPlan as
+                | Document
+                | undefined;
+            const ixscanStage = this.findStageInPlan(winningPlan, 'IXSCAN');
+            if (ixscanStage?.isBitmap === true) {
+                diagnostics.push({
+                    diagnosticId: 'bitmap_index',
+                    type: 'neutral',
+                    message: l10n.t('Bitmap index'),
+                    details: l10n.t(
+                        'The database used a bitmap index to execute this query.\n\nBitmap indexes are an internal optimization that DocumentDB applies to low-cardinality fields (fields with few distinct values, such as booleans or status codes). They are space-efficient but less selective than B-tree indexes on high-cardinality fields.\n\nThis is expected behavior and does not indicate a problem. If query performance is a concern, consider filtering on a more selective field or using a compound index.',
+                    ),
+                });
+            }
+        }
+
         // --- Low-cardinality index badge (gated on index scan) ---
         // Skip when efficiency is high (≥90%) — the index is clearly working well
         // regardless of individual key cardinality (e.g., compound indexes with a

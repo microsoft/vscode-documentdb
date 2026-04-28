@@ -14,7 +14,7 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import { FALLBACK_MODELS, PREFERRED_MODEL, type FilledPromptResult } from './promptTemplates';
+import { FALLBACK_MODELS, PREFERRED_MODEL, getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -66,6 +66,8 @@ export interface QueryOptimizationContext {
     collectionStats?: CollectionStats;
     // Pre-loaded index stat
     indexStats?: IndexStats[];
+    // Static analysis summary from Stage 2 (what the user has already been shown)
+    staticAnalysisSummary?: string;
     // Preferred LLM model for optimization
     preferredModel?: string;
     // Fallback LLM models
@@ -304,12 +306,13 @@ async function fillPromptTemplate(
     indexes: IndexStats[] | undefined,
     executionStats: string,
     clusterInfo: ClusterMetadata,
+    staticAnalysisSummary?: string,
 ): Promise<FilledPromptResult> {
     // Get the template for this command type
     const craftedPrompt = await getPromptTemplate(templateType);
 
     // User's original query
-    const userQuery = context.query || 'N/A';
+    const userQuery = context.query || (context.queryObject ? JSON.stringify(context.queryObject, null, 2) : 'N/A');
 
     // System-retrieved context data
     const contextData = `## Cluster Information
@@ -323,7 +326,7 @@ async function fillPromptTemplate(
 - **Indexes_Stats**: ${indexes ? JSON.stringify(indexes, null, 2) : 'N/A'}
 
 ## Query Execution Stats
-- **Execution_Stats**: ${executionStats}`;
+- **Execution_Stats**: ${executionStats}${staticAnalysisSummary ? `\n\n${staticAnalysisSummary}` : ''}`;
 
     return { craftedPrompt, userQuery, contextData };
 }
@@ -592,13 +595,17 @@ export async function optimizeQuery(
         // sanitizedExecutionStats,
         JSON.stringify(explainResult, null, 2),
         clusterInfo,
+        queryContext.staticAnalysisSummary,
     );
+
+    // Track prompt source and static analysis inclusion
+    context.telemetry.properties.promptSource = getLastPromptSource();
+    context.telemetry.properties.hasStaticAnalysisSummary = queryContext.staticAnalysisSummary ? 'true' : 'false';
 
     // Send to Copilot with configured models
     const preferredModelToUse = queryContext.preferredModel || PREFERRED_MODEL;
     const fallbackModelsToUse = queryContext.fallbackModels || FALLBACK_MODELS;
 
-    const copilotStart = Date.now();
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Calling Copilot (model: {model})...', {
             model: preferredModelToUse,
@@ -625,17 +632,16 @@ export async function optimizeQuery(
         fallbackModels: fallbackModelsToUse,
         signal: queryContext.signal,
     });
-    const copilotDuration = Date.now() - copilotStart;
 
     // Track Copilot call performance and response
-    context.telemetry.measurements.copilotDurationMs = copilotDuration;
+    context.telemetry.measurements.copilotDurationMs = response.durationMs;
     context.telemetry.measurements.promptSize = craftedPrompt.length + userQuery.length + contextData.length;
     context.telemetry.measurements.responseSize = response.text.length;
     context.telemetry.properties.modelUsed = response.modelUsed;
 
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Copilot response received in {ms}ms (model: {model})', {
-            ms: copilotDuration.toString(),
+            ms: response.durationMs.toString(),
             model: response.modelUsed,
         }),
     );
