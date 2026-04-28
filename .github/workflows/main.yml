@@ -83,7 +83,7 @@ jobs:
               run: npm run jesttest
 
             - name: 💬 Post PR Code Quality Report
-              if: github.event_name == 'pull_request'
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               uses: actions/github-script@v8
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
