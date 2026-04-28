@@ -83,7 +83,7 @@ jobs:
               run: npm run jesttest
 
             - name: 💬 Post PR Code Quality Report
-              if: github.event_name == 'pull_request'
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               uses: actions/github-script@v8
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -254,7 +254,7 @@ jobs:
                   key: build-sizes-${{ github.ref_name }}-${{ github.sha }}
 
             - name: 📥 Restore base branch sizes (PR only)
-              if: github.event_name == 'pull_request'
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               id: base-cache
               uses: actions/cache/restore@v5
               with:
@@ -264,14 +264,14 @@ jobs:
                       build-sizes-${{ github.event.pull_request.base.ref }}-
 
             - name: 📐 Prepare base sizes for comparison
-              if: github.event_name == 'pull_request' && steps.base-cache.outputs.cache-matched-key
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository && steps.base-cache.outputs.cache-matched-key
               run: |
                   # Cache restore overwrites build-sizes.json with base branch data.
                   # Rename it so the PR comment step can read base vs PR separately.
                   mv build-sizes.json base-sizes.json
 
             - name: 💬 Post PR Build Size Report
-              if: github.event_name == 'pull_request'
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
               uses: actions/github-script@v8
               with:
                   github-token: ${{ secrets.GITHUB_TOKEN }}
