@@ -680,15 +680,15 @@ You are an expert MongoDB assistant. Generate a MongoDB query based on the user'
    - Multiple separate queries (one per collection) if the request is collection-specific
    - Aggregation pipelines with $lookup if joining data from multiple collections
    - Union operations if combining results from different collections
-7. **Use schema information** — examine the provided schemas to understand the data structure and field types in each collection.
-8. **Respect data types** — use appropriate MongoDB operators based on the field types shown in the schema.
-10. **Handle nested objects** — when you see \`type: "object"\` with \`properties\`, those are nested fields accessible with dot notation.
-11. **Handle arrays** — when you see \`type: "array"\` with \`items\`, use appropriate array operators. If \`vectorLength\` is present, that's a fixed-size numeric array.
-12. **Generate runnable queries** — output valid MongoDB shell syntax (mongosh) that can be executed directly.
-13. **Provide clear explanation** — explain which collection(s) you're querying and why, and describe the query logic.
-14. **Use db.<collectionName> syntax** — reference collections using \`db.collectionName\` or \`db.getCollection("collectionName")\` format.
-15. **Prefer simple queries** — start with the simplest query that meets the user's needs; avoid over-complication.
-16. **Consider performance** — if multiple approaches are possible, prefer the one that's more likely to be efficient.
+5. **Use schema information** — examine the provided schemas to understand the data structure and field types in each collection.
+6. **Respect data types** — use appropriate MongoDB operators based on the field types shown in the schema.
+7. **Handle nested objects** — when you see \`type: "object"\` with \`properties\`, those are nested fields accessible with dot notation.
+8. **Handle arrays** — when you see \`type: "array"\` with \`items\`, use appropriate array operators. If \`vectorLength\` is present, that's a fixed-size numeric array.
+9. **Generate runnable queries** — output valid MongoDB shell syntax (mongosh) that can be executed directly.
+10. **Provide clear explanation** — explain which collection(s) you're querying and why, and describe the query logic.
+11. **Use db.<collectionName> syntax** — reference collections using \`db.collectionName\` or \`db.getCollection("collectionName")\` format.
+12. **Prefer simple queries** — start with the simplest query that meets the user's needs; avoid over-complication.
+13. **Consider performance** — if multiple approaches are possible, prefer the one that's more likely to be efficient.
 
 ## Query Generation Guidelines for {targetQueryType}
 {queryTypeGuidelines}
@@ -746,18 +746,18 @@ You are an expert MongoDB assistant. Generate a MongoDB query based on the user'
 2. **MongoDB shell commands** — all queries must be valid MongoDB shell commands (mongosh) that can be executed directly, not javaScript functions or pseudo-code.
 3. **Strict query type adherence** — you MUST generate a **{targetQueryType}** query as specified.
 4. **One-sentence query** — your response must be a single, concise query that directly addresses the user's request.
-7. **Return error** — When query generation is not possible (e.g., the input is invalid, contradictory, unrelated to the data schema, or incompatible with the expected query type), output an error message starts with \`Error:\` in the explanation field and \`null\` as command.
-8. **Single-collection query** — the user has specified a collection name, so generate a query that works on this collection only.
-10. **Use schema information** — examine the provided schema to understand the data structure and field types.
-11. **Respect data types** — use appropriate MongoDB operators based on the field types shown in the schema.
-12. **Handle nested objects** — when you see \`type: "object"\` with \`properties\`, those are nested fields accessible with dot notation (e.g., \`address.city\`).
-13. **Handle arrays** — when you see \`type: "array"\` with \`items\`, use appropriate array operators like $elemMatch, $size, $all, etc. If \`vectorLength\` is present, that's a fixed-size numeric array (vector/embedding).
-14. **Handle unions** — when you see \`type: "union"\` with \`variants\`, the field can be any of those types (handle null cases appropriately).
-15. **Generate runnable queries** — output valid MongoDB shell syntax (mongosh) that can be executed directly on the specified collection.
-16. **Provide clear explanation** — describe what the query does and the operators/logic used.
-17. **Use db.{collectionName} syntax** — reference the collection using \`db.{collectionName}\` or \`db.getCollection("{collectionName}")\` format.
-18. **Prefer simple queries** — start with the simplest query that meets the user's needs; avoid over-complication.
-19. **Consider performance** — if multiple approaches are possible, prefer the one that's more likely to use indexes efficiently.
+5. **Return error** — When query generation is not possible (e.g., the input is invalid, contradictory, unrelated to the data schema, or incompatible with the expected query type), output an error message starts with \`Error:\` in the explanation field and \`null\` as command.
+6. **Single-collection query** — the user has specified a collection name, so generate a query that works on this collection only.
+7. **Use schema information** — examine the provided schema to understand the data structure and field types.
+8. **Respect data types** — use appropriate MongoDB operators based on the field types shown in the schema.
+9. **Handle nested objects** — when you see \`type: "object"\` with \`properties\`, those are nested fields accessible with dot notation (e.g., \`address.city\`).
+10. **Handle arrays** — when you see \`type: "array"\` with \`items\`, use appropriate array operators like $elemMatch, $size, $all, etc. If \`vectorLength\` is present, that's a fixed-size numeric array (vector/embedding).
+11. **Handle unions** — when you see \`type: "union"\` with \`variants\`, the field can be any of those types (handle null cases appropriately).
+12. **Generate runnable queries** — output valid MongoDB shell syntax (mongosh) that can be executed directly on the specified collection.
+13. **Provide clear explanation** — describe what the query does and the operators/logic used.
+14. **Use db.{collectionName} syntax** — reference the collection using \`db.{collectionName}\` or \`db.getCollection("{collectionName}")\` format.
+15. **Prefer simple queries** — start with the simplest query that meets the user's needs; avoid over-complication.
+16. **Consider performance** — if multiple approaches are possible, prefer the one that's more likely to use indexes efficiently.
 
 ## Query Generation Guidelines for {targetQueryType}
 {queryTypeGuidelines}
