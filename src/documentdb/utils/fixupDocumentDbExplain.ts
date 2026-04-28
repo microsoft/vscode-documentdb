@@ -9,15 +9,20 @@ import { type ClusterMetadata } from './getClusterMetadata';
 /**
  * TEMPORARY WORKAROUNDS (connector-side).
  *
- * 1. **keysExamined**: When connected to Azure DocumentDB, the explain plan data for
+ * 1. **keysExamined for COLLSCAN**: When connected to Azure DocumentDB, the explain plan data for
  *    queries that do not use an index (COLLSCAN) reports `totalKeysExamined` equal to
  *    `totalDocsExamined`. The expected value is 0 since no index keys were examined.
  *
  * 2. **docsExamined with SORT**: When a SORT stage wraps the execution plan, the
  *    top-level `executionStats.totalDocsExamined` is incorrectly set to `nReturned`
  *    (documents returned) instead of the actual number of documents scanned by the
- *    underlying stage (e.g. COLLSCAN). The correct value is found deeper in the
+ *    underlying stage (e.g. COLLSCAN/FETCH). The correct value is found deeper in the
  *    stage tree.
+ *
+ * 3. **keysExamined with SORT+IXSCAN**: When a SORT stage wraps an IXSCAN, the
+ *    top-level `executionStats.totalKeysExamined` is incorrectly set to `nReturned`
+ *    instead of the actual number of index keys scanned by the IXSCAN stage. The
+ *    correct value is found in the innermost IXSCAN execution stage.
  *
  * These issues have been reported and these fixes will remain here until they are
  * fixed server-side.
@@ -55,9 +60,14 @@ export function fixupDocumentDbExplain(
         return explainResult;
     }
 
-    if (planUsesNoIndex(queryPlanner.winningPlan as Document | undefined)) {
+    const usesNoIndex = planUsesNoIndex(queryPlanner.winningPlan as Document | undefined);
+
+    if (usesNoIndex) {
         // Zero out keysExamined in executionStats (top-level for unsharded, nested for sharded)
         zeroOutKeysExamined(explainResult.executionStats as Document | undefined);
+    } else {
+        // Fix totalKeysExamined when a SORT stage hides the actual IXSCAN key count
+        fixupTotalKeysExamined(explainResult.executionStats as Document | undefined);
     }
 
     // Fix totalDocsExamined when a SORT stage hides the actual scan count
@@ -104,6 +114,37 @@ function zeroOutKeysExamined(stats: Document | undefined): void {
 }
 
 /**
+ * Corrects `totalKeysExamined` when a SORT stage causes the top-level value
+ * to be set to `nReturned` instead of the actual keys scanned by IXSCAN.
+ *
+ * Walks the execution stage tree and uses the maximum `totalKeysExamined` found
+ * at any stage. This is safe because:
+ * - Without SORT, the IXSCAN value already matches the top-level (no change).
+ * - With SORT, the IXSCAN stage deeper in the tree has the true count.
+ *
+ * Only called for index-scan plans (COLLSCAN plans are handled by zeroOutKeysExamined).
+ */
+function fixupTotalKeysExamined(stats: Document | undefined): void {
+    if (!stats) return;
+
+    const stages = stats.executionStages as Document | undefined;
+    if (stages) {
+        const maxKeys = findMaxKeysExamined(stages);
+        if (typeof stats.totalKeysExamined === 'number' && maxKeys > stats.totalKeysExamined) {
+            stats.totalKeysExamined = maxKeys;
+        }
+    }
+
+    // Sharded clusters nest per-shard executionStats
+    const shards = stats.shards as Document[] | undefined;
+    if (Array.isArray(shards)) {
+        for (const shard of shards) {
+            fixupTotalKeysExamined(shard);
+        }
+    }
+}
+
+/**
  * Corrects `totalDocsExamined` when a SORT stage causes the top-level value
  * to be set to `nReturned` instead of the actual documents scanned.
  *
@@ -130,6 +171,17 @@ function fixupTotalDocsExamined(stats: Document | undefined): void {
             fixupTotalDocsExamined(shard);
         }
     }
+}
+
+/** Walks the stage tree and returns the maximum `totalKeysExamined` found. */
+function findMaxKeysExamined(node: Document | undefined): number {
+    let max = 0;
+    walkStages(node, (stage) => {
+        if (typeof stage.totalKeysExamined === 'number' && stage.totalKeysExamined > max) {
+            max = stage.totalKeysExamined;
+        }
+    });
+    return max;
 }
 
 /** Walks the stage tree and returns the maximum `totalDocsExamined` found. */

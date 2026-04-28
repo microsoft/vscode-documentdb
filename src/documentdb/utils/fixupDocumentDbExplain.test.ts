@@ -102,12 +102,56 @@ describe('fixupDocumentDbExplain', () => {
             expect(result.executionStats.executionStages.docsExamined).toBe(2400);
         });
 
-        it('does not modify IXSCAN plans', () => {
+        it('does not modify IXSCAN plans without SORT', () => {
             const explain = makeIxscanExplain(50, 50);
             const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
 
             expect(result.executionStats.totalKeysExamined).toBe(50);
             expect(result.executionStats.executionStages.inputStage.keysExamined).toBe(50);
+        });
+
+        it('fixes totalKeysExamined when SORT wraps IXSCAN (the keys are hidden by SORT stage)', () => {
+            // Mirrors the Azure DocumentDB bug: SORT+FETCH+IXSCAN plan where the top-level
+            // totalKeysExamined is set to nReturned (68) instead of the IXSCAN value (3875).
+            const explain: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'SORT',
+                        inputStage: {
+                            stage: 'FETCH',
+                            inputStage: {
+                                stage: 'IXSCAN',
+                                indexName: 'cuisine_1',
+                            },
+                        },
+                    },
+                },
+                executionStats: {
+                    nReturned: 68,
+                    totalKeysExamined: 68, // wrong: should be 3875
+                    totalDocsExamined: 3875,
+                    executionStages: {
+                        stage: 'SORT',
+                        totalKeysExamined: 68,
+                        totalDocsExamined: 68,
+                        inputStage: {
+                            stage: 'FETCH',
+                            totalKeysExamined: 68,
+                            totalDocsExamined: 3875,
+                            inputStage: {
+                                stage: 'IXSCAN',
+                                totalKeysExamined: 3875, // the real value
+                                totalDocsExamined: 3875,
+                            },
+                        },
+                    },
+                },
+            };
+
+            const result = fixupDocumentDbExplain(explain, azureDocumentDbMetadata)!;
+            expect(result.executionStats.totalKeysExamined).toBe(3875);
+            // totalDocsExamined should remain correct (already 3875)
+            expect(result.executionStats.totalDocsExamined).toBe(3875);
         });
 
         it('handles SORT with COLLSCAN inputStage', () => {
