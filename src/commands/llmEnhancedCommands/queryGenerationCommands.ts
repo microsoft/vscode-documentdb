@@ -12,7 +12,13 @@ import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { generateSchemaDefinition, type SchemaDefinition } from '../../utils/schemaInference';
-import { FALLBACK_MODELS, PREFERRED_MODEL, getQueryTypeConfig, type FilledPromptResult } from './promptTemplates';
+import {
+    FALLBACK_MODELS,
+    PREFERRED_MODEL,
+    PREFERRED_MODEL_OPTIONS,
+    getQueryTypeConfig,
+    type FilledPromptResult,
+} from './promptTemplates';
 
 /**
  * Type of query generation
@@ -271,6 +277,7 @@ export async function generateQuery(
         {
             preferredModel: PREFERRED_MODEL,
             fallbackModels: FALLBACK_MODELS,
+            modelOptions: PREFERRED_MODEL_OPTIONS,
         },
     );
     context.telemetry.measurements.llmCallDurationMs = Date.now() - llmCallStart;

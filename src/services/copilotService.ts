@@ -27,12 +27,8 @@ export interface CopilotMessageOptions {
     /* AbortSignal for cancellation support */
     signal?: AbortSignal;
 
-    // TODO:
-    /* Temperature setting for the model (if supported later) */
-    // temperature?: number;
-
-    /* Maximum tokens for the response (if supported later) */
-    // maxTokens?: number;
+    /* Model-specific options (e.g., reasoning_effort for GPT-5 class models) */
+    modelOptions?: { [name: string]: unknown };
 }
 
 /**
@@ -173,7 +169,9 @@ export class CopilotService {
         try {
             // GitHub copilot LLM API currently doesn't support temperature or maxTokens in
             // LanguageModelChatRequestOptions, but we keep them here for potential future use
-            const requestOptions: vscode.LanguageModelChatRequestOptions = {};
+            const requestOptions: vscode.LanguageModelChatRequestOptions = {
+                ...(options?.modelOptions ? { modelOptions: options.modelOptions } : {}),
+            };
 
             const chatResponse = await model.sendRequest(messages, requestOptions, cts.token);
 

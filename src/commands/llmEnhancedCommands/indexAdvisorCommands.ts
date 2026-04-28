@@ -14,7 +14,13 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import { FALLBACK_MODELS, PREFERRED_MODEL, getLastPromptSource, type FilledPromptResult } from './promptTemplates';
+import {
+    FALLBACK_MODELS,
+    PREFERRED_MODEL,
+    PREFERRED_MODEL_OPTIONS,
+    getLastPromptSource,
+    type FilledPromptResult,
+} from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -632,6 +638,7 @@ export async function optimizeQuery(
         preferredModel: preferredModelToUse,
         fallbackModels: fallbackModelsToUse,
         signal: queryContext.signal,
+        modelOptions: PREFERRED_MODEL_OPTIONS,
     });
     const copilotDuration = Date.now() - copilotStart;
 
