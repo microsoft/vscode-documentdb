@@ -14,13 +14,7 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import {
-    FALLBACK_MODELS,
-    PREFERRED_MODEL,
-    PREFERRED_MODEL_OPTIONS,
-    getLastPromptSource,
-    type FilledPromptResult,
-} from './promptTemplates';
+import { FALLBACK_MODELS, PREFERRED_MODEL, getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -612,7 +606,6 @@ export async function optimizeQuery(
     const preferredModelToUse = queryContext.preferredModel || PREFERRED_MODEL;
     const fallbackModelsToUse = queryContext.fallbackModels || FALLBACK_MODELS;
 
-    const copilotStart = Date.now();
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Calling Copilot (model: {model})...', {
             model: preferredModelToUse,
@@ -638,19 +631,17 @@ export async function optimizeQuery(
         preferredModel: preferredModelToUse,
         fallbackModels: fallbackModelsToUse,
         signal: queryContext.signal,
-        modelOptions: PREFERRED_MODEL_OPTIONS,
     });
-    const copilotDuration = Date.now() - copilotStart;
 
     // Track Copilot call performance and response
-    context.telemetry.measurements.copilotDurationMs = copilotDuration;
+    context.telemetry.measurements.copilotDurationMs = response.durationMs;
     context.telemetry.measurements.promptSize = craftedPrompt.length + userQuery.length + contextData.length;
     context.telemetry.measurements.responseSize = response.text.length;
     context.telemetry.properties.modelUsed = response.modelUsed;
 
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Copilot response received in {ms}ms (model: {model})', {
-            ms: copilotDuration.toString(),
+            ms: response.durationMs.toString(),
             model: response.modelUsed,
         }),
     );

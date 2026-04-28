@@ -11,19 +11,12 @@ import { ext } from '../../extensionVariables';
 /**
  * Preferred language model for index optimization
  */
-export const PREFERRED_MODEL = 'gpt-5-mini';
-
-/**
- * Model-specific options (e.g., reasoning effort for GPT-5 class models)
- */
-export const PREFERRED_MODEL_OPTIONS: { [name: string]: unknown } = {
-    reasoning_effort: 'medium',
-};
+export const PREFERRED_MODEL = 'gpt-4o';
 
 /**
  * Fallback models to use if the preferred model is not available
  */
-export const FALLBACK_MODELS = ['gpt-4o'];
+export const FALLBACK_MODELS = ['gpt-4o-mini'];
 
 /**
  * Prompt factory utility functions

@@ -12,13 +12,7 @@ import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { generateSchemaDefinition, type SchemaDefinition } from '../../utils/schemaInference';
-import {
-    FALLBACK_MODELS,
-    PREFERRED_MODEL,
-    PREFERRED_MODEL_OPTIONS,
-    getQueryTypeConfig,
-    type FilledPromptResult,
-} from './promptTemplates';
+import { FALLBACK_MODELS, PREFERRED_MODEL, getQueryTypeConfig, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of query generation
@@ -262,7 +256,6 @@ export async function generateQuery(
     );
 
     // Send to Copilot with configured models
-    const llmCallStart = Date.now();
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Calling Copilot (model: {model})...', {
             model: PREFERRED_MODEL || 'default',
@@ -277,13 +270,12 @@ export async function generateQuery(
         {
             preferredModel: PREFERRED_MODEL,
             fallbackModels: FALLBACK_MODELS,
-            modelOptions: PREFERRED_MODEL_OPTIONS,
         },
     );
-    context.telemetry.measurements.llmCallDurationMs = Date.now() - llmCallStart;
+    context.telemetry.measurements.llmCallDurationMs = response.durationMs;
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Copilot response received in {ms}ms (model: {model})', {
-            ms: context.telemetry.measurements.llmCallDurationMs.toString(),
+            ms: response.durationMs.toString(),
             model: response.modelUsed,
         }),
     );
