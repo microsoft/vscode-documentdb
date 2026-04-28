@@ -16,7 +16,9 @@ import {
     FIND_QUERY_PROMPT_TEMPLATE,
     SINGLE_COLLECTION_QUERY_PROMPT_TEMPLATE,
     buildIndexAdvisorPrompt,
+    getLastPromptSource,
     setLastPromptSource,
+    type PromptSource,
 } from '../commands/llmEnhancedCommands/promptTemplates';
 import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenerationCommands';
 
@@ -25,7 +27,10 @@ import { QueryGenerationType } from '../commands/llmEnhancedCommands/queryGenera
  */
 export class PromptTemplateService {
     private static readonly configSection = 'documentDB.aiAssistant';
-    private static readonly templateCache: Map<CommandType | QueryGenerationType, string> = new Map();
+    private static readonly templateCache: Map<
+        CommandType | QueryGenerationType,
+        { template: string; source: PromptSource }
+    > = new Map();
 
     /**
      * Gets the prompt template for index advisor
@@ -41,7 +46,8 @@ export class PromptTemplateService {
         if (cacheEnabled) {
             const cached = this.templateCache.get(commandType);
             if (cached) {
-                return cached;
+                setLastPromptSource(cached.source);
+                return cached.template;
             }
         }
 
@@ -90,9 +96,10 @@ export class PromptTemplateService {
             template = this.getBuiltInIndexAdvisorTemplate(commandType);
         }
 
-        // Cache the template (if caching is enabled)
+        // Cache the template and its source (if caching is enabled)
+        const source = getLastPromptSource();
         if (cacheEnabled) {
-            this.templateCache.set(commandType, template);
+            this.templateCache.set(commandType, { template, source });
         }
 
         return template;

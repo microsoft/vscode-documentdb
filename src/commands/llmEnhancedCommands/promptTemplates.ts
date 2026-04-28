@@ -146,28 +146,33 @@ ${result.body}`;
 }
 
 /**
- * Tracks the source of the last prompt template loaded.
- * Used by telemetry to monitor whether resource files or inline fallbacks are in use.
+ * All valid prompt template source values for telemetry tracking.
  */
-let lastPromptSource:
+export type PromptSource =
     | 'resource-file'
     | 'inline-fallback'
     | 'inline-fallback-no-context'
     | 'inline-fallback-read-error'
     | 'custom-file'
-    | 'unknown' = 'unknown';
+    | 'unknown';
+
+/**
+ * Tracks the source of the last prompt template loaded.
+ * Used by telemetry to monitor whether resource files or inline fallbacks are in use.
+ */
+let lastPromptSource: PromptSource = 'unknown';
 
 /**
  * Returns the source of the last prompt template loaded by buildIndexAdvisorPrompt().
  */
-export function getLastPromptSource(): string {
+export function getLastPromptSource(): PromptSource {
     return lastPromptSource;
 }
 
 /**
  * Sets the prompt source (called by PromptTemplateService when loading custom templates).
  */
-export function setLastPromptSource(source: 'resource-file' | 'inline-fallback' | 'custom-file'): void {
+export function setLastPromptSource(source: PromptSource): void {
     lastPromptSource = source;
 }
 
