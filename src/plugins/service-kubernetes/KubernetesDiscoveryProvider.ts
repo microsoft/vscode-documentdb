@@ -1,0 +1,77 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azext-utils';
+import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
+import { type DiscoveryProvider } from '../../services/discoveryServices';
+import { type TreeElement } from '../../tree/TreeElement';
+import { DISCOVERY_PROVIDER_ID, ICON_PATH, getDescription, getLabel, getWizardTitle } from './config';
+import { KubernetesRootItem } from './discovery-tree/KubernetesRootItem';
+import { KubernetesExecuteStep } from './discovery-wizard/KubernetesExecuteStep';
+import { SelectContextStep } from './discovery-wizard/SelectContextStep';
+import { SelectServiceStep } from './discovery-wizard/SelectServiceStep';
+import { ensureMigration } from './sources/migrationV2';
+
+export class KubernetesDiscoveryProvider implements DiscoveryProvider {
+    id = DISCOVERY_PROVIDER_ID;
+    iconPath = ICON_PATH;
+    configureCredentialsOnActivation = false;
+
+    get label(): string {
+        return getLabel();
+    }
+
+    get description(): string {
+        return getDescription();
+    }
+
+    getDiscoveryTreeRootItem(parentId: string): TreeElement {
+        return new KubernetesRootItem(parentId);
+    }
+
+    getDiscoveryWizard(_context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext> {
+        return {
+            title: getWizardTitle(),
+            promptSteps: [new SelectContextStep(), new SelectServiceStep()],
+            executeSteps: [new KubernetesExecuteStep()],
+            showLoadingPrompt: true,
+        };
+    }
+
+    getLearnMoreUrl(): string | undefined {
+        return 'https://documentdb.io/documentdb-kubernetes-operator/latest/preview/';
+    }
+
+    /**
+     * Manage Credentials on the K8s root opens the manage UI, where the user
+     * can deselect or remove existing kubeconfig sources. Adding sources is
+     * handled separately via the dedicated `+` inline action.
+     */
+    async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
+        context.telemetry.properties.credentialConfigActivated = 'true';
+        context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+        context.telemetry.properties.nodeProvided = node ? 'true' : 'false';
+
+        await ensureMigration();
+
+        const { manageKubeconfigSources } = await import('./commands/manageKubeconfigSources');
+        try {
+            await manageKubeconfigSources(context);
+        } catch (error) {
+            const { UserCancelledError } = await import('@microsoft/vscode-azext-utils');
+            if (!(error instanceof UserCancelledError)) {
+                throw error;
+            }
+        }
+
+        const { refreshKubernetesRoot } = await import('./commands/refreshKubernetesRoot');
+        refreshKubernetesRoot();
+    }
+
+    async deactivate(_context: IActionContext): Promise<void> {
+        const { PortForwardTunnelManager } = await import('./portForwardTunnel');
+        PortForwardTunnelManager.getInstance().stopAll();
+    }
+}

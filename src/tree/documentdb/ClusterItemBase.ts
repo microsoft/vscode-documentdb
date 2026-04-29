@@ -47,6 +47,9 @@ export type EphemeralClusterCredentials = {
     // Authentication method specific configurations
     nativeAuthConfig?: NativeAuthConfig;
     entraIdAuthConfig?: EntraIdAuthConfig;
+
+    // Additional non-secret storage properties needed by a discovery provider.
+    connectionProperties?: Record<string, unknown>;
 };
 
 /**
@@ -92,6 +95,15 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * @returns An instance of ClustersClient if successful; otherwise, null.
      */
     protected abstract authenticateAndConnect(): Promise<ClustersClient | null>;
+
+    /**
+     * Gives subclasses a chance to prepare connection-specific infrastructure
+     * before a cached client is reused. For example, Kubernetes ClusterIP
+     * connections may need to restore a port-forward tunnel.
+     */
+    protected async beforeCachedClientConnect(): Promise<void> {
+        // Default cluster types do not need extra preparation.
+    }
 
     /**
      * Abstract method to get the credentials for the MongoDB cluster.
@@ -157,6 +169,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 }),
             );
             try {
+                await this.beforeCachedClientConnect();
                 clustersClient = await this.getClientWithProgress(this.cluster.clusterId);
             } catch (error) {
                 if (error instanceof UserCancelledError) {

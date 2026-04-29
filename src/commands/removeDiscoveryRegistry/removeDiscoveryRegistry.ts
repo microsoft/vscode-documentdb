@@ -40,6 +40,10 @@ export async function removeDiscoveryRegistry(context: IActionContext, node: Tre
         return;
     }
 
+    if (provider.deactivate) {
+        await provider.deactivate(context);
+    }
+
     // Get active discovery provider IDs from global state
     const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
 

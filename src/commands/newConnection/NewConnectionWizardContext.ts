@@ -29,6 +29,9 @@ export interface NewConnectionWizardContext extends IActionContext {
     nativeAuthConfig?: NativeAuthConfig;
     entraIdAuthConfig?: EntraIdAuthConfig;
 
+    // Additional non-secret connection properties supplied by service discovery providers.
+    connectionProperties?: Record<string, unknown>;
+
     // The following properties are used in the "DocumentDB Connections" experience
     connectionMode?: ConnectionMode;
 
