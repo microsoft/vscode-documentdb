@@ -478,6 +478,34 @@
         "title": "Copy Connection String…"
       },
       {
+        "//": "[DiscoveryView] Rename Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+        "title": "Rename Kubeconfig Source…",
+        "icon": "$(edit)"
+      },
+      {
+        "//": "[DiscoveryView] Remove Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+        "title": "Remove Kubeconfig Source",
+        "icon": "$(trash)"
+      },
+      {
+        "//": "[DiscoveryView] Add Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+        "title": "Add Kubeconfig Source…",
+        "icon": "$(add)"
+      },
+      {
+        "//": "[DiscoveryView] Rename Kubernetes context (display alias)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+        "title": "Rename Context…",
+        "icon": "$(edit)"
+      },
+      {
         "//": "Create Database",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.createDatabase",
@@ -777,6 +805,41 @@
           "group": "2@4"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
+          "group": "1@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
+          "group": "inline@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
+          "group": "1@2"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
+          "group": "inline@2"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesRootItem\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesRootItem\\b/i",
+          "group": "2@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesContext\\b/i",
+          "group": "1@1"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
           "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
           "group": "inline@3"
@@ -1019,6 +1082,22 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
           "when": "never"
         },
         {

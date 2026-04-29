@@ -37,6 +37,7 @@ import {
 import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY, createKubernetesPortForwardMetadata } from '../portForwardMetadata';
 import { PortForwardTunnelManager } from '../portForwardTunnel';
 import { promptForLocalPort } from '../promptForLocalPort';
+import { getSource } from '../sources/sourceStore';
 
 /**
  * Model for a Kubernetes-discovered service, extending BaseClusterModel.
@@ -80,15 +81,17 @@ function sanitizeForId(value: string): string {
 export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceModel> {
     constructor(
         journeyCorrelationId: string,
+        readonly sourceId: string,
         readonly contextInfo: KubeContextInfo,
         readonly serviceInfo: KubeServiceInfo,
         parentId: string,
     ) {
+        const sanitizedSource = sanitizeForId(sourceId);
         const sanitizedContext = sanitizeForId(contextInfo.name);
         const sanitizedNs = sanitizeForId(serviceInfo.namespace);
         const sanitizedSvc = sanitizeForId(serviceInfo.name);
         const sanitizedId = `${sanitizedNs}__${sanitizedSvc}`;
-        const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedContext}__${sanitizedId}`;
+        const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedSource}_${sanitizedContext}__${sanitizedId}`;
 
         const cluster: TreeCluster<KubernetesServiceModel> = {
             name: serviceInfo.displayName,
@@ -270,7 +273,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
     }
 
     private async resolveClusterCredentials(context: IActionContext): Promise<EphemeralClusterCredentials | undefined> {
-        const kubeConfig = await loadConfiguredKubeConfig();
+        const kubeConfig = await loadConfiguredKubeConfig(this.sourceId);
         const coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
         const endpoint = await resolveServiceEndpoint(this.serviceInfo, coreApi);
         const resolvedConnectionDetails = await this.resolveConnectionDetails(context, endpoint, kubeConfig, coreApi);
@@ -346,8 +349,15 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         }
 
         const { ensureKubernetesPortForward } = await import('../ensureKubernetesPortForward');
+        const sourceRecord = await getSource(this.sourceId);
         await ensureKubernetesPortForward(
-            createKubernetesPortForwardMetadata(this.contextInfo.name, this.serviceInfo, localPort),
+            createKubernetesPortForwardMetadata(
+                this.sourceId,
+                this.contextInfo.name,
+                this.serviceInfo,
+                localPort,
+                sourceRecord?.label,
+            ),
         );
     }
 
@@ -373,6 +383,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 }
 
                 const result = await PortForwardTunnelManager.getInstance().startTunnel({
+                    sourceId: this.sourceId,
                     kubeConfig,
                     coreApi,
                     contextName: this.contextInfo.name,
@@ -394,13 +405,20 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                     );
                 }
 
+                // Capture the source label so future reconnects can produce a friendlier
+                // error message if the source has been removed by the time the user opens
+                // this saved connection.
+                const sourceRecord = await getSource(this.sourceId);
+
                 return {
                     connectionString: buildPortForwardConnectionString(this.serviceInfo, localPort),
                     connectionProperties: {
                         [KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]: createKubernetesPortForwardMetadata(
+                            this.sourceId,
                             this.contextInfo.name,
                             this.serviceInfo,
                             localPort,
+                            sourceRecord?.label,
                         ),
                     },
                 };

@@ -5,7 +5,6 @@
 
 import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azext-utils';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
-import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { DISCOVERY_PROVIDER_ID, ICON_PATH, getDescription, getLabel, getWizardTitle } from './config';
@@ -13,11 +12,12 @@ import { KubernetesRootItem } from './discovery-tree/KubernetesRootItem';
 import { KubernetesExecuteStep } from './discovery-wizard/KubernetesExecuteStep';
 import { SelectContextStep } from './discovery-wizard/SelectContextStep';
 import { SelectServiceStep } from './discovery-wizard/SelectServiceStep';
+import { ensureMigration } from './sources/migrationV2';
 
 export class KubernetesDiscoveryProvider implements DiscoveryProvider {
     id = DISCOVERY_PROVIDER_ID;
     iconPath = ICON_PATH;
-    configureCredentialsOnActivation = true;
+    configureCredentialsOnActivation = false;
 
     get label(): string {
         return getLabel();
@@ -44,32 +44,30 @@ export class KubernetesDiscoveryProvider implements DiscoveryProvider {
         return 'https://documentdb.io/documentdb-kubernetes-operator/latest/preview/';
     }
 
-    async configureTreeItemFilter(context: IActionContext, node: TreeElement): Promise<void> {
-        if (node instanceof KubernetesRootItem) {
-            const { configureKubernetesFilter } = await import('./filtering/configureKubernetesFilter');
-            await configureKubernetesFilter(context);
-            ext.discoveryBranchDataProvider.refresh(node);
-        }
-    }
-
+    /**
+     * Manage Credentials on the K8s root opens the manage UI, where the user
+     * can deselect or remove existing kubeconfig sources. Adding sources is
+     * handled separately via the dedicated `+` inline action.
+     */
     async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
         context.telemetry.properties.credentialConfigActivated = 'true';
         context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
         context.telemetry.properties.nodeProvided = node ? 'true' : 'false';
 
-        const { configureKubernetesCredentials } = await import('./credentials/configureKubernetesCredentials');
-        const result = await configureKubernetesCredentials(context, { resetFilters: node === undefined });
+        await ensureMigration();
 
-        if (result.kubeconfigChanged) {
-            const { PortForwardTunnelManager } = await import('./portForwardTunnel');
-            PortForwardTunnelManager.getInstance().stopAll();
+        const { manageKubeconfigSources } = await import('./commands/manageKubeconfigSources');
+        try {
+            await manageKubeconfigSources(context);
+        } catch (error) {
+            const { UserCancelledError } = await import('@microsoft/vscode-azext-utils');
+            if (!(error instanceof UserCancelledError)) {
+                throw error;
+            }
         }
 
-        if (node) {
-            ext.discoveryBranchDataProvider.refresh(node);
-        } else {
-            ext.discoveryBranchDataProvider.refresh();
-        }
+        const { refreshKubernetesRoot } = await import('./commands/refreshKubernetesRoot');
+        refreshKubernetesRoot();
     }
 
     async deactivate(_context: IActionContext): Promise<void> {

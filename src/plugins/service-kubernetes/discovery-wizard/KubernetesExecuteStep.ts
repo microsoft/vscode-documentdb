@@ -34,12 +34,14 @@ export class KubernetesExecuteStep extends AzureWizardExecuteStep<NewConnectionW
     public async execute(context: NewConnectionWizardContext): Promise<void> {
         const selectedContext = context.properties[KubernetesWizardProperties.SelectedContext] as KubeContextInfo;
         const selectedService = context.properties[KubernetesWizardProperties.SelectedService] as KubeServiceInfo;
+        const sourceId = context.properties[KubernetesWizardProperties.SelectedSourceId] as string | undefined;
+        const sourceLabel = context.properties[KubernetesWizardProperties.SelectedSourceLabel] as string | undefined;
 
-        if (!selectedContext || !selectedService) {
+        if (!selectedContext || !selectedService || !sourceId) {
             throw new Error('Kubernetes context or service not selected.');
         }
 
-        const kubeConfig = await loadConfiguredKubeConfig();
+        const kubeConfig = await loadConfiguredKubeConfig(sourceId);
         const coreApi = await createCoreApi(kubeConfig, selectedContext.name);
         const endpoint = await resolveServiceEndpoint(selectedService, coreApi);
 
@@ -56,6 +58,7 @@ export class KubernetesExecuteStep extends AzureWizardExecuteStep<NewConnectionW
                 }
 
                 const result = await PortForwardTunnelManager.getInstance().startTunnel({
+                    sourceId,
                     kubeConfig,
                     coreApi,
                     contextName: selectedContext.name,
@@ -81,9 +84,11 @@ export class KubernetesExecuteStep extends AzureWizardExecuteStep<NewConnectionW
                 context.connectionString = buildPortForwardConnectionString(selectedService, localPort);
                 context.connectionProperties = {
                     [KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]: createKubernetesPortForwardMetadata(
+                        sourceId,
                         selectedContext.name,
                         selectedService,
                         localPort,
+                        sourceLabel,
                     ),
                 };
                 break;
@@ -105,7 +110,8 @@ export class KubernetesExecuteStep extends AzureWizardExecuteStep<NewConnectionW
         // Clean up wizard properties
         context.properties[KubernetesWizardProperties.SelectedContext] = undefined;
         context.properties[KubernetesWizardProperties.SelectedService] = undefined;
-        context.properties[KubernetesWizardProperties.AvailableContexts] = undefined;
+        context.properties[KubernetesWizardProperties.SelectedSourceId] = undefined;
+        context.properties[KubernetesWizardProperties.SelectedSourceLabel] = undefined;
     }
 
     public shouldExecute(): boolean {

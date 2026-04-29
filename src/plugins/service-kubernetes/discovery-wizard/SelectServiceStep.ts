@@ -25,12 +25,13 @@ export class SelectServiceStep extends AzureWizardPromptStep<NewConnectionWizard
         const selectedContext = context.properties[KubernetesWizardProperties.SelectedContext] as
             | KubeContextInfo
             | undefined;
+        const sourceId = context.properties[KubernetesWizardProperties.SelectedSourceId] as string | undefined;
 
-        if (!selectedContext) {
+        if (!selectedContext || !sourceId) {
             throw new Error('Kubernetes context not selected.');
         }
 
-        const kubeConfig = await loadConfiguredKubeConfig();
+        const kubeConfig = await loadConfiguredKubeConfig(sourceId);
         const coreApi = await createCoreApi(kubeConfig, selectedContext.name);
         const namespaceNames = await listNamespaces(coreApi);
 

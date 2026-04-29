@@ -143,6 +143,8 @@ function createWizardContext(selectedService: KubeServiceInfo): NewConnectionWiz
         properties: {
             [KubernetesWizardProperties.SelectedContext]: selectedContext,
             [KubernetesWizardProperties.SelectedService]: selectedService,
+            [KubernetesWizardProperties.SelectedSourceId]: 'default',
+            [KubernetesWizardProperties.SelectedSourceLabel]: 'Default kubeconfig',
         },
     } as unknown as NewConnectionWizardContext;
 }
@@ -304,10 +306,13 @@ describe('KubernetesExecuteStep', () => {
         expect(context.connectionString).toBe('mongodb://127.0.0.1:10260/?directConnection=true');
         expect(context.connectionProperties?.[KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]).toEqual({
             kind: 'kubernetesClusterIpPortForward',
+            sourceId: 'default',
+            sourceLabel: 'Default kubeconfig',
             contextName: 'kind-documentdb-dev',
             namespace: 'prod',
             serviceName: 'orders-clusterip',
             servicePort: 10260,
+            servicePortName: undefined,
             localPort: 10260,
         });
     });

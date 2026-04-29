@@ -81,6 +81,7 @@ jest.mock('./KubernetesServiceItem', () => ({
     KubernetesServiceItem: class KubernetesServiceItem {
         constructor(
             public readonly journeyCorrelationId: string,
+            public readonly sourceId: string,
             public readonly contextInfo: KubeContextInfo,
             public readonly serviceInfo: KubeServiceInfo,
             public readonly parentId: string,
@@ -107,7 +108,7 @@ describe('KubernetesNamespaceItem', () => {
 
     describe('getTreeItem', () => {
         it('should return correct tree item', () => {
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1');
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-ns');
@@ -116,7 +117,7 @@ describe('KubernetesNamespaceItem', () => {
         });
 
         it('should return a non-expandable namespace item when preloaded services are empty', () => {
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1', []);
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1', []);
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-ns');
@@ -125,7 +126,7 @@ describe('KubernetesNamespaceItem', () => {
         });
 
         it('should describe preloaded DocumentDB targets on expandable namespace items', () => {
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1', [
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1', [
                 { name: 'svc-a', namespace: 'my-ns', type: 'LoadBalancer', port: 10260 } as KubeServiceInfo,
                 { name: 'svc-b', namespace: 'my-ns', type: 'ClusterIP', port: 10260 } as KubeServiceInfo,
             ]);
@@ -144,7 +145,7 @@ describe('KubernetesNamespaceItem', () => {
             ];
             mockListDocumentDBServices.mockResolvedValue(services);
 
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1');
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -160,7 +161,14 @@ describe('KubernetesNamespaceItem', () => {
                 { name: 'svc-a', namespace: 'my-ns', type: 'LoadBalancer', port: 10260 } as KubeServiceInfo,
             ];
 
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1', services);
+            const item = new KubernetesNamespaceItem(
+                'parent/ctx',
+                'default',
+                baseContextInfo,
+                'my-ns',
+                'corr-1',
+                services,
+            );
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -173,7 +181,7 @@ describe('KubernetesNamespaceItem', () => {
         it('should show informational child when no DocumentDB services are found', async () => {
             mockListDocumentDBServices.mockResolvedValue([]);
 
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1');
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -187,7 +195,7 @@ describe('KubernetesNamespaceItem', () => {
         it('should show retry/error child and log diagnostics on RBAC or service-list failure', async () => {
             mockListDocumentDBServices.mockRejectedValue(new Error('RBAC: forbidden'));
 
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1');
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -206,7 +214,7 @@ describe('KubernetesNamespaceItem', () => {
         it('should show retry/error child when kubeconfig fails to load', async () => {
             mockLoadConfiguredKubeConfig.mockRejectedValue(new Error('ENOENT: config not found'));
 
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1');
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -222,7 +230,7 @@ describe('KubernetesNamespaceItem', () => {
             ];
             mockListDocumentDBServices.mockResolvedValue(services);
 
-            const item = new KubernetesNamespaceItem('parent/ctx', baseContextInfo, 'my-ns', 'corr-1');
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
             await item.getChildren();
 
             expect(telemetryContextMock.telemetry.measurements).toHaveProperty('discoveryResourcesCount', 1);

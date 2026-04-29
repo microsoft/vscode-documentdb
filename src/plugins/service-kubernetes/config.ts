@@ -43,24 +43,67 @@ export const DOCUMENTDB_PORTS = [27017, 27018, 27019, 10260];
 /** Default kubeconfig path */
 export const DEFAULT_KUBECONFIG_PATH = '~/.kube/config';
 
-/** GlobalState key for enabled kubeconfig contexts */
+// -----------------------------------------------------------------------------
+// Multi-source kubeconfig storage (v2)
+// -----------------------------------------------------------------------------
+
+/** GlobalState key holding the ordered list of KubeconfigSourceRecord entries. */
+export const KUBECONFIG_SOURCES_KEY = 'kubernetes-discovery.sources';
+
+/** GlobalState key holding the list of source ids hidden from the discovery tree. */
+export const HIDDEN_SOURCE_IDS_KEY = 'kubernetes-discovery.hiddenSourceIds';
+
+/** GlobalState flag indicating the v2 (multi-source) migration has run. */
+export const MIGRATION_V2_DONE_KEY = 'kubernetes-discovery.migration.v2Done';
+
+/** Secret-storage key prefix for inline kubeconfig YAML (one secret per inline source). */
+export const INLINE_KUBECONFIG_SECRET_PREFIX = 'kubernetes-discovery.inlineKubeconfig.';
+
+/** Stable id of the built-in Default kubeconfig source. */
+export const DEFAULT_SOURCE_ID = 'default';
+
+/**
+ * Discriminator describing where a kubeconfig source's bytes live.
+ *
+ * - `default`: the platform default (`KUBECONFIG` env or `~/.kube/config`).
+ * - `file`: an absolute path on disk.
+ * - `inline`: YAML text held in VS Code Secret Storage.
+ */
+export type KubeconfigSourceKind = 'default' | 'file' | 'inline';
+
+/**
+ * Persistent record describing a single kubeconfig source. Stored as one
+ * {@link import('./sources/sourceStore').StorageItem} via the StorageService;
+ * inline YAML lives in the item's `secrets` array, so this record itself
+ * carries no secret material.
+ */
+export interface KubeconfigSourceRecord {
+    readonly id: string;
+    readonly label: string;
+    readonly kind: KubeconfigSourceKind;
+    /** Absolute path. Required when {@link kind} is `'file'`. */
+    readonly path?: string;
+}
+
+// -----------------------------------------------------------------------------
+// Legacy v1 storage keys — kept only so {@link migrationV2} can wipe them.
+// Do not read or write these from anywhere else in v2 code.
+// -----------------------------------------------------------------------------
+
+/** @deprecated v1 — wiped by migrationV2. */
 export const ENABLED_CONTEXTS_KEY = 'kubernetes-discovery.enabledContexts';
-
-/** GlobalState key for filtered (hidden) namespaces */
+/** @deprecated v1 — wiped by migrationV2. */
 export const FILTERED_NAMESPACES_KEY = 'kubernetes-discovery.filteredNamespaces';
-
-/** GlobalState key for custom kubeconfig path */
+/** @deprecated v1 — wiped by migrationV2. */
 export const CUSTOM_KUBECONFIG_PATH_KEY = 'kubernetes-discovery.customKubeconfigPath';
-
-/** GlobalState key for the configured kubeconfig source */
+/** @deprecated v1 — wiped by migrationV2. */
 export const KUBECONFIG_SOURCE_KEY = 'kubernetes-discovery.kubeconfigSource';
-
-/** SecretStorage key for pasted kubeconfig YAML */
+/** @deprecated v1 — wiped by migrationV2. */
 export const INLINE_KUBECONFIG_SECRET_KEY = 'kubernetes-discovery.inlineKubeconfig';
-
-/** GlobalState key for hidden (filtered) contexts */
+/** @deprecated v1 — wiped by migrationV2. */
 export const HIDDEN_CONTEXTS_KEY = 'kubernetes-discovery.hiddenContexts';
 
+/** @deprecated v1 — only used by tests that still type the old discriminator. */
 export type KubeconfigSource = 'default' | 'customFile' | 'inline';
 
 /**
@@ -88,10 +131,8 @@ export const DISCOVERY_ANNOTATION = 'documentdb.vscode.extension/discovery';
 export const CREDENTIAL_SECRET_ANNOTATION = 'documentdb.vscode.extension/credential-secret';
 
 /**
- * Resolves which kubeconfig contexts should be treated as enabled.
- *
- * When the user has never explicitly configured enabled contexts, all contexts
- * from the current kubeconfig are considered enabled by default.
+ * @deprecated v1 — no longer used. The v2 model treats every context as
+ * implicitly enabled and exposes per-source visibility instead.
  */
 export function resolveEnabledContextNames(
     allContextNames: readonly string[],

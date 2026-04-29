@@ -34,8 +34,10 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
 
     constructor(
         public readonly parentId: string,
+        public readonly sourceId: string,
         public readonly contextInfo: KubeContextInfo,
         private readonly journeyCorrelationId: string,
+        public readonly alias?: string,
     ) {
         // Sanitize context name for tree ID (replace / with _)
         const sanitizedName = contextInfo.name.replace(/\//g, '_');
@@ -54,7 +56,7 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                 let namespaceNames: string[];
                 let coreApi: Awaited<ReturnType<typeof createCoreApi>>;
                 try {
-                    kubeConfig = await loadConfiguredKubeConfig();
+                    kubeConfig = await loadConfiguredKubeConfig(this.sourceId);
                     coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
                     namespaceNames = await listNamespaces(coreApi);
                 } catch (error) {
@@ -127,6 +129,7 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                     (result) =>
                         new KubernetesNamespaceItem(
                             this.id,
+                            this.sourceId,
                             this.contextInfo,
                             result.namespace,
                             this.journeyCorrelationId,
@@ -140,11 +143,16 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
     public getTreeItem(): vscode.TreeItem {
         const serverUrl = this.contextInfo.server;
 
-        const tooltipParts: string[] = [
+        const tooltipParts: string[] = [];
+        if (this.alias) {
+            // Show the alias prominently while preserving the original name as the source of truth.
+            tooltipParts.push(`**Display name:** ${this.alias}`);
+        }
+        tooltipParts.push(
             `**Context:** ${this.contextInfo.name}`,
             `**Cluster:** ${this.contextInfo.cluster}`,
             `**Server:** ${serverUrl}`,
-        ];
+        );
 
         if (this.contextInfo.provider) {
             tooltipParts.push(`**Provider:** ${this.contextInfo.provider}`);
@@ -152,31 +160,37 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
         if (this.contextInfo.region) {
             tooltipParts.push(`**Region:** ${this.contextInfo.region}`);
         }
-        // Build description: prefer provider/region, fall back to server host
+        // Build description: prefer provider/region, fall back to server host.
+        // When an alias is in effect, the original context name is shown so users can still
+        // identify the underlying context at a glance.
         const descriptionParts: string[] = [];
+        if (this.alias) {
+            descriptionParts.push(`(${this.contextInfo.name})`);
+        }
+        const detailParts: string[] = [];
         if (this.contextInfo.provider) {
-            descriptionParts.push(this.contextInfo.provider);
+            detailParts.push(this.contextInfo.provider);
         }
         if (this.contextInfo.region) {
-            descriptionParts.push(this.contextInfo.region);
+            detailParts.push(this.contextInfo.region);
         }
-
-        let description: string | undefined;
-        if (descriptionParts.length > 0) {
-            description = descriptionParts.join(' / ');
+        if (detailParts.length > 0) {
+            descriptionParts.push(`(${detailParts.join(' / ')})`);
         } else if (serverUrl) {
             try {
-                description = new URL(serverUrl).host;
+                descriptionParts.push(`(${new URL(serverUrl).host})`);
             } catch {
-                description = serverUrl;
+                descriptionParts.push(`(${serverUrl})`);
             }
         }
+
+        const description = descriptionParts.length > 0 ? descriptionParts.join(' ') : undefined;
 
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: this.contextInfo.name,
-            description: description ? `(${description})` : undefined,
+            label: this.alias ?? this.contextInfo.name,
+            description,
             tooltip: new vscode.MarkdownString(tooltipParts.join('\n\n')),
             iconPath: new vscode.ThemeIcon('server'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,

@@ -3,63 +3,36 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { KubernetesRootItem } from './KubernetesRootItem';
+import { DEFAULT_SOURCE_ID, type KubeconfigSourceRecord } from '../config';
 
-jest.mock('crypto', () => ({
-    randomUUID: jest.fn(() => 'corr-1'),
-}));
+const mockEnsureMigration = jest.fn(async () => undefined);
+const mockReadSources = jest.fn<Promise<readonly KubeconfigSourceRecord[]>, []>();
+const mockReadHiddenSourceIds = jest.fn<readonly string[], []>(() => []);
 
 jest.mock('vscode', () => ({
-    commands: {
-        executeCommand: jest.fn(),
-    },
-    window: {
-        showInformationMessage: jest.fn(),
-    },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
-    TreeItemCollapsibleState: {
-        None: 0,
-        Collapsed: 1,
-        Expanded: 2,
+    MarkdownString: class MarkdownString {
+        constructor(public readonly value?: string) {}
     },
+    TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     l10n: {
         t: jest.fn((message: string) => message),
     },
 }));
 
-const mockGlobalStateGet = jest.fn((_key: string, defaultValue?: unknown) => defaultValue);
-const mockOutputChannelError = jest.fn();
-
-jest.mock('../../../extensionVariables', () => ({
-    ext: {
-        context: {
-            globalState: {
-                get: (key: string, defaultValue?: unknown) => mockGlobalStateGet(key, defaultValue),
-                update: jest.fn(() => Promise.resolve()),
-            },
-        },
-        outputChannel: {
-            warn: jest.fn(),
-            error: (...args: unknown[]) => mockOutputChannelError(...args),
-            trace: jest.fn(),
-        },
-    },
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    createContextValue: (parts: string[]) => parts.join(';'),
 }));
 
-const mockLoadConfiguredKubeConfig = jest.fn();
-const mockGetContexts = jest.fn();
-const mockCreateCoreApi = jest.fn();
-const mockListNamespaces = jest.fn();
-const mockListDocumentDBServices = jest.fn();
+jest.mock('../sources/migrationV2', () => ({
+    ensureMigration: () => mockEnsureMigration(),
+}));
 
-jest.mock('../kubernetesClient', () => ({
-    loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
-    getContexts: (...args: unknown[]) => mockGetContexts(...args),
-    createCoreApi: (...args: unknown[]) => mockCreateCoreApi(...args),
-    listNamespaces: (...args: unknown[]) => mockListNamespaces(...args),
-    listDocumentDBServices: (...args: unknown[]) => mockListDocumentDBServices(...args),
+jest.mock('../sources/sourceStore', () => ({
+    readSources: () => mockReadSources(),
+    readHiddenSourceIds: () => mockReadHiddenSourceIds(),
 }));
 
 jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
@@ -71,230 +44,92 @@ jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
     })),
 }));
 
-jest.mock('./KubernetesContextItem', () => ({
-    KubernetesContextItem: class KubernetesContextItem {
-        constructor(
-            public readonly parentId: string,
-            public readonly contextInfo: { name: string },
-            public readonly journeyCorrelationId: string,
-        ) {}
+jest.mock('../../../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            error: jest.fn(),
+            warn: jest.fn(),
+            appendLine: jest.fn(),
+        },
+        discoveryBranchDataProvider: {
+            refresh: jest.fn(),
+        },
     },
 }));
 
-describe('KubernetesRootItem', () => {
-    const mockKubeConfig = {};
-    const liveContext = {
-        name: 'kind-documentdb-dev',
-        cluster: 'kind-documentdb-dev',
-        user: 'kind-user',
-        server: 'https://127.0.0.1:6443',
-    };
-    const deadContext = {
-        name: 'kind-documentdb-old',
-        cluster: 'kind-documentdb-old',
-        user: 'kind-user',
-        server: 'https://127.0.0.1:55555',
-    };
-    const hiddenContext = {
-        name: 'kind-documentdb-hidden',
-        cluster: 'kind-documentdb-hidden',
-        user: 'kind-user',
-        server: 'https://127.0.0.1:44444',
-    };
+import { KubernetesRootItem } from './KubernetesRootItem';
 
+describe('KubernetesRootItem (v2 multi-source)', () => {
     beforeEach(() => {
-        jest.clearAllMocks();
-        mockLoadConfiguredKubeConfig.mockResolvedValue(mockKubeConfig);
-        mockGetContexts.mockReturnValue([liveContext, deadContext, hiddenContext]);
-        mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-            if (key === 'kubernetes-discovery.enabledContexts') {
-                return [liveContext.name, deadContext.name, hiddenContext.name];
-            }
-            if (key === 'kubernetes-discovery.hiddenContexts') {
-                return [];
-            }
-            return defaultValue;
-        });
+        mockEnsureMigration.mockClear();
+        mockReadSources.mockReset();
+        mockReadHiddenSourceIds.mockReset();
+        mockReadHiddenSourceIds.mockReturnValue([]);
     });
 
-    it('lists all enabled visible contexts without service scanning (lazy)', async () => {
-        const item = new KubernetesRootItem('discoveryView');
-        const children = await item.getChildren();
+    it('runs the v2 migration and renders one source per stored entry', async () => {
+        const sources: KubeconfigSourceRecord[] = [
+            { id: DEFAULT_SOURCE_ID, kind: 'default', label: 'Default kubeconfig' },
+            { id: 'abc-123', kind: 'file', label: 'team.yaml', path: '/abs/team.yaml' },
+            {
+                id: 'xyz-789',
+                kind: 'inline',
+                label: 'Pasted YAML 1',
+            },
+        ];
+        mockReadSources.mockResolvedValue(sources);
 
-        // All three enabled, none hidden → all three returned
+        const root = new KubernetesRootItem('discoveryView');
+        const children = await root.getChildren();
+
+        expect(mockEnsureMigration).toHaveBeenCalledTimes(1);
         expect(children).toHaveLength(3);
-        const names = children.map((child) => (child as unknown as { contextInfo: { name: string } }).contextInfo.name);
-        expect(names).toContain(liveContext.name);
-        expect(names).toContain(deadContext.name);
-        expect(names).toContain(hiddenContext.name);
-
-        // Root must NOT scan namespaces or services
-        expect(mockCreateCoreApi).not.toHaveBeenCalled();
-        expect(mockListNamespaces).not.toHaveBeenCalled();
-        expect(mockListDocumentDBServices).not.toHaveBeenCalled();
+        const labels = children.map((c) => (c as unknown as { source?: KubeconfigSourceRecord }).source?.label);
+        expect(labels).toEqual(['Default kubeconfig', 'team.yaml', 'Pasted YAML 1']);
     });
 
-    it('excludes contexts listed in HIDDEN_CONTEXTS_KEY', async () => {
-        mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-            if (key === 'kubernetes-discovery.enabledContexts') {
-                return [liveContext.name, deadContext.name, hiddenContext.name];
-            }
-            if (key === 'kubernetes-discovery.hiddenContexts') {
-                return [hiddenContext.name];
-            }
-            return defaultValue;
-        });
+    it('returns recovery actions when readSources unexpectedly returns an empty list', async () => {
+        mockReadSources.mockResolvedValue([]);
 
-        const item = new KubernetesRootItem('discoveryView');
-        const children = await item.getChildren();
+        const root = new KubernetesRootItem('discoveryView');
+        const children = await root.getChildren();
 
-        expect(children).toHaveLength(2);
-        const names = children.map((child) => (child as unknown as { contextInfo: { name: string } }).contextInfo.name);
-        expect(names).not.toContain(hiddenContext.name);
-        expect(names).toContain(liveContext.name);
-        expect(names).toContain(deadContext.name);
+        expect(children.length).toBeGreaterThanOrEqual(2);
+        const labels = children.map((c) => (c as unknown as { label?: string }).label);
+        expect(labels).toEqual(
+            expect.arrayContaining(['No kubeconfig sources are configured.', 'Add kubeconfig source\u2026', 'Retry']),
+        );
     });
 
-    it('treats all kubeconfig contexts as enabled when none have been configured yet', async () => {
-        mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-            if (key === 'kubernetes-discovery.hiddenContexts') {
-                return [];
-            }
-            // ENABLED_CONTEXTS_KEY not set → resolveEnabledContextNames falls back to all contexts
-            return defaultValue;
-        });
-
-        const item = new KubernetesRootItem('discoveryView');
-        const children = await item.getChildren();
-
-        // All three contexts are present since none have been explicitly enabled/disabled
-        expect(children).toHaveLength(3);
-        // No scanning should occur
-        expect(mockCreateCoreApi).not.toHaveBeenCalled();
-        expect(mockListNamespaces).not.toHaveBeenCalled();
+    it('exposes a tree item with the Kubernetes label and collapsed state', () => {
+        const treeItem = new KubernetesRootItem('discoveryView').getTreeItem();
+        expect(treeItem.label).toBe('Kubernetes');
+        expect(treeItem.collapsibleState).toBe(1);
     });
 
-    it('returns a retry node when kubeconfig fails to load', async () => {
-        mockLoadConfiguredKubeConfig.mockRejectedValue(new Error('ENOENT: no such file'));
-
-        const item = new KubernetesRootItem('discoveryView');
-        const children = await item.getChildren();
-
-        expect(children).toHaveLength(4);
-        expect(children).toMatchObject([
-            {
-                contextValue: 'error',
-                id: 'discoveryView/kubernetes-discovery/kubeconfig-error',
-                label: 'Failed to load Kubernetes kubeconfig. Configure kubeconfig or retry.',
-            },
-            {
-                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
-                label: 'Configure kubeconfig',
-            },
-            {
-                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
-                label: 'Open Kubernetes discovery docs',
-            },
-            {
-                commandId: 'vscode-documentdb.command.internal.retry',
-                label: 'Retry',
-            },
-        ]);
-        expect(mockOutputChannelError).toHaveBeenCalledWith(expect.stringContaining('Failed to load kubeconfig'));
+    it('drops enableFilterCommand from the contextValue and includes the add-source marker', () => {
+        const root = new KubernetesRootItem('discoveryView');
+        expect(root.contextValue).not.toContain('enableFilterCommand');
+        expect(root.contextValue).toContain('enableManageCredentialsCommand');
+        expect(root.contextValue).toContain('enableLearnMoreCommand');
+        expect(root.contextValue).toContain('enableAddKubernetesSourceCommand');
     });
 
-    it('returns a retry node when no contexts exist in kubeconfig', async () => {
-        mockGetContexts.mockReturnValue([]);
+    it('hides sources whose id appears in readHiddenSourceIds', async () => {
+        const sources: KubeconfigSourceRecord[] = [
+            { id: DEFAULT_SOURCE_ID, kind: 'default', label: 'Default kubeconfig' },
+            { id: 'visible-1', kind: 'file', label: 'team.yaml', path: '/abs/team.yaml' },
+            {
+                id: 'hidden-1',
+                kind: 'inline',
+                label: 'Pasted YAML 1',
+            },
+        ];
+        mockReadSources.mockResolvedValue(sources);
+        mockReadHiddenSourceIds.mockReturnValue(['hidden-1']);
 
-        const item = new KubernetesRootItem('discoveryView');
-        const children = await item.getChildren();
-
-        expect(children).toHaveLength(4);
-        expect(children).toMatchObject([
-            {
-                contextValue: 'error',
-                id: 'discoveryView/kubernetes-discovery/kubeconfig-error',
-                label: 'No Kubernetes contexts found in the configured kubeconfig. Configure kubeconfig or retry.',
-            },
-            {
-                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
-                label: 'Configure kubeconfig',
-            },
-            {
-                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
-                label: 'Open Kubernetes discovery docs',
-            },
-            {
-                commandId: 'vscode-documentdb.command.internal.retry',
-                label: 'Retry',
-            },
-        ]);
-    });
-
-    it('returns a retry node when all enabled contexts are hidden', async () => {
-        mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-            if (key === 'kubernetes-discovery.enabledContexts') {
-                return [liveContext.name, deadContext.name, hiddenContext.name];
-            }
-            // Hide all contexts
-            if (key === 'kubernetes-discovery.hiddenContexts') {
-                return [liveContext.name, deadContext.name, hiddenContext.name];
-            }
-            return defaultValue;
-        });
-
-        const item = new KubernetesRootItem('discoveryView');
-        const children = await item.getChildren();
-
-        expect(children).toHaveLength(4);
-        expect(children).toMatchObject([
-            {
-                contextValue: 'error',
-                label: 'All Kubernetes contexts are hidden by Filter. Manage Filter or retry.',
-            },
-            {
-                commandId: 'vscode-documentdb.command.discoveryView.filterProviderContent',
-                label: 'Manage Filter',
-            },
-            {
-                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
-                label: 'Configure kubeconfig',
-            },
-            {
-                commandId: 'vscode-documentdb.command.internal.retry',
-                label: 'Retry',
-            },
-        ]);
-    });
-
-    it('returns a retry node when no contexts are enabled', async () => {
-        mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-            if (key === 'kubernetes-discovery.enabledContexts') {
-                return [];
-            }
-            if (key === 'kubernetes-discovery.hiddenContexts') {
-                return [];
-            }
-            return defaultValue;
-        });
-
-        const item = new KubernetesRootItem('discoveryView');
-        const children = await item.getChildren();
-
-        expect(children).toHaveLength(3);
-        expect(children).toMatchObject([
-            {
-                contextValue: 'error',
-                label: 'No Kubernetes contexts are enabled. Configure kubeconfig or retry.',
-            },
-            {
-                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
-                label: 'Configure kubeconfig',
-            },
-            {
-                commandId: 'vscode-documentdb.command.internal.retry',
-                label: 'Retry',
-            },
-        ]);
+        const children = await new KubernetesRootItem('discoveryView').getChildren();
+        const labels = children.map((c) => (c as unknown as { source?: KubeconfigSourceRecord }).source?.label);
+        expect(labels).toEqual(['Default kubeconfig', 'team.yaml']);
     });
 });

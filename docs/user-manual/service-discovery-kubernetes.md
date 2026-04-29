@@ -8,79 +8,100 @@ The Kubernetes discovery plugin helps you find DocumentDB-compatible targets run
 
 You can use Kubernetes discovery from either:
 
-- The **Service Discovery** tree, where you browse contexts, namespaces, and discovered targets.
+- The **Service Discovery** tree, where you browse kubeconfig sources, contexts, namespaces, and discovered targets.
 - **New Connection** > **Service Discovery** > **Kubernetes**, where the wizard creates a connection from a discovered target.
 
-## Enable and Configure Kubernetes Discovery
+## Multiple kubeconfig sources
 
-1. Open the **Service Discovery** panel.
-2. Select **+** and choose **Kubernetes**.
-3. Choose a kubeconfig source.
+The Kubernetes node lists one or more **kubeconfig sources** as siblings:
 
-The selected kubeconfig is validated before it is saved. If the file cannot be loaded or does not contain any contexts, the setup flow fails immediately so you can choose a different source. By default, all contexts from the selected kubeconfig are enabled, matching the Azure DocumentDB discovery behavior where adding the provider does not ask for per-context aliases, context selection, or namespace selection. After activation, use **Manage Credentials** on the Kubernetes provider to change the kubeconfig source. Use **Filter** separately when you want to hide contexts.
+- **Default kubeconfig** — always present; uses the Kubernetes client's default loading (the `KUBECONFIG` env var or `~/.kube/config`).
+- **Custom kubeconfig file…** — a kubeconfig YAML file you select on disk.
+- **Pasted kubeconfig YAML** — kubeconfig YAML pasted from the clipboard, kept in VS Code Secret Storage.
 
-Reconfiguring Kubernetes credentials stops active Kubernetes port-forward tunnels automatically. Tunnels are recreated when you connect to ClusterIP targets again.
+Each source expands independently to its own contexts -> namespaces -> services subtree. Failures in one source do not affect the others.
 
-## Kubeconfig Sources
+## Add a kubeconfig source
 
-| Source | Behavior |
-| --- | --- |
-| **Default kubeconfig** | Uses the Kubernetes client's default loading behavior, including `KUBECONFIG` and `~/.kube/config`. |
-| **Custom kubeconfig file** | Lets you browse to a kubeconfig file. The selected file path is stored in extension global state. |
-| **Pasted kubeconfig YAML** | Reads kubeconfig YAML from the clipboard and stores it in VS Code Secret Storage. |
+The Kubernetes node exposes two inline icons:
 
-If a configured kubeconfig cannot be loaded later, the Kubernetes tree shows recovery actions to configure kubeconfig, open Kubernetes discovery documentation, or retry.
+- **`+` (Add kubeconfig source...)** — opens a quick pick:
+  - **Add custom kubeconfig file...** — pick a file from disk.
+  - **Paste kubeconfig YAML from clipboard** — kept in VS Code Secret Storage.
+- **`key` (Manage kubeconfig sources)** — opens a manage dialog (described below).
 
-## Contexts and Filters
+The selected kubeconfig is validated before it is saved. If the file cannot be loaded or contains zero contexts, the source is not added and an error is shown. Adding the same path twice or pasting identical YAML reuses the existing entry.
 
-**Manage Credentials** controls the kubeconfig source:
+## Manage existing sources
 
-- Default kubeconfig
-- Custom kubeconfig file
-- Pasted kubeconfig YAML
+Click the **key** icon on the **Kubernetes** node to manage existing sources:
 
-Changing the kubeconfig source does not immediately prompt for context or namespace filtering. All contexts from the selected source are enabled by default.
+- Each source appears with a checkbox. Uncheck a source to **deselect** it — the record is preserved but it disappears from the discovery tree until you check it again.
+- Click the **trash** button on any non-default entry to remove it permanently. Active port-forward tunnels for the source are stopped on removal.
+- The Default source is always shown, always selected, and cannot be removed.
 
-**Filter** controls context visibility without changing enabled contexts:
+Per-source right-click actions on the source nodes themselves remain available:
 
-- Hidden contexts are not shown in the Discovery tree or the New Connection Kubernetes wizard.
-- Filtering is useful for reducing noise after choosing or changing the kubeconfig source.
+- **Refresh** — reloads the source and re-expands its contexts.
+- **Rename...** — changes the source's display label. The Default source cannot be renamed.
+- **Remove** — deletes a non-default source.
 
-## Browse the Discovery Tree
+## Browse the discovery tree
 
-Kubernetes discovery keeps context loading lightweight while making namespace browsing easier to understand:
+```
+v Discovery
+  v Kubernetes
+    v Default kubeconfig
+      v aks-prod (AKS / eastus)
+        v app
+          > db-primary
+    v team.yaml
+      v eks-staging
+        ...
+```
 
-1. The Kubernetes root lists visible enabled contexts without scanning namespaces or services.
-2. Expanding a context checks namespaces for DocumentDB targets.
-3. Namespaces that contain DocumentDB targets are expandable and sorted first.
-4. Namespaces without DocumentDB targets remain visible as non-expandable leaf items with a "No DocumentDB targets" description.
-5. Expanding a DocumentDB namespace lists the targets in that namespace.
+1. Each source lists its contexts after a lightweight kubeconfig load.
+2. Expanding a context checks its namespaces for DocumentDB targets.
+3. Namespaces with DocumentDB targets are expandable and sorted first; namespaces without targets remain visible as leaf items with a "No DocumentDB targets" description.
+4. Expanding a DocumentDB namespace lists the discovered targets.
 
-If kubeconfig loading fails, no contexts are available, or filters hide every context, the tree shows recovery actions such as **Configure kubeconfig**, **Manage Filter**, **Open Kubernetes discovery docs**, and **Retry**. Namespace or service listing failures still show retry items and write diagnostics to the DocumentDB output channel.
+## Rename a context (display alias)
 
-## New Connection Wizard Behavior
+Auto-generated context names from cloud CLIs (`clusterUser_…`, `arn:aws:eks:…`, `gke_…`) are often hard to scan. You can give a context a friendlier display name without modifying the kubeconfig file:
 
-The **New Connection** > **Service Discovery** > **Kubernetes** flow uses the same visibility rules as the tree:
+1. Right-click a context node in the Discovery tree -> **Rename Context...**
+2. Type a display name (e.g. `Prod AKS East`) and press Enter. Submit an empty value to clear the alias.
 
-1. It lists enabled contexts that are not hidden by Filter.
-2. It scans namespaces in the selected context without prompting for namespace selection.
-3. It lists discovered DocumentDB targets directly.
-4. It resolves the endpoint and creates a credential-free DocumentDB API connection string.
-5. If credentials are available from a supported Kubernetes Secret, it preselects native username/password authentication and masks the password.
+The alias is stored locally inside the extension. It changes only:
+
+- the tree label (the original context name remains visible in parentheses next to the alias),
+- the wizard quick-pick label (the original name appears in brackets in the description so you can still grep by it).
+
+The kubeconfig file, the underlying Kubernetes context name, saved-connection metadata, and output-channel logs are **never** modified. Aliases are scoped per source — the same context name in two different kubeconfig sources can have different aliases. If you delete a context from the kubeconfig (or remove the source), its aliases are cleaned up automatically.
+
+## New Connection wizard
+
+The **New Connection** > **Service Discovery** > **Kubernetes** flow lists every context across every source in a single quick pick. Each item shows the source label in the description so colliding context names can be told apart.
+
+After selecting a context and a target, the wizard:
+
+1. Resolves the endpoint and creates a credential-free DocumentDB API connection string.
+2. Starts a port-forward tunnel for `ClusterIP` services, prompting for a local port.
+3. If credentials are available from a supported Kubernetes Secret, preselects native username/password authentication and masks the password.
 
 If credentials cannot be read or are not configured, discovery still succeeds and the connection flow prompts you for credentials later.
 
-## Discovery Rules
+## Discovery rules
 
 Kubernetes discovery uses the following target selection order.
 
-### 1. DocumentDB Kubernetes Operator Resources
+### 1. DocumentDB Kubernetes Operator resources
 
 DocumentDB Kubernetes Operator (DKO) custom resources are discovered first. The plugin lists `documentdb.io/preview` `dbs` resources in the selected namespace and maps each resource to its backing Service.
 
 DKO-backed Services are not duplicated by generic service fallback. DKO targets are displayed before generic targets.
 
-### 2. Explicit Generic Service Opt-In
+### 2. Explicit generic service opt-in
 
 A generic Kubernetes Service can opt in to discovery with this annotation or label:
 
@@ -100,7 +121,7 @@ metadata:
 
 An opted-in Service is included when it has at least one TCP port. Ports with non-TCP protocols are ignored. If the Kubernetes port protocol is omitted, it is treated as TCP.
 
-### 3. Known-Port Generic Fallback
+### 3. Known-port generic fallback
 
 Without explicit opt-in, generic fallback includes TCP Services that expose a known DocumentDB API-compatible service or numeric target port:
 
@@ -111,11 +132,11 @@ Without explicit opt-in, generic fallback includes TCP Services that expose a kn
 
 Services that are not DKO-backed, not explicitly opted in, and not on a known DocumentDB API-compatible port are ignored.
 
-## Credential Secret Conventions
+## Credential secret conventions
 
 Credentials are passed to the extension as native username/password authentication. They are never embedded into Kubernetes-discovered connection strings and are not written to logs.
 
-### DKO Credentials
+### DKO credentials
 
 For DKO resources, the plugin reads the Secret named by:
 
@@ -126,7 +147,7 @@ spec:
 
 If `spec.documentDbCredentialSecret` is not set, the plugin uses the default Secret name `documentdb-credentials`.
 
-### Generic Service Credentials
+### Generic service credentials
 
 For generic Services, add a same-namespace Secret reference with this annotation:
 
@@ -136,7 +157,7 @@ metadata:
     documentdb.vscode.extension/credential-secret: "my-documentdb-credentials"
 ```
 
-The Secret name must be a valid Kubernetes DNS subdomain name. The Secret must contain `username` and `password` data keys. For example:
+The Secret name must be a valid Kubernetes DNS subdomain name. The Secret must contain `username` and `password` data keys.
 
 ```yaml
 apiVersion: v1
@@ -151,7 +172,7 @@ stringData:
 
 Missing, invalid, or unreadable credential Secrets do not block discovery. The extension prompts for credentials later when needed.
 
-## Endpoint Resolution and Port Forwarding
+## Endpoint resolution and port forwarding
 
 | Kubernetes Service type | Behavior |
 | --- | --- |
@@ -160,11 +181,11 @@ Missing, invalid, or unreadable credential Secrets do not block discovery. The e
 | **ClusterIP** | Starts a local port-forward tunnel to a ready backing pod and connects through `127.0.0.1:<localPort>`. |
 | **ExternalName** | Not resolved automatically. Use the external DNS name to connect manually. |
 
-For ClusterIP targets, the extension prompts for a local port when needed. If the port is already in use, the extension can use an existing process on that port, such as a manually started `kubectl port-forward`, if you confirm.
+For ClusterIP targets the extension prompts for a local port when needed. If the port is already in use, the extension can use an existing process on that port (such as a manually started `kubectl port-forward`) if you confirm.
 
-Active tunnels are tracked and reused for the same context, namespace, Service, and local port. Tunnels stop automatically when the extension is disposed or when Kubernetes credentials are reconfigured. There are internal APIs for tunnel management, but there are no user-facing list or stop commands at this time.
+Active tunnels are tracked and reused for the same source, context, namespace, Service, and local port. Tunnels stop automatically when the extension is disposed or when the underlying source is removed.
 
-## Minimum RBAC Permissions
+## Minimum RBAC permissions
 
 The current implementation uses the following Kubernetes API operations. `services` only requires `list`; service `get` and `watch` are not required.
 
@@ -230,9 +251,8 @@ If RBAC denies an operation, discovery surfaces the failure as a warning, retry 
 
 | Symptom | What to check |
 | --- | --- |
-| Kubernetes provider activates but shows a kubeconfig error | Verify the default kubeconfig or use **Manage Credentials** to choose another source. |
-| No contexts appear | Verify kubeconfig contents and check **Filter**. |
-| Context is missing | Check **Filter**. Filters hide contexts in both the tree and New Connection wizard without changing enabled contexts. |
+| A source shows a kubeconfig error | Verify the file exists or the YAML is still valid; use **Refresh** or remove the source and add it again. |
+| No contexts under a source | Verify the kubeconfig contents — the source must declare at least one context. |
 | Namespace shows no DocumentDB services | Verify a DKO `dbs` resource exists, add the explicit discovery annotation/label, or expose a TCP known-port service. |
 | RBAC errors or retry nodes | Grant the relevant RBAC from the table above. Namespace and service list failures appear as retry/error nodes. |
 | LoadBalancer target is pending | Wait for load balancer ingress, or ensure NodePort fallback is available and reachable. |
@@ -240,7 +260,7 @@ If RBAC denies an operation, discovery surfaces the failure as a warning, retry 
 | ClusterIP connection fails | Check that a ready backing pod appears in the Service Endpoints, that `pods/portforward` is allowed, and that the chosen local port is free or intentionally reused. |
 | Credentials are not auto-filled | Verify the Secret name convention, namespace, RBAC `secrets get`, and `username` / `password` data keys. Discovery still works without auto-resolved credentials. |
 
-## Cluster Provider Detection
+## Cluster provider detection
 
 The plugin identifies common cluster providers from the kubeconfig server URL, context name, or cluster name. The detected provider and region, when available, are shown in the tree description or tooltip.
 

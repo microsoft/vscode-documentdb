@@ -10,6 +10,13 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 
 interface TunnelParams {
+    /**
+     * Stable id of the {@link KubeconfigSourceRecord} this tunnel was opened
+     * against. Stored so {@link PortForwardTunnelManager.stopTunnelsForSource}
+     * can selectively close just the tunnels for a removed source instead of
+     * closing every active tunnel in the extension.
+     */
+    readonly sourceId: string;
     readonly kubeConfig: KubeConfig;
     readonly coreApi: CoreV1Api;
     readonly contextName: string;
@@ -237,6 +244,51 @@ export class PortForwardTunnelManager implements vscode.Disposable {
         }
 
         ext.outputChannel.appendLine(vscode.l10n.t('All port-forward tunnels stopped.'));
+    }
+
+    /**
+     * Stops every active tunnel and aborts every pending start that was opened
+     * against the given kubeconfig source. Tunnels for other sources are left
+     * untouched. Used when a source is removed via the manage UI / right-click
+     * menu so unrelated K8s connections in other sources keep working.
+     *
+     * @returns the number of active tunnels that were closed.
+     */
+    stopTunnelsForSource(sourceId: string): number {
+        let closed = 0;
+
+        // Cancel any pending starts that belong to this source. Their stop
+        // generation gets bumped so the in-flight start resolves to a no-op.
+        const pendingKeys = [...this._pendingStartParams.entries()]
+            .filter(([, params]) => params.sourceId === sourceId)
+            .map(([key]) => key);
+        for (const key of pendingKeys) {
+            this._invalidateKey(key);
+            this._pendingStarts.delete(key);
+            this._pendingStartParams.delete(key);
+        }
+
+        const keys = [...this._activeTunnels.keys()];
+        for (const key of keys) {
+            const tunnel = this._activeTunnels.get(key);
+            if (!tunnel || tunnel.params.sourceId !== sourceId) {
+                continue;
+            }
+            this._invalidateKey(key);
+            this._closeTunnel(key, tunnel);
+            closed++;
+        }
+
+        if (closed > 0 || pendingKeys.length > 0) {
+            ext.outputChannel.appendLine(
+                vscode.l10n.t(
+                    'Stopped {0} port-forward tunnel(s) for kubeconfig source "{1}".',
+                    String(closed),
+                    sourceId,
+                ),
+            );
+        }
+        return closed;
     }
 
     dispose(): void {

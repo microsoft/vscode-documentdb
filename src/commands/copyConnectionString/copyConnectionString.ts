@@ -49,11 +49,26 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
         const parsedConnectionString = new DocumentDBConnectionString(credentials.connectionString);
         parsedConnectionString.username = credentials.nativeAuthConfig?.connectionUser ?? '';
 
-        // Check if we're in the connections view and using native auth
+        // Determine origin so we can decide whether to offer the with/without-password choice.
+        // Today the prompt fires for saved connections and for Kubernetes-discovered targets,
+        // both of which routinely have a real native-auth password attached to credentials.
         const isConnectionsView = containsDelimited(node.contextValue, Views.ConnectionsView);
+        // KubernetesServiceItem.contextValue contains "discovery.kubernetesService"; the
+        // \b boundary inside containsDelimited treats "." as a non-word boundary so this matches.
+        const isKubernetesDiscoveryItem = containsDelimited(node.contextValue, 'kubernetesService');
+        const shouldOfferPasswordPrompt = isConnectionsView || isKubernetesDiscoveryItem;
 
-        // Ask if user wants to include password (only in connections view with native auth)
-        if (isConnectionsView) {
+        context.telemetry.properties.copyOrigin = isConnectionsView
+            ? 'connectionsView'
+            : isKubernetesDiscoveryItem
+              ? 'kubernetesDiscovery'
+              : 'other';
+
+        let passwordIncluded: 'true' | 'false' | 'notPrompted' = 'notPrompted';
+
+        // Ask whether to include the password when the resolved credentials use native
+        // auth and we actually have a password to offer.
+        if (shouldOfferPasswordPrompt) {
             // Note: selectedAuthMethod is undefined when it's the only auth method available in legacy connections
             // that haven't been explicitly authenticated yet. In such cases, NativeAuth is assumed.
             const isNativeAuth =
@@ -95,9 +110,14 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
                     );
                     context.valuesToMask.push(password);
                     parsedConnectionString.password = password;
+                    passwordIncluded = 'true';
+                } else {
+                    passwordIncluded = 'false';
                 }
             }
         }
+
+        context.telemetry.properties.passwordIncluded = passwordIncluded;
 
         if (credentials.selectedAuthMethod === AuthMethodId.MicrosoftEntraID) {
             parsedConnectionString.searchParams.set('authMechanism', 'MONGODB-OIDC');

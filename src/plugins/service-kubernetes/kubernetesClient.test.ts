@@ -5,10 +5,10 @@
 
 import {
     CREDENTIAL_SECRET_ANNOTATION,
-    CUSTOM_KUBECONFIG_PATH_KEY,
+    DEFAULT_SOURCE_ID,
     DISCOVERY_ANNOTATION,
     DOCUMENTDB_PORTS,
-    KUBECONFIG_SOURCE_KEY,
+    type KubeconfigSourceRecord,
 } from './config';
 import {
     getContexts,
@@ -30,20 +30,12 @@ const mockSetCurrentContext = jest.fn();
 const mockMakeApiClient = jest.fn();
 
 const mockLoadFromDefault = jest.fn();
-const mockGlobalStateGet = jest.fn((_key: string, defaultValue?: unknown) => defaultValue);
-const mockSecretGet = jest.fn();
+const mockGetSource = jest.fn<KubeconfigSourceRecord | undefined, [string]>();
+const mockReadInlineYaml = jest.fn<Promise<string | undefined>, [KubeconfigSourceRecord]>();
 
-jest.mock('../../extensionVariables', () => ({
-    ext: {
-        context: {
-            globalState: {
-                get: (key: string, defaultValue?: unknown) => mockGlobalStateGet(key, defaultValue),
-            },
-        },
-        secretStorage: {
-            get: (key: string) => mockSecretGet(key),
-        },
-    },
+jest.mock('./sources/sourceStore', () => ({
+    getSource: (id: string) => mockGetSource(id),
+    readInlineYaml: (record: KubeconfigSourceRecord) => mockReadInlineYaml(record),
 }));
 
 jest.mock('@kubernetes/client-node', () => ({
@@ -80,7 +72,8 @@ function createServiceInfo(overrides: Partial<KubeServiceInfo>): KubeServiceInfo
 describe('kubernetesClient', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockGlobalStateGet.mockImplementation((_key: string, defaultValue?: unknown) => defaultValue);
+        mockGetSource.mockReset();
+        mockReadInlineYaml.mockReset();
         mockGetContexts.mockReturnValue([{ name: 'ctx', cluster: 'cluster', user: 'user' }]);
         mockGetClusters.mockReturnValue([{ name: 'cluster', server: 'https://cluster.example.com' }]);
         mockGetUsers.mockReturnValue([{ name: 'user' }]);
@@ -191,83 +184,76 @@ describe('kubernetesClient', () => {
         });
     });
 
-    describe('loadConfiguredKubeConfig', () => {
+    describe('loadConfiguredKubeConfig (v2 multi-source)', () => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { loadConfiguredKubeConfig } = require('./kubernetesClient');
 
-        it('should load the default kubeconfig when default source is configured', async () => {
-            mockLoadFromDefault.mockImplementation(() => {
-                /* success */
+        it('loads the platform default kubeconfig for the default source', async () => {
+            mockGetSource.mockReturnValue({
+                id: DEFAULT_SOURCE_ID,
+                kind: 'default',
+                label: 'Default kubeconfig',
             });
+            mockLoadFromDefault.mockImplementation(() => undefined);
 
-            const result = await loadConfiguredKubeConfig();
+            const result = await loadConfiguredKubeConfig(DEFAULT_SOURCE_ID);
             expect(result).toBeDefined();
             expect(mockLoadFromDefault).toHaveBeenCalledTimes(1);
         });
 
-        it('should load the configured custom kubeconfig file', async () => {
-            mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === KUBECONFIG_SOURCE_KEY) {
-                    return 'customFile';
-                }
-
-                if (key === CUSTOM_KUBECONFIG_PATH_KEY) {
-                    return '/custom/path/config';
-                }
-
-                return defaultValue;
+        it('loads from the configured file path for a file source', async () => {
+            mockGetSource.mockReturnValue({
+                id: 'abc',
+                kind: 'file',
+                label: 'team.yaml',
+                path: '/abs/team.yaml',
             });
-            mockLoadFromFile.mockImplementation(() => {
-                /* success */
-            });
+            mockLoadFromFile.mockImplementation(() => undefined);
 
-            const result = await loadConfiguredKubeConfig();
+            const result = await loadConfiguredKubeConfig('abc');
             expect(result).toBeDefined();
-            expect(mockLoadFromFile).toHaveBeenCalledWith('/custom/path/config');
+            expect(mockLoadFromFile).toHaveBeenCalledWith('/abs/team.yaml');
         });
 
-        it('should load stored inline kubeconfig YAML from secure storage', async () => {
-            mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === KUBECONFIG_SOURCE_KEY) {
-                    return 'inline';
-                }
-
-                return defaultValue;
+        it('loads from secret storage for an inline source', async () => {
+            mockGetSource.mockReturnValue({
+                id: 'xyz',
+                kind: 'inline',
+                label: 'Pasted YAML 1',
             });
-            mockSecretGet.mockResolvedValue('apiVersion: v1');
-            mockLoadFromString.mockImplementation(() => {
-                /* success */
-            });
+            mockReadInlineYaml.mockResolvedValue('apiVersion: v1');
+            mockLoadFromString.mockImplementation(() => undefined);
 
-            const result = await loadConfiguredKubeConfig();
+            const result = await loadConfiguredKubeConfig('xyz');
             expect(result).toBeDefined();
-            expect(mockSecretGet).toHaveBeenCalledTimes(1);
+            expect(mockReadInlineYaml).toHaveBeenCalledTimes(1);
             expect(mockLoadFromString).toHaveBeenCalledWith('apiVersion: v1');
         });
 
-        it('should fail when custom-file source is configured without a path', async () => {
-            mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === KUBECONFIG_SOURCE_KEY) {
-                    return 'customFile';
-                }
-
-                return defaultValue;
-            });
-
-            await expect(loadConfiguredKubeConfig()).rejects.toThrow(/No custom kubeconfig file is configured/);
+        it('throws when the requested source id is unknown', async () => {
+            mockGetSource.mockReturnValue(undefined);
+            await expect(loadConfiguredKubeConfig('missing')).rejects.toThrow(/was not found/);
         });
 
-        it('should fail when inline source is configured without stored YAML', async () => {
-            mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
-                if (key === KUBECONFIG_SOURCE_KEY) {
-                    return 'inline';
-                }
-
-                return defaultValue;
+        it('throws when an inline source has no stored YAML', async () => {
+            mockGetSource.mockReturnValue({
+                id: 'xyz',
+                kind: 'inline',
+                label: 'Pasted YAML 1',
             });
-            mockSecretGet.mockResolvedValue(undefined);
+            mockReadInlineYaml.mockResolvedValue(undefined);
 
-            await expect(loadConfiguredKubeConfig()).rejects.toThrow(/No pasted kubeconfig YAML is stored/);
+            await expect(loadConfiguredKubeConfig('xyz')).rejects.toThrow(/empty or unreadable/);
+        });
+
+        it('throws when a file source is missing its path', async () => {
+            mockGetSource.mockReturnValue({
+                id: 'broken',
+                kind: 'file',
+                label: 'broken',
+            });
+
+            await expect(loadConfiguredKubeConfig('broken')).rejects.toThrow(/has no file path/);
         });
     });
 

@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
@@ -13,107 +12,62 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
-import { ENABLED_CONTEXTS_KEY, HIDDEN_CONTEXTS_KEY, resolveEnabledContextNames } from '../config';
-import { getContexts, loadConfiguredKubeConfig, type KubeContextInfo } from '../kubernetesClient';
-import { KubernetesContextItem } from './KubernetesContextItem';
+import { ensureMigration } from '../sources/migrationV2';
+import { readHiddenSourceIds, readSources } from '../sources/sourceStore';
+import { KubernetesKubeconfigSourceItem } from './KubernetesKubeconfigSourceItem';
 
 export class KubernetesRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string =
-        'enableRefreshCommand;enableManageCredentialsCommand;enableFilterCommand;enableLearnMoreCommand;discoveryKubernetesRootItem';
+        'enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;enableAddKubernetesSourceCommand;discoveryKubernetesRootItem';
 
     constructor(public readonly parentId: string) {
         this.id = `${parentId}/kubernetes-discovery`;
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        const journeyCorrelationId = randomUUID();
+        await ensureMigration();
 
-        const hiddenContextNames = ext.context.globalState.get<string[]>(HIDDEN_CONTEXTS_KEY, []);
+        const sources = await readSources();
+        const hiddenIds = new Set(await readHiddenSourceIds());
+        const visibleSources = sources.filter((s) => !hiddenIds.has(s.id));
 
-        let allContexts: KubeContextInfo[];
-        try {
-            const kubeConfig = await loadConfiguredKubeConfig();
-            allContexts = getContexts(kubeConfig);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.error(`[KubernetesDiscovery] Failed to load kubeconfig: ${errorMessage}`);
-
-            return this.createKubeconfigRecoveryChildren(
-                vscode.l10n.t('Failed to load Kubernetes kubeconfig. Configure kubeconfig or retry.'),
-            );
-        }
-
-        if (allContexts.length === 0) {
-            return this.createKubeconfigRecoveryChildren(
-                vscode.l10n.t(
-                    'No Kubernetes contexts found in the configured kubeconfig. Configure kubeconfig or retry.',
-                ),
-            );
-        }
-
-        const configuredEnabledContextNames = ext.context.globalState.get<string[] | undefined>(ENABLED_CONTEXTS_KEY);
-        const enabledContextNames = new Set(
-            resolveEnabledContextNames(
-                allContexts.map((ctx) => ctx.name),
-                configuredEnabledContextNames,
-            ),
-        );
-
-        // Filter to enabled contexts only, excluding hidden ones; sort for stable order
-        const visibleContexts = allContexts
-            .filter((ctx) => enabledContextNames.has(ctx.name) && !hiddenContextNames.includes(ctx.name))
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-        if (enabledContextNames.size === 0) {
+        if (sources.length === 0) {
+            // Defensive: should never happen post-migration. Surface a recovery path.
             return [
                 createGenericElementWithContext({
                     contextValue: 'error',
-                    id: `${this.id}/no-enabled-contexts`,
-                    label: vscode.l10n.t('No Kubernetes contexts are enabled. Configure kubeconfig or retry.'),
+                    id: `${this.id}/no-sources`,
+                    label: vscode.l10n.t('No kubeconfig sources are configured.'),
                     iconPath: new vscode.ThemeIcon('warning'),
                 }),
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/configure-kubeconfig`,
-                    label: vscode.l10n.t('Configure kubeconfig'),
-                    iconPath: new vscode.ThemeIcon('key'),
-                    commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
-                    commandArgs: [this],
-                }),
+                this.createAddSourceChild(),
                 this.createRetryChild(),
             ];
         }
 
-        if (visibleContexts.length === 0) {
+        if (visibleSources.length === 0) {
             return [
                 createGenericElementWithContext({
                     contextValue: 'error',
-                    id: `${this.id}/all-contexts-hidden`,
-                    label: vscode.l10n.t('All Kubernetes contexts are hidden by Filter. Manage Filter or retry.'),
+                    id: `${this.id}/all-sources-hidden`,
+                    label: vscode.l10n.t('All kubeconfig sources are hidden. Use Manage to re-enable one.'),
                     iconPath: new vscode.ThemeIcon('warning'),
                 }),
                 createGenericElementWithContext({
                     contextValue: 'error',
-                    id: `${this.id}/manage-filter`,
-                    label: vscode.l10n.t('Manage Filter'),
-                    iconPath: new vscode.ThemeIcon('filter'),
-                    commandId: 'vscode-documentdb.command.discoveryView.filterProviderContent',
-                    commandArgs: [this],
-                }),
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/configure-kubeconfig`,
-                    label: vscode.l10n.t('Configure kubeconfig'),
+                    id: `${this.id}/manage-sources`,
+                    label: vscode.l10n.t('Manage kubeconfig sources\u2026'),
                     iconPath: new vscode.ThemeIcon('key'),
                     commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
                     commandArgs: [this],
                 }),
+                this.createAddSourceChild(),
                 this.createRetryChild(),
             ];
         }
 
-        return visibleContexts.map((ctx) => new KubernetesContextItem(this.id, ctx, journeyCorrelationId));
+        return visibleSources.map((source) => new KubernetesKubeconfigSourceItem(this.id, source));
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
@@ -132,32 +86,19 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
         };
     }
 
-    private createKubeconfigRecoveryChildren(message: string): ExtTreeElementBase[] {
-        return [
-            createGenericElementWithContext({
-                contextValue: 'error',
-                id: `${this.id}/kubeconfig-error`,
-                label: message,
-                iconPath: new vscode.ThemeIcon('warning'),
-            }),
-            createGenericElementWithContext({
-                contextValue: 'error',
-                id: `${this.id}/configure-kubeconfig`,
-                label: vscode.l10n.t('Configure kubeconfig'),
-                iconPath: new vscode.ThemeIcon('key'),
-                commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
-                commandArgs: [this],
-            }),
-            createGenericElementWithContext({
-                contextValue: 'error',
-                id: `${this.id}/open-docs`,
-                label: vscode.l10n.t('Open Kubernetes discovery docs'),
-                iconPath: new vscode.ThemeIcon('book'),
-                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
-                commandArgs: [this],
-            }),
-            this.createRetryChild(),
-        ];
+    public refresh(): void {
+        ext.discoveryBranchDataProvider.refresh(this);
+    }
+
+    private createAddSourceChild(): ExtTreeElementBase {
+        return createGenericElementWithContext({
+            contextValue: 'error',
+            id: `${this.id}/add-source`,
+            label: vscode.l10n.t('Add kubeconfig source\u2026'),
+            iconPath: new vscode.ThemeIcon('add'),
+            commandId: 'vscode-documentdb.command.discoveryView.kubernetes.addSource',
+            commandArgs: [this],
+        });
     }
 
     private createRetryChild(): ExtTreeElementBase {

@@ -268,6 +268,7 @@ describe('PortForwardTunnelManager', () => {
     });
 
     function createMockParams(overrides?: {
+        sourceId?: string;
         localPort?: number;
         serviceName?: string;
         contextName?: string;
@@ -276,6 +277,7 @@ describe('PortForwardTunnelManager', () => {
         servicePortName?: string;
     }) {
         return {
+            sourceId: overrides?.sourceId ?? 'default',
             kubeConfig: {} as never,
             coreApi: {
                 readNamespacedEndpoints: jest.fn().mockResolvedValue({
@@ -440,6 +442,28 @@ describe('PortForwardTunnelManager', () => {
         manager.stopAll();
         expect(manager.hasTunnel('test-ctx', 'default', 'svc-a', 0)).toBe(false);
         expect(manager.hasTunnel('test-ctx', 'default', 'svc-b', 0)).toBe(false);
+    });
+
+    it('stopTunnelsForSource closes only tunnels opened against the matching sourceId', async () => {
+        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        await manager.startTunnel(createMockParams({ sourceId: 'src-keep', serviceName: 'svc-keep' }));
+        await manager.startTunnel(createMockParams({ sourceId: 'src-drop', serviceName: 'svc-drop' }));
+
+        const closed = manager.stopTunnelsForSource('src-drop');
+
+        expect(closed).toBe(1);
+        expect(manager.hasTunnel('test-ctx', 'default', 'svc-keep', 0)).toBe(true);
+        expect(manager.hasTunnel('test-ctx', 'default', 'svc-drop', 0)).toBe(false);
+    });
+
+    it('stopTunnelsForSource is a no-op when no tunnels match the sourceId', async () => {
+        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        await manager.startTunnel(createMockParams({ sourceId: 'src-a', serviceName: 'svc-a' }));
+
+        const closed = manager.stopTunnelsForSource('src-other');
+
+        expect(closed).toBe(0);
+        expect(manager.hasTunnel('test-ctx', 'default', 'svc-a', 0)).toBe(true);
     });
 
     it('should cancel a pending start when stopAll is called before listen completes', async () => {
@@ -705,6 +729,7 @@ describe('PortForwardTunnelManager', () => {
 
     it('should destroy socket when pod resolution fails', async () => {
         const failingParams = {
+            sourceId: 'default',
             kubeConfig: {} as never,
             coreApi: {
                 readNamespacedEndpoints: jest.fn().mockRejectedValue(new Error('Endpoints not found')),
@@ -746,6 +771,7 @@ describe('PortForwardTunnelManager', () => {
         });
 
         const failingParams = {
+            sourceId: 'default',
             kubeConfig: {} as never,
             coreApi: {
                 readNamespacedEndpoints: jest.fn().mockRejectedValue(new Error('Forbidden')),

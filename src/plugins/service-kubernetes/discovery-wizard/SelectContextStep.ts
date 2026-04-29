@@ -7,59 +7,76 @@ import { AzureWizardPromptStep, UserCancelledError, type IAzureQuickPickItem } f
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../extensionVariables';
-import { ENABLED_CONTEXTS_KEY, HIDDEN_CONTEXTS_KEY, resolveEnabledContextNames } from '../config';
+import { type KubeconfigSourceRecord } from '../config';
 import { getContexts, loadConfiguredKubeConfig, type KubeContextInfo } from '../kubernetesClient';
+import { aliasMapForSource } from '../sources/aliasStore';
+import { readSources } from '../sources/sourceStore';
 
 export enum KubernetesWizardProperties {
-    AvailableContexts = 'k8sAvailableContexts',
+    SelectedSourceId = 'k8sSelectedSourceId',
+    SelectedSourceLabel = 'k8sSelectedSourceLabel',
     SelectedContext = 'k8sSelectedContext',
     SelectedService = 'k8sSelectedService',
 }
 
+interface ContextPickData {
+    readonly source: KubeconfigSourceRecord;
+    readonly contextInfo: KubeContextInfo;
+}
+
 /**
  * Wizard step for selecting a Kubernetes context in the new-connection flow.
+ *
+ * Lists every context from every configured kubeconfig source, identifying the
+ * source via the description column so that colliding context names can be
+ * disambiguated.
  */
 export class SelectContextStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const configuredEnabledContextNames = ext.context.globalState.get<string[] | undefined>(ENABLED_CONTEXTS_KEY);
-        const hiddenContextNames = ext.context.globalState.get<string[]>(HIDDEN_CONTEXTS_KEY, []);
+        const sources = await readSources();
+        const picks: IAzureQuickPickItem<ContextPickData>[] = [];
 
-        const kubeConfig = await loadConfiguredKubeConfig();
-        const allContexts = getContexts(kubeConfig);
-        const enabledContextNames = new Set(
-            resolveEnabledContextNames(
-                allContexts.map((ctx) => ctx.name),
-                configuredEnabledContextNames,
-            ),
-        );
+        for (const source of sources) {
+            try {
+                const kubeConfig = await loadConfiguredKubeConfig(source.id);
+                const contexts = getContexts(kubeConfig);
+                contexts.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+                const aliases = await aliasMapForSource(source.id);
+                for (const ctx of contexts) {
+                    const alias = aliases.get(ctx.name);
+                    const label = alias ?? ctx.name;
+                    const aliasHint = alias ? `[${ctx.name}] ` : '';
+                    picks.push({
+                        label,
+                        description: `${aliasHint}(${source.label})${ctx.server ? ` ${ctx.server}` : ''}`,
+                        data: { source, contextInfo: ctx },
+                    });
+                }
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.warn(
+                    `[KubernetesDiscovery] Skipping source "${source.label}" while building context picker: ${message}`,
+                );
+            }
+        }
 
-        const contexts = allContexts.filter(
-            (ctx) => enabledContextNames.has(ctx.name) && !hiddenContextNames.includes(ctx.name),
-        );
-
-        if (contexts.length === 0) {
+        if (picks.length === 0) {
             void vscode.window.showWarningMessage(
                 vscode.l10n.t(
-                    'No visible Kubernetes contexts remain. Use Filter to show hidden contexts or Manage Credentials to enable contexts.',
+                    'No Kubernetes contexts are available across the configured kubeconfig sources. Add a kubeconfig source from the Discovery view and try again.',
                 ),
             );
             throw new UserCancelledError();
         }
-
-        context.properties[KubernetesWizardProperties.AvailableContexts] = allContexts;
-
-        const picks: IAzureQuickPickItem<KubeContextInfo>[] = contexts.map((ctx) => ({
-            label: ctx.name,
-            description: ctx.server ? `(${ctx.server})` : undefined,
-            data: ctx,
-        }));
 
         const selected = await context.ui.showQuickPick(picks, {
             placeHolder: vscode.l10n.t('Select a Kubernetes context'),
             suppressPersistence: true,
         });
 
-        context.properties[KubernetesWizardProperties.SelectedContext] = selected.data;
+        context.properties[KubernetesWizardProperties.SelectedSourceId] = selected.data.source.id;
+        context.properties[KubernetesWizardProperties.SelectedSourceLabel] = selected.data.source.label;
+        context.properties[KubernetesWizardProperties.SelectedContext] = selected.data.contextInfo;
     }
 
     public shouldPrompt(): boolean {

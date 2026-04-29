@@ -149,6 +149,12 @@ jest.mock('../promptForLocalPort', () => ({
     promptForLocalPort: (...args: unknown[]) => mockPromptForLocalPort(...args),
 }));
 
+// Mock the source store so getSource() returns a known label without touching StorageService.
+const mockGetSource = jest.fn(async (id: string) => ({ id, label: `Label for ${id}`, kind: 'default' as const }));
+jest.mock('../sources/sourceStore', () => ({
+    getSource: (...args: unknown[]) => mockGetSource(...(args as [string])),
+}));
+
 describe('KubernetesServiceItem', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -161,6 +167,7 @@ describe('KubernetesServiceItem', () => {
     it('expands to database nodes instead of metadata detail rows', async () => {
         const item = new KubernetesServiceItem(
             'corr-1',
+            'default',
             {
                 name: 'kind-documentdb-dev',
                 cluster: 'kind-documentdb-dev',
@@ -220,6 +227,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-pf',
+                'default',
                 {
                     name: 'my-ctx',
                     cluster: 'my-cluster',
@@ -244,14 +252,18 @@ describe('KubernetesServiceItem', () => {
             expect(creds?.connectionString).toBe('mongodb://127.0.0.1:10260/');
             expect(creds?.connectionProperties?.[KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]).toEqual({
                 kind: 'kubernetesClusterIpPortForward',
+                sourceId: 'default',
+                sourceLabel: 'Label for default',
                 contextName: 'my-ctx',
                 namespace: 'default',
                 serviceName: 'my-svc',
                 servicePort: 10260,
+                servicePortName: undefined,
                 localPort: 10260,
             });
 
             expect(mockStartTunnel).toHaveBeenCalledWith({
+                sourceId: 'default',
                 kubeConfig: mockKubeConfig,
                 coreApi: mockCoreApi,
                 contextName: 'my-ctx',
@@ -274,6 +286,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-cancel',
+                'default',
                 {
                     name: 'my-ctx',
                     cluster: 'my-cluster',
@@ -306,6 +319,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-lb',
+                'default',
                 {
                     name: 'my-ctx',
                     cluster: 'my-cluster',
@@ -339,6 +353,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-ur',
+                'default',
                 {
                     name: 'my-ctx',
                     cluster: 'my-cluster',
@@ -380,6 +395,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-dko',
+                'default',
                 {
                     name: 'aks-ctx',
                     cluster: 'aks-cluster',
@@ -441,6 +457,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-gen-cred',
+                'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
                 {
                     sourceKind: 'generic',
@@ -473,6 +490,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-dko-wins',
+                'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
                 {
                     sourceKind: 'dko',
@@ -497,6 +515,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-no-cred',
+                'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
                 {
                     sourceKind: 'generic',
@@ -544,6 +563,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-warn',
+                'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
                 {
                     sourceKind: 'generic',
@@ -593,6 +613,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-warn-telem',
+                'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
                 {
                     sourceKind: 'generic',
@@ -633,6 +654,7 @@ describe('KubernetesServiceItem', () => {
 
             const item = new KubernetesServiceItem(
                 'corr-no-warn',
+                'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
                 {
                     sourceKind: 'dko',

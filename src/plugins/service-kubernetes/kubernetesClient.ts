@@ -6,7 +6,6 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { ext } from '../../extensionVariables';
 
 // Lazy-load @kubernetes/client-node to avoid impacting extension startup.
 // Only type imports are used at the top level — they disappear at runtime.
@@ -17,15 +16,8 @@ import {
     type V1Node,
     type V1Service,
 } from '@kubernetes/client-node';
-import {
-    CREDENTIAL_SECRET_ANNOTATION,
-    CUSTOM_KUBECONFIG_PATH_KEY,
-    DISCOVERY_ANNOTATION,
-    DOCUMENTDB_PORTS,
-    INLINE_KUBECONFIG_SECRET_KEY,
-    KUBECONFIG_SOURCE_KEY,
-    type KubeconfigSource,
-} from './config';
+import { CREDENTIAL_SECRET_ANNOTATION, DISCOVERY_ANNOTATION, DOCUMENTDB_PORTS } from './config';
+import { getSource, readInlineYaml } from './sources/sourceStore';
 
 /**
  * Information about a Kubernetes context extracted from kubeconfig.
@@ -157,7 +149,7 @@ export function isValidKubernetesSecretName(name: string): boolean {
  * Returns the first valid path from the KUBECONFIG env var (which can be colon-separated on
  * Unix or semicolon-separated on Windows), or falls back to ~/.kube/config.
  */
-function resolveKubeconfigPath(kubeconfigPath?: string): string {
+export function resolveKubeconfigPath(kubeconfigPath?: string): string {
     if (kubeconfigPath) {
         if (kubeconfigPath.startsWith('~')) {
             return path.join(os.homedir(), kubeconfigPath.slice(1));
@@ -180,6 +172,19 @@ function resolveKubeconfigPath(kubeconfigPath?: string): string {
     }
 
     return path.join(os.homedir(), '.kube', 'config');
+}
+
+/**
+ * Returns a user-friendly representation of the resolved default kubeconfig
+ * path, collapsing the home directory back to `~/`.
+ */
+export function describeDefaultKubeconfigPath(): string {
+    const resolved = resolveKubeconfigPath();
+    const home = os.homedir();
+    if (home && resolved.startsWith(home + path.sep)) {
+        return `~${resolved.slice(home.length)}`;
+    }
+    return resolved;
 }
 
 /**
@@ -251,9 +256,13 @@ export async function loadKubeConfig(kubeconfigPath?: string, kubeconfigContents
 }
 
 function isSyntheticDefaultKubeConfig(kubeConfig: KubeConfig): boolean {
-    const contexts = kubeConfig.getContexts();
-    const clusters = kubeConfig.getClusters();
-    const users = kubeConfig.getUsers();
+    // Defensive: some loadFromDefault paths (e.g., when the resolved kubeconfig
+    // is empty or malformed in a way that bypasses the normal init) leave the
+    // backing arrays as `undefined` instead of `[]`. Treat missing arrays as
+    // empty so we don't throw a confusing TypeError back to the user.
+    const contexts = kubeConfig.getContexts() ?? [];
+    const clusters = kubeConfig.getClusters() ?? [];
+    const users = kubeConfig.getUsers() ?? [];
 
     return (
         kubeConfig.getCurrentContext() === 'loaded-context' &&
@@ -269,41 +278,46 @@ function isSyntheticDefaultKubeConfig(kubeConfig: KubeConfig): boolean {
     );
 }
 
-export async function loadConfiguredKubeConfig(): Promise<KubeConfig> {
-    const kubeconfigSource = ext.context.globalState.get<KubeconfigSource>(KUBECONFIG_SOURCE_KEY, 'default');
+/**
+ * Loads the kubeconfig for the given source id (v2 multi-source model).
+ *
+ * @param sourceId The id of a {@link KubeconfigSourceRecord}. Pass
+ *  {@link DEFAULT_SOURCE_ID} for the platform-default kubeconfig.
+ */
+export async function loadConfiguredKubeConfig(sourceId: string): Promise<KubeConfig> {
+    const record = await getSource(sourceId);
+    if (!record) {
+        throw new Error(
+            vscode.l10n.t(
+                'Kubeconfig source "{0}" was not found. It may have been removed; reconfigure Kubernetes discovery and try again.',
+                sourceId,
+            ),
+        );
+    }
 
-    switch (kubeconfigSource) {
-        case 'customFile': {
-            const kubeconfigPath = ext.context.globalState.get<string>(CUSTOM_KUBECONFIG_PATH_KEY);
-            if (!kubeconfigPath) {
+    switch (record.kind) {
+        case 'file': {
+            if (!record.path) {
                 throw new Error(
                     vscode.l10n.t(
-                        'No custom kubeconfig file is configured. Reconfigure Kubernetes discovery credentials.',
+                        'Kubeconfig source "{0}" has no file path. Remove and re-add the source.',
+                        record.label,
                     ),
                 );
             }
-
-            return await loadKubeConfig(kubeconfigPath);
+            return await loadKubeConfig(record.path);
         }
         case 'inline': {
-            let kubeconfigContents: string | undefined;
-            try {
-                kubeconfigContents = await ext.secretStorage.get(INLINE_KUBECONFIG_SECRET_KEY);
-            } catch {
+            const yaml = await readInlineYaml(record);
+            if (!yaml || yaml.length === 0) {
                 throw new Error(
                     vscode.l10n.t(
-                        'Failed to read stored kubeconfig from secure storage. Reconfigure Kubernetes discovery credentials.',
+                        'Pasted kubeconfig "{0}" is empty or unreadable. Remove and re-add the source.',
+                        record.label,
                     ),
                 );
             }
-
-            if (!kubeconfigContents) {
-                throw new Error(
-                    vscode.l10n.t('No pasted kubeconfig YAML is stored. Reconfigure Kubernetes discovery credentials.'),
-                );
-            }
-
-            return await loadKubeConfig(undefined, kubeconfigContents);
+            return await loadKubeConfig(undefined, yaml);
         }
         case 'default':
         default:
@@ -318,14 +332,20 @@ export async function loadConfiguredKubeConfig(): Promise<KubeConfig> {
  * @returns Array of context information
  */
 export function getContexts(kubeConfig: KubeConfig): KubeContextInfo[] {
-    const contexts = kubeConfig.getContexts();
+    // Defensive: protect against bundled @kubernetes/client-node returning
+    // `undefined` from `getContexts()` if `this.contexts` was somehow left
+    // unassigned during a partial load (observed in Electron with certain
+    // kubeconfig contents). Treat missing as empty.
+    const contexts = kubeConfig.getContexts() ?? [];
     return contexts.map((ctx) => {
         const cluster = kubeConfig.getCluster(ctx.cluster);
         const server = cluster?.server ?? '';
-        const { provider, region } = inferClusterProvider(server, ctx.name, ctx.cluster);
+        const contextName = ctx.name ?? '';
+        const clusterName = ctx.cluster ?? '';
+        const { provider, region } = inferClusterProvider(server, contextName, clusterName);
         return {
-            name: ctx.name,
-            cluster: ctx.cluster,
+            name: contextName,
+            cluster: clusterName,
             user: ctx.user,
             server,
             provider,
@@ -345,8 +365,11 @@ export function inferClusterProvider(
     contextName: string,
     clusterName: string,
 ): { provider?: string; region?: string } {
-    const serverLower = server.toLowerCase();
-    const nameLower = `${contextName} ${clusterName}`.toLowerCase();
+    const safeServer = server ?? '';
+    const safeContext = contextName ?? '';
+    const safeCluster = clusterName ?? '';
+    const serverLower = safeServer.toLowerCase();
+    const nameLower = `${safeContext} ${safeCluster}`.toLowerCase();
 
     // AKS: *.azmk8s.io or *.hcp.<region>.azmk8s.io
     const aksMatch = serverLower.match(/\.(?:hcp\.)?([a-z0-9-]+)\.azmk8s\.io/);
@@ -371,7 +394,7 @@ export function inferClusterProvider(
     }
 
     // kind: context/cluster names typically start with "kind-"
-    if (contextName.startsWith('kind-') || clusterName.startsWith('kind-')) {
+    if (safeContext.startsWith('kind-') || safeCluster.startsWith('kind-')) {
         return { provider: 'kind' };
     }
 

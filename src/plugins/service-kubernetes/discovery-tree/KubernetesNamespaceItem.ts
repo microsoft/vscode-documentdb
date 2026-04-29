@@ -26,6 +26,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
 
     constructor(
         public readonly parentId: string,
+        public readonly sourceId: string,
         public readonly contextInfo: KubeContextInfo,
         public readonly namespace: string,
         private readonly journeyCorrelationId: string,
@@ -48,7 +49,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                     if (this.preloadedServices !== undefined) {
                         services = this.preloadedServices;
                     } else {
-                        const kubeConfig = await loadConfiguredKubeConfig();
+                        const kubeConfig = await loadConfiguredKubeConfig(this.sourceId);
                         const coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
                         services = await listDocumentDBServices(coreApi, this.namespace, kubeConfig);
                     }
@@ -85,7 +86,14 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                 }
 
                 return services.map(
-                    (svc) => new KubernetesServiceItem(this.journeyCorrelationId, this.contextInfo, svc, this.id),
+                    (svc) =>
+                        new KubernetesServiceItem(
+                            this.journeyCorrelationId,
+                            this.sourceId,
+                            this.contextInfo,
+                            svc,
+                            this.id,
+                        ),
                 );
             },
         );

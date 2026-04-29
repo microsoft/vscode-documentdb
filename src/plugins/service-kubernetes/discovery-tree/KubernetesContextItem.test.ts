@@ -123,7 +123,7 @@ describe('KubernetesContextItem', () => {
 
     describe('getTreeItem', () => {
         it('should return correct tree item with valid server URL', () => {
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-context');
@@ -139,7 +139,7 @@ describe('KubernetesContextItem', () => {
                 server: 'not-a-valid-url',
             };
 
-            const item = new KubernetesContextItem('parent', malformedContext, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', malformedContext, 'corr-1');
 
             // The current code may throw on malformed URL; Ripley's fix wraps in try/catch.
             // After the fix, the description should use the raw URL on parse failure.
@@ -164,7 +164,7 @@ describe('KubernetesContextItem', () => {
                 server: '',
             };
 
-            const item = new KubernetesContextItem('parent', emptyServerContext, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', emptyServerContext, 'corr-1');
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-context');
@@ -178,9 +178,31 @@ describe('KubernetesContextItem', () => {
                 name: 'arn:aws:eks:us-east-1:123456/my-cluster',
             };
 
-            const item = new KubernetesContextItem('parent', slashContext, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', slashContext, 'corr-1');
             expect(item.id).toBe('parent/arn:aws:eks:us-east-1:123456_my-cluster');
             expect(item.id).not.toContain('//');
+        });
+
+        it('uses the alias as the tree label and includes the original context name in the description when an alias is set', () => {
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1', 'Prod AKS');
+            const treeItem = item.getTreeItem();
+
+            expect(treeItem.label).toBe('Prod AKS');
+            expect(treeItem.description).toContain('(my-context)');
+            expect(treeItem.description).toContain('(k8s.example.com:6443)');
+            const tooltipValue = (treeItem.tooltip as { value: string } | undefined)?.value ?? '';
+            expect(tooltipValue).toContain('Display name:** Prod AKS');
+            expect(tooltipValue).toContain('Context:** my-context');
+        });
+
+        it('falls back to the original context name when the alias is undefined', () => {
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
+            const treeItem = item.getTreeItem();
+
+            expect(treeItem.label).toBe('my-context');
+            expect(treeItem.description).toBe('(k8s.example.com:6443)');
+            const tooltipValue = (treeItem.tooltip as { value: string } | undefined)?.value ?? '';
+            expect(tooltipValue).not.toContain('Display name:');
         });
     });
 
@@ -201,7 +223,7 @@ describe('KubernetesContextItem', () => {
                     : [],
             );
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -217,7 +239,7 @@ describe('KubernetesContextItem', () => {
         it('should return error/retry node when kubeconfig load fails', async () => {
             mockLoadConfiguredKubeConfig.mockRejectedValue(new Error('ENOENT: no such file or directory'));
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -240,7 +262,7 @@ describe('KubernetesContextItem', () => {
                 return defaultValue;
             });
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -257,7 +279,7 @@ describe('KubernetesContextItem', () => {
                 namespace === 'staging' ? [{ name: 'svc-a', namespace, type: 'ClusterIP', port: 10260 }] : [],
             );
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -281,7 +303,7 @@ describe('KubernetesContextItem', () => {
                 return [];
             });
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             await item.getChildren();
 
             expect(maxActiveScans).toBeLessThanOrEqual(5);
@@ -290,7 +312,7 @@ describe('KubernetesContextItem', () => {
         it('should show informational child when no namespaces exist', async () => {
             mockListNamespaces.mockResolvedValue([]);
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -302,7 +324,7 @@ describe('KubernetesContextItem', () => {
         it('should return error node when createCoreApi fails', async () => {
             mockCreateCoreApi.mockRejectedValue(new Error('context not found'));
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -322,7 +344,7 @@ describe('KubernetesContextItem', () => {
                 return namespace === 'working-ns' ? [{ name: 'svc-a', namespace, type: 'ClusterIP', port: 10260 }] : [];
             });
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
@@ -336,7 +358,7 @@ describe('KubernetesContextItem', () => {
             mockListNamespaces.mockResolvedValue(['default']);
             mockListDocumentDBServices.mockResolvedValue([]);
 
-            const item = new KubernetesContextItem('parent', baseContextInfo, 'corr-1');
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             await item.getChildren();
 
             expect(telemetryContextMock.telemetry.measurements).toHaveProperty('namespacesCount', 1);

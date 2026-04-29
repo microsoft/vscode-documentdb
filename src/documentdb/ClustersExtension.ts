@@ -522,6 +522,56 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation(learnMoreAboutServiceProvider),
                 );
 
+                //// Kubernetes-specific source commands
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.addSource',
+                    withTreeNodeCommandCorrelation(async (context, _node) => {
+                        const { addKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/addKubeconfigSource');
+                        try {
+                            await addKubeconfigSource(context);
+                        } catch (error) {
+                            const { UserCancelledError } = await import('@microsoft/vscode-azext-utils');
+                            if (!(error instanceof UserCancelledError)) {
+                                throw error;
+                            }
+                            return;
+                        }
+
+                        const { refreshKubernetesRoot } =
+                            await import('../plugins/service-kubernetes/commands/refreshKubernetesRoot');
+                        refreshKubernetesRoot();
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.renameSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { renameKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/renameKubeconfigSource');
+                        await renameKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.removeSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { removeKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/removeKubeconfigSource');
+                        await removeKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.renameContext',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { renameKubernetesContext } =
+                            await import('../plugins/service-kubernetes/commands/renameKubernetesContext');
+                        await renameKubernetesContext(context, node as never);
+                    }),
+                );
+
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.discoveryView.addConnectionToConnectionsView',
                     withTreeNodeCommandCorrelation(addConnectionFromRegistry),
