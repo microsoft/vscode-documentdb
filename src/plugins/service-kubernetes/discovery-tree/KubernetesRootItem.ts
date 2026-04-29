@@ -57,7 +57,7 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
                 createGenericElementWithContext({
                     contextValue: 'error',
                     id: `${this.id}/manage-sources`,
-                    label: vscode.l10n.t('Manage kubeconfig sources\u2026'),
+                    label: vscode.l10n.t('Manage kubeconfig sources…'),
                     iconPath: new vscode.ThemeIcon('key'),
                     commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
                     commandArgs: [this],
@@ -94,7 +94,7 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
         return createGenericElementWithContext({
             contextValue: 'error',
             id: `${this.id}/add-source`,
-            label: vscode.l10n.t('Add kubeconfig source\u2026'),
+            label: vscode.l10n.t('Add kubeconfig source…'),
             iconPath: new vscode.ThemeIcon('add'),
             commandId: 'vscode-documentdb.command.discoveryView.kubernetes.addSource',
             commandArgs: [this],
