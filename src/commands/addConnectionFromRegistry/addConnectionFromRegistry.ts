@@ -11,6 +11,10 @@ import { Views } from '../../documentdb/Views';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import {
+    getKubernetesPortForwardIdentity,
+    getKubernetesPortForwardMetadata,
+} from '../../plugins/service-kubernetes/portForwardMetadata';
+import {
     ConnectionStorageService,
     ConnectionType,
     ItemType,
@@ -65,7 +69,9 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
 
     return withConnectionsViewProgress(async () => {
         const credentials = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
-            context.telemetry.properties.experience = node.experience.api;
+            // Use optional chaining — node may be duck-typed (e.g. KubernetesServiceItem)
+            // and not a true ClusterItemBase subclass
+            context.telemetry.properties.experience = node.experience?.api ?? 'unknown';
 
             return node.getCredentials();
         });
@@ -79,6 +85,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
         parsedCS.username = '';
 
         const joinedHosts = [...parsedCS.hosts].sort().join(',');
+        const newPortForwardMetadata = getKubernetesPortForwardMetadata(credentials.connectionProperties);
 
         //  Sanity Check 1/2: is there a connection with the same username + host in there?
         const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
@@ -88,6 +95,18 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
             const existingHostsJoined = [...existingCS.hosts].sort().join(',');
             // Use nativeAuthConfig for comparison
             const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+            const existingPortForwardMetadata = getKubernetesPortForwardMetadata(existingConnection.properties);
+
+            if (newPortForwardMetadata || existingPortForwardMetadata) {
+                return (
+                    existingUsername === username &&
+                    !!newPortForwardMetadata &&
+                    !!existingPortForwardMetadata &&
+                    getKubernetesPortForwardIdentity(existingPortForwardMetadata) ===
+                        getKubernetesPortForwardIdentity(newPortForwardMetadata)
+                );
+            }
+
             return existingUsername === username && existingHostsJoined === joinedHosts;
         });
 
@@ -150,9 +169,11 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
             id: storageId,
             name: newConnectionLabel,
             properties: {
+                ...credentials.connectionProperties,
                 type: ItemType.Connection,
                 api: API.DocumentDB,
                 availableAuthMethods: credentials.availableAuthMethods,
+                selectedAuthMethod: credentials.selectedAuthMethod,
             },
             secrets: {
                 connectionString: parsedCS.toString(),

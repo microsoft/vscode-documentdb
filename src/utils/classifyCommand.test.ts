@@ -3,10 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { classifyCodeBlock, classifyCommand, extractRunCommandName } from '../../src/utils/classifyCommand';
+import { classifyCodeBlock, classifyCommand, extractRunCommandName } from './classifyCommand';
 
 describe('classifyCommand', () => {
-    // ── Find ─────────────────────────────────────────────────────────────
+    // -- Find --------------------------------------------------------------
     it.each([
         ["db.col.find({ name: 'x' })", 'find'],
         ['db.col.findOne({})', 'find'],
@@ -15,7 +15,7 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
-    // ── Insert ───────────────────────────────────────────────────────────
+    // -- Insert ------------------------------------------------------------
     it.each([
         ['db.col.insertOne({ a: 1 })', 'insert'],
         ['db.col.insertMany([{ a: 1 }])', 'insert'],
@@ -24,7 +24,7 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
-    // ── Update ───────────────────────────────────────────────────────────
+    // -- Update ------------------------------------------------------------
     it.each([
         ['db.col.updateOne({ a: 1 }, { $set: { b: 2 } })', 'update'],
         ['db.col.updateMany({}, { $set: { x: 1 } })', 'update'],
@@ -35,7 +35,7 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
-    // ── Delete ───────────────────────────────────────────────────────────
+    // -- Delete ------------------------------------------------------------
     it.each([
         ['db.col.deleteOne({ a: 1 })', 'delete'],
         ['db.col.deleteMany({})', 'delete'],
@@ -45,12 +45,12 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
-    // ── Aggregate ────────────────────────────────────────────────────────
+    // -- Aggregate ---------------------------------------------------------
     it('classifies aggregate', () => {
         expect(classifyCommand('db.col.aggregate([{ $match: {} }])')).toBe('aggregate');
     });
 
-    // ── Count ────────────────────────────────────────────────────────────
+    // -- Count -------------------------------------------------------------
     it.each([
         ['db.col.count()', 'count'],
         ['db.col.countDocuments({})', 'count'],
@@ -59,7 +59,7 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
-    // ── Index ────────────────────────────────────────────────────────────
+    // -- Index -------------------------------------------------------------
     it.each([
         ['db.col.createIndex({ a: 1 })', 'index'],
         ['db.col.dropIndex("a_1")', 'index'],
@@ -68,7 +68,7 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
-    // ── runCommand ───────────────────────────────────────────────────────
+    // -- runCommand --------------------------------------------------------
     it.each([
         ['db.runCommand({ ping: 1 })', 'runCommand'],
         ['db.runCommand({ serverStatus: 1 })', 'runCommand'],
@@ -76,7 +76,7 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
-    // ── Shell commands ───────────────────────────────────────────────────
+    // -- Shell commands ----------------------------------------------------
     it.each([
         ['help', 'help'],
         ['db.col.help()', 'help'],
@@ -92,13 +92,13 @@ describe('classifyCommand', () => {
         expect(classifyCommand(input)).toBe(expected);
     });
 
-    // ── Other ────────────────────────────────────────────────────────────
+    // -- Other -------------------------------------------------------------
     it('classifies unknown commands as "other"', () => {
         expect(classifyCommand('const x = 42')).toBe('other');
         expect(classifyCommand('print("hello")')).toBe('other');
     });
 
-    // ── Whitespace handling ──────────────────────────────────────────────
+    // -- Whitespace handling ----------------------------------------------
     it('handles leading/trailing whitespace', () => {
         expect(classifyCommand('  help  ')).toBe('help');
         expect(classifyCommand('  show dbs  ')).toBe('show');
@@ -154,7 +154,7 @@ describe('extractRunCommandName', () => {
         ['db.runCommand({"ping": 1})', 'ping'],
         ["db.runCommand({'ping': 1})", 'ping'],
         ['db.runCommand({ myCustomThing: 1 })', 'myCustomThing'],
-    ])('extracts "%s" → "%s"', (input, expected) => {
+    ])('extracts "%s" -> "%s"', (input, expected) => {
         expect(extractRunCommandName(input)).toBe(expected);
     });
 
