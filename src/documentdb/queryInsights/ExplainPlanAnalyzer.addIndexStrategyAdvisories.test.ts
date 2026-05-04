@@ -29,14 +29,25 @@ function makeAnalysis(overrides: Partial<ExecutionStatsAnalysis> = {}): Executio
 
 /**
  * Helper to build a minimal explain result with optional isBitmap on the IXSCAN stage.
+ * Optionally includes scanKeys in the execution stats IXSCAN to simulate single/compound.
  */
-function makeExplainResult(options: { isBitmap?: boolean; indexName?: string } = {}): Document {
+function makeExplainResult(
+    options: { isBitmap?: boolean; indexName?: string; scanKeys?: string[] } = {},
+): Document {
     const ixscan: Document = {
         stage: 'IXSCAN',
         indexName: options.indexName ?? 'someIndex_1',
     };
     if (options.isBitmap !== undefined) {
         ixscan.isBitmap = options.isBitmap;
+    }
+
+    const execIxscan: Document = {
+        stage: 'IXSCAN',
+        indexName: options.indexName ?? 'someIndex_1',
+    };
+    if (options.scanKeys) {
+        execIxscan.indexUsage = [{ scanKeys: options.scanKeys }];
     }
 
     return {
@@ -53,10 +64,7 @@ function makeExplainResult(options: { isBitmap?: boolean; indexName?: string } =
             totalKeysExamined: 100,
             executionStages: {
                 stage: 'FETCH',
-                inputStage: {
-                    stage: 'IXSCAN',
-                    indexName: options.indexName ?? 'someIndex_1',
-                },
+                inputStage: execIxscan,
             },
         },
     };
@@ -125,13 +133,78 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
             expect(ids).not.toContain('bitmap_index');
         });
 
-        it('does not affect performance score (purely informational)', () => {
+        it('does not affect performance score when scanKeys is missing (cannot determine single-field)', () => {
             const analysis = makeAnalysis({ efficiencyRatio: 1.0 });
             const explainResult = makeExplainResult({ isBitmap: true });
 
             ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
 
             expect(analysis.performanceRating.score).toBe('excellent');
+        });
+
+        it('does not demote score for single-field bitmap when selectivity < 20%', () => {
+            // nReturned=100, totalDocs=1000 → 10% coverage, below threshold
+            const analysis = makeAnalysis({ nReturned: 100, efficiencyRatio: 1.0 });
+            const explainResult = makeExplainResult({
+                isBitmap: true,
+                scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 100)]'],
+            });
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            expect(analysis.performanceRating.score).toBe('excellent');
+            const badge = analysis.performanceRating.diagnostics.find((d) => d.diagnosticId === 'bitmap_index');
+            expect(badge?.type).toBe('neutral');
+        });
+
+        it('demotes score one level for single-field bitmap when selectivity >= 20%', () => {
+            // nReturned=350, totalDocs=1000 → 35% coverage, above threshold
+            const analysis = makeAnalysis({ nReturned: 350, efficiencyRatio: 1.0 });
+            const explainResult = makeExplainResult({
+                isBitmap: true,
+                scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 350)]'],
+            });
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            expect(analysis.performanceRating.score).toBe('good'); // demoted from excellent
+            const badge = analysis.performanceRating.diagnostics.find((d) => d.diagnosticId === 'bitmap_index');
+            expect(badge?.type).toBe('negative');
+        });
+
+        it('does not demote score for compound bitmap index even with high selectivity', () => {
+            // nReturned=500, totalDocs=1000 → 50% coverage, but compound (2 scanKeys)
+            const analysis = makeAnalysis({ nReturned: 500, efficiencyRatio: 1.0 });
+            const explainResult = makeExplainResult({
+                isBitmap: true,
+                scanKeys: [
+                    'key 1: [(isInequality: false, estimatedEntryCount: 500)]',
+                    'key 2: [(isInequality: false, estimatedEntryCount: 100)]',
+                ],
+            });
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            expect(analysis.performanceRating.score).toBe('excellent'); // not demoted
+            const badge = analysis.performanceRating.diagnostics.find((d) => d.diagnosticId === 'bitmap_index');
+            expect(badge?.type).toBe('neutral');
+        });
+
+        it('demotes from good to fair for single-field bitmap at 55% selectivity', () => {
+            // Simulates the isFamilyFriendly demo case
+            const analysis = makeAnalysis({
+                nReturned: 550,
+                efficiencyRatio: 1.0,
+                performanceRating: { score: 'good', diagnostics: [] },
+            });
+            const explainResult = makeExplainResult({
+                isBitmap: true,
+                scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 550)]'],
+            });
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            expect(analysis.performanceRating.score).toBe('fair'); // demoted from good
         });
     });
 });

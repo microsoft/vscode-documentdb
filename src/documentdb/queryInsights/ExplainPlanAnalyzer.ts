@@ -912,21 +912,59 @@ export class ExplainPlanAnalyzer {
 
         // --- Bitmap index badge (gated on index scan, NOT gated on efficiency) ---
         // isBitmap is a direct engine assertion — always surface it when present.
-        // This is purely informational; it does not affect scoring.
+        // When the bitmap index is single-field AND returns >= 20% of the collection,
+        // the badge becomes negative and demotes the score one level (the index is
+        // wasteful: ongoing write/storage cost for minimal read benefit).
+        // Compound indexes are excluded — a bitmap prefix with a selective second key
+        // is a valid pattern (see Design Decision 3).
         if (analysis.isIndexScan) {
             const winningPlan = (explainResult.queryPlanner as Document | undefined)?.winningPlan as
                 | Document
                 | undefined;
             const ixscanStage = this.findStageInPlan(winningPlan, 'IXSCAN');
             if (ixscanStage?.isBitmap === true) {
+                // Detect single-field: check scanKeys in execution stats IXSCAN
+                const executionStages = (explainResult.executionStats as Document | undefined)?.executionStages as
+                    | Document
+                    | undefined;
+                const ixscanExec = this.findStageInPlan(executionStages, 'IXSCAN');
+                const indexUsage = ixscanExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+                const isSingleField = indexUsage?.some((u) => u.scanKeys && u.scanKeys.length === 1) ?? false;
+
+                const coverage =
+                    totalCollectionDocs && totalCollectionDocs > 0
+                        ? analysis.nReturned / totalCollectionDocs
+                        : undefined;
+
+                const shouldDemote = isSingleField && coverage !== undefined && coverage >= COVERAGE_LOW_SELECTIVITY;
+
                 diagnostics.push({
                     diagnosticId: 'bitmap_index',
-                    type: 'neutral',
+                    type: shouldDemote ? 'negative' : 'neutral',
                     message: l10n.t('Bitmap index'),
-                    details: l10n.t(
-                        'The database used a bitmap index to execute this query.\n\nBitmap indexes are an internal optimization that DocumentDB applies to low-cardinality fields (fields with few distinct values, such as booleans or status codes). They are space-efficient but less selective than B-tree indexes on high-cardinality fields.\n\nThis is expected behavior and does not indicate a problem. If query performance is a concern, consider filtering on a more selective field or using a compound index.',
-                    ),
+                    details: shouldDemote
+                        ? l10n.t(
+                              'The database used a bitmap index on a low-cardinality field.\n\nThis single-field index splits the collection into very few buckets, returning {0}% of documents. The ongoing write and storage cost on every insert and update outweighs the marginal read benefit.\n\nConsider hiding this index if no other queries depend on it.',
+                              ((coverage ?? 0) * 100).toFixed(1),
+                          )
+                        : l10n.t(
+                              'The database used a bitmap index to execute this query.\n\nBitmap indexes are an internal optimization that DocumentDB applies to low-cardinality fields (fields with few distinct values, such as booleans or status codes). They are space-efficient but less selective than B-tree indexes on high-cardinality fields.\n\nThis is expected behavior and does not indicate a problem. If query performance is a concern, consider filtering on a more selective field or using a compound index.',
+                          ),
                 });
+
+                // Demote score by one level for wasteful single-field bitmap index
+                if (shouldDemote) {
+                    const scoreOrder: Array<ExecutionStatsAnalysis['performanceRating']['score']> = [
+                        'excellent',
+                        'good',
+                        'fair',
+                        'poor',
+                    ];
+                    const currentIndex = scoreOrder.indexOf(analysis.performanceRating.score);
+                    if (currentIndex >= 0 && currentIndex < scoreOrder.length - 1) {
+                        analysis.performanceRating.score = scoreOrder[currentIndex + 1];
+                    }
+                }
             }
         }
 
