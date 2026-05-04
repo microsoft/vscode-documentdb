@@ -31,9 +31,7 @@ function makeAnalysis(overrides: Partial<ExecutionStatsAnalysis> = {}): Executio
  * Helper to build a minimal explain result with optional isBitmap on the IXSCAN stage.
  * Optionally includes scanKeys in the execution stats IXSCAN to simulate single/compound.
  */
-function makeExplainResult(
-    options: { isBitmap?: boolean; indexName?: string; scanKeys?: string[] } = {},
-): Document {
+function makeExplainResult(options: { isBitmap?: boolean; indexName?: string; scanKeys?: string[] } = {}): Document {
     const ixscan: Document = {
         stage: 'IXSCAN',
         indexName: options.indexName ?? 'someIndex_1',
