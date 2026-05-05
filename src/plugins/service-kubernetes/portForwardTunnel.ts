@@ -37,6 +37,7 @@ export type TunnelStartResult =
  * contains no secrets or credentials.
  */
 export interface TunnelInfo {
+    readonly sourceId: string;
     readonly contextName: string;
     readonly namespace: string;
     readonly serviceName: string;
@@ -132,8 +133,14 @@ export class PortForwardTunnelManager implements vscode.Disposable {
     /**
      * Returns true if a tunnel already exists for the given parameters.
      */
-    hasTunnel(contextName: string, namespace: string, serviceName: string, localPort: number): boolean {
-        return this._activeTunnels.has(this._buildKey(contextName, namespace, serviceName, localPort));
+    hasTunnel(
+        sourceId: string,
+        contextName: string,
+        namespace: string,
+        serviceName: string,
+        localPort: number,
+    ): boolean {
+        return this._activeTunnels.has(this._buildKey(sourceId, contextName, namespace, serviceName, localPort));
     }
 
     /**
@@ -141,6 +148,7 @@ export class PortForwardTunnelManager implements vscode.Disposable {
      */
     listTunnels(): TunnelInfo[] {
         return [...this._activeTunnels.values()].map((t) => ({
+            sourceId: t.params.sourceId,
             contextName: t.params.contextName,
             namespace: t.params.namespace,
             serviceName: t.params.serviceName,
@@ -154,8 +162,14 @@ export class PortForwardTunnelManager implements vscode.Disposable {
      * Stops a single tunnel identified by its key parameters.
      * Returns true if a tunnel was found and stopped, false if not found.
      */
-    stopTunnel(contextName: string, namespace: string, serviceName: string, localPort: number): boolean {
-        const key = this._buildKey(contextName, namespace, serviceName, localPort);
+    stopTunnel(
+        sourceId: string,
+        contextName: string,
+        namespace: string,
+        serviceName: string,
+        localPort: number,
+    ): boolean {
+        const key = this._buildKey(sourceId, contextName, namespace, serviceName, localPort);
         const hadPendingStart = this._pendingStarts.has(key);
         this._invalidateKey(key);
         this._pendingStarts.delete(key);
@@ -191,7 +205,13 @@ export class PortForwardTunnelManager implements vscode.Disposable {
      *         or if binding fails for a reason other than EADDRINUSE.
      */
     async startTunnel(params: TunnelParams): Promise<TunnelStartResult> {
-        const key = this._buildKey(params.contextName, params.namespace, params.serviceName, params.localPort);
+        const key = this._buildKey(
+            params.sourceId,
+            params.contextName,
+            params.namespace,
+            params.serviceName,
+            params.localPort,
+        );
 
         if (this._activeTunnels.has(key)) {
             return { outcome: 'reused' };
@@ -497,8 +517,14 @@ export class PortForwardTunnelManager implements vscode.Disposable {
         }
     }
 
-    private _buildKey(contextName: string, namespace: string, serviceName: string, localPort: number): string {
-        return `${contextName}/${namespace}/${serviceName}:${String(localPort)}`;
+    private _buildKey(
+        sourceId: string,
+        contextName: string,
+        namespace: string,
+        serviceName: string,
+        localPort: number,
+    ): string {
+        return JSON.stringify([sourceId, contextName, namespace, serviceName, localPort]);
     }
 
     private _closeTunnel(key: string, tunnel: ActiveTunnel): void {

@@ -564,6 +564,7 @@
   "Failed to hide index.": "Failed to hide index.",
   "Failed to initialize Azure management clients": "Failed to initialize Azure management clients",
   "Failed to initialize task": "Failed to initialize task",
+  "Failed to list DKO resources in namespace \"{0}\": {1}. Check that the DocumentDB Kubernetes Operator CRD is installed and that your Kubernetes credentials can list documentdb.io dbs resources.": "Failed to list DKO resources in namespace \"{0}\": {1}. Check that the DocumentDB Kubernetes Operator CRD is installed and that your Kubernetes credentials can list documentdb.io dbs resources.",
   "Failed to list namespaces: {0}. Check that your credentials are valid and you have the required RBAC permissions.": "Failed to list namespaces: {0}. Check that your credentials are valid and you have the required RBAC permissions.",
   "Failed to list services in namespace \"{0}\": {1}. Check your RBAC permissions.": "Failed to list services in namespace \"{0}\": {1}. Check your RBAC permissions.",
   "Failed to list services. Click to retry.": "Failed to list services. Click to retry.",

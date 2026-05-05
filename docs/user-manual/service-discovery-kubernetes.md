@@ -15,7 +15,7 @@ You can use Kubernetes discovery from either:
 
 The Kubernetes node lists one or more **kubeconfig sources** as siblings:
 
-- **Default kubeconfig** — always present; uses the Kubernetes client's default loading (the `KUBECONFIG` env var or `~/.kube/config`).
+- **Default kubeconfig** — uses the Kubernetes client's default loading (the `KUBECONFIG` env var or `~/.kube/config`). It is created by default, but if you remove it explicitly, it stays removed until you add it again.
 - **Custom kubeconfig file…** — a kubeconfig YAML file you select on disk.
 - **Pasted kubeconfig YAML** — kubeconfig YAML pasted from the clipboard, kept in VS Code Secret Storage.
 
@@ -26,11 +26,12 @@ Each source expands independently to its own contexts -> namespaces -> services 
 The Kubernetes node exposes two inline icons:
 
 - **`+` (Add kubeconfig source...)** — opens a quick pick:
+  - **Default kubeconfig** — uses the `KUBECONFIG` env var or `~/.kube/config`.
   - **Add custom kubeconfig file...** — pick a file from disk.
   - **Paste kubeconfig YAML from clipboard** — kept in VS Code Secret Storage.
 - **`key` (Manage kubeconfig sources)** — opens a manage dialog (described below).
 
-The selected kubeconfig is validated before it is saved. If the file cannot be loaded or contains zero contexts, the source is not added and an error is shown. Adding the same path twice or pasting identical YAML reuses the existing entry.
+Custom file and pasted-YAML sources are validated before they are saved. If the file or pasted YAML cannot be loaded or contains zero contexts, the source is not added and an error is shown. The Default source can still be added when the current default kubeconfig is missing, invalid, or empty; a warning is shown so you can fix the underlying `KUBECONFIG` or `~/.kube/config` later. Adding the same path twice or pasting identical YAML reuses the existing entry.
 
 ## Manage existing sources
 
@@ -38,13 +39,13 @@ Click the **key** icon on the **Kubernetes** node to manage existing sources:
 
 - Each source appears with a checkbox. Uncheck a source to **deselect** it — the record is preserved but it disappears from the discovery tree until you check it again.
 - Click the **trash** button on any non-default entry to remove it permanently. Active port-forward tunnels for the source are stopped on removal.
-- The Default source is always shown, always selected, and cannot be removed.
+- The Default source can be deselected in this dialog. The dialog does not show a trash button for the Default source, but you can remove it from the source node's right-click menu and add it again later with **Add kubeconfig source...**.
 
 Per-source right-click actions on the source nodes themselves remain available:
 
 - **Refresh** — reloads the source and re-expands its contexts.
-- **Rename...** — changes the source's display label. The Default source cannot be renamed.
-- **Remove** — deletes a non-default source.
+- **Rename...** — changes the source's display label, including the Default source.
+- **Remove** — deletes the source, including the Default source. Removing a source stops active port-forward tunnels for that source, and saved connections that depend on it need to be reconfigured or the source needs to be added again.
 
 ## Browse the discovery tree
 
@@ -100,6 +101,8 @@ Kubernetes discovery uses the following target selection order.
 DocumentDB Kubernetes Operator (DKO) custom resources are discovered first. The plugin lists `documentdb.io/preview` `dbs` resources in the selected namespace and maps each resource to its backing Service.
 
 DKO-backed Services are not duplicated by generic service fallback. DKO targets are displayed before generic targets.
+
+If the DKO CRD is not installed in a cluster, Kubernetes discovery falls back to generic Service discovery. If the CRD exists but cannot be listed because of RBAC, authentication, or API errors, discovery surfaces the failure instead of silently showing only generic targets.
 
 ### 2. Explicit generic service opt-in
 

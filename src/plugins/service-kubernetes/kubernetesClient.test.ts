@@ -69,6 +69,12 @@ function createServiceInfo(overrides: Partial<KubeServiceInfo>): KubeServiceInfo
     };
 }
 
+function createApiExceptionLike(statusCode: number, message: string): Error & { code: number } {
+    const error = new Error(message) as Error & { code: number };
+    error.code = statusCode;
+    return error;
+}
+
 describe('kubernetesClient', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -392,7 +398,7 @@ describe('kubernetesClient', () => {
             };
             const mockKubeConfig = {
                 makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockRejectedValue(new Error('Forbidden')),
+                    listNamespacedCustomObject: jest.fn().mockRejectedValue(createApiExceptionLike(404, 'Not Found')),
                 }),
             };
 
@@ -401,6 +407,56 @@ describe('kubernetesClient', () => {
             expect(services[0].externalAddress).toBe('1.2.3.4');
             expect(services[0].sourceKind).toBe('generic');
             expect(services[0].type).toBe('LoadBalancer');
+        });
+
+        it('should surface DKO permission errors instead of silently falling back to generic discovery', async () => {
+            const mockCoreApi = {
+                listNamespacedService: jest.fn().mockResolvedValue({
+                    items: [
+                        {
+                            metadata: { name: 'manual-documentdb', namespace: 'default' },
+                            spec: {
+                                type: 'LoadBalancer',
+                                ports: [{ port: 10260, targetPort: 10260 }],
+                            },
+                        },
+                    ],
+                }),
+            };
+            const mockKubeConfig = {
+                makeApiClient: jest.fn().mockReturnValue({
+                    listNamespacedCustomObject: jest.fn().mockRejectedValue(createApiExceptionLike(403, 'Forbidden')),
+                }),
+            };
+
+            await expect(listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig)).rejects.toThrow(
+                /Failed to list DKO resources.*Forbidden/,
+            );
+        });
+
+        it('should surface DKO network errors instead of silently falling back to generic discovery', async () => {
+            const mockCoreApi = {
+                listNamespacedService: jest.fn().mockResolvedValue({
+                    items: [
+                        {
+                            metadata: { name: 'manual-documentdb', namespace: 'default' },
+                            spec: {
+                                type: 'LoadBalancer',
+                                ports: [{ port: 10260, targetPort: 10260 }],
+                            },
+                        },
+                    ],
+                }),
+            };
+            const mockKubeConfig = {
+                makeApiClient: jest.fn().mockReturnValue({
+                    listNamespacedCustomObject: jest.fn().mockRejectedValue(new Error('ECONNRESET')),
+                }),
+            };
+
+            await expect(listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig)).rejects.toThrow(
+                /Failed to list DKO resources.*ECONNRESET/,
+            );
         });
 
         it('should throw on RBAC error', async () => {
@@ -1162,6 +1218,21 @@ describe('kubernetesClient', () => {
                 'cluster',
             );
             expect(result.provider).toBe('GKE');
+        });
+
+        it('should detect GKE from gke.io hostnames', () => {
+            const result = inferClusterProvider('https://private-cluster.gke.io:443', 'ctx', 'cluster');
+            expect(result.provider).toBe('GKE');
+        });
+
+        it.each([
+            'https://container.googleapis.com.evil.example',
+            'https://evil.example/container.googleapis.com/v1/projects/my-proj',
+            'https://private-cluster.gke.io.evil.example',
+            'https://evil.example/.gke.io',
+        ])('should not detect GKE from untrusted URL substrings in %s', (serverUrl: string) => {
+            const result = inferClusterProvider(serverUrl, 'ctx', 'cluster');
+            expect(result.provider).toBeUndefined();
         });
 
         it('should detect kind from context name prefix', () => {

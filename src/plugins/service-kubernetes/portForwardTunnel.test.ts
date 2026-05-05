@@ -298,22 +298,86 @@ describe('PortForwardTunnelManager', () => {
         };
     }
 
+    function hasTunnel(overrides?: {
+        sourceId?: string;
+        localPort?: number;
+        serviceName?: string;
+        contextName?: string;
+        namespace?: string;
+    }): boolean {
+        return manager.hasTunnel(
+            overrides?.sourceId ?? 'default',
+            overrides?.contextName ?? 'test-ctx',
+            overrides?.namespace ?? 'default',
+            overrides?.serviceName ?? 'test-svc',
+            overrides?.localPort ?? 0,
+        );
+    }
+
+    function stopTunnel(overrides?: {
+        sourceId?: string;
+        localPort?: number;
+        serviceName?: string;
+        contextName?: string;
+        namespace?: string;
+    }): boolean {
+        return manager.stopTunnel(
+            overrides?.sourceId ?? 'default',
+            overrides?.contextName ?? 'test-ctx',
+            overrides?.namespace ?? 'default',
+            overrides?.serviceName ?? 'test-svc',
+            overrides?.localPort ?? 0,
+        );
+    }
+
     // --- Lifecycle ---
 
     it('should start a tunnel on a free port', async () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         const result = await manager.startTunnel(createMockParams());
         expect(result.outcome).toBe('started');
-        expect(manager.hasTunnel('test-ctx', 'default', 'test-svc', 0)).toBe(true);
+        expect(hasTunnel()).toBe(true);
     });
 
-    it('should return reused for the same key', async () => {
+    it('should return reused for the same source and service key', async () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         const params = createMockParams();
         await manager.startTunnel(params);
         const result = await manager.startTunnel(params);
         expect(result.outcome).toBe('reused');
-        expect(manager.hasTunnel('test-ctx', 'default', 'test-svc', 0)).toBe(true);
+        expect(hasTunnel()).toBe(true);
+    });
+
+    it('should start independent tunnels for identical service keys from different sourceIds', async () => {
+        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+
+        const first = await manager.startTunnel(createMockParams({ sourceId: 'source-a' }));
+        const second = await manager.startTunnel(createMockParams({ sourceId: 'source-b' }));
+
+        expect(first.outcome).toBe('started');
+        expect(second.outcome).toBe('started');
+        expect(hasTunnel({ sourceId: 'source-a' })).toBe(true);
+        expect(hasTunnel({ sourceId: 'source-b' })).toBe(true);
+        expect(
+            manager
+                .listTunnels()
+                .map((t) => t.sourceId)
+                .sort(),
+        ).toEqual(['source-a', 'source-b']);
+    });
+
+    it('should not share a pending tunnel start across different sourceIds', async () => {
+        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+
+        const firstStart = manager.startTunnel(createMockParams({ sourceId: 'source-a' }));
+        const secondStart = manager.startTunnel(createMockParams({ sourceId: 'source-b' }));
+
+        await expect(Promise.all([firstStart, secondStart])).resolves.toEqual([
+            { outcome: 'started' },
+            { outcome: 'started' },
+        ]);
+        expect(hasTunnel({ sourceId: 'source-a' })).toBe(true);
+        expect(hasTunnel({ sourceId: 'source-b' })).toBe(true);
     });
 
     it('should propagate a pending start failure to concurrent callers for the same key', async () => {
@@ -341,7 +405,7 @@ describe('PortForwardTunnelManager', () => {
 
             await expect(firstStart).rejects.toThrow(/already in use/);
             await expect(secondStart).rejects.toThrow(/already in use/);
-            expect(manager.hasTunnel('test-ctx', 'default', 'test-svc', port)).toBe(false);
+            expect(hasTunnel({ localPort: port })).toBe(false);
         } finally {
             blockingServer.close();
         }
@@ -351,24 +415,24 @@ describe('PortForwardTunnelManager', () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-a' }));
         await manager.startTunnel(createMockParams({ serviceName: 'svc-b' }));
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-a', 0)).toBe(true);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-b', 0)).toBe(true);
+        expect(hasTunnel({ serviceName: 'svc-a' })).toBe(true);
+        expect(hasTunnel({ serviceName: 'svc-b' })).toBe(true);
     });
 
     it('should distinguish tunnels by context name', async () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         await manager.startTunnel(createMockParams({ contextName: 'ctx-1' }));
         await manager.startTunnel(createMockParams({ contextName: 'ctx-2' }));
-        expect(manager.hasTunnel('ctx-1', 'default', 'test-svc', 0)).toBe(true);
-        expect(manager.hasTunnel('ctx-2', 'default', 'test-svc', 0)).toBe(true);
+        expect(hasTunnel({ contextName: 'ctx-1' })).toBe(true);
+        expect(hasTunnel({ contextName: 'ctx-2' })).toBe(true);
     });
 
     it('should distinguish tunnels by namespace', async () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         await manager.startTunnel(createMockParams({ namespace: 'ns-a' }));
         await manager.startTunnel(createMockParams({ namespace: 'ns-b' }));
-        expect(manager.hasTunnel('test-ctx', 'ns-a', 'test-svc', 0)).toBe(true);
-        expect(manager.hasTunnel('test-ctx', 'ns-b', 'test-svc', 0)).toBe(true);
+        expect(hasTunnel({ namespace: 'ns-a' })).toBe(true);
+        expect(hasTunnel({ namespace: 'ns-b' })).toBe(true);
     });
 
     // --- listTunnels ---
@@ -386,6 +450,7 @@ describe('PortForwardTunnelManager', () => {
         const tunnels = manager.listTunnels();
         expect(tunnels).toHaveLength(1);
         const info = tunnels[0];
+        expect(info.sourceId).toBe('default');
         expect(info.contextName).toBe('test-ctx');
         expect(info.namespace).toBe('my-ns');
         expect(info.serviceName).toBe('my-svc');
@@ -409,13 +474,19 @@ describe('PortForwardTunnelManager', () => {
     it('should stop a single tunnel and return true', async () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-target' }));
-        const stopped = manager.stopTunnel('test-ctx', 'default', 'svc-target', 0);
+        const stopped = stopTunnel({ serviceName: 'svc-target' });
         expect(stopped).toBe(true);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-target', 0)).toBe(false);
+        expect(hasTunnel({ serviceName: 'svc-target' })).toBe(false);
     });
 
     it('should return false when stopping a non-existent tunnel', () => {
-        const stopped = manager.stopTunnel('no-ctx', 'no-ns', 'no-svc', 9999);
+        const stopped = stopTunnel({
+            sourceId: 'no-source',
+            contextName: 'no-ctx',
+            namespace: 'no-ns',
+            serviceName: 'no-svc',
+            localPort: 9999,
+        });
         expect(stopped).toBe(false);
     });
 
@@ -423,15 +494,27 @@ describe('PortForwardTunnelManager', () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-a' }));
         await manager.startTunnel(createMockParams({ serviceName: 'svc-b' }));
-        manager.stopTunnel('test-ctx', 'default', 'svc-a', 0);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-a', 0)).toBe(false);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-b', 0)).toBe(true);
+        stopTunnel({ serviceName: 'svc-a' });
+        expect(hasTunnel({ serviceName: 'svc-a' })).toBe(false);
+        expect(hasTunnel({ serviceName: 'svc-b' })).toBe(true);
+    });
+
+    it('should stop only the targeted source when service identity is otherwise identical', async () => {
+        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        await manager.startTunnel(createMockParams({ sourceId: 'source-a' }));
+        await manager.startTunnel(createMockParams({ sourceId: 'source-b' }));
+
+        const stopped = stopTunnel({ sourceId: 'source-a' });
+
+        expect(stopped).toBe(true);
+        expect(hasTunnel({ sourceId: 'source-a' })).toBe(false);
+        expect(hasTunnel({ sourceId: 'source-b' })).toBe(true);
     });
 
     it('should log when a single tunnel is stopped', async () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         await manager.startTunnel(createMockParams({ serviceName: 'svc-log' }));
-        manager.stopTunnel('test-ctx', 'default', 'svc-log', 0);
+        stopTunnel({ serviceName: 'svc-log' });
         expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('svc-log'));
     });
 
@@ -440,8 +523,8 @@ describe('PortForwardTunnelManager', () => {
         await manager.startTunnel(createMockParams({ serviceName: 'svc-a' }));
         await manager.startTunnel(createMockParams({ serviceName: 'svc-b' }));
         manager.stopAll();
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-a', 0)).toBe(false);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-b', 0)).toBe(false);
+        expect(hasTunnel({ serviceName: 'svc-a' })).toBe(false);
+        expect(hasTunnel({ serviceName: 'svc-b' })).toBe(false);
     });
 
     it('stopTunnelsForSource closes only tunnels opened against the matching sourceId', async () => {
@@ -452,8 +535,20 @@ describe('PortForwardTunnelManager', () => {
         const closed = manager.stopTunnelsForSource('src-drop');
 
         expect(closed).toBe(1);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-keep', 0)).toBe(true);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-drop', 0)).toBe(false);
+        expect(hasTunnel({ sourceId: 'src-keep', serviceName: 'svc-keep' })).toBe(true);
+        expect(hasTunnel({ sourceId: 'src-drop', serviceName: 'svc-drop' })).toBe(false);
+    });
+
+    it('stopTunnelsForSource closes the matching source even when another source has the same service identity', async () => {
+        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        await manager.startTunnel(createMockParams({ sourceId: 'src-keep' }));
+        await manager.startTunnel(createMockParams({ sourceId: 'src-drop' }));
+
+        const closed = manager.stopTunnelsForSource('src-drop');
+
+        expect(closed).toBe(1);
+        expect(hasTunnel({ sourceId: 'src-keep' })).toBe(true);
+        expect(hasTunnel({ sourceId: 'src-drop' })).toBe(false);
     });
 
     it('stopTunnelsForSource is a no-op when no tunnels match the sourceId', async () => {
@@ -463,7 +558,7 @@ describe('PortForwardTunnelManager', () => {
         const closed = manager.stopTunnelsForSource('src-other');
 
         expect(closed).toBe(0);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-a', 0)).toBe(true);
+        expect(hasTunnel({ sourceId: 'src-a', serviceName: 'svc-a' })).toBe(true);
     });
 
     it('should cancel a pending start when stopAll is called before listen completes', async () => {
@@ -473,18 +568,18 @@ describe('PortForwardTunnelManager', () => {
         manager.stopAll();
 
         await expect(start).rejects.toThrow(/cancelled/);
-        expect(manager.hasTunnel('test-ctx', 'default', 'test-svc', 0)).toBe(false);
+        expect(hasTunnel()).toBe(false);
     });
 
     it('should cancel a pending start when stopTunnel is called for that key', async () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         const start = manager.startTunnel(createMockParams({ serviceName: 'pending-svc' }));
 
-        const stopped = manager.stopTunnel('test-ctx', 'default', 'pending-svc', 0);
+        const stopped = stopTunnel({ serviceName: 'pending-svc' });
 
         expect(stopped).toBe(true);
         await expect(start).rejects.toThrow(/cancelled/);
-        expect(manager.hasTunnel('test-ctx', 'default', 'pending-svc', 0)).toBe(false);
+        expect(hasTunnel({ serviceName: 'pending-svc' })).toBe(false);
     });
 
     it('should log when tunnels are stopped', async () => {
@@ -550,10 +645,30 @@ describe('PortForwardTunnelManager', () => {
 
         try {
             await manager.startTunnel(createMockParams({ localPort: port }));
-            expect(manager.hasTunnel('test-ctx', 'default', 'test-svc', port)).toBe(false);
+            expect(hasTunnel({ localPort: port })).toBe(false);
         } finally {
             blockingServer.close();
         }
+    });
+
+    it('should report a managed port conflict instead of reusing a tunnel from a different sourceId', async () => {
+        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+        const port = await new Promise<number>((resolve) => {
+            const tmp = net.createServer();
+            tmp.listen(0, '127.0.0.1', () => {
+                const freePort = (tmp.address() as net.AddressInfo).port;
+                tmp.close(() => resolve(freePort));
+            });
+        });
+
+        await manager.startTunnel(createMockParams({ sourceId: 'source-a', localPort: port }));
+
+        await expect(manager.startTunnel(createMockParams({ sourceId: 'source-b', localPort: port }))).rejects.toThrow(
+            /already used by Kubernetes tunnel/,
+        );
+
+        expect(hasTunnel({ sourceId: 'source-a', localPort: port })).toBe(true);
+        expect(hasTunnel({ sourceId: 'source-b', localPort: port })).toBe(false);
     });
 
     it('should not offer to reuse a managed tunnel for a different Kubernetes service on the same local port', async () => {
@@ -574,8 +689,8 @@ describe('PortForwardTunnelManager', () => {
         );
 
         expect(mockShowWarningMessage).not.toHaveBeenCalled();
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-a', port)).toBe(true);
-        expect(manager.hasTunnel('test-ctx', 'default', 'svc-b', port)).toBe(false);
+        expect(hasTunnel({ serviceName: 'svc-a', localPort: port })).toBe(true);
+        expect(hasTunnel({ serviceName: 'svc-b', localPort: port })).toBe(false);
     });
 
     // --- Output channel ---
@@ -601,7 +716,7 @@ describe('PortForwardTunnelManager', () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         await manager.startTunnel(createMockParams());
         manager.dispose();
-        expect(manager.hasTunnel('test-ctx', 'default', 'test-svc', 0)).toBe(false);
+        expect(hasTunnel()).toBe(false);
     });
 
     it('should reset singleton on dispose', async () => {
@@ -614,7 +729,15 @@ describe('PortForwardTunnelManager', () => {
     // --- hasTunnel ---
 
     it('should return false for non-existent tunnel', () => {
-        expect(manager.hasTunnel('no-ctx', 'no-ns', 'no-svc', 12345)).toBe(false);
+        expect(
+            hasTunnel({
+                sourceId: 'no-source',
+                contextName: 'no-ctx',
+                namespace: 'no-ns',
+                serviceName: 'no-svc',
+                localPort: 12345,
+            }),
+        ).toBe(false);
     });
 
     // --- Connection handling (integration-style) ---
@@ -626,7 +749,7 @@ describe('PortForwardTunnelManager', () => {
         await manager.startTunnel(params);
 
         // Port 0 means OS-assigned; verifies tunnel server was created successfully
-        expect(manager.hasTunnel('test-ctx', 'default', 'test-svc', 0)).toBe(true);
+        expect(hasTunnel()).toBe(true);
     });
 
     it('should accept TCP connections and call portForward with resolved pod', async () => {

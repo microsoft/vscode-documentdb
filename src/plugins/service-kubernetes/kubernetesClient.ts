@@ -115,6 +115,10 @@ interface DkoDocumentDbResourceInfo {
     readonly tlsReady: boolean;
 }
 
+interface ListDkoDocumentDbResourcesOptions {
+    readonly suppressUnexpectedErrors?: boolean;
+}
+
 const DEFAULT_DKO_SECRET_NAME = 'documentdb-credentials';
 const DKO_SERVICE_PREFIX = 'documentdb-service-';
 
@@ -369,6 +373,7 @@ export function inferClusterProvider(
     const safeContext = contextName ?? '';
     const safeCluster = clusterName ?? '';
     const serverLower = safeServer.toLowerCase();
+    const serverHostLower = getUrlHostname(safeServer);
     const nameLower = `${safeContext} ${safeCluster}`.toLowerCase();
 
     // AKS: *.azmk8s.io or *.hcp.<region>.azmk8s.io
@@ -384,7 +389,7 @@ export function inferClusterProvider(
     }
 
     // GKE: container.googleapis.com or *.gke.io
-    if (serverLower.includes('container.googleapis.com') || serverLower.includes('.gke.io')) {
+    if (serverHostLower === 'container.googleapis.com' || serverHostLower.endsWith('.gke.io')) {
         return { provider: 'GKE' };
     }
 
@@ -419,6 +424,14 @@ export function inferClusterProvider(
     }
 
     return {};
+}
+
+function getUrlHostname(server: string): string {
+    try {
+        return new URL(server).hostname.toLowerCase();
+    } catch {
+        return '';
+    }
 }
 
 /**
@@ -526,6 +539,7 @@ function getPrimaryServicePort(service: V1Service): { port: number; portName?: s
 async function listDkoDocumentDbResources(
     kubeConfig: KubeConfig,
     namespace: string,
+    options: ListDkoDocumentDbResourcesOptions = {},
 ): Promise<DkoDocumentDbResourceInfo[]> {
     try {
         const k8s = await import('@kubernetes/client-node');
@@ -594,10 +608,82 @@ async function listDkoDocumentDbResources(
         }
 
         return result.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-    } catch {
-        // DKO CRD not installed or inaccessible — treat as no DKO resources and fall back to generic discovery.
-        return [];
+    } catch (error) {
+        if (isDkoCrdUnavailableError(error) || options.suppressUnexpectedErrors) {
+            // Treat unavailable DKO metadata as no DKO resources when callers explicitly allow fallback.
+            return [];
+        }
+
+        const errorMessage = getKubernetesApiErrorMessage(error);
+        throw new Error(
+            vscode.l10n.t(
+                'Failed to list DKO resources in namespace "{0}": {1}. Check that the DocumentDB Kubernetes Operator CRD is installed and that your Kubernetes credentials can list documentdb.io dbs resources.',
+                namespace,
+                errorMessage,
+            ),
+        );
     }
+}
+
+function isDkoCrdUnavailableError(error: unknown): boolean {
+    return getKubernetesApiStatusCode(error) === 404;
+}
+
+function getKubernetesApiStatusCode(error: unknown): number | undefined {
+    if (!isRecord(error)) {
+        return undefined;
+    }
+
+    const directStatusCode =
+        getNumberProperty(error, 'statusCode') ??
+        getNumberProperty(error, 'status') ??
+        getNumberProperty(error, 'code');
+    if (directStatusCode !== undefined) {
+        return directStatusCode;
+    }
+
+    const response = error.response;
+    if (isRecord(response)) {
+        return getNumberProperty(response, 'statusCode') ?? getNumberProperty(response, 'status');
+    }
+
+    return undefined;
+}
+
+function getKubernetesApiErrorMessage(error: unknown): string {
+    if (error instanceof Error) {
+        return error.message;
+    }
+
+    if (typeof error === 'string') {
+        return error;
+    }
+
+    if (isRecord(error)) {
+        const message = error.message;
+        if (typeof message === 'string') {
+            return message;
+        }
+
+        const body = error.body;
+        if (typeof body === 'string') {
+            return body;
+        }
+        if (isRecord(body) && typeof body.message === 'string') {
+            return body.message;
+        }
+    }
+
+    return String(error);
+}
+
+function getNumberProperty(record: Record<string, unknown>, propertyName: string): number | undefined {
+    const value = record[propertyName];
+    return typeof value === 'number' ? value : undefined;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+    return value !== null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function createDkoTarget(resource: DkoDocumentDbResourceInfo, service: V1Service | undefined): KubeServiceInfo {
@@ -668,7 +754,6 @@ function createGenericDocumentDbTarget(service: V1Service): KubeServiceInfo | un
         connectionParams: buildDocumentDbConnectionParams(),
     };
 }
-
 /**
  * Lists services in a namespace that expose DocumentDB-compatible ports.
  * Automatically resolves credentials from DocumentDB CRs when available.
@@ -960,7 +1045,9 @@ export async function resolveDocumentDBCredentials(
     namespace: string,
     serviceName: string,
 ): Promise<{ username: string; password: string; connectionParams: string } | undefined> {
-    const resources = await listDkoDocumentDbResources(kubeConfig, namespace);
+    // Credential lookup is best-effort: failing to read DKO metadata should prompt for credentials later,
+    // not block a target that was already discovered.
+    const resources = await listDkoDocumentDbResources(kubeConfig, namespace, { suppressUnexpectedErrors: true });
     const matchingResource = resources.find((resource) => resource.serviceName === serviceName);
     if (!matchingResource) {
         return undefined;
