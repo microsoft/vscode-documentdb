@@ -23,6 +23,14 @@ const MULTIKEY_WARN_THRESHOLD = 5;
 /** Multikey expansion: ≥20× keys-to-docs ratio triggers severe warning + score demotion */
 const MULTIKEY_SEVERE_THRESHOLD = 20;
 
+/** Ordered score levels for one-level demotion logic */
+const SCORE_ORDER: ReadonlyArray<ExecutionStatsAnalysis['performanceRating']['score']> = [
+    'excellent',
+    'good',
+    'fair',
+    'poor',
+];
+
 /**
  * Diagnostic detail about query performance
  */
@@ -971,16 +979,7 @@ export class ExplainPlanAnalyzer {
 
                 // Demote score by one level for wasteful single-field bitmap index
                 if (shouldDemote) {
-                    const scoreOrder: Array<ExecutionStatsAnalysis['performanceRating']['score']> = [
-                        'excellent',
-                        'good',
-                        'fair',
-                        'poor',
-                    ];
-                    const currentIndex = scoreOrder.indexOf(analysis.performanceRating.score);
-                    if (currentIndex >= 0 && currentIndex < scoreOrder.length - 1) {
-                        analysis.performanceRating.score = scoreOrder[currentIndex + 1];
-                    }
+                    this.demoteScoreOneLevel(analysis);
                 }
             }
         }
@@ -1024,16 +1023,7 @@ export class ExplainPlanAnalyzer {
                 });
 
                 // Demote score by one level for severe multikey
-                const scoreOrder: Array<ExecutionStatsAnalysis['performanceRating']['score']> = [
-                    'excellent',
-                    'good',
-                    'fair',
-                    'poor',
-                ];
-                const currentIndex = scoreOrder.indexOf(analysis.performanceRating.score);
-                if (currentIndex >= 0 && currentIndex < scoreOrder.length - 1) {
-                    analysis.performanceRating.score = scoreOrder[currentIndex + 1];
-                }
+                this.demoteScoreOneLevel(analysis);
             } else if (multikeyMultiplier >= MULTIKEY_WARN_THRESHOLD) {
                 diagnostics.push({
                     diagnosticId: 'high_multikey_expansion',
@@ -1045,6 +1035,17 @@ export class ExplainPlanAnalyzer {
                     ),
                 });
             }
+        }
+    }
+
+    /**
+     * Demotes the performance score by one level (e.g., excellent → good).
+     * No-op if already at the lowest level (poor).
+     */
+    private static demoteScoreOneLevel(analysis: ExecutionStatsAnalysis): void {
+        const currentIndex = SCORE_ORDER.indexOf(analysis.performanceRating.score);
+        if (currentIndex >= 0 && currentIndex < SCORE_ORDER.length - 1) {
+            analysis.performanceRating.score = SCORE_ORDER[currentIndex + 1];
         }
     }
 }
