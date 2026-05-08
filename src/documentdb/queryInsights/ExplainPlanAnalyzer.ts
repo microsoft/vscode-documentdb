@@ -925,13 +925,20 @@ export class ExplainPlanAnalyzer {
                 | undefined;
             const ixscanStage = this.findStageInPlan(winningPlan, 'IXSCAN');
             if (ixscanStage?.isBitmap === true) {
-                // Detect single-field: check scanKeys in execution stats IXSCAN
+                // Detect single-field: check scanKeys in execution stats IXSCAN.
+                // We require exactly one indexUsage entry with exactly one scanKey.
+                // If there are multiple entries (e.g., mixed single/compound), we
+                // conservatively treat the index as compound to avoid false demotions.
                 const executionStages = (explainResult.executionStats as Document | undefined)?.executionStages as
                     | Document
                     | undefined;
                 const ixscanExec = this.findStageInPlan(executionStages, 'IXSCAN');
                 const indexUsage = ixscanExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
-                const isSingleField = indexUsage?.some((u) => u.scanKeys && u.scanKeys.length === 1) ?? false;
+                const isSingleField =
+                    indexUsage !== undefined &&
+                    indexUsage.length === 1 &&
+                    indexUsage[0].scanKeys !== undefined &&
+                    indexUsage[0].scanKeys.length === 1;
 
                 const coverage =
                     totalCollectionDocs && totalCollectionDocs > 0

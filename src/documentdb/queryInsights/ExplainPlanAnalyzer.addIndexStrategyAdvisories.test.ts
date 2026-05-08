@@ -31,7 +31,14 @@ function makeAnalysis(overrides: Partial<ExecutionStatsAnalysis> = {}): Executio
  * Helper to build a minimal explain result with optional isBitmap on the IXSCAN stage.
  * Optionally includes scanKeys in the execution stats IXSCAN to simulate single/compound.
  */
-function makeExplainResult(options: { isBitmap?: boolean; indexName?: string; scanKeys?: string[] } = {}): Document {
+function makeExplainResult(
+    options: {
+        isBitmap?: boolean;
+        indexName?: string;
+        scanKeys?: string[];
+        rawIndexUsage?: Array<{ scanKeys: string[] }>;
+    } = {},
+): Document {
     const ixscan: Document = {
         stage: 'IXSCAN',
         indexName: options.indexName ?? 'someIndex_1',
@@ -44,7 +51,9 @@ function makeExplainResult(options: { isBitmap?: boolean; indexName?: string; sc
         stage: 'IXSCAN',
         indexName: options.indexName ?? 'someIndex_1',
     };
-    if (options.scanKeys) {
+    if (options.rawIndexUsage) {
+        execIxscan.indexUsage = options.rawIndexUsage;
+    } else if (options.scanKeys) {
         execIxscan.indexUsage = [{ scanKeys: options.scanKeys }];
     }
 
@@ -178,6 +187,30 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
                 scanKeys: [
                     'key 1: [(isInequality: false, estimatedEntryCount: 500)]',
                     'key 2: [(isInequality: false, estimatedEntryCount: 100)]',
+                ],
+            });
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            expect(analysis.performanceRating.score).toBe('excellent'); // not demoted
+            const badge = analysis.performanceRating.diagnostics.find((d) => d.diagnosticId === 'bitmap_index');
+            expect(badge?.type).toBe('neutral');
+        });
+
+        it('does not demote score when indexUsage has mixed single/multi-key entries', () => {
+            // nReturned=500, totalDocs=1000 → 50% coverage, but multiple indexUsage entries
+            // with a mix of key counts — conservatively treated as compound
+            const analysis = makeAnalysis({ nReturned: 500, efficiencyRatio: 1.0 });
+            const explainResult = makeExplainResult({
+                isBitmap: true,
+                rawIndexUsage: [
+                    { scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 500)]'] },
+                    {
+                        scanKeys: [
+                            'key 1: [(isInequality: false, estimatedEntryCount: 500)]',
+                            'key 2: [(isInequality: false, estimatedEntryCount: 100)]',
+                        ],
+                    },
                 ],
             });
 
