@@ -926,14 +926,22 @@ export class ExplainPlanAnalyzer {
             const ixscanStage = this.findStageInPlan(winningPlan, 'IXSCAN');
             if (ixscanStage?.isBitmap === true) {
                 // Detect single-field: check scanKeys in execution stats IXSCAN.
-                // We require exactly one indexUsage entry with exactly one scanKey.
-                // If there are multiple entries (e.g., mixed single/compound), we
-                // conservatively treat the index as compound to avoid false demotions.
+                // Correlate by indexName so that on plans with multiple IXSCAN stages
+                // (e.g., OR, index intersection) we inspect the correct one.
+                const bitmapIndexName = ixscanStage.indexName as string | undefined;
                 const executionStages = (explainResult.executionStats as Document | undefined)?.executionStages as
                     | Document
                     | undefined;
                 const ixscanExec = this.findStageInPlan(executionStages, 'IXSCAN');
-                const indexUsage = ixscanExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+                // Only use the exec IXSCAN if it matches the planner IXSCAN by name
+                const correlatedExec =
+                    ixscanExec && bitmapIndexName && (ixscanExec.indexName as string) === bitmapIndexName
+                        ? ixscanExec
+                        : undefined;
+                const indexUsage = correlatedExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+                // We require exactly one indexUsage entry with exactly one scanKey.
+                // If there are multiple entries (e.g., mixed single/compound), we
+                // conservatively treat the index as compound to avoid false demotions.
                 const isSingleField =
                     indexUsage !== undefined &&
                     indexUsage.length === 1 &&

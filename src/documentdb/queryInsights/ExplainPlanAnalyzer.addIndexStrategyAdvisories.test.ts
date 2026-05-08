@@ -237,5 +237,51 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
 
             expect(analysis.performanceRating.score).toBe('fair'); // demoted from good
         });
+
+        it('does not demote when planner and exec IXSCAN have different index names', () => {
+            // Simulates a plan where findStageInPlan returns different IXSCAN stages
+            // for the planner (bitmap) vs execution stats (different index)
+            const analysis = makeAnalysis({ nReturned: 500, efficiencyRatio: 1.0 });
+            const explainResult: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'FETCH',
+                        inputStage: {
+                            stage: 'IXSCAN',
+                            indexName: 'bitmapIndex_1',
+                            isBitmap: true,
+                        },
+                    },
+                },
+                executionStats: {
+                    nReturned: 100,
+                    executionTimeMillis: 13,
+                    totalDocsExamined: 100,
+                    totalKeysExamined: 100,
+                    executionStages: {
+                        stage: 'FETCH',
+                        inputStage: {
+                            stage: 'IXSCAN',
+                            indexName: 'otherIndex_1',
+                            indexUsage: [
+                                {
+                                    scanKeys: [
+                                        'key 1: [(isInequality: false, estimatedEntryCount: 500)]',
+                                    ],
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            // Badge should still appear (isBitmap is true) but not demote
+            // because the exec IXSCAN doesn't match the bitmap planner IXSCAN
+            expect(analysis.performanceRating.score).toBe('excellent');
+            const badge = analysis.performanceRating.diagnostics.find((d) => d.diagnosticId === 'bitmap_index');
+            expect(badge?.type).toBe('neutral');
+        });
     });
 });
