@@ -23,6 +23,14 @@ const MULTIKEY_WARN_THRESHOLD = 5;
 /** Multikey expansion: ≥20× keys-to-docs ratio triggers severe warning + score demotion */
 const MULTIKEY_SEVERE_THRESHOLD = 20;
 
+/** Ordered score levels for one-level demotion logic */
+const SCORE_ORDER: ReadonlyArray<ExecutionStatsAnalysis['performanceRating']['score']> = [
+    'excellent',
+    'good',
+    'fair',
+    'poor',
+];
+
 /**
  * Diagnostic detail about query performance
  */
@@ -861,7 +869,9 @@ export class ExplainPlanAnalyzer {
     /**
      * Appends index-strategy advisory diagnostics to an existing analysis.
      * Called **after** `calculatePerformanceRating` has run so that scoring
-     * diagnostics are already present; this method adds informational badges.
+     * diagnostics are already present. Most badges are informational, but
+     * selected advisories (bitmap index, severe multikey) can also demote
+     * the score when they identify a clear index-strategy problem.
      *
      * All advisories are gated on `analysis.isIndexScan === true` (except
      * multikey, which is relevant regardless of index type).
@@ -912,21 +922,65 @@ export class ExplainPlanAnalyzer {
 
         // --- Bitmap index badge (gated on index scan, NOT gated on efficiency) ---
         // isBitmap is a direct engine assertion — always surface it when present.
-        // This is purely informational; it does not affect scoring.
+        // When the bitmap index is single-field AND returns >= 20% of the collection,
+        // the badge becomes negative and demotes the score one level (the index is
+        // wasteful: ongoing write/storage cost for minimal read benefit).
+        // Compound indexes are excluded — a bitmap prefix with a selective second key
+        // is a valid pattern (see Design Decision 3).
         if (analysis.isIndexScan) {
             const winningPlan = (explainResult.queryPlanner as Document | undefined)?.winningPlan as
                 | Document
                 | undefined;
             const ixscanStage = this.findStageInPlan(winningPlan, 'IXSCAN');
             if (ixscanStage?.isBitmap === true) {
+                // Detect single-field: check scanKeys in execution stats IXSCAN.
+                // Correlate by indexName so that on plans with multiple IXSCAN stages
+                // (e.g., OR, index intersection) we inspect the correct one.
+                const bitmapIndexName = ixscanStage.indexName as string | undefined;
+                const executionStages = (explainResult.executionStats as Document | undefined)?.executionStages as
+                    | Document
+                    | undefined;
+                const ixscanExec = this.findStageInPlan(executionStages, 'IXSCAN');
+                // Only use the exec IXSCAN if it matches the planner IXSCAN by name
+                const correlatedExec =
+                    ixscanExec && bitmapIndexName && (ixscanExec.indexName as string) === bitmapIndexName
+                        ? ixscanExec
+                        : undefined;
+                const indexUsage = correlatedExec?.indexUsage as Array<{ scanKeys?: string[] }> | undefined;
+                // We require exactly one indexUsage entry with exactly one scanKey.
+                // If there are multiple entries (e.g., mixed single/compound), we
+                // conservatively treat the index as compound to avoid false demotions.
+                const isSingleField =
+                    indexUsage !== undefined &&
+                    indexUsage.length === 1 &&
+                    indexUsage[0].scanKeys !== undefined &&
+                    indexUsage[0].scanKeys.length === 1;
+
+                const coverage =
+                    totalCollectionDocs && totalCollectionDocs > 0
+                        ? Math.min(analysis.nReturned / totalCollectionDocs, 1)
+                        : undefined;
+
+                const shouldDemote = isSingleField && coverage !== undefined && coverage >= COVERAGE_LOW_SELECTIVITY;
+
                 diagnostics.push({
                     diagnosticId: 'bitmap_index',
-                    type: 'neutral',
+                    type: shouldDemote ? 'negative' : 'neutral',
                     message: l10n.t('Bitmap index'),
-                    details: l10n.t(
-                        'The database used a bitmap index to execute this query.\n\nBitmap indexes are an internal optimization that DocumentDB applies to low-cardinality fields (fields with few distinct values, such as booleans or status codes). They are space-efficient but less selective than B-tree indexes on high-cardinality fields.\n\nThis is expected behavior and does not indicate a problem. If query performance is a concern, consider filtering on a more selective field or using a compound index.',
-                    ),
+                    details: shouldDemote
+                        ? l10n.t(
+                              'The database used a bitmap index on a low-cardinality field.\n\nThis single-field index splits the collection into very few buckets, returning {0}% of documents. The ongoing write and storage cost on every insert and update outweighs the marginal read benefit.\n\nConsider hiding this index if no other queries depend on it.',
+                              ((coverage ?? 0) * 100).toFixed(1),
+                          )
+                        : l10n.t(
+                              'The database used a bitmap index to execute this query.\n\nBitmap indexes are an internal optimization that DocumentDB applies to low-cardinality fields (fields with few distinct values, such as booleans or status codes). They are space-efficient but less selective than B-tree indexes on high-cardinality fields.\n\nThis is expected behavior and does not indicate a problem. If query performance is a concern, consider filtering on a more selective field or using a compound index.',
+                          ),
                 });
+
+                // Demote score by one level for wasteful single-field bitmap index
+                if (shouldDemote) {
+                    this.demoteScoreOneLevel(analysis);
+                }
             }
         }
 
@@ -969,16 +1023,7 @@ export class ExplainPlanAnalyzer {
                 });
 
                 // Demote score by one level for severe multikey
-                const scoreOrder: Array<ExecutionStatsAnalysis['performanceRating']['score']> = [
-                    'excellent',
-                    'good',
-                    'fair',
-                    'poor',
-                ];
-                const currentIndex = scoreOrder.indexOf(analysis.performanceRating.score);
-                if (currentIndex >= 0 && currentIndex < scoreOrder.length - 1) {
-                    analysis.performanceRating.score = scoreOrder[currentIndex + 1];
-                }
+                this.demoteScoreOneLevel(analysis);
             } else if (multikeyMultiplier >= MULTIKEY_WARN_THRESHOLD) {
                 diagnostics.push({
                     diagnosticId: 'high_multikey_expansion',
@@ -990,6 +1035,17 @@ export class ExplainPlanAnalyzer {
                     ),
                 });
             }
+        }
+    }
+
+    /**
+     * Demotes the performance score by one level (e.g., excellent → good).
+     * No-op if already at the lowest level (poor).
+     */
+    private static demoteScoreOneLevel(analysis: ExecutionStatsAnalysis): void {
+        const currentIndex = SCORE_ORDER.indexOf(analysis.performanceRating.score);
+        if (currentIndex >= 0 && currentIndex < SCORE_ORDER.length - 1) {
+            analysis.performanceRating.score = SCORE_ORDER[currentIndex + 1];
         }
     }
 }
