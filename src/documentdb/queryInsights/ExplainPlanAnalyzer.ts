@@ -933,7 +933,7 @@ export class ExplainPlanAnalyzer {
 
                 const coverage =
                     totalCollectionDocs && totalCollectionDocs > 0
-                        ? analysis.nReturned / totalCollectionDocs
+                        ? Math.min(analysis.nReturned / totalCollectionDocs, 1)
                         : undefined;
 
                 const shouldDemote = isSingleField && coverage !== undefined && coverage >= COVERAGE_LOW_SELECTIVITY;
