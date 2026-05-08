@@ -270,9 +270,7 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
                             indexName: 'otherIndex_1',
                             indexUsage: [
                                 {
-                                    scanKeys: [
-                                        'key 1: [(isInequality: false, estimatedEntryCount: 500)]',
-                                    ],
+                                    scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 500)]'],
                                 },
                             ],
                         },
