@@ -247,6 +247,10 @@ Demoting on bitmap alone would penalize valid compound patterns.
 **Single-field detection:** Uses `executionStats.executionStages` IXSCAN
 `indexUsage[].scanKeys.length === 1`.
 
+**Cumulative demotions:** Advisory demotions are independent and stack.
+If a query triggers both `bitmap_index` and `severe_multikey_expansion`
+demotions, the score is reduced by two levels (e.g., Excellent → Fair).
+
 #### Low-Cardinality Index
 
 Gated on: `isIndexScan === true` AND `efficiencyRatio < 0.9`.

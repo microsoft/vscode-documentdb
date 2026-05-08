@@ -289,4 +289,30 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
             expect(badge?.type).toBe('neutral');
         });
     });
+
+    describe('cumulative advisory demotions', () => {
+        it('demotes score twice when both bitmap and severe multikey thresholds are met', () => {
+            // Single-field bitmap with 50% coverage + 25× multikey expansion
+            // Both demotion rules fire independently: excellent → good (bitmap) → fair (multikey)
+            const analysis = makeAnalysis({
+                nReturned: 500,
+                totalKeysExamined: 2500,
+                totalDocsExamined: 100,
+                efficiencyRatio: 1.0,
+            });
+            const explainResult = makeExplainResult({
+                isBitmap: true,
+                nReturned: 500,
+                scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 500)]'],
+            });
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            // Two independent index-strategy problems → two demotions
+            expect(analysis.performanceRating.score).toBe('fair');
+            const ids = getDiagnosticIds(analysis.performanceRating.diagnostics);
+            expect(ids).toContain('bitmap_index');
+            expect(ids).toContain('severe_multikey_expansion');
+        });
+    });
 });
