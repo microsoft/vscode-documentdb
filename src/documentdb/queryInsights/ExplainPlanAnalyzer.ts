@@ -861,7 +861,9 @@ export class ExplainPlanAnalyzer {
     /**
      * Appends index-strategy advisory diagnostics to an existing analysis.
      * Called **after** `calculatePerformanceRating` has run so that scoring
-     * diagnostics are already present; this method adds informational badges.
+     * diagnostics are already present. Most badges are informational, but
+     * selected advisories (bitmap index, severe multikey) can also demote
+     * the score when they identify a clear index-strategy problem.
      *
      * All advisories are gated on `analysis.isIndexScan === true` (except
      * multikey, which is relevant regardless of index type).

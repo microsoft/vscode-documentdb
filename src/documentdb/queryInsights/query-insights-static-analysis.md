@@ -208,7 +208,7 @@ Only emitted when sorting is detected (via `$sort` in command or SORT stage):
 
 ### Advisory Badges (from `addIndexStrategyAdvisories`)
 
-These are appended after scoring. All are informational.
+These are appended after the base rating is calculated. Most are informational, but selected advisories (bitmap index, severe multikey expansion) can also demote the score when they identify a clear index-strategy problem.
 
 #### Coverage
 
