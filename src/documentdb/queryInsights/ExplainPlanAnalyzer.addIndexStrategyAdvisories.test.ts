@@ -37,6 +37,7 @@ function makeExplainResult(
         indexName?: string;
         scanKeys?: string[];
         rawIndexUsage?: Array<{ scanKeys: string[] }>;
+        nReturned?: number;
     } = {},
 ): Document {
     const ixscan: Document = {
@@ -65,7 +66,7 @@ function makeExplainResult(
             },
         },
         executionStats: {
-            nReturned: 100,
+            nReturned: options.nReturned ?? 100,
             executionTimeMillis: 13,
             totalDocsExamined: 100,
             totalKeysExamined: 100,
@@ -169,6 +170,7 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
             const analysis = makeAnalysis({ nReturned: 350, efficiencyRatio: 1.0 });
             const explainResult = makeExplainResult({
                 isBitmap: true,
+                nReturned: 350,
                 scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 350)]'],
             });
 
@@ -184,6 +186,7 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
             const analysis = makeAnalysis({ nReturned: 500, efficiencyRatio: 1.0 });
             const explainResult = makeExplainResult({
                 isBitmap: true,
+                nReturned: 500,
                 scanKeys: [
                     'key 1: [(isInequality: false, estimatedEntryCount: 500)]',
                     'key 2: [(isInequality: false, estimatedEntryCount: 100)]',
@@ -203,6 +206,7 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
             const analysis = makeAnalysis({ nReturned: 500, efficiencyRatio: 1.0 });
             const explainResult = makeExplainResult({
                 isBitmap: true,
+                nReturned: 500,
                 rawIndexUsage: [
                     { scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 500)]'] },
                     {
@@ -230,6 +234,7 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
             });
             const explainResult = makeExplainResult({
                 isBitmap: true,
+                nReturned: 550,
                 scanKeys: ['key 1: [(isInequality: false, estimatedEntryCount: 550)]'],
             });
 
@@ -254,7 +259,7 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
                     },
                 },
                 executionStats: {
-                    nReturned: 100,
+                    nReturned: 500,
                     executionTimeMillis: 13,
                     totalDocsExamined: 100,
                     totalKeysExamined: 100,
