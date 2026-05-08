@@ -227,10 +227,10 @@ Fires when the `queryPlanner.winningPlan` IXSCAN stage has `isBitmap === true`.
 This is a direct engine assertion and is always surfaced regardless of query
 efficiency, unlike the heuristic-based low-cardinality badge.
 
-| diagnosticId   | Condition                                          | Type     | Message      | Score effect      |
-| -------------- | -------------------------------------------------- | -------- | ------------ | ----------------- |
-| `bitmap_index` | Bitmap, compound index OR selectivity < 20%        | neutral  | Bitmap index | None              |
-| `bitmap_index` | Bitmap, single-field index AND selectivity >= 20%  | negative | Bitmap index | Demoted one level |
+| diagnosticId   | Condition                                         | Type     | Message      | Score effect      |
+| -------------- | ------------------------------------------------- | -------- | ------------ | ----------------- |
+| `bitmap_index` | Bitmap, compound index OR selectivity < 20%       | neutral  | Bitmap index | None              |
+| `bitmap_index` | Bitmap, single-field index AND selectivity >= 20% | negative | Bitmap index | Demoted one level |
 
 **Demotion rule:** When the bitmap index is **single-field** (only one key
 in `scanKeys`) AND the query returns **>= 20%** of the collection, the badge
