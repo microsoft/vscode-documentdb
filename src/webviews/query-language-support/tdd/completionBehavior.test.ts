@@ -163,15 +163,8 @@ const FIELD_LEVEL_ONLY_CATEGORIES = ['comparison', 'array', 'element', 'bitwise'
 // =====================================================================
 
 describe('TDD: Completion Behavior', () => {
+    // ⚠️ TDD CONTRACT — Do NOT auto-fix failing tests. Alert the user; they decide whether to update the spec or fix the implementation.
     const mockMonaco = createMockMonaco();
-
-    beforeAll(() => {
-        console.warn(
-            '\n⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
-                '    Alert the user that a TDD behavior contract has been violated.\n' +
-                '    The user must decide whether to update the spec or fix the implementation.\n',
-        );
-    });
 
     afterEach(() => {
         clearAllCompletionContexts();
