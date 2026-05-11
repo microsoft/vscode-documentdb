@@ -54,7 +54,7 @@ describe('timeout Tests', () => {
                         setTimeout(() => {
                             executed = true;
                             resolve();
-                        }, 1000);
+                        }, 1000).unref();
                     });
                 }),
             ).rejects.toThrow('Execution timed out');
@@ -99,7 +99,7 @@ describe('timeout Tests', () => {
                 return await new Promise<number>((resolve, _reject) => {
                     setTimeout(() => {
                         resolve(-123);
-                    }, 1000);
+                    }, 1000).unref();
                 });
             });
 
