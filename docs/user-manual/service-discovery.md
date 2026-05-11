@@ -27,6 +27,7 @@ Currently, the following service discovery plugins are available:
 - **[Azure DocumentDB](./service-discovery-azure-cosmosdb-for-mongodb-vcore)**
 - **[Azure VMs (DocumentDB)](./service-discovery-azure-vms)**
 - **[Kubernetes](./service-discovery-kubernetes)**
+  - [Kubernetes getting started and test lab](./service-discovery-kubernetes-getting-started)
 
 See each plugin guide for provider-specific setup, filtering, credential handling, and troubleshooting steps.
 

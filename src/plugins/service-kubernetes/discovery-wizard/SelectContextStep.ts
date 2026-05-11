@@ -5,6 +5,7 @@
 
 import { AzureWizardPromptStep, UserCancelledError, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { QuickPickItemKind, ThemeIcon } from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { ext } from '../../../extensionVariables';
 import { type KubeconfigSourceRecord } from '../config';
@@ -24,6 +25,8 @@ interface ContextPickData {
     readonly contextInfo: KubeContextInfo;
 }
 
+type SelectContextPickData = ContextPickData | 'addSource';
+
 /**
  * Wizard step for selecting a Kubernetes context in the new-connection flow.
  *
@@ -34,7 +37,20 @@ interface ContextPickData {
 export class SelectContextStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const sources = await readSources();
-        const picks: IAzureQuickPickItem<ContextPickData>[] = [];
+        const picks: IAzureQuickPickItem<SelectContextPickData>[] = [
+            {
+                label: vscode.l10n.t('Add a kubeconfig source…'),
+                detail: vscode.l10n.t('Add or manage sources to see more contexts.'),
+                iconPath: new ThemeIcon('plug'),
+                alwaysShow: true,
+                data: 'addSource',
+            },
+            {
+                label: '',
+                kind: QuickPickItemKind.Separator,
+                data: 'addSource',
+            },
+        ];
 
         for (const source of sources) {
             try {
@@ -60,19 +76,19 @@ export class SelectContextStep extends AzureWizardPromptStep<NewConnectionWizard
             }
         }
 
-        if (picks.length === 0) {
-            void vscode.window.showWarningMessage(
-                vscode.l10n.t(
-                    'No Kubernetes contexts are available across the configured kubeconfig sources. Add a kubeconfig source from the Discovery view and try again.',
-                ),
-            );
-            throw new UserCancelledError();
-        }
-
         const selected = await context.ui.showQuickPick(picks, {
             placeHolder: vscode.l10n.t('Select a Kubernetes context'),
             suppressPersistence: true,
         });
+
+        if (selected.data === 'addSource') {
+            const { addKubeconfigSource } = await import('../commands/addKubeconfigSource');
+            // If the user cancels the inner picker, UserCancelledError propagates
+            // naturally and the retry modal below is never reached.
+            await addKubeconfigSource(context);
+            await this.showRetryInstructions();
+            throw new UserCancelledError('Kubeconfig source management completed');
+        }
 
         context.properties[KubernetesWizardProperties.SelectedSourceId] = selected.data.source.id;
         context.properties[KubernetesWizardProperties.SelectedSourceLabel] = selected.data.source.label;
@@ -81,5 +97,18 @@ export class SelectContextStep extends AzureWizardPromptStep<NewConnectionWizard
 
     public shouldPrompt(): boolean {
         return true;
+    }
+
+    private async showRetryInstructions(): Promise<void> {
+        await vscode.window.showInformationMessage(
+            vscode.l10n.t('Kubeconfig Source Added'),
+            {
+                modal: true,
+                detail: vscode.l10n.t(
+                    'The kubeconfig source management flow has completed.\n\nPlease try Service Discovery again to see your available contexts.',
+                ),
+            },
+            vscode.l10n.t('OK'),
+        );
     }
 }

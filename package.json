@@ -824,11 +824,6 @@
           "group": "1@2"
         },
         {
-          "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
-          "group": "inline@2"
-        },
-        {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
           "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesRootItem\\b/i",
           "group": "inline@0"

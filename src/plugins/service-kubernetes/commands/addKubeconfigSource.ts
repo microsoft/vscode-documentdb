@@ -77,13 +77,13 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
         {
             label: vscode.l10n.t('Default kubeconfig ({0})', defaultPath),
             detail: vscode.l10n.t('Uses KUBECONFIG env var or {0}', defaultPath),
-            iconPath: new vscode.ThemeIcon('key'),
+            iconPath: new vscode.ThemeIcon('home'),
             data: 'default',
         },
         {
             label: vscode.l10n.t('Add custom kubeconfig file…'),
             detail: vscode.l10n.t('Browse for a kubeconfig file on disk'),
-            iconPath: new vscode.ThemeIcon('file'),
+            iconPath: new vscode.ThemeIcon('folder-opened'),
             data: 'file',
         },
         {

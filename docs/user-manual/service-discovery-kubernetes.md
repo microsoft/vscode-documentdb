@@ -11,6 +11,8 @@ You can use Kubernetes discovery from either:
 - The **Service Discovery** tree, where you browse kubeconfig sources, contexts, namespaces, and discovered targets.
 - **New Connection** > **Service Discovery** > **Kubernetes**, where the wizard creates a connection from a discovered target.
 
+For a step-by-step lab that creates a local or AKS DocumentDB cluster and tests this feature end to end, see [Kubernetes Service Discovery: Getting Started and Test Lab](./service-discovery-kubernetes-getting-started).
+
 ## Multiple kubeconfig sources
 
 The Kubernetes node lists one or more **kubeconfig sources** as siblings:
@@ -111,7 +113,7 @@ A generic Kubernetes Service can opt in to discovery with this annotation or lab
 ```yaml
 metadata:
   annotations:
-    documentdb.vscode.extension/discovery: "true"
+    documentdb.vscode.extension/discovery: 'true'
 ```
 
 or:
@@ -119,7 +121,7 @@ or:
 ```yaml
 metadata:
   labels:
-    documentdb.vscode.extension/discovery: "true"
+    documentdb.vscode.extension/discovery: 'true'
 ```
 
 An opted-in Service is included when it has at least one TCP port. Ports with non-TCP protocols are ignored. If the Kubernetes port protocol is omitted, it is treated as TCP.
@@ -157,7 +159,7 @@ For generic Services, add a same-namespace Secret reference with this annotation
 ```yaml
 metadata:
   annotations:
-    documentdb.vscode.extension/credential-secret: "my-documentdb-credentials"
+    documentdb.vscode.extension/credential-secret: 'my-documentdb-credentials'
 ```
 
 The Secret name must be a valid Kubernetes DNS subdomain name. The Secret must contain `username` and `password` data keys.
@@ -177,12 +179,12 @@ Missing, invalid, or unreadable credential Secrets do not block discovery. The e
 
 ## Endpoint resolution and port forwarding
 
-| Kubernetes Service type | Behavior |
-| --- | --- |
-| **LoadBalancer** | Uses the first load balancer ingress hostname or IP. If ingress is not assigned yet, falls back to NodePort behavior when a NodePort is available. |
-| **NodePort** | Uses node `ExternalIP` addresses first. If only `InternalIP` addresses are available, the extension warns that the endpoint may not be reachable from your machine. |
-| **ClusterIP** | Starts a local port-forward tunnel to a ready backing pod and connects through `127.0.0.1:<localPort>`. |
-| **ExternalName** | Not resolved automatically. Use the external DNS name to connect manually. |
+| Kubernetes Service type | Behavior                                                                                                                                                            |
+| ----------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **LoadBalancer**        | Uses the first load balancer ingress hostname or IP. If ingress is not assigned yet, falls back to NodePort behavior when a NodePort is available.                  |
+| **NodePort**            | Uses node `ExternalIP` addresses first. If only `InternalIP` addresses are available, the extension warns that the endpoint may not be reachable from your machine. |
+| **ClusterIP**           | Starts a local port-forward tunnel to a ready backing pod and connects through `127.0.0.1:<localPort>`.                                                             |
+| **ExternalName**        | Not resolved automatically. Use the external DNS name to connect manually.                                                                                          |
 
 For ClusterIP targets the extension prompts for a local port when needed. If the port is already in use, the extension can use an existing process on that port (such as a manually started `kubectl port-forward`) if you confirm.
 
@@ -192,15 +194,15 @@ Active tunnels are tracked and reused for the same source, context, namespace, S
 
 The current implementation uses the following Kubernetes API operations. `services` only requires `list`; service `get` and `watch` are not required.
 
-| Purpose | API group | Resource | Verbs |
-| --- | --- | --- | --- |
-| List contexts' namespaces | `""` | `namespaces` | `list` |
-| Discover Services in a selected namespace | `""` | `services` | `list` |
-| Resolve NodePort and LoadBalancer NodePort fallback addresses | `""` | `nodes` | `list` |
-| Resolve ClusterIP port-forward backend pods | `""` | `endpoints` | `get` |
-| Open ClusterIP port-forward streams | `""` | `pods/portforward` | `create` |
-| Read DKO or generic credential Secrets | `""` | `secrets` | `get` |
-| Discover DKO resources | `documentdb.io` | `dbs` | `list` |
+| Purpose                                                       | API group       | Resource           | Verbs    |
+| ------------------------------------------------------------- | --------------- | ------------------ | -------- |
+| List contexts' namespaces                                     | `""`            | `namespaces`       | `list`   |
+| Discover Services in a selected namespace                     | `""`            | `services`         | `list`   |
+| Resolve NodePort and LoadBalancer NodePort fallback addresses | `""`            | `nodes`            | `list`   |
+| Resolve ClusterIP port-forward backend pods                   | `""`            | `endpoints`        | `get`    |
+| Open ClusterIP port-forward streams                           | `""`            | `pods/portforward` | `create` |
+| Read DKO or generic credential Secrets                        | `""`            | `secrets`          | `get`    |
+| Discover DKO resources                                        | `documentdb.io` | `dbs`              | `list`   |
 
 A broad ClusterRole for all Kubernetes discovery features looks like this:
 
@@ -210,27 +212,27 @@ kind: ClusterRole
 metadata:
   name: documentdb-vscode-discovery
 rules:
-  - apiGroups: [""]
-    resources: ["namespaces"]
-    verbs: ["list"]
-  - apiGroups: [""]
-    resources: ["services"]
-    verbs: ["list"]
-  - apiGroups: [""]
-    resources: ["nodes"]
-    verbs: ["list"]
-  - apiGroups: [""]
-    resources: ["endpoints"]
-    verbs: ["get"]
-  - apiGroups: [""]
-    resources: ["pods/portforward"]
-    verbs: ["create"]
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get"]
-  - apiGroups: ["documentdb.io"]
-    resources: ["dbs"]
-    verbs: ["list"]
+  - apiGroups: ['']
+    resources: ['namespaces']
+    verbs: ['list']
+  - apiGroups: ['']
+    resources: ['services']
+    verbs: ['list']
+  - apiGroups: ['']
+    resources: ['nodes']
+    verbs: ['list']
+  - apiGroups: ['']
+    resources: ['endpoints']
+    verbs: ['get']
+  - apiGroups: ['']
+    resources: ['pods/portforward']
+    verbs: ['create']
+  - apiGroups: ['']
+    resources: ['secrets']
+    verbs: ['get']
+  - apiGroups: ['documentdb.io']
+    resources: ['dbs']
+    verbs: ['list']
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
@@ -252,29 +254,29 @@ If RBAC denies an operation, discovery surfaces the failure as a warning, retry 
 
 ## Troubleshooting
 
-| Symptom | What to check |
-| --- | --- |
-| A source shows a kubeconfig error | Verify the file exists or the YAML is still valid; use **Refresh** or remove the source and add it again. |
-| No contexts under a source | Verify the kubeconfig contents — the source must declare at least one context. |
-| Namespace shows no DocumentDB services | Verify a DKO `dbs` resource exists, add the explicit discovery annotation/label, or expose a TCP known-port service. |
-| RBAC errors or retry nodes | Grant the relevant RBAC from the table above. Namespace and service list failures appear as retry/error nodes. |
-| LoadBalancer target is pending | Wait for load balancer ingress, or ensure NodePort fallback is available and reachable. |
-| NodePort uses an InternalIP | The address may only be reachable from inside the cluster network. Use a reachable node address or another service type if needed. |
-| ClusterIP connection fails | Check that a ready backing pod appears in the Service Endpoints, that `pods/portforward` is allowed, and that the chosen local port is free or intentionally reused. |
-| Credentials are not auto-filled | Verify the Secret name convention, namespace, RBAC `secrets get`, and `username` / `password` data keys. Discovery still works without auto-resolved credentials. |
+| Symptom                                | What to check                                                                                                                                                        |
+| -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A source shows a kubeconfig error      | Verify the file exists or the YAML is still valid; use **Refresh** or remove the source and add it again.                                                            |
+| No contexts under a source             | Verify the kubeconfig contents — the source must declare at least one context.                                                                                       |
+| Namespace shows no DocumentDB services | Verify a DKO `dbs` resource exists, add the explicit discovery annotation/label, or expose a TCP known-port service.                                                 |
+| RBAC errors or retry nodes             | Grant the relevant RBAC from the table above. Namespace and service list failures appear as retry/error nodes.                                                       |
+| LoadBalancer target is pending         | Wait for load balancer ingress, or ensure NodePort fallback is available and reachable.                                                                              |
+| NodePort uses an InternalIP            | The address may only be reachable from inside the cluster network. Use a reachable node address or another service type if needed.                                   |
+| ClusterIP connection fails             | Check that a ready backing pod appears in the Service Endpoints, that `pods/portforward` is allowed, and that the chosen local port is free or intentionally reused. |
+| Credentials are not auto-filled        | Verify the Secret name convention, namespace, RBAC `secrets get`, and `username` / `password` data keys. Discovery still works without auto-resolved credentials.    |
 
 ## Cluster provider detection
 
 The plugin identifies common cluster providers from the kubeconfig server URL, context name, or cluster name. The detected provider and region, when available, are shown in the tree description or tooltip.
 
-| Provider | Detection method |
-| --- | --- |
-| **AKS** | `*.azmk8s.io` server URL, with region extracted when available. |
-| **EKS** | `*.eks.amazonaws.com` server URL, with region extracted when available. |
-| **GKE** | `container.googleapis.com` or `*.gke.io` server URL. |
-| **OpenShift** | Server URL or context/cluster name contains `openshift`. |
-| **kind** | Context or cluster name starts with `kind-`. |
-| **minikube** | Context or cluster name contains `minikube`. |
-| **k3s / k3d** | Context or cluster name contains `k3s` or `k3d`. |
-| **Docker Desktop** | Context or cluster name contains `docker-desktop` or `docker desktop`. |
-| **Rancher** | Context or cluster name contains `rancher`. |
+| Provider           | Detection method                                                        |
+| ------------------ | ----------------------------------------------------------------------- |
+| **AKS**            | `*.azmk8s.io` server URL, with region extracted when available.         |
+| **EKS**            | `*.eks.amazonaws.com` server URL, with region extracted when available. |
+| **GKE**            | `container.googleapis.com` or `*.gke.io` server URL.                    |
+| **OpenShift**      | Server URL or context/cluster name contains `openshift`.                |
+| **kind**           | Context or cluster name starts with `kind-`.                            |
+| **minikube**       | Context or cluster name contains `minikube`.                            |
+| **k3s / k3d**      | Context or cluster name contains `k3s` or `k3d`.                        |
+| **Docker Desktop** | Context or cluster name contains `docker-desktop` or `docker desktop`.  |
+| **Rancher**        | Context or cluster name contains `rancher`.                             |

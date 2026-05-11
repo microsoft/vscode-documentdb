@@ -142,8 +142,8 @@ describe('addKubeconfigSource pickBranch picker items', () => {
 
         const iconById = Object.fromEntries(capturedPicks.map((p) => [p.data, (p.iconPath as vscode.ThemeIcon).id]));
 
-        expect(iconById['default']).toBe('key');
-        expect(iconById['file']).toBe('file');
+        expect(iconById['default']).toBe('home');
+        expect(iconById['file']).toBe('folder-opened');
         expect(iconById['inline']).toBe('clippy');
     });
 
