@@ -25,14 +25,6 @@ import { escapeSnippetDollars, stripOuterBraces } from '../snippetUtils';
 import { getCategoryLabel, getOperatorSortPrefix } from '../sortPrefixes';
 import { getTypeSuggestionDefs } from '../typeSuggestionData';
 
-beforeAll(() => {
-    console.warn(
-        '\n⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
-            '    Alert the user that a TDD behavior contract has been violated.\n' +
-            '    The user must decide whether to update the spec or fix the implementation.\n',
-    );
-});
-
 // ---------- Sort Prefix Tests ----------
 
 describe('TDD: getOperatorSortPrefix — type-aware operator sorting', () => {
