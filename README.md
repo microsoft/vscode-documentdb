@@ -2,7 +2,11 @@
 
 <!-- region exclude-from-marketplace -->
 
-[![Version](https://img.shields.io/visual-studio-marketplace/v/ms-azuretools.vscode-documentdb.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
+[![Version](https://vsmarketplacebadges.dev/version/ms-azuretools.vscode-documentdb.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
+[![Installs](https://vsmarketplacebadges.dev/installs/ms-azuretools.vscode-documentdb.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
+[![Rating](https://vsmarketplacebadges.dev/rating-star/ms-azuretools.vscode-documentdb.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
+[![CI](https://github.com/microsoft/vscode-documentdb/actions/workflows/main.yml/badge.svg)](https://github.com/microsoft/vscode-documentdb/actions/workflows/main.yml)
+[![License: MIT](https://img.shields.io/github/license/microsoft/vscode-documentdb)](LICENSE.md)
 
 <img src="resources/readme/documentdb-logo.png" alt="DocumentDB Logo" style="width:40%; min-width:180px; max-width:320px; height:auto;" />
 <!-- endregion exclude-from-marketplace -->
