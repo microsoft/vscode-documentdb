@@ -535,11 +535,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // Show a hint line and clickable settings link for errors that reference a VS Code setting
             if (error instanceof SettingsHintError) {
-                this.writeLine(
-                    this._outputFormatter.formatSystemMessage(
-                        `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
-                    ),
+                const settingsLink = this._outputFormatter.formatLinkSentinel(
+                    `${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
                 );
+                this.writeLine(this._outputFormatter.formatSystemMessage(`${error.settingsHint} ${settingsLink}`));
             }
 
             this._inputHandler.setEnabled(true);
@@ -691,11 +690,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Show a hint line and clickable settings link for errors that reference a VS Code setting
         if (error instanceof SettingsHintError) {
-            this.writeLine(
-                this._outputFormatter.formatSystemMessage(
-                    `${error.settingsHint} ${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
-                ),
+            const settingsLink = this._outputFormatter.formatLinkSentinel(
+                `${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
             );
+            this.writeLine(this._outputFormatter.formatSystemMessage(`${error.settingsHint} ${settingsLink}`));
         }
 
         // Detect query timeout errors (error code 50: MaxTimeMSExpired / ExceededTimeLimit)
@@ -894,7 +892,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         }
 
         const nsLabel = `[${ns.db}.${ns.collection}]`;
-        const actionText = `${ACTION_LINE_PREFIX}${nsLabel}  ${PLAYGROUND_ACTION_PREFIX}${nsLabel}`;
+        const collectionLink = this._outputFormatter.formatLinkSentinel(`${ACTION_LINE_PREFIX}${nsLabel}`);
+        const playgroundLink = this._outputFormatter.formatLinkSentinel(`${PLAYGROUND_ACTION_PREFIX}${nsLabel}`);
+        const actionText = `${collectionLink}  ${playgroundLink}`;
         this.writeLine(this._outputFormatter.formatSystemMessage(actionText));
     }
 
