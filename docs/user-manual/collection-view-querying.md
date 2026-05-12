@@ -164,12 +164,12 @@ These type-aware suggestions appear at the top of the completion list, followed 
 
 The autocompletion is aware of where your cursor is within the query expression and adjusts what it suggests accordingly:
 
-| Cursor Position                                | What You See |
-| ---------------------------------------------- | ------------ | ----------------------------------------------------------------------------------- |
-| **At a key position** (e.g., `{                | }`)          | Field names and logical operators (`$and`, `$or`, `$nor`, `$not`)                   |
-| **At a value position** (e.g., `{ age:         | }`)          | Type-aware suggestions, comparison operators, BSON constructors, JavaScript globals |
-| **Inside an operator object** (e.g., `{ age: { | } }`)        | Comparison and query operators without outer braces                                 |
-| **Inside an array** (e.g., `{ $and: [          | ] }`)        | Same as key position (each array element is a query document)                       |
+| Cursor Position                                           | What You See                                                                        |
+| --------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **At a key position** (e.g., `{ \| }`)                   | Field names and logical operators (`$and`, `$or`, `$nor`, `$not`)                   |
+| **At a value position** (e.g., `{ age: \| }`)            | Type-aware suggestions, comparison operators, BSON constructors, JavaScript globals |
+| **Inside an operator object** (e.g., `{ age: { \| } }`)  | Comparison and query operators without outer braces                                 |
+| **Inside an array** (e.g., `{ $and: [ \| ] }`)           | Same as key position (each array element is a query document)                       |
 
 This means you see the right suggestions at the right time, instead of a flat list of everything.
 
