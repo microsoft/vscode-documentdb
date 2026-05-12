@@ -59,16 +59,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                         `[KubernetesDiscovery] Failed to list services in "${this.contextInfo.name}/${this.namespace}": ${errorMessage}`,
                     );
                     context.telemetry.properties.serviceFetchError = 'true';
-                    return [
-                        createGenericElementWithContext({
-                            contextValue: 'error',
-                            id: `${this.id}/retry`,
-                            label: vscode.l10n.t('Failed to list services. Click to retry.'),
-                            iconPath: new vscode.ThemeIcon('refresh'),
-                            commandId: 'vscode-documentdb.command.internal.retry',
-                            commandArgs: [this],
-                        }),
-                    ];
+                    return createServiceErrorChildren(this.id, errorMessage, this);
                 }
 
                 context.telemetry.measurements.discoveryResourcesCount = services.length;
@@ -124,4 +115,46 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                     : vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
+}
+
+/**
+ * Builds tree children for a service-list error with a classified summary,
+ * actionable hint in the tooltip, and a retry action.
+ */
+function createServiceErrorChildren(parentId: string, errorMessage: string, retryTarget: TreeElement): TreeElement[] {
+    const lower = errorMessage.toLowerCase();
+
+    let summary: string;
+    let hint: string;
+
+    if (lower.includes('403') || lower.includes('forbidden')) {
+        summary = vscode.l10n.t('Access denied listing services (403 Forbidden)');
+        hint = vscode.l10n.t('Your account lacks permission to list services in this namespace.');
+    } else if (lower.includes('401') || lower.includes('unauthorized')) {
+        summary = vscode.l10n.t('Authentication failed listing services (401)');
+        hint = vscode.l10n.t('Credentials may have expired. Re-authenticate with your cluster.');
+    } else {
+        const truncated = errorMessage.length > 120 ? errorMessage.slice(0, 117) + '...' : errorMessage;
+        summary = vscode.l10n.t('Failed to list services: {0}', truncated);
+        hint = vscode.l10n.t('Check the output channel for details.');
+    }
+
+    return [
+        createGenericElementWithContext({
+            contextValue: 'error',
+            id: `${parentId}/error-info`,
+            label: summary,
+            description: hint,
+            iconPath: new vscode.ThemeIcon('warning'),
+            tooltip: `${summary}\n\n${hint}\n\nFull error: ${errorMessage}`,
+        }),
+        createGenericElementWithContext({
+            contextValue: 'error',
+            id: `${parentId}/retry`,
+            label: vscode.l10n.t('Retry'),
+            iconPath: new vscode.ThemeIcon('refresh'),
+            commandId: 'vscode-documentdb.command.internal.retry',
+            commandArgs: [retryTarget],
+        }),
+    ];
 }

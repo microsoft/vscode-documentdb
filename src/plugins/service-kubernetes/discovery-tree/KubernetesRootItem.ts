@@ -33,17 +33,7 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
         const visibleSources = sources.filter((s) => !hiddenIds.has(s.id));
 
         if (sources.length === 0) {
-            // Defensive: should never happen post-migration. Surface a recovery path.
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/no-sources`,
-                    label: vscode.l10n.t('No kubeconfig sources are configured.'),
-                    iconPath: new vscode.ThemeIcon('warning'),
-                }),
-                this.createAddSourceChild(),
-                this.createRetryChild(),
-            ];
+            return [this.createAddSourceChild()];
         }
 
         if (visibleSources.length === 0) {

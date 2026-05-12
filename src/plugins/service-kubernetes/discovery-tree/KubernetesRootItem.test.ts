@@ -88,17 +88,15 @@ describe('KubernetesRootItem (v2 multi-source)', () => {
         expect(labels).toEqual(['Default kubeconfig', 'team.yaml', 'Pasted YAML 1']);
     });
 
-    it('returns recovery actions when readSources unexpectedly returns an empty list', async () => {
+    it('returns only add-source action when no sources are configured', async () => {
         mockReadSources.mockResolvedValue([]);
 
         const root = new KubernetesRootItem('discoveryView');
         const children = await root.getChildren();
 
-        expect(children.length).toBeGreaterThanOrEqual(2);
+        expect(children).toHaveLength(1);
         const labels = children.map((c) => (c as unknown as { label?: string }).label);
-        expect(labels).toEqual(
-            expect.arrayContaining(['No kubeconfig sources are configured.', 'Add kubeconfig source\u2026', 'Retry']),
-        );
+        expect(labels).toEqual(['Add kubeconfig source\u2026']);
     });
 
     it('exposes a tree item with the Kubernetes label and collapsed state', () => {
