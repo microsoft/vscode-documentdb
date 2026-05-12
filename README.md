@@ -13,7 +13,7 @@
 
 Connect with a connection string, browse through cloud service discovery, or use a local emulator. Everything runs inside VS Code with no external tools required.
 
-![DocumentDB for VS Code showing the Collection View with context-aware autocompletion](resources/readme/vscode-documentdb-vcore.png)
+![DocumentDB for VS Code showing the Collection View with context-aware autocompletion](resources/readme/vscode-documentdb-hero-screenshot.png)
 
 # Features
 
