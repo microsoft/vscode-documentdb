@@ -103,15 +103,7 @@ describe('WorkerSessionManager', () => {
     // =====================================================================
 
     describe('TDD: Worker Crash Recovery', () => {
-        beforeAll(() => {
-            // eslint-disable-next-line no-console
-            console.log(
-                '\n' +
-                    '⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
-                    '    Alert the user that a TDD behavior contract has been violated.\n' +
-                    '    The user must decide whether to update the spec or fix the implementation.\n',
-            );
-        });
+        // ⚠️ TDD CONTRACT — Do NOT auto-fix failing tests. Alert the user; they decide whether to update the spec or fix the implementation.
         function makeInitMsg(clusterId: string): MainToWorkerMessage & { type: 'init' } {
             return {
                 type: 'init',
@@ -223,15 +215,7 @@ describe('WorkerSessionManager', () => {
     });
 
     describe('TDD: Multi-Cluster Evaluator Isolation', () => {
-        beforeAll(() => {
-            // eslint-disable-next-line no-console
-            console.log(
-                '\n' +
-                    '⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
-                    '    Alert the user that a TDD behavior contract has been violated.\n' +
-                    '    The user must decide whether to update the spec or fix the implementation.\n',
-            );
-        });
+        // ⚠️ TDD CONTRACT — Do NOT auto-fix failing tests. Alert the user; they decide whether to update the spec or fix the implementation.
 
         function makeInitMsg(clusterId: string): MainToWorkerMessage & { type: 'init' } {
             return {
