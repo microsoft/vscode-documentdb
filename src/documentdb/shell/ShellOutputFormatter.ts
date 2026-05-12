@@ -15,6 +15,8 @@ import { type SerializableExecutionResult } from '../playground/workerTypes';
 const ANSI = {
     reset: '\x1b[0m',
     bold: '\x1b[1m',
+    underline: '\x1b[4m',
+    noUnderline: '\x1b[24m',
     red: '\x1b[31m',
     green: '\x1b[32m',
     yellow: '\x1b[33m',
@@ -327,6 +329,20 @@ export class ShellOutputFormatter {
                 return line;
             })
             .join('\r\n');
+    }
+
+    /**
+     * Wrap text with ANSI underline codes to visually indicate a clickable link.
+     *
+     * Uses `\x1b[4m` (underline on) and `\x1b[24m` (underline off) instead of
+     * a full reset, so that surrounding styles (e.g., gray from {@link formatSystemMessage})
+     * are preserved.
+     *
+     * Underline is applied regardless of the `colorSupport` setting because it
+     * communicates clickability, not decoration.
+     */
+    formatLinkSentinel(text: string): string {
+        return `${ANSI.underline}${text}${ANSI.noUnderline}`;
     }
 
     // ─── Private: Settings ───────────────────────────────────────────────────
