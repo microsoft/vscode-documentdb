@@ -49,7 +49,7 @@ The extension samples documents from your collection and analyzes their structur
 
 ### Operators from Official Documentation
 
-All 308 DocumentDB API operators, stages, accumulators, BSON constructors, and system variables are available as completion items. Each entry includes a description, a code snippet, and a link to the official documentation page. The operator data is automatically sourced from the [DocumentDB compatibility reference](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language) and the [DocumentDB operator documentation](https://learn.microsoft.com/en-us/azure/documentdb/operators/), ensuring it stays up to date with the latest supported features.
+All supported DocumentDB API operators, stages, accumulators, BSON constructors, and system variables (over 300 in total) are available as completion items. Each entry includes a description, a code snippet, and a link to the official documentation page. The operator data is automatically sourced from the [DocumentDB compatibility reference](https://learn.microsoft.com/en-us/azure/documentdb/compatibility-query-language) and the [DocumentDB operator documentation](https://learn.microsoft.com/en-us/azure/documentdb/operators/), ensuring it stays up to date with the latest supported features.
 
 ## The @documentdb-js Packages
 
