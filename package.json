@@ -1356,6 +1356,24 @@
               "image": "resources/walkthroughs/copy-and-paste.png",
               "altText": "Copy and Paste Collections"
             }
+          },
+          {
+            "id": "query-playground-v0.8.0",
+            "title": "7. Write Scripts in the Query Playground",
+            "description": "Create `.documentdb.js` files to write and run JavaScript queries with CodeLens execution, autocompletion, and per-file connections. No external tools needed. [Read more...](https://microsoft.github.io/vscode-documentdb/user-manual/query-playground)",
+            "media": {
+              "image": "resources/walkthroughs/query-playground.png",
+              "altText": "Query Playground with CodeLens Run buttons and JavaScript code"
+            }
+          },
+          {
+            "id": "interactive-shell-v0.8.0",
+            "title": "8. Explore with the Interactive Shell",
+            "description": "Open a built-in REPL terminal from any cluster, database, or collection. Use shell commands, tab completion, syntax highlighting, and persistent variables. No external tools needed. [Read more...](https://microsoft.github.io/vscode-documentdb/user-manual/interactive-shell)",
+            "media": {
+              "image": "resources/walkthroughs/interactive-shell.png",
+              "altText": "Interactive Shell with tab completion and syntax highlighting"
+            }
           }
         ]
       }
