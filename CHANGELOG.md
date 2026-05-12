@@ -1,5 +1,29 @@
 # Change Log
 
+## 0.8.0
+
+### New Features
+
+- **Context-Aware Autocompletion in Collection View**: The filter, project, sort, and aggregation editors now provide schema-aware field suggestions, type-aware operator ordering, hover documentation, real-time syntax validation, and relaxed query syntax (unquoted keys, BSON constructors, JavaScript expressions). [#508](https://github.com/microsoft/vscode-documentdb/pull/508), [#506](https://github.com/microsoft/vscode-documentdb/pull/506), [#513](https://github.com/microsoft/vscode-documentdb/pull/513), [#518](https://github.com/microsoft/vscode-documentdb/pull/518)
+- **Query Playground**: Introduces `.documentdb.js` files for writing and running JavaScript scripts against your cluster with CodeLens execution (per-block and Run All), `console.log()`/`print()`/`printjson()` support, per-file connections, and autocompletion for `db.*` chains and schema fields. No external tools required: the runtime is bundled and works with Entra ID. [#508](https://github.com/microsoft/vscode-documentdb/pull/508), [#573](https://github.com/microsoft/vscode-documentdb/pull/573), [#589](https://github.com/microsoft/vscode-documentdb/pull/589)
+- **Interactive Shell**: A full REPL terminal in VS Code with shell commands (`show dbs`, `use <db>`, `help`, `it`, `exit`), persistent eval context, syntax highlighting, tab completion with ghost text, `Ctrl+C` cancellation, and clickable result links. Bundled runtime, no external tools needed, works with Entra ID. [#508](https://github.com/microsoft/vscode-documentdb/pull/508), [#573](https://github.com/microsoft/vscode-documentdb/pull/573), [#576](https://github.com/microsoft/vscode-documentdb/pull/576), [#580](https://github.com/microsoft/vscode-documentdb/pull/580)
+- **Cross-Feature Navigation**: Collection View, Query Playground, and Interactive Shell are linked with toolbar buttons, CodeLens actions, clickable terminal links, and clipboard copy/paste for seamless query movement between surfaces. [#589](https://github.com/microsoft/vscode-documentdb/pull/589)
+- **About Dialog**: Adds an "About" entry to the Help & Feedback view with extension version, VS Code version, OS details, and registered plugins, plus a Copy button for bug reporting. [#612](https://github.com/microsoft/vscode-documentdb/pull/612)
+
+### Improvements
+
+- **Query Insights: Static Analysis**: Improved performance evaluation with selectivity and fetch overhead metrics, three-color badge system, index strategy advisories, and edge case fixes. AI analysis now aligns with static analysis to avoid contradictions. Single-field bitmap index score demotion for high-selectivity queries. [#615](https://github.com/microsoft/vscode-documentdb/pull/615), [#616](https://github.com/microsoft/vscode-documentdb/pull/616), [#623](https://github.com/microsoft/vscode-documentdb/pull/623)
+- **Internal Package Rename**: Renamed internal packages to `@documentdb-js` scope for consistency. [#613](https://github.com/microsoft/vscode-documentdb/pull/613)
+- **Prerelease Version Migration**: Implemented migration for prerelease version handling in notifications. [#610](https://github.com/microsoft/vscode-documentdb/pull/610)
+
+### Fixes
+
+- **Duplicate Connection Reveal**: Fixed an issue where revealing a duplicate connection failed when the connection was inside a folder. [#602](https://github.com/microsoft/vscode-documentdb/pull/602)
+
+### Dependencies
+
+- **Dependency Updates**: Updated `fast-uri`, `fast-xml-builder`, `basic-ftp`, `path-to-regexp`, `fast-xml-parser`, and `@aws-sdk/xml-builder`. [#624](https://github.com/microsoft/vscode-documentdb/pull/624), [#606](https://github.com/microsoft/vscode-documentdb/pull/606), [#607](https://github.com/microsoft/vscode-documentdb/pull/607), [#609](https://github.com/microsoft/vscode-documentdb/pull/609), [#627](https://github.com/microsoft/vscode-documentdb/pull/627), [#628](https://github.com/microsoft/vscode-documentdb/pull/628), [#629](https://github.com/microsoft/vscode-documentdb/pull/629)
+
 ## 0.7.4
 
 ### New Features & Improvements

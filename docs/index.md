@@ -61,6 +61,13 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 - [Data Migrations (Experimental)](./user-manual/data-migrations)
 - [Copy and Paste Collections](./user-manual/copy-and-paste.md)
 
+### Querying
+
+- [Collection View: Querying](./user-manual/collection-view-querying)
+- [Query Playground](./user-manual/query-playground)
+- [Interactive Shell](./user-manual/interactive-shell)
+- [How It Works Behind the Scenes](./user-manual/query-runtime)
+
 ## Release Notes
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
