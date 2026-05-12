@@ -162,6 +162,48 @@ describe('ShellTerminalLinkProvider', () => {
             });
         });
 
+        it('should handle underline-wrapped action line', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+
+            // Underline wrapping: \x1b[4m ... \x1b[24m
+            const actionLine = `\x1b[4m${ACTION_LINE_PREFIX}[mydb.users]\x1b[24m`;
+            const context = {
+                terminal: mockTerminal,
+                line: actionLine,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(1);
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                startIndex: 0,
+                length: actionLine.length,
+                databaseName: 'mydb',
+                collectionName: 'users',
+            });
+        });
+
+        it('should handle gray + underline wrapped action line', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+
+            // Gray wrapping outside, underline inside (matches real output)
+            const actionLine = `\x1b[90m\x1b[4m${ACTION_LINE_PREFIX}[mydb.users]\x1b[24m\x1b[0m`;
+            const context = {
+                terminal: mockTerminal,
+                line: actionLine,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(1);
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                startIndex: 0,
+                length: actionLine.length,
+                databaseName: 'mydb',
+                collectionName: 'users',
+            });
+        });
+
         it('should not match partial action line text', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
 
@@ -243,6 +285,25 @@ describe('ShellTerminalLinkProvider', () => {
             });
         });
 
+        it('should handle underline-wrapped settings action line', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-id'));
+
+            const actionLine = `\x1b[90m\x1b[4m${SETTINGS_ACTION_PREFIX}[documentDB.shell.initTimeout]\x1b[24m\x1b[0m`;
+            const context = {
+                terminal: mockTerminal,
+                line: actionLine,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(1);
+            expect(links[0]).toMatchObject({
+                linkType: 'settings',
+                startIndex: 0,
+                length: actionLine.length,
+                settingKey: 'documentDB.shell.initTimeout',
+            });
+        });
+
         it('should not match settings line for non-shell terminals', () => {
             const context = {
                 terminal: { name: 'bash' } as unknown as vscode.Terminal,
@@ -313,6 +374,36 @@ describe('ShellTerminalLinkProvider', () => {
             });
             expect(links[1]).toMatchObject({
                 linkType: 'playground',
+                databaseName: 'mydb',
+                collectionName: 'orders',
+            });
+        });
+
+        it('should detect both links when each is individually underline-wrapped', () => {
+            registerShellTerminal(mockTerminal, () => mockShellInfo('test-cluster-id'));
+
+            // Matches real output: gray wraps the whole line, each link segment is underlined separately
+            const collectionPart = `\x1b[90m\x1b[4m${ACTION_LINE_PREFIX}[mydb.orders]\x1b[24m`;
+            const playgroundPart = `\x1b[4m${PLAYGROUND_ACTION_PREFIX}[mydb.orders]\x1b[24m\x1b[0m`;
+            const actionLine = `${collectionPart}  ${playgroundPart}`;
+            const context = {
+                terminal: mockTerminal,
+                line: actionLine,
+            } as vscode.TerminalLinkContext;
+
+            const links = provider.provideTerminalLinks(context);
+            expect(links).toHaveLength(2);
+            expect(links[0]).toMatchObject({
+                linkType: 'collectionView',
+                startIndex: 0,
+                length: collectionPart.length,
+                databaseName: 'mydb',
+                collectionName: 'orders',
+            });
+            expect(links[1]).toMatchObject({
+                linkType: 'playground',
+                startIndex: collectionPart.length + 2, // +2 for "  " separator
+                length: playgroundPart.length,
                 databaseName: 'mydb',
                 collectionName: 'orders',
             });
