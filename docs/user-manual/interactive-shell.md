@@ -137,7 +137,7 @@ The shell colorizes your input in real time as you type:
 | Yellow  | Numbers, `$`-prefixed operators, escape sequences |
 | Magenta | Shell commands (`show`, `use`, `it`, etc.)        |
 | Gray    | Comments                                          |
-| Red     | Regex literals, unterminated strings              |
+| Red     | Regex literals (and unterminated string errors)   |
 
 Syntax highlighting can be disabled via the `documentDB.shell.display.colorSupport` setting for accessibility (screen readers) or piped output.
 

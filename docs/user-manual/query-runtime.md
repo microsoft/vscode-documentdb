@@ -83,7 +83,7 @@ The analyzer uses version-based caching so derived data (like the field list) is
 
 ### @documentdb-js/operator-registry
 
-A reference catalog of all operators supported by DocumentDB. It contains 308 entries across query operators, update operators, expression operators, aggregation stages, accumulators, window operators, BSON type constructors, and system variables. Each entry includes:
+A reference catalog of all operators supported by DocumentDB. It contains over 300 entries across query operators, update operators, expression operators, aggregation stages, accumulators, window operators, BSON type constructors, and system variables. Each entry includes:
 
 - **Value**: The operator name (e.g., `$gt`, `$match`, `ObjectId`).
 - **Description**: A human-readable explanation of what the operator does.

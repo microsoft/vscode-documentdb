@@ -28,10 +28,11 @@ Connect to any MongoDB or DocumentDB instance: cloud, hybrid cloud, on-premises,
 
 DocumentDB for VS Code focuses on providing developer productivity features with minimal setup.
 
+- **Query Your Data, Your Way**: Three integrated query surfaces: the visual **Collection View** with context-aware autocompletion, the file-based **Query Playground** for JavaScript scripts, and the built-in **Interactive Shell** for ad-hoc exploration. All three share schema awareness and are linked with navigation actions.
 - **Multiple Data Views**: Inspect collections using **Table**, **Tree**, or **JSON** layouts, with built-in pagination.
-- **Query Editing**: Execute `find` queries with syntax highlighting, auto-completion, and field name suggestions.
 - **Document Management**: Create, edit, and delete documents directly from VS Code.
 - **Data Import/Export**: Quickly import JSON files or export documents, query results, or collections.
+- **Query Insights**: Analyze query performance with explain plans, static analysis badges, and AI-powered index recommendations.
 
 ### Open Development
 

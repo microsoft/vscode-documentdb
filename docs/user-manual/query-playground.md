@@ -27,7 +27,7 @@ Each playground file uses the `.documentdb.js` extension and behaves like a regu
 There are several ways to open a new Query Playground:
 
 1. **From the tree view**: Right-click a database or collection node in the Connections, Discovery, or Azure views, then select **New Query Playground**. The playground will be pre-connected to that cluster and database.
-2. **From the inline button**: Click the keyboard icon (middle icon) next to a database or collection node in the tree view.
+2. **From the inline button**: Click the middle inline button next to a database or collection node in the tree view.
 3. **From the Collection View**: Use the **Open in Playground** toolbar button to export your current find query into a new playground file.
 4. **From the Command Palette**: Run `DocumentDB: New Query Playground`.
 

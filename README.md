@@ -19,7 +19,7 @@ Connect with a connection string, browse through cloud service discovery, or use
 
 ## Query Your Data, Your Way
 
-Three integrated query surfaces let you work with your data however you prefer: visually, in scripts, or at a command line. All three share the same schema awareness and are linked together with navigation actions, so you can move your work between them seamlessly.
+Three integrated query surfaces let you work with your data however you prefer: visually, in scripts, or at a command line. All three share the same schema awareness and are linked with navigation actions, so you can move your work between them seamlessly.
 
 ### Collection View
 
@@ -138,7 +138,7 @@ This project may contain trademarks or logos for projects, products, or services
 
 # Telemetry
 
-VS Code collects usage data and sends it to Microsoft to help improve our products and services. Read our [privacy statement](https://go.microsoft.com/fwlink/?LinkId=521839) to learn more. If you don't wish to send usage data to Microsoft, you can set the `telemetry.enableTelemetry` setting to `false`. Learn more in our [FAQ](https://code.visualstudio.com/docs/supporting/faq#_how-to-disable-telemetry-reporting).
+VS Code collects usage data and sends it to Microsoft to help improve our products and services. Read our [privacy statement](https://go.microsoft.com/fwlink/?LinkId=521839) to learn more. If you don't wish to send usage data to Microsoft, you can set the `telemetry.telemetryLevel` setting to `off`. Learn more in our [FAQ](https://code.visualstudio.com/docs/supporting/faq#_how-to-disable-telemetry-reporting).
 
 # Feedback Collection
 
