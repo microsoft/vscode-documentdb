@@ -203,9 +203,14 @@ export async function loadKubeConfig(kubeconfigPath?: string, kubeconfigContents
     const k8s = await import('@kubernetes/client-node');
     const kc = new k8s.KubeConfig();
 
+    // Skip malformed entries (e.g. contexts with missing names) instead of
+    // aborting the entire load. Real-world kubeconfigs often contain stale or
+    // incomplete entries left behind by tooling.
+    const tolerantOpts = { onInvalidEntry: 'filter' as const };
+
     if (kubeconfigContents) {
         try {
-            kc.loadFromString(kubeconfigContents);
+            kc.loadFromString(kubeconfigContents, tolerantOpts);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(
@@ -219,7 +224,7 @@ export async function loadKubeConfig(kubeconfigPath?: string, kubeconfigContents
         // Explicit path — load from that file
         const resolvedPath = resolveKubeconfigPath(kubeconfigPath);
         try {
-            kc.loadFromFile(resolvedPath);
+            kc.loadFromFile(resolvedPath, tolerantOpts);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(
@@ -236,7 +241,7 @@ export async function loadKubeConfig(kubeconfigPath?: string, kubeconfigContents
         // - ~/.kube/config fallback
         // - In-cluster service account tokens
         try {
-            kc.loadFromDefault();
+            kc.loadFromDefault(tolerantOpts);
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(

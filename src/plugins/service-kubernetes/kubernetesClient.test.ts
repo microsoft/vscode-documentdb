@@ -53,6 +53,7 @@ jest.mock('@kubernetes/client-node', () => ({
     })),
     CoreV1Api: jest.fn(),
     CustomObjectsApi: jest.fn(),
+    ActionOnInvalid: { THROW: 'throw', FILTER: 'filter' },
 }));
 
 function createServiceInfo(overrides: Partial<KubeServiceInfo>): KubeServiceInfo {
@@ -114,7 +115,7 @@ describe('kubernetesClient', () => {
 
             const result = await loadKubeConfig('/custom/path/config');
             expect(result).toBeDefined();
-            expect(mockLoadFromFile).toHaveBeenCalledWith('/custom/path/config');
+            expect(mockLoadFromFile).toHaveBeenCalledWith('/custom/path/config', { onInvalidEntry: 'filter' });
         });
 
         it('should load kubeconfig from pasted YAML', async () => {
@@ -124,7 +125,7 @@ describe('kubernetesClient', () => {
 
             const result = await loadKubeConfig(undefined, 'apiVersion: v1');
             expect(result).toBeDefined();
-            expect(mockLoadFromString).toHaveBeenCalledWith('apiVersion: v1');
+            expect(mockLoadFromString).toHaveBeenCalledWith('apiVersion: v1', { onInvalidEntry: 'filter' });
             expect(mockLoadFromDefault).not.toHaveBeenCalled();
             expect(mockLoadFromFile).not.toHaveBeenCalled();
         });
@@ -186,7 +187,7 @@ describe('kubernetesClient', () => {
 
             const result = await loadKubeConfig('/custom/path/config');
             expect(result).toBeDefined();
-            expect(mockLoadFromFile).toHaveBeenCalledWith('/custom/path/config');
+            expect(mockLoadFromFile).toHaveBeenCalledWith('/custom/path/config', { onInvalidEntry: 'filter' });
         });
     });
 
@@ -218,7 +219,7 @@ describe('kubernetesClient', () => {
 
             const result = await loadConfiguredKubeConfig('abc');
             expect(result).toBeDefined();
-            expect(mockLoadFromFile).toHaveBeenCalledWith('/abs/team.yaml');
+            expect(mockLoadFromFile).toHaveBeenCalledWith('/abs/team.yaml', { onInvalidEntry: 'filter' });
         });
 
         it('loads from secret storage for an inline source', async () => {
@@ -233,7 +234,7 @@ describe('kubernetesClient', () => {
             const result = await loadConfiguredKubeConfig('xyz');
             expect(result).toBeDefined();
             expect(mockReadInlineYaml).toHaveBeenCalledTimes(1);
-            expect(mockLoadFromString).toHaveBeenCalledWith('apiVersion: v1');
+            expect(mockLoadFromString).toHaveBeenCalledWith('apiVersion: v1', { onInvalidEntry: 'filter' });
         });
 
         it('throws when the requested source id is unknown', async () => {
