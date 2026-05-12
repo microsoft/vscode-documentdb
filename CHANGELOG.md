@@ -13,6 +13,9 @@
 ### Improvements
 
 - **Query Insights: Static Analysis**: Improved performance evaluation with selectivity and fetch overhead metrics, three-color badge system, index strategy advisories, and edge case fixes. AI analysis now aligns with static analysis to avoid contradictions. Single-field bitmap index score demotion for high-selectivity queries. [#615](https://github.com/microsoft/vscode-documentdb/pull/615), [#616](https://github.com/microsoft/vscode-documentdb/pull/616), [#623](https://github.com/microsoft/vscode-documentdb/pull/623)
+- **Double-Click to Open Collection View**: The Documents tree item now requires a double-click to open the Collection View, preventing accidental tab opens on single-click browse.
+- **Custom Editor Tab Icons**: Collection View, Document View, and Query Playground tabs now display dedicated icons instead of the default webview icon.
+- **Telemetry**: Simplified and standardized telemetry instrumentation across connection, discovery, shell, and playground features. [#601](https://github.com/microsoft/vscode-documentdb/pull/601), [#544](https://github.com/microsoft/vscode-documentdb/pull/544), [#599](https://github.com/microsoft/vscode-documentdb/pull/599)
 - **Internal Package Rename**: Renamed internal packages to `@documentdb-js` scope for consistency. [#613](https://github.com/microsoft/vscode-documentdb/pull/613)
 - **Prerelease Version Migration**: Implemented migration for prerelease version handling in notifications. [#610](https://github.com/microsoft/vscode-documentdb/pull/610)
 
