@@ -535,10 +535,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
             // Show a hint line and clickable settings link for errors that reference a VS Code setting
             if (error instanceof SettingsHintError) {
-                const settingsLink = this._outputFormatter.formatLinkSentinel(
-                    `${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
-                );
-                this.writeLine(this._outputFormatter.formatSystemMessage(`${error.settingsHint} ${settingsLink}`));
+                this.writeSettingsHintLine(error);
             }
 
             this._inputHandler.setEnabled(true);
@@ -690,10 +687,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Show a hint line and clickable settings link for errors that reference a VS Code setting
         if (error instanceof SettingsHintError) {
-            const settingsLink = this._outputFormatter.formatLinkSentinel(
-                `${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`,
-            );
-            this.writeLine(this._outputFormatter.formatSystemMessage(`${error.settingsHint} ${settingsLink}`));
+            this.writeSettingsHintLine(error);
         }
 
         // Detect query timeout errors (error code 50: MaxTimeMSExpired / ExceededTimeLimit)
@@ -864,6 +858,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     }
 
     // ─── Private: Action line ("Open in Collection View") ────────────────────
+
+    /**
+     * Write a hint line with a clickable settings link for a {@link SettingsHintError}.
+     */
+    private writeSettingsHintLine(error: SettingsHintError): void {
+        const settingsLink = this._outputFormatter.formatLinkSentinel(`${SETTINGS_ACTION_PREFIX}[${error.settingKey}]`);
+        this.writeLine(this._outputFormatter.formatSystemMessage(`${error.settingsHint} ${settingsLink}`));
+    }
 
     /**
      * If the result came from a query with a known namespace (db + collection),

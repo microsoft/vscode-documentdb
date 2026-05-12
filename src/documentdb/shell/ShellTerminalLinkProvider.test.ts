@@ -176,6 +176,8 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'collectionView',
+                startIndex: 0,
+                length: actionLine.length,
                 databaseName: 'mydb',
                 collectionName: 'users',
             });
@@ -195,6 +197,8 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'collectionView',
+                startIndex: 0,
+                length: actionLine.length,
                 databaseName: 'mydb',
                 collectionName: 'users',
             });
@@ -294,6 +298,8 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(1);
             expect(links[0]).toMatchObject({
                 linkType: 'settings',
+                startIndex: 0,
+                length: actionLine.length,
                 settingKey: 'documentDB.shell.initTimeout',
             });
         });
@@ -377,10 +383,9 @@ describe('ShellTerminalLinkProvider', () => {
             registerShellTerminal(mockTerminal, () => mockShellInfo('test-cluster-id'));
 
             // Matches real output: gray wraps the whole line, each link segment is underlined separately
-            const actionLine =
-                `\x1b[90m\x1b[4m${ACTION_LINE_PREFIX}[mydb.orders]\x1b[24m` +
-                `  ` +
-                `\x1b[4m${PLAYGROUND_ACTION_PREFIX}[mydb.orders]\x1b[24m\x1b[0m`;
+            const collectionPart = `\x1b[90m\x1b[4m${ACTION_LINE_PREFIX}[mydb.orders]\x1b[24m`;
+            const playgroundPart = `\x1b[4m${PLAYGROUND_ACTION_PREFIX}[mydb.orders]\x1b[24m\x1b[0m`;
+            const actionLine = `${collectionPart}  ${playgroundPart}`;
             const context = {
                 terminal: mockTerminal,
                 line: actionLine,
@@ -390,11 +395,15 @@ describe('ShellTerminalLinkProvider', () => {
             expect(links).toHaveLength(2);
             expect(links[0]).toMatchObject({
                 linkType: 'collectionView',
+                startIndex: 0,
+                length: collectionPart.length,
                 databaseName: 'mydb',
                 collectionName: 'orders',
             });
             expect(links[1]).toMatchObject({
                 linkType: 'playground',
+                startIndex: collectionPart.length + 2, // +2 for "  " separator
+                length: playgroundPart.length,
                 databaseName: 'mydb',
                 collectionName: 'orders',
             });
