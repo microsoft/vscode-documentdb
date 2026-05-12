@@ -2,9 +2,6 @@
 
 <!-- region exclude-from-marketplace -->
 
-[![Version](https://vsmarketplacebadges.dev/version/ms-azuretools.vscode-documentdb.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
-[![Installs](https://vsmarketplacebadges.dev/installs/ms-azuretools.vscode-documentdb.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
-[![Rating](https://vsmarketplacebadges.dev/rating-star/ms-azuretools.vscode-documentdb.svg)](https://marketplace.visualstudio.com/items?itemName=ms-azuretools.vscode-documentdb)
 [![CI](https://github.com/microsoft/vscode-documentdb/actions/workflows/main.yml/badge.svg)](https://github.com/microsoft/vscode-documentdb/actions/workflows/main.yml)
 [![License: MIT](https://img.shields.io/github/license/microsoft/vscode-documentdb)](LICENSE.md)
 
