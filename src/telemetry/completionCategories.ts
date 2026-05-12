@@ -38,11 +38,12 @@ export function normalizeCompletionCategory(raw: string | undefined): Completion
 // Sources — which surface produced the completion
 // ---------------------------------------------------------------------------
 
-export type CompletionSource = 'playground' | 'collectionView';
+export type CompletionSource = 'playground' | 'collectionView' | 'shell';
 
 export const CompletionSources = {
     Playground: 'playground',
     CollectionView: 'collectionView',
+    Shell: 'shell',
 } as const satisfies Record<string, CompletionSource>;
 
 const validSources: ReadonlySet<string> = new Set<string>(Object.values(CompletionSources));
