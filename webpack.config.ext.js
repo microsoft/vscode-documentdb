@@ -58,7 +58,6 @@ module.exports = (env, { mode }) => {
                 '@aws-sdk/credential-providers': 'commonjs @aws-sdk/credential-providers',
                 'gcp-metadata': 'commonjs gcp-metadata',
                 snappy: 'commonjs snappy',
-                socks: 'commonjs socks',
                 aws4: 'commonjs aws4',
                 'mongodb-client-encryption': 'commonjs mongodb-client-encryption',
                 /* Kubernetes client-node optional dependencies */
