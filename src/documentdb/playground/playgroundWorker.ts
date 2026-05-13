@@ -316,9 +316,43 @@ process.on('uncaughtException', (error: Error) => {
     }
 
     log('error', `Uncaught exception in worker: ${error.message}\n${error.stack ?? ''}`);
+
+    // Exit so the supervisor (WorkerSessionManager) treats this as an unexpected
+    // exit and respawns a fresh worker on the next eval. Continuing to run after
+    // an uncaught exception risks operating with a corrupted mongoClient or
+    // shellRuntime state. The supervisor emits worker.unexpectedExit telemetry
+    // when this happens, so we keep visibility into the failure.
+    //
+    // Use a short delay so the postMessage above flushes before the worker
+    // terminates. setImmediate is not enough because Node may schedule the exit
+    // before the IPC message is serialized to the parent.
+    setTimeout(() => process.exit(1), 50);
 });
 
 process.on('unhandledRejection', (reason: unknown) => {
     const message = reason instanceof Error ? reason.message : String(reason);
-    log('error', `Unhandled rejection in worker: ${message}`);
+    const stack = reason instanceof Error ? reason.stack : undefined;
+
+    // If a user-code eval is in flight, surface the rejection as its failure
+    // result so the user sees a meaningful error instead of a generic
+    // "Worker exited unexpectedly" message from the supervisor.
+    if (currentEvalRequestId) {
+        const response: WorkerToMainMessage = {
+            type: 'evalError',
+            requestId: currentEvalRequestId,
+            error: `Unhandled rejection: ${message}`,
+            stack,
+        };
+        parentPort!.postMessage(response);
+        currentEvalRequestId = undefined;
+    }
+
+    log('error', `Unhandled rejection in worker: ${message}\n${stack ?? ''}`);
+
+    // Exit for the same reason uncaughtException does: a rejection that escaped
+    // all eval-scoped catch blocks may have left mongoClient or shellRuntime in
+    // an inconsistent state. The supervisor (WorkerSessionManager) will reject
+    // pending requests, emit worker.unexpectedExit telemetry, and respawn a
+    // fresh worker on the next eval. The 50 ms delay lets postMessage flush.
+    setTimeout(() => process.exit(1), 50);
 });
