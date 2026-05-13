@@ -275,8 +275,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Clear ghost text before processing input (except for Right Arrow and Tab
         // which are handled by the input handler's escape sequence processing)
         if (data !== '\x1b[C' && data !== '\x09') {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
-            this._ghostTextIsHint = false;
+            this.clearGhostState();
         }
 
         // Dismiss completion list on any input
@@ -443,10 +442,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * completion, forward to input handler).
      */
     private processInputDirectly(data: string): void {
-        this._ghostText.clear((d) => this._writeEmitter.fire(d));
-        this._ghostTextIsHint = false;
-        this._ghostTextIsClosingBrackets = false;
-        this._ghostCandidateKind = undefined;
+        this.clearGhostState();
         this._completionListVisible = false;
         this._inputHandler.handleInput(data);
     }
@@ -947,10 +943,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Clear hint ghost text if visible (hints are not insertable)
         if (this._ghostText.isVisible) {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
-            this._ghostTextIsHint = false;
-            this._ghostTextIsClosingBrackets = false;
-            this._ghostCandidateKind = undefined;
+            this.clearGhostState();
         }
 
         const result = this.getCompletionResult(buffer, cursor);
@@ -1034,6 +1027,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Ghost text ─────────────────────────────────────────────────
 
     /**
+     * Clear ghost text rendering and reset all associated state fields.
+     */
+    private clearGhostState(): void {
+        this._ghostText.clear((d) => this._writeEmitter.fire(d));
+        this._ghostTextIsHint = false;
+        this._ghostTextIsClosingBrackets = false;
+        this._ghostCandidateKind = undefined;
+    }
+
+    /**
      * Handle buffer changes for ghost text evaluation.
      * Called after every character insertion or deletion.
      */
@@ -1050,7 +1053,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Don't show ghost text if cursor is not at end of buffer
         if (cursor < buffer.length) {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            this.clearGhostState();
             return;
         }
 
@@ -1071,7 +1074,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Need at least 1 character to show ghost text
         if (buffer.trim().length === 0) {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            this.clearGhostState();
             return;
         }
 
@@ -1084,7 +1087,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // (e.g., bracket notation, quoted field paths, special-char collections).
             // The visual would be misleading since the insertion replaces the prefix.
             if (!candidate.insertText.startsWith(result.prefix)) {
-                this._ghostText.clear((d) => this._writeEmitter.fire(d));
+                this.clearGhostState();
                 return;
             }
 
@@ -1144,9 +1147,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             }
         }
 
-        this._ghostCandidateKind = undefined;
-        this._ghostTextIsClosingBrackets = false;
-        this._ghostText.clear((d) => this._writeEmitter.fire(d));
+        this.clearGhostState();
     }
 
     /**
@@ -1172,8 +1173,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Don't accept hint ghost text — it's informational only
         if (this._ghostTextIsHint) {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
-            this._ghostTextIsHint = false;
+            this.clearGhostState();
             return undefined;
         }
 
@@ -1182,9 +1182,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const candidateKind = this._ghostCandidateKind;
 
         // Clear ghost state and erase the dim rendering
-        this._ghostText.clear((d) => this._writeEmitter.fire(d));
-        this._ghostTextIsClosingBrackets = false;
-        this._ghostCandidateKind = undefined;
+        this.clearGhostState();
 
         if (ghostText) {
             // ── Telemetry: track ghost text acceptance ───────────────
