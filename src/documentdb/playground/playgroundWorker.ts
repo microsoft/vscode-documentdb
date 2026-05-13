@@ -316,6 +316,17 @@ process.on('uncaughtException', (error: Error) => {
     }
 
     log('error', `Uncaught exception in worker: ${error.message}\n${error.stack ?? ''}`);
+
+    // Exit so the supervisor (WorkerSessionManager) treats this as an unexpected
+    // exit and respawns a fresh worker on the next eval. Continuing to run after
+    // an uncaught exception risks operating with a corrupted mongoClient or
+    // shellRuntime state. The supervisor emits worker.unexpectedExit telemetry
+    // when this happens, so we keep visibility into the failure.
+    //
+    // Use a short delay so the postMessage above flushes before the worker
+    // terminates. setImmediate is not enough because Node may schedule the exit
+    // before the IPC message is serialized to the parent.
+    setTimeout(() => process.exit(1), 50);
 });
 
 process.on('unhandledRejection', (reason: unknown) => {
