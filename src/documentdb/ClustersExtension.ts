@@ -318,6 +318,9 @@ export class ClustersExtension implements vscode.Disposable {
                     // from TS server restart failures (timing / api availability).
                     let stage: 'stubInstall' | 'tsActivate' | 'tsWait' | 'tsRestart' | 'complete' = 'stubInstall';
                     let stubCreated = false;
+                    // Disambiguates 'stubCreated=false': either the stub already existed (existed=true)
+                    // or the stub-install branch was never reached at all (existed=false).
+                    let stubExisted = false;
 
                     await callWithTelemetryAndErrorHandling('playground.tsPluginBootstrap', async (context) => {
                         // We do not want a modal error popup if this best-effort
@@ -340,7 +343,9 @@ export class ClustersExtension implements vscode.Disposable {
                                 'documentdb-playground-ts-plugin',
                             );
                             const stubEntry = path.join(stubDir, 'index.js');
-                            if (!fs.existsSync(stubEntry)) {
+                            if (fs.existsSync(stubEntry)) {
+                                stubExisted = true;
+                            } else {
                                 fs.mkdirSync(stubDir, { recursive: true });
                                 // Point to the bundled plugin at the extension root
                                 fs.writeFileSync(
@@ -389,6 +394,7 @@ export class ClustersExtension implements vscode.Disposable {
                         } finally {
                             context.telemetry.properties.stage = stage;
                             context.telemetry.properties.stubCreated = stubCreated ? 'true' : 'false';
+                            context.telemetry.properties.stubExisted = stubExisted ? 'true' : 'false';
                         }
                     });
                 };
