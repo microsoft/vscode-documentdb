@@ -12,7 +12,7 @@
 
 **DocumentDB for VS Code** helps you browse, manage, and query **DocumentDB** and **MongoDB** databases across any cloud, hybrid, or local environment.
 
-![DocumentDB with a Collection View and auto-completion](./vscode-documentdb-vcore.png)
+![DocumentDB with a Collection View and auto-completion](./vscode-documentdb-hero-screenshot.png)
 
 # Features
 
@@ -28,10 +28,11 @@ Connect to any MongoDB or DocumentDB instance: cloud, hybrid cloud, on-premises,
 
 DocumentDB for VS Code focuses on providing developer productivity features with minimal setup.
 
+- **Query Your Data, Your Way**: Three integrated query surfaces: the visual **Collection View** with context-aware autocompletion, the file-based **Query Playground** for JavaScript scripts, and the built-in **Interactive Shell** for ad-hoc exploration. All three share schema awareness and are linked with navigation actions.
 - **Multiple Data Views**: Inspect collections using **Table**, **Tree**, or **JSON** layouts, with built-in pagination.
-- **Query Editing**: Execute `find` queries with syntax highlighting, auto-completion, and field name suggestions.
 - **Document Management**: Create, edit, and delete documents directly from VS Code.
 - **Data Import/Export**: Quickly import JSON files or export documents, query results, or collections.
+- **Query Insights**: Analyze query performance with explain plans, static analysis badges, and AI-powered index recommendations.
 
 ### Open Development
 
@@ -61,10 +62,18 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 - [Data Migrations (Experimental)](./user-manual/data-migrations)
 - [Copy and Paste Collections](./user-manual/copy-and-paste.md)
 
+### Querying
+
+- [Collection View: Querying](./user-manual/collection-view-querying)
+- [Query Playground](./user-manual/query-playground)
+- [Interactive Shell](./user-manual/interactive-shell)
+- [How It Works Behind the Scenes](./user-manual/query-runtime)
+
 ## Release Notes
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.
 
+- [0.8](./release-notes/0.8)
 - [0.7](./release-notes/0.7), [0.7.2](./release-notes/0.7#patch-release-v072), [0.7.3](./release-notes/0.7#patch-release-v073), [0.7.4](./release-notes/0.7#patch-release-v074)
 - [0.6](./release-notes/0.6), [0.6.1](./release-notes/0.6#patch-release-v061), [0.6.2](./release-notes/0.6#patch-release-v062), [0.6.3](./release-notes/0.6#patch-release-v063)
 - [0.5](./release-notes/0.5), [0.5.1](./release-notes/0.5#patch-release-v051), [0.5.2](./release-notes/0.5#patch-release-v052)
