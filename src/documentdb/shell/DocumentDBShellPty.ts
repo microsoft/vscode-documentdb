@@ -1095,8 +1095,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 this._ghostTextIsHint = false;
                 this._ghostTextIsClosingBrackets = false;
                 this._ghostCandidateKind = candidate.kind;
-                this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
-                this.trackCompletionGhostShown(candidate.kind);
+                const rendered = this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
+                if (rendered) {
+                    this.trackCompletionGhostShown(candidate.kind);
+                }
                 return;
             }
         }
@@ -1134,8 +1136,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                     this._ghostTextIsHint = false;
                     this._ghostTextIsClosingBrackets = true;
                     this._ghostCandidateKind = undefined;
-                    this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
-                    this.trackClosingBracketsShown();
+                    const closingRendered = this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
+                    if (closingRendered) {
+                        this.trackClosingBracketsShown();
+                    }
                     return;
                 }
             }
