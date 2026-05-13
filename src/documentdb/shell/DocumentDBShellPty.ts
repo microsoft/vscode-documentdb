@@ -7,6 +7,8 @@ import { callWithTelemetryAndErrorHandling, UserCancelledError } from '@microsof
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { type CompletionCategory } from '../../telemetry/completionCategories';
+import { callWithAccumulatingTelemetry } from '../../utils/callWithAccumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
 import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
@@ -18,7 +20,7 @@ import { addDomainInfoToProperties } from '../utils/getClusterMetadata';
 import { getClosingBrackets } from './bracketDepthCounter';
 import { colorizeShellInput } from './highlighting/colorizeShellInput';
 import { SettingsHintError } from './SettingsHintError';
-import { type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
+import { type CompletionCandidate, type CompletionResult, ShellCompletionProvider } from './ShellCompletionProvider';
 import { findCommonPrefix, renderCompletionList } from './ShellCompletionRenderer';
 import { ShellGhostText } from './ShellGhostText';
 import { ShellInputHandler } from './ShellInputHandler';
@@ -95,6 +97,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private _completionListVisible: boolean = false;
     /** Whether the current ghost text is an informational hint (not insertable). */
     private _ghostTextIsHint: boolean = false;
+    /** Whether the current ghost text is a closing-brackets suggestion. */
+    private _ghostTextIsClosingBrackets: boolean = false;
+    /** The kind of the completion candidate shown as ghost text (for telemetry). */
+    private _ghostCandidateKind: CompletionCandidate['kind'] | undefined;
     /** Optional initial input to pre-fill after initialization. */
     private _initialInput: string | undefined;
 
@@ -269,8 +275,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // Clear ghost text before processing input (except for Right Arrow and Tab
         // which are handled by the input handler's escape sequence processing)
         if (data !== '\x1b[C' && data !== '\x09') {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
-            this._ghostTextIsHint = false;
+            this.clearGhostState();
         }
 
         // Dismiss completion list on any input
@@ -437,8 +442,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * completion, forward to input handler).
      */
     private processInputDirectly(data: string): void {
-        this._ghostText.clear((d) => this._writeEmitter.fire(d));
-        this._ghostTextIsHint = false;
+        this.clearGhostState();
         this._completionListVisible = false;
         this._inputHandler.handleInput(data);
     }
@@ -939,8 +943,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Clear hint ghost text if visible (hints are not insertable)
         if (this._ghostText.isVisible) {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
-            this._ghostTextIsHint = false;
+            this.clearGhostState();
         }
 
         const result = this.getCompletionResult(buffer, cursor);
@@ -966,6 +969,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             this._writeEmitter.fire(listOutput);
             this._completionListVisible = true;
 
+            // ── Telemetry: track completion list shown ───────────────
+            this.trackCompletionListShown(result.candidates);
+
             // Rewrite the prompt + buffer so the user continues editing
             this._writeEmitter.fire('\r\n');
             this.rewriteCurrentLine();
@@ -986,12 +992,14 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         // special-char collections (sto → ['stores (10)']).
         if (result.prefix.length > 0 && !candidate.insertText.startsWith(result.prefix)) {
             this._inputHandler.replaceText(result.prefix.length, candidate.insertText);
+            this.trackCompletionAccepted(candidate.kind, 'tab');
             return;
         }
 
         const remaining = candidate.insertText.slice(result.prefix.length);
         if (remaining.length > 0) {
             this._inputHandler.insertText(remaining);
+            this.trackCompletionAccepted(candidate.kind, 'tab');
         }
     }
 
@@ -1019,6 +1027,16 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     // ─── Private: Ghost text ─────────────────────────────────────────────────
 
     /**
+     * Clear ghost text rendering and reset all associated state fields.
+     */
+    private clearGhostState(): void {
+        this._ghostText.clear((d) => this._writeEmitter.fire(d));
+        this._ghostTextIsHint = false;
+        this._ghostTextIsClosingBrackets = false;
+        this._ghostCandidateKind = undefined;
+    }
+
+    /**
      * Handle buffer changes for ghost text evaluation.
      * Called after every character insertion or deletion.
      */
@@ -1035,7 +1053,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Don't show ghost text if cursor is not at end of buffer
         if (cursor < buffer.length) {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            this.clearGhostState();
             return;
         }
 
@@ -1056,7 +1074,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Need at least 1 character to show ghost text
         if (buffer.trim().length === 0) {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
+            this.clearGhostState();
             return;
         }
 
@@ -1069,7 +1087,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             // (e.g., bracket notation, quoted field paths, special-char collections).
             // The visual would be misleading since the insertion replaces the prefix.
             if (!candidate.insertText.startsWith(result.prefix)) {
-                this._ghostText.clear((d) => this._writeEmitter.fire(d));
+                this.clearGhostState();
                 return;
             }
 
@@ -1077,7 +1095,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             const remaining = candidate.insertText.slice(result.prefix.length);
             if (remaining.length > 0) {
                 this._ghostTextIsHint = false;
-                this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
+                this._ghostTextIsClosingBrackets = false;
+                this._ghostCandidateKind = candidate.kind;
+                const rendered = this._ghostText.show(remaining, (d) => this._writeEmitter.fire(d));
+                if (rendered) {
+                    this.trackCompletionGhostShown(candidate.kind);
+                }
                 return;
             }
         }
@@ -1113,13 +1136,18 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
                 const closing = getClosingBrackets(buffer);
                 if (closing.length > 0) {
                     this._ghostTextIsHint = false;
-                    this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
+                    this._ghostTextIsClosingBrackets = true;
+                    this._ghostCandidateKind = undefined;
+                    const closingRendered = this._ghostText.show(closing, (d) => this._writeEmitter.fire(d));
+                    if (closingRendered) {
+                        this.trackClosingBracketsShown();
+                    }
                     return;
                 }
             }
         }
 
-        this._ghostText.clear((d) => this._writeEmitter.fire(d));
+        this.clearGhostState();
     }
 
     /**
@@ -1145,16 +1173,26 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
         // Don't accept hint ghost text — it's informational only
         if (this._ghostTextIsHint) {
-            this._ghostText.clear((d) => this._writeEmitter.fire(d));
-            this._ghostTextIsHint = false;
+            this.clearGhostState();
             return undefined;
         }
 
         const ghostText = this._ghostText.currentText;
+        const wasClosingBrackets = this._ghostTextIsClosingBrackets;
+        const candidateKind = this._ghostCandidateKind;
+
         // Clear ghost state and erase the dim rendering
-        this._ghostText.clear((d) => this._writeEmitter.fire(d));
+        this.clearGhostState();
 
         if (ghostText) {
+            // ── Telemetry: track ghost text acceptance ───────────────
+            if (wasClosingBrackets) {
+                this.trackClosingBracketsAccepted();
+            } else if (candidateKind) {
+                this.trackCompletionAccepted(candidateKind, 'ghostText');
+                this.trackCompletionGhostAccepted(candidateKind);
+            }
+
             // Insert the ghost text into the buffer through the input handler.
             // insertText handles buffer update + terminal echo in normal color.
             this._inputHandler.insertText(ghostText);
@@ -1187,5 +1225,85 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         } catch {
             // Domain info is best-effort — don't fail telemetry if parsing fails
         }
+    }
+
+    /**
+     * Map shell CompletionCandidate.kind to the standard CompletionCategory.
+     */
+    private static shellKindToCategory(kind: CompletionCandidate['kind']): CompletionCategory {
+        switch (kind) {
+            case 'field':
+                return 'field';
+            case 'operator':
+                return 'operator';
+            case 'bson':
+                return 'bsonConstructor';
+            case 'collection':
+            case 'database':
+                return 'collectionName';
+            case 'method':
+            case 'command':
+                return 'other';
+        }
+    }
+
+    /**
+     * Track a completion acceptance (Tab or ghost text) in the shell.
+     */
+    private trackCompletionAccepted(kind: CompletionCandidate['kind'], trigger: 'tab' | 'ghostText'): void {
+        const category = DocumentDBShellPty.shellKindToCategory(kind);
+        void callWithAccumulatingTelemetry('completion.accepted', (ctx) => {
+            ctx.telemetry.measurements[`cat_${category}_src_shell`] = 1;
+            ctx.telemetry.measurements[`trigger_${trigger}`] = 1;
+        });
+    }
+
+    /**
+     * Track that a closing-brackets ghost text suggestion was shown.
+     */
+    private trackClosingBracketsShown(): void {
+        void callWithAccumulatingTelemetry('shell.closingBrackets', (ctx) => {
+            ctx.telemetry.measurements.shown = 1;
+        });
+    }
+
+    /**
+     * Track that a closing-brackets ghost text suggestion was accepted.
+     */
+    private trackClosingBracketsAccepted(): void {
+        void callWithAccumulatingTelemetry('shell.closingBrackets', (ctx) => {
+            ctx.telemetry.measurements.accepted = 1;
+        });
+    }
+
+    /**
+     * Track that a completion list (multi-match picker) was shown.
+     */
+    private trackCompletionListShown(candidates: readonly CompletionCandidate[]): void {
+        const kind = candidates[0]?.kind ?? 'command';
+        const category = DocumentDBShellPty.shellKindToCategory(kind);
+        void callWithAccumulatingTelemetry('shell.completionList', (ctx) => {
+            ctx.telemetry.measurements[`shown_${category}`] = 1;
+        });
+    }
+
+    /**
+     * Track that a completion ghost text suggestion was shown.
+     */
+    private trackCompletionGhostShown(kind: CompletionCandidate['kind']): void {
+        const category = DocumentDBShellPty.shellKindToCategory(kind);
+        void callWithAccumulatingTelemetry('shell.completionGhost', (ctx) => {
+            ctx.telemetry.measurements[`shown_${category}`] = 1;
+        });
+    }
+
+    /**
+     * Track that a completion ghost text suggestion was accepted.
+     */
+    private trackCompletionGhostAccepted(kind: CompletionCandidate['kind']): void {
+        const category = DocumentDBShellPty.shellKindToCategory(kind);
+        void callWithAccumulatingTelemetry('shell.completionGhost', (ctx) => {
+            ctx.telemetry.measurements[`accepted_${category}`] = 1;
+        });
     }
 }

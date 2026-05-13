@@ -58,16 +58,17 @@ export class ShellGhostText {
      *
      * @param text - the suggestion text to display (the part NOT yet typed)
      * @param write - function to write ANSI data to the terminal
+     * @returns `true` if new ghost text was rendered, `false` if skipped (empty or unchanged)
      */
-    show(text: string, write: (data: string) => void): void {
+    show(text: string, write: (data: string) => void): boolean {
         if (!text || text.length === 0) {
             this.clear(write);
-            return;
+            return false;
         }
 
         // If the same ghost text is already showing, don't re-render
         if (this._visible && this._currentGhost === text) {
-            return;
+            return false;
         }
 
         // Clear any existing ghost text first
@@ -84,6 +85,8 @@ export class ShellGhostText {
         if (displayWidth > 0) {
             write(`\x1b[${String(displayWidth)}D`);
         }
+
+        return true;
     }
 
     /**
