@@ -331,5 +331,28 @@ process.on('uncaughtException', (error: Error) => {
 
 process.on('unhandledRejection', (reason: unknown) => {
     const message = reason instanceof Error ? reason.message : String(reason);
-    log('error', `Unhandled rejection in worker: ${message}`);
+    const stack = reason instanceof Error ? reason.stack : undefined;
+
+    // If a user-code eval is in flight, surface the rejection as its failure
+    // result so the user sees a meaningful error instead of a generic
+    // "Worker exited unexpectedly" message from the supervisor.
+    if (currentEvalRequestId) {
+        const response: WorkerToMainMessage = {
+            type: 'evalError',
+            requestId: currentEvalRequestId,
+            error: `Unhandled rejection: ${message}`,
+            stack,
+        };
+        parentPort!.postMessage(response);
+        currentEvalRequestId = undefined;
+    }
+
+    log('error', `Unhandled rejection in worker: ${message}\n${stack ?? ''}`);
+
+    // Exit for the same reason uncaughtException does: a rejection that escaped
+    // all eval-scoped catch blocks may have left mongoClient or shellRuntime in
+    // an inconsistent state. The supervisor (WorkerSessionManager) will reject
+    // pending requests, emit worker.unexpectedExit telemetry, and respawn a
+    // fresh worker on the next eval. The 50 ms delay lets postMessage flush.
+    setTimeout(() => process.exit(1), 50);
 });
