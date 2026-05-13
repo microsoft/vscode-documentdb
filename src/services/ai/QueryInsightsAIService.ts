@@ -16,7 +16,6 @@ import {
     type QueryObject,
     type QueryOptimizationContext,
 } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
-import { type FindQueryParams } from '../../documentdb/ClustersClient';
 import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type IndexSpecification } from '../../documentdb/LlmEnhancedFeatureApis';
 import { ext } from '../../extensionVariables';
@@ -51,7 +50,7 @@ interface ModifyIndexPayload {
     sessionId: string;
     databaseName: string;
     collectionName: string;
-    mongoShell: string;
+    shellCommand: string;
 }
 
 /**
@@ -63,7 +62,8 @@ export class QueryInsightsAIService {
      * Gets optimization recommendations for a query
      *
      * @param sessionId - Session Id for accessing cached data
-     * @param query - The query string
+     * @param query - Either a parsed QueryObject (for find queries) or a raw query string
+     *                (kept for forward compatibility with non-find command types).
      * @param databaseName - Target database name
      * @param collectionName - Target collection name
      * @param executionPlan - Optional pre-loaded execution plan
@@ -71,11 +71,12 @@ export class QueryInsightsAIService {
      */
     public async getOptimizationRecommendations(
         sessionId: string,
-        query: string | FindQueryParams,
+        query: string | QueryObject,
         databaseName: string,
         collectionName: string,
         executionPlan?: unknown,
         signal?: AbortSignal,
+        staticAnalysisSummary?: string,
     ): Promise<AIOptimizationResponse> {
         const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.queryInsights.getOptimizationRecommendations',
@@ -83,16 +84,15 @@ export class QueryInsightsAIService {
                 // Prepare query optimization context
                 let queryContext: QueryOptimizationContext;
                 if (typeof query !== 'string') {
-                    // Convert FindQueryParams to QueryObject
-                    const queryObject = this.convertFindParamsToQueryObject(query);
                     queryContext = {
                         sessionId,
                         databaseName,
                         collectionName,
-                        queryObject,
+                        queryObject: query,
                         commandType: CommandType.Find,
                         executionPlan,
                         signal,
+                        staticAnalysisSummary,
                     };
                 } else {
                     // handle string query for temporary compatibility
@@ -104,6 +104,7 @@ export class QueryInsightsAIService {
                         commandType: CommandType.Find,
                         executionPlan,
                         signal,
+                        staticAnalysisSummary,
                     };
                 }
 
@@ -170,7 +171,7 @@ export class QueryInsightsAIService {
                     indexSpec: Record<string, number>;
                     indexOptions?: Record<string, unknown>;
                     indexName: string;
-                    mongoShell: string;
+                    shellCommand: string;
                     justification: string;
                     priority: 'high' | 'medium' | 'low';
                     risks?: string;
@@ -189,49 +190,6 @@ export class QueryInsightsAIService {
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(l10n.t('Failed to parse AI optimization response. {error}', { error: errorMessage }));
         }
-    }
-
-    /**
-     * Converts FindQueryParams to QueryObject
-     * TODO: Later should support other command types as well
-     * @param params - FindQueryParams with string filter, sort, project
-     * @returns QueryObject with parsed Document objects
-     */
-    private convertFindParamsToQueryObject(params: FindQueryParams): QueryObject {
-        const result: QueryObject = {};
-
-        try {
-            if (params.filter) {
-                result.filter = JSON.parse(params.filter) as Document;
-            }
-
-            if (params.project) {
-                const projection = JSON.parse(params.project) as Document;
-                if (Object.keys(projection).length > 0) {
-                    result.projection = projection;
-                }
-            }
-
-            if (params.sort) {
-                const sort = JSON.parse(params.sort) as Document;
-                if (Object.keys(sort).length > 0) {
-                    result.sort = sort;
-                }
-            }
-
-            if (params.limit !== undefined) {
-                result.limit = params.limit;
-            }
-
-            if (params.skip !== undefined) {
-                result.skip = params.skip;
-            }
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            throw new Error(l10n.t('Failed to convert query parameters: {error}', { error: errorMessage }));
-        }
-
-        return result;
     }
 
     /**
@@ -320,10 +278,10 @@ export class QueryInsightsAIService {
             payload !== null &&
             'databaseName' in payload &&
             'collectionName' in payload &&
-            'mongoShell' in payload &&
+            'shellCommand' in payload &&
             typeof (payload as ModifyIndexPayload).databaseName === 'string' &&
             typeof (payload as ModifyIndexPayload).collectionName === 'string' &&
-            typeof (payload as ModifyIndexPayload).mongoShell === 'string'
+            typeof (payload as ModifyIndexPayload).shellCommand === 'string'
         );
     }
 
@@ -556,17 +514,17 @@ export class QueryInsightsAIService {
             }
 
             const parseOperationPattern = /db\.getCollection\(['"]([^'"]+)['"]\)\.(\w+)\((.*)\)/;
-            const match = payload.mongoShell.match(parseOperationPattern);
+            const match = payload.shellCommand.match(parseOperationPattern);
             if (!match || match.length < 3 || (match[2] !== 'hideIndex' && match[2] !== 'unhideIndex')) {
-                context.telemetry.properties.actionError = 'invalidMongoShellFormat';
+                context.telemetry.properties.actionError = 'invalidShellCommandFormat';
                 ext.outputChannel.warn(
-                    l10n.t('[Query Insights Action] Invalid mongoShell command format: {command}', {
-                        command: payload.mongoShell,
+                    l10n.t('[Query Insights Action] Invalid shell command format: {command}', {
+                        command: payload.shellCommand,
                     }),
                 );
                 return {
                     success: false,
-                    message: l10n.t('Invalid mongoShell command format'),
+                    message: l10n.t('Invalid shell command format'),
                 };
             }
 

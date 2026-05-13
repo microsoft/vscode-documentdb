@@ -1,0 +1,8 @@
+{
+  "scopeName": "source.documentdb-playground-result",
+  "patterns": [
+    {
+      "include": "source.json.comments"
+    }
+  ]
+}

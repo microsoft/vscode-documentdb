@@ -97,7 +97,17 @@ export type CollectionViewContextType = {
             skip: number;
             limit: number;
         };
-        setJsonSchema(schema: object): Promise<void>; //monacoEditor.languages.json.DiagnosticsOptions, but we don't want to import monacoEditor here
+    };
+    /**
+     * When set, the QueryEditor should apply these values to its editors
+     * and then clear this field. Used by the "Paste Query" feature.
+     */
+    pendingPaste?: {
+        filter?: string;
+        project?: string;
+        sort?: string;
+        skip?: number;
+        limit?: number;
     };
     isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
     queryInsights: QueryInsightsState; // Query insights state for progressive loading

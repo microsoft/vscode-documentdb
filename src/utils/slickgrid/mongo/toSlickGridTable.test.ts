@@ -76,7 +76,6 @@ describe('toSlickGridTable', () => {
 
     it('at a nested level', () => {
         const tableData = getDataAtPath(mongoDocuments, ['nestedDocument']);
-        console.log(tableData);
 
         expect(tableData).toHaveLength(5);
         expect(tableData[0]['key']).toBeDefined();

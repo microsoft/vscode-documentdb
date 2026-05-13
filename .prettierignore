@@ -1,1 +1,5 @@
 package-lock.json
+
+# Prompt template files contain precise formatting (backtick fences, indentation)
+# that prettier mangles — triple backticks get collapsed, blank lines inserted.
+resources/prompts/

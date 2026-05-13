@@ -10,6 +10,7 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
+import { ext } from '../../extensionVariables';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -137,8 +138,20 @@ export class HelpAndFeedbackBranchDataProvider extends BaseExtendedTreeDataProvi
                 commandId: 'vscode-documentdb.command.internal.helpAndFeedback.openUrl',
                 commandArgs: ['https://aka.ms/tryvcore'],
             }) as TreeElement,
+
+            createGenericElement({
+                contextValue: 'helpItem',
+                id: `${parentId}/about`,
+                label: vscode.l10n.t('About (v{0})', this.getExtensionVersion()),
+                iconPath: new vscode.ThemeIcon('info'),
+                commandId: 'vscode-documentdb.command.internal.helpAndFeedback.showAbout',
+            }) as TreeElement,
         ];
 
         return rootItems;
+    }
+
+    private getExtensionVersion(): string {
+        return (ext.context.extension.packageJSON as { version: string }).version;
     }
 }

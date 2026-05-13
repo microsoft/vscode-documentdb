@@ -18,6 +18,7 @@ import {
 } from '../../services/connectionStorageService';
 import {
     buildConnectionsViewTreePath,
+    buildFullTreePath,
     focusAndRevealInConnectionsView,
     withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
@@ -91,9 +92,12 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
         });
 
         if (existingDuplicateConnection) {
-            // Reveal the existing duplicate connection
+            // Reveal the existing duplicate connection.
+            // Use buildFullTreePath to correctly handle connections inside folders —
+            // buildConnectionsViewTreePath produces a flat path that omits folder ancestors,
+            // causing findNodeById to fail silently when the connection is in a folder.
             ext.connectionsBranchDataProvider.refresh();
-            const connectionPath = buildConnectionsViewTreePath(existingDuplicateConnection.id, false);
+            const connectionPath = await buildFullTreePath(existingDuplicateConnection.id, ConnectionType.Clusters);
             await focusAndRevealInConnectionsView(context, connectionPath, {
                 select: true,
                 focus: false,

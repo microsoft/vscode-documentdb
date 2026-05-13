@@ -27,12 +27,8 @@ export interface CopilotMessageOptions {
     /* AbortSignal for cancellation support */
     signal?: AbortSignal;
 
-    // TODO:
-    /* Temperature setting for the model (if supported later) */
-    // temperature?: number;
-
-    /* Maximum tokens for the response (if supported later) */
-    // maxTokens?: number;
+    /* Model-specific options (e.g., reasoning_effort for GPT-5 class models) */
+    modelOptions?: { [name: string]: unknown };
 }
 
 /**
@@ -43,6 +39,8 @@ export interface CopilotResponse {
     text: string;
     /* The model used to generate the response */
     modelUsed: string;
+    /* Duration of the actual LLM request in milliseconds (excludes model selection overhead) */
+    durationMs: number;
 }
 
 /**
@@ -83,8 +81,9 @@ export class CopilotService {
                 try {
                     const response = await this.sendToModel(selectedModel, messages, options);
                     return {
-                        text: response,
+                        text: response.text,
                         modelUsed: selectedModel.id,
+                        durationMs: response.durationMs,
                     };
                 } catch (error) {
                     if (error instanceof UserCancelledError) {
@@ -157,7 +156,7 @@ export class CopilotService {
         model: vscode.LanguageModelChat,
         messages: vscode.LanguageModelChatMessage[],
         options?: CopilotMessageOptions,
-    ): Promise<string> {
+    ): Promise<{ text: string; durationMs: number }> {
         const signal = options?.signal;
 
         // If already aborted, throw immediately
@@ -173,8 +172,11 @@ export class CopilotService {
         try {
             // GitHub copilot LLM API currently doesn't support temperature or maxTokens in
             // LanguageModelChatRequestOptions, but we keep them here for potential future use
-            const requestOptions: vscode.LanguageModelChatRequestOptions = {};
+            const requestOptions: vscode.LanguageModelChatRequestOptions = {
+                ...(options?.modelOptions ? { modelOptions: options.modelOptions } : {}),
+            };
 
+            const requestStart = Date.now();
             const chatResponse = await model.sendRequest(messages, requestOptions, cts.token);
 
             // Collect the streaming response, checking for cancellation between chunks
@@ -185,13 +187,14 @@ export class CopilotService {
                 }
                 fullResponse += fragment;
             }
+            const durationMs = Date.now() - requestStart;
 
             if (signal?.aborted) {
                 ext.outputChannel.trace(l10n.t('[Query Insights AI] Copilot call cancelled during streaming'));
                 throw new UserCancelledError('AbortSignal');
             }
 
-            return fullResponse;
+            return { text: fullResponse, durationMs };
         } finally {
             signal?.removeEventListener('abort', onAbort);
             cts.dispose();

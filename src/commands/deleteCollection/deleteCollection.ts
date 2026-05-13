@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
@@ -59,6 +60,11 @@ export async function deleteCollection(context: IActionContext, node: Collection
         });
 
         if (success) {
+            SchemaStore.getInstance().clearSchema(
+                node.cluster.clusterId,
+                node.databaseInfo.name,
+                node.collectionInfo.name,
+            );
             showConfirmationAsInSettings(successMessage);
         }
     } finally {

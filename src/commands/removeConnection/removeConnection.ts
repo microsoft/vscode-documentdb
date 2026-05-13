@@ -6,6 +6,7 @@
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { CredentialCache } from '../../documentdb/CredentialCache';
+import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
@@ -65,6 +66,9 @@ export async function removeConnection(context: IActionContext, node: DocumentDB
 
         // delete cached credentials from memory using stable clusterId (not treeId)
         CredentialCache.deleteCredentials(node.cluster.clusterId);
+
+        // clear cached schema data for this cluster
+        SchemaStore.getInstance().clearCluster(node.cluster.clusterId);
 
         refreshParentInConnectionsView(node.id);
     });

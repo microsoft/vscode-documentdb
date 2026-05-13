@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { ClustersClient } from '../../documentdb/ClustersClient';
+import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -58,6 +59,7 @@ export async function deleteDatabase(context: IActionContext, node: DatabaseItem
         });
 
         if (success) {
+            SchemaStore.getInstance().clearDatabase(node.cluster.clusterId, node.databaseInfo.name);
             showConfirmationAsInSettings(l10n.t('The "{databaseId}" database has been deleted.', { databaseId }));
         }
     } finally {

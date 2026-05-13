@@ -1,0 +1,97 @@
+# Scripts
+
+Helper scripts for maintaining the `@documentdb-js/operator-registry` package.
+
+## scrape-operator-docs.ts
+
+Scrapes the DocumentDB compatibility page and per-operator documentation to produce `resources/scraped/operator-reference.md`.
+
+```bash
+npm run scrape
+```
+
+**When to run:** When the upstream DocumentDB documentation changes (new operators, updated descriptions, etc.). This is infrequent — typically once per DocumentDB release.
+
+**Output:** `resources/scraped/operator-reference.md` — a machine-generated Markdown dump of all supported operators, their descriptions, syntax blocks, and doc links.
+
+## generate-from-reference.ts
+
+Reads the scraped dump, hand-maintained overrides file, and snippet templates, then generates the TypeScript operator data files in `src/`.
+
+```bash
+npm run generate
+```
+
+**When to run:**
+
+- After running the scraper (`npm run scrape`)
+- After editing `resources/overrides/operator-overrides.md`
+- After editing `resources/overrides/operator-snippets.md`
+
+**Inputs:**
+
+| File                                        | Purpose                            |
+| ------------------------------------------- | ---------------------------------- |
+| `resources/scraped/operator-reference.md`   | Primary data (machine-generated)   |
+| `resources/overrides/operator-overrides.md` | Manual overrides (hand-maintained) |
+| `resources/overrides/operator-snippets.md`  | Snippet templates per category     |
+
+**Outputs:** Seven TypeScript files in `src/`:
+
+- `queryOperators.ts` — comparison, logical, element, evaluation, geospatial, array, bitwise, projection, misc query operators
+- `updateOperators.ts` — field, array, and bitwise update operators
+- `expressionOperators.ts` — arithmetic, array, bitwise, boolean, comparison, conditional, data-size, date, literal, misc, object, set, string, timestamp, trig, type, and variable expression operators
+- `accumulators.ts` — group and other-stage accumulators
+- `windowOperators.ts` — window function operators
+- `stages.ts` — aggregation pipeline stages
+- `systemVariables.ts` — system variables (`$$NOW`, `$$ROOT`, etc.)
+
+> **Do not edit the generated `src/` files by hand.** Put corrections in the overrides or snippets files instead. The generated files contain a header warning to this effect.
+
+## evaluate-overrides.ts
+
+Evaluates the relationship between scraped data, manual overrides, and snippet coverage. Produces a color-coded report.
+
+```bash
+npm run evaluate
+```
+
+**When to run:**
+
+- After re-scraping (`npm run scrape`) to see if previously-missing descriptions are now available
+- Periodically, to check coverage and detect redundant overrides
+
+**Report sections:**
+
+1. **GAPS** — operators with empty scraped descriptions and no override (need attention)
+2. **POTENTIALLY REDUNDANT** — operators that have **both** a scraped description and an override description; the override may no longer be needed
+3. **ACTIVE OVERRIDES** — overrides filling real gaps, with both override and scraped values shown
+4. **SNIPPET COVERAGE** — operators with/without snippet templates per category
+5. **SUMMARY** — total counts and coverage percentage
+
+## Workflow
+
+```
+  ┌──────────────────────┐
+  │  Upstream docs change │
+  └──────────┬───────────┘
+             ▼
+      npm run scrape
+             │
+             ▼
+  scraped/operator-reference.md
+             │
+             ├──── npm run evaluate  (check gaps, redundant overrides & snippet coverage)
+             │
+             ├──── overrides/operator-overrides.md (manual)
+             ├──── overrides/operator-snippets.md  (manual)
+             │
+             ▼
+     npm run generate
+             │
+             ▼
+    src/*.ts (generated)
+             │
+             ▼
+      npm run build
+```

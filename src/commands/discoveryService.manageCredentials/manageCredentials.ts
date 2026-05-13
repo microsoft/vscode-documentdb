@@ -45,15 +45,9 @@ export async function manageCredentials(context: IActionContext, node: TreeEleme
         return;
     }
 
-    try {
-        // Call the filter function provided by the provider
-        await provider.configureCredentials(context, node as TreeElement);
+    // Call the filter function provided by the provider
+    await provider.configureCredentials(context, node as TreeElement);
 
-        // Refresh the discovery branch data provider to show the updated list
-        ext.discoveryBranchDataProvider.refresh(node as TreeElement);
-    } catch (error) {
-        context.telemetry.properties.result = 'Failed';
-        context.telemetry.properties.errorReason = 'configureCredentialsThrew';
-        throw error;
-    }
+    // Refresh the discovery branch data provider to show the updated list
+    ext.discoveryBranchDataProvider.refresh(node as TreeElement);
 }

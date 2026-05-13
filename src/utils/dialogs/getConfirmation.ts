@@ -27,9 +27,9 @@ export async function getConfirmationAsInSettings(
     message: string,
     expectedConfirmationWord: string,
 ): Promise<boolean> {
-    const deleteConfirmation: ConfirmationStyle | undefined = vscode.workspace
+    const deleteConfirmation: ConfirmationStyle = vscode.workspace
         .getConfiguration()
-        .get<ConfirmationStyle>(ext.settingsKeys.confirmationStyle);
+        .get<ConfirmationStyle>(ext.settingsKeys.confirmationStyle, ConfirmationStyle.wordConfirmation);
 
     if (deleteConfirmation === ConfirmationStyle.wordConfirmation) {
         return await getConfirmationWithWordQuestion(title, message, expectedConfirmationWord);

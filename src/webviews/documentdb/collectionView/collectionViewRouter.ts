@@ -3,19 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type FieldEntry } from '@documentdb-js/schema-analyzer';
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as fs from 'fs';
 import { type Document } from 'mongodb';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { type JSONSchema } from 'vscode-json-languageservice';
 import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
+import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { getKnownFields, type FieldEntry } from '../../../utils/json/mongo/autocomplete/getKnownFields';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
 
 import * as l10n from '@vscode/l10n';
+import { type QueryObject } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import {
     generateQuery,
     QueryGenerationType,
@@ -23,12 +24,14 @@ import {
 } from '../../../commands/llmEnhancedCommands/queryGenerationCommands';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 
+import { parseFindExpression } from '../../../documentdb/playground/parseFindExpression';
 import {
     ExplainPlanAnalyzer,
     type ExecutionStatsAnalysis,
     type QueryPlannerAnalysis,
 } from '../../../documentdb/queryInsights/ExplainPlanAnalyzer';
 import { StagePropertyExtractor } from '../../../documentdb/queryInsights/StagePropertyExtractor';
+import { buildStaticAnalysisSummary } from '../../../documentdb/queryInsights/staticAnalysisSummary';
 import {
     createFailedQueryResponse,
     transformAIResponseForUI,
@@ -38,10 +41,11 @@ import {
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../services/ai/QueryInsightsAIService';
+import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
-// eslint-disable-next-line import/no-internal-modules
-import basicFindQuerySchema from '../../../utils/json/mongo/autocomplete/basicMongoFindFilterSchema.json';
-import { generateMongoFindJsonSchema } from '../../../utils/json/mongo/autocomplete/generateMongoFindJsonSchema';
+import { callWithAccumulatingTelemetry } from '../../../utils/callWithAccumulatingTelemetry';
+import { escapeJsString } from '../../../utils/escapeJsString';
+import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../api/configuration/appRouter';
@@ -57,6 +61,10 @@ export type RouterContext = BaseRouterContext & {
      * For Azure/Discovery Views: This is the Azure Resource ID (already a valid tree path)
      */
     clusterId: string;
+    /**
+     * Human-readable cluster display name for use in Playground headers and Shell titles.
+     */
+    clusterDisplayName: string;
     /**
      * Identifies which tree view this cluster belongs to.
      *
@@ -109,6 +117,48 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
         );
         return null;
     }
+}
+
+/**
+ * Build a `db.getCollection('name').find(filter, project).sort(sort)` expression
+ * from the Collection View's current query state. Used by cross-feature navigation
+ * to carry the query to Playground or Shell.
+ */
+function buildFindExpression(
+    collectionName: string,
+    filter: string,
+    project: string | undefined,
+    sort: string | undefined,
+    skip: number | undefined,
+    limit: number | undefined,
+): string {
+    const hasProject = project && project.trim() !== '{}' && project.trim() !== '{  }' && project.trim() !== '';
+    const hasSort = sort && sort.trim() !== '{}' && sort.trim() !== '{  }' && sort.trim() !== '';
+
+    const filterArg = filter.trim() || '{}';
+
+    const escaped = escapeJsString(collectionName);
+
+    let expr: string;
+    if (hasProject) {
+        expr = `db.getCollection('${escaped}').find(${filterArg}, ${project})`;
+    } else {
+        expr = `db.getCollection('${escaped}').find(${filterArg})`;
+    }
+
+    if (hasSort) {
+        expr += `.sort(${sort})`;
+    }
+
+    if (skip && skip > 0) {
+        expr += `.skip(${skip})`;
+    }
+
+    if (limit && limit > 0) {
+        expr += `.limit(${limit})`;
+    }
+
+    return expr;
 }
 
 // Helper function to find the collection node based on context
@@ -226,7 +276,7 @@ export const collectionsViewRouter = router({
             void callWithTelemetryAndErrorHandling('documentDB.query.executionIntent', (telemetryCtx) => {
                 telemetryCtx.errorHandling.suppressDisplay = true;
                 telemetryCtx.telemetry.properties.intent = executionIntent;
-                telemetryCtx.telemetry.properties.pageNumber = input.pageNumber.toString();
+                telemetryCtx.telemetry.measurements.pageNumber = input.pageNumber;
                 telemetryCtx.telemetry.measurements.documentCount = size;
             });
 
@@ -234,25 +284,16 @@ export const collectionsViewRouter = router({
 
             return { documentCount: size };
         }),
-    getAutocompletionSchema: publicProcedureWithTelemetry
+    getFieldCompletionData: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
-            const _currentJsonSchema = session.getCurrentSchema();
-            const autoCompletionData: FieldEntry[] = getKnownFields(_currentJsonSchema);
+            const fieldEntries: FieldEntry[] = session.getKnownFields();
 
-            let querySchema: JSONSchema;
-
-            if (autoCompletionData.length > 0) {
-                querySchema = generateMongoFindJsonSchema(autoCompletionData);
-            } else {
-                querySchema = basicFindQuerySchema;
-            }
-
-            return querySchema;
+            return toFieldCompletionItems(fieldEntries);
         }),
     getCurrentPageAsTable: publicProcedureWithTelemetry
         // parameters
@@ -656,14 +697,17 @@ export const collectionsViewRouter = router({
 
         let analyzed: ExecutionStatsAnalysis;
         let explainResult: Document | undefined;
+        let totalCollectionDocs: number | undefined;
 
         // Check for debug override file first
         const debugData = readQueryInsightsDebugFile('query-insights-stage2.json');
+        let queryFilter: Document | undefined;
         if (debugData) {
             ext.outputChannel.trace(l10n.t('[Query Insights Stage 2] Using debug data file'));
             // Use debug data - analyze it the same way as real data
             analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(debugData);
             explainResult = debugData;
+            // totalCollectionDocs not available in debug mode — advisories will simply not fire
         } else {
             // Get ClusterSession
             const session: ClusterSession = ClusterSession.getSession(sessionId);
@@ -693,9 +737,18 @@ export const collectionsViewRouter = router({
                 }),
             );
 
-            // Analyze with ExplainPlanAnalyzer
-            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult);
+            // Analyze with ExplainPlanAnalyzer (pass the user's actual filter for empty-query detection)
+            analyzed = ExplainPlanAnalyzer.analyzeExecutionStats(executionStatsResult, queryParams.filterObj);
             explainResult = executionStatsResult;
+            queryFilter = queryParams.filterObj as Document | undefined;
+
+            // Fetch total collection docs for index-strategy advisories and selectivity cell
+            try {
+                totalCollectionDocs = await session.getClient().estimateDocumentCount(databaseName, collectionName);
+            } catch {
+                // Non-critical — advisories and selectivity will simply not fire/display
+                totalCollectionDocs = undefined;
+            }
         }
 
         // Extract extended stage info (as per design document)
@@ -703,6 +756,13 @@ export const collectionsViewRouter = router({
         const executionStages = explainResult?.executionStats?.executionStages as Document | undefined;
         if (executionStages) {
             analyzed.extendedStageInfo = StagePropertyExtractor.extractAllExtendedStageInfo(executionStages);
+
+            // Enrich with properties from queryPlanner (e.g., isBitmap is only in queryPlanner stages)
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
+            const winningPlan = explainResult?.queryPlanner?.winningPlan as Document | undefined;
+            if (winningPlan) {
+                StagePropertyExtractor.enrichWithQueryPlannerInfo(analyzed.extendedStageInfo, winningPlan);
+            }
         }
 
         // Check for execution error and return error response if found
@@ -718,9 +778,69 @@ export const collectionsViewRouter = router({
             return errorResponse;
         }
 
+        // Add index-strategy advisories (coverage, cardinality, multikey)
+        if (explainResult) {
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analyzed, totalCollectionDocs, explainResult, queryFilter);
+        }
+
         // Transform to UI format (normal successful execution path)
         ext.outputChannel.trace(l10n.t('Transforming Stage 2 response to UI format'));
-        const transformed = transformStage2Response(analyzed);
+        const transformed = transformStage2Response(analyzed, totalCollectionDocs);
+
+        // Cache the Stage 2 response for Stage 3's static analysis context
+        if (!debugData) {
+            const session: ClusterSession = ClusterSession.getSession(sessionId);
+            session.setStage2Response(transformed, totalCollectionDocs);
+        }
+
+        // --- Stage 2 telemetry ---
+        // Performance metrics (safe to aggregate, no PII/OII)
+        ctx.telemetry.properties.performanceScore = transformed.efficiencyAnalysis.performanceRating.score;
+        ctx.telemetry.properties.executionStrategy = transformed.executionStrategy;
+        ctx.telemetry.properties.indexUsed = transformed.indexUsed ? 'true' : 'false';
+        ctx.telemetry.properties.hadCollectionScan = transformed.hadCollectionScan ? 'true' : 'false';
+        ctx.telemetry.properties.hadInMemorySort = transformed.hadInMemorySort ? 'true' : 'false';
+        ctx.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
+        ctx.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
+        ctx.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
+
+        ctx.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
+        ctx.telemetry.measurements.documentsReturned = transformed.documentsReturned;
+        ctx.telemetry.measurements.totalDocsExamined = transformed.totalDocsExamined;
+        ctx.telemetry.measurements.totalKeysExamined = transformed.totalKeysExamined;
+        ctx.telemetry.measurements.examinedToReturnedRatio = transformed.examinedToReturnedRatio;
+        ctx.telemetry.measurements.diagnosticBadgeCount =
+            transformed.efficiencyAnalysis.performanceRating.diagnostics.length;
+
+        if (totalCollectionDocs !== undefined) {
+            ctx.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
+        }
+
+        // Selectivity as a number (strip the '%' if present)
+        if (transformed.efficiencyAnalysis.selectivity) {
+            const selectivityNum = parseFloat(transformed.efficiencyAnalysis.selectivity);
+            if (!isNaN(selectivityNum)) {
+                ctx.telemetry.measurements.selectivityPercent = selectivityNum;
+            }
+        }
+
+        // Badge IDs (safe categorical data, no PII)
+        const diagnosticIds = transformed.efficiencyAnalysis.performanceRating.diagnostics
+            .map((d) => d.diagnosticId)
+            .join(',');
+        ctx.telemetry.properties.diagnosticBadgeIds = diagnosticIds;
+
+        // Count badges by type
+        const badgesByType = transformed.efficiencyAnalysis.performanceRating.diagnostics.reduce(
+            (acc, d) => {
+                acc[d.type] = (acc[d.type] || 0) + 1;
+                return acc;
+            },
+            {} as Record<string, number>,
+        );
+        ctx.telemetry.measurements.positiveBadgeCount = badgesByType['positive'] ?? 0;
+        ctx.telemetry.measurements.neutralBadgeCount = badgesByType['neutral'] ?? 0;
+        ctx.telemetry.measurements.negativeBadgeCount = badgesByType['negative'] ?? 0;
 
         ext.outputChannel.trace(
             l10n.t(
@@ -766,8 +886,18 @@ export const collectionsViewRouter = router({
             const clusterMetadata = await session.getClient().getClusterMetadata();
             ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
 
-            // Get query parameters from session (current query)
-            const queryParams = session.getCurrentFindQueryParams();
+            // Get parsed query parameters from session.
+            // Using the parsed variant (rather than raw strings) ensures we apply the same relaxed
+            // BSON parsing used everywhere else in the collection view (handles unquoted keys,
+            // single quotes, ObjectId()/UUID()/Date()/MinKey()/MaxKey() constructors, etc.).
+            const parsedQueryParams = session.getCurrentFindQueryParamsWithObjects();
+            const queryObject: QueryObject = {
+                filter: parsedQueryParams.filterObj,
+                sort: parsedQueryParams.sortObj,
+                projection: parsedQueryParams.projectionObj,
+                skip: parsedQueryParams.skip,
+                limit: parsedQueryParams.limit,
+            };
 
             // Get cached execution plan from Stage 2
             const cachedExecutionPlan = session.getRawExplainOutput(databaseName, collectionName);
@@ -782,15 +912,59 @@ export const collectionsViewRouter = router({
             // Create AI service instance
             const aiService = new QueryInsightsAIService();
 
+            // Build static analysis summary from cached Stage 2 response
+            let staticAnalysisSummary: string | undefined;
+            const stage2Cache = session.getStage2Response();
+            if (stage2Cache?.response) {
+                try {
+                    staticAnalysisSummary = buildStaticAnalysisSummary(
+                        stage2Cache.response,
+                        stage2Cache.totalCollectionDocs,
+                    );
+                    ctx.telemetry.properties.hasStaticAnalysisSummary = 'true';
+                    ctx.telemetry.measurements.staticAnalysisSummaryLength = staticAnalysisSummary.length;
+                    ext.outputChannel.trace(
+                        l10n.t(
+                            '[Query Insights Stage 3] Static analysis summary built ({len} chars, requestKey: {key})',
+                            {
+                                len: staticAnalysisSummary.length.toString(),
+                                key: requestKey,
+                            },
+                        ),
+                    );
+                } catch (error) {
+                    ctx.telemetry.properties.hasStaticAnalysisSummary = 'false';
+                    ctx.telemetry.properties.staticAnalysisSummaryError = 'true';
+                    ctx.telemetry.properties.staticAnalysisSummaryErrorKind =
+                        error instanceof Error ? error.constructor.name : 'unknown';
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    // Non-critical: proceed without summary if it fails
+                    ext.outputChannel.error(
+                        l10n.t(
+                            '[Query Insights Stage 3] Failed to build static analysis summary (requestKey: {key}): {error}',
+                            {
+                                key: requestKey,
+                                error: errorMessage,
+                            },
+                        ),
+                    );
+                }
+            } else {
+                ctx.telemetry.properties.hasStaticAnalysisSummary = 'false';
+            }
+
+            ctx.telemetry.properties.hasCachedExecutionPlan = cachedExecutionPlan ? 'true' : 'false';
+
             // Call AI service with execution plan
             const aiServiceStart = Date.now();
             const aiRecommendations = await aiService.getOptimizationRecommendations(
                 sessionId,
-                queryParams,
+                queryObject,
                 databaseName,
                 collectionName,
                 cachedExecutionPlan ?? undefined,
                 myCtx.signal,
+                staticAnalysisSummary,
             );
             const aiServiceDuration = Date.now() - aiServiceStart;
             ext.outputChannel.trace(
@@ -902,4 +1076,150 @@ export const collectionsViewRouter = router({
 
         return { success: true };
     }),
+
+    openQueryInPlayground: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
+            myCtx.telemetry.properties.hasFilter =
+                input.filter && input.filter.replace(/\s/g, '') !== '{}' ? 'true' : 'false';
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+
+            await vscode.commands.executeCommand('vscode-documentdb.command.playground.new.withContent', {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                content: query,
+                viewId: myCtx.viewId,
+            });
+        }),
+
+    openQueryInShell: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            // ── Telemetry: activation source for cross-feature analytics ──
+            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+
+            await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                viewId: myCtx.viewId,
+                initialInput: query,
+            });
+        }),
+
+    copyQueryToClipboard: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                filter: z.string(),
+                project: z.string().optional(),
+                sort: z.string().optional(),
+                skip: z.number().optional(),
+                limit: z.number().optional(),
+            }),
+        )
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const query = buildFindExpression(
+                myCtx.collectionName,
+                input.filter,
+                input.project,
+                input.sort,
+                input.skip,
+                input.limit,
+            );
+            await vscode.env.clipboard.writeText(query);
+            void vscode.window.showInformationMessage(l10n.t('Query copied to clipboard'));
+        }),
+
+    pasteQueryFromClipboard: publicProcedureWithTelemetry.mutation(async () => {
+        const text = await vscode.env.clipboard.readText();
+
+        if (!text.trim()) {
+            throw new Error(l10n.t('Clipboard is empty.'));
+        }
+
+        const parsed = parseFindExpression(text);
+
+        // Require at least one transferable query component before reporting success
+        if (
+            !parsed.filter &&
+            !parsed.project &&
+            !parsed.sort &&
+            parsed.skip === undefined &&
+            parsed.limit === undefined
+        ) {
+            throw new Error(l10n.t('Clipboard does not contain a recognizable find() query.'));
+        }
+
+        return {
+            success: true as const,
+            filter: parsed.filter,
+            project: parsed.project,
+            sort: parsed.sort,
+            skip: parsed.skip,
+            limit: parsed.limit,
+        };
+    }),
+
+    completionAccepted: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                category: z.enum([...COMPLETION_CATEGORIES, 'unknown']),
+            }),
+        )
+        .mutation(({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            // Suppress per-call tRPC telemetry — we accumulate instead
+            myCtx.telemetry.suppressAll = true;
+
+            if (input.category === 'unknown') {
+                ext.outputChannel.appendLog(
+                    `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
+                );
+            }
+            void callWithAccumulatingTelemetry('completion.accepted.cv', (accCtx) => {
+                accCtx.telemetry.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
+            });
+        }),
 });

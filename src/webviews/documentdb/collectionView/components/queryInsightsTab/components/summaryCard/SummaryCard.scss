@@ -43,3 +43,19 @@
     opacity: 0.5;
     color: var(--vscode-disabledForeground);
 }
+
+// Label with tooltip indicator
+.cellLabelWithTooltip {
+    display: inline-flex;
+    align-items: center;
+}
+
+// Entire cell wrapped in a tooltip
+.cellWithTooltip {
+    border-radius: 4px;
+
+    &:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+    }
+}

@@ -179,14 +179,21 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
     /**
      * Configures the Tab key behavior for the Monaco editor.
      *
-     * When called, this function sets up or removes a keydown handler for the Tab key.
-     * If `shouldTrap` is true, Tab/Shift+Tab are trapped within the editor (focus remains in editor).
-     * If `shouldTrap` is false, Tab/Shift+Tab move focus to the next/previous focusable element outside the editor.
+     * When `shouldTrap` is true, Tab/Shift+Tab are trapped within the editor
+     * (default Monaco behavior for code indentation).
+     *
+     * When `shouldTrap` is false, Tab/Shift+Tab move focus to the next/previous
+     * focusable element outside the editor — UNLESS the editor is in snippet
+     * tab-stop mode (`inSnippetMode`), in which case Tab navigates between
+     * snippet placeholders. After the snippet session ends (final tab stop or
+     * ESC), Tab reverts to moving focus out of the editor.
+     *
+     * Uses `editor.addAction` with a precondition context key expression
+     * (`!inSnippetMode`) rather than `onKeyDown` interception, so Monaco's
+     * built-in snippet navigation takes priority when a snippet is active.
      *
      * @param {monacoEditor.editor.IStandaloneCodeEditor} editor - The Monaco editor instance.
      * @param {boolean} shouldTrap - Whether to trap Tab key in the editor.
-     *   - true: Tab/Shift+Tab are trapped in the editor.
-     *   - false: Tab/Shift+Tab move focus to next/previous element.
      */
     const configureTabKeyMode = (editor: monacoEditor.editor.IStandaloneCodeEditor, shouldTrap: boolean) => {
         if (tabKeyDisposerRef.current) {
@@ -198,17 +205,30 @@ export const MonacoAutoHeight = (props: MonacoAutoHeightProps) => {
             return;
         }
 
-        tabKeyDisposerRef.current = editor.onKeyDown((event) => {
-            if (event.keyCode !== monacoEditor.KeyCode.Tab) {
-                return;
-            }
-
-            event.preventDefault();
-            event.stopPropagation();
-
-            const direction = event.browserEvent.shiftKey ? 'previous' : 'next';
-            moveFocus(editor, direction);
+        // Register Tab and Shift+Tab actions that only fire when NOT in snippet mode.
+        // When inSnippetMode is true, Monaco's built-in snippet Tab handler takes over.
+        const tabAction = editor.addAction({
+            id: 'documentdb.tab.moveFocusNext',
+            label: 'Move Focus to Next Element',
+            keybindings: [monacoEditor.KeyCode.Tab],
+            precondition: '!inSnippetMode',
+            run: () => moveFocus(editor, 'next'),
         });
+
+        const shiftTabAction = editor.addAction({
+            id: 'documentdb.tab.moveFocusPrevious',
+            label: 'Move Focus to Previous Element',
+            keybindings: [monacoEditor.KeyMod.Shift | monacoEditor.KeyCode.Tab],
+            precondition: '!inSnippetMode',
+            run: () => moveFocus(editor, 'previous'),
+        });
+
+        tabKeyDisposerRef.current = {
+            dispose: () => {
+                tabAction.dispose();
+                shiftTabAction.dispose();
+            },
+        };
     };
 
     // Default escape handler: move focus to next element (like Tab)

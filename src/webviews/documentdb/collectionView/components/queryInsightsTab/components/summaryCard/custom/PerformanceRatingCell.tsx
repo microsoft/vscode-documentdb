@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, Text, tokens, Tooltip } from '@fluentui/react-components';
-import { InfoRegular } from '@fluentui/react-icons';
+import { InfoRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
@@ -103,6 +103,18 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     // Determine the content to display based on rating value
     let customContent: React.ReactNode;
 
+    // Step 1 — Filter: keep only high-signal positive badges + all neutral/negative
+    const SHOWN_POSITIVE_IDS: string[] = ['high_efficiency_ratio', 'fast_execution', 'index_used'];
+    const filteredDiagnostics = (diagnostics ?? []).filter(
+        (d) => d.type !== 'positive' || SHOWN_POSITIVE_IDS.includes(d.diagnosticId),
+    );
+
+    // Step 2 — Sort: positive → neutral → negative (standard UX convention)
+    const TYPE_ORDER: Record<string, number> = { positive: 0, neutral: 1, negative: 2 };
+    const visibleDiagnostics = [...filteredDiagnostics].sort(
+        (a, b) => (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1),
+    );
+
     if (rating === null) {
         // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
         customContent = null;
@@ -130,11 +142,11 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                         {getRatingText(rating)}
                     </Text>
                     {/* Second row, first column: empty */}
-                    {diagnostics && diagnostics.length > 0 && <div />}
+                    {visibleDiagnostics.length > 0 && <div />}
                     {/* Second row, second column: diagnostic badges with tooltips */}
-                    {diagnostics && diagnostics.length > 0 && (
+                    {visibleDiagnostics.length > 0 && (
                         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                            {diagnostics.map((diagnostic, index) => (
+                            {visibleDiagnostics.map((diagnostic, index) => (
                                 <Tooltip
                                     key={index}
                                     content={{
@@ -145,8 +157,12 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                                         fontWeight: 600,
                                                         marginBottom: '12px',
                                                         fontSize: '16px',
+                                                        display: 'flex',
+                                                        alignItems: 'center',
+                                                        gap: '6px',
                                                     }}
                                                 >
+                                                    {diagnostic.type === 'negative' && <WarningRegular />}
                                                     {diagnostic.message}
                                                 </div>
                                                 <div style={{ whiteSpace: 'pre-line' }}>{diagnostic.details}</div>
@@ -164,7 +180,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                                         color={diagnostic.type === 'positive' ? 'success' : 'informative'}
                                         size="small"
                                         shape="rounded"
-                                        icon={<InfoRegular />}
+                                        icon={diagnostic.type === 'negative' ? <WarningRegular /> : <InfoRegular />}
                                         tabIndex={0}
                                         className="focusableBadge"
                                         aria-label={`${diagnostic.message}. ${diagnostic.details}`}

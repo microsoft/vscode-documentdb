@@ -40,7 +40,10 @@ export class DocumentsViewController extends WebviewController<DocumentsViewWebv
             }
         }
 
-        super(ext.context, title, 'documentView', initialData, vscode.ViewColumn.Active);
+        super(ext.context, title, 'documentView', initialData, vscode.ViewColumn.Active, {
+            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-light.svg'),
+            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-dark.svg'),
+        });
 
         const trpcContext: RouterContext = {
             dbExperience: API.DocumentDB,

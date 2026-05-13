@@ -16,6 +16,43 @@
     width: 100%;
 }
 
+// Header with inline info icon (used in both metric cards and summary cells)
+.headerWithInfoIcon {
+    display: inline-flex;
+    align-items: center;
+}
+
+// Small info icon shown next to labels that have tooltips
+.tooltipInfoIcon {
+    font-size: 12px;
+    opacity: 0.6;
+    margin-left: 4px;
+}
+
+// Shared tooltip content styles
+.tooltipContainer {
+    padding: 8px;
+}
+
+.tooltipTitle {
+    font-weight: 600;
+    margin-bottom: 12px;
+    font-size: 16px;
+}
+
+.tooltipBody {
+    white-space: pre-line;
+}
+
+.tooltipValue {
+    margin-top: 12px;
+    margin-left: -3px;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
 .baseDataValue {
     font-size: 28px;
     font-weight: 600;

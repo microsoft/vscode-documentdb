@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
+
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { SettingsService } from '../../../services/SettingsService';
@@ -12,6 +14,10 @@ import { type RouterContext } from './collectionViewRouter';
 export type CollectionViewWebviewConfigurationType = {
     sessionId: string;
     clusterId: string;
+    /**
+     * Human-readable cluster display name for Playground headers and Shell titles.
+     */
+    clusterDisplayName: string;
     /**
      * Identifies which tree view this cluster belongs to.
      * Required for finding the tree node during import/export operations.
@@ -23,6 +29,14 @@ export type CollectionViewWebviewConfigurationType = {
     defaultPageSize: number;
     feedbackSignalsEnabled: boolean;
     enableAIQueryGeneration: boolean;
+    /** Pre-populated query from cross-feature navigation (e.g., Playground → Collection View). */
+    initialQuery?: {
+        filter?: string;
+        project?: string;
+        sort?: string;
+        skip?: number;
+        limit?: number;
+    };
 };
 
 export class CollectionViewController extends WebviewController<CollectionViewWebviewConfigurationType> {
@@ -48,13 +62,17 @@ export class CollectionViewController extends WebviewController<CollectionViewWe
             enableAIQueryGeneration,
         };
 
-        super(ext.context, title, 'collectionView', fullInitialData);
+        super(ext.context, title, 'collectionView', fullInitialData, vscode.ViewColumn.One, {
+            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
+            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-dark.svg'),
+        });
 
         const trpcContext: RouterContext = {
             dbExperience: API.DocumentDB,
             webviewName: 'collectionView',
             sessionId: initialData.sessionId,
             clusterId: initialData.clusterId,
+            clusterDisplayName: initialData.clusterDisplayName,
             viewId: initialData.viewId,
             databaseName: initialData.databaseName,
             collectionName: initialData.collectionName,

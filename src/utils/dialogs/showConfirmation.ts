@@ -7,9 +7,9 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 
 export function showConfirmationAsInSettings(message: string) {
-    const showSummary: boolean | undefined = vscode.workspace
+    const showSummary: boolean = vscode.workspace
         .getConfiguration()
-        .get<boolean>(ext.settingsKeys.showOperationSummaries);
+        .get<boolean>(ext.settingsKeys.showOperationSummaries, true);
 
     if (showSummary) {
         vscode.window.showInformationMessage(message);

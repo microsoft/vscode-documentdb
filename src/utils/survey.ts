@@ -108,12 +108,12 @@ export function countUsageForSurvey(score: UsageImpact | number): void {
  */
 export async function promptAfterActionEventually(score: UsageImpact | number, triggerAction?: string): Promise<void> {
     await callWithTelemetryAndErrorHandling('survey.measure-score', async (context: IActionContext) => {
-        context.telemetry.properties.triggerActionScore = score.toString();
+        context.telemetry.measurements.triggerActionScore = typeof score === 'number' ? score : Number(score);
         context.telemetry.properties.triggerAction = triggerAction;
 
         const globalOptOut = getIsSurveyDisabledGlobally();
-        context.telemetry.properties.isSurveyDisabledGlobally = globalOptOut.toString();
-        context.telemetry.properties.wasPromptedInSession = surveyState.wasPromptedInSession.toString();
+        context.telemetry.properties.isSurveyDisabledGlobally = globalOptOut ? 'true' : 'false';
+        context.telemetry.properties.wasPromptedInSession = surveyState.wasPromptedInSession ? 'true' : 'false';
 
         if (globalOptOut || surveyState.wasPromptedInSession) {
             return;
@@ -122,14 +122,14 @@ export async function promptAfterActionEventually(score: UsageImpact | number, t
         countUsageForSurvey(score);
 
         const fullScore = surveyState.usageScore;
-        context.telemetry.properties.fullScore = fullScore.toString();
+        context.telemetry.measurements.fullScore = fullScore;
 
         const scoreTargetReached = fullScore >= SurveyConfig.scoring.REQUIRED_SCORE;
-        context.telemetry.properties.scoreTargetReached = scoreTargetReached.toString();
+        context.telemetry.properties.scoreTargetReached = scoreTargetReached ? 'true' : 'false';
 
         if (scoreTargetReached) {
             const isCandidate = await getIsSurveyCandidate();
-            context.telemetry.properties.isCandidate = isCandidate.toString();
+            context.telemetry.properties.isCandidate = isCandidate ? 'true' : 'false';
             await surveyPromptIfCandidate(triggerAction);
         }
     });
@@ -154,7 +154,7 @@ async function initSurvey(): Promise<void> {
         ): boolean => {
             surveyState.isCandidate = isCandidate;
             context.telemetry.properties.reason = reason;
-            context.telemetry.properties.isCandidate = isCandidate.toString();
+            context.telemetry.properties.isCandidate = isCandidate ? 'true' : 'false';
 
             // Add any additional properties
             Object.entries(extraProps).forEach(([key, value]) => {
@@ -257,7 +257,7 @@ async function initSurvey(): Promise<void> {
                 const acceptedForABTest = normalized < SurveyConfig.settings.A_B_TEST_SELECTION;
 
                 return setCandidateStatus(acceptedForABTest, '07_not_in_ab_test_group', {
-                    acceptedForABTest: acceptedForABTest.toString(),
+                    acceptedForABTest: acceptedForABTest ? 'true' : 'false',
                     normalizedValue: normalized.toFixed(6),
                 });
             } catch (error) {
@@ -277,7 +277,7 @@ async function surveyPromptIfCandidate(triggerAction?: string): Promise<void> {
     }
     await callWithTelemetryAndErrorHandling('survey.prompt', async (context: IActionContext) => {
         const isCandidate = await getIsSurveyCandidate();
-        context.telemetry.properties.isCandidate = isCandidate.toString();
+        context.telemetry.properties.isCandidate = isCandidate ? 'true' : 'false';
         context.telemetry.properties.triggerAction = triggerAction;
         context.telemetry.properties.userAsked = 'false'; // this will be set to 'true' later if the user interacts with the prompt
         surveyState.wasPromptedInSession = true; // disarm for the rest of the session

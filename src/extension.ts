@@ -19,7 +19,11 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersExtension } from './documentdb/ClustersExtension';
+import { PlaygroundDiagnostics } from './documentdb/playground/PlaygroundDiagnostics';
+import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
+import { SchemaStore } from './documentdb/SchemaStore';
 import { ext } from './extensionVariables';
+import { flushAccumulatingTelemetry } from './utils/callWithAccumulatingTelemetry';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
@@ -41,6 +45,17 @@ export async function activateInternal(
 
     ext.outputChannel = createAzExtLogOutputChannel('DocumentDB for VS Code');
     context.subscriptions.push(ext.outputChannel);
+
+    ext.playgroundOutputChannel = vscode.window.createOutputChannel('DocumentDB Query Playground Output');
+    context.subscriptions.push(ext.playgroundOutputChannel);
+
+    ext.playgroundResultProvider = new PlaygroundResultProvider();
+    context.subscriptions.push(
+        ext.playgroundResultProvider,
+        vscode.workspace.registerTextDocumentContentProvider(PLAYGROUND_RESULT_SCHEME, ext.playgroundResultProvider),
+        new PlaygroundDiagnostics(),
+    );
+
     registerUIExtensionVariables(ext);
     registerAzureUtilsExtensionVariables(ext);
 
@@ -58,6 +73,7 @@ export async function activateInternal(
 
         const clustersSupport: ClustersExtension = new ClustersExtension();
         context.subscriptions.push(clustersSupport); // to be disposed when extension is deactivated.
+        context.subscriptions.push(SchemaStore.getInstance());
         await clustersSupport.activateClustersSupport();
 
         context.subscriptions.push(
@@ -79,10 +95,9 @@ export async function activateInternal(
 
         const enableAIQueryGeneration = vscode.workspace
             .getConfiguration()
-            .get<boolean>(ext.settingsKeys.enableAIQueryGeneration, false)
-            .toString();
+            .get<boolean>(ext.settingsKeys.enableAIQueryGeneration, false);
 
-        telemetryContext.telemetry.properties.enableAIQueryGeneration = enableAIQueryGeneration;
+        telemetryContext.telemetry.properties.enableAIQueryGeneration = enableAIQueryGeneration ? 'true' : 'false';
     });
 
     // Create the DocumentDB Extension API v0.2.0
@@ -132,7 +147,9 @@ export async function activateInternal(
 
 // this method is called when your extension is deactivated
 export function deactivateInternal(_context: vscode.ExtensionContext): void {
-    // NOOP
+    // Flush any pending accumulated telemetry (high-frequency events batched via
+    // callWithAccumulatingTelemetry) so the last partial batch is not lost.
+    flushAccumulatingTelemetry();
 }
 
 /**
