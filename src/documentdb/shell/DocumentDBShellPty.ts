@@ -993,21 +993,20 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private applySingleCompletion(result: CompletionResult): void {
         const candidate = result.candidates[0];
 
-        // ── Telemetry: track completion acceptance ───────────────────
-        this.trackCompletionAccepted(candidate.kind, 'tab');
-
         // If insertText doesn't start with the typed prefix, replace
         // the prefix entirely. Covers bracket notation (db[re → 'restaurants']),
         // quoted field paths (address.ci → "address.city"), and
         // special-char collections (sto → ['stores (10)']).
         if (result.prefix.length > 0 && !candidate.insertText.startsWith(result.prefix)) {
             this._inputHandler.replaceText(result.prefix.length, candidate.insertText);
+            this.trackCompletionAccepted(candidate.kind, 'tab');
             return;
         }
 
         const remaining = candidate.insertText.slice(result.prefix.length);
         if (remaining.length > 0) {
             this._inputHandler.insertText(remaining);
+            this.trackCompletionAccepted(candidate.kind, 'tab');
         }
     }
 
@@ -1287,7 +1286,6 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         const category = DocumentDBShellPty.shellKindToCategory(kind);
         void callWithAccumulatingTelemetry('shell.completionList', (ctx) => {
             ctx.telemetry.measurements[`shown_${category}`] = 1;
-            ctx.telemetry.measurements.candidateCount = candidates.length;
         });
     }
 
