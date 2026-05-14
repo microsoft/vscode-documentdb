@@ -20,6 +20,7 @@ import {
     MIGRATION_V2_DONE_KEY,
     type KubeconfigSourceRecord,
 } from '../config';
+import { defaultKubeconfigExists } from '../kubernetesClient';
 import {
     isMigrationDone,
     KUBECONFIG_STORAGE_NAME,
@@ -103,13 +104,14 @@ export async function ensureMigration(): Promise<void> {
     await ext.context.globalState.update(MIGRATION_V2_DONE_KEY, undefined);
 
     // Step 5: if nothing has been written yet (fresh install or v2 was empty),
-    //         seed the StorageService store with the singleton Default record.
+    //         seed the StorageService store with the singleton Default record
+    //         only when a default kubeconfig actually exists on disk.
     if (!importedAny) {
         const existingItems =
             await StorageService.get(KUBECONFIG_STORAGE_NAME).getItems<SourceItemProperties>(
                 KUBECONFIG_STORAGE_WORKSPACE,
             );
-        if (existingItems.length === 0) {
+        if (existingItems.length === 0 && defaultKubeconfigExists()) {
             const defaultItem: StorageItem<SourceItemProperties> = {
                 id: DEFAULT_SOURCE_ID,
                 name: vscode.l10n.t('Default kubeconfig'),

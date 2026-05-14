@@ -103,13 +103,11 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
     }
 
     private createKubeconfigRecoveryChildren(message: string): ExtTreeElementBase[] {
+        void vscode.window.showWarningMessage(
+            vscode.l10n.t('Kubeconfig source "{0}": {1}', this.source.label, message),
+        );
+
         const children: ExtTreeElementBase[] = [
-            createGenericElementWithContext({
-                contextValue: 'error',
-                id: `${this.id}/kubeconfig-error`,
-                label: message,
-                iconPath: new vscode.ThemeIcon('warning'),
-            }),
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/remove-source`,
@@ -156,7 +154,7 @@ function buildDescription(source: KubeconfigSourceRecord): string | undefined {
         case 'file':
             return source.path ? `(file: ${shortenPath(source.path)})` : '(file)';
         case 'inline':
-            return '(pasted YAML)';
+            return undefined;
         case 'default':
         default:
             return `(${describeDefaultKubeconfigPath()})`;
@@ -176,16 +174,8 @@ function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
     return new vscode.MarkdownString(lines.join('\n\n'));
 }
 
-function buildIcon(source: KubeconfigSourceRecord): vscode.ThemeIcon {
-    switch (source.kind) {
-        case 'file':
-            return new vscode.ThemeIcon('file');
-        case 'inline':
-            return new vscode.ThemeIcon('clippy');
-        case 'default':
-        default:
-            return new vscode.ThemeIcon('key');
-    }
+function buildIcon(_source: KubeconfigSourceRecord): vscode.ThemeIcon {
+    return new vscode.ThemeIcon('plug');
 }
 
 function shortenPath(absolutePath: string): string {

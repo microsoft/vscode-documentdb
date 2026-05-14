@@ -99,8 +99,35 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
         await this.renameLegacyProviders();
         await this.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
 
-        // Get the list of active discovery provider IDs from global state
-        const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
+        // Get the list of active discovery provider IDs from global state.
+        // On fresh install (empty list, not yet seeded), auto-activate all registered
+        // providers so users see every discovery source without manual setup.
+        // A one-shot flag ensures this only fires once — users who explicitly remove
+        // all providers will not have them re-added on the next refresh.
+        let activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
+
+        const autoSeedDone = ext.context.globalState.get<boolean>('discoveryAutoSeedDone', false);
+        if (!autoSeedDone) {
+            if (activeDiscoveryProviderIds.length === 0) {
+                const allProviderIds = DiscoveryService.listProviders().map((p) => p.id);
+                if (allProviderIds.length > 0) {
+                    activeDiscoveryProviderIds = allProviderIds;
+                    try {
+                        await ext.context.globalState.update('activeDiscoveryProviderIds', activeDiscoveryProviderIds);
+                    } catch {
+                        // Best-effort; providers still show for this session via the local variable.
+                    }
+                }
+            }
+            // Stamp the flag regardless of whether we seeded or the user already had
+            // providers. This ensures existing users who later remove all providers
+            // won't have them re-added.
+            try {
+                await ext.context.globalState.update('discoveryAutoSeedDone', true);
+            } catch {
+                // Best-effort.
+            }
+        }
 
         const rootItems: TreeElement[] = [];
 

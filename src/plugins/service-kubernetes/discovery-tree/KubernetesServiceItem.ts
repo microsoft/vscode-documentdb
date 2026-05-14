@@ -442,35 +442,16 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
     }
 
     private buildTooltip(): vscode.MarkdownString {
-        const tooltipParts: string[] = [
-            `**Target:** ${this.serviceInfo.displayName}`,
-            `**Source:** ${this.serviceInfo.sourceKind === 'dko' ? 'DKO resource' : 'Generic fallback service'}`,
-            `**Service:** ${this.serviceInfo.serviceName}`,
-            `**Namespace:** ${this.serviceInfo.namespace}`,
-            `**Type:** ${this.serviceInfo.type}`,
-            `**Port:** ${String(this.serviceInfo.port)}`,
-        ];
+        const tooltipParts: string[] = [`**Target:** ${this.serviceInfo.displayName}`];
 
-        if (this.serviceInfo.documentDbName) {
-            tooltipParts.push(`**DocumentDB:** ${this.serviceInfo.documentDbName}`);
-        }
         if (this.serviceInfo.status) {
             tooltipParts.push(`**Status:** ${this.serviceInfo.status}`);
-        }
-        if (this.serviceInfo.secretName) {
-            tooltipParts.push(`**Secret:** ${this.serviceInfo.secretName}`);
-        }
-
-        if (this.serviceInfo.nodePort) {
-            tooltipParts.push(`**NodePort:** ${String(this.serviceInfo.nodePort)}`);
         }
         if (this.serviceInfo.externalAddress) {
             tooltipParts.push(`**External Address:** ${this.serviceInfo.externalAddress}`);
         }
-        if (this.serviceInfo.clusterIP) {
-            tooltipParts.push(`**ClusterIP:** ${this.serviceInfo.clusterIP}`);
-        }
-        tooltipParts.push('', `**Context:** ${this.contextInfo.name}`, `**Server:** ${this.contextInfo.server}`);
+
+        tooltipParts.push(`**Port:** ${String(this.serviceInfo.port)}`);
 
         if (this.contextInfo.provider) {
             tooltipParts.push(`**Provider:** ${this.contextInfo.provider}`);
@@ -478,6 +459,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         if (this.contextInfo.region) {
             tooltipParts.push(`**Region:** ${this.contextInfo.region}`);
         }
+
+        tooltipParts.push('', `**Namespace:** ${this.serviceInfo.namespace}`, `**Context:** ${this.contextInfo.name}`);
 
         return new vscode.MarkdownString(tooltipParts.join('\n\n'));
     }

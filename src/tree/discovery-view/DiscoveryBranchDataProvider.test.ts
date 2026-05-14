@@ -639,3 +639,103 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
         });
     });
 });
+
+describe('DiscoveryBranchDataProvider - auto-seed on fresh install', () => {
+    let dataProvider: DiscoveryBranchDataProvider;
+    let globalStateGetMock: jest.Mock;
+    let globalStateUpdateMock: jest.Mock;
+    let listProvidersMock: jest.Mock;
+    let getProviderMock: jest.Mock;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        globalStateGetMock = ext.context.globalState.get as jest.Mock;
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        globalStateUpdateMock = ext.context.globalState.update as jest.Mock;
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        listProvidersMock = DiscoveryService.listProviders as jest.Mock;
+        // eslint-disable-next-line @typescript-eslint/unbound-method
+        getProviderMock = DiscoveryService.getProvider as jest.Mock;
+
+        globalStateUpdateMock.mockResolvedValue(undefined);
+
+        listProvidersMock.mockReturnValue([
+            { id: 'provider-a', label: 'Provider A' },
+            { id: 'provider-b', label: 'Provider B' },
+        ]);
+        getProviderMock.mockImplementation((id: string) => ({
+            id,
+            label: `Provider ${id}`,
+            getDiscoveryTreeRootItem: jest.fn().mockReturnValue({
+                id: `discoveryView/${id}`,
+                getTreeItem: jest.fn().mockResolvedValue({ contextValue: 'rootItem' }),
+                getChildren: jest.fn().mockResolvedValue([]),
+            }),
+        }));
+
+        dataProvider = new DiscoveryBranchDataProvider();
+    });
+
+    it('should auto-activate all providers when list is empty and auto-seed has not run', async () => {
+        globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
+            if (key === 'activeDiscoveryProviderIds') return [];
+            if (key === 'discoveryAutoSeedDone') return false;
+            return defaultValue;
+        });
+
+        await dataProvider.getChildren(undefined as unknown as never);
+
+        expect(globalStateUpdateMock).toHaveBeenCalledWith('activeDiscoveryProviderIds', ['provider-a', 'provider-b']);
+        expect(globalStateUpdateMock).toHaveBeenCalledWith('discoveryAutoSeedDone', true);
+    });
+
+    it('should not auto-seed when auto-seed flag is already set', async () => {
+        globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
+            if (key === 'activeDiscoveryProviderIds') return [];
+            if (key === 'discoveryAutoSeedDone') return true;
+            return defaultValue;
+        });
+
+        await dataProvider.getChildren(undefined as unknown as never);
+
+        const activeProviderUpdates = (globalStateUpdateMock.mock.calls as unknown[][]).filter(
+            (call) => call[0] === 'activeDiscoveryProviderIds',
+        );
+        expect(activeProviderUpdates).toHaveLength(0);
+    });
+
+    it('should not auto-seed when providers are already active but should stamp the flag', async () => {
+        globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
+            if (key === 'activeDiscoveryProviderIds') return ['provider-a'];
+            if (key === 'discoveryAutoSeedDone') return false;
+            if (key.startsWith('discoveryProviderPromotionProcessed:')) return true;
+            return defaultValue;
+        });
+
+        await dataProvider.getChildren(undefined as unknown as never);
+
+        const activeProviderUpdates = (globalStateUpdateMock.mock.calls as unknown[][]).filter(
+            (call) => call[0] === 'activeDiscoveryProviderIds',
+        );
+        expect(activeProviderUpdates).toHaveLength(0);
+        // Flag should still be stamped so future remove-all won't re-seed
+        expect(globalStateUpdateMock).toHaveBeenCalledWith('discoveryAutoSeedDone', true);
+    });
+
+    it('should still render providers when globalState.update throws', async () => {
+        globalStateGetMock.mockImplementation((key: string, defaultValue?: unknown) => {
+            if (key === 'activeDiscoveryProviderIds') return [];
+            if (key === 'discoveryAutoSeedDone') return false;
+            return defaultValue;
+        });
+        globalStateUpdateMock.mockRejectedValue(new Error('Storage error'));
+
+        const result = await dataProvider.getChildren(undefined as unknown as never);
+
+        // Should still return providers for this session despite storage failure
+        expect(result).toBeDefined();
+        expect(result!.length).toBeGreaterThan(0);
+    });
+});

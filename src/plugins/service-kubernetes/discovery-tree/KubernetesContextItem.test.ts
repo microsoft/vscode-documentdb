@@ -215,7 +215,7 @@ describe('KubernetesContextItem', () => {
             mockCreateCoreApi.mockResolvedValue(mockCoreApi);
         });
 
-        it('should make namespaces with DocumentDB targets expandable and empty namespaces non-expandable', async () => {
+        it('should show only namespaces with DocumentDB targets and hide empty ones', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'production']);
             mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) =>
                 namespace === 'production'
@@ -227,11 +227,9 @@ describe('KubernetesContextItem', () => {
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(2);
+            expect(children).toHaveLength(1);
             expect(getNamespaceName(children![0])).toBe('production');
             expect(getCollapsibleState(children![0])).toBe(1);
-            expect(getNamespaceName(children![1])).toBe('default');
-            expect(getCollapsibleState(children![1])).toBe(0);
 
             expect(mockListDocumentDBServices).toHaveBeenCalledTimes(2);
         });
@@ -259,6 +257,9 @@ describe('KubernetesContextItem', () => {
 
         it('should ignore stale hidden namespace filters from earlier builds', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'kube-system', 'production']);
+            mockListDocumentDBServices.mockResolvedValue([
+                { name: 'svc-a', namespace: 'default', type: 'ClusterIP', port: 10260 },
+            ]);
 
             mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
                 if (key === 'kubernetes-discovery.filteredNamespaces') {
@@ -271,6 +272,7 @@ describe('KubernetesContextItem', () => {
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
+            // All 3 namespaces have services, so all should be visible
             expect(children).toHaveLength(3);
             const namespaceNames = children!.map((child) => getNamespaceName(child));
             expect(namespaceNames).toContain('default');
@@ -278,19 +280,19 @@ describe('KubernetesContextItem', () => {
             expect(namespaceNames).toContain('production');
         });
 
-        it('should sort namespaces with DocumentDB targets before namespaces without targets', async () => {
+        it('should show informational node when all namespaces are empty', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'staging']);
-            mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) =>
-                namespace === 'staging' ? [{ name: 'svc-a', namespace, type: 'ClusterIP', port: 10260 }] : [],
-            );
+            mockListDocumentDBServices.mockResolvedValue([]);
 
             const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(2);
-            expect(getNamespaceName(children![0])).toBe('staging');
-            expect(getNamespaceName(children![1])).toBe('default');
+            expect(children).toHaveLength(1);
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            expect((children![0] as any).contextValue).toBe('informational');
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            expect((children![0] as any).label).toContain('No DocumentDB targets');
         });
 
         it('should limit concurrent namespace service pre-scans', async () => {
@@ -357,8 +359,11 @@ describe('KubernetesContextItem', () => {
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(3);
+            // broken-ns (pre-scan failed, kept visible) + working-ns (has targets)
+            // default is hidden (confirmed empty)
+            expect(children).toHaveLength(2);
             const brokenNamespace = children!.find((child) => getNamespaceName(child) === 'broken-ns');
+            expect(brokenNamespace).toBeDefined();
             expect(getCollapsibleState(brokenNamespace)).toBe(1);
             expect(telemetryContextMock.telemetry.properties).toHaveProperty('namespaceServiceFetchError', 'true');
         });

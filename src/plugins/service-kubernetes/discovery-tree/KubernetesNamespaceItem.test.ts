@@ -121,18 +121,18 @@ describe('KubernetesNamespaceItem', () => {
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-ns');
-            expect(treeItem.description).toBe('No DocumentDB targets');
+            expect(treeItem.description).toBeUndefined();
             expect(treeItem.collapsibleState).toBe(0);
         });
 
-        it('should describe preloaded DocumentDB targets on expandable namespace items', () => {
+        it('should not include target count description on expandable namespace items', () => {
             const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1', [
                 { name: 'svc-a', namespace: 'my-ns', type: 'LoadBalancer', port: 10260 } as KubeServiceInfo,
                 { name: 'svc-b', namespace: 'my-ns', type: 'ClusterIP', port: 10260 } as KubeServiceInfo,
             ]);
             const treeItem = item.getTreeItem();
 
-            expect(treeItem.description).toBe('2 DocumentDB targets');
+            expect(treeItem.description).toBeUndefined();
             expect(treeItem.collapsibleState).toBe(1);
         });
     });

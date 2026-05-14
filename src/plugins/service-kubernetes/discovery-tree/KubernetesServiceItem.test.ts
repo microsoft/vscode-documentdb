@@ -673,4 +673,59 @@ describe('KubernetesServiceItem', () => {
             expect(capturedProperties['endpointWarning']).toBeUndefined();
         });
     });
+
+    describe('tooltip contents', () => {
+        it('should include only user-actionable fields and exclude internal details', () => {
+            const item = new KubernetesServiceItem(
+                'corr-1',
+                'src-1',
+                {
+                    name: 'my-context',
+                    cluster: 'my-cluster',
+                    user: 'my-user',
+                    server: 'https://k8s.example.com:6443',
+                    provider: 'AKS',
+                    region: 'eastus',
+                },
+                {
+                    sourceKind: 'dko',
+                    name: 'svc-1',
+                    displayName: 'sample-documentdb',
+                    serviceName: 'documentdb-service-sample',
+                    namespace: 'documentdb-ns',
+                    type: 'LoadBalancer',
+                    port: 10260,
+                    documentDbName: 'sample-documentdb',
+                    status: 'Cluster in healthy state',
+                    secretName: 'documentdb-credentials',
+                    nodePort: 30112,
+                    externalAddress: '172.179.59.30',
+                    clusterIP: '10.0.97.117',
+                },
+                'parent',
+            );
+
+            const treeItem = item.getTreeItem();
+            const tooltipText = (treeItem.tooltip as { toString(): string }).toString();
+
+            // User-actionable fields should be present
+            expect(tooltipText).toContain('sample-documentdb');
+            expect(tooltipText).toContain('Cluster in healthy state');
+            expect(tooltipText).toContain('172.179.59.30');
+            expect(tooltipText).toContain('10260');
+            expect(tooltipText).toContain('AKS');
+            expect(tooltipText).toContain('eastus');
+            expect(tooltipText).toContain('my-context');
+            expect(tooltipText).toContain('documentdb-ns');
+
+            // Internal / noisy fields must NOT be present
+            expect(tooltipText).not.toContain('documentdb-credentials');
+            expect(tooltipText).not.toContain('30112');
+            expect(tooltipText).not.toContain('10.0.97.117');
+            expect(tooltipText).not.toContain('DKO resource');
+            expect(tooltipText).not.toContain('documentdb-service-sample');
+            expect(tooltipText).not.toContain('LoadBalancer');
+            expect(tooltipText).not.toContain('k8s.example.com');
+        });
+    });
 });

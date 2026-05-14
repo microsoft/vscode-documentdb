@@ -116,7 +116,24 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                     (result) => result.services !== undefined && result.services.length > 0,
                 ).length;
 
-                return sortedNamespaceResults.map(
+                // Show only namespaces with targets or failed pre-scans (which need retry).
+                // Hide confirmed-empty namespaces to reduce noise.
+                const visibleResults = sortedNamespaceResults.filter(
+                    (result) => result.services === undefined || result.services.length > 0,
+                );
+
+                if (visibleResults.length === 0) {
+                    return [
+                        createGenericElementWithContext({
+                            contextValue: 'informational',
+                            id: `${this.id}/no-targets`,
+                            label: vscode.l10n.t('No DocumentDB targets found in this context.'),
+                            iconPath: new vscode.ThemeIcon('info'),
+                        }),
+                    ];
+                }
+
+                return visibleResults.map(
                     (result) =>
                         new KubernetesNamespaceItem(
                             this.id,

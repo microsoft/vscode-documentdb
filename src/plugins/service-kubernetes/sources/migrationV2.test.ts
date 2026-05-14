@@ -53,6 +53,10 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
+jest.mock('../kubernetesClient', () => ({
+    defaultKubeconfigExists: jest.fn(() => true),
+}));
+
 import {
     CUSTOM_KUBECONFIG_PATH_KEY,
     DEFAULT_SOURCE_ID,
@@ -64,6 +68,7 @@ import {
     KUBECONFIG_SOURCE_KEY,
     KUBECONFIG_SOURCES_KEY,
 } from '../config';
+import { defaultKubeconfigExists } from '../kubernetesClient';
 import { _resetMigrationGuardForTests, ensureMigration } from './migrationV2';
 import {
     KUBECONFIG_STORAGE_NAME,
@@ -79,6 +84,7 @@ beforeEach(() => {
     globalStateBacking.clear();
     secretStorageBacking.clear();
     outputWarn.mockClear();
+    jest.mocked(defaultKubeconfigExists).mockReturnValue(true);
     _resetMigrationGuardForTests();
     resetSourceStoreCacheForMigration();
 });
@@ -115,6 +121,15 @@ describe('ensureMigration', () => {
         const item = globalStateBacking.get(defaultKey) as { id: string; name: string; properties: { kind: string } };
         expect(item.id).toBe(DEFAULT_SOURCE_ID);
         expect(item.properties.kind).toBe('default');
+    });
+
+    it('does not seed the default source when no kubeconfig exists on disk', async () => {
+        jest.mocked(defaultKubeconfigExists).mockReturnValue(false);
+
+        await ensureMigration();
+
+        const defaultKey = `${STORAGE_PREFIX}${DEFAULT_SOURCE_ID}`;
+        expect(globalStateBacking.has(defaultKey)).toBe(false);
     });
 
     it('imports v2 array entries into StorageService', async () => {

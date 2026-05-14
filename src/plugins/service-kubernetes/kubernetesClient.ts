@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -176,6 +177,17 @@ export function resolveKubeconfigPath(kubeconfigPath?: string): string {
     }
 
     return path.join(os.homedir(), '.kube', 'config');
+}
+
+/**
+ * Returns `true` when a default kubeconfig is likely available — either via the
+ * `KUBECONFIG` env var or the standard `~/.kube/config` fallback. Performs a
+ * synchronous `fs.existsSync` check so callers (e.g. migration) can cheaply
+ * gate whether the default source should be pre-populated.
+ */
+export function defaultKubeconfigExists(): boolean {
+    const resolvedPath = resolveKubeconfigPath();
+    return fs.existsSync(resolvedPath);
 }
 
 /**

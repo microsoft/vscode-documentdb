@@ -92,22 +92,11 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
 
     public getTreeItem(): vscode.TreeItem {
         const preloadedServiceCount = this.preloadedServices?.length;
-        let description: string | undefined;
-        if (preloadedServiceCount !== undefined) {
-            if (preloadedServiceCount === 0) {
-                description = vscode.l10n.t('No DocumentDB targets');
-            } else if (preloadedServiceCount === 1) {
-                description = vscode.l10n.t('1 DocumentDB target');
-            } else {
-                description = vscode.l10n.t('{0} DocumentDB targets', String(preloadedServiceCount));
-            }
-        }
 
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.namespace,
-            description,
             iconPath: new vscode.ThemeIcon('archive'),
             collapsibleState:
                 preloadedServiceCount === 0

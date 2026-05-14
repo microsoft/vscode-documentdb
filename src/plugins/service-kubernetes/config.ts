@@ -30,7 +30,7 @@ export function getDescription(): string {
 }
 
 /** Icon for the discovery provider */
-export const ICON_PATH = new ThemeIcon('symbol-namespace');
+export const ICON_PATH = new ThemeIcon('layers');
 
 /** Title shown in the discovery wizard (lazy-evaluated) */
 export function getWizardTitle(): string {

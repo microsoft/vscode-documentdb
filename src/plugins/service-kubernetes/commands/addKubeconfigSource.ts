@@ -157,6 +157,31 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
 }
 
 async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourceRecord | undefined> {
+    // Modal confirmation before reading the clipboard.
+    const confirmLabel = vscode.l10n.t('Continue');
+    const previewLabel = vscode.l10n.t('Preview Clipboard');
+    const confirmation = await vscode.window.showWarningMessage(
+        vscode.l10n.t(
+            'The contents of your clipboard will be read and stored as a kubeconfig source in VS Code Secret Storage. Make sure you have the correct content copied before continuing.',
+        ),
+        { modal: true },
+        confirmLabel,
+        previewLabel,
+    );
+
+    if (confirmation === previewLabel) {
+        // Open clipboard contents in an untitled editor for review without storing anything.
+        const clipboardPreview = (await vscode.env.clipboard.readText()).trim();
+        const doc = await vscode.workspace.openTextDocument({ content: clipboardPreview, language: 'yaml' });
+        await vscode.window.showTextDocument(doc, { preview: true });
+        context.telemetry.properties.kubeconfigSourceResult = 'previewed';
+        throw new UserCancelledError();
+    }
+
+    if (confirmation !== confirmLabel) {
+        throw new UserCancelledError();
+    }
+
     const clipboardText = (await vscode.env.clipboard.readText()).trim();
     if (clipboardText.length === 0) {
         context.telemetry.properties.kubeconfigSourceResult = 'emptyClipboard';

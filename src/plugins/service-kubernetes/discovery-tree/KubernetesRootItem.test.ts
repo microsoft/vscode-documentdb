@@ -7,7 +7,6 @@ import { DEFAULT_SOURCE_ID, type KubeconfigSourceRecord } from '../config';
 
 const mockEnsureMigration = jest.fn(async () => undefined);
 const mockReadSources = jest.fn<Promise<readonly KubeconfigSourceRecord[]>, []>();
-const mockReadHiddenSourceIds = jest.fn<readonly string[], []>(() => []);
 
 jest.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
@@ -32,7 +31,6 @@ jest.mock('../sources/migrationV2', () => ({
 
 jest.mock('../sources/sourceStore', () => ({
     readSources: () => mockReadSources(),
-    readHiddenSourceIds: () => mockReadHiddenSourceIds(),
 }));
 
 jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
@@ -63,8 +61,6 @@ describe('KubernetesRootItem (v2 multi-source)', () => {
     beforeEach(() => {
         mockEnsureMigration.mockClear();
         mockReadSources.mockReset();
-        mockReadHiddenSourceIds.mockReset();
-        mockReadHiddenSourceIds.mockReturnValue([]);
     });
 
     it('runs the v2 migration and renders one source per stored entry', async () => {
@@ -99,35 +95,31 @@ describe('KubernetesRootItem (v2 multi-source)', () => {
         expect(labels).toEqual(['Add kubeconfig source\u2026']);
     });
 
-    it('exposes a tree item with the Kubernetes label and collapsed state', () => {
+    it('exposes a tree item with the Kubernetes label, layers icon, and collapsed state', () => {
         const treeItem = new KubernetesRootItem('discoveryView').getTreeItem();
         expect(treeItem.label).toBe('Kubernetes');
+        expect((treeItem.iconPath as { id: string }).id).toBe('layers');
         expect(treeItem.collapsibleState).toBe(1);
     });
 
-    it('drops enableFilterCommand from the contextValue and includes the add-source marker', () => {
+    it('does not expose enableManageCredentialsCommand in the contextValue', () => {
         const root = new KubernetesRootItem('discoveryView');
+        expect(root.contextValue).not.toContain('enableManageCredentialsCommand');
         expect(root.contextValue).not.toContain('enableFilterCommand');
-        expect(root.contextValue).toContain('enableManageCredentialsCommand');
         expect(root.contextValue).toContain('enableLearnMoreCommand');
         expect(root.contextValue).toContain('enableAddKubernetesSourceCommand');
     });
 
-    it('hides sources whose id appears in readHiddenSourceIds', async () => {
+    it('shows all sources without hidden-source filtering', async () => {
         const sources: KubeconfigSourceRecord[] = [
             { id: DEFAULT_SOURCE_ID, kind: 'default', label: 'Default kubeconfig' },
             { id: 'visible-1', kind: 'file', label: 'team.yaml', path: '/abs/team.yaml' },
-            {
-                id: 'hidden-1',
-                kind: 'inline',
-                label: 'Pasted YAML 1',
-            },
+            { id: 'other-1', kind: 'inline', label: 'Pasted YAML 1' },
         ];
         mockReadSources.mockResolvedValue(sources);
-        mockReadHiddenSourceIds.mockReturnValue(['hidden-1']);
 
         const children = await new KubernetesRootItem('discoveryView').getChildren();
         const labels = children.map((c) => (c as unknown as { source?: KubeconfigSourceRecord }).source?.label);
-        expect(labels).toEqual(['Default kubeconfig', 'team.yaml']);
+        expect(labels).toEqual(['Default kubeconfig', 'team.yaml', 'Pasted YAML 1']);
     });
 });

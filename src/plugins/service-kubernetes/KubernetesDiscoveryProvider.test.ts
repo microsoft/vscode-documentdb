@@ -5,11 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 
-const mockManageKubeconfigSources = jest.fn();
-const mockEnsureMigration = jest.fn(async () => undefined);
 const mockStopAll = jest.fn();
-const mockRefresh = jest.fn();
-const mockResetNodeErrorState = jest.fn();
 
 jest.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
@@ -30,8 +26,8 @@ jest.mock('../../extensionVariables', () => ({
             extensionUri: {},
         },
         discoveryBranchDataProvider: {
-            refresh: mockRefresh,
-            resetNodeErrorState: mockResetNodeErrorState,
+            refresh: jest.fn(),
+            resetNodeErrorState: jest.fn(),
         },
         outputChannel: {
             appendLine: jest.fn(),
@@ -64,12 +60,8 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-jest.mock('./commands/manageKubeconfigSources', () => ({
-    manageKubeconfigSources: (...args: unknown[]) => mockManageKubeconfigSources(...args),
-}));
-
 jest.mock('./sources/migrationV2', () => ({
-    ensureMigration: () => mockEnsureMigration(),
+    ensureMigration: jest.fn(async () => undefined),
 }));
 
 jest.mock('./portForwardTunnel', () => ({
@@ -101,6 +93,12 @@ describe('KubernetesDiscoveryProvider (v2)', () => {
         expect(provider.configureCredentialsOnActivation).toBe(false);
     });
 
+    it('does not implement configureCredentials', () => {
+        // configureCredentials is an optional method on DiscoveryProvider;
+        // the Kubernetes plugin should not define it.
+        expect('configureCredentials' in provider).toBe(false);
+    });
+
     it('returns a KubernetesRootItem with the standard tree id', () => {
         const rootItem = provider.getDiscoveryTreeRootItem('discoveryView');
         expect(rootItem).toBeInstanceOf(KubernetesRootItem);
@@ -114,33 +112,6 @@ describe('KubernetesDiscoveryProvider (v2)', () => {
         expect(wizardOptions.promptSteps!.length).toBeGreaterThan(0);
         expect(wizardOptions.executeSteps).toBeDefined();
         expect(wizardOptions.executeSteps!.length).toBeGreaterThan(0);
-    });
-
-    it('runs the v2 migration and launches manageKubeconfigSources on configureCredentials', async () => {
-        const context = {
-            telemetry: { properties: {}, measurements: {} },
-        } as unknown as IActionContext;
-        const node = new KubernetesRootItem('discoveryView');
-
-        await provider.configureCredentials(context, node);
-
-        expect(mockEnsureMigration).toHaveBeenCalledTimes(1);
-        expect(mockManageKubeconfigSources).toHaveBeenCalledTimes(1);
-        // refreshKubernetesRoot resets the K8s root error state and fires a tree-wide refresh
-        // (no element argument).
-        expect(mockResetNodeErrorState).toHaveBeenCalledWith('discoveryView/kubernetes-discovery');
-        expect(mockRefresh).toHaveBeenCalledWith();
-    });
-
-    it('refreshes the discovery tree when no node is provided', async () => {
-        const context = {
-            telemetry: { properties: {}, measurements: {} },
-        } as unknown as IActionContext;
-
-        await provider.configureCredentials(context);
-
-        expect(mockResetNodeErrorState).toHaveBeenCalledWith('discoveryView/kubernetes-discovery');
-        expect(mockRefresh).toHaveBeenCalledWith();
     });
 
     it('stops port-forward tunnels when the provider is deactivated', async () => {
