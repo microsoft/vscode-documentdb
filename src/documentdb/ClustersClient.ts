@@ -425,7 +425,7 @@ export class ClustersClient {
     }
 
     /**
-     * Determines whether a client for the given cluster identifier is present in the internal cache.
+     * Determines whether a client for the given cluster ID is present in the internal cache.
      */
     public static exists(clusterId: string): boolean {
         return ClustersClient._clients.has(clusterId);
