@@ -208,7 +208,7 @@ Only emitted when sorting is detected (via `$sort` in command or SORT stage):
 
 ### Advisory Badges (from `addIndexStrategyAdvisories`)
 
-These are appended after scoring. All are informational.
+These are appended after the base rating is calculated. Most are informational, but selected advisories (bitmap index, severe multikey expansion) can also demote the score when they identify a clear index-strategy problem.
 
 #### Coverage
 
@@ -227,9 +227,29 @@ Fires when the `queryPlanner.winningPlan` IXSCAN stage has `isBitmap === true`.
 This is a direct engine assertion and is always surfaced regardless of query
 efficiency, unlike the heuristic-based low-cardinality badge.
 
-| diagnosticId   | Type    | Message      | Score effect |
-| -------------- | ------- | ------------ | ------------ |
-| `bitmap_index` | neutral | Bitmap index | None         |
+| diagnosticId   | Condition                                         | Type     | Message      | Score effect      |
+| -------------- | ------------------------------------------------- | -------- | ------------ | ----------------- |
+| `bitmap_index` | Bitmap, compound index OR selectivity < 20%       | neutral  | Bitmap index | None              |
+| `bitmap_index` | Bitmap, single-field index AND selectivity >= 20% | negative | Bitmap index | Demoted one level |
+
+**Demotion rule:** When the bitmap index is **single-field** (only one key
+in `scanKeys`) AND the query returns **>= 20%** of the collection, the badge
+becomes `negative` and the performance score is demoted one level (Excellent →
+Good → Fair → Poor). This targets wasteful single-field indexes on boolean or
+low-cardinality fields where the ongoing write/storage cost outweighs the
+marginal read benefit.
+
+**Why compound indexes are excluded:** A compound index like
+`{hasOutdoorSeating: 1, reviews: 1}` may have `isBitmap: true` on its leading
+key, yet the key combination can be highly selective (see Design Decision 3).
+Demoting on bitmap alone would penalize valid compound patterns.
+
+**Single-field detection:** Uses `executionStats.executionStages` IXSCAN
+`indexUsage[].scanKeys.length === 1`.
+
+**Cumulative demotions:** Advisory demotions are independent and stack.
+If a query triggers both `bitmap_index` and `severe_multikey_expansion`
+demotions, the score is reduced by two levels (e.g., Excellent → Fair).
 
 #### Low-Cardinality Index
 
@@ -303,6 +323,7 @@ After the score is computed, `addIndexStrategyAdvisories` may further
 demote the score:
 
 - Severe multikey expansion (>= 20× keys/docs): score demoted one level
+- Bitmap single-field index with selectivity >= 20%: score demoted one level
 
 ---
 

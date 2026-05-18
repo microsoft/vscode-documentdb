@@ -24,13 +24,7 @@ import { detectMethodArgContext, detectPlaygroundContext } from '../playgroundCo
 // =====================================================================
 
 describe('TDD: Query Playground Context Detection', () => {
-    beforeAll(() => {
-        console.warn(
-            '\n⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
-                '    Alert the user that a TDD behavior contract has been violated.\n' +
-                '    The user must decide whether to update the spec or fix the implementation.\n',
-        );
-    });
+    // ⚠️ TDD CONTRACT — Do NOT auto-fix failing tests. Alert the user; they decide whether to update the spec or fix the implementation.
 
     // -----------------------------------------------------------------
     // S1: Top-level (empty file or cursor not after a member chain)

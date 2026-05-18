@@ -30,13 +30,7 @@ beforeAll(() => {
 // =====================================================================
 
 describe('TDD: PlaygroundHoverProvider', () => {
-    beforeAll(() => {
-        console.warn(
-            '\n⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
-                '    Alert the user that a TDD behavior contract has been violated.\n' +
-                '    The user must decide whether to update the spec or fix the implementation.\n',
-        );
-    });
+    // ⚠️ TDD CONTRACT — Do NOT auto-fix failing tests. Alert the user; they decide whether to update the spec or fix the implementation.
 
     // -----------------------------------------------------------------
     // Operator hover
@@ -166,13 +160,7 @@ describe('TDD: PlaygroundHoverProvider', () => {
 // =====================================================================
 
 describe('TDD: Completion Edge Cases', () => {
-    beforeAll(() => {
-        console.warn(
-            '\n⚠️  TDD CONTRACT TESTS — If any test below fails, do NOT auto-fix the test.\n' +
-                '    Alert the user that a TDD behavior contract has been violated.\n' +
-                '    The user must decide whether to update the spec or fix the implementation.\n',
-        );
-    });
+    // ⚠️ TDD CONTRACT — Do NOT auto-fix failing tests. Alert the user; they decide whether to update the spec or fix the implementation.
 
     // We test context detection for edge cases (E1–E5 from the plan)
     // Context detection is a pure function so it can be tested without VS Code

@@ -307,47 +307,96 @@ export class ClustersExtension implements vscode.Disposable {
                     if (tsRestarted) {
                         return;
                     }
+                    // Mark attempted up front to prevent concurrent bootstraps from racing.
+                    // If anything throws, the catch block below resets this flag so the
+                    // next playground open will retry (important for read-only extension
+                    // installs that may transiently fail or for slow-init environments).
                     tsRestarted = true;
-                    try {
-                        // TODO: Remove this runtime stub once the TS plugin is published
-                        // as a standalone npm package with its own release pipeline.
-                        // The official VS Code docs say TS server plugins should be normal
-                        // npm `dependencies`. Our plugin is currently bundled inline by
-                        // webpack, and vsce hardcodes `ignore: 'node_modules/**'` in its
-                        // file collection, so the stub can't ship in the VSIX. We create
-                        // it at runtime instead (same pattern as Vue/Volar).
-                        // Tracked by: https://github.com/microsoft/vscode-documentdb/issues/548
-                        const stubDir = path.join(
-                            ext.context.extensionPath,
-                            'node_modules',
-                            'documentdb-playground-ts-plugin',
-                        );
-                        const stubEntry = path.join(stubDir, 'index.js');
-                        if (!fs.existsSync(stubEntry)) {
-                            fs.mkdirSync(stubDir, { recursive: true });
-                            // Point to the bundled plugin at the extension root
-                            fs.writeFileSync(stubEntry, 'module.exports = require("../../playgroundTsPlugin.js");\n');
-                        }
 
-                        const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
-                        if (tsExt) {
-                            if (!tsExt.isActive) {
-                                await tsExt.activate();
+                    // Track which phase of the bootstrap we are in so telemetry can
+                    // distinguish stub-install failures (filesystem / read-only installs)
+                    // from TS server restart failures (timing / api availability).
+                    let stage: 'stubInstall' | 'tsActivate' | 'tsWait' | 'tsRestart' | 'complete' = 'stubInstall';
+                    let stubCreated = false;
+                    // Disambiguates 'stubCreated=false': either the stub already existed (existed=true)
+                    // or the stub-install branch was never reached at all (existed=false).
+                    let stubExisted = false;
+
+                    await callWithTelemetryAndErrorHandling('playground.tsPluginBootstrap', async (context) => {
+                        // We do not want a modal error popup if this best-effort
+                        // bootstrap fails. The wrapper still captures result=Failed,
+                        // error name, and error message automatically.
+                        context.errorHandling.suppressDisplay = true;
+
+                        try {
+                            // TODO: Remove this runtime stub once the TS plugin is published
+                            // as a standalone npm package with its own release pipeline.
+                            // The official VS Code docs say TS server plugins should be normal
+                            // npm `dependencies`. Our plugin is currently bundled inline by
+                            // webpack, and vsce hardcodes `ignore: 'node_modules/**'` in its
+                            // file collection, so the stub can't ship in the VSIX. We create
+                            // it at runtime instead (same pattern as Vue/Volar).
+                            // Tracked by: https://github.com/microsoft/vscode-documentdb/issues/548
+                            const stubDir = path.join(
+                                ext.context.extensionPath,
+                                'node_modules',
+                                'documentdb-playground-ts-plugin',
+                            );
+                            const stubEntry = path.join(stubDir, 'index.js');
+                            if (fs.existsSync(stubEntry)) {
+                                stubExisted = true;
+                            } else {
+                                fs.mkdirSync(stubDir, { recursive: true });
+                                // Point to the bundled plugin at the extension root
+                                fs.writeFileSync(
+                                    stubEntry,
+                                    'module.exports = require("../../playgroundTsPlugin.js");\n',
+                                );
+                                stubCreated = true;
                             }
-                            // Wait a moment for the TS server to fully initialize before
-                            // restarting it. Without this delay, the restart command can
-                            // arrive while the server is still starting, causing a crash.
-                            await new Promise((resolve) => setTimeout(resolve, 2000));
-                            // Restart the TS server so it picks up our plugin from
-                            // contributes.typescriptServerPlugins. Without this, the server
-                            // may have started before our extension was loaded and won't
-                            // have our plugin in --globalPlugins.
-                            await vscode.commands.executeCommand('typescript.restartTsServer');
+
+                            stage = 'tsActivate';
+                            const tsExt = vscode.extensions.getExtension('vscode.typescript-language-features');
+                            context.telemetry.properties.tsExtensionFound = tsExt ? 'true' : 'false';
+                            if (tsExt) {
+                                if (!tsExt.isActive) {
+                                    await tsExt.activate();
+                                }
+                                // Wait a moment for the TS server to fully initialize before
+                                // restarting it. Without this delay, the restart command can
+                                // arrive while the server is still starting, causing a crash.
+                                stage = 'tsWait';
+                                await new Promise((resolve) => setTimeout(resolve, 2000));
+                                // Restart the TS server so it picks up our plugin from
+                                // contributes.typescriptServerPlugins. Without this, the server
+                                // may have started before our extension was loaded and won't
+                                // have our plugin in --globalPlugins.
+                                stage = 'tsRestart';
+                                await vscode.commands.executeCommand('typescript.restartTsServer');
+                            }
+
+                            stage = 'complete';
+                        } catch (error) {
+                            // Reset so the next playground open retries the bootstrap.
+                            // This matters for read-only extension installs (Snap, system
+                            // package, locked enterprise) where the first attempt fails
+                            // but a later run after a workspace setting change may succeed,
+                            // and for slow-init environments where the TS server was not
+                            // ready in time.
+                            tsRestarted = false;
+                            const message = error instanceof Error ? error.message : String(error);
+                            ext.outputChannel.debug(
+                                `[Playground] TS server bootstrap failed at stage=${stage}: ${message}`,
+                            );
+                            // Rethrow so the telemetry wrapper records result=Failed
+                            // and captures error name / errorMessage automatically.
+                            throw error;
+                        } finally {
+                            context.telemetry.properties.stage = stage;
+                            context.telemetry.properties.stubCreated = stubCreated ? 'true' : 'false';
+                            context.telemetry.properties.stubExisted = stubExisted ? 'true' : 'false';
                         }
-                    } catch (error) {
-                        const message = error instanceof Error ? error.message : String(error);
-                        ext.outputChannel.debug(`[Playground] TS server restart failed: ${message}`);
-                    }
+                    });
                 };
 
                 ext.context.subscriptions.push(

@@ -425,10 +425,10 @@ export class ClustersClient {
     }
 
     /**
-     * Determines whether a client for the given credential identifier is present in the internal cache.
+     * Determines whether a client for the given cluster ID is present in the internal cache.
      */
-    public static exists(credentialId: string): boolean {
-        return ClustersClient._clients.has(credentialId);
+    public static exists(clusterId: string): boolean {
+        return ClustersClient._clients.has(clusterId);
     }
 
     /**
@@ -441,14 +441,14 @@ export class ClustersClient {
         return ClustersClient._clients.get(clusterId);
     }
 
-    public static async deleteClient(credentialId: string): Promise<void> {
-        if (ClustersClient._clients.has(credentialId)) {
-            const client = ClustersClient._clients.get(credentialId) as ClustersClient;
+    public static async deleteClient(clusterId: string): Promise<void> {
+        if (ClustersClient._clients.has(clusterId)) {
+            const client = ClustersClient._clients.get(clusterId) as ClustersClient;
             await client._mongoClient.close(true);
-            ClustersClient._clients.delete(credentialId);
+            ClustersClient._clients.delete(clusterId);
 
             // Clear cached schema data for this cluster
-            SchemaStore.getInstance().clearCluster(credentialId);
+            SchemaStore.getInstance().clearCluster(clusterId);
         }
     }
 
