@@ -696,7 +696,6 @@ export class ClusterSession {
 
     /**
      * Initializes a new session for the MongoDB DocumentDB cluster.
-     * Initializes a new session for the MongoDB DocumentDB cluster.
      *
      * @param clusterId - The stable cluster identifier used to
      *   look up credentials and create a MongoDB client.
