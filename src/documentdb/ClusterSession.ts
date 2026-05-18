@@ -712,7 +712,7 @@ export class ClusterSession {
 
         const sessionId = Math.random().toString(16).substring(2, 15) + Math.random().toString(36).substring(2, 15);
 
-        const session = new ClusterSession(client, credentialId);
+        const session = new ClusterSession(client, clusterId);
 
         ClusterSession._sessions.set(sessionId, session);
 
