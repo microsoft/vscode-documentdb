@@ -75,11 +75,12 @@ Design implication: Quick Start owns the **local lifecycle** (download image,
 create container, start, connect, stop, reset), while the existing manual
 connection wizard remains the attach-only path.
 
-### 0.2 PostgreSQL local Docker server flow
+### 0.2 Primary reference: PostgreSQL local Docker server flow
 
 The PostgreSQL extension already lets users create a local Docker PostgreSQL
 server from the extension. Its flow is closer to the DocumentDB Quick Start
-goal than the Cosmos DB emulator flow:
+goal than the Cosmos DB emulator flow because it owns creation, readiness,
+connection save, and reveal:
 
 ```
 PostgreSQL extension local Docker flow
@@ -111,76 +112,63 @@ Save connection, connect, reveal in Object Explorer
 
 Observed UX patterns worth adapting:
 
-| Pattern from vs-code-postgresql                                       | Keep / adapt for DocumentDB Local Quick Start                                                                  |
-| --------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------- |
-| Starts with a benefit-oriented home page                              | Do not force this into the happy path, but use the welcome card / Review screen to state the value clearly.    |
-| Runs prerequisite checks before asking for container details          | Keep Docker readiness checks before any image pull or container creation.                                      |
-| Separates common fields from advanced image / port / platform fields  | Keep Quick Start simple and hide image tag, alias, credentials, port, and sample-data options behind Advanced. |
-| Auto-generates or derives connection/container names                  | Use a stable default alias, and only expose naming when the user opens Advanced.                               |
-| Validates duplicate connection and container names before launch      | Detect conflicts before pull/create so errors are explained before side effects.                               |
-| Allocates a fallback host port when the requested port is unavailable | Keep the visible port-fallback banner and make the actual port persistent in the tree.                         |
-| Connects and reveals the created connection after readiness succeeds  | Keep "success means opened/revealed usable connection," not merely "container exists."                         |
+| Pattern from vs-code-postgresql                                           | Keep / adapt for DocumentDB Local Quick Start                                                                                                        |
+| ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Creates the container and connection in one guided flow                   | Quick Start owns create -> wait -> connect -> reveal, so the user never needs to run Docker commands or paste a connection string.                   |
+| Starts with value, not Docker mechanics                                   | Welcome / Review copy should say "try DocumentDB locally now"; Docker details stay secondary.                                                        |
+| Keeps common fields separate from advanced image / port / platform fields | The default DocumentDB path should require **zero form fields**; alias, port, image tag, credentials, platform, and sample data live under Advanced. |
+| Defaults most fields before the user acts                                 | Pre-fill alias, port, username, password, image, volume, security mode, and connection name.                                                         |
+| Validates duplicate connection and container names before launch          | Detect conflicts before pull/create so errors are explained before side effects.                                                                     |
+| Allocates a fallback host port when the requested port is unavailable     | Keep the visible port-fallback banner and make the actual port persistent in the tree.                                                               |
+| Waits for database readiness before connecting                            | Do not declare success at "container started"; success means DocumentDB accepts connections.                                                         |
+| Saves the connection and reveals it after readiness succeeds              | Keep "success means opened/revealed usable connection," not merely "container exists."                                                               |
 
-### 0.3 MSSQL local container deployment flow
-
-The MSSQL extension has the most complete local-container UX reference. It
-uses a wizard with distinct information, prerequisite, form, and provisioning
-pages:
+What **not** to copy literally from PostgreSQL:
 
 ```
-MSSQL extension local container wizard
+PostgreSQL has: Home page -> Prereq page -> Create form -> Create
 
-Info page
-  Instant setup / simple management / choose version / docs
-        |
-        v
-Prerequisite page
-  [ ] Check Docker installed
-  [ ] Start Docker Desktop if needed
-  [ ] Check Docker engine configuration
-        |
-        v
-Form page
-  version, password, save password, profile group
-  advanced: container name, port, hostname
-  required: EULA acceptance
-        |
-        v
-Provisioning page
-  [ ] Pull image
-  [ ] Create/start container
-  [ ] Wait for readiness from container logs
-  [ ] Save connection and connect
-        |
-        v
-Object Explorer shows a connected local container
+DocumentDB Quick Start should compress this to:
+  Quick Start click -> Review & Start -> Progress -> Open connection
+
+No required home page.
+No required prerequisite page when Docker is ready.
+No required form fields in the default path.
+No separate "create connection" step after the container starts.
 ```
 
-Observed UX patterns worth adapting:
+### 0.3 Secondary reference: MSSQL local container deployment flow
 
-| Pattern from vscode-mssql                                           | Keep / adapt for DocumentDB Local Quick Start                                                                                                |
-| ------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| Uses visible step cards for prereqs and provisioning                | Keep the compact notification, but add "Show Details" with the same step-card model for long pulls or failures.                              |
-| Offers to start Docker Desktop when Docker is installed but stopped | Offer an explicit `Start Docker Desktop` action where supported; never start it silently.                                                    |
-| Checks Docker engine/platform details before pulling                | Add platform-specific readiness results for Linux permissions, Windows engine mode, Apple Silicon image support, and remote extension hosts. |
-| Validates container name and port before provisioning               | Keep preflight validation and resolve defaults before side effects.                                                                          |
-| Shows full error text behind an expandable link                     | In failure UI, show a friendly summary first and full Docker output only on demand.                                                          |
-| Uses log/readiness monitoring before connecting                     | UX should say "Waiting for DocumentDB to accept connections," not merely "container started."                                                |
-| Adds lifecycle commands for start, stop, restart/delete             | Keep tree-row lifecycle actions after the managed connection exists.                                                                         |
+The MSSQL extension reinforces a few useful failure and progress patterns, but
+its multi-page wizard should **not** become the default DocumentDB Quick Start
+shape.
+
+```
+Use from MSSQL:
+  - explicit Docker start action if Docker is installed but stopped
+  - visible provisioning steps for long-running work
+  - retry at the failed step
+  - expandable full Docker output
+
+Do not copy from MSSQL:
+  - mandatory info page
+  - mandatory multi-page wizard
+  - required version/password/profile form before the user can start
+```
 
 ### 0.4 Design updates after comparing all three references
 
-The final direction is a hybrid:
+The final direction is PostgreSQL-inspired, but simpler:
 
 ```
 Cosmos DB teaches: keep local resources visually separate and preserve manual attach.
-PostgreSQL teaches: create, connect, and reveal can be one managed flow.
-MSSQL teaches: long Docker work needs visible steps, retry, and full-error details.
+PostgreSQL teaches: create, connect, and reveal can be one easy managed flow.
+MSSQL teaches: long Docker work needs optional details, retry, and full-error text.
 
 DocumentDB Quick Start should therefore be:
   attach-compatible like Cosmos DB,
   creation-capable like PostgreSQL,
-  and step-transparent like MSSQL.
+  but with fewer required screens than both PostgreSQL and MSSQL.
 ```
 
 ---
@@ -192,6 +180,10 @@ local instance and an open Collection View from one entry point, one
 one-screen review, and one progress flow — without leaving VS Code and
 without touching a terminal.
 
+The default path is intentionally **not a setup wizard**. Quick Start borrows
+PostgreSQL's "create local Docker server and reveal the connection" outcome,
+but removes the required form by generating safe defaults.
+
 Key capabilities:
 
 - **Install, run, and connect** to an official DocumentDB local container by
@@ -199,6 +191,9 @@ Key capabilities:
 - **Review before action.** A single one-screen interstitial summarizes what
   the extension is about to do to the user's machine (image, port, data
   persistence, security, lifetime) before anything is downloaded or started.
+- **Zero required fields.** Container name, connection name, username,
+  password, port, image tag, data volume, and TLS behavior all have defaults.
+  The user opens Advanced only when they want to override them.
 - **Manage** the resulting instance directly from the tree — start, stop,
   restart, view logs, copy connection string, copy password, update the
   image, delete the container, or reset everything.
@@ -356,6 +351,10 @@ screen** and then **one compact progress surface**. There is no required
 multi-page wizard in the happy path, but the user can open detailed step
 cards when the pull is slow or something fails.
 
+PostgreSQL's local Docker creation proves the value of `create -> wait ->
+connect -> reveal`; DocumentDB keeps that outcome but avoids PostgreSQL's
+required create form by pre-filling every setup choice.
+
 ```
 [Quick Start clicked anywhere]
               |
@@ -410,6 +409,24 @@ cards when the pull is slow or something fails.
      focus lands on the new managed instance row.
 ```
 
+### 4.1 Easy setup defaults
+
+These defaults are visible in Review & Start, but they are not prompts. They
+exist so the user can start without thinking about Docker, credentials, or
+connection-string shape.
+
+| Setup choice    | Default the user sees             | Why this keeps setup easy                        |
+| --------------- | --------------------------------- | ------------------------------------------------ |
+| Connection name | `DocumentDB Local`                | The tree label is understandable immediately.    |
+| Container alias | `vscode-documentdb-local`         | Stable name for lifecycle actions and adoption.  |
+| Port            | `10260`                           | Matches DocumentDB Local documentation.          |
+| Credentials     | Generated username/password       | No password decision before first run.           |
+| Secret storage  | Store generated password securely | Copy password is available later if needed.      |
+| Data volume     | Persistent local volume           | Data survives stop/restart/update by default.    |
+| Image           | Official DocumentDB local image   | No registry/image decision in the happy path.    |
+| TLS             | Local self-signed setup           | Works for local development without cert setup.  |
+| Sample data     | Offered after start               | Keeps the first run fast and still discoverable. |
+
 If the user clicks `[Open Connection]`, the standard Collection View opens.
 If the database is empty, the Collection View shows a first-run callout:
 
@@ -434,7 +451,7 @@ rolls back: the container is removed and the port reservation is released.
 Generated credentials are kept in storage so a retry can reuse them or
 discard them at the user's choice.
 
-### 4.1 The Advanced panel
+### 4.2 The Advanced panel
 
 `[Advanced]` opens a single inline expansion on the Review screen — not a
 new dialog — so the user never loses the original review context.
@@ -467,7 +484,7 @@ Ephemeral data volumes are out of scope for v1. The only v1 data mode is a
 persistent local volume that survives Stop, Restart, Update Image, Move Port,
 and Delete Container, and is removed only by Reset.
 
-### 4.2 Remote-session review banner
+### 4.3 Remote-session review banner
 
 When VS Code is connected to SSH, WSL, a dev container, or another remote
 extension host, "local" means local to that remote context. The Review screen
@@ -1067,9 +1084,12 @@ the user opted into sample data IS sent.
   setup.
 - **No background pulls.** Image is pulled only inside a user-initiated
   Quick Start or Update Image flow.
-- **Canonical local port.** Quick Start and the manual `New Local
-Connection...` DocumentDB Local path use `10260` by default. If existing
-  code still uses another default, that is a pre-ship bug, not a UX variant.
+- **No required form in the happy path.** The default Quick Start path has no
+  mandatory fields. Any setting that would otherwise become a setup step must
+  either have a safe default or move to Advanced.
+- **Canonical local port.** Quick Start and the manual DocumentDB Local path
+  use `10260` by default. If existing code still uses another default, that
+  is a pre-ship bug, not a UX variant.
 - **No nag toasts.** Updates and warnings stay in the tree row description
   unless the user opens the overflow menu.
 - **Reversibility.** Stop, Restart, and Cancel are always safe.
@@ -1147,12 +1167,12 @@ document.
 **Approve the UX direction for implementation planning.**
 
 The design correctly moves beyond the Cosmos DB extension's attach-only
-emulator pattern and aligns with the stronger local-container patterns in the
-PostgreSQL and MSSQL extensions. The strongest parts are the explicit Review
-& Start screen, visible Docker/readiness steps, the tree as the persistent
-control surface, the separation between managed Quick Start and manual
-connections, and the careful lifecycle vocabulary for Stop, Delete, Reset,
-and Forget.
+emulator pattern and uses the PostgreSQL local Docker creation flow as the
+primary UX reference. The strongest parts are the explicit Review & Start
+screen, zero required fields in the default path, visible Docker/readiness
+progress when needed, the tree as the persistent control surface, the
+separation between managed Quick Start and manual connections, and the careful
+lifecycle vocabulary for Stop, Delete, Reset, and Forget.
 
 The initial review findings below have been folded back into this draft. The
 remaining open questions are intentionally limited to follow-up product or
@@ -1160,36 +1180,40 @@ implementation decisions that should not block the core v1 workflow.
 
 ### 17.2 Findings
 
-| ID  | Severity     | Original finding                                                                | Resolution in this draft                                                                                                                       |
-| --- | ------------ | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| R1  | Must fix     | "One click" could conflict with first-run review.                               | Product copy now uses **Quick Start**; true one-click is scoped to subsequent starts after setup.                                              |
-| R2  | Must fix     | Manual DocumentDB Local and Quick Start could disagree on default port.         | `10260` is now a cross-cutting UX rule for both Quick Start and manual local connection; mismatch is called a pre-ship bug.                    |
-| R3  | Must fix     | Users could think the extension installs Docker.                                | The Review screen and prerequisite promise say Docker is required and not installed by the extension; if Docker is stopped, start is explicit. |
-| R4  | Must fix     | Ephemeral data mode was ambiguous.                                              | Ephemeral volumes are removed from v1; persistent local volume is the only data mode.                                                          |
-| R5  | Should fix   | Empty database after success may not feel like "try DocumentDB."                | `Load Sample Data` is promoted on the success card and empty Collection View callout.                                                          |
-| R6  | Should fix   | Existing-container adoption could take over the wrong container.                | Adopt is offered only for recognized DocumentDB Local Quick Start resources; name-only matches get manual connection/reset/cancel choices.     |
-| R7  | Should fix   | Remote VS Code makes "local" ambiguous.                                         | Remote-session Review banner names the actual target context before start.                                                                     |
-| R8  | Should fix   | `latest` makes image version hard to reason about.                              | Managed-row tooltip and update dialog show resolved version and image digest.                                                                  |
-| R9  | Nice to have | Multi-window coordination may expand v1 implementation scope.                   | User-facing rule remains; implementation planning may phase event subscription after basic polling.                                            |
-| R10 | Nice to have | Inline actions should not shift under the cursor.                               | Three fixed action slots are retained as UX contract: primary, power, overflow.                                                                |
-| R11 | Nice to have | Welcome card could annoy users with cloud connections but no local ones.        | Empty `DocumentDB Local` section remains the default scope; dismissal is shared with empty-state card.                                         |
-| R12 | Should fix   | PostgreSQL and MSSQL show that container setup benefits from step transparency. | The compact progress notification now has `Show Details` with step cards, retry, logs, and expandable full Docker output.                      |
-| R13 | Should fix   | MSSQL reduces friction by starting Docker Desktop when possible.                | The design now allows an explicit user-clicked Docker start action where supported, while preserving the no-silent-start rule.                 |
+| ID  | Severity     | Original finding                                                                                                 | Resolution in this draft                                                                                                                       |
+| --- | ------------ | ---------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| R1  | Must fix     | "One click" could conflict with first-run review.                                                                | Product copy now uses **Quick Start**; true one-click is scoped to subsequent starts after setup.                                              |
+| R2  | Must fix     | Manual DocumentDB Local and Quick Start could disagree on default port.                                          | `10260` is now a cross-cutting UX rule for both Quick Start and manual local connection; mismatch is called a pre-ship bug.                    |
+| R3  | Must fix     | Users could think the extension installs Docker.                                                                 | The Review screen and prerequisite promise say Docker is required and not installed by the extension; if Docker is stopped, start is explicit. |
+| R4  | Must fix     | Ephemeral data mode was ambiguous.                                                                               | Ephemeral volumes are removed from v1; persistent local volume is the only data mode.                                                          |
+| R5  | Should fix   | Empty database after success may not feel like "try DocumentDB."                                                 | `Load Sample Data` is promoted on the success card and empty Collection View callout.                                                          |
+| R6  | Should fix   | Existing-container adoption could take over the wrong container.                                                 | Adopt is offered only for recognized DocumentDB Local Quick Start resources; name-only matches get manual connection/reset/cancel choices.     |
+| R7  | Should fix   | Remote VS Code makes "local" ambiguous.                                                                          | Remote-session Review banner names the actual target context before start.                                                                     |
+| R8  | Should fix   | `latest` makes image version hard to reason about.                                                               | Managed-row tooltip and update dialog show resolved version and image digest.                                                                  |
+| R9  | Nice to have | Multi-window coordination may expand v1 implementation scope.                                                    | User-facing rule remains; implementation planning may phase event subscription after basic polling.                                            |
+| R10 | Nice to have | Inline actions should not shift under the cursor.                                                                | Three fixed action slots are retained as UX contract: primary, power, overflow.                                                                |
+| R11 | Nice to have | Welcome card could annoy users with cloud connections but no local ones.                                         | Empty `DocumentDB Local` section remains the default scope; dismissal is shared with empty-state card.                                         |
+| R12 | Should fix   | PostgreSQL shows that local Docker creation should finish by saving, connecting, and revealing the new resource. | The success definition now requires DocumentDB readiness plus a usable revealed connection, not just a running container.                      |
+| R13 | Should fix   | PostgreSQL uses a form, but DocumentDB can be easier because its defaults are known.                             | The happy path now has zero required fields; all setup choices are generated or moved to Advanced.                                             |
+| R14 | Should fix   | MSSQL reduces friction by starting Docker Desktop when possible, but that can feel surprising.                   | The design allows an explicit user-clicked Docker start action where supported, while preserving the no-silent-start rule.                     |
 
 ### 17.3 UX principles to carry into implementation planning
 
 1. **Be transparent before side effects.** Downloading an image, creating a
    container, binding a port, and persisting a volume are machine-level
    changes. The Review screen must stay mandatory on first run.
-2. **Keep routine actions quiet.** After setup, Start and Stop should update
+2. **Do not turn Quick Start into a setup form.** PostgreSQL's flow is a good
+   creation reference, but DocumentDB should be easier: generate defaults and
+   use Advanced for overrides.
+3. **Keep routine actions quiet.** After setup, Start and Stop should update
    the tree and status bar without celebratory toasts.
-3. **Keep manual attach first-class.** Quick Start should not replace users
+4. **Keep manual attach first-class.** Quick Start should not replace users
    who already run DocumentDB themselves.
-4. **Use the tree as source of truth.** Status, port, update availability,
+5. **Use the tree as source of truth.** Status, port, update availability,
    and lifecycle actions should be discoverable from the managed instance row.
-5. **Prefer reversible defaults.** Persistent data, explicit reset, and no
+6. **Prefer reversible defaults.** Persistent data, explicit reset, and no
    automatic cleanup on extension uninstall are the safest defaults.
-6. **Avoid terminal language in the happy path.** Docker details belong in
+7. **Avoid terminal language in the happy path.** Docker details belong in
    Review, Advanced, logs, and troubleshooting, not in the main success flow.
 
 ### 17.4 Suggested v1 scope cut
