@@ -9,17 +9,6 @@ import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
 
 export const STORAGE_KEY = 'ms-azuretools.vscode-documentdb.releaseNotes/lastShownVersion';
-export const WELCOME_SCREEN_KEY = 'welcomeScreenShown_v0_4_0';
-
-/**
- * One-time migration key for users who had a 0.8.0-bugbash prerelease installed.
- * Those users got '0.8.0' stored in STORAGE_KEY, which would prevent the official
- * 0.8.0 release notification from showing. This migration resets their stored
- * version to '0.7.0' so the notification fires correctly.
- *
- * Can be removed once 0.8.0 has been released and most users have updated.
- */
-const BUGBASH_MIGRATION_KEY = 'ms-azuretools.vscode-documentdb.releaseNotes/bugbashMigrationDone';
 
 /**
  * In-memory flag to defer the notification until next VS Code session.
@@ -47,14 +36,11 @@ export interface VersionCheckResult {
     /** The normalized current version (major.minor.0) */
     currentMajorMinor: string;
     /**
-     * The normalized stored version (major.minor.0), or '0.0.0' for pre-0.7.0 upgrades.
      * Empty string ('') when `isPrerelease` is true (function returns early without reading storage).
      */
     storedMajorMinor: string;
     /** Whether this is a first-time install */
     isFirstInstall: boolean;
-    /** Whether this is an upgrade from a pre-0.7.0 version (transitional) */
-    isUpgradeFromPre070: boolean;
     /** Whether the current version is a prerelease build (notification skipped, nothing stored) */
     isPrerelease: boolean;
     /** Whether version parsing failed */
@@ -67,20 +53,17 @@ export interface VersionCheckResult {
  *
  * @param currentVersionString - The current extension version string
  * @param storedVersionString - The stored version string from globalState (or undefined if not set)
- * @param welcomeScreenShown - Whether the welcome screen flag is set (for transitional detection)
  * @returns The version check result
  */
 export function checkVersionForNotification(
     currentVersionString: string,
     storedVersionString: string | undefined,
-    welcomeScreenShown: boolean,
 ): VersionCheckResult {
     const result: VersionCheckResult = {
         shouldShowNotification: false,
         currentMajorMinor: '',
         storedMajorMinor: '',
         isFirstInstall: false,
-        isUpgradeFromPre070: false,
         isPrerelease: false,
         parseError: false,
     };
@@ -104,32 +87,8 @@ export function checkVersionForNotification(
     const storedVersion = storedVersionString ? semver.parse(storedVersionString) : null;
 
     if (!storedVersion) {
-        // ================================================================================
-        // TRANSITIONAL CODE FOR 0.7.0 RELEASE - CAN BE REMOVED IN 0.8.0 OR LATER
-        // ================================================================================
-        // Since the release notes feature is being introduced in 0.7.0, we cannot
-        // distinguish between a fresh install and an upgrade from a pre-0.7.0 version
-        // based solely on the release notes storage key (which didn't exist before).
-        //
-        // To detect upgrades from pre-0.7.0 versions, we check for the welcome screen
-        // flag that was set in previous versions. If this flag exists, the user had
-        // a previous version installed and should see the release notes notification.
-        //
-        // Once most users have transitioned to 0.7.0+, this block can be safely removed.
-        // ================================================================================
-        if (welcomeScreenShown) {
-            // User upgraded from a pre-0.7.0 version
-            result.isUpgradeFromPre070 = true;
-            result.storedMajorMinor = '0.0.0';
-            result.shouldShowNotification = true;
-        } else {
-            // Genuine first-time install
-            result.isFirstInstall = true;
-            result.storedMajorMinor = result.currentMajorMinor;
-        }
-        // ================================================================================
-        // END TRANSITIONAL CODE
-        // ================================================================================
+        result.isFirstInstall = true;
+        result.storedMajorMinor = result.currentMajorMinor;
         return result;
     }
 
@@ -173,36 +132,10 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
                 releaseNotesUrl?: string;
             };
 
-            // ====================================================================================
-            // ONE-TIME MIGRATION: Fix stored version for 0.8.0-bugbash prerelease users
-            // ====================================================================================
-            // Users who installed a 0.8.0-bugbash build had '0.8.0' written to STORAGE_KEY.
-            // Without this migration, the official 0.8.0 release would not trigger the
-            // notification (0.8.0 is not > 0.8.0). Reset their stored version to '0.7.0'.
-            // Can be removed once 0.8.0 has been released and most users have updated.
-            // ====================================================================================
-            const migrationDone = ext.context.globalState.get<boolean>(BUGBASH_MIGRATION_KEY, false);
-            if (!migrationDone) {
-                const existingStored = ext.context.globalState.get<string>(STORAGE_KEY);
-                if (existingStored === '0.8.0') {
-                    await ext.context.globalState.update(STORAGE_KEY, '0.7.0');
-                    ext.outputChannel.info('Release notes: Migrated stored version from 0.8.0 (bugbash) to 0.7.0');
-                }
-                await ext.context.globalState.update(BUGBASH_MIGRATION_KEY, true);
-            }
-            // ====================================================================================
-            // END ONE-TIME MIGRATION
-            // ====================================================================================
-
             const storedVersionString = ext.context.globalState.get<string>(STORAGE_KEY);
-            const welcomeScreenShown = ext.context.globalState.get<boolean>(WELCOME_SCREEN_KEY, false);
 
             // Use the extracted version check logic
-            const versionCheck = checkVersionForNotification(
-                packageJSON.version,
-                storedVersionString,
-                welcomeScreenShown,
-            );
+            const versionCheck = checkVersionForNotification(packageJSON.version, storedVersionString);
 
             if (versionCheck.parseError) {
                 ext.outputChannel.warn(`Release notes: Could not parse current version: ${packageJSON.version}`);
@@ -228,13 +161,6 @@ export async function maybeShowReleaseNotesNotification(): Promise<void> {
                 );
                 context.telemetry.properties.firstInstall = 'true';
                 return;
-            }
-
-            if (versionCheck.isUpgradeFromPre070) {
-                ext.outputChannel.trace(
-                    'Release notes: Detected upgrade from pre-0.7.0 version (welcome screen flag present)',
-                );
-                context.telemetry.properties.upgradeFromPre070 = 'true';
             }
 
             if (!versionCheck.shouldShowNotification) {
