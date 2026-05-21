@@ -5,6 +5,7 @@
 
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
@@ -14,17 +15,22 @@ import {
     refreshParentInConnectionsView,
     withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
-import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { type TreeElement } from '../../tree/TreeElement';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
 export async function removeConnection(
     context: IActionContext,
-    node?: DocumentDBClusterItem,
-    nodes?: DocumentDBClusterItem[],
+    node?: TreeElement,
+    nodes?: TreeElement[],
 ): Promise<void> {
-    // Build the list of connections to delete from multi-select (nodes) or single-select (node)
-    const connectionsToDelete: DocumentDBClusterItem[] = nodes && nodes.length > 0 ? nodes : node ? [node] : [];
+    // VS Code multi-select passes an array of *all* selected tree elements, which can include
+    // folders, placeholders, or other non-connection items. Filter to DocumentDBClusterItem only.
+    const candidates: TreeElement[] = nodes && nodes.length > 0 ? nodes : node ? [node] : [];
+    const connectionsToDelete: DocumentDBClusterItem[] = candidates.filter(
+        (item): item is DocumentDBClusterItem => item instanceof DocumentDBClusterItem,
+    );
 
     if (connectionsToDelete.length === 0) {
         ext.outputChannel.warn(l10n.t('No connections selected to remove.'));
@@ -96,11 +102,6 @@ export async function removeConnection(
                         error: errorMessage,
                     }),
                 );
-
-                // Intentionally capture only the last error in telemetry — a single representative
-                // error is sufficient for diagnostics; errorCount provides the full failure picture.
-                context.telemetry.properties.error = 'RemoveConnectionError';
-                context.telemetry.properties.errorMessage = errorMessage;
             }
         }
     });
@@ -122,6 +123,15 @@ export async function removeConnection(
             connectionsToDelete.length === 1
                 ? l10n.t('The selected connection has been removed.')
                 : l10n.t('All {count} connections have been removed.', { count: connectionsToDelete.length }),
+        );
+    } else {
+        // All deletions failed — surface an error so the user isn't left wondering what happened.
+        void vscode.window.showErrorMessage(
+            connectionsToDelete.length === 1
+                ? l10n.t('Failed to remove the selected connection. See the output channel for details.')
+                : l10n.t('Failed to remove all {count} connections. See the output channel for details.', {
+                      count: connectionsToDelete.length,
+                  }),
         );
     }
 }
