@@ -2,11 +2,11 @@ name: CI
 
 # This workflow handles the following scenarios:
 #
-# 1. Push to `main` or `next`:
+# 1. Push to `main` or `release/**`:
 #    - Runs all jobs: code checks, tests, packaging, and caches build sizes
 #      for PR comparisons
 #
-# 2. Pull Requests to `main`, `next`, `dev/*`, or `feature/*`:
+# 2. Pull Requests to `main`, `release/**`, `dev/**`, or `feature/**`:
 #    - Runs all jobs: code checks, tests, integration tests, and packaging
 #    - Posts PR comments with code quality report and build size comparison
 #
@@ -25,14 +25,14 @@ on:
     push:
         branches:
             - main
-            - next
+            - release/**
 
     pull_request:
         branches:
             - main
-            - next
-            - dev/*
-            - feature/*
+            - release/**
+            - dev/**
+            - feature/**
 
 concurrency:
     group: ${{ github.head_ref || github.run_id }}
@@ -161,10 +161,10 @@ jobs:
         if: |
             (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
             github.ref == 'refs/heads/main' ||
-            github.ref == 'refs/heads/next' ||
+            startsWith(github.ref, 'refs/heads/release/') ||
             (startsWith(github.ref, 'refs/pull/') && (
               github.base_ref == 'main' ||
-              github.base_ref == 'next'
+              startsWith(github.base_ref, 'release/')
             ))
         defaults:
             run:
@@ -187,7 +187,7 @@ jobs:
               if: false # TODO: Disabled — unreliable, needs revisiting
               run: xvfb-run -a npm test
 
-    # Run on push to `main`/`next` (for cache seeding) and for PRs to main/next
+    # Run on push to `main`/`release/**` (for cache seeding) and for PRs to main/release/**
     build-and-package:
         name: Build & Package
         runs-on: ubuntu-latest
@@ -197,10 +197,10 @@ jobs:
         if: |
             (github.event_name == 'workflow_dispatch' && inputs.enforce_full_run) ||
             github.ref == 'refs/heads/main' ||
-            github.ref == 'refs/heads/next' ||
+            startsWith(github.ref, 'refs/heads/release/') ||
             (startsWith(github.ref, 'refs/pull/') && (
               github.base_ref == 'main' ||
-              github.base_ref == 'next'
+              startsWith(github.base_ref, 'release/')
             ))
         defaults:
             run:
