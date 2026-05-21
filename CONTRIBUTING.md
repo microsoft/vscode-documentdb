@@ -25,7 +25,7 @@ The document consists of four sections:
 CI runs automatically on:
 
 - **Push to `main` or `release/**`\*\* — full build, tests, and packaging; build sizes cached for PR comparisons.
-- **Pull requests targeting `main`, `release/**`, `dev/**`, or `feature/**`\*\* — full build, tests, packaging, and a code-quality report posted as a PR comment.
+- **Pull requests targeting `main`, `release/**`, or `feature/**`** — full build, tests, packaging, and a code-quality report posted as a PR comment.
 - **Manual dispatch** — use `workflow_dispatch` with `enforce_full_run` to run the full pipeline on any branch.
 
 ### 1.3 Releases
