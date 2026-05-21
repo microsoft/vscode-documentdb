@@ -1,17 +1,17 @@
 ---
 name: review-external-pr
-description: Prepare an external contributor's PR for maintainer review by redirecting it into a dedicated review branch, then merging and creating a new finalization PR targeting next. Use when triaging/reviewing contributor PRs, merging external PRs with maintainer changes, or setting up a review workflow for incoming community contributions.
+description: Prepare an external contributor's PR for maintainer review by redirecting it into a dedicated review branch, then merging and creating a new finalization PR targeting main. Use when triaging/reviewing contributor PRs, merging external PRs with maintainer changes, or setting up a review workflow for incoming community contributions.
 ---
 
 # Review External PR Workflow
 
-Redirects an external contributor's PR into a `reviews/` staging branch so a maintainer can inspect, add changes, then merge everything into `next` cleanly.
+Redirects an external contributor's PR into a `reviews/` staging branch so a maintainer can inspect, add changes, then merge everything into `main` cleanly.
 
 ## When to Use
 
-- An external contributor opened a PR targeting `next` and you want to add changes before merging
+- An external contributor opened a PR targeting `main` and you want to add changes before merging
 - You want to formally review and finalize a community contribution
-- You want the contributor to get proper merge credit while still controlling what lands in `next`
+- You want the contributor to get proper merge credit while still controlling what lands in `main`
 
 ## Workflow Steps
 
@@ -29,7 +29,7 @@ Branch naming format: `reviews/<helpful-name>-original-pr-<number>`
 
 ```bash
 git fetch origin
-git checkout -b reviews/<helpful-name>-original-pr-<PR_NUMBER> origin/next
+git checkout -b reviews/<helpful-name>-original-pr-<PR_NUMBER> origin/main
 git push origin reviews/<helpful-name>-original-pr-<PR_NUMBER>
 ```
 
@@ -61,7 +61,7 @@ Or approve + merge via the GitHub UI to trigger any required status checks.
 
 ### 5. Create the Finalization PR
 
-Pull the merged review branch, then open a new PR from it to `next`:
+Pull the merged review branch, then open a new PR from it to `main`:
 
 ```bash
 git checkout reviews/<helpful-name>-original-pr-<PR_NUMBER>
@@ -72,7 +72,7 @@ Create the PR:
 
 ```bash
 gh pr create \
-  --base next \
+  --base main \
   --head reviews/<helpful-name>-original-pr-<PR_NUMBER> \
   --title "<original title> [reviewed]" \
   --body "This PR finalizes the review of the contribution originally submitted by @<author_login> in #<PR_NUMBER>.
@@ -86,7 +86,7 @@ Go back to the contributor's original (now merged) PR and leave a comment linkin
 
 ```bash
 gh pr comment <ORIGINAL_PR_NUMBER> \
-  --body "Thank you for the contribution! The review is continuing in #<NEW_PR_NUMBER> where maintainer changes will be finalized before merging to \`next\`."
+  --body "Thank you for the contribution! The review is continuing in #<NEW_PR_NUMBER> where maintainer changes will be finalized before merging to \`main\`."
 ```
 
 ## Summary
@@ -94,8 +94,8 @@ gh pr comment <ORIGINAL_PR_NUMBER> \
 | Step | Action                                     | Result                                    |
 | ---- | ------------------------------------------ | ----------------------------------------- |
 | 1    | Gather PR info                             | Know PR number, title, author             |
-| 2    | Create `reviews/...` branch off `next`     | Staging branch ready                      |
+| 2    | Create `reviews/...` branch off `main`     | Staging branch ready                      |
 | 3    | Retarget contributor's PR to review branch | Their diff is scoped to review branch     |
 | 4    | Merge contributor's PR                     | Contributor gets merge credit             |
-| 5    | Create finalization PR to `next`           | Maintainer controls what lands in `next`  |
+| 5    | Create finalization PR to `main`           | Maintainer controls what lands in `main`  |
 | 6    | Comment on original PR with link to new PR | Contributor is informed, thread is linked |
