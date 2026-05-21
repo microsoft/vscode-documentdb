@@ -1,0 +1,91 @@
+name: Publish @documentdb-js packages
+
+# Publishes one or more of the @documentdb-js/* packages to npmjs.com using
+# npm Trusted Publishing (OIDC). No long-lived token is stored in the repo.
+#
+# The job runs inside the `npm-publish-documentdb-js-scope` environment, which
+# adds a required-reviewer approval gate before any publish step executes.
+#
+# Trigger: workflow_dispatch only — pick which packages to publish via the
+# boolean inputs below.
+
+on:
+    workflow_dispatch:
+        inputs:
+            publish_operator_registry:
+                description: 'Publish @documentdb-js/operator-registry'
+                type: boolean
+                default: false
+            publish_schema_analyzer:
+                description: 'Publish @documentdb-js/schema-analyzer'
+                type: boolean
+                default: false
+            publish_shell_api_types:
+                description: 'Publish @documentdb-js/shell-api-types'
+                type: boolean
+                default: false
+            publish_shell_runtime:
+                description: 'Publish @documentdb-js/shell-runtime'
+                type: boolean
+                default: false
+
+concurrency:
+    group: publish-documentdb-js-packages
+    cancel-in-progress: false
+
+jobs:
+    publish:
+        name: Publish to npmjs.com
+        runs-on: ubuntu-latest
+        environment: npm-publish-documentdb-js-scope
+        permissions:
+            id-token: write # required for npm Trusted Publishing (OIDC)
+            contents: read
+        steps:
+            - name: 🛑 Validate inputs (at least one package selected)
+              if: >-
+                  ${{
+                    !inputs.publish_operator_registry &&
+                    !inputs.publish_schema_analyzer &&
+                    !inputs.publish_shell_api_types &&
+                    !inputs.publish_shell_runtime
+                  }}
+              run: |
+                  echo "::error::No package selected. Enable at least one publish_* input before running this workflow."
+                  exit 1
+
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@v6
+
+            - name: 🛠 Setup Node.js Environment (with cache)
+              uses: actions/setup-node@v5
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
+                  registry-url: 'https://registry.npmjs.org'
+
+            - name: ⬆️ Upgrade npm to >=11.5.1 (required for Trusted Publishing)
+              run: npm install -g npm@latest
+
+            - name: 📦 Install Dependencies (npm ci)
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+            - name: 🔨 Build Workspace Packages
+              run: npm run build --workspaces --if-present
+
+            - name: 🚀 Publish @documentdb-js/operator-registry
+              if: ${{ inputs.publish_operator_registry }}
+              run: npm publish --provenance --workspace @documentdb-js/operator-registry
+
+            - name: 🚀 Publish @documentdb-js/schema-analyzer
+              if: ${{ inputs.publish_schema_analyzer }}
+              run: npm publish --provenance --workspace @documentdb-js/schema-analyzer
+
+            - name: 🚀 Publish @documentdb-js/shell-api-types
+              if: ${{ inputs.publish_shell_api_types }}
+              run: npm publish --provenance --workspace @documentdb-js/shell-api-types
+
+            - name: 🚀 Publish @documentdb-js/shell-runtime
+              if: ${{ inputs.publish_shell_runtime }}
+              run: npm publish --provenance --workspace @documentdb-js/shell-runtime
