@@ -1,6 +1,6 @@
 {
   "name": "@documentdb-js/operator-registry",
-  "version": "0.8.0",
+  "version": "0.8.1",
   "description": "Static operator metadata for DocumentDB-supported operators, stages, accumulators, and BSON constructors",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
@@ -21,5 +21,8 @@
     "url": "https://github.com/microsoft/vscode-documentdb",
     "directory": "packages/documentdb-js-operator-registry"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }
