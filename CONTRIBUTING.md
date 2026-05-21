@@ -11,29 +11,62 @@ The document consists of four sections:
 
 ## 1. Branching Strategy
 
-The repository follows a structured branching strategy to ensure smooth development and release processes:
+### 1.1 Branch overview
 
-- **`main`** — Production-ready code. All releases are tagged here.
-- **`next`** — Staging for the upcoming release. Completed features are merged here.
-- **`dev/<user>/<feature>`** — Individual feature branches for personal development.
-- **`feature/<big-feature>`** — Shared branches for large features requiring collaboration.
+| Branch               | Purpose                                                                      | Lifetime                                     |
+| -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
+| `main`               | Default trunk. All PRs target it. Always open.                               | Long-lived                                   |
+| `release/<X.Y>`      | Stabilization + patch line for one minor release. Cut from `main` at freeze. | Short (days to cut, kept around for patches) |
+| `dev/<user>/<topic>` | Personal working branches                                                    | Short                                        |
+| `feature/<name>`     | Shared collaboration on large features before they are ready for `main`      | Variable                                     |
 
-### Pull Requests and GitHub Actions
+### 1.2 GitHub Actions
 
-GitHub Actions are configured to perform automated checks on the repository. The intensity of these checks depends on the target branch:
+CI runs automatically on:
 
-1. **Push to `next`, `dev/*`, or `feature/*` branches**:
-   - Runs basic code quality checks and tests.
-   - Skips resource-intensive jobs like integration tests and packaging to focus on code validation.
+- **Push to `main` or `release/**`\*\* — full build, tests, and packaging; build sizes cached for PR comparisons.
+- **Pull requests targeting `main`, `release/**`, or `feature/**`** — full build, tests, packaging, and a code-quality report posted as a PR comment.
+- **Manual dispatch** — use `workflow_dispatch` with `enforce_full_run` to run the full pipeline on any branch.
 
-2. **Pull Requests to `main` or `next`**:
-   - Executes all jobs, including code checks, tests, and packaging.
-   - Ensures complete validation before merging, including artifact generation.
+### 1.3 Releases
 
-3. **Push to `main`**:
-   - Runs the full workflow for release validation and artifact generation.
+Releases are cut from a `release/<X.Y>` branch, not from `main` directly:
 
-This setup ensures that contributions are thoroughly validated while optimizing resource usage during development.
+1. When the team is ready to freeze, a maintainer cuts `release/0.9` from a chosen `main` commit and pushes it.
+2. Stabilization (bug fixes only) happens on the release branch. Each fix is opened as a PR to `release/<X.Y>`, reviewed, merged, and immediately forward-merged to `main` so `main` stays up to date.
+3. When stable, the maintainer tags `v0.9.0` on the release branch and publishes from that tag.
+4. Patch releases (`v0.9.1`, `v0.9.2`, …) tag later commits on the same branch.
+
+**The cut point is the content decision.** If you have a PR you want in the upcoming release, merge it to `main` before the release branch is cut. Once the branch is cut, new PRs merged to `main` target the _next_ release.
+
+> **Example:** The team is preparing v0.9. A contributor submits PR #690 — a small connection timeout fix the team wants to include. The maintainer merges #690 to `main`, then cuts `release/0.9` — the fix is in. At the same time, PR #695 proposes a complex new authentication flow that isn't fully ready. The release branch is cut before #695 merges; #695 lands on `main` afterward and ships in v0.10.
+
+### 1.4 Large features
+
+Large features — those that span multiple PRs, touch core subsystems, or carry meaningful integration risk — live on a `feature/<name>` branch until they are merge-ready as a whole. A maintainer merges individual PRs into the feature branch as work progresses. When the feature is complete and validated end-to-end, a single PR from `feature/<name>` to `main` brings it in.
+
+> **Example:** The integrated shell was built across more than 10 dedicated PRs, each reviewed and merged into `feature/shell`. Once the feature was complete and validated as a whole, it landed on `main` in a single PR.
+
+Before opening the final PR from a feature branch to `main`:
+
+- [ ] All sub-tasks complete; no unresolved `TODO` markers in core paths
+- [ ] Validated against a packaged VSIX (not only dev mode)
+- [ ] Telemetry instrumented
+- [ ] CHANGELOG / docs entry drafted
+- [ ] Behind a setting (default off) if there is any doubt about stability
+- [ ] Author commits to monitoring for fallout for ~1 week after merge
+
+### 1.5 External contributions
+
+All external PRs target `main` and are reviewed at the team's normal pace.
+
+If a PR is approved but the team wants to defer merging — for example, to avoid introducing uncertainty during an ongoing release cycle — a maintainer will:
+
+1. Mark the PR as **Draft**.
+2. Apply the **`on-hold`** label.
+3. Leave a short comment with the reason and expected timeline, e.g.: _"Approved — holding until v0.9 ships (~2 weeks). No action needed from you."_
+
+To release the hold: remove the `on-hold` label and click **Ready for review**, then merge normally.
 
 ## 2. Machine Setup
 

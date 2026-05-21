@@ -2,14 +2,14 @@ name: 'API: Extract Public Typings'
 
 # 📘 This workflow verifies that API typings can be generated and rolled up cleanly.
 # It runs on:
-# - Pushes to `main` or `next` (validate committed state)
+# - Pushes to `main` or `release/**` (validate committed state)
 # - PRs to any branch (validate incoming changes)
 
 on:
     push:
         branches:
             - main
-            - next
+            - release/**
     pull_request:
 
 concurrency:

@@ -61,8 +61,8 @@ Before finishing work on a PR, agents **must** run the following steps in order:
 
 ## Branching
 
-- **`next`**: Target branch for PRs (default)
-- **`main`**: Production releases only
+- **`main`**: Default branch; all PRs target it.
+- **`release/<X.Y>`**: Short-lived stabilization branches cut from `main` at freeze; release tags (`vX.Y.0`, `vX.Y.1`, …) live here.
 
 ## TypeScript Guidelines
 
