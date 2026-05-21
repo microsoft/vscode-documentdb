@@ -16,18 +16,34 @@ on:
                 description: 'Publish @documentdb-js/operator-registry'
                 type: boolean
                 default: false
+            version_operator_registry:
+                description: 'Version of @documentdb-js/operator-registry (must match package.json exactly, e.g. 0.8.2)'
+                type: string
+                default: ''
             publish_schema_analyzer:
                 description: 'Publish @documentdb-js/schema-analyzer'
                 type: boolean
                 default: false
+            version_schema_analyzer:
+                description: 'Version of @documentdb-js/schema-analyzer (must match package.json exactly, e.g. 0.8.2)'
+                type: string
+                default: ''
             publish_shell_api_types:
                 description: 'Publish @documentdb-js/shell-api-types'
                 type: boolean
                 default: false
+            version_shell_api_types:
+                description: 'Version of @documentdb-js/shell-api-types (must match package.json exactly, e.g. 0.8.2)'
+                type: string
+                default: ''
             publish_shell_runtime:
                 description: 'Publish @documentdb-js/shell-runtime'
                 type: boolean
                 default: false
+            version_shell_runtime:
+                description: 'Version of @documentdb-js/shell-runtime (must match package.json exactly, e.g. 0.8.2)'
+                type: string
+                default: ''
 
 concurrency:
     group: publish-documentdb-js-packages
@@ -71,21 +87,170 @@ jobs:
             - name: 📦 Install Dependencies (npm ci)
               run: npm ci --prefer-offline --no-audit --no-fund --progress=false
 
+            # Per-package verification: each selected package gets its own
+            # verify step (id: verify_<pkg>) with continue-on-error so all four
+            # run regardless of individual failures — that gives clean per-
+            # package error annotations in one pass. Checks: typed version is
+            # non-empty, valid semver, matches packages/<dir>/package.json
+            # exactly, and is not already on npm.
+            #
+            # The "atomic release gate" step below then aborts the whole job if
+            # ANY selected package failed verification, so dependent packages
+            # never ship referencing a version that didn't get published.
+
+            - name: 🔒 Verify @documentdb-js/operator-registry
+              id: verify_operator_registry
+              if: ${{ inputs.publish_operator_registry }}
+              continue-on-error: true
+              env:
+                  TYPED: ${{ inputs.version_operator_registry }}
+                  DIR: documentdb-js-operator-registry
+                  NAME: '@documentdb-js/operator-registry'
+              run: |
+                  set -euo pipefail
+                  semver_re='^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'
+                  if [[ -z "${TYPED}" ]]; then
+                      echo "::error::${NAME}: no version typed. Fill in version_operator_registry."
+                      exit 1
+                  fi
+                  if [[ ! "${TYPED}" =~ ${semver_re} ]]; then
+                      echo "::error::${NAME}: typed version '${TYPED}' is not a valid semver string."
+                      exit 1
+                  fi
+                  actual=$(node -p "require('./packages/${DIR}/package.json').version")
+                  if [[ "${actual}" != "${TYPED}" ]]; then
+                      echo "::error file=packages/${DIR}/package.json::${NAME}: typed '${TYPED}' but package.json has '${actual}'."
+                      exit 1
+                  fi
+                  if npm view "${NAME}@${TYPED}" version >/dev/null 2>&1; then
+                      echo "::error::${NAME}@${TYPED} is already published on npm."
+                      exit 1
+                  fi
+                  echo "  ok  ${NAME} = ${TYPED}"
+
+            - name: 🔒 Verify @documentdb-js/schema-analyzer
+              id: verify_schema_analyzer
+              if: ${{ inputs.publish_schema_analyzer }}
+              continue-on-error: true
+              env:
+                  TYPED: ${{ inputs.version_schema_analyzer }}
+                  DIR: documentdb-js-schema-analyzer
+                  NAME: '@documentdb-js/schema-analyzer'
+              run: |
+                  set -euo pipefail
+                  semver_re='^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'
+                  if [[ -z "${TYPED}" ]]; then
+                      echo "::error::${NAME}: no version typed. Fill in version_schema_analyzer."
+                      exit 1
+                  fi
+                  if [[ ! "${TYPED}" =~ ${semver_re} ]]; then
+                      echo "::error::${NAME}: typed version '${TYPED}' is not a valid semver string."
+                      exit 1
+                  fi
+                  actual=$(node -p "require('./packages/${DIR}/package.json').version")
+                  if [[ "${actual}" != "${TYPED}" ]]; then
+                      echo "::error file=packages/${DIR}/package.json::${NAME}: typed '${TYPED}' but package.json has '${actual}'."
+                      exit 1
+                  fi
+                  if npm view "${NAME}@${TYPED}" version >/dev/null 2>&1; then
+                      echo "::error::${NAME}@${TYPED} is already published on npm."
+                      exit 1
+                  fi
+                  echo "  ok  ${NAME} = ${TYPED}"
+
+            - name: 🔒 Verify @documentdb-js/shell-api-types
+              id: verify_shell_api_types
+              if: ${{ inputs.publish_shell_api_types }}
+              continue-on-error: true
+              env:
+                  TYPED: ${{ inputs.version_shell_api_types }}
+                  DIR: documentdb-js-shell-api-types
+                  NAME: '@documentdb-js/shell-api-types'
+              run: |
+                  set -euo pipefail
+                  semver_re='^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'
+                  if [[ -z "${TYPED}" ]]; then
+                      echo "::error::${NAME}: no version typed. Fill in version_shell_api_types."
+                      exit 1
+                  fi
+                  if [[ ! "${TYPED}" =~ ${semver_re} ]]; then
+                      echo "::error::${NAME}: typed version '${TYPED}' is not a valid semver string."
+                      exit 1
+                  fi
+                  actual=$(node -p "require('./packages/${DIR}/package.json').version")
+                  if [[ "${actual}" != "${TYPED}" ]]; then
+                      echo "::error file=packages/${DIR}/package.json::${NAME}: typed '${TYPED}' but package.json has '${actual}'."
+                      exit 1
+                  fi
+                  if npm view "${NAME}@${TYPED}" version >/dev/null 2>&1; then
+                      echo "::error::${NAME}@${TYPED} is already published on npm."
+                      exit 1
+                  fi
+                  echo "  ok  ${NAME} = ${TYPED}"
+
+            - name: 🔒 Verify @documentdb-js/shell-runtime
+              id: verify_shell_runtime
+              if: ${{ inputs.publish_shell_runtime }}
+              continue-on-error: true
+              env:
+                  TYPED: ${{ inputs.version_shell_runtime }}
+                  DIR: documentdb-js-shell-runtime
+                  NAME: '@documentdb-js/shell-runtime'
+              run: |
+                  set -euo pipefail
+                  semver_re='^[0-9]+\.[0-9]+\.[0-9]+(-[A-Za-z0-9.-]+)?$'
+                  if [[ -z "${TYPED}" ]]; then
+                      echo "::error::${NAME}: no version typed. Fill in version_shell_runtime."
+                      exit 1
+                  fi
+                  if [[ ! "${TYPED}" =~ ${semver_re} ]]; then
+                      echo "::error::${NAME}: typed version '${TYPED}' is not a valid semver string."
+                      exit 1
+                  fi
+                  actual=$(node -p "require('./packages/${DIR}/package.json').version")
+                  if [[ "${actual}" != "${TYPED}" ]]; then
+                      echo "::error file=packages/${DIR}/package.json::${NAME}: typed '${TYPED}' but package.json has '${actual}'."
+                      exit 1
+                  fi
+                  if npm view "${NAME}@${TYPED}" version >/dev/null 2>&1; then
+                      echo "::error::${NAME}@${TYPED} is already published on npm."
+                      exit 1
+                  fi
+                  echo "  ok  ${NAME} = ${TYPED}"
+
+            # Atomic release gate: if ANY selected package failed verification,
+            # abort here so nothing publishes. Packages can depend on each
+            # other (e.g. shell-runtime → shell-api-types), so a partial
+            # release would leave dependents pointing at a non-existent version.
+            # Subsequent steps default to `if: success()`, so they skip when
+            # this step fails.
+            - name: 🛑 Atomic release gate — abort if any verification failed
+              if: >-
+                  ${{
+                    (inputs.publish_operator_registry && steps.verify_operator_registry.outcome != 'success') ||
+                    (inputs.publish_schema_analyzer && steps.verify_schema_analyzer.outcome != 'success') ||
+                    (inputs.publish_shell_api_types && steps.verify_shell_api_types.outcome != 'success') ||
+                    (inputs.publish_shell_runtime && steps.verify_shell_runtime.outcome != 'success')
+                  }}
+              run: |
+                  echo "::error::At least one selected package failed verification. Aborting the release — no packages will be published. See the verify_* steps above."
+                  exit 1
+
             - name: 🔨 Build Workspace Packages
               run: npm run build --workspaces --if-present
 
             - name: 🚀 Publish @documentdb-js/operator-registry
-              if: ${{ inputs.publish_operator_registry }}
+              if: ${{ success() && inputs.publish_operator_registry }}
               run: npm publish --provenance --workspace @documentdb-js/operator-registry
 
             - name: 🚀 Publish @documentdb-js/schema-analyzer
-              if: ${{ inputs.publish_schema_analyzer }}
+              if: ${{ success() && inputs.publish_schema_analyzer }}
               run: npm publish --provenance --workspace @documentdb-js/schema-analyzer
 
             - name: 🚀 Publish @documentdb-js/shell-api-types
-              if: ${{ inputs.publish_shell_api_types }}
+              if: ${{ success() && inputs.publish_shell_api_types }}
               run: npm publish --provenance --workspace @documentdb-js/shell-api-types
 
             - name: 🚀 Publish @documentdb-js/shell-runtime
-              if: ${{ inputs.publish_shell_runtime }}
+              if: ${{ success() && inputs.publish_shell_runtime }}
               run: npm publish --provenance --workspace @documentdb-js/shell-runtime
