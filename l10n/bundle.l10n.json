@@ -995,6 +995,7 @@
   "sessionId is required for query optimization": "sessionId is required for query optimization",
   "Settings:": "Settings:",
   "Severe multikey expansion": "Severe multikey expansion",
+  "Shard Key": "Shard Key",
   "SHARD_MERGE · {0} shards": "SHARD_MERGE · {0} shards",
   "SHARD_MERGE · {0} shards · {1} docs · {2}ms": "SHARD_MERGE · {0} shards · {1} docs · {2}ms",
   "Shard: {0}": "Shard: {0}",

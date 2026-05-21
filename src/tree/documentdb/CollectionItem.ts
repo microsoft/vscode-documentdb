@@ -137,6 +137,14 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
             md.appendMarkdown(`**${l10n.t('Documents')}:** ${formatDocumentCount(this.documentCount)}\n\n`);
         }
 
+        // Shard key
+        if (this.collectionInfo.shardKey) {
+            const entries = Object.entries(this.collectionInfo.shardKey)
+                .map(([k, v]) => `${k}: ${typeof v === 'string' ? `"${v}"` : v}`)
+                .join(', ');
+            md.appendMarkdown(`**${l10n.t('Shard Key')}:** \`{ ${entries} }\`\n\n`);
+        }
+
         return md;
     }
 }
