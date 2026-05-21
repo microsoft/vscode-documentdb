@@ -1,11 +1,12 @@
 {
   "name": "@documentdb-js/schema-analyzer",
-  "version": "0.8.1",
+  "version": "0.8.2-dev",
   "description": "Incremental JSON Schema analyzer for DocumentDB API / MongoDB API documents with statistical extensions",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
-    "dist"
+    "dist",
+    "src"
   ],
   "scripts": {
     "build": "tsc -p .",

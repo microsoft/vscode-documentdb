@@ -89,6 +89,25 @@ await mongoClient.close();
 
 This package was developed while building features for the [DocumentDB VS Code extension](https://github.com/microsoft/vscode-documentdb), which remains the primary consumer. The runtime is designed to work with any Node.js application that has a `MongoClient` and needs to evaluate shell-style JavaScript against a DocumentDB database.
 
+## Versioning & Publishing
+
+This package lives in the [microsoft/vscode-documentdb](https://github.com/microsoft/vscode-documentdb) monorepo and is published manually via a GitHub Actions workflow using npm Trusted Publishing.
+
+**Why the `version` in `package.json` ends in `-dev`:**
+
+Between releases, the on-disk version is intentionally suffixed with `-dev` (for example `0.8.2-dev`) to make it obvious that the source on `main` is **not** the same as what's published on npm. External consumers who pin a real range like `"^0.8.1"` will resolve to the latest released version on npm (e.g. `0.8.1`), not to this in-progress dev state — because `0.8.2-dev` is a pre-release and pre-releases don't satisfy a normal range.
+
+**Release flow (maintainers):**
+
+1. Workspace is at `X.Y.Z-dev` during normal development.
+2. When ready to publish: bump the version in `package.json` to the final `X.Y.Z` (drop `-dev`), commit, merge to `main`.
+3. Trigger the [`Publish @documentdb-js packages`](https://github.com/microsoft/vscode-documentdb/actions/workflows/npm-publish-documentdb-js.yml) workflow and approve the deployment gate.
+4. After the publish succeeds, bump to the next `X.Y.(Z+1)-dev` to start the next dev cycle.
+
+**Source maps:**
+
+The published tarball includes the original TypeScript sources alongside the compiled JavaScript and source maps. Consumers can step into this package's code with a debugger and see the original `.ts` files instead of just the compiled `.js`.
+
 ## License
 
 [MIT](LICENSE.md)

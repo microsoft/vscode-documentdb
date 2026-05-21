@@ -1,11 +1,12 @@
 {
   "name": "@documentdb-js/shell-api-types",
-  "version": "0.8.1",
+  "version": "0.8.2-dev",
   "description": "TypeScript type definitions and method-to-command registry for the DocumentDB shell API",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "files": [
     "dist",
+    "src",
     "typeDefs"
   ],
   "scripts": {
