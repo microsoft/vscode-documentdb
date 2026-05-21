@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -20,6 +21,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     public contextValue: string = 'treeItem_indexes';
 
     private readonly experienceContextValue: string = '';
+    private indexCount: number | undefined;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -47,6 +49,8 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             // Search indexes not supported on this platform, continue without them
         }
 
+        this.updateIndexCount(indexes.length);
+
         // Sort indexes by name
         indexes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
@@ -60,8 +64,23 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             id: this.id,
             contextValue: this.contextValue,
             label: l10n.t('Indexes'),
+            description:
+                typeof this.indexCount === 'number'
+                    ? this.indexCount === 1
+                        ? l10n.t('1 index')
+                        : l10n.t('{0} indexes', this.indexCount)
+                    : undefined,
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    private updateIndexCount(count: number): void {
+        if (this.indexCount === count) {
+            return;
+        }
+
+        this.indexCount = count;
+        ext.state.notifyChildrenChanged(this.id);
     }
 }
