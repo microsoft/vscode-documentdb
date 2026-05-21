@@ -16,6 +16,11 @@ import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { escapeJsString } from '../../utils/escapeJsString';
 
+interface PlaygroundFileNameContext {
+    readonly clusterDisplayName: string;
+    readonly databaseOrCollectionName: string;
+}
+
 /**
  * Creates a new Query Playground file.
  *
@@ -52,12 +57,19 @@ export async function newPlayground(context: IActionContext, node?: DatabaseItem
         '',
     ].join('\n');
 
-    await createPlaygroundWithContent(template, {
-        clusterId: node.cluster.clusterId,
-        clusterDisplayName: node.cluster.name,
-        databaseName: node.databaseInfo.name,
-        viewId: node.cluster.viewId,
-    });
+    await createPlaygroundWithContent(
+        template,
+        {
+            clusterId: node.cluster.clusterId,
+            clusterDisplayName: node.cluster.name,
+            databaseName: node.databaseInfo.name,
+            viewId: node.cluster.viewId,
+        },
+        {
+            clusterDisplayName: node.cluster.name,
+            databaseOrCollectionName: isCollectionItem(node) ? node.collectionInfo.name : node.databaseInfo.name,
+        },
+    );
 }
 
 /**
@@ -111,16 +123,17 @@ export async function newPlaygroundWithContent(
 /**
  * Shared logic for creating an untitled playground document and binding its connection.
  */
-async function createPlaygroundWithContent(content: string, connection: PlaygroundConnection): Promise<void> {
+async function createPlaygroundWithContent(
+    content: string,
+    connection: PlaygroundConnection,
+    fileNameContext?: PlaygroundFileNameContext,
+): Promise<void> {
     const service = PlaygroundService.getInstance();
 
     // Create untitled file with a workspace-relative path so VS Code's hot exit
     // can persist the content across restarts. Without a real-looking path,
     // untitled documents lose their content on relaunch.
-    const numberUntitledPlaygrounds = vscode.workspace.textDocuments.filter(
-        (doc) => doc.languageId === PLAYGROUND_LANGUAGE_ID,
-    ).length;
-    const fileName = `playground-${numberUntitledPlaygrounds + 1}${PLAYGROUND_FILE_EXTENSION}`;
+    const fileName = createPlaygroundFileName(vscode.workspace.textDocuments, fileNameContext);
     const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
     const filePath = path.join(folderPath, fileName);
     const uri = vscode.Uri.file(filePath).with({ scheme: 'untitled' });
@@ -136,4 +149,54 @@ async function createPlaygroundWithContent(content: string, connection: Playgrou
 
 function isCollectionItem(node: DatabaseItem | CollectionItem | undefined): node is CollectionItem {
     return node !== undefined && 'collectionInfo' in node;
+}
+
+export function createPlaygroundFileName(
+    textDocuments: readonly vscode.TextDocument[],
+    context?: PlaygroundFileNameContext,
+): string {
+    const playgroundDocuments = textDocuments.filter((doc) => doc.languageId === PLAYGROUND_LANGUAGE_ID);
+
+    if (!context) {
+        return `playground-${playgroundDocuments.length + 1}${PLAYGROUND_FILE_EXTENSION}`;
+    }
+
+    const baseName = [
+        sanitizeFileNamePart(context.clusterDisplayName),
+        sanitizeFileNamePart(context.databaseOrCollectionName),
+    ]
+        .filter(Boolean)
+        .join('_');
+
+    if (!baseName) {
+        return `playground-${playgroundDocuments.length + 1}${PLAYGROUND_FILE_EXTENSION}`;
+    }
+
+    const existingFileNames = new Set(playgroundDocuments.map(getTextDocumentFileName).filter(Boolean));
+    let fileName = `${baseName}${PLAYGROUND_FILE_EXTENSION}`;
+    let suffix = 2;
+
+    while (existingFileNames.has(fileName)) {
+        fileName = `${baseName}-${suffix}${PLAYGROUND_FILE_EXTENSION}`;
+        suffix += 1;
+    }
+
+    return fileName;
+}
+
+function sanitizeFileNamePart(value: string): string {
+    return replaceControlCharacters(value)
+        .replace(/[<>:"/\\|?*]/g, '-')
+        .replace(/\s+/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-|-$/g, '');
+}
+
+function replaceControlCharacters(value: string): string {
+    return [...value].map((char) => (char.charCodeAt(0) < 32 ? '-' : char)).join('');
+}
+
+function getTextDocumentFileName(doc: vscode.TextDocument): string {
+    const fileName = doc.uri.fsPath || doc.fileName || doc.uri.path;
+    return path.basename(fileName.replace(/\\/g, '/'));
 }
