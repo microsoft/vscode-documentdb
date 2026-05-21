@@ -18,60 +18,110 @@ import { type DocumentDBClusterItem } from '../../tree/connections-view/Document
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
-export async function removeAzureConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
-    if (!node) {
-        throw new Error(l10n.t('No node selected.'));
+export async function removeConnection(
+    context: IActionContext,
+    node?: DocumentDBClusterItem,
+    nodes?: DocumentDBClusterItem[],
+): Promise<void> {
+    // Build the list of connections to delete from multi-select (nodes) or single-select (node)
+    const connectionsToDelete: DocumentDBClusterItem[] = nodes && nodes.length > 0 ? nodes : node ? [node] : [];
+
+    if (connectionsToDelete.length === 0) {
+        ext.outputChannel.warn(l10n.t('No connections selected to remove.'));
+        return;
     }
 
-    await removeConnection(context, node);
-}
+    context.telemetry.properties.experience = connectionsToDelete[0].experience.api;
+    context.telemetry.measurements.connectionsToDelete = connectionsToDelete.length;
 
-export async function removeConnection(context: IActionContext, node: DocumentDBClusterItem): Promise<void> {
-    context.telemetry.properties.experience = node.experience.api;
+    // Check if any running tasks are using the selected connections
+    for (const connection of connectionsToDelete) {
+        const canProceed = await checkCanProceedAndInformUser(
+            {
+                clusterId: connection.cluster.clusterId,
+            },
+            l10n.t('remove this connection'),
+        );
 
-    // Check if any running tasks are using this connection
-    const canProceed = await checkCanProceedAndInformUser(
-        {
-            clusterId: node.cluster.clusterId,
-        },
-        l10n.t('remove this connection'),
-    );
-
-    if (!canProceed) {
-        throw new UserCancelledError();
+        if (!canProceed) {
+            throw new UserCancelledError();
+        }
     }
 
-    const confirmed = await getConfirmationAsInSettings(
-        l10n.t('Are you sure?'),
-        l10n.t('Delete "{connectionName}"?', { connectionName: node.cluster.name }) +
-            '\n' +
-            l10n.t('This cannot be undone.'),
-        'delete',
-    );
+    // Build confirmation message adapted for single vs. multiple connections
+    const confirmationMessage =
+        connectionsToDelete.length === 1
+            ? l10n.t('Delete "{connectionName}"?', { connectionName: connectionsToDelete[0].cluster.name }) +
+              '\n' +
+              l10n.t('This cannot be undone.')
+            : l10n.t('Delete {count} connections?', { count: connectionsToDelete.length }) +
+              '\n' +
+              l10n.t('This cannot be undone.');
+
+    const confirmed = await getConfirmationAsInSettings(l10n.t('Are you sure?'), confirmationMessage, 'delete');
 
     if (!confirmed) {
         throw new UserCancelledError();
     }
 
-    // continue with deletion
+    // Resilient deletion loop — continues even if individual deletions fail
+    let successCount = 0;
+    let failureCount = 0;
 
     await withConnectionsViewProgress(async () => {
-        await ext.state.showDeleting(node.id, async () => {
-            if ((node as DocumentDBClusterItem).cluster.emulatorConfiguration?.isEmulator) {
-                await ConnectionStorageService.delete(ConnectionType.Emulators, node.storageId);
-            } else {
-                await ConnectionStorageService.delete(ConnectionType.Clusters, node.storageId);
+        for (const connection of connectionsToDelete) {
+            try {
+                await ext.state.showDeleting(connection.id, async () => {
+                    if (connection.cluster.emulatorConfiguration?.isEmulator) {
+                        await ConnectionStorageService.delete(ConnectionType.Emulators, connection.storageId);
+                    } else {
+                        await ConnectionStorageService.delete(ConnectionType.Clusters, connection.storageId);
+                    }
+                });
+
+                // delete cached credentials from memory using stable clusterId (not treeId)
+                CredentialCache.deleteCredentials(connection.cluster.clusterId);
+
+                // clear cached schema data for this cluster
+                SchemaStore.getInstance().clearCluster(connection.cluster.clusterId);
+
+                refreshParentInConnectionsView(connection.id);
+                successCount++;
+            } catch (error) {
+                failureCount++;
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.error(
+                    l10n.t('Failed to remove connection "{connectionName}": {error}', {
+                        connectionName: connection.cluster.name,
+                        error: errorMessage,
+                    }),
+                );
+
+                // Intentionally capture only the last error in telemetry — a single representative
+                // error is sufficient for diagnostics; errorCount provides the full failure picture.
+                context.telemetry.properties.error = 'RemoveConnectionError';
+                context.telemetry.properties.errorMessage = errorMessage;
             }
-        });
-
-        // delete cached credentials from memory using stable clusterId (not treeId)
-        CredentialCache.deleteCredentials(node.cluster.clusterId);
-
-        // clear cached schema data for this cluster
-        SchemaStore.getInstance().clearCluster(node.cluster.clusterId);
-
-        refreshParentInConnectionsView(node.id);
+        }
     });
 
-    showConfirmationAsInSettings(l10n.t('The selected connection has been removed.'));
+    context.telemetry.measurements.connectionsDeleted = successCount;
+    context.telemetry.measurements.errorCount = failureCount;
+
+    // Show appropriate feedback
+    if (failureCount > 0 && successCount > 0) {
+        showConfirmationAsInSettings(
+            l10n.t('Removed {successCount} of {totalCount} connections. {failureCount} failed.', {
+                successCount,
+                totalCount: connectionsToDelete.length,
+                failureCount,
+            }),
+        );
+    } else if (failureCount === 0) {
+        showConfirmationAsInSettings(
+            connectionsToDelete.length === 1
+                ? l10n.t('The selected connection has been removed.')
+                : l10n.t('All {count} connections have been removed.', { count: connectionsToDelete.length }),
+        );
+    }
 }
