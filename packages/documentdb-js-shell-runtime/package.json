@@ -19,6 +19,9 @@
     "directory": "packages/documentdb-js-shell-runtime"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "mongodb": ">=6.0.0"
   },

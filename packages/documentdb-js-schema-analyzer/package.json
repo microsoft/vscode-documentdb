@@ -18,6 +18,9 @@
     "directory": "packages/documentdb-js-schema-analyzer"
   },
   "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
   "peerDependencies": {
     "mongodb": ">=6.0.0"
   },

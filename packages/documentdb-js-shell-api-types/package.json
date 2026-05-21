@@ -20,5 +20,8 @@
     "url": "https://github.com/microsoft/vscode-documentdb",
     "directory": "packages/documentdb-js-shell-api-types"
   },
-  "license": "MIT"
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  }
 }
