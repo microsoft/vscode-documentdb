@@ -42,6 +42,18 @@ jobs:
             id-token: write # required for npm Trusted Publishing (OIDC)
             contents: read
         steps:
+            - name: 🛑 Validate inputs (at least one package selected)
+              if: >-
+                  ${{
+                    !inputs.publish_operator_registry &&
+                    !inputs.publish_schema_analyzer &&
+                    !inputs.publish_shell_api_types &&
+                    !inputs.publish_shell_runtime
+                  }}
+              run: |
+                  echo "::error::No package selected. Enable at least one publish_* input before running this workflow."
+                  exit 1
+
             - name: ✅ Checkout Repository
               uses: actions/checkout@v6
 
