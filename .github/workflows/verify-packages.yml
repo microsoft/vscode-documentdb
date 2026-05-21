@@ -1,0 +1,215 @@
+name: 'CI: Verify Packages'
+
+# Validates the workspace packages (currently @documentdb-js/*) as if we were
+# about to publish them, without actually publishing anything.
+#
+# What it does:
+#   1. npm pack each workspace package into a tarball
+#   2. publint each tarball (lints package.json/exports/types/files for common
+#      publish mistakes)
+#   3. install all tarballs into a clean throwaway project and `require()` each
+#      one to catch broken entry points, missing dist/, etc.
+#
+# It does NOT pull anything from npmjs.com — the check is local-only against
+# the source in this commit. Peer deps are installed alongside the tarballs to
+# make the smoke install behave like a realistic consumer setup.
+#
+# Triggers: only when packages/** (or this workflow file) is touched.
+
+on:
+    workflow_dispatch:
+
+    pull_request:
+        branches:
+            - main
+            - release/**
+            - feature/**
+        paths:
+            - 'packages/**'
+            - '.github/workflows/verify-packages.yml'
+
+    push:
+        branches:
+            - main
+            - release/**
+        paths:
+            - 'packages/**'
+            - '.github/workflows/verify-packages.yml'
+
+concurrency:
+    group: verify-packages-${{ github.head_ref || github.run_id }}
+    cancel-in-progress: true
+
+jobs:
+    pack-and-smoke-install:
+        name: Pack & smoke-install
+        runs-on: ubuntu-latest
+        permissions:
+            pull-requests: write
+        steps:
+            - name: ✅ Checkout Repository
+              uses: actions/checkout@v6
+
+            - name: 🛠 Setup Node.js Environment (with cache)
+              uses: actions/setup-node@v5
+              with:
+                  node-version-file: .nvmrc
+                  cache: npm
+                  cache-dependency-path: '**/package-lock.json'
+
+            - name: 📦 Install Dependencies (npm ci)
+              run: npm ci --prefer-offline --no-audit --no-fund --progress=false
+
+            - name: 🔨 Build Workspace Packages
+              run: npm run build --workspaces --if-present
+
+            - name: 📦 Pack workspace packages
+              id: pack
+              continue-on-error: true
+              run: |
+                  set -euo pipefail
+                  mkdir -p /tmp/tarballs
+                  for dir in packages/*/; do
+                      pkg=$(node -p "require('./${dir}package.json').name")
+                      echo "::group::Packing ${pkg}"
+                      (cd "${dir}" && npm pack --pack-destination /tmp/tarballs)
+                      echo "::endgroup::"
+                  done
+                  echo "--- tarballs ---"
+                  ls -lh /tmp/tarballs
+
+            - name: 🔎 Lint package metadata (publint)
+              id: publint
+              continue-on-error: true
+              run: |
+                  set -euo pipefail
+                  failed=0
+                  for dir in packages/*/; do
+                      pkg=$(node -p "require('./${dir}package.json').name")
+                      echo "::group::publint ${pkg}"
+                      if ! npx --yes publint "${dir}"; then
+                          failed=1
+                      fi
+                      echo "::endgroup::"
+                  done
+                  exit "${failed}"
+
+            - name: 🧪 Smoke install + require from a clean consumer
+              id: smoke
+              continue-on-error: true
+              run: |
+                  set -euo pipefail
+                  CONSUMER=$(mktemp -d)
+                  cd "${CONSUMER}"
+                  npm init -y >/dev/null
+
+                  # Install all freshly-packed tarballs plus the declared peer
+                  # dependency (mongodb) so packages that touch it at load time
+                  # have it available — simulates a realistic consumer.
+                  npm install /tmp/tarballs/*.tgz mongodb \
+                      --no-audit --no-fund --progress=false
+
+                  node -e "
+                      const fs = require('fs');
+                      const path = require('path');
+                      const scopeDirs = fs.readdirSync('node_modules')
+                          .filter(d => d.startsWith('@'));
+                      const pkgs = [];
+                      for (const scope of scopeDirs) {
+                          for (const name of fs.readdirSync(path.join('node_modules', scope))) {
+                              pkgs.push(scope + '/' + name);
+                          }
+                      }
+                      const ours = pkgs.filter(p => p.startsWith('@documentdb-js/'));
+                      if (ours.length === 0) {
+                          console.error('No @documentdb-js packages installed — nothing to smoke-test.');
+                          process.exit(1);
+                      }
+                      let ok = true;
+                      for (const p of ours) {
+                          try {
+                              require(p);
+                              console.log('  ok  ' + p);
+                          } catch (e) {
+                              console.error(' FAIL ' + p + ' — ' + e.message);
+                              ok = false;
+                          }
+                      }
+                      if (!ok) process.exit(1);
+                  "
+
+            - name: 💬 Post PR Verify Packages Report
+              if: github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
+              uses: actions/github-script@v8
+              with:
+                  github-token: ${{ secrets.GITHUB_TOKEN }}
+                  script: |
+                      const results = {
+                          pack:    '${{ steps.pack.outcome }}',
+                          publint: '${{ steps.publint.outcome }}',
+                          smoke:   '${{ steps.smoke.outcome }}',
+                      };
+                      const labels = {
+                          pack:    '`npm pack` (tarball creation)',
+                          publint: '`publint` (package metadata)',
+                          smoke:   'Smoke install + `require()` from a clean consumer',
+                      };
+                      const hints = {
+                          pack:    'A package failed to pack. Most often caused by a missing `dist/` or a bad `files` array. See logs.',
+                          publint: 'Run `npx publint packages/<dir>` locally to reproduce. Common issues: wrong `main`/`types`, ESM/CJS mismatch, missing fields.',
+                          smoke:   'A consumer cannot `require()` the package. Verify `main`, that `dist/` was built, and that no top-level imports rely on missing peer deps.',
+                      };
+
+                      const marker = '<!-- verify-packages-report -->';
+                      const failed = Object.keys(results).filter(k => results[k] === 'failure');
+                      const rows = Object.keys(results).map(k => {
+                          const ok = results[k] === 'success';
+                          const status = ok ? '✅ Passed' : '❌ Failed';
+                          const hint = ok ? '' : hints[k];
+                          return `| ${labels[k]} | ${status} | ${hint} |`;
+                      }).join('\n');
+
+                      const runUrl = `${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}`;
+                      const title = failed.length === 0
+                          ? '## ✅ Package Verification'
+                          : '## ⚠️ Package Verification Issues';
+
+                      const body = [
+                          marker,
+                          title,
+                          '',
+                          '| Check | Status | Comments |',
+                          '|-------|--------|----------|',
+                          rows,
+                          '',
+                          `_[Workflow run](${runUrl}) · updated automatically on each push._`,
+                      ].join('\n');
+
+                      const { data: comments } = await github.rest.issues.listComments({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: context.issue.number,
+                      });
+                      const existing = comments.find(c => c.body && c.body.includes(marker));
+                      if (existing) {
+                          await github.rest.issues.deleteComment({
+                              owner: context.repo.owner,
+                              repo: context.repo.repo,
+                              comment_id: existing.id,
+                          });
+                      }
+                      await github.rest.issues.createComment({
+                          owner: context.repo.owner,
+                          repo: context.repo.repo,
+                          issue_number: context.issue.number,
+                          body,
+                      });
+
+            - name: ❌ Fail if any package verification check failed
+              if: steps.pack.outcome == 'failure' || steps.publint.outcome == 'failure' || steps.smoke.outcome == 'failure'
+              run: |
+                  echo "One or more package verification checks failed:"
+                  echo "  pack    = ${{ steps.pack.outcome }}"
+                  echo "  publint = ${{ steps.publint.outcome }}"
+                  echo "  smoke   = ${{ steps.smoke.outcome }}"
+                  exit 1
