@@ -139,10 +139,18 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
 
         // Shard key
         if (this.collectionInfo.shardKey) {
-            const entries = Object.entries(this.collectionInfo.shardKey)
-                .map(([k, v]) => `${k}: ${typeof v === 'string' ? `"${v}"` : v}`)
-                .join(', ');
-            md.appendMarkdown(`**${l10n.t('Shard Key')}:** \`{ ${entries} }\`\n\n`);
+            const shardKeyEntries = Object.entries(this.collectionInfo.shardKey);
+            if (shardKeyEntries.length > 0) {
+                const entries = shardKeyEntries
+                    .map(([k, v]) => {
+                        const escapedKey = escapeMarkdown(k);
+                        const valueText = typeof v === 'string' ? `"${v}"` : String(v);
+                        const escapedValue = escapeMarkdown(valueText);
+                        return `${escapedKey}: ${escapedValue}`;
+                    })
+                    .join(', ');
+                md.appendMarkdown(`**${l10n.t('Shard Key')}:** \`{ ${entries} }\`\n\n`);
+            }
         }
 
         return md;
