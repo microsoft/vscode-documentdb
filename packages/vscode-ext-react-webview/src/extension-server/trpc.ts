@@ -76,7 +76,7 @@ export const publicProcedure = t.procedure;
  *
  * ```typescript
  * import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
- * import { createMiddleware, publicProcedure, type BaseRouterContext } from '@microsoft/vscode-ext-react-webview';
+ * import { createMiddleware, publicProcedure, type BaseRouterContext } from '@microsoft/vscode-ext-react-webview/server';
  *
  * const trpcToTelemetry = createMiddleware(async (opts) => {
  *     const result = await callWithTelemetryAndErrorHandling(
