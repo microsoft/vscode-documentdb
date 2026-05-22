@@ -5,9 +5,9 @@
 
 /**
  * Entry point for the extension-host (server) surface of
- * `@microsoft/vscode-webview-api`.
+ * `@microsoft/vscode-ext-react-webview`.
  *
- * Imported as `@microsoft/vscode-webview-api/server` from the extension's
+ * Imported as `@microsoft/vscode-ext-react-webview/server` from the extension's
  * Node.js code (controllers, routers, telemetry middleware). Pulls in
  * Node / VS Code APIs (`fs`, `path`, `vscode`) and must not be bundled into
  * the webview's browser-side code.

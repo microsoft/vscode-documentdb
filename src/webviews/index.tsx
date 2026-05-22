@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type WebviewState, WithWebviewContext } from '@microsoft/vscode-webview-api';
+import { type WebviewState, WithWebviewContext } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { type l10nJsonFormat } from '@vscode/l10n';
 import type * as React from 'react';

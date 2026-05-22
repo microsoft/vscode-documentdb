@@ -19,6 +19,6 @@ module.exports = {
         '<rootDir>/packages/documentdb-js-schema-analyzer',
         '<rootDir>/packages/documentdb-js-operator-registry',
         '<rootDir>/packages/documentdb-js-shell-runtime',
-        '<rootDir>/packages/vscode-webview-api',
+        '<rootDir>/packages/vscode-ext-react-webview',
     ],
 };

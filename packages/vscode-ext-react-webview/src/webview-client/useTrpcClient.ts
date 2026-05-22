@@ -15,7 +15,7 @@ import { vscodeLink, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessa
  * @example
  * ```ts
  * import type { AppRouter } from './appRouter';
- * import type { TrpcClient } from '@microsoft/vscode-webview-api';
+ * import type { TrpcClient } from '@microsoft/vscode-ext-react-webview';
  *
  * type AppTrpcClient = TrpcClient<AppRouter>;
  * ```
@@ -37,7 +37,7 @@ export type TrpcClient<TRouter extends AnyRouter> = CreateTRPCClient<TRouter>;
  *
  * @example
  * ```tsx
- * import { useTrpcClient } from '@microsoft/vscode-webview-api';
+ * import { useTrpcClient } from '@microsoft/vscode-ext-react-webview';
  * import type { AppRouter } from '../api/configuration/appRouter';
  *
  * export const MyComponent = () => {

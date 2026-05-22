@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
-import { Announcer, useConfiguration, useSelectiveContextMenuPrevention } from '@microsoft/vscode-webview-api';
+import { Announcer, useConfiguration, useSelectiveContextMenuPrevention } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';

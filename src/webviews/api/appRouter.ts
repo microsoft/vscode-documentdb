@@ -15,7 +15,7 @@
  */
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
-import { type TelemetryContext } from '@microsoft/vscode-webview-api/server';
+import { type TelemetryContext } from '@microsoft/vscode-ext-react-webview/server';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
@@ -28,7 +28,7 @@ import { publicProcedure, router } from './trpc';
 
 /**
  * DocumentDB-flavoured router context. Extends the framework's
- * `BaseRouterContext` (from `@microsoft/vscode-webview-api`) with the
+ * `BaseRouterContext` (from `@microsoft/vscode-ext-react-webview`) with the
  * DocumentDB-specific fields every procedure needs.
  */
 export type BaseRouterContext = {

@@ -34,7 +34,7 @@ import {
     SparkleRegular,
     WindowConsoleRegular,
 } from '@fluentui/react-icons';
-import { useConfiguration } from '@microsoft/vscode-webview-api';
+import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
 import { useTrpcClient } from '../../../../api/useTrpcClient';

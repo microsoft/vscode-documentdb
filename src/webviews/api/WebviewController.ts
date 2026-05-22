@@ -7,7 +7,7 @@
  * DocumentDB-flavoured `WebviewController`.
  *
  * Thin wrapper that pre-fills the framework's
- * {@link import('@microsoft/vscode-webview-api').WebviewControllerOptions}
+ * {@link import('@microsoft/vscode-ext-react-webview').WebviewControllerOptions}
  * with this extension's bundle layout, dev-server host, and root tRPC router.
  *
  * View controllers (`CollectionViewController`, `DocumentsViewController`,
@@ -15,7 +15,7 @@
  * webview name, initial configuration, view column, icon) to `super(...)`.
  */
 
-import { WebviewController as FrameworkWebviewController } from '@microsoft/vscode-webview-api/server';
+import { WebviewController as FrameworkWebviewController } from '@microsoft/vscode-ext-react-webview/server';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { appRouter, type AppRouter, type BaseRouterContext } from './appRouter';

@@ -1,7 +1,7 @@
 {
-  "name": "@microsoft/vscode-webview-api",
-  "version": "0.1.0-pre",
-  "description": "Type-safe RPC infrastructure for React webviews in VS Code extensions (tRPC over postMessage, adaptive theming hooks, accessibility helpers)",
+  "name": "@microsoft/vscode-ext-react-webview",
+  "version": "0.8.0-preview",
+  "description": "Webview infrastructure for VS Code extensions with type-safe tRPC RPC over postMessage, React hooks, pluggable telemetry middleware, and accessibility helpers",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -22,7 +22,8 @@
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "README.md"
   ],
   "scripts": {
     "build": "tsc -p .",
@@ -33,7 +34,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/vscode-documentdb",
-    "directory": "packages/vscode-webview-api"
+    "directory": "packages/vscode-ext-react-webview"
   },
   "license": "MIT",
   "publishConfig": {

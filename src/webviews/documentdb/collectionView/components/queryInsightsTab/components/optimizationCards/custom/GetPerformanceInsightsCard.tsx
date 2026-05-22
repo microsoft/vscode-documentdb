@@ -15,7 +15,7 @@ import {
     tokens,
 } from '@fluentui/react-components';
 import { SparkleRegular } from '@fluentui/react-icons';
-import { Announcer } from '@microsoft/vscode-webview-api';
+import { Announcer } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
 import '../baseOptimizationCard.scss';

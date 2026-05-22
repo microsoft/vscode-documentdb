@@ -5,7 +5,7 @@
 
 /**
  * DocumentDB-tuned re-exports of the tRPC primitives from
- * `@microsoft/vscode-webview-api`.
+ * `@microsoft/vscode-ext-react-webview`.
  *
  * The framework's `publicProcedureWithTelemetry` uses a `console.log` sink by
  * default. We replace it here with a middleware that forwards events to the
@@ -24,7 +24,7 @@ import {
     publicProcedure,
     router,
     type BaseRouterContext,
-} from '@microsoft/vscode-webview-api/server';
+} from '@microsoft/vscode-ext-react-webview/server';
 
 /**
  * DocumentDB-flavoured replacement for the package's `WithTelemetry<T>` helper.

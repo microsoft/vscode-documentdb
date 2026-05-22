@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Public entry point for `@microsoft/vscode-webview-api` — the webview-client
+ * Public entry point for `@microsoft/vscode-ext-react-webview` — the webview-client
  * (browser) surface.
  *
  * The webview side never needs the extension-server APIs, and pulling them in
@@ -14,7 +14,7 @@
  * Extension-host code imports the server surface from the `/server` subpath:
  *
  * ```ts
- * import { WebviewController, router } from '@microsoft/vscode-webview-api/server';
+ * import { WebviewController, router } from '@microsoft/vscode-ext-react-webview/server';
  * ```
  */
 

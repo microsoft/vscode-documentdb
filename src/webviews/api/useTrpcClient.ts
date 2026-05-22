@@ -5,12 +5,12 @@
 
 /**
  * Thin wrapper around the framework's `useTrpcClient` hook from
- * `@microsoft/vscode-webview-api`, pre-typed against this extension's
+ * `@microsoft/vscode-ext-react-webview`, pre-typed against this extension's
  * {@link AppRouter}. Webview components import from here so they do not need
  * to repeat the router type argument at every call site.
  */
 
-import { useTrpcClient as useFrameworkTrpcClient } from '@microsoft/vscode-webview-api';
+import { useTrpcClient as useFrameworkTrpcClient } from '@microsoft/vscode-ext-react-webview';
 import { type AppRouter } from './appRouter';
 
 export function useTrpcClient() {

@@ -23,13 +23,13 @@ useTrpcClient() hook                      WebviewController
 
 | File                                                     | Purpose                                                                                    |
 | -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `@microsoft/vscode-webview-api/server` (trpc)            | tRPC init, `publicProcedure`, `createMiddleware`, `router`, `BaseRouterContext`            |
+| `@microsoft/vscode-ext-react-webview/server` (trpc)            | tRPC init, `publicProcedure`, `createMiddleware`, `router`, `BaseRouterContext`            |
 | `src/webviews/api/trpc.ts`                              | DocumentDB-specific telemetry middleware + `publicProcedureWithTelemetry` + `WithTelemetry` |
 | `src/webviews/api/appRouter.ts`                         | Root router bundling all view routers + `commonRouter` + DocumentDB `BaseRouterContext`    |
-| `@microsoft/vscode-webview-api/server` (WebviewController) | WebviewPanel lifecycle, tRPC message dispatcher (queries, mutations, subscriptions, abort) |
+| `@microsoft/vscode-ext-react-webview/server` (WebviewController) | WebviewPanel lifecycle, tRPC message dispatcher (queries, mutations, subscriptions, abort) |
 | `src/webviews/api/WebviewController.ts`                 | DocumentDB-tuned wrapper that pre-fills router + bundle layout                              |
 | `src/webviews/api/useTrpcClient.ts`                     | React hook providing the tRPC client (pre-typed against `AppRouter`)                        |
-| `@microsoft/vscode-webview-api` (vscodeLink)            | Custom tRPC link bridging `postMessage` transport                                          |
+| `@microsoft/vscode-ext-react-webview` (vscodeLink)            | Custom tRPC link bridging `postMessage` transport                                          |
 
 ## Creating a New Router
 
@@ -241,7 +241,7 @@ sub.unsubscribe();
 
 ```tsx
 import { useTrpcClient } from '../api/useTrpcClient';
-import { useConfiguration } from '@microsoft/vscode-webview-api';
+import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 
 export const MyComponent = () => {
   const { trpcClient } = useTrpcClient();

@@ -5,7 +5,7 @@
 
 import { Button, Input, Label, ToggleButton, Tooltip } from '@fluentui/react-components';
 import { Collapse } from '@fluentui/react-motion-components-preview';
-import { useConfiguration } from '@microsoft/vscode-webview-api';
+import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';

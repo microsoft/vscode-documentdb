@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ProgressBar } from '@fluentui/react-components';
-import { useConfiguration, useSelectiveContextMenuPrevention } from '@microsoft/vscode-webview-api';
+import { useConfiguration, useSelectiveContextMenuPrevention } from '@microsoft/vscode-ext-react-webview';
 import { loader } from '@monaco-editor/react';
 import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
