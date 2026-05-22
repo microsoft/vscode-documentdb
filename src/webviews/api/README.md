@@ -10,13 +10,12 @@ Local integration layer between the DocumentDB extension and
 
 ## Files
 
-| File                   | Owns                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------- |
-| `appRouter.ts`         | Root tRPC router, `BaseRouterContext`, common procedures (telemetry/survey helpers) |
-| `trpc.ts`              | DocumentDB telemetry middleware, `publicProcedureWithTelemetry`, `WithTelemetry`    |
-| `useTrpcClient.ts`     | React hook pre-bound to `AppRouter` (browser-side glue)                             |
-| `WebviewController.ts` | DocumentDB controller base class; pre-fills bundle layout and dev-server host       |
-| `WebviewRegistry.ts`   | Webview name to React component map; source of the `WebviewName` union              |
+| File                   | Owns                                                                                                                                |
+| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `appRouter.ts`         | Root tRPC router, telemetry middleware, `publicProcedureWithTelemetry`, `WithTelemetry`, `BaseRouterContext`, and common procedures |
+| `useTrpcClient.ts`     | React hook pre-bound to `AppRouter` (browser-side glue)                                                                             |
+| `WebviewController.ts` | DocumentDB controller base class; pre-fills bundle layout and dev-server host                                                       |
+| `WebviewRegistry.ts`   | Webview name to React component map; source of the `WebviewName` union                                                              |
 
 Per-view router files (`collectionViewRouter.ts`, `documentsViewRouter.ts`)
 live next to their views, not here. See "Per-view router convention" below.
@@ -28,7 +27,7 @@ live next to their views, not here. See "Per-view router convention" below.
 | Add a new webview                                     | `WebviewRegistry.ts` (and register the controller command) |
 | Add a tRPC procedure to an existing view              | `<view>Router.ts` next to the view                         |
 | Bundle a new per-view router into the app router tree | `appRouter.ts`                                             |
-| Change the telemetry sink or RPC event namespace      | `trpc.ts`                                                  |
+| Change the telemetry sink or RPC event namespace      | `appRouter.ts`                                             |
 | Add a field to the per-procedure context              | `BaseRouterContext` in `appRouter.ts`                      |
 | Change the bundle layout or dev-server host           | `WebviewController.ts`                                     |
 
@@ -54,7 +53,7 @@ Each per-view router:
 
 - Defines a `RouterContext` type that extends `BaseRouterContext` with
   view-specific fields (e.g. cluster id, collection name).
-- Imports `publicProcedureWithTelemetry` and `router` from `../../api/trpc`.
+- Imports `publicProcedureWithTelemetry` and `router` from `../../api/appRouter`.
 - Imports `BaseRouterContext` from `../../api/appRouter` when extending
   the context.
 - Is wired into the root tRPC tree in `appRouter.ts` so it is reachable
