@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { ProgressBar } from '@fluentui/react-components';
-import { useConfiguration, useSelectiveContextMenuPrevention } from '@microsoft/vscode-ext-react-webview';
+import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import { loader } from '@monaco-editor/react';
 import * as l10n from '@vscode/l10n';
 import { debounce } from 'es-toolkit';
@@ -13,6 +13,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { useTrpcClient } from '../../api/useTrpcClient';
 import { MonacoEditor } from '../../components/MonacoEditor';
+import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { ToolbarDocuments } from './components/toolbarDocuments';
 import { type DocumentsViewWebviewConfigurationType } from './documentsViewController';
 import './documentView.scss';
