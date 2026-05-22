@@ -155,6 +155,45 @@ export class TypedEventSink<T extends DiscriminatedEvent> implements AsyncIterab
                     this.resolve = resolve;
                 });
             },
+
+            /**
+             * Implements the optional `return()` half of the async-iterator
+             * protocol so that callers can release a parked consumer without
+             * having to wait for the next `emit` or `close`.
+             *
+             * This is invoked automatically by `for await (...) { break; }`,
+             * `for await (...) { throw ...; }`, and explicit
+             * `iterator.return()` calls. The framework's
+             * `WebviewController` also calls it on `subscription.stop` and on
+             * panel disposal to close out the unsubscribe-while-panel-alive
+             * window that abort signals alone cannot reach.
+             *
+             * After `return()` the sink reports `isClosed === true`,
+             * subsequent `emit()` calls are dropped, and a new consumer can
+             * iterate again (it will see `{ done: true }` immediately).
+             */
+            return: (): Promise<IteratorResult<T>> => {
+                // Mark the sink closed so any race between `return()` and a
+                // late `emit()` from the producer is dropped on the floor.
+                this.done = true;
+                this.queue.length = 0;
+
+                // If we were parked on a pending `next()`, settle it with
+                // `done: true` so the caller's `for await` loop terminates
+                // cleanly instead of staying pending forever.
+                if (this.resolve) {
+                    const res = this.resolve;
+                    this.resolve = null;
+                    res({ value: undefined as unknown as T, done: true });
+                }
+
+                // Release the single-consumer guard. A second `for await`
+                // over the same sink is now allowed; it will see `done: true`
+                // on the first `next()` because `this.done` is `true`.
+                this.iterating = false;
+
+                return Promise.resolve({ value: undefined as unknown as T, done: true });
+            },
         };
     }
 }

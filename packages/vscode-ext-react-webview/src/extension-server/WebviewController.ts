@@ -90,11 +90,28 @@ export class WebviewController<
     public readonly onDisposed: vscode.Event<void> = this._onDisposed.event;
 
     /**
-     * A map tracking active subscriptions by their operation ID.
-     * Each subscription is associated with an AbortController, allowing the server
-     * side to cancel the subscription if requested by the client.
+     * Tracks active subscriptions by their operation ID.
+     *
+     * Each entry carries both:
+     *
+     * - an `AbortController` used to surface cooperative cancellation through
+     *   `ctx.signal.aborted` to procedure bodies that poll the signal, and
+     * - the procedure's live `AsyncIterator`, so the framework can call
+     *   `iterator.return()` on `subscription.stop` and on panel disposal.
+     *   That second half is what releases consumers parked on the next
+     *   `next()` call (e.g. `TypedEventSink` waiting for the next `emit`):
+     *   abort signals on their own cannot unblock a parked `next()`, so
+     *   without iterator-protocol cleanup a subscription that has not
+     *   recently emitted would stay parked until the panel was disposed
+     *   *and* the producer happened to close its sink.
      */
-    private _activeSubscriptions = new Map<string, AbortController>();
+    private _activeSubscriptions = new Map<
+        string,
+        {
+            abortController: AbortController;
+            iterator: AsyncIterator<unknown>;
+        }
+    >();
 
     /**
      * A map tracking active queries and mutations by their operation ID.
@@ -223,25 +240,38 @@ export class WebviewController<
                 throw new Error(`Procedure not found: ${message.op.path}`);
             }
 
-            // Await the procedure call to get the async iterator (async generator) for the subscription
+            // Await the procedure call to get the async iterable (the procedure's `async function*`
+            // result, which is an AsyncGenerator and therefore both iterable and an iterator).
             // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
-            const asyncIter = await procedure(message.op.input);
+            const asyncIterable = await procedure(message.op.input);
+
+            // Normalize to a live AsyncIterator and store it. We deliberately do *not* use
+            // `for await (const value of asyncIterable)` because that would obtain the iterator
+            // internally and give us no handle to call `iterator.return()` on `subscription.stop`
+            // or panel dispose. Driving `next()`/`return()` ourselves is what lets us release
+            // consumers parked on a pending next (e.g. an event sink with no recent emit).
+            const iterator: AsyncIterator<unknown> = this.toAsyncIterator(asyncIterable);
 
             // Only track the subscription once we actually have an iterator. If procedure
             // lookup or the initial `await procedure(...)` throws, we fall through to the
             // outer catch without ever inserting an entry — so an early failure cannot
             // leave a stale (id, AbortController) pair behind for the lifetime of the panel.
-            this._activeSubscriptions.set(message.id, abortController);
+            this._activeSubscriptions.set(message.id, { abortController, iterator });
 
             void (async () => {
                 try {
-                    for await (const value of asyncIter) {
+                    while (true) {
+                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
+                        const { value, done } = await iterator.next();
+                        if (done) {
+                            break;
+                        }
                         // Each yielded value is sent to the webview
-                        // eslint-disable-next-line
                         this.safePostMessage({ id: message.id, result: value });
                     }
 
-                    // On natural completion, inform the client
+                    // On natural completion (procedure returned, or our `return()` propagated
+                    // through the generator), inform the client.
                     this.safePostMessage({ id: message.id, complete: true });
                 } catch (error) {
                     const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
@@ -257,17 +287,46 @@ export class WebviewController<
     }
 
     /**
+     * Normalizes a procedure's subscription return value (which may be an
+     * `AsyncIterable`, an `AsyncIterator`, or both — async generators are
+     * both) to a single live `AsyncIterator`.
+     *
+     * Calling `[Symbol.asyncIterator]()` once is required for iterables like
+     * {@link TypedEventSink} (which enforce single-consumer semantics);
+     * direct iterators are returned as-is.
+     */
+    private toAsyncIterator(value: unknown): AsyncIterator<unknown> {
+        if (
+            value !== null &&
+            typeof value === 'object' &&
+            typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function'
+        ) {
+            return (value as AsyncIterable<unknown>)[Symbol.asyncIterator]();
+        }
+        return value as AsyncIterator<unknown>;
+    }
+
+    /**
      * Handles the 'subscription.stop' message type.
      *
-     * Looks up the active subscription by ID and aborts it, stopping further
-     * data emission.
+     * Aborts the per-operation `AbortController` (for procedure bodies that
+     * poll `ctx.signal.aborted` between yields) and calls the iterator's
+     * `return()` (for procedure bodies parked on a `for await` over an event
+     * sink with no recent emit). Either path will end the streaming task
+     * and run its `finally`, which deletes the map entry.
      *
      * @param message - The original message from the webview.
      */
     private handleSubscriptionStopMessage(message: VsCodeLinkRequestMessage) {
-        const abortController = this._activeSubscriptions.get(message.id);
-        if (abortController) {
-            abortController.abort();
+        const record = this._activeSubscriptions.get(message.id);
+        if (record) {
+            record.abortController.abort();
+            // Cooperative abort cannot unblock a parked `iterator.next()`. Calling `return()`
+            // here propagates through the procedure's async generator into any inner
+            // `for await` (including `TypedEventSink` consumers), which lets parked
+            // promises settle with `{ done: true }` and the streaming task exit cleanly.
+            // We swallow rejection from `return()` because we have no useful reaction.
+            void Promise.resolve(record.iterator.return?.({ value: undefined, done: true })).catch(() => void 0);
             this._activeSubscriptions.delete(message.id);
         }
     }
@@ -525,9 +584,15 @@ export class WebviewController<
         }
         this._activeOperations.clear();
 
-        // Abort all active subscriptions so async generators can terminate
-        for (const controller of this._activeSubscriptions.values()) {
-            controller.abort();
+        // Abort all active subscriptions and call `return()` on each iterator so async
+        // generators terminate even when parked on `next()`. The abort signal alone
+        // cannot unblock a parked `next()`; `return()` propagates through the
+        // procedure's `for await` into any inner event sink and settles its pending
+        // promise. Rejections from `return()` are swallowed because we have no useful
+        // reaction during shutdown.
+        for (const { abortController, iterator } of this._activeSubscriptions.values()) {
+            abortController.abort();
+            void Promise.resolve(iterator.return?.({ value: undefined, done: true })).catch(() => void 0);
         }
         this._activeSubscriptions.clear();
 

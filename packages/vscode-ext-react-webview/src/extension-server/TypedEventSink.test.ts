@@ -126,4 +126,74 @@ describe('TypedEventSink', () => {
         sink.close();
         expect(sink.isClosed).toBe(true);
     });
+
+    describe('iterator.return()', () => {
+        it('releases a consumer parked on next() with no buffered events', async () => {
+            const sink = new TypedEventSink<TestEvent>();
+            const iterator = sink[Symbol.asyncIterator]();
+
+            // Park the consumer on next() — no events buffered, sink not closed.
+            const pendingNext = iterator.next();
+
+            // Drive return() externally (like WebviewController does on subscription.stop).
+            const returnResult = await iterator.return!({ value: undefined as unknown as TestEvent, done: true });
+
+            expect(returnResult.done).toBe(true);
+
+            // The previously parked next() should now resolve with { done: true }.
+            const settled = await pendingNext;
+            expect(settled.done).toBe(true);
+            expect(sink.isClosed).toBe(true);
+        });
+
+        it('completes a for-await loop that calls break early', async () => {
+            const sink = new TypedEventSink<TestEvent>();
+
+            sink.emit({ type: 'progress', percent: 10 });
+            sink.emit({ type: 'progress', percent: 20 });
+
+            const received: TestEvent[] = [];
+            for await (const event of sink) {
+                received.push(event);
+                // `break` calls iterator.return() under the iterator protocol.
+                break;
+            }
+
+            expect(received).toEqual([{ type: 'progress', percent: 10 }]);
+            expect(sink.isClosed).toBe(true);
+
+            // Subsequent emit() calls are dropped, exactly like after close().
+            sink.emit({ type: 'progress', percent: 99 });
+            expect(sink.isClosed).toBe(true);
+        });
+
+        it('drops buffered events on return() so they cannot leak to a later consumer', async () => {
+            const sink = new TypedEventSink<TestEvent>();
+
+            sink.emit({ type: 'progress', percent: 10 });
+            sink.emit({ type: 'progress', percent: 20 });
+
+            const iterator = sink[Symbol.asyncIterator]();
+            await iterator.return!({ value: undefined as unknown as TestEvent, done: true });
+
+            // A second consumer is allowed after return() — single-consumer guard is released.
+            const second: TestEvent[] = [];
+            for await (const event of sink) {
+                second.push(event);
+            }
+            expect(second).toEqual([]);
+        });
+
+        it('is idempotent (return() after return())', async () => {
+            const sink = new TypedEventSink<TestEvent>();
+            const iterator = sink[Symbol.asyncIterator]();
+
+            const r1 = await iterator.return!({ value: undefined as unknown as TestEvent, done: true });
+            const r2 = await iterator.return!({ value: undefined as unknown as TestEvent, done: true });
+
+            expect(r1.done).toBe(true);
+            expect(r2.done).toBe(true);
+            expect(sink.isClosed).toBe(true);
+        });
+    });
 });

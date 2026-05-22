@@ -464,8 +464,12 @@ keeps "things the webview calls" and "things the host pushes" in separate
 files, which makes it easy to discover the entire event vocabulary of a
 view at a glance.
 
-When the panel is disposed, call `sink.close()` so the iterator completes
-and the subscription releases cleanly.
+When the producer (panel, session, task) finishes for good, call
+`sink.close()`. The framework already cleans up async iteration on
+unsubscribe and panel disposal via `iterator.return()`, but calling
+`close()` is still the right signal whenever the sink itself has no more
+events to ever emit — it lets late producers stop without checking, and
+it prevents reuse by accident.
 
 ### Importing the router type into webview code
 
@@ -561,9 +565,14 @@ ac.abort();
 ```
 
 On the server side, read `ctx.signal` inside your procedure to cooperatively
-stop work. Subscriptions stop cleanly when the client unsubscribes. The
-framework sends a `subscription.stop` message that aborts the underlying
-async generator.
+stop work. Subscriptions stop cleanly when the client unsubscribes: the
+framework sends a `subscription.stop` message and the controller both
+aborts the per-operation `AbortController` *and* calls
+`iterator.return()` on the procedure's async generator. The `return()`
+call propagates through the generator into any inner `for await` loop —
+including loops over a `TypedEventSink` — which releases consumers
+parked on the next event without waiting for the producer to emit or
+close. The same cleanup runs when the controller itself is disposed.
 
 ### Can I use a UI library other than React?
 
