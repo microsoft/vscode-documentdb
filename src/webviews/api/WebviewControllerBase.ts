@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * DocumentDB-flavoured `WebviewController`.
+ * DocumentDB-flavoured `WebviewControllerBase`.
  *
  * Thin wrapper that pre-fills the framework's
  * {@link import('@microsoft/vscode-ext-react-webview').WebviewControllerOptions}
@@ -13,9 +13,13 @@
  * View controllers (`CollectionViewController`, `DocumentsViewController`,
  * ...) extend this class and pass only the per-view arguments (title,
  * webview name, initial configuration, view column, icon) to `super(...)`.
+ *
+ * The `Base` suffix disambiguates this DocumentDB-specific base class from
+ * the framework's `WebviewController` it extends; both appear in import
+ * graphs and stack traces, and the same-name shadow used to be confusing.
  */
 
-import { WebviewController as FrameworkWebviewController } from '@microsoft/vscode-ext-react-webview/server';
+import { WebviewController } from '@microsoft/vscode-ext-react-webview/server';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { appRouter, type AppRouter, type BaseRouterContext } from './appRouter';
@@ -39,14 +43,14 @@ const DOCUMENTDB_WEBVIEW_SOURCE_LAYOUT = {
 const DOCUMENTDB_DEV_SERVER_HOST = 'http://localhost:18080';
 
 /**
- * DocumentDB `WebviewController` base class. View controllers extend this and
+ * DocumentDB `WebviewControllerBase`. View controllers extend this and
  * only need to forward the call-site arguments to `super(...)`.
  *
  * @template TConfiguration - The initial configuration object passed to the
  *                            webview (received in the webview via
  *                            `useConfiguration`).
  */
-export abstract class WebviewController<TConfiguration> extends FrameworkWebviewController<
+export abstract class WebviewControllerBase<TConfiguration> extends WebviewController<
     AppRouter,
     TConfiguration,
     BaseRouterContext

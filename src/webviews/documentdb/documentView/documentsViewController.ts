@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { WebviewController } from '../../api/WebviewController';
+import { WebviewControllerBase } from '../../api/WebviewControllerBase';
 import { type RouterContext } from './documentsViewRouter';
 
 export type DocumentsViewWebviewConfigurationType = {
@@ -26,7 +26,7 @@ export type DocumentsViewWebviewConfigurationType = {
     mode: string; // 'add', 'view', 'edit'
 };
 
-export class DocumentsViewController extends WebviewController<DocumentsViewWebviewConfigurationType> {
+export class DocumentsViewController extends WebviewControllerBase<DocumentsViewWebviewConfigurationType> {
     constructor(initialData: DocumentsViewWebviewConfigurationType) {
         // ext.context here is the vscode.ExtensionContext required by the ReactWebviewPanelController's original implementation
         // we're not modifying it here in order to be ready for future updates of the webview API.

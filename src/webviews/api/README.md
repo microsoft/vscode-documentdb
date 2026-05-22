@@ -10,12 +10,12 @@ Local integration layer between the DocumentDB extension and
 
 ## Files
 
-| File                   | Owns                                                                                                                                |
-| ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
-| `appRouter.ts`         | Root tRPC router, telemetry middleware, `publicProcedureWithTelemetry`, `WithTelemetry`, `BaseRouterContext`, and common procedures |
-| `useTrpcClient.ts`     | React hook pre-bound to `AppRouter` (browser-side glue)                                                                             |
-| `WebviewController.ts` | DocumentDB controller base class; pre-fills bundle layout and dev-server host                                                       |
-| `WebviewRegistry.ts`   | Webview name to React component map; source of the `WebviewName` union                                                              |
+| File                       | Owns                                                                                                                                |
+| -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| `appRouter.ts`             | Root tRPC router, telemetry middleware, `publicProcedureWithTelemetry`, `WithTelemetry`, `BaseRouterContext`, and common procedures |
+| `useTrpcClient.ts`         | React hook pre-bound to `AppRouter` (browser-side glue)                                                                             |
+| `WebviewControllerBase.ts` | DocumentDB controller base class; pre-fills bundle layout and dev-server host                                                       |
+| `WebviewRegistry.ts`       | Webview name to React component map; source of the `WebviewName` union                                                              |
 
 Per-view router files (`collectionViewRouter.ts`, `documentsViewRouter.ts`)
 live next to their views, not here. See "Per-view router convention" below.
@@ -29,13 +29,13 @@ live next to their views, not here. See "Per-view router convention" below.
 | Bundle a new per-view router into the app router tree | `appRouter.ts`                                             |
 | Change the telemetry sink or RPC event namespace      | `appRouter.ts`                                             |
 | Add a field to the per-procedure context              | `BaseRouterContext` in `appRouter.ts`                      |
-| Change the bundle layout or dev-server host           | `WebviewController.ts`                                     |
+| Change the bundle layout or dev-server host           | `WebviewControllerBase.ts`                                 |
 
 ## Data flow
 
 1. **Extension host:** a view controller extends
-   `WebviewController` (this folder) and is constructed in response to a
-   user command. The framework wires `appRouter` to the webview panel.
+   `WebviewControllerBase` (this folder) and is constructed in response to
+   a user command. The framework wires `appRouter` to the webview panel.
 2. **Transport:** `vscodeLink` (from the framework package) marshals
    tRPC calls over `postMessage` between host and webview.
 3. **Webview (browser):** React components call `useTrpcClient()` (this

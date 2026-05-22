@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { SettingsService } from '../../../services/SettingsService';
-import { WebviewController } from '../../api/WebviewController';
+import { WebviewControllerBase } from '../../api/WebviewControllerBase';
 import { type RouterContext } from './collectionViewRouter';
 
 export type CollectionViewWebviewConfigurationType = {
@@ -39,7 +39,7 @@ export type CollectionViewWebviewConfigurationType = {
     };
 };
 
-export class CollectionViewController extends WebviewController<CollectionViewWebviewConfigurationType> {
+export class CollectionViewController extends WebviewControllerBase<CollectionViewWebviewConfigurationType> {
     constructor(
         initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
     ) {
