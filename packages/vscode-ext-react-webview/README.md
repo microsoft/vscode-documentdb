@@ -22,7 +22,7 @@ reference repository.
 `WebviewController` lives on the extension-host side and owns a
 `vscode.WebviewPanel`. The webview side runs the React app inside the panel
 and talks to the host through tRPC over `window.postMessage`. There is no
-HTTP, no WebSocket, and no string-typed protocol to maintain by hand — tRPC
+HTTP, no WebSocket, and no string-typed protocol to maintain by hand. tRPC
 types flow from the router definition to the React component that calls
 into it.
 
@@ -42,28 +42,204 @@ The same `AppRouter` type is shared by both sides: define the router once
 on the extension host, then call it from the webview with full type
 inference, auto-completion, and refactor-safety.
 
+## Quick start
+
+The shortest path to a working webview is four files. The example below
+defines one procedure and renders a button in the webview that calls it.
+
+> For a complete extension layout with build configuration, accessibility
+> helpers, Monaco wiring, and tested-end-to-end command registration, copy
+> the [vscode-webview-starter-kit](https://github.com/tnaum-ms/vscode-webview-starter-kit)
+> instead of starting from these snippets. The starter kit is the canonical
+> consumer reference; this section is for understanding the moving parts.
+
+**1. Install**
+
+```bash
+npm install @microsoft/vscode-ext-react-webview
+```
+
+The package declares `react`, `react-dom`, `@trpc/client`, `@trpc/server`,
+and `@vscode/l10n` as peer dependencies. Bring whatever versions you use
+yourself; the package will not pull duplicates into your webview bundle.
+
+**2. Define the router (extension host)**
+
+```ts
+// src/webviews/_integration/appRouter.ts
+import { publicProcedure, router, type BaseRouterContext } from '@microsoft/vscode-ext-react-webview/server';
+import { z } from 'zod';
+
+export type RouterContext = BaseRouterContext & {
+  // application-specific fields, e.g.:
+  workspaceRoot: string;
+};
+
+export const appRouter = router({
+  hello: publicProcedure
+    .input(z.object({ name: z.string() }))
+    .query(({ input }) => ({ greeting: `Hello, ${input.name}!` })),
+});
+
+export type AppRouter = typeof appRouter;
+```
+
+**3. Create a controller (extension host)**
+
+```ts
+// src/webviews/_integration/MyViewController.ts
+import * as vscode from 'vscode';
+import { WebviewController } from '@microsoft/vscode-ext-react-webview/server';
+import { appRouter, type AppRouter, type RouterContext } from './appRouter';
+
+export class MyViewController extends WebviewController<AppRouter, MyViewConfig, RouterContext> {
+  constructor(extensionContext: vscode.ExtensionContext, title: string) {
+    super(
+      extensionContext,
+      title,
+      'myView', // viewType key; matches the React component registration
+      { initialMessage: 'ready' } satisfies MyViewConfig,
+      {
+        appRouter,
+        isBundled: extensionContext.extensionMode === vscode.ExtensionMode.Production,
+        sourceLayout: {
+          bundled: { dir: '', file: 'views.js' },
+          dev: { dir: 'out/src/webviews', file: 'index.js' },
+        },
+        devServerHost: 'http://localhost:18080',
+      },
+    );
+
+    this.setupTrpc({
+      workspaceRoot: vscode.workspace.workspaceFolders?.[0].uri.fsPath ?? '',
+    } satisfies RouterContext);
+  }
+}
+
+type MyViewConfig = { initialMessage: string };
+```
+
+Open the panel from a command:
+
+```ts
+// src/extension.ts
+import * as vscode from 'vscode';
+import { MyViewController } from './webviews/_integration/MyViewController';
+
+export function activate(ctx: vscode.ExtensionContext) {
+  ctx.subscriptions.push(
+    vscode.commands.registerCommand('myExtension.openMyView', () => {
+      new MyViewController(ctx, 'My View');
+    }),
+  );
+}
+```
+
+**4. Render the view (webview / browser)**
+
+The webview entry point exports a `render(viewType, vscodeApi)` function
+that the framework's HTML scaffold calls when the panel loads. The
+`viewType` argument is the key you passed to `WebviewController` (here,
+`'myView'`); use it to look up the matching React component.
+
+```tsx
+// src/webviews/index.tsx
+import { createRoot } from 'react-dom/client';
+import { WithWebviewContext, type WebviewState } from '@microsoft/vscode-ext-react-webview';
+import type { WebviewApi } from 'vscode-webview';
+import { MyView } from './myView/MyView';
+
+const registry = {
+  myView: MyView,
+} as const;
+
+export function render(viewType: keyof typeof registry, vscodeApi: WebviewApi<WebviewState>) {
+  const Component = registry[viewType];
+  createRoot(document.getElementById('root')!).render(
+    <WithWebviewContext vscodeApi={vscodeApi}>
+      <Component />
+    </WithWebviewContext>,
+  );
+}
+```
+
+```tsx
+// src/webviews/myView/MyView.tsx
+import { useEffect, useState } from 'react';
+import { useTrpcClient, useConfiguration } from '@microsoft/vscode-ext-react-webview';
+import type { AppRouter } from '../_integration/appRouter';
+
+type MyViewConfig = { initialMessage: string };
+
+export const MyView = () => {
+  const config = useConfiguration<MyViewConfig>();
+  const { trpcClient } = useTrpcClient<AppRouter>();
+  const [greeting, setGreeting] = useState(config.initialMessage);
+
+  useEffect(() => {
+    void trpcClient.hello.query({ name: 'world' }).then((r) => setGreeting(r.greeting));
+  }, [trpcClient]);
+
+  return <h1>{greeting}</h1>;
+};
+```
+
+That is the complete data path: the React component calls
+`trpcClient.hello.query(...)`, the call travels through `vscodeLink` as a
+`postMessage`, the host-side `WebviewController` dispatches it to
+`appRouter.hello`, the result is `postMessage`d back, and the call promise
+resolves with full type inference for `r.greeting`.
+
+## Starter kit and reference consumers
+
+The recommended way to start a new consumer is to copy the
+[vscode-webview-starter-kit](https://github.com/tnaum-ms/vscode-webview-starter-kit)
+and adapt it. The starter kit covers things the package intentionally
+does not own:
+
+- webpack / Vite build configuration for both the extension and the
+  views bundle;
+- accessibility helpers (an ARIA `Announcer`, a selective context-menu
+  prevention hook);
+- a Monaco editor integration recipe;
+- a worked demo view exercising the tRPC client end to end.
+
+A consumer-side integration layer (router + controller base + telemetry
+sink + configuration knobs) typically lives in a folder like
+`src/webviews/_integration/`. The underscore prefix sorts the folder
+above feature folders in the file explorer, which is the conventional
+"infrastructure / not feature code" signal. The
+[vscode-documentdb](https://github.com/microsoft/vscode-documentdb) and
+[Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb)
+extensions are working examples of that layout against this package.
+
+> **Note about freshness.** The package is `0.8.0-preview` and the
+> starter kit may lag a release while the surface stabilises. When the
+> kit is not yet on the latest preview, fall back to the README and the
+> in-tree consumer in vscode-documentdb for the current shape.
+
 ## What's inside
 
-- **`WebviewController`** — manages a `vscode.WebviewPanel`, dispatches
+- **`WebviewController`**: manages a `vscode.WebviewPanel`, dispatches
   incoming tRPC operations (queries, mutations, subscriptions), and handles
   abort / subscription cancellation lifecycle.
-- **`TypedEventSink<T>`** — a small typed async-iterable used to bridge
+- **`TypedEventSink<T>`**: a small typed async-iterable used to bridge
   push-style domain events (event emitters, callbacks) into tRPC
   subscriptions. See [Advanced · Push events from the extension host to
   the webview](#push-events-from-the-extension-host-to-the-webview).
-- **`vscodeLink`** — a custom tRPC link that bridges tRPC over
+- **`vscodeLink`**: a custom tRPC link that bridges tRPC over
   `window.postMessage`. Type-safe end-to-end from the extension host to the
   React webview.
-- **`errorLink`** — optional tRPC link that forwards query/mutation errors
+- **`errorLink`**: optional tRPC link that forwards query/mutation errors
   to a consumer-supplied handler (announce, toast, telemetry) without
   preventing the normal error flow. See [Advanced · Webview-side error
   observer](#webview-side-error-observer).
-- **React hooks** — `useTrpcClient`, `useConfiguration`.
-- **Webview context** — `WebviewContext`, `WithWebviewContext` for wiring up
+- **React hooks**: `useTrpcClient`, `useConfiguration`.
+- **Webview context**: `WebviewContext`, `WithWebviewContext` for wiring up
   the React tree.
-- **Pluggable telemetry middleware** — generic `TelemetryContext`, a
-  `createMiddleware` factory, and a default `console.log` sink. Plug in your
-  own instrumentation (e.g. Application Insights) by writing a custom
+- **Pluggable telemetry middleware**: generic `TelemetryContext`, a
+  `createMiddleware` factory, and a default `console.log` sink. Plug in
+  your own instrumentation (e.g. Application Insights) by writing a custom
   middleware.
 
 ## Entry points
@@ -72,10 +248,10 @@ The package has two separate entry points so bundlers do not drag Node /
 VS Code APIs into the webview bundle.
 
 ```ts
-// Webview (browser) side — no Node / vscode imports
+// Webview (browser) side. No Node / vscode imports.
 import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/vscode-ext-react-webview';
 
-// Extension host side — uses fs, path, vscode
+// Extension host side. Uses fs, path, vscode.
 import {
   WebviewController,
   router,
@@ -88,22 +264,22 @@ import {
 
 ## Peer dependencies
 
-| Package          | Required version                        |
-| ---------------- | --------------------------------------- |
-| `react`          | `>=18.0.0`                              |
-| `@trpc/client`   | `^11.0.0`                               |
-| `@trpc/server`   | `^11.0.0`                               |
-| `@vscode/l10n`   | `^0.0.18`                               |
-| `vscode-webview` | `^1.0.0` (optional — webview-side only) |
+| Package          | Required version                       |
+| ---------------- | -------------------------------------- |
+| `react`          | `>=18.0.0`                             |
+| `@trpc/client`   | `^11.0.0`                              |
+| `@trpc/server`   | `^11.0.0`                              |
+| `@vscode/l10n`   | `^0.0.18`                              |
+| `vscode-webview` | `^1.0.0` (optional, webview-side only) |
 
 ## Scope
 
 This package ships **only the webview transport** (tRPC over `postMessage`)
 and the minimum React glue to consume it. UI components, UX policy
 (context-menu handling, focus management, etc.), accessibility helpers,
-editor-specific behaviours, and other consumer concerns are out of scope by
-design — keep them in your application repository or pick dedicated libraries
-for them.
+editor-specific behaviours, and other consumer concerns are out of scope
+by design. Keep them in your application repository or pick dedicated
+libraries for them.
 
 ## Advanced
 
@@ -131,7 +307,7 @@ import {
   type VsCodeLinkRequestMessage,
   type VsCodeLinkResponseMessage,
 } from '@microsoft/vscode-ext-react-webview';
-import type { AppRouter } from '../api/appRouter';
+import type { AppRouter } from '../_integration/appRouter';
 
 const TrpcContext = createContext<CreateTRPCClient<AppRouter>>({} as CreateTRPCClient<AppRouter>);
 
@@ -168,11 +344,11 @@ Then wrap your view tree:
 </WithWebviewContext>
 ```
 
-| Pros                                          | Cons                                                |
-| --------------------------------------------- | --------------------------------------------------- |
-| One client instance, one `message` listener   | Requires a provider wrapping the component tree     |
-| Central place to configure or swap the client | Extra indirection — trace through the provider tree |
-| Scales past a dozen components                | Provider-ordering mistakes can be hard to debug     |
+| Pros                                          | Cons                                               |
+| --------------------------------------------- | -------------------------------------------------- |
+| One client instance, one `message` listener   | Requires a provider wrapping the component tree    |
+| Central place to configure or swap the client | Extra indirection: trace through the provider tree |
+| Scales past a dozen components                | Provider-ordering mistakes can be hard to debug    |
 
 For most views the per-component default is simpler and sufficient.
 
@@ -244,9 +420,7 @@ Define the event union, then the events router:
 import { publicProcedureWithTelemetry, router } from './appRouter';
 import type { TypedEventSink } from '@microsoft/vscode-ext-react-webview/server';
 
-export type MyViewEvent =
-  | { type: 'progress'; percent: number }
-  | { type: 'completed'; durationMs: number };
+export type MyViewEvent = { type: 'progress'; percent: number } | { type: 'completed'; durationMs: number };
 
 type MyViewRouterContext = BaseRouterContext & {
   eventSink: TypedEventSink<MyViewEvent>;
@@ -330,7 +504,7 @@ common cause is a non-type-only import of `AppRouter`. Switching it to
 
 Raw `postMessage` requires you to define message types manually, match
 request/response pairs by hand, and serialise yourself. tRPC threads
-TypeScript types end-to-end — your extension-host procedures and webview
+TypeScript types end-to-end. Your extension-host procedures and webview
 calls share the same `AppRouter` type with zero code generation. Renaming a
 field on the server shows a compile error in the webview immediately.
 
@@ -387,7 +561,7 @@ ac.abort();
 ```
 
 On the server side, read `ctx.signal` inside your procedure to cooperatively
-stop work. Subscriptions stop cleanly when the client unsubscribes — the
+stop work. Subscriptions stop cleanly when the client unsubscribes. The
 framework sends a `subscription.stop` message that aborts the underlying
 async generator.
 
@@ -407,4 +581,4 @@ preview.
 
 ## License
 
-MIT — see [LICENSE.md](../../LICENSE.md) at the repository root.
+MIT. See [LICENSE.md](../../LICENSE.md) at the repository root.
