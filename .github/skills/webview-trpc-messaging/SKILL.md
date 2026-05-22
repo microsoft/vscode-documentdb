@@ -21,15 +21,15 @@ useTrpcClient() hook                      WebviewController
 
 **Key files** (read as needed for implementation details):
 
-| File                                                              | Purpose                                                                                                              |
-| ----------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `@microsoft/vscode-ext-react-webview/server` (trpc)               | tRPC init, `publicProcedure`, `createMiddleware`, `router`, `BaseRouterContext`                                      |
-| `src/webviews/webviewIntegration/appRouter.ts`                    | Root router + telemetry middleware + `publicProcedureWithTelemetry` + `WithTelemetry` + DocumentDB `BaseRouterContext` |
-| `src/webviews/webviewIntegration/configuration.ts`                | Consumer-owned knobs (telemetry namespace, bundle layout, dev-server host)                                           |
-| `@microsoft/vscode-ext-react-webview/server` (WebviewController)  | WebviewPanel lifecycle, tRPC message dispatcher (queries, mutations, subscriptions, abort)                           |
-| `src/webviews/webviewIntegration/WebviewControllerBase.ts`        | DocumentDB-tuned base class that pre-fills router + bundle layout                                                    |
-| `src/webviews/webviewIntegration/useTrpcClient.ts`                | React hook providing the tRPC client (pre-typed against `AppRouter`)                                                 |
-| `@microsoft/vscode-ext-react-webview` (vscodeLink)                | Custom tRPC link bridging `postMessage` transport                                                                    |
+| File                                                             | Purpose                                                                                                                |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `@microsoft/vscode-ext-react-webview/server` (trpc)              | tRPC init, `publicProcedure`, `createMiddleware`, `router`, `BaseRouterContext`                                        |
+| `src/webviews/webviewIntegration/appRouter.ts`                   | Root router + telemetry middleware + `publicProcedureWithTelemetry` + `WithTelemetry` + DocumentDB `BaseRouterContext` |
+| `src/webviews/webviewIntegration/configuration.ts`               | Consumer-owned knobs (telemetry namespace, bundle layout, dev-server host)                                             |
+| `@microsoft/vscode-ext-react-webview/server` (WebviewController) | WebviewPanel lifecycle, tRPC message dispatcher (queries, mutations, subscriptions, abort)                             |
+| `src/webviews/webviewIntegration/WebviewControllerBase.ts`       | DocumentDB-tuned base class that pre-fills router + bundle layout                                                      |
+| `src/webviews/webviewIntegration/useTrpcClient.ts`               | React hook providing the tRPC client (pre-typed against `AppRouter`)                                                   |
+| `@microsoft/vscode-ext-react-webview` (vscodeLink)               | Custom tRPC link bridging `postMessage` transport                                                                      |
 
 ## Creating a New Router
 
