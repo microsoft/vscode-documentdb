@@ -1,9 +1,9 @@
-# PR: Webview API package preview hardening and consumer reshape
+# PR #676: Webview API package preview hardening and consumer reshape
 
 **Branch:** `dev/tnaum/webview-api-package`
 **Base:** `main`
 **Date:** 2026-05-22
-**Commits:** 23 on top of `1fba8a78`
+**Commits:** 24 on top of `1fba8a78`
 
 ## Why
 
