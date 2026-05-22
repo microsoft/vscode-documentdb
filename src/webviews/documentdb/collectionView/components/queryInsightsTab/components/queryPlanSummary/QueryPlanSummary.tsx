@@ -19,11 +19,11 @@ import {
 import { ArrowUpFilled, EyeRegular, WarningRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
-import { useTrpcClient } from '../../../../../../api/useTrpcClient';
 import {
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
 } from '../../../../../../documentdb/collectionView/types/queryInsights';
+import { useTrpcClient } from '../../../../../../webviewIntegration/useTrpcClient';
 import '../../queryInsights.scss';
 import './QueryPlanSummary.scss';
 import { StageDetailCard, type StageType } from './StageDetailCard';

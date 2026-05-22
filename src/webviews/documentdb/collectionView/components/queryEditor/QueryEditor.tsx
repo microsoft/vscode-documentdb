@@ -25,8 +25,8 @@ import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from 
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { normalizeCompletionCategory } from '../../../../../telemetry/completionCategories';
-import { useTrpcClient } from '../../../../api/useTrpcClient';
 import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
+import { useTrpcClient } from '../../../../webviewIntegration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import './queryEditor.scss';

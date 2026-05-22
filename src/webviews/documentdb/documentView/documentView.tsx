@@ -11,9 +11,9 @@ import { debounce } from 'es-toolkit';
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import { UsageImpact } from '../../../utils/surveyTypes';
-import { useTrpcClient } from '../../api/useTrpcClient';
 import { MonacoEditor } from '../../components/MonacoEditor';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
+import { useTrpcClient } from '../../webviewIntegration/useTrpcClient';
 import { ToolbarDocuments } from './components/toolbarDocuments';
 import { type DocumentsViewWebviewConfigurationType } from './documentsViewController';
 import './documentView.scss';

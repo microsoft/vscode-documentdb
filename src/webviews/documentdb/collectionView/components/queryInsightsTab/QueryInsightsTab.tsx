@@ -36,7 +36,7 @@ import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useRef, useState, type JSX } from 'react';
-import { useTrpcClient } from '../../../../api/useTrpcClient';
+import { useTrpcClient } from '../../../../webviewIntegration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';

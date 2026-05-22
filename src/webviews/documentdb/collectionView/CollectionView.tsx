@@ -9,10 +9,10 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
-import { useTrpcClient } from '../../api/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
+import { useTrpcClient } from '../../webviewIntegration/useTrpcClient';
 import './collectionView.scss';
 import {
     CollectionViewContext,
