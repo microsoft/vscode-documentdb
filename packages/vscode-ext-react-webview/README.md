@@ -5,8 +5,8 @@
 > a `1.0.0` release.
 
 Webview infrastructure for VS Code extensions with type-safe tRPC RPC over
-`postMessage`, React hooks for the webview side, a pluggable telemetry
-middleware, and accessibility helpers.
+`postMessage`, React hooks for the webview side, and a pluggable telemetry
+middleware.
 
 The package was extracted from the webview stack powering the
 [DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb) and
@@ -25,16 +25,13 @@ reference repository.
 - **`vscodeLink`** — a custom tRPC link that bridges tRPC over
   `window.postMessage`. Type-safe end-to-end from the extension host to the
   React webview.
-- **React hooks** — `useTrpcClient`, `useConfiguration`,
-  `useSelectiveContextMenuPrevention`.
+- **React hooks** — `useTrpcClient`, `useConfiguration`.
 - **Webview context** — `WebviewContext`, `WithWebviewContext` for wiring up
   the React tree.
 - **Pluggable telemetry middleware** — generic `TelemetryContext`, a
   `createMiddleware` factory, and a default `console.log` sink. Plug in your
   own instrumentation (e.g. Application Insights) by writing a custom
   middleware.
-- **Accessibility helper** — `Announcer` for ARIA live-region announcements
-  (WCAG 4.1.3 status messages).
 
 ## Entry points
 
@@ -46,7 +43,6 @@ VS Code APIs into the webview bundle.
 import {
     useTrpcClient,
     useConfiguration,
-    Announcer,
     WithWebviewContext,
 } from '@microsoft/vscode-ext-react-webview';
 
@@ -72,18 +68,12 @@ import {
 
 ## Scope
 
-This package ships **the webview transport** (tRPC over `postMessage`,
-`WebviewController`, React hooks for the client side) plus a *minimum-viable*
-set of WCAG helpers that every VS Code webview needs in practice (currently:
-`Announcer` for ARIA live-region announcements).
-
-It is intentionally **not** a general-purpose React UI / accessibility
-toolbox. Patterns like focus traps, keyboard shortcut managers, route
-announcers, or skip-links are out of scope here — use a dedicated library
-(`react-aria`, your in-house framework, …) for those. New helpers are only
-added to this package when they are (a) tightly coupled to the VS Code
-webview lifecycle and (b) the same boilerplate every consumer would
-otherwise write themselves.
+This package ships **only the webview transport** (tRPC over `postMessage`)
+and the minimum React glue to consume it. UI components, UX policy
+(context-menu handling, focus management, etc.), accessibility helpers,
+editor-specific behaviours, and other consumer concerns are out of scope by
+design — keep them in your application repository or pick dedicated libraries
+for them.
 
 ## Status
 
