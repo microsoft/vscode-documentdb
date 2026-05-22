@@ -179,6 +179,7 @@
     "@documentdb-js/operator-registry": "*",
     "@documentdb-js/shell-runtime": "*",
     "@documentdb-js/schema-analyzer": "*",
+    "@microsoft/vscode-webview-api": "*",
     "@vscode/l10n": "~0.0.18",
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
