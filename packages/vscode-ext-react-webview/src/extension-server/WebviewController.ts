@@ -199,11 +199,10 @@ export class WebviewController<
      * @param context - The router context, to which we add an abort signal.
      */
     private async handleSubscriptionMessage(message: VsCodeLinkRequestMessage, context: TContext) {
-        try {
-            // In v12, tRPC will have better cancellation support. For now, we use AbortController.
-            const abortController = new AbortController();
-            this._activeSubscriptions.set(message.id, abortController);
+        // In v12, tRPC will have better cancellation support. For now, we use AbortController.
+        const abortController = new AbortController();
 
+        try {
             // Clone context so the signal is per-operation and does not mutate the shared context object
             const opContext: TContext = { ...context, signal: abortController.signal };
 
@@ -220,6 +219,12 @@ export class WebviewController<
             // Await the procedure call to get the async iterator (async generator) for the subscription
             // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
             const asyncIter = await procedure(message.op.input);
+
+            // Only track the subscription once we actually have an iterator. If procedure
+            // lookup or the initial `await procedure(...)` throws, we fall through to the
+            // outer catch without ever inserting an entry — so an early failure cannot
+            // leave a stale (id, AbortController) pair behind for the lifetime of the panel.
+            this._activeSubscriptions.set(message.id, abortController);
 
             void (async () => {
                 try {
