@@ -54,6 +54,10 @@ inference, auto-completion, and refactor-safety.
 - **`vscodeLink`** — a custom tRPC link that bridges tRPC over
   `window.postMessage`. Type-safe end-to-end from the extension host to the
   React webview.
+- **`errorLink`** — optional tRPC link that forwards query/mutation errors
+  to a consumer-supplied handler (announce, toast, telemetry) without
+  preventing the normal error flow. See [Advanced · Webview-side error
+  observer](#webview-side-error-observer).
 - **React hooks** — `useTrpcClient`, `useConfiguration`.
 - **Webview context** — `WebviewContext`, `WithWebviewContext` for wiring up
   the React tree.
@@ -171,6 +175,53 @@ Then wrap your view tree:
 | Scales past a dozen components                | Provider-ordering mistakes can be hard to debug     |
 
 For most views the per-component default is simpler and sufficient.
+
+### Webview-side error observer
+
+By default a query or mutation that throws on the extension host side
+propagates to the call-site `.catch(...)` (or `try/catch` around `await`).
+That works, but it forces every call site to remember to handle the
+error.
+
+When there is a single place that should always see webview-side errors
+(an ARIA `Announcer`, a `Toaster`, telemetry), pass an `onError` callback
+to `useTrpcClient`. The hook installs an `errorLink` for you:
+
+```tsx
+const { trpcClient } = useTrpcClient<AppRouter>({
+  onError: (err) => announcer.announceError(err.message),
+});
+```
+
+Semantics:
+
+- The callback fires for query and mutation errors, **in addition to** the
+  normal tRPC error flow. Your call-site `.catch(...)` handlers still run
+  and still receive the error. The link observes, it does not swallow.
+- Subscription errors are intentionally **not** forwarded to the callback.
+  Subscriptions have their own per-call `.subscribe({ onError })` hook
+  that gives the call site enough control; forwarding here would surface
+  the error twice.
+- The callback is captured into the tRPC client at memo time. Pass a
+  stable reference (e.g. `useCallback`) or accept that changing the
+  callback identity will rebuild the client on the next render.
+
+If you need finer control over the link order (e.g. composing with a
+third-party logging link), import `errorLink` directly and skip the
+option:
+
+```ts
+import { createTRPCClient, loggerLink } from '@trpc/client';
+import { errorLink, vscodeLink } from '@microsoft/vscode-ext-react-webview';
+
+const trpcClient = createTRPCClient<AppRouter>({
+  links: [
+    loggerLink(),
+    errorLink<AppRouter>((err) => announcer.announceError(err.message)),
+    vscodeLink<AppRouter>({ send, onReceive }),
+  ],
+});
+```
 
 ### Push events from the extension host to the webview
 

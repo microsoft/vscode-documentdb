@@ -3,8 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+export { errorLink, type ErrorHandler } from './errorLink';
 export { useConfiguration } from './useConfiguration';
-export { useTrpcClient, type TrpcClient } from './useTrpcClient';
+export { useTrpcClient, type TrpcClient, type UseTrpcClientOptions } from './useTrpcClient';
 export {
     vscodeLink,
     type VSCodeLinkOptions,
