@@ -876,7 +876,7 @@
         {
           "//": "[Index] Hide Index",
           "command": "vscode-documentdb.command.hideIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /^(?!.*\\bindex_hidden\\b)(?!.*\\bindex_default\\b).*$/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && !(viewItem =~ /\\bindex_hidden\\b/i) && !(viewItem =~ /\\bindex_default\\b/i) && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
           "group": "3@1"
         },
         {
