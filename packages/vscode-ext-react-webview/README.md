@@ -167,6 +167,37 @@ Then wrap your view tree:
 
 For most views the per-component default is simpler and sufficient.
 
+### Importing the router type into webview code
+
+The webview side of your application needs the `AppRouter` type to keep
+`useTrpcClient<AppRouter>()` calls type-safe end to end. This is the only
+thing webview code should import from the file that defines your router.
+
+```tsx
+// In a webview component
+import type { AppRouter } from '../_integration/appRouter';
+import { useTrpcClient } from '@microsoft/vscode-ext-react-webview';
+
+const { trpcClient } = useTrpcClient<AppRouter>();
+```
+
+A few rules of thumb keep the host/browser boundary honest:
+
+- Use `import type { AppRouter } from '...'` (or
+  `import { type AppRouter }`). Type-only imports are erased at compile
+  time and never produce runtime references, so the webview bundle stays
+  free of extension-host code even if the router module also imports
+  Node-only APIs.
+- Do not import runtime values (the `appRouter` constant, procedure
+  builders, middleware) from webview code. Those belong to the
+  extension-host side.
+- Do not reach into procedure implementation files from the webview side.
+  Router types are the only contract the webview consumes.
+
+If your bundler ever pulls server modules into the views bundle, the most
+common cause is a non-type-only import of `AppRouter`. Switching it to
+`import type { ... }` resolves it without changes to the router itself.
+
 ## FAQ
 
 ### Why tRPC instead of raw `postMessage`?
