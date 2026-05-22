@@ -14,6 +14,7 @@ import {
 } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -27,8 +28,10 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     private readonly experienceContextValue: string = '';
     private indexCount: number | undefined;
+    private cachedIndexes: IndexItemModel[] | undefined;
     private isLoadingCount: boolean = false;
     private indexesPromise: Promise<IndexItemModel[]> | undefined;
+    private isRefreshingIndexCount: boolean = false;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -42,7 +45,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const indexes = await this.getIndexes();
+        const indexes = [...(await this.getIndexes())];
         this.indexCount = indexes.length;
 
         // Sort indexes by name
@@ -67,22 +70,48 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             const indexes = await this.getIndexes();
             this.indexCount = indexes.length;
         } catch {
+            meterSilentCatch('IndexesItem_loadIndexCount');
             // Keep the description empty if the count cannot be loaded.
             this.indexCount = undefined;
         } finally {
             this.isLoadingCount = false;
-            ext.state.notifyChildrenChanged(this.id);
+            this.isRefreshingIndexCount = true;
+            try {
+                ext.state.notifyChildrenChanged(this.id);
+            } finally {
+                queueMicrotask(() => {
+                    this.isRefreshingIndexCount = false;
+                });
+            }
         }
     }
 
     private getIndexes(): Promise<IndexItemModel[]> {
+        if (this.cachedIndexes) {
+            return Promise.resolve(this.cachedIndexes);
+        }
+
         if (!this.indexesPromise) {
-            this.indexesPromise = this.fetchIndexes().finally(() => {
-                this.indexesPromise = undefined;
-            });
+            this.indexesPromise = this.fetchIndexes()
+                .then((indexes) => {
+                    this.cachedIndexes = indexes;
+                    return indexes;
+                })
+                .finally(() => {
+                    this.indexesPromise = undefined;
+                });
         }
 
         return this.indexesPromise;
+    }
+
+    public invalidateChildrenCache(): void {
+        if (this.isRefreshingIndexCount) {
+            return;
+        }
+
+        this.cachedIndexes = undefined;
+        this.indexesPromise = undefined;
     }
 
     private async fetchIndexes(): Promise<IndexItemModel[]> {
