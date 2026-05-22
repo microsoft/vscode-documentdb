@@ -70,6 +70,21 @@ import {
 | `@vscode/l10n` | `^0.0.18` |
 | `vscode-webview` | `^1.0.0` (optional — webview-side only) |
 
+## Scope
+
+This package ships **the webview transport** (tRPC over `postMessage`,
+`WebviewController`, React hooks for the client side) plus a *minimum-viable*
+set of WCAG helpers that every VS Code webview needs in practice (currently:
+`Announcer` for ARIA live-region announcements).
+
+It is intentionally **not** a general-purpose React UI / accessibility
+toolbox. Patterns like focus traps, keyboard shortcut managers, route
+announcers, or skip-links are out of scope here — use a dedicated library
+(`react-aria`, your in-house framework, …) for those. New helpers are only
+added to this package when they are (a) tightly coupled to the VS Code
+webview lifecycle and (b) the same boilerplate every consumer would
+otherwise write themselves.
+
 ## Status
 
 `0.8.0-preview`. Version aligns with the parent
