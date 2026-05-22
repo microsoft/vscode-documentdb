@@ -59,8 +59,8 @@ defines one procedure and renders a button in the webview that calls it.
 npm install @microsoft/vscode-ext-react-webview
 ```
 
-The package declares `react`, `react-dom`, `@trpc/client`, `@trpc/server`,
-and `@vscode/l10n` as peer dependencies. Bring whatever versions you use
+The package declares `react`, `react-dom`, `@trpc/client`, and
+`@trpc/server` as peer dependencies. Bring whatever versions you use
 yourself; the package will not pull duplicates into your webview bundle.
 
 **2. Define the router (extension host)**
@@ -269,7 +269,6 @@ import {
 | `react`          | `>=18.0.0`                             |
 | `@trpc/client`   | `^11.0.0`                              |
 | `@trpc/server`   | `^11.0.0`                              |
-| `@vscode/l10n`   | `^0.0.18`                              |
 | `vscode-webview` | `^1.0.0` (optional, webview-side only) |
 
 ## Scope

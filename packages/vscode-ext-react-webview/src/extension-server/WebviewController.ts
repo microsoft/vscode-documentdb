@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { getTRPCErrorFromUnknown, type AnyRouter } from '@trpc/server';
-import * as l10n from '@vscode/l10n';
 import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
@@ -213,7 +212,9 @@ export class WebviewController<
             const procedure = caller[message.op.path];
 
             if (typeof procedure !== 'function') {
-                throw new Error(l10n.t('Procedure not found: {name}', { name: message.op.path }));
+                // Framework-internal protocol error; not localized — consumers cannot translate it
+                // and this code path indicates a programming error in the caller (wrong path).
+                throw new Error(`Procedure not found: ${message.op.path}`);
             }
 
             // Await the procedure call to get the async iterator (async generator) for the subscription
@@ -306,7 +307,8 @@ export class WebviewController<
             const procedure = caller[message.op.path];
 
             if (typeof procedure !== 'function') {
-                throw new Error(l10n.t('Procedure not found: {name}', { name: message.op.path }));
+                // Framework-internal protocol error; not localized — see handleSubscriptionMessage().
+                throw new Error(`Procedure not found: ${message.op.path}`);
             }
 
             // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
