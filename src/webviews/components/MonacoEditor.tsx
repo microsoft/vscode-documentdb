@@ -8,9 +8,9 @@ import Editor, { loader, useMonaco, type EditorProps, type OnMount } from '@mona
 import * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 
 import { useUncontrolledFocus } from '@fluentui/react-components';
+import { Announcer } from '@microsoft/vscode-webview-api';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Announcer } from '../api/webview-client/accessibility';
 import { useThemeState } from '../theme/state/ThemeContext';
 
 loader.config({ monaco: monacoEditor });

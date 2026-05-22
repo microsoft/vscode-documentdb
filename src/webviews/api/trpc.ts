@@ -4,44 +4,47 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * This is your entry point to setup the root configuration for tRPC on the server.
- * - `initTRPC` should only be used once per app.
- * - We export only the functionality that we use so we can enforce which base procedures should be used
+ * DocumentDB-tuned re-exports of the tRPC primitives from
+ * `@microsoft/vscode-webview-api`.
  *
- * Learn how to create protected base procedures and other things below:
- * @see https://trpc.io/docs/v11/router
- * @see https://trpc.io/docs/v11/procedures
+ * The framework's `publicProcedureWithTelemetry` uses a `console.log` sink by
+ * default. We replace it here with a middleware that forwards events to the
+ * VS Code Azure telemetry pipeline via `callWithTelemetryAndErrorHandling`
+ * using the `documentDB.rpc.*` event-name namespace.
+ *
+ * Router code throughout the extension imports `router`, `publicProcedure`,
+ * `publicProcedureWithTelemetry`, and `WithTelemetry` from this module. The
+ * underlying tRPC instance is the one provided by the package — this file is
+ * a thin DocumentDB-flavoured adapter.
  */
 
 import { callWithTelemetryAndErrorHandling, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
-import { initTRPC } from '@trpc/server';
-import { type BaseRouterContext } from '../configuration/appRouter';
+import {
+    createMiddleware,
+    publicProcedure,
+    router,
+    type BaseRouterContext,
+} from '@microsoft/vscode-webview-api/server';
 
 /**
- * Helper type: transforms a context type to have required (non-optional) telemetry.
- * Use with publicProcedureWithTelemetry to get type-safe telemetry access.
+ * DocumentDB-flavoured replacement for the package's `WithTelemetry<T>` helper.
+ *
+ * The package types `telemetry` as its generic `TelemetryContext`
+ * (`{ properties; measurements }`). In this extension, the runtime value is
+ * always the richer `ITelemetryContext` from `@microsoft/vscode-azext-utils`
+ * (provides `suppressAll`, `suppressIfSuccessful`, etc.). Re-typing the helper
+ * here lets procedure code access those fields without ad-hoc casts.
  */
-export type WithTelemetry<T extends { telemetry?: ITelemetryContext }> = T & {
+export type WithTelemetry<T extends { telemetry?: unknown }> = Omit<T, 'telemetry'> & {
     telemetry: ITelemetryContext;
 };
 
 /**
- * Initialization of tRPC backend.
- *
- * Please note, this hould be done only once per backend.
+ * Telemetry middleware that forwards every tRPC call to the VS Code Azure
+ * telemetry pipeline. Event names follow the `documentDB.rpc.${type}.${path}`
+ * convention.
  */
-const t = initTRPC.create();
-
-/**
- * Unprotected procedure
- **/
-
-export const createCallerFactory = t.createCallerFactory;
-
-export const router = t.router;
-export const publicProcedure = t.procedure;
-// Create middleware for logging requests
-const trpcToTelemetry = t.middleware(async (opts) => {
+const trpcToTelemetry = createMiddleware(async (opts) => {
     const result = await callWithTelemetryAndErrorHandling(
         `documentDB.rpc.${opts.type}.${opts.path}`,
         async (context) => {
@@ -72,7 +75,7 @@ const trpcToTelemetry = t.middleware(async (opts) => {
                 }
                 context.telemetry.properties.error = result.error.name;
                 context.telemetry.properties.errorMessage = result.error.message;
-                context.telemetry.properties.errorStack = result.error.stack;
+                context.telemetry.properties.errorStack = result.error.stack ?? '';
                 if (result.error.cause) {
                     context.telemetry.properties.errorCause = JSON.stringify(result.error.cause, null, 0);
                 }
@@ -90,5 +93,16 @@ const trpcToTelemetry = t.middleware(async (opts) => {
     return result;
 });
 
-// Convenience base procedure that always attaches telemetry
+/**
+ * Base procedure that automatically attaches DocumentDB Azure telemetry context.
+ *
+ * Use this instead of {@link publicProcedure} when you want every call to be
+ * tracked. The `telemetry` object is available on `ctx` inside your procedure
+ * handlers (cast with `WithTelemetry<YourContext>`).
+ */
 export const publicProcedureWithTelemetry = publicProcedure.use(trpcToTelemetry);
+
+// Re-export the unprotected procedure builder and router factory so consumers
+// have a single import location for everything they need to declare tRPC
+// procedures.
+export { publicProcedure, router };

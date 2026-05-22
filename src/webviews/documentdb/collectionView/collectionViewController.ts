@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { SettingsService } from '../../../services/SettingsService';
-import { WebviewController } from '../../api/extension-server/WebviewController';
+import { WebviewController } from '../../api/WebviewController';
 import { type RouterContext } from './collectionViewRouter';
 
 export type CollectionViewWebviewConfigurationType = {

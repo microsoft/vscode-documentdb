@@ -18,7 +18,7 @@ import { ArrowUp16Filled } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useContext } from 'react';
 import { UsageImpact } from '../../../../../utils/surveyTypes';
-import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { useTrpcClient } from '../../../../api/useTrpcClient';
 import { CollectionViewContext, Views } from '../../collectionViewContext';
 
 export const ToolbarTableNavigation = (): React.JSX.Element => {

@@ -3,15 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type WebviewState, WithWebviewContext } from '@microsoft/vscode-webview-api';
 import * as l10n from '@vscode/l10n';
 import { type l10nJsonFormat } from '@vscode/l10n';
 import type * as React from 'react';
-// eslint-disable-next-line import/no-internal-modules
-import { createRoot } from 'react-dom/client';
+import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { type WebviewApi } from 'vscode-webview';
-import { type WebviewName, WebviewRegistry } from './api/configuration/WebviewRegistry';
+import { type WebviewName, WebviewRegistry } from './api/WebviewRegistry';
 import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
-import { type WebviewState, WithWebviewContext } from './WebviewContext';
 
 export type ViewKey = WebviewName;
 

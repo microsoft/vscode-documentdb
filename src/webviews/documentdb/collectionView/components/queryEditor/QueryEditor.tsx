@@ -5,12 +5,11 @@
 
 import { Button, Input, Label, ToggleButton, Tooltip } from '@fluentui/react-components';
 import { Collapse } from '@fluentui/react-motion-components-preview';
+import { useConfiguration } from '@microsoft/vscode-webview-api';
 import * as l10n from '@vscode/l10n';
+import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api'; // eslint-disable-line import/no-internal-modules
 import { useContext, useEffect, useRef, useState, type JSX } from 'react';
 import { InputWithProgress } from '../../../../components/InputWithProgress';
-// eslint-disable-next-line import/no-internal-modules
-import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
-import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
 import {
     buildEditorUri,
     clearCompletionContext,
@@ -26,7 +25,7 @@ import { ArrowResetRegular, SendRegular, SettingsFilled, SettingsRegular } from 
 // eslint-disable-next-line import/no-internal-modules
 import { type editor } from 'monaco-editor/esm/vs/editor/editor.api';
 import { normalizeCompletionCategory } from '../../../../../telemetry/completionCategories';
-import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { useTrpcClient } from '../../../../api/useTrpcClient';
 import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';

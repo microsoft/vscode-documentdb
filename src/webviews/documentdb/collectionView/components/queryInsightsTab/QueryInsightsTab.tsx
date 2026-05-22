@@ -33,10 +33,10 @@
 import { MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
 import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
+import { useConfiguration } from '@microsoft/vscode-webview-api';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useRef, useState, type JSX } from 'react';
-import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
-import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { useTrpcClient } from '../../../../api/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
