@@ -39,6 +39,7 @@ import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
+import { WEBVIEW_CONFIG } from './configuration';
 
 /**
  * DocumentDB-flavoured replacement for the package's `WithTelemetry<T>` helper.
@@ -60,7 +61,7 @@ export type WithTelemetry<T extends { telemetry?: unknown }> = Omit<T, 'telemetr
  */
 const trpcToTelemetry = createMiddleware(async (opts) => {
     const result = await callWithTelemetryAndErrorHandling(
-        `documentDB.rpc.${opts.type}.${opts.path}`,
+        `${WEBVIEW_CONFIG.telemetry.rpcEventPrefix}.${opts.type}.${opts.path}`,
         async (context) => {
             context.errorHandling.suppressDisplay = true;
 
@@ -150,9 +151,10 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
     dbExperience: API;
     /**
      * Label used in telemetry event names to identify the source webview
-     * (e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
+     * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
+     * the final event name, e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
      *
-     * This is **not** the same as the registry key passed to the `WebviewController` constructor.
+     * This is **not** the same as the registry key passed to the `WebviewControllerBase` constructor.
      */
     webviewName: string;
 };
@@ -177,7 +179,7 @@ const commonRouter = router({
             const myCtx = ctx as BaseRouterContext;
 
             void callWithTelemetryAndErrorHandling<void>(
-                `documentDB.webview.event.${myCtx.webviewName}.${input.eventName}`,
+                `${WEBVIEW_CONFIG.telemetry.webviewEventPrefix}.${myCtx.webviewName}.${input.eventName}`,
                 (context) => {
                     context.errorHandling.suppressDisplay = true;
                     context.telemetry.properties.experience = myCtx.dbExperience;
@@ -200,17 +202,20 @@ const commonRouter = router({
         .mutation(({ input, ctx }) => {
             const myCtx = ctx as BaseRouterContext;
 
-            void callWithTelemetryAndErrorHandling<void>(`documentDB.webview.error.${myCtx.webviewName}`, (context) => {
-                context.errorHandling.suppressDisplay = true;
-                context.telemetry.properties.experience = myCtx.dbExperience;
+            void callWithTelemetryAndErrorHandling<void>(
+                `${WEBVIEW_CONFIG.telemetry.webviewErrorPrefix}.${myCtx.webviewName}`,
+                (context) => {
+                    context.errorHandling.suppressDisplay = true;
+                    context.telemetry.properties.experience = myCtx.dbExperience;
 
-                Object.assign(context.telemetry.properties, input.properties ?? {});
+                    Object.assign(context.telemetry.properties, input.properties ?? {});
 
-                const newError = new Error(input.message);
-                // If it's a rendering error in the webview, swap the stack with the componentStack which is more helpful
-                newError.stack = input.componentStack ?? input.stack;
-                throw newError;
-            });
+                    const newError = new Error(input.message);
+                    // If it's a rendering error in the webview, swap the stack with the componentStack which is more helpful
+                    newError.stack = input.componentStack ?? input.stack;
+                    throw newError;
+                },
+            );
         }),
     displayErrorMessage: publicProcedure
         .input(

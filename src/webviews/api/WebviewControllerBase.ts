@@ -23,24 +23,8 @@ import { WebviewController } from '@microsoft/vscode-ext-react-webview/server';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { appRouter, type AppRouter, type BaseRouterContext } from './appRouter';
+import { WEBVIEW_CONFIG } from './configuration';
 import { type WebviewName } from './WebviewRegistry';
-
-/**
- * Layout describing where the extension's webview JavaScript lives on disk.
- *
- * - `bundled` is used when the extension runs from its webpack output
- *   (production: `dist/views.js`).
- * - `dev` is used when running from `tsc` output during development
- *   (`out/src/webviews/index.js`).
- *
- * These paths are joined with `extensionPath` by the framework at runtime.
- */
-const DOCUMENTDB_WEBVIEW_SOURCE_LAYOUT = {
-    bundled: { dir: '', file: 'views.js' },
-    dev: { dir: 'out/src/webviews', file: 'index.js' },
-};
-
-const DOCUMENTDB_DEV_SERVER_HOST = 'http://localhost:18080';
 
 /**
  * DocumentDB `WebviewControllerBase`. View controllers extend this and
@@ -74,8 +58,8 @@ export abstract class WebviewControllerBase<TConfiguration> extends WebviewContr
                 // only instantiated in response to user commands, which always
                 // run after activation, so the value is safe to read here.
                 isBundled: !!ext.isBundle,
-                sourceLayout: DOCUMENTDB_WEBVIEW_SOURCE_LAYOUT,
-                devServerHost: DOCUMENTDB_DEV_SERVER_HOST,
+                sourceLayout: WEBVIEW_CONFIG.bundle,
+                devServerHost: WEBVIEW_CONFIG.devServerHost,
             },
             viewColumn,
             iconPath,
