@@ -6,7 +6,12 @@
 import { createContextValue } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import {
+    ClustersClient,
+    type CollectionItemModel,
+    type DatabaseItemModel,
+    type IndexItemModel,
+} from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -22,6 +27,8 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     private readonly experienceContextValue: string = '';
     private indexCount: number | undefined;
+    private isLoadingCount: boolean = false;
+    private indexesPromise: Promise<IndexItemModel[]> | undefined;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -35,6 +42,50 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     }
 
     async getChildren(): Promise<TreeElement[]> {
+        const indexes = await this.getIndexes();
+        this.indexCount = indexes.length;
+
+        // Sort indexes by name
+        indexes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+        return indexes.map((index) => {
+            return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
+        });
+    }
+
+    public loadIndexCount(): void {
+        if (this.isLoadingCount || this.indexCount !== undefined) {
+            return;
+        }
+
+        this.isLoadingCount = true;
+        void this.fetchAndUpdateCount();
+    }
+
+    private async fetchAndUpdateCount(): Promise<void> {
+        try {
+            const indexes = await this.getIndexes();
+            this.indexCount = indexes.length;
+        } catch {
+            // Keep the description empty if the count cannot be loaded.
+            this.indexCount = undefined;
+        } finally {
+            this.isLoadingCount = false;
+            ext.state.notifyChildrenChanged(this.id);
+        }
+    }
+
+    private getIndexes(): Promise<IndexItemModel[]> {
+        if (!this.indexesPromise) {
+            this.indexesPromise = this.fetchIndexes().finally(() => {
+                this.indexesPromise = undefined;
+            });
+        }
+
+        return this.indexesPromise;
+    }
+
+    private async fetchIndexes(): Promise<IndexItemModel[]> {
         const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
 
@@ -49,14 +100,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             // Search indexes not supported on this platform, continue without them
         }
 
-        this.updateIndexCount(indexes.length);
-
-        // Sort indexes by name
-        indexes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-        return indexes.map((index) => {
-            return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
-        });
+        return indexes;
     }
 
     getTreeItem(): vscode.TreeItem {
@@ -73,14 +117,5 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
-    }
-
-    private updateIndexCount(count: number): void {
-        if (this.indexCount === count) {
-            return;
-        }
-
-        this.indexCount = count;
-        ext.state.notifyChildrenChanged(this.id);
     }
 }
