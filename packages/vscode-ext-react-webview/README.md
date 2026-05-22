@@ -59,9 +59,10 @@ defines one procedure and renders a button in the webview that calls it.
 npm install @microsoft/vscode-ext-react-webview
 ```
 
-The package declares `react`, `react-dom`, `@trpc/client`, and
-`@trpc/server` as peer dependencies. Bring whatever versions you use
-yourself; the package will not pull duplicates into your webview bundle.
+The package declares `react`, `@trpc/client`, and `@trpc/server` as peer
+dependencies. Bring whatever versions you use yourself; the package will
+not pull duplicates into your webview bundle. `react-dom` is *not* a peer
+of this package — it is a transitive concern of any React DOM app shell.
 
 **2. Define the router (extension host)**
 
