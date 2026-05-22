@@ -47,6 +47,10 @@ inference, auto-completion, and refactor-safety.
 - **`WebviewController`** — manages a `vscode.WebviewPanel`, dispatches
   incoming tRPC operations (queries, mutations, subscriptions), and handles
   abort / subscription cancellation lifecycle.
+- **`TypedEventSink<T>`** — a small typed async-iterable used to bridge
+  push-style domain events (event emitters, callbacks) into tRPC
+  subscriptions. See [Advanced · Push events from the extension host to
+  the webview](#push-events-from-the-extension-host-to-the-webview).
 - **`vscodeLink`** — a custom tRPC link that bridges tRPC over
   `window.postMessage`. Type-safe end-to-end from the extension host to the
   React webview.
@@ -73,6 +77,7 @@ import {
   router,
   publicProcedure,
   createMiddleware,
+  TypedEventSink,
   type BaseRouterContext,
 } from '@microsoft/vscode-ext-react-webview/server';
 ```
@@ -166,6 +171,76 @@ Then wrap your view tree:
 | Scales past a dozen components                | Provider-ordering mistakes can be hard to debug     |
 
 For most views the per-component default is simpler and sufficient.
+
+### Push events from the extension host to the webview
+
+tRPC subscriptions are modeled as `async function*` generators. That shape
+fits **pull**-style producers (cursors, polling loops). For **push**-style
+producers (VS Code event emitters, driver callbacks, completion notifiers)
+you need a small adapter: something the producer can call imperatively, and
+that the subscription procedure can iterate.
+
+`TypedEventSink<T>` is that adapter. It implements `AsyncIterable<T>` over
+a discriminated event union, with a write-only `emit(event)` (or
+`emit(type, payload)`) on the producer side and `for await (const event of
+sink)` on the consumer side. Single consumer per sink; events emitted
+before a consumer attaches are buffered.
+
+Define the event union, then the events router:
+
+```ts
+// _integration/myViewEventsRouter.ts (or co-located with the view)
+import { publicProcedureWithTelemetry, router } from './appRouter';
+import type { TypedEventSink } from '@microsoft/vscode-ext-react-webview/server';
+
+export type MyViewEvent =
+  | { type: 'progress'; percent: number }
+  | { type: 'completed'; durationMs: number };
+
+type MyViewRouterContext = BaseRouterContext & {
+  eventSink: TypedEventSink<MyViewEvent>;
+};
+
+export const myViewEventsRouter = router({
+  events: publicProcedureWithTelemetry.subscription(async function* ({ ctx }) {
+    const sink = (ctx as MyViewRouterContext).eventSink;
+    for await (const event of sink) {
+      if (ctx.signal?.aborted) return;
+      yield event;
+    }
+  }),
+});
+```
+
+Emit events from anywhere in extension-host code that holds the sink:
+
+```ts
+sink.emit({ type: 'progress', percent: 25 });
+sink.emit('completed', { durationMs: 1500 });
+```
+
+Consume them in the webview with the standard tRPC subscription API:
+
+```tsx
+useEffect(() => {
+  const sub = trpcClient.myView.events.subscribe(undefined, {
+    onData: (event) => {
+      if (event.type === 'progress') setPercent(event.percent);
+      else if (event.type === 'completed') setDoneAfter(event.durationMs);
+    },
+  });
+  return () => sub.unsubscribe();
+}, [trpcClient]);
+```
+
+Recommended convention: put push-event procedures in a sibling
+`<view>EventsRouter.ts` and merge it into the view's main router. This
+keeps "things the webview calls" and "things the host pushes" in separate
+files, which makes it easy to discover the entire event vocabulary of a
+view at a glance.
+
+When the panel is disposed, call `sink.close()` so the iterator completes
+and the subscription releases cleanly.
 
 ### Importing the router type into webview code
 

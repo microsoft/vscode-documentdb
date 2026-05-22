@@ -14,4 +14,5 @@ export {
     type TelemetryContext,
     type WithTelemetry,
 } from './trpc';
+export { TypedEventSink, type DiscriminatedEvent, type EventOfType, type UntypedEventEmitter } from './TypedEventSink';
 export { WebviewController, type WebviewControllerOptions, type WebviewSourceLayout } from './WebviewController';
