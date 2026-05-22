@@ -226,21 +226,21 @@ export class WebviewController<
                     for await (const value of asyncIter) {
                         // Each yielded value is sent to the webview
                         // eslint-disable-next-line
-                        this._panel.webview.postMessage({ id: message.id, result: value });
+                        this.safePostMessage({ id: message.id, result: value });
                     }
 
                     // On natural completion, inform the client
-                    this._panel.webview.postMessage({ id: message.id, complete: true });
+                    this.safePostMessage({ id: message.id, complete: true });
                 } catch (error) {
                     const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
-                    this._panel.webview.postMessage(trpcErrorMessage);
+                    this.safePostMessage(trpcErrorMessage);
                 } finally {
                     this._activeSubscriptions.delete(message.id);
                 }
             })();
         } catch (error) {
             const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
-            this._panel.webview.postMessage(trpcErrorMessage);
+            this.safePostMessage(trpcErrorMessage);
         }
     }
 
@@ -315,13 +315,13 @@ export class WebviewController<
                 // to never complete for void mutations).
                 // eslint-disable-next-line
                 const response = { id: message.id, result: result ?? null };
-                this._panel.webview.postMessage(response);
+                this.safePostMessage(response);
             }
         } catch (error) {
             // Only send error if the operation was not aborted (client already errored locally)
             if (!abortController.signal.aborted) {
                 const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
-                this._panel.webview.postMessage(trpcErrorMessage);
+                this.safePostMessage(trpcErrorMessage);
             }
         } finally {
             this._activeOperations.delete(message.id);
@@ -350,6 +350,36 @@ export class WebviewController<
                 cause: errorEntry.cause,
             },
         };
+    }
+
+    /**
+     * Safely posts a message to the webview.
+     *
+     * Calling {@link vscode.Webview.postMessage} after the panel has been
+     * disposed can throw synchronously or reject the returned `Thenable`
+     * depending on the VS Code version. This wrapper guards both shapes so
+     * that natural races (a subscription generator yielding one more value
+     * after the panel was closed, an in-flight query resolving after dispose,
+     * etc.) do not surface as uncaught exceptions in the extension host.
+     *
+     * Returns `false` if the message could not be delivered (panel disposed
+     * or `postMessage` threw); `true` otherwise. The boolean is informational;
+     * callers do not need to react to it.
+     */
+    private safePostMessage(message: unknown): boolean {
+        if (this._isDisposed) {
+            return false;
+        }
+        try {
+            // The Thenable returned by `postMessage` resolves with a delivery
+            // boolean and rejects if the webview is gone. We attach a no-op
+            // catch so a late rejection does not surface as an unhandled
+            // promise rejection.
+            void Promise.resolve(this._panel.webview.postMessage(message)).catch(() => void 0);
+            return true;
+        } catch {
+            return false;
+        }
     }
 
     /**
