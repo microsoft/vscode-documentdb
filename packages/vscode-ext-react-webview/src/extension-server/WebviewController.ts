@@ -149,6 +149,12 @@ export class WebviewController<
         this._panel.webview.html = this.getDocumentTemplate(this._panel.webview);
         this._panel.iconPath = this._iconPath;
 
+        // Register the onDisposed emitter so dispose() releases its subscriber list.
+        // It is intentionally not part of the disposables chain that fires _onDisposed
+        // itself — dispose() fires the event first, then disposes the rest (this entry
+        // included), so subscribers see the notification before the emitter is torn down.
+        this.registerDisposable(this._onDisposed);
+
         this.registerDisposable(
             this._panel.onDidDispose(() => {
                 this.dispose();
