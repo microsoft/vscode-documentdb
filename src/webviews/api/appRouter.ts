@@ -30,7 +30,6 @@ import {
     publicProcedure,
     router,
     type BaseRouterContext as FrameworkBaseRouterContext,
-    type TelemetryContext,
 } from '@microsoft/vscode-ext-react-webview/server';
 import * as vscode from 'vscode';
 import { z } from 'zod';
@@ -124,10 +123,30 @@ export { publicProcedure, router };
 
 /**
  * DocumentDB-flavoured router context. Extends the framework's
- * `BaseRouterContext` (from `@microsoft/vscode-ext-react-webview`) with the
- * DocumentDB-specific fields every procedure needs.
+ * `BaseRouterContext` (from `@microsoft/vscode-ext-react-webview`, which
+ * already declares `telemetry?` and `signal?`) with the DocumentDB-specific
+ * fields every procedure needs. Inheriting `telemetry?` / `signal?` keeps
+ * the context shape in lock step with the framework: if the framework adds
+ * a field, it lands here automatically without an edit in this file.
+ *
+ * The `signal?` slot inherited from the framework is populated by
+ * `WebviewController` when handling incoming tRPC messages. Each operation
+ * receives its own `AbortController`; when the client sends an `'abort'`
+ * (for queries/mutations) or `'subscription.stop'` (for subscriptions)
+ * message, the controller calls `.abort()` on it. Router procedures can
+ * use this signal to gracefully cancel long-running work:
+ *
+ * ```ts
+ * .query(async ({ ctx }) => {
+ *     const myCtx = ctx as WithTelemetry<RouterContext>;
+ *     // Option 1: pass to APIs that accept AbortSignal (e.g. MongoDB driver)
+ *     const cursor = collection.find(filter, { signal: myCtx.signal });
+ *     // Option 2: check manually
+ *     if (myCtx.signal?.aborted) return;
+ * })
+ * ```
  */
-export type BaseRouterContext = {
+export type BaseRouterContext = FrameworkBaseRouterContext & {
     dbExperience: API;
     /**
      * Label used in telemetry event names to identify the source webview
@@ -136,28 +155,6 @@ export type BaseRouterContext = {
      * This is **not** the same as the registry key passed to the `WebviewController` constructor.
      */
     webviewName: string;
-    telemetry?: TelemetryContext;
-
-    /**
-     * AbortSignal used to cancel in-flight operations (queries, mutations, and subscriptions).
-     *
-     * Populated by `WebviewController` when handling incoming tRPC messages. Each operation
-     * receives its own `AbortController`; when the client sends an `'abort'` (for queries/mutations)
-     * or `'subscription.stop'` (for subscriptions) message, the controller calls `.abort()` on it.
-     *
-     * Router procedures can use this signal to gracefully cancel long-running work:
-     *
-     * ```ts
-     * .query(async ({ ctx }) => {
-     *     const myCtx = ctx as WithTelemetry<RouterContext>;
-     *     // Option 1: Pass to APIs that accept AbortSignal (e.g. MongoDB driver)
-     *     const cursor = collection.find(filter, { signal: myCtx.signal });
-     *     // Option 2: Check manually
-     *     if (myCtx.signal?.aborted) return;
-     * })
-     * ```
-     */
-    signal?: AbortSignal;
 };
 
 /**
