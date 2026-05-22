@@ -215,7 +215,13 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             databases.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
             // Map the databases to DatabaseItem elements
-            return databases.map((database) => new DatabaseItem(this.cluster, database));
+            return databases.map((database) => {
+                const databaseItem = new DatabaseItem(this.cluster, database);
+                // Start loading collection count in background (fire-and-forget)
+                // This does not block tree expansion
+                databaseItem.loadCollectionCount();
+                return databaseItem;
+            });
         });
     }
 
