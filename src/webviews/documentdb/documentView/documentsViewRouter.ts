@@ -17,7 +17,7 @@ import {
     router,
     type BaseRouterContext,
     type WithTelemetry,
-} from '../../webviewIntegration/appRouter';
+} from '../../_integration/appRouter';
 
 export type RouterContext = BaseRouterContext & {
     /**

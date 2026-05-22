@@ -38,7 +38,7 @@ root.render(
 
 - **`DynamicThemeProvider`** — adapts Fluent UI theming to VS Code's active color theme
 - **`WithWebviewContext`** — provides `vscodeApi` (postMessage) via React Context
-- **`WebviewRegistry`** — maps webview names → React components (in `webviewIntegration/WebviewRegistry`)
+- **`WebviewRegistry`** — maps webview names → React components (in `_integration/WebviewRegistry`)
 
 Configuration from the extension host is read via `useConfiguration<T>()`.
 

@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { WebviewControllerBase } from '../../webviewIntegration/WebviewControllerBase';
+import { WebviewControllerBase } from '../../_integration/WebviewControllerBase';
 import { type RouterContext } from './documentsViewRouter';
 
 export type DocumentsViewWebviewConfigurationType = {

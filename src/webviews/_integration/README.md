@@ -1,4 +1,4 @@
-# `src/webviews/webviewIntegration/`
+# `src/webviews/_integration/`
 
 Local integration layer between the DocumentDB extension and
 [`@microsoft/vscode-ext-react-webview`](../../../packages/vscode-ext-react-webview/README.md).
@@ -54,8 +54,8 @@ Each per-view router:
 
 - Defines a `RouterContext` type that extends `BaseRouterContext` with
   view-specific fields (e.g. cluster id, collection name).
-- Imports `publicProcedureWithTelemetry` and `router` from `../../webviewIntegration/appRouter`.
-- Imports `BaseRouterContext` from `../../webviewIntegration/appRouter` when extending
+- Imports `publicProcedureWithTelemetry` and `router` from `../../_integration/appRouter`.
+- Imports `BaseRouterContext` from `../../_integration/appRouter` when extending
   the context.
 - Is wired into the root tRPC tree in `appRouter.ts` so it is reachable
   from the webview client.

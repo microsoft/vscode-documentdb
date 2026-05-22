@@ -7,7 +7,7 @@ import { Button, Card, CardHeader, Text, tokens } from '@fluentui/react-componen
 import { ChevronLeftRegular, ChevronRightRegular, DismissRegular, LightbulbRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
-import { useTrpcClient } from '../../../../../../webviewIntegration/useTrpcClient';
+import { useTrpcClient } from '../../../../../../_integration/useTrpcClient';
 import './baseOptimizationCard.scss';
 import './TipsCard.scss';
 
