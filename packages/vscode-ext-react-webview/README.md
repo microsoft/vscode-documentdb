@@ -117,33 +117,33 @@ prefer sharing a single instance through a React context:
 import { createTRPCClient, loggerLink, type CreateTRPCClient } from '@trpc/client';
 import { createContext, useContext, useMemo } from 'react';
 import {
-    vscodeLink,
-    WebviewContext,
-    type VsCodeLinkRequestMessage,
-    type VsCodeLinkResponseMessage,
+  vscodeLink,
+  WebviewContext,
+  type VsCodeLinkRequestMessage,
+  type VsCodeLinkResponseMessage,
 } from '@microsoft/vscode-ext-react-webview';
 import type { AppRouter } from '../api/appRouter';
 
 const TrpcContext = createContext<CreateTRPCClient<AppRouter>>({} as CreateTRPCClient<AppRouter>);
 
 export const TrpcProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-    const { vscodeApi } = useContext(WebviewContext);
+  const { vscodeApi } = useContext(WebviewContext);
 
-    const trpcClient = useMemo(() => {
-        const send = (m: VsCodeLinkRequestMessage) => vscodeApi.postMessage(m);
-        const onReceive = (cb: (m: VsCodeLinkResponseMessage) => void) => {
-            const handler = (e: MessageEvent) => {
-                if ((e.data as VsCodeLinkResponseMessage).id) cb(e.data as VsCodeLinkResponseMessage);
-            };
-            window.addEventListener('message', handler);
-            return () => window.removeEventListener('message', handler);
-        };
-        return createTRPCClient<AppRouter>({
-            links: [loggerLink(), vscodeLink<AppRouter>({ send, onReceive })],
-        });
-    }, [vscodeApi]);
+  const trpcClient = useMemo(() => {
+    const send = (m: VsCodeLinkRequestMessage) => vscodeApi.postMessage(m);
+    const onReceive = (cb: (m: VsCodeLinkResponseMessage) => void) => {
+      const handler = (e: MessageEvent) => {
+        if ((e.data as VsCodeLinkResponseMessage).id) cb(e.data as VsCodeLinkResponseMessage);
+      };
+      window.addEventListener('message', handler);
+      return () => window.removeEventListener('message', handler);
+    };
+    return createTRPCClient<AppRouter>({
+      links: [loggerLink(), vscodeLink<AppRouter>({ send, onReceive })],
+    });
+  }, [vscodeApi]);
 
-    return <TrpcContext.Provider value={trpcClient}>{children}</TrpcContext.Provider>;
+  return <TrpcContext.Provider value={trpcClient}>{children}</TrpcContext.Provider>;
 };
 
 export const useSharedTrpcClient = () => useContext(TrpcContext);
@@ -153,9 +153,9 @@ Then wrap your view tree:
 
 ```tsx
 <WithWebviewContext vscodeApi={vscodeApi}>
-    <TrpcProvider>
-        <Component />
-    </TrpcProvider>
+  <TrpcProvider>
+    <Component />
+  </TrpcProvider>
 </WithWebviewContext>
 ```
 
@@ -198,15 +198,15 @@ import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils
 import { createMiddleware, publicProcedure } from '@microsoft/vscode-ext-react-webview/server';
 
 const trpcToTelemetry = createMiddleware(async (opts) => {
-    const result = await callWithTelemetryAndErrorHandling(
-        `myExtension.rpc.${opts.type}.${opts.path}`,
-        async (context) => {
-            context.errorHandling.suppressDisplay = true;
-            return opts.next({ ctx: { ...opts.ctx, telemetry: context.telemetry } });
-        },
-    );
-    if (!result) throw new Error(`No result from tRPC call: ${opts.type} ${opts.path}`);
-    return result;
+  const result = await callWithTelemetryAndErrorHandling(
+    `myExtension.rpc.${opts.type}.${opts.path}`,
+    async (context) => {
+      context.errorHandling.suppressDisplay = true;
+      return opts.next({ ctx: { ...opts.ctx, telemetry: context.telemetry } });
+    },
+  );
+  if (!result) throw new Error(`No result from tRPC call: ${opts.type} ${opts.path}`);
+  return result;
 });
 
 export const publicProcedureWithTelemetry = publicProcedure.use(trpcToTelemetry);
