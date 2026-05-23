@@ -23,23 +23,25 @@ function escapeMarkdown(text: string): string {
     return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
 }
 
+type CollectionCountState =
+    | { status: 'notLoaded' }
+    | { status: 'loading' }
+    | { status: 'loaded'; count: number }
+    | { status: 'error' };
+
 export class DatabaseItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
+    private static readonly maxConcurrentCollectionCountLoads = 4;
+    private static activeCollectionCountLoads = 0;
+    private static readonly pendingCollectionCountLoads: Array<() => void> = [];
+    private static readonly collectionCountCache = new Map<string, CollectionCountState>();
+
     public readonly id: string;
     public readonly experience: Experience;
     public contextValue: string = 'treeItem_database';
 
     private readonly experienceContextValue: string = '';
 
-    /**
-     * Cached collection count for the database.
-     * undefined means not yet loaded, null means loading failed.
-     */
-    private collectionCount: number | undefined | null = undefined;
-
-    /**
-     * Flag indicating if a count fetch is in progress.
-     */
-    private isLoadingCount: boolean = false;
+    private collectionCountState: CollectionCountState = { status: 'notLoaded' };
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -58,11 +60,13 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
      */
     public loadCollectionCount(): void {
         // Skip if already loading or already loaded
-        if (this.isLoadingCount || this.collectionCount !== undefined) {
+        this.collectionCountState = this.getCachedCollectionCountState();
+        if (this.collectionCountState.status !== 'notLoaded') {
             return;
         }
 
-        this.isLoadingCount = true;
+        this.collectionCountState = { status: 'loading' };
+        DatabaseItem.collectionCountCache.set(this.collectionCountCacheKey, this.collectionCountState);
 
         // Fire-and-forget: load count in background
         void this.fetchAndUpdateCount();
@@ -74,13 +78,15 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     private async fetchAndUpdateCount(): Promise<void> {
         try {
             const client = await ClustersClient.getClient(this.cluster.clusterId);
-            const collections = await client.listCollections(this.databaseInfo.name);
-            this.collectionCount = collections.length;
+            const collections = await DatabaseItem.runQueuedCollectionCountLoad(() =>
+                client.listCollections(this.databaseInfo.name, true),
+            );
+            this.collectionCountState = { status: 'loaded', count: collections.length };
         } catch {
-            // On error, set to null to indicate failure (we won't retry automatically)
-            this.collectionCount = null;
+            // On error, mark as failed so we won't retry automatically.
+            this.collectionCountState = { status: 'error' };
         } finally {
-            this.isLoadingCount = false;
+            DatabaseItem.collectionCountCache.set(this.collectionCountCacheKey, this.collectionCountState);
             // Trigger a tree item refresh to show the updated description
             ext.state.notifyChildrenChanged(this.id);
         }
@@ -88,7 +94,9 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
     async getChildren(): Promise<TreeElement[]> {
         const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
-        const collections = await client.listCollections(this.databaseInfo.name);
+        const collections = await client.listCollections(this.databaseInfo.name, true);
+        this.collectionCountState = { status: 'loaded', count: collections.length };
+        DatabaseItem.collectionCountCache.set(this.collectionCountCacheKey, this.collectionCountState);
 
         if (collections.length === 0) {
             // no databases in there:
@@ -119,11 +127,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     getTreeItem(): vscode.TreeItem {
         // Build description based on collection count state
         let description: string | undefined;
-        if (typeof this.collectionCount === 'number') {
+        this.collectionCountState = this.getCachedCollectionCountState();
+        if (this.collectionCountState.status === 'loaded') {
             description =
-                this.collectionCount === 1
+                this.collectionCountState.count === 1
                     ? l10n.t('1 collection')
-                    : l10n.t('{count} collections', { count: this.collectionCount });
+                    : l10n.t('{count} collections', { count: this.collectionCountState.count });
         }
 
         return {
@@ -149,5 +158,33 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         md.appendMarkdown(`\`${l10n.t('Database')}\`\n\n`);
 
         return md;
+    }
+
+    private get collectionCountCacheKey(): string {
+        return `${this.cluster.clusterId}\0${this.databaseInfo.name}`;
+    }
+
+    private getCachedCollectionCountState(): CollectionCountState {
+        return DatabaseItem.collectionCountCache.get(this.collectionCountCacheKey) ?? this.collectionCountState;
+    }
+
+    private static runQueuedCollectionCountLoad<T>(load: () => Promise<T>): Promise<T> {
+        return new Promise<T>((resolve, reject) => {
+            const run = (): void => {
+                DatabaseItem.activeCollectionCountLoads++;
+                load()
+                    .then(resolve, reject)
+                    .finally(() => {
+                        DatabaseItem.activeCollectionCountLoads--;
+                        DatabaseItem.pendingCollectionCountLoads.shift()?.();
+                    });
+            };
+
+            if (DatabaseItem.activeCollectionCountLoads < DatabaseItem.maxConcurrentCollectionCountLoads) {
+                run();
+            } else {
+                DatabaseItem.pendingCollectionCountLoads.push(run);
+            }
+        });
     }
 }
