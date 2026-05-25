@@ -14,25 +14,56 @@ enum ConfirmationStyle {
     buttonConfirmation = 'buttonConfirmation',
 }
 
+export interface WordConfirmationOptions {
+    /**
+     * Fallback word to use when the challenge word is too complex to type comfortably.
+     * Applied when the word exceeds maxLength or contains characters outside [a-zA-Z].
+     */
+    fallbackWord?: string;
+
+    /** Maximum allowed length before the fallback is used. Defaults to 16. */
+    maxLength?: number;
+}
+
+function resolveConfirmationWord(word: string, options?: WordConfirmationOptions): string {
+    const fallback = options?.fallbackWord;
+
+    if (!fallback) {
+        return word;
+    }
+
+    const limit = options?.maxLength ?? 16;
+
+    if (word.length > limit || !/^[a-zA-Z]+$/.test(word)) {
+        return fallback;
+    }
+
+    return word;
+}
+
 /**
  * Prompts the user for a confirmation based on the configured confirmation style.
  *
  * @param title - The title of the confirmation dialog.
  * @param message - The message to display in the confirmation dialog. This message will be suffixed with instructions for a specific prompt.
  * @param expectedConfirmationWord - The word that the user must type to confirm the action when the confirmation style is set to 'Word Confirmation'.
+ * @param options - Optional settings for word confirmations. Only takes effect when the
+ * confirmation style is set to 'Word Confirmation'. When fallbackWord is provided,
+ * it is used if the expected word exceeds maxLength or contains characters outside [a-zA-Z].
  * @returns A promise that resolves to a boolean indicating whether the user confirmed the action.
  */
 export async function getConfirmationAsInSettings(
     title: string,
     message: string,
     expectedConfirmationWord: string,
+    options?: WordConfirmationOptions,
 ): Promise<boolean> {
     const deleteConfirmation: ConfirmationStyle = vscode.workspace
         .getConfiguration()
         .get<ConfirmationStyle>(ext.settingsKeys.confirmationStyle, ConfirmationStyle.wordConfirmation);
 
     if (deleteConfirmation === ConfirmationStyle.wordConfirmation) {
-        return await getConfirmationWithWordQuestion(title, message, expectedConfirmationWord);
+        return await getConfirmationWithWordQuestion(title, message, expectedConfirmationWord, options);
     } else if (deleteConfirmation === ConfirmationStyle.challengeConfirmation) {
         return await getConfirmationWithNumberQuiz(title, message);
     }
@@ -40,18 +71,31 @@ export async function getConfirmationAsInSettings(
     return await getConfirmationWithClick(title, message);
 }
 
+/**
+ * Prompts the user to type a confirmation word.
+ *
+ * @param title - The title of the confirmation dialog.
+ * @param message - The message to display in the confirmation dialog. This message will be suffixed with word confirmation instructions.
+ * @param expectedConfirmationWord - The word that the user must type to confirm the action.
+ * @param options - Optional settings for word confirmations. When fallbackWord is provided,
+ * it is used if the expected word exceeds maxLength or contains characters outside [a-zA-Z].
+ * @returns A promise that resolves to a boolean indicating whether the user entered the confirmation word.
+ */
 export async function getConfirmationWithWordQuestion(
     title: string,
     message: string,
     expectedConfirmationWord: string,
+    options?: WordConfirmationOptions,
 ): Promise<boolean> {
+    const effectiveWord = resolveConfirmationWord(expectedConfirmationWord, options);
+
     const result = await vscode.window.showInputBox({
         title: title,
         prompt:
             message +
             '\n\n' +
             l10n.t('Please enter the word "{expectedConfirmationWord}" to confirm the operation.', {
-                expectedConfirmationWord,
+                expectedConfirmationWord: effectiveWord,
             }) +
             '\n\n' +
             l10n.t('Note: This confirmation type can be configured in the extension settings.'),
@@ -61,14 +105,14 @@ export async function getConfirmationWithWordQuestion(
             if (
                 val &&
                 0 ===
-                    val.localeCompare(expectedConfirmationWord, undefined, {
+                    val.localeCompare(effectiveWord, undefined, {
                         sensitivity: 'accent',
                     })
             ) {
                 return undefined;
             }
             return l10n.t('Please enter the word "{expectedConfirmationWord}" to confirm the operation.', {
-                expectedConfirmationWord,
+                expectedConfirmationWord: effectiveWord,
             });
         },
     });
@@ -79,7 +123,7 @@ export async function getConfirmationWithWordQuestion(
 
     return (
         0 ===
-        result.localeCompare(expectedConfirmationWord, undefined, {
+        result.localeCompare(effectiveWord, undefined, {
             sensitivity: 'accent',
         })
     );

@@ -32,7 +32,7 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
         l10n.t('Delete index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
             '\n' +
             l10n.t('This cannot be undone.'),
-        indexName,
+        'delete',
     );
 
     if (!confirmed) {
