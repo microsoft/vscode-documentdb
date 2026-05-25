@@ -46,7 +46,7 @@ function resolveConfirmationWord(word: string, options?: WordConfirmationOptions
  *
  * @param title - The title of the confirmation dialog.
  * @param message - The message to display in the confirmation dialog. This message will be suffixed with instructions for a specific prompt.
- * @param expectedConfirmationWord - The word that the user must type to confirm the action when the confirmation style is set to 'Word Confirmation'.
+ * @param expectedConfirmationWord - The default word used for word confirmation. It may be replaced by fallbackWord when the configured fallback rules apply.
  * @param options - Optional settings for word confirmations. Only takes effect when the
  * confirmation style is set to 'Word Confirmation'. When fallbackWord is provided,
  * it is used if the expected word exceeds maxLength or contains characters outside [a-zA-Z].
@@ -76,7 +76,7 @@ export async function getConfirmationAsInSettings(
  *
  * @param title - The title of the confirmation dialog.
  * @param message - The message to display in the confirmation dialog. This message will be suffixed with word confirmation instructions.
- * @param expectedConfirmationWord - The word that the user must type to confirm the action.
+ * @param expectedConfirmationWord - The default word used for word confirmation. It may be replaced by fallbackWord when the configured fallback rules apply.
  * @param options - Optional settings for word confirmations. When fallbackWord is provided,
  * it is used if the expected word exceeds maxLength or contains characters outside [a-zA-Z].
  * @returns A promise that resolves to a boolean indicating whether the user entered the confirmation word.
