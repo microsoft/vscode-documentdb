@@ -11,13 +11,13 @@ import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
-import { type BaseRouterContext } from '../../api/configuration/appRouter';
 import {
     publicProcedure,
     publicProcedureWithTelemetry,
     router,
+    type BaseRouterContext,
     type WithTelemetry,
-} from '../../api/extension-server/trpc';
+} from '../../_integration/appRouter';
 
 export type RouterContext = BaseRouterContext & {
     /**

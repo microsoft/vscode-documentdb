@@ -34,10 +34,10 @@ import {
     SparkleRegular,
     WindowConsoleRegular,
 } from '@fluentui/react-icons';
+import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
-import { useConfiguration } from '../../../../api/webview-client/useConfiguration';
-import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
