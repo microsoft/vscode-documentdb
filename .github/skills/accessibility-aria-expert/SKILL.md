@@ -171,7 +171,7 @@ Voice control users say "click Refresh" – only works if accessible name contai
 ✅ **Fix**: Use the `Announcer` component
 
 ```tsx
-import { Announcer } from '../../api/webview-client/accessibility';
+import { Announcer } from '<relative-path>/components/accessibility';
 
 // Announces when `when` transitions from false to true
 <Announcer when={isLoading} message={l10n.t('Loading...')} />
@@ -265,7 +265,7 @@ For keyboard-accessible badges with tooltips:
 Use the `Announcer` component for WCAG 4.1.3 (Status Messages) compliance.
 
 ```tsx
-import { Announcer } from '../../api/webview-client/accessibility';
+import { Announcer } from '<relative-path>/components/accessibility';
 ```
 
 ### Basic Usage

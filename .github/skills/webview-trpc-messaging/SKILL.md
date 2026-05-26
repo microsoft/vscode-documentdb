@@ -21,13 +21,15 @@ useTrpcClient() hook                      WebviewController
 
 **Key files** (read as needed for implementation details):
 
-| File                                                     | Purpose                                                                                    |
-| -------------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| `src/webviews/api/extension-server/trpc.ts`              | tRPC init, `publicProcedure`, `publicProcedureWithTelemetry`                               |
-| `src/webviews/api/configuration/appRouter.ts`            | Root router bundling all view routers + `commonRouter`                                     |
-| `src/webviews/api/extension-server/WebviewController.ts` | WebviewPanel lifecycle, tRPC message dispatcher (queries, mutations, subscriptions, abort) |
-| `src/webviews/api/webview-client/useTrpcClient.ts`       | React hook providing the tRPC client                                                       |
-| `src/webviews/api/webview-client/vscodeLink.ts`          | Custom tRPC link bridging `postMessage` transport                                          |
+| File                                                             | Purpose                                                                                                                |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `@microsoft/vscode-ext-react-webview/server` (trpc)              | tRPC init, `publicProcedure`, `createMiddleware`, `router`, `BaseRouterContext`                                        |
+| `src/webviews/_integration/appRouter.ts`                   | Root router + telemetry middleware + `publicProcedureWithTelemetry` + `WithTelemetry` + DocumentDB `BaseRouterContext` |
+| `src/webviews/_integration/configuration.ts`               | Consumer-owned knobs (telemetry namespace, bundle layout, dev-server host)                                             |
+| `@microsoft/vscode-ext-react-webview/server` (WebviewController) | WebviewPanel lifecycle, tRPC message dispatcher (queries, mutations, subscriptions, abort)                             |
+| `src/webviews/_integration/WebviewControllerBase.ts`       | DocumentDB-tuned base class that pre-fills router + bundle layout                                                      |
+| `src/webviews/_integration/useTrpcClient.ts`               | React hook providing the tRPC client (pre-typed against `AppRouter`)                                                   |
+| `@microsoft/vscode-ext-react-webview` (vscodeLink)               | Custom tRPC link bridging `postMessage` transport                                                                      |
 
 ## Creating a New Router
 
@@ -39,7 +41,7 @@ Extend `BaseRouterContext` with view-specific fields:
 
 ```typescript
 // src/webviews/documentdb/myView/myViewRouter.ts
-import { type BaseRouterContext } from '../../api/configuration/appRouter';
+import { type BaseRouterContext } from '../../_integration/appRouter';
 
 export type RouterContext = BaseRouterContext & {
   clusterId: string;
@@ -53,7 +55,7 @@ export type RouterContext = BaseRouterContext & {
 
 ```typescript
 import { z } from 'zod';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/appRouter';
 
 export const myViewRouter = router({
   // Query with telemetry (preferred for operations that touch external services)
@@ -74,7 +76,7 @@ export const myViewRouter = router({
 ### 3. Register in appRouter
 
 ```typescript
-// src/webviews/api/configuration/appRouter.ts
+// src/webviews/_integration/appRouter.ts
 import { myViewRouter } from '../../documentdb/myView/myViewRouter';
 
 export const appRouter = router({
@@ -91,10 +93,10 @@ export const appRouter = router({
 
 ```typescript
 // src/webviews/documentdb/myView/myViewController.ts
-import { WebviewController } from '../../api/extension-server/WebviewController';
+import { WebviewControllerBase } from '../../_integration/WebviewControllerBase';
 import { type RouterContext } from './myViewRouter';
 
-export class MyViewController extends WebviewController<MyViewConfig> {
+export class MyViewController extends WebviewControllerBase<MyViewConfig> {
   constructor(initialData: MyViewConfig) {
     super(ext.context, title, 'myViewName', initialData);
 
@@ -111,14 +113,14 @@ export class MyViewController extends WebviewController<MyViewConfig> {
 }
 ```
 
-> **Important:** The `webviewName` in the `WebviewController` constructor is the **registry key** (must match a key in `WebviewRegistry`, e.g. `collectionView`). The `webviewName` in the tRPC context is a **telemetry label** used in telemetry event names (e.g. `collectionView`). These may be the same string but serve different purposes — do not confuse them.
+> **Important:** The `webviewName` in the `WebviewControllerBase` constructor is the **registry key** (must match a key in `WebviewRegistry`, e.g. `collectionView`). The `webviewName` in the tRPC context is a **telemetry label** used in telemetry event names (e.g. `collectionView`). These may be the same string but serve different purposes — do not confuse them.
 
 ### 5. Register in WebviewRegistry
 
-Add your React component to the registry. The key must match the `webviewName` passed to `WebviewController`'s constructor. The `WebviewName` type (exported from the same file) ensures compile-time validation of webview names.
+Add your React component to the registry. The key must match the `webviewName` passed to `WebviewControllerBase`'s constructor. The `WebviewName` type (exported from the same file) ensures compile-time validation of webview names.
 
 ```typescript
-// src/webviews/api/configuration/WebviewRegistry.ts
+// src/webviews/_integration/WebviewRegistry.ts
 import { MyView } from '../../documentdb/myView/MyView';
 
 export const WebviewRegistry = {
@@ -238,8 +240,8 @@ sub.unsubscribe();
 ## Client-Side Hook Usage
 
 ```tsx
-import { useTrpcClient } from '../api/webview-client/useTrpcClient';
-import { useConfiguration } from '../api/webview-client/useConfiguration';
+import { useTrpcClient } from '../_integration/useTrpcClient';
+import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 
 export const MyComponent = () => {
   const { trpcClient } = useTrpcClient();
