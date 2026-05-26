@@ -33,25 +33,25 @@ mergeable,mergeStateStatus,additions,deletions,changedFiles,commits,labels
 
 ### Derive signals
 
-| Signal           | Rule                                                                |
-| ---------------- | ------------------------------------------------------------------- |
-| `canPushToHead`  | `headRepositoryOwner.login == "microsoft"` OR `maintainerCanModify` |
-| `baseBranch`     | `baseRefName` (do **not** hardcode `main`)                          |
-| `isDraft`        | warn if `true`                                                      |
-| `mergeable`      | warn if `mergeable != "MERGEABLE"` (values: `MERGEABLE`, `CONFLICTING`, `UNKNOWN`) |
-| `mergeReady`     | warn if `mergeStateStatus` is not `CLEAN` (other values: `DIRTY`, `BLOCKED`, `BEHIND`, `UNSTABLE`, `HAS_HOOKS`, `UNKNOWN`) |
-| `commitCount`    | `commits.length`                                                    |
-| `messyHistory`   | any `commits[].messageHeadline` (the first line of the commit message, returned by `gh pr view --json commits`) matches `/wip|fixup|address review|typo|merge( |$)/i` |
-| `changedLines`   | `additions + deletions`                                             |
-| `sizeBucket`     | small ≤ 50 changed lines, medium ≤ 300, large > 300 (uses `changedLines`) |
+| Signal          | Rule                                                                                                                          |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------- | ----- | -------------- | ---- | ------ | ----- |
+| `canPushToHead` | `headRepositoryOwner.login == "microsoft"` OR `maintainerCanModify`                                                           |
+| `baseBranch`    | `baseRefName` (do **not** hardcode `main`)                                                                                    |
+| `isDraft`       | warn if `true`                                                                                                                |
+| `mergeable`     | warn if `mergeable != "MERGEABLE"` (values: `MERGEABLE`, `CONFLICTING`, `UNKNOWN`)                                            |
+| `mergeReady`    | warn if `mergeStateStatus` is not `CLEAN` (other values: `DIRTY`, `BLOCKED`, `BEHIND`, `UNSTABLE`, `HAS_HOOKS`, `UNKNOWN`)    |
+| `commitCount`   | `commits.length`                                                                                                              |
+| `messyHistory`  | any `commits[].messageHeadline` (the first line of the commit message, returned by `gh pr view --json commits`) matches `/wip | fixup | address review | typo | merge( | $)/i` |
+| `changedLines`  | `additions + deletions`                                                                                                       |
+| `sizeBucket`    | small ≤ 50 changed lines, medium ≤ 300, large > 300 (uses `changedLines`)                                                     |
 
 ### Squash recommendation
 
-| Condition                                    | Recommend                |
-| -------------------------------------------- | ------------------------ |
-| `commitCount == 1`                           | **No squash** (rebase or merge) — history already clean |
-| `commitCount ≤ 3` AND no messy subjects AND small | Ask, **default no squash** |
-| `commitCount > 3` OR messy subjects detected | **Squash** (default)     |
+| Condition                                         | Recommend                                               |
+| ------------------------------------------------- | ------------------------------------------------------- |
+| `commitCount == 1`                                | **No squash** (rebase or merge) — history already clean |
+| `commitCount ≤ 3` AND no messy subjects AND small | Ask, **default no squash**                              |
+| `commitCount > 3` OR messy subjects detected      | **Squash** (default)                                    |
 
 ### Print the triage report
 
@@ -81,11 +81,11 @@ Ask **only** these. Pre-select the recommended option.
 - **Yes, small tweaks** → Path B (direct push) if `canPushToHead`, otherwise Path C
 - **Yes, heavy rework / contributor unresponsive** → Path C (`reviews/` staging branch)
 
-If `canPushToHead == false`, omit the "direct push" option and explain: *"Contributor disabled maintainer edits; we must use a `reviews/` branch."*
+If `canPushToHead == false`, omit the "direct push" option and explain: _"Contributor disabled maintainer edits; we must use a `reviews/` branch."_
 
 ### Q2: Merge strategy?
 
-Offer `--squash`, `--merge`, `--rebase` with the recommended option marked. Justify the default in one short sentence (e.g., *"4 commits including 'fix typo' — squash recommended"*).
+Offer `--squash`, `--merge`, `--rebase` with the recommended option marked. Justify the default in one short sentence (e.g., _"4 commits including 'fix typo' — squash recommended"_).
 
 ## Phase 3 — Execute
 
@@ -172,11 +172,11 @@ gh pr comment <PR_NUMBER> \
 
 ## Merge Strategy Reference
 
-| Strategy    | When to use                                                                 |
-| ----------- | --------------------------------------------------------------------------- |
-| `--squash`  | Default for messy/multi-commit external PRs. One revert undoes the change. Contributor still gets authorship credit. |
-| `--merge`   | Large feature where individual commits are meaningful and worth preserving. |
-| `--rebase`  | Single clean commit, or a series of clean atomic commits you want linear on the base. |
+| Strategy   | When to use                                                                                                          |
+| ---------- | -------------------------------------------------------------------------------------------------------------------- |
+| `--squash` | Default for messy/multi-commit external PRs. One revert undoes the change. Contributor still gets authorship credit. |
+| `--merge`  | Large feature where individual commits are meaningful and worth preserving.                                          |
+| `--rebase` | Single clean commit, or a series of clean atomic commits you want linear on the base.                                |
 
 ## Hard Rules
 
@@ -188,8 +188,8 @@ gh pr comment <PR_NUMBER> \
 
 ## Summary
 
-| Phase | What happens                                                | Output                         |
-| ----- | ----------------------------------------------------------- | ------------------------------ |
-| 1     | Read PR metadata, derive push capability + recommendations  | Triage report                  |
-| 2     | Ask Q1 (path) and Q2 (merge strategy)                       | Decision                       |
-| 3     | Execute the chosen path with the chosen merge strategy      | Merged PR / finalization PR    |
+| Phase | What happens                                               | Output                      |
+| ----- | ---------------------------------------------------------- | --------------------------- |
+| 1     | Read PR metadata, derive push capability + recommendations | Triage report               |
+| 2     | Ask Q1 (path) and Q2 (merge strategy)                      | Decision                    |
+| 3     | Execute the chosen path with the chosen merge strategy     | Merged PR / finalization PR |
