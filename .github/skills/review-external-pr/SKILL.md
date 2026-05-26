@@ -10,7 +10,7 @@ A triage-first workflow for handling community PRs. The skill **inspects first, 
 ## When to Use
 
 - A contributor PR is open and you want to review and merge it
-- Trigger phrases: "prepare this external PR", "review PR #N", "let's review this contribution", or invocation while the user is on a `pr/<owner>/<num>` branch (created by `gh pr checkout`)
+- Trigger phrases: "prepare this external PR", "review PR #N", "let's review this contribution", or invocation while the user is on a `pr/<owner>/<PR_NUMBER>` branch (created by `gh pr checkout`)
 - You want a recommendation on push path and merge strategy before doing anything
 
 ## Phase 1 — Triage (read-only, no prompts)
@@ -20,13 +20,13 @@ A triage-first workflow for handling community PRs. The skill **inspects first, 
 Resolve, in order:
 
 1. The PR number the user mentioned.
-2. Current branch matches `pr/<owner>/<num>` → use `<num>`.
+2. Current branch matches `pr/<owner>/<PR_NUMBER>` → extract `<PR_NUMBER>`.
 3. `gh pr status` → active PR for current branch.
 
 ### Fetch metadata in one call
 
 ```bash
-gh pr view <PR> --json number,title,author,url,state,isDraft,\
+gh pr view <PR_NUMBER> --json number,title,author,url,state,isDraft,\
 headRefName,baseRefName,headRepositoryOwner,maintainerCanModify,\
 mergeable,mergeStateStatus,additions,deletions,changedFiles,commits,labels
 ```
@@ -38,10 +38,12 @@ mergeable,mergeStateStatus,additions,deletions,changedFiles,commits,labels
 | `canPushToHead`  | `headRepositoryOwner.login == "microsoft"` OR `maintainerCanModify` |
 | `baseBranch`     | `baseRefName` (do **not** hardcode `main`)                          |
 | `isDraft`        | warn if `true`                                                      |
-| `mergeable`      | warn if not `MERGEABLE` / `CLEAN`                                   |
+| `mergeable`      | warn if `mergeable != "MERGEABLE"` (values: `MERGEABLE`, `CONFLICTING`, `UNKNOWN`) |
+| `mergeReady`     | warn if `mergeStateStatus` is not `CLEAN` (other values: `DIRTY`, `BLOCKED`, `BEHIND`, `UNSTABLE`, `HAS_HOOKS`, `UNKNOWN`) |
 | `commitCount`    | `commits.length`                                                    |
-| `messyHistory`   | any commit subject matches `/wip|fixup|address review|typo|merge( |$)/i` |
-| `sizeBucket`     | small ≤ 50 LOC, medium ≤ 300 LOC, large > 300 LOC (use `additions + deletions`) |
+| `messyHistory`   | any `commits[].messageHeadline` (the first line of the commit message, returned by `gh pr view --json commits`) matches `/wip|fixup|address review|typo|merge( |$)/i` |
+| `changedLines`   | `additions + deletions`                                             |
+| `sizeBucket`     | small ≤ 50 changed lines, medium ≤ 300, large > 300 (uses `changedLines`) |
 
 ### Squash recommendation
 
@@ -54,13 +56,13 @@ mergeable,mergeStateStatus,additions,deletions,changedFiles,commits,labels
 ### Print the triage report
 
 ```
-PR #<num> — <title>
+PR #<PR_NUMBER> — <title>
   Author:        <login>  (<fork|same-repo>)
   Base:          <baseBranch>
-  State:         <state>, <draft?>, <mergeable?>
+  State:         <state>, <draft?>, mergeable=<mergeable>, mergeStateStatus=<mergeStateStatus>
   Push to head:  <✅ allowed reason | ❌ blocked reason>
   Size:          +<additions> / -<deletions> across <changedFiles> file(s), <commitCount> commit(s)
-  History:       <clean | messy: "<sample subject>">
+  History:       <clean | messy: "<sample messageHeadline>">
 
 Recommendation:
   • Path:  <direct push | reviews/ branch | review-only>
@@ -92,9 +94,9 @@ Run commands non-interactively, echoing each one. After merge, print a one-line 
 ### Path A — Review & merge (no maintainer changes)
 
 ```bash
-gh pr checkout <PR>                  # optional, for local inspection
+gh pr checkout <PR_NUMBER>                  # optional, for local inspection
 # review, leave comments via the PR UI or `gh pr review`
-gh pr merge <PR> --<strategy>        # against the PR's actual base
+gh pr merge <PR_NUMBER> --<strategy>        # against the PR's actual base
 ```
 
 ### Path B — Direct push to the contributor's branch
@@ -102,10 +104,10 @@ gh pr merge <PR> --<strategy>        # against the PR's actual base
 Requires `canPushToHead == true`.
 
 ```bash
-gh pr checkout <PR>                  # sets up a remote tracking the fork branch
+gh pr checkout <PR_NUMBER>                  # sets up a remote tracking the fork branch
 # make changes, commit
-git push                             # updates the existing PR in place
-gh pr merge <PR> --<strategy>
+git push                                    # updates the existing PR in place
+gh pr merge <PR_NUMBER> --<strategy>
 ```
 
 The existing PR updates in place; the contributor keeps authorship of their commits and maintainer commits are attributed to the maintainer. No second PR is needed.
@@ -114,19 +116,28 @@ The existing PR updates in place; the contributor keeps authorship of their comm
 
 Use when push to head is blocked, or when the maintainer explicitly wants to isolate rework.
 
-Branch naming: `reviews/<short-slug>-pr-<num>` (slug derived from PR title, ≤ 30 chars).
+**Branch slug sanitization** — derive `<slug>` from the PR title:
+
+1. Lowercase.
+2. Replace every run of non-`[a-z0-9]` characters with a single `-`.
+3. Trim leading/trailing `-`.
+4. Truncate to 30 characters; trim trailing `-` again if the cut left one.
+
+Example: `"fix(tree): sort _id_ index first / cleanup"` → `fix-tree-sort-id-index-first-c`.
+
+Full branch name: `reviews/<slug>-pr-<PR_NUMBER>`.
 
 ```bash
 git fetch origin
-git checkout -b reviews/<slug>-pr-<num> origin/<baseBranch>
-git push -u origin reviews/<slug>-pr-<num>
+git checkout -b reviews/<slug>-pr-<PR_NUMBER> origin/<baseBranch>
+git push -u origin reviews/<slug>-pr-<PR_NUMBER>
 ```
 
 Retarget the contributor's PR:
 
 ```bash
-gh pr edit <PR> --base reviews/<slug>-pr-<num>
-gh pr view <PR> --json baseRefName    # verify
+gh pr edit <PR_NUMBER> --base reviews/<slug>-pr-<PR_NUMBER>
+gh pr view <PR_NUMBER> --json baseRefName    # verify
 ```
 
 > ⚠️ `gh pr edit --base` may print a deprecation warning about Projects (classic). Cosmetic only — the base change succeeds.
@@ -134,20 +145,20 @@ gh pr view <PR> --json baseRefName    # verify
 Merge the contributor's PR into the review branch:
 
 ```bash
-gh pr merge <PR> --<strategy>
+gh pr merge <PR_NUMBER> --<strategy>
 ```
 
 Pull and create the finalization PR back to the original base:
 
 ```bash
-git checkout reviews/<slug>-pr-<num>
-git pull origin reviews/<slug>-pr-<num>
+git checkout reviews/<slug>-pr-<PR_NUMBER>
+git pull origin reviews/<slug>-pr-<PR_NUMBER>
 
 gh pr create \
   --base <baseBranch> \
-  --head reviews/<slug>-pr-<num> \
+  --head reviews/<slug>-pr-<PR_NUMBER> \
   --title "<original title> [reviewed]" \
-  --body "Finalizes review of @<author>'s contribution in #<PR>.
+  --body "Finalizes review of @<author>'s contribution in #<PR_NUMBER>.
 
 Original PR: <PR_URL>"
 ```
@@ -155,8 +166,8 @@ Original PR: <PR_URL>"
 Comment on the original PR:
 
 ```bash
-gh pr comment <PR> \
-  --body "Thanks for the contribution! Review continues in #<NEW_PR> where maintainer changes are finalized before merging to \`<baseBranch>\`."
+gh pr comment <PR_NUMBER> \
+  --body "Thanks for the contribution! Review continues in #<NEW_PR_NUMBER> where maintainer changes are finalized before merging to \`<baseBranch>\`."
 ```
 
 ## Merge Strategy Reference
@@ -173,7 +184,7 @@ gh pr comment <PR> \
 - **Never** create a `reviews/` branch in Phase 1.
 - **Never** force-push to a contributor's branch.
 - If the PR is a **draft**, refuse to merge and report it back to the maintainer.
-- If `mergeStateStatus` reports conflicts, stop and surface that before any merge command.
+- If `mergeable == "CONFLICTING"` or `mergeStateStatus != "CLEAN"`, stop and surface that before any merge command.
 
 ## Summary
 
