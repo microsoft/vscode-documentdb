@@ -25,7 +25,7 @@ export interface WordConfirmationOptions {
     maxLength?: number;
 }
 
-function resolveConfirmationWord(word: string, options?: WordConfirmationOptions): string {
+export function resolveConfirmationWord(word: string, options?: WordConfirmationOptions): string {
     const fallback = options?.fallbackWord;
 
     if (!fallback) {
