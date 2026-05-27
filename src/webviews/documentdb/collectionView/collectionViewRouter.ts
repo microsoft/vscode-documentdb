@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/appRouter';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 import * as l10n from '@vscode/l10n';
 import { type QueryObject } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';

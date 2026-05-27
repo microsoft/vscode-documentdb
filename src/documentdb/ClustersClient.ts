@@ -71,6 +71,7 @@ export interface DatabaseItemModel {
 export interface CollectionItemModel {
     name: string;
     type?: string;
+    shardKey?: Record<string, number | string>;
 }
 
 /**
@@ -602,7 +603,14 @@ export class ClustersClient {
         }
 
         const rawCollections = await this._mongoClient.db(databaseName).listCollections().toArray();
-        const collections: CollectionItemModel[] = rawCollections;
+        const collections: CollectionItemModel[] = rawCollections.map((c) => ({
+            name: c.name,
+            type: c.type,
+            shardKey:
+                'options' in c
+                    ? (c.options as { shardKey?: Record<string, number | string> } | undefined)?.shardKey
+                    : undefined,
+        }));
 
         this._collectionsCache.set(databaseName, collections);
 
