@@ -155,6 +155,10 @@ jest.mock('../sources/sourceStore', () => ({
     getSource: (...args: unknown[]) => mockGetSource(...(args as [string])),
 }));
 
+function tooltipText(tooltip: unknown): string {
+    return (tooltip as { toString(): string }).toString();
+}
+
 describe('KubernetesServiceItem', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -201,6 +205,157 @@ describe('KubernetesServiceItem', () => {
         const databaseTreeItem = await children[0].getTreeItem();
         expect(databaseTreeItem.label).toBe('appdb');
         expect(databaseTreeItem.collapsibleState).toBe(1);
+    });
+
+    describe('reachability display', () => {
+        const baseContext = {
+            name: 'ctx',
+            cluster: 'cluster',
+            user: 'user',
+            server: 'https://api.example.com:6443',
+        };
+
+        it('marks ClusterIP services as requiring port-forwarding', () => {
+            const item = new KubernetesServiceItem(
+                'corr-reachability',
+                'default',
+                baseContext,
+                {
+                    sourceKind: 'dko',
+                    name: 'clusterip-svc',
+                    displayName: 'clusterip-svc',
+                    serviceName: 'clusterip-svc',
+                    namespace: 'default',
+                    type: 'ClusterIP',
+                    port: 10260,
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+
+            const treeItem = item.getTreeItem();
+            expect(treeItem.description).toBe('[DKO] ClusterIP · port-forward required :10260');
+            expect((treeItem.iconPath as { id: string }).id).toBe('plug');
+            expect(tooltipText(treeItem.tooltip)).toContain('Local port-forward required');
+            expect(tooltipText(treeItem.tooltip)).toContain('127.0.0.1');
+        });
+
+        it('marks LoadBalancer services with external addresses as direct', () => {
+            const item = new KubernetesServiceItem(
+                'corr-reachability',
+                'default',
+                baseContext,
+                {
+                    sourceKind: 'generic',
+                    name: 'lb-svc',
+                    displayName: 'lb-svc',
+                    serviceName: 'lb-svc',
+                    namespace: 'default',
+                    type: 'LoadBalancer',
+                    port: 10260,
+                    externalAddress: '1.2.3.4',
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+
+            const treeItem = item.getTreeItem();
+            expect(treeItem.description).toBe('[Generic] LoadBalancer · direct :10260');
+            expect((treeItem.iconPath as { id: string }).id).toBe('globe');
+            expect(tooltipText(treeItem.tooltip)).toContain('Direct external address');
+        });
+
+        it('marks LoadBalancer services without external addresses but with node ports as node-routed', () => {
+            const item = new KubernetesServiceItem(
+                'corr-reachability',
+                'default',
+                baseContext,
+                {
+                    sourceKind: 'generic',
+                    name: 'lb-fallback-svc',
+                    displayName: 'lb-fallback-svc',
+                    serviceName: 'lb-fallback-svc',
+                    namespace: 'default',
+                    type: 'LoadBalancer',
+                    port: 10260,
+                    nodePort: 32000,
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+
+            const treeItem = item.getTreeItem();
+            expect(treeItem.description).toBe('[Generic] LoadBalancer · node-routed :32000');
+            expect((treeItem.iconPath as { id: string }).id).toBe('server');
+            expect(tooltipText(treeItem.tooltip)).toContain('Cluster-routed via node port');
+        });
+
+        it('marks pending LoadBalancer services without usable addresses as pending', () => {
+            const item = new KubernetesServiceItem(
+                'corr-reachability',
+                'default',
+                baseContext,
+                {
+                    sourceKind: 'generic',
+                    name: 'pending-lb-svc',
+                    displayName: 'pending-lb-svc',
+                    serviceName: 'pending-lb-svc',
+                    namespace: 'default',
+                    type: 'LoadBalancer',
+                    port: 10260,
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+
+            const treeItem = item.getTreeItem();
+            expect(treeItem.description).toBe('[Generic] LoadBalancer · pending :10260');
+            expect((treeItem.iconPath as { id: string }).id).toBe('warning');
+            expect(tooltipText(treeItem.tooltip)).toContain('LoadBalancer pending');
+        });
+
+        it('marks NodePort services as node-routed', () => {
+            const item = new KubernetesServiceItem(
+                'corr-reachability',
+                'default',
+                baseContext,
+                {
+                    sourceKind: 'generic',
+                    name: 'nodeport-svc',
+                    displayName: 'nodeport-svc',
+                    serviceName: 'nodeport-svc',
+                    namespace: 'default',
+                    type: 'NodePort',
+                    port: 10260,
+                    nodePort: 32000,
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+
+            const treeItem = item.getTreeItem();
+            expect(treeItem.description).toBe('[Generic] NodePort · node-routed :32000');
+            expect((treeItem.iconPath as { id: string }).id).toBe('server');
+            expect(tooltipText(treeItem.tooltip)).toContain('Cluster-routed via node port');
+        });
+
+        it('marks unsupported service types as not directly supported', () => {
+            const item = new KubernetesServiceItem(
+                'corr-reachability',
+                'default',
+                baseContext,
+                {
+                    sourceKind: 'generic',
+                    name: 'external-name-svc',
+                    displayName: 'external-name-svc',
+                    serviceName: 'external-name-svc',
+                    namespace: 'default',
+                    type: 'ExternalName',
+                    port: 10260,
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+
+            const treeItem = item.getTreeItem();
+            expect(treeItem.description).toBe('[Generic] ExternalName · not directly supported :10260');
+            expect((treeItem.iconPath as { id: string }).id).toBe('warning');
+            expect(tooltipText(treeItem.tooltip)).toContain('Not directly reachable');
+        });
     });
 
     describe('ClusterIP port-forward', () => {
@@ -272,6 +427,55 @@ describe('KubernetesServiceItem', () => {
                 servicePort: 10260,
                 localPort: 10260,
             });
+        });
+
+        it('should return copy credentials for ClusterIP services without prompting or starting a tunnel', async () => {
+            mockResolveServiceEndpoint.mockResolvedValue({
+                kind: 'needsPortForward',
+                serviceName: 'copy-svc',
+                namespace: 'default',
+                remotePort: 10260,
+                suggestedLocalPort: 10260,
+            });
+            mockBuildPortForwardConnectionString.mockReturnValue('mongodb://127.0.0.1:10260/');
+
+            const item = new KubernetesServiceItem(
+                'corr-copy',
+                'default',
+                {
+                    name: 'my-ctx',
+                    cluster: 'my-cluster',
+                    user: 'my-user',
+                    server: 'https://api.example.com:6443',
+                },
+                {
+                    sourceKind: 'dko',
+                    name: 'copy-svc',
+                    displayName: 'Copy Service',
+                    serviceName: 'copy-svc',
+                    namespace: 'default',
+                    type: 'ClusterIP',
+                    port: 10260,
+                    clusterIP: '10.0.0.1',
+                },
+                'discoveryView/kubernetes-discovery/default',
+            );
+
+            const creds = await item.getCredentialsForCopy();
+            expect(creds?.connectionString).toBe('mongodb://127.0.0.1:10260/');
+            expect(creds?.connectionProperties?.[KUBERNETES_PORT_FORWARD_METADATA_PROPERTY]).toEqual({
+                kind: 'kubernetesClusterIpPortForward',
+                sourceId: 'default',
+                sourceLabel: 'Label for default',
+                contextName: 'my-ctx',
+                namespace: 'default',
+                serviceName: 'copy-svc',
+                servicePort: 10260,
+                servicePortName: undefined,
+                localPort: 10260,
+            });
+            expect(mockPromptForLocalPort).not.toHaveBeenCalled();
+            expect(mockStartTunnel).not.toHaveBeenCalled();
         });
 
         it('should return undefined when user cancels port prompt', async () => {
@@ -724,7 +928,6 @@ describe('KubernetesServiceItem', () => {
             expect(tooltipText).not.toContain('10.0.97.117');
             expect(tooltipText).not.toContain('DKO resource');
             expect(tooltipText).not.toContain('documentdb-service-sample');
-            expect(tooltipText).not.toContain('LoadBalancer');
             expect(tooltipText).not.toContain('k8s.example.com');
         });
     });

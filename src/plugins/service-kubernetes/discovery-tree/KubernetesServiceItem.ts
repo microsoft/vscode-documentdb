@@ -62,6 +62,18 @@ interface ResolvedConnectionDetails {
     readonly connectionProperties?: Record<string, unknown>;
 }
 
+interface ResolveConnectionOptions {
+    readonly startPortForward: boolean;
+}
+
+interface ReachabilityInfo {
+    readonly icon: vscode.ThemeIcon;
+    readonly description: string;
+    readonly tooltipLabel: string;
+    readonly tooltipDetail: string;
+    readonly displayPort: number;
+}
+
 /**
  * Sanitizes a string for use in tree IDs and cluster IDs.
  * Uses double-underscore as separator to avoid collisions
@@ -116,7 +128,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
             'discovery.kubernetesService',
             `experience_${this.experience.api}`,
         ]);
-        this.iconPath = new vscode.ThemeIcon('server-environment');
+        this.iconPath = this.getReachabilityInfo().icon;
         this.descriptionOverride = this.buildDescription();
         this.tooltipOverride = this.buildTooltip();
     }
@@ -127,7 +139,23 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
         return callWithTelemetryAndErrorHandling('getCredentials', async (context: IActionContext) => {
             this.populateTelemetry(context);
-            return await this.resolveClusterCredentials(context);
+            return await this.resolveClusterCredentials(context, { startPortForward: true });
+        });
+    }
+
+    /**
+     * Returns credentials for read-only copy operations.
+     *
+     * For ClusterIP services, this deliberately does not prompt for a local port
+     * or start a port-forward tunnel. The copied localhost connection string is
+     * annotated with port-forward metadata so the caller can explain the
+     * machine-local tunnel dependency to the user.
+     */
+    public async getCredentialsForCopy(): Promise<EphemeralClusterCredentials | undefined> {
+        return callWithTelemetryAndErrorHandling('getCredentials.copy', async (context: IActionContext) => {
+            this.populateTelemetry(context);
+            context.telemetry.properties.connectionIntent = 'copy';
+            return await this.resolveClusterCredentials(context, { startPortForward: false });
         });
     }
 
@@ -145,7 +173,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 }),
             );
 
-            const credentials = await this.resolveClusterCredentials(context);
+            const credentials = await this.resolveClusterCredentials(context, { startPortForward: true });
             if (!credentials) {
                 return null;
             }
@@ -272,11 +300,20 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         }
     }
 
-    private async resolveClusterCredentials(context: IActionContext): Promise<EphemeralClusterCredentials | undefined> {
+    private async resolveClusterCredentials(
+        context: IActionContext,
+        options: ResolveConnectionOptions,
+    ): Promise<EphemeralClusterCredentials | undefined> {
         const kubeConfig = await loadConfiguredKubeConfig(this.sourceId);
         const coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
         const endpoint = await resolveServiceEndpoint(this.serviceInfo, coreApi);
-        const resolvedConnectionDetails = await this.resolveConnectionDetails(context, endpoint, kubeConfig, coreApi);
+        const resolvedConnectionDetails = await this.resolveConnectionDetails(
+            context,
+            endpoint,
+            kubeConfig,
+            coreApi,
+            options,
+        );
 
         if (!resolvedConnectionDetails) {
             return undefined;
@@ -366,6 +403,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         endpoint: KubeServiceEndpoint,
         kubeConfig: KubeConfig,
         coreApi: CoreV1Api,
+        options: ResolveConnectionOptions,
     ): Promise<ResolvedConnectionDetails | undefined> {
         switch (endpoint.kind) {
             case 'ready':
@@ -376,33 +414,39 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 }
                 return { connectionString: endpoint.connectionString };
             case 'needsPortForward': {
-                const localPort = await promptForLocalPort(this.serviceInfo);
+                const localPort = options.startPortForward
+                    ? await promptForLocalPort(this.serviceInfo)
+                    : endpoint.suggestedLocalPort;
                 if (localPort === undefined) {
                     context.telemetry.properties.connectionResult = 'cancelled';
                     return undefined;
                 }
 
-                const result = await PortForwardTunnelManager.getInstance().startTunnel({
-                    sourceId: this.sourceId,
-                    kubeConfig,
-                    coreApi,
-                    contextName: this.contextInfo.name,
-                    namespace: this.serviceInfo.namespace,
-                    serviceName: this.serviceInfo.serviceName,
-                    servicePort: this.serviceInfo.port,
-                    servicePortName: this.serviceInfo.portName,
-                    localPort,
-                });
+                if (options.startPortForward) {
+                    const result = await PortForwardTunnelManager.getInstance().startTunnel({
+                        sourceId: this.sourceId,
+                        kubeConfig,
+                        coreApi,
+                        contextName: this.contextInfo.name,
+                        namespace: this.serviceInfo.namespace,
+                        serviceName: this.serviceInfo.serviceName,
+                        servicePort: this.serviceInfo.port,
+                        servicePortName: this.serviceInfo.portName,
+                        localPort,
+                    });
 
-                context.telemetry.properties.portForwardOutcome = result.outcome;
+                    context.telemetry.properties.portForwardOutcome = result.outcome;
 
-                if (result.outcome === 'started') {
-                    void vscode.window.showInformationMessage(
-                        l10n.t('Port-forward tunnel started on 127.0.0.1:{port} for "{service}".', {
-                            port: String(localPort),
-                            service: this.serviceInfo.displayName,
-                        }),
-                    );
+                    if (result.outcome === 'started') {
+                        void vscode.window.showInformationMessage(
+                            l10n.t('Port-forward tunnel started on 127.0.0.1:{port} for "{service}".', {
+                                port: String(localPort),
+                                service: this.serviceInfo.displayName,
+                            }),
+                        );
+                    }
+                } else {
+                    context.telemetry.properties.portForwardOutcome = 'notStartedForCopy';
                 }
 
                 // Capture the source label so future reconnects can produce a friendlier
@@ -433,15 +477,13 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
     }
 
     private buildDescription(): string {
-        const portDisplay =
-            this.serviceInfo.type === 'NodePort' && this.serviceInfo.nodePort
-                ? `:${String(this.serviceInfo.nodePort)}`
-                : `:${String(this.serviceInfo.port)}`;
+        const reachability = this.getReachabilityInfo();
         const sourcePrefix = this.serviceInfo.sourceKind === 'dko' ? 'DKO' : 'Generic';
-        return `[${sourcePrefix}] [${this.serviceInfo.type} ${portDisplay}]`;
+        return `[${sourcePrefix}] ${reachability.description} :${String(reachability.displayPort)}`;
     }
 
     private buildTooltip(): vscode.MarkdownString {
+        const reachability = this.getReachabilityInfo();
         const tooltipParts: string[] = [`**Target:** ${this.serviceInfo.displayName}`];
 
         if (this.serviceInfo.status) {
@@ -450,6 +492,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         if (this.serviceInfo.externalAddress) {
             tooltipParts.push(`**External Address:** ${this.serviceInfo.externalAddress}`);
         }
+
+        tooltipParts.push(`**Reachability:** ${reachability.tooltipLabel}`, reachability.tooltipDetail);
 
         tooltipParts.push(`**Port:** ${String(this.serviceInfo.port)}`);
 
@@ -463,6 +507,75 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         tooltipParts.push('', `**Namespace:** ${this.serviceInfo.namespace}`, `**Context:** ${this.contextInfo.name}`);
 
         return new vscode.MarkdownString(tooltipParts.join('\n\n'));
+    }
+
+    private getReachabilityInfo(): ReachabilityInfo {
+        switch (this.serviceInfo.type) {
+            case 'LoadBalancer':
+                if (this.serviceInfo.externalAddress) {
+                    return {
+                        icon: new vscode.ThemeIcon('globe'),
+                        description: l10n.t('LoadBalancer · direct'),
+                        tooltipLabel: l10n.t('Direct external address'),
+                        tooltipDetail: l10n.t(
+                            'Connects to the LoadBalancer external address. The connection string is portable if that address is reachable from the client machine.',
+                        ),
+                        displayPort: this.serviceInfo.port,
+                    };
+                }
+                if (this.serviceInfo.nodePort) {
+                    return {
+                        icon: new vscode.ThemeIcon('server'),
+                        description: l10n.t('LoadBalancer · node-routed'),
+                        tooltipLabel: l10n.t('Cluster-routed via node port'),
+                        tooltipDetail: l10n.t(
+                            'The LoadBalancer external address is not assigned, so VS Code falls back to a node port. This only works if the selected node address is reachable from this machine.',
+                        ),
+                        displayPort: this.serviceInfo.nodePort,
+                    };
+                }
+                return {
+                    icon: new vscode.ThemeIcon('warning'),
+                    description: l10n.t('LoadBalancer · pending'),
+                    tooltipLabel: l10n.t('LoadBalancer pending'),
+                    tooltipDetail: l10n.t(
+                        'The LoadBalancer external address is not assigned yet and no node-port fallback is available.',
+                    ),
+                    displayPort: this.serviceInfo.port,
+                };
+            case 'NodePort':
+                return {
+                    icon: new vscode.ThemeIcon('server'),
+                    description: l10n.t('NodePort · node-routed'),
+                    tooltipLabel: l10n.t('Cluster-routed via node port'),
+                    tooltipDetail: l10n.t(
+                        'Connects through a Kubernetes node port. This only works if a cluster node address is reachable from this machine.',
+                    ),
+                    displayPort: this.serviceInfo.nodePort ?? this.serviceInfo.port,
+                };
+            case 'ClusterIP':
+                return {
+                    icon: new vscode.ThemeIcon('plug'),
+                    description: l10n.t('ClusterIP · port-forward required'),
+                    tooltipLabel: l10n.t('Local port-forward required'),
+                    tooltipDetail: l10n.t(
+                        'VS Code connects through the Kubernetes PortForward API. Connection strings using 127.0.0.1 only work on this machine while the tunnel is active.',
+                    ),
+                    displayPort: this.serviceInfo.port,
+                };
+            default:
+                return {
+                    icon: new vscode.ThemeIcon('warning'),
+                    description: l10n.t('{serviceType} · not directly supported', {
+                        serviceType: this.serviceInfo.type,
+                    }),
+                    tooltipLabel: l10n.t('Not directly reachable'),
+                    tooltipDetail: l10n.t(
+                        'This Kubernetes service type is not resolved automatically. Use a reachable service endpoint or connect manually.',
+                    ),
+                    displayPort: this.serviceInfo.port,
+                };
+        }
     }
 
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
