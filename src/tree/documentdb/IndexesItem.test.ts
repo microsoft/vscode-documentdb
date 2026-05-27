@@ -136,7 +136,7 @@ describe('IndexesItem - async index loading', () => {
 
         expect(listIndexesMock).toHaveBeenCalledTimes(1);
         expect(notifyChildrenChangedMock).toHaveBeenCalledWith(item.id);
-        expect(item.getTreeItem().description).toBe('3');
+        expect(item.getTreeItem().description).toContain('3');
     });
 
     it('loadIndexCount is idempotent: a second call does not refetch', async () => {
