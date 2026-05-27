@@ -54,7 +54,24 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     async getChildren(): Promise<TreeElement[]> {
         const indexes = [...(await this.getIndexes())];
+        const previousCount = this.indexCount;
         this.indexCount = indexes.length;
+
+        // If the count actually changed (e.g. user-initiated refresh after an
+        // external mutation), re-render this node so the description shown in
+        // the tree matches the children we are about to return. The
+        // `isRefreshingIndexCount` guard prevents the resulting refresh from
+        // wiping the cache we just populated (see invalidateChildrenCache).
+        if (previousCount !== this.indexCount) {
+            this.isRefreshingIndexCount = true;
+            try {
+                ext.state.notifyChildrenChanged(this.id);
+            } finally {
+                queueMicrotask(() => {
+                    this.isRefreshingIndexCount = false;
+                });
+            }
+        }
 
         // Sort indexes by name, with _id_ always first
         indexes.sort((a, b) => compareIndexNames(a.name, b.name));
