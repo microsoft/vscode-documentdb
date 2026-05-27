@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { TRPCClientError } from '@trpc/client';
+import { type AnyRouter } from '@trpc/server';
 import { vscodeLink, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from './vscodeLink';
 
 /**
@@ -47,7 +48,7 @@ function createTestHarness(op: ReturnType<typeof createMockOp>) {
         return unsubscribeFn;
     });
 
-    const link = vscodeLink({ send, onReceive });
+    const link = vscodeLink<AnyRouter>({ send, onReceive });
     // vscodeLink returns: (runtime) => ({ op, next }) => Observable
     // runtime is unused (_runtime), so we pass a dummy
     // next is unused (terminating link), so we pass a dummy
@@ -155,6 +156,7 @@ describe('vscodeLink', () => {
             });
 
             expect(onError).toHaveBeenCalledTimes(1);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             const error = onError.mock.calls[0]![0] as TRPCClientError<never>;
             expect(error).toBeInstanceOf(TRPCClientError);
             expect(error.message).toBe('Something went wrong');
@@ -177,6 +179,7 @@ describe('vscodeLink', () => {
             });
 
             expect(onError).toHaveBeenCalledTimes(1);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             const error = onError.mock.calls[0]![0] as TRPCClientError<never>;
             expect(error).toBeInstanceOf(TRPCClientError);
         });
@@ -290,7 +293,7 @@ describe('vscodeLink', () => {
                 return jest.fn();
             });
 
-            const link = vscodeLink({ send, onReceive });
+            const link = vscodeLink<AnyRouter>({ send, onReceive });
             const linkRuntime = link({} as never);
 
             const onNext1 = jest.fn();
@@ -345,6 +348,7 @@ describe('vscodeLink', () => {
 
             // The observer should have received an error
             expect(onError).toHaveBeenCalledTimes(1);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             const error = onError.mock.calls[0]![0] as TRPCClientError<never>;
             expect(error).toBeInstanceOf(TRPCClientError);
             expect(error.message).toBe('Aborted');
@@ -363,6 +367,7 @@ describe('vscodeLink', () => {
 
             // The observer should have received an error
             expect(onError).toHaveBeenCalledTimes(1);
+            // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
             const error = onError.mock.calls[0]![0] as TRPCClientError<never>;
             expect(error).toBeInstanceOf(TRPCClientError);
             expect(error.message).toBe('Aborted');
