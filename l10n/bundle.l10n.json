@@ -590,6 +590,7 @@
   "Good": "Good",
   "Got a moment? Share your feedback on DocumentDB for VS Code!": "Got a moment? Share your feedback on DocumentDB for VS Code!",
   "Helped me understand the query execution": "Helped me understand the query execution",
+  "hidden": "hidden",
   "hide": "hide",
   "Hide index \"{indexName}\" from collection \"{collectionName}\"?": "Hide index \"{indexName}\" from collection \"{collectionName}\"?",
   "Hide index?": "Hide index?",

@@ -70,7 +70,7 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
             id: this.id,
             contextValue: this.contextValue,
             label: this.indexInfo.name,
-            description: this.indexInfo.hidden ? 'hidden' : undefined,
+            description: this.indexInfo.hidden ? vscode.l10n.t('hidden') : undefined,
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
