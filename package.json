@@ -1301,7 +1301,7 @@
         }
       },
       {
-        "title": "DocumentDB for VS Code — Accessibility",
+        "title": "Accessibility",
         "properties": {
           "documentDB.accessibility.hideCountPrefix": {
             "order": 1,
