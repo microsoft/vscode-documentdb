@@ -112,12 +112,19 @@ export async function newPlaygroundWithContent(
         '',
     ].join('\n');
 
-    await createPlaygroundWithContent(template, {
-        clusterId: params.clusterId,
-        clusterDisplayName: params.clusterDisplayName,
-        databaseName: params.databaseName,
-        viewId: params.viewId,
-    });
+    await createPlaygroundWithContent(
+        template,
+        {
+            clusterId: params.clusterId,
+            clusterDisplayName: params.clusterDisplayName,
+            databaseName: params.databaseName,
+            viewId: params.viewId,
+        },
+        {
+            clusterDisplayName: params.clusterDisplayName,
+            databaseOrCollectionName: params.databaseName,
+        },
+    );
 }
 
 /**
