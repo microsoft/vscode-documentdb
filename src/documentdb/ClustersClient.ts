@@ -341,9 +341,10 @@ export class ClustersClient {
     }
 
     /**
-     * Returns the underlying MongoClient instance.
-     * Used by the query playground evaluator to create a `@mongosh` ServiceProvider
-     * that reuses the existing, authenticated connection.
+     * Returns the cached, authenticated MongoClient instance for extension-host
+     * features that need direct driver access, such as collection schema scanning.
+     * This client is not used by the playground worker; the worker creates its own
+     * MongoClient for query evaluation.
      */
     public getMongoClient(): MongoClient {
         return this._mongoClient;
