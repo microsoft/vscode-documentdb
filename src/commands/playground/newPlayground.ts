@@ -10,7 +10,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { modifierKey } from '../../constants';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
-import { PLAYGROUND_FILE_EXTENSION, PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
+import { PLAYGROUND_FILE_EXTENSION } from '../../documentdb/playground/constants';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -155,33 +155,49 @@ export function createPlaygroundFileName(
     textDocuments: readonly vscode.TextDocument[],
     context?: PlaygroundFileNameContext,
 ): string {
-    const playgroundDocuments = textDocuments.filter((doc) => doc.languageId === PLAYGROUND_LANGUAGE_ID);
+    // Dedup against ALL open documents (not just playgrounds): VS Code rejects
+    // applyEdit on an untitled URI that already exists, regardless of language.
+    const existingFileNames = new Set(textDocuments.map(getTextDocumentFileName).filter(Boolean));
 
-    if (!context) {
-        return `playground-${playgroundDocuments.length + 1}${PLAYGROUND_FILE_EXTENSION}`;
+    const contextualBaseName = context
+        ? [sanitizeFileNamePart(context.clusterDisplayName), sanitizeFileNamePart(context.databaseOrCollectionName)]
+              .filter(Boolean)
+              .join('_')
+        : '';
+
+    if (contextualBaseName) {
+        return findFreeFileName(contextualBaseName, existingFileNames, { startSuffix: 2, suffixFirst: false });
     }
 
-    const baseName = [
-        sanitizeFileNamePart(context.clusterDisplayName),
-        sanitizeFileNamePart(context.databaseOrCollectionName),
-    ]
-        .filter(Boolean)
-        .join('_');
+    return findFreeFileName('playground', existingFileNames, { startSuffix: 1, suffixFirst: true });
+}
 
-    if (!baseName) {
-        return `playground-${playgroundDocuments.length + 1}${PLAYGROUND_FILE_EXTENSION}`;
+/**
+ * Returns the first `${base}${ext}` (or `${base}-${N}${ext}`) name not present in `existing`.
+ * When `suffixFirst` is true, always starts with a numeric suffix (e.g. `playground-1`).
+ */
+function findFreeFileName(
+    base: string,
+    existing: ReadonlySet<string>,
+    options: { startSuffix: number; suffixFirst: boolean },
+): string {
+    if (!options.suffixFirst) {
+        const unsuffixed = `${base}${PLAYGROUND_FILE_EXTENSION}`;
+        if (!existing.has(unsuffixed)) {
+            return unsuffixed;
+        }
     }
 
-    const existingFileNames = new Set(playgroundDocuments.map(getTextDocumentFileName).filter(Boolean));
-    let fileName = `${baseName}${PLAYGROUND_FILE_EXTENSION}`;
-    let suffix = 2;
-
-    while (existingFileNames.has(fileName)) {
-        fileName = `${baseName}-${suffix}${PLAYGROUND_FILE_EXTENSION}`;
+    let suffix = options.startSuffix;
+    // Loop is bounded by the number of open documents + 1, so termination is guaranteed.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const candidate = `${base}-${suffix}${PLAYGROUND_FILE_EXTENSION}`;
+        if (!existing.has(candidate)) {
+            return candidate;
+        }
         suffix += 1;
     }
-
-    return fileName;
 }
 
 function sanitizeFileNamePart(value: string): string {

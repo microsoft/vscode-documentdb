@@ -61,7 +61,9 @@ describe('createPlaygroundFileName', () => {
             },
         );
 
-        expect(fileName).toBe('my-cluster_users-3.documentdb.js');
+        // Dedup checks ALL open documents (including non-playground) because VS Code rejects
+        // applyEdit on an untitled URI that already exists, regardless of language.
+        expect(fileName).toBe('my-cluster_users-4.documentdb.js');
     });
 
     it('falls back to generic numbering when context is missing', () => {
@@ -70,7 +72,18 @@ describe('createPlaygroundFileName', () => {
             playgroundDocument('C:\\workspace\\my-cluster_users.documentdb.js'),
         ]);
 
-        expect(fileName).toBe('playground-3.documentdb.js');
+        expect(fileName).toBe('playground-2.documentdb.js');
+    });
+
+    it('skips taken slots in the generic fallback (counter cannot collide)', () => {
+        const fileName = createPlaygroundFileName([
+            playgroundDocument('C:\\workspace\\playground-1.documentdb.js'),
+            playgroundDocument('C:\\workspace\\playground-3.documentdb.js'),
+        ]);
+
+        // playground-2 is free even though two playgrounds are open — old logic would have
+        // produced playground-3 (a collision).
+        expect(fileName).toBe('playground-2.documentdb.js');
     });
 
     it('falls back to generic numbering when context sanitizes to empty', () => {
