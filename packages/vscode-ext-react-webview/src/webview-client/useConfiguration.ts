@@ -15,9 +15,10 @@ declare global {
 }
 
 /**
- * Use this hook to access the configuration object that was passed to the webview at its creation.W
+ * Use this hook to access the configuration object that was passed to the
+ * webview at its creation.
  *
- * @returns The configuration object that was passed to the webview at its creation
+ * @returns The configuration object that was passed to the webview at its creation.
  */
 export function useConfiguration<T>(): T {
     const [configuration] = useState<T>(() => {
