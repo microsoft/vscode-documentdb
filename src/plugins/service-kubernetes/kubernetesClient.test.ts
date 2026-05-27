@@ -11,6 +11,7 @@ import {
     type KubeconfigSourceRecord,
 } from './config';
 import {
+    describeDefaultKubeconfigPath,
     getContexts,
     inferClusterProvider,
     isValidKubernetesSecretName,
@@ -261,6 +262,31 @@ describe('kubernetesClient', () => {
             });
 
             await expect(loadConfiguredKubeConfig('broken')).rejects.toThrow(/has no file path/);
+        });
+    });
+
+    describe('describeDefaultKubeconfigPath', () => {
+        const originalPlatformDescriptor = Object.getOwnPropertyDescriptor(process, 'platform');
+
+        afterEach(() => {
+            if (originalPlatformDescriptor) {
+                Object.defineProperty(process, 'platform', originalPlatformDescriptor);
+            }
+            delete process.env.KUBECONFIG;
+        });
+
+        it('uses tilde shorthand on macOS and Linux', () => {
+            Object.defineProperty(process, 'platform', { value: 'darwin' });
+            delete process.env.KUBECONFIG;
+
+            expect(describeDefaultKubeconfigPath()).toBe('~/.kube/config');
+        });
+
+        it('uses USERPROFILE shorthand on Windows', () => {
+            Object.defineProperty(process, 'platform', { value: 'win32' });
+            delete process.env.KUBECONFIG;
+
+            expect(describeDefaultKubeconfigPath()).toBe('%USERPROFILE%/.kube/config');
         });
     });
 

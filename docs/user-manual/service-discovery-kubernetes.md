@@ -17,7 +17,7 @@ For a step-by-step lab that creates a local or AKS DocumentDB cluster and tests 
 
 The Kubernetes node lists one or more **kubeconfig sources** as siblings:
 
-- **Default kubeconfig** — uses the Kubernetes client's default loading (the `KUBECONFIG` env var or `~/.kube/config`). It is created by default, but if you remove it explicitly, it stays removed until you add it again.
+- **Default kubeconfig** — uses the Kubernetes client's default loading (`KUBECONFIG` environment variable, or the Kubernetes default kubeconfig path in your user profile). It is created by default, but if you remove it explicitly, it stays removed until you add it again.
 - **Custom kubeconfig file…** — a kubeconfig YAML file you select on disk.
 - **Pasted kubeconfig YAML** — kubeconfig YAML pasted from the clipboard, kept in VS Code Secret Storage.
 
@@ -28,12 +28,14 @@ Each source expands independently to its own contexts -> namespaces -> services 
 The Kubernetes node exposes two inline icons:
 
 - **`+` (Add kubeconfig source...)** — opens a quick pick:
-  - **Default kubeconfig** — uses the `KUBECONFIG` env var or `~/.kube/config`.
+  - **Default kubeconfig** — uses the `KUBECONFIG` environment variable or Kubernetes default kubeconfig path.
   - **Add custom kubeconfig file...** — pick a file from disk.
   - **Paste kubeconfig YAML from clipboard** — kept in VS Code Secret Storage.
 - **`key` (Manage kubeconfig sources)** — opens a manage dialog (described below).
 
-Custom file and pasted-YAML sources are validated before they are saved. If the file or pasted YAML cannot be loaded or contains zero contexts, the source is not added and an error is shown. The Default source can still be added when the current default kubeconfig is missing, invalid, or empty; a warning is shown so you can fix the underlying `KUBECONFIG` or `~/.kube/config` later. Adding the same path twice or pasting identical YAML reuses the existing entry.
+Custom file and pasted-YAML sources are validated before they are saved. If the file or pasted YAML cannot be loaded or contains zero contexts, the source is not added and an error is shown. The Default source also validates the current default kubeconfig before it is added; if it is missing, invalid, or empty, fix the underlying `KUBECONFIG` value or default kubeconfig file and try again. Adding the same path twice or pasting identical YAML reuses the existing entry.
+
+The Kubernetes default kubeconfig path is `~/.kube/config` on macOS/Linux and `%USERPROFILE%\.kube\config` on Windows.
 
 ## Manage existing sources
 

@@ -320,7 +320,7 @@ describe('addKubeconfigSource default branch validation', () => {
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
         expect(mockShowWarningMessage).toHaveBeenCalledWith(
-            'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG env or ~/.kube/config). Fix the kubeconfig and try again.',
+            'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG environment variable or Kubernetes default kubeconfig path). Fix the kubeconfig and try again.',
         );
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('noContexts');
     });

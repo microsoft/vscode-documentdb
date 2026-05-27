@@ -152,7 +152,8 @@ export function isValidKubernetesSecretName(name: string): boolean {
 /**
  * Resolves kubeconfig file path(s), expanding `~` and supporting KUBECONFIG path lists.
  * Returns the first valid path from the KUBECONFIG env var (which can be colon-separated on
- * Unix or semicolon-separated on Windows), or falls back to ~/.kube/config.
+ * Unix or semicolon-separated on Windows), or falls back to the Kubernetes default kubeconfig
+ * path in the user's home directory (.kube/config; %USERPROFILE%\.kube\config on Windows).
  */
 export function resolveKubeconfigPath(kubeconfigPath?: string): string {
     if (kubeconfigPath) {
@@ -181,7 +182,7 @@ export function resolveKubeconfigPath(kubeconfigPath?: string): string {
 
 /**
  * Returns `true` when a default kubeconfig is likely available — either via the
- * `KUBECONFIG` env var or the standard `~/.kube/config` fallback. Performs a
+ * `KUBECONFIG` env var or the standard Kubernetes default kubeconfig fallback. Performs a
  * synchronous `fs.existsSync` check so callers (e.g. migration) can cheaply
  * gate whether the default source should be pre-populated.
  */
@@ -192,13 +193,14 @@ export function defaultKubeconfigExists(): boolean {
 
 /**
  * Returns a user-friendly representation of the resolved default kubeconfig
- * path, collapsing the home directory back to `~/`.
+ * path, collapsing the home directory to the platform's familiar shorthand.
  */
 export function describeDefaultKubeconfigPath(): string {
     const resolved = resolveKubeconfigPath();
     const home = os.homedir();
     if (home && resolved.startsWith(home + path.sep)) {
-        return `~${resolved.slice(home.length)}`;
+        const homePrefix = process.platform === 'win32' ? '%USERPROFILE%' : '~';
+        return `${homePrefix}${resolved.slice(home.length)}`;
     }
     return resolved;
 }
@@ -206,7 +208,7 @@ export function describeDefaultKubeconfigPath(): string {
 /**
  * Loads a KubeConfig from the specified path (or default locations).
  *
- * @param kubeconfigPath Optional path to a kubeconfig file. Defaults to KUBECONFIG env or ~/.kube/config.
+ * @param kubeconfigPath Optional path to a kubeconfig file. Defaults to KUBECONFIG env or the Kubernetes default kubeconfig path.
  * @param kubeconfigContents Optional kubeconfig YAML content.
  * @returns A loaded KubeConfig instance
  * @throws Error if the kubeconfig file cannot be loaded or parsed
@@ -258,7 +260,7 @@ export async function loadKubeConfig(kubeconfigPath?: string, kubeconfigContents
             const errorMessage = error instanceof Error ? error.message : String(error);
             throw new Error(
                 vscode.l10n.t(
-                    'Failed to load kubeconfig: {0}. Ensure a kubeconfig file exists at ~/.kube/config or the KUBECONFIG environment variable is set.',
+                    'Failed to load kubeconfig: {0}. Ensure a kubeconfig file exists at the Kubernetes default kubeconfig path or the KUBECONFIG environment variable is set.',
                     errorMessage,
                 ),
             );
@@ -267,7 +269,7 @@ export async function loadKubeConfig(kubeconfigPath?: string, kubeconfigContents
         if (isSyntheticDefaultKubeConfig(kc)) {
             throw new Error(
                 vscode.l10n.t(
-                    'No Kubernetes kubeconfig was found. Ensure a kubeconfig file exists at ~/.kube/config or the KUBECONFIG environment variable is set.',
+                    'No Kubernetes kubeconfig was found. Ensure a kubeconfig file exists at the Kubernetes default kubeconfig path or the KUBECONFIG environment variable is set.',
                 ),
             );
         }

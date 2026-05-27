@@ -174,7 +174,7 @@ function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
         lines.push('**Storage:** VS Code Secret Storage');
     } else if (source.kind === 'default') {
         lines.push(`**Path:** ${describeDefaultKubeconfigPath()}`);
-        lines.push('**Storage:** `KUBECONFIG` environment variable or `~/.kube/config`');
+        lines.push('**Storage:** `KUBECONFIG` environment variable or Kubernetes default kubeconfig path');
     }
     return new vscode.MarkdownString(lines.join('\n\n'));
 }

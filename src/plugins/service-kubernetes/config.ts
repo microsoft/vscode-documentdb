@@ -65,7 +65,7 @@ export const DEFAULT_SOURCE_ID = 'default';
 /**
  * Discriminator describing where a kubeconfig source's bytes live.
  *
- * - `default`: the platform default (`KUBECONFIG` env or `~/.kube/config`).
+ * - `default`: the Kubernetes default (`KUBECONFIG` env or the default kubeconfig path).
  * - `file`: an absolute path on disk.
  * - `inline`: YAML text held in VS Code Secret Storage.
  */

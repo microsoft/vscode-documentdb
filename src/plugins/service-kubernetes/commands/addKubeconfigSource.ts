@@ -54,7 +54,7 @@ async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSour
             context.telemetry.properties.kubeconfigSourceResult = 'noContexts';
             void vscode.window.showWarningMessage(
                 vscode.l10n.t(
-                    'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG env or ~/.kube/config). Fix the kubeconfig and try again.',
+                    'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG environment variable or Kubernetes default kubeconfig path). Fix the kubeconfig and try again.',
                 ),
             );
             throw new UserCancelledError();
@@ -87,7 +87,7 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
     const picks: IAzureQuickPickItem<AddBranch>[] = [
         {
             label: vscode.l10n.t('Default kubeconfig ({0})', defaultPath),
-            detail: vscode.l10n.t('Uses KUBECONFIG env var or {0}', defaultPath),
+            detail: vscode.l10n.t('Uses the KUBECONFIG environment variable or Kubernetes default kubeconfig path'),
             iconPath: new vscode.ThemeIcon('home'),
             data: 'default',
         },
