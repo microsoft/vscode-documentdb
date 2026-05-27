@@ -79,6 +79,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             connectionString: connectionCredentials.secrets.connectionString,
             availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
             selectedAuthMethod: authMethodFromString(connectionCredentials.properties.selectedAuthMethod),
+            connectionProperties: connectionCredentials.properties,
 
             // Structured auth configurations
             nativeAuthConfig: connectionCredentials.secrets.nativeAuthConfig,
