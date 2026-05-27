@@ -51,6 +51,7 @@ jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
 }));
 
 import type * as vscode from 'vscode';
+import { type TreeElement } from '../../../tree/TreeElement';
 import { type KubeconfigSourceRecord } from '../config';
 import { KubernetesKubeconfigSourceItem } from './KubernetesKubeconfigSourceItem';
 
@@ -60,6 +61,14 @@ function makeSource(kind: 'default' | 'file' | 'inline'): KubeconfigSourceRecord
         kind,
         label: `${kind} source`,
         ...(kind === 'file' ? { path: '/some/path' } : {}),
+    };
+}
+
+function makeRecoveryChild(id: string): TreeElement & { contextValue: string } {
+    return {
+        id,
+        contextValue: 'error',
+        getTreeItem: () => ({ id }),
     };
 }
 
@@ -92,6 +101,18 @@ describe('KubernetesKubeconfigSourceItem', () => {
         it('shows no description for inline sources', () => {
             const item = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
             expect(item.getTreeItem().description).toBeUndefined();
+        });
+    });
+
+    describe('hasRetryNode', () => {
+        it('detects retry recovery children', () => {
+            const item = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
+            expect(
+                item.hasRetryNode([
+                    makeRecoveryChild('parent/inline-id/open-docs'),
+                    makeRecoveryChild('parent/inline-id/retry'),
+                ]),
+            ).toBe(true);
         });
     });
 });

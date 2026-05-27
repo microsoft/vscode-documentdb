@@ -105,6 +105,18 @@ function getCollapsibleState(child: unknown): unknown {
     return (child as { getTreeItem(): { collapsibleState?: unknown } }).getTreeItem().collapsibleState;
 }
 
+function getTreeItemLabel(child: unknown): unknown {
+    return (child as { getTreeItem(): { label?: unknown } }).getTreeItem().label;
+}
+
+function getTreeItemDescription(child: unknown): unknown {
+    return (child as { getTreeItem(): { description?: unknown } }).getTreeItem().description;
+}
+
+function getChildLabel(child: unknown): unknown {
+    return (child as { label?: unknown }).label;
+}
+
 describe('KubernetesContextItem', () => {
     const baseContextInfo: KubeContextInfo = {
         name: 'my-context',
@@ -215,7 +227,7 @@ describe('KubernetesContextItem', () => {
             mockCreateCoreApi.mockResolvedValue(mockCoreApi);
         });
 
-        it('should show only namespaces with DocumentDB targets and hide empty ones', async () => {
+        it('should show namespaces with DocumentDB targets directly and group empty namespaces under Others', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'production']);
             mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) =>
                 namespace === 'production'
@@ -227,9 +239,15 @@ describe('KubernetesContextItem', () => {
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(1);
+            expect(children).toHaveLength(2);
             expect(getNamespaceName(children![0])).toBe('production');
             expect(getCollapsibleState(children![0])).toBe(1);
+            expect(getTreeItemLabel(children![1])).toBe('Others');
+            expect(getTreeItemDescription(children![1])).toBe('DocumentDB not detected');
+
+            const otherChildren = await children![1].getChildren!();
+            expect(otherChildren).toHaveLength(1);
+            expect(getChildLabel(otherChildren![0])).toBe('default');
 
             expect(mockListDocumentDBServices).toHaveBeenCalledTimes(2);
         });
@@ -252,6 +270,7 @@ describe('KubernetesContextItem', () => {
             const retryNode = children![1] as any;
             expect(retryNode.contextValue).toBe('error');
             expect(retryNode.id).toContain('retry');
+            expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalled();
         });
 
@@ -280,7 +299,7 @@ describe('KubernetesContextItem', () => {
             expect(namespaceNames).toContain('production');
         });
 
-        it('should show informational node when all namespaces are empty', async () => {
+        it('should show Others when all namespaces are empty', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'staging']);
             mockListDocumentDBServices.mockResolvedValue([]);
 
@@ -289,10 +308,12 @@ describe('KubernetesContextItem', () => {
 
             expect(children).toBeDefined();
             expect(children).toHaveLength(1);
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![0] as any).contextValue).toBe('informational');
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![0] as any).label).toContain('No DocumentDB targets');
+            expect(getTreeItemLabel(children![0])).toBe('Others');
+            expect(getTreeItemDescription(children![0])).toBe('DocumentDB not detected');
+
+            const otherChildren = await children![0].getChildren!();
+            expect(otherChildren).toHaveLength(2);
+            expect(otherChildren!.map((child) => getChildLabel(child))).toEqual(['default', 'staging']);
         });
 
         it('should limit concurrent namespace service pre-scans', async () => {
@@ -342,6 +363,7 @@ describe('KubernetesContextItem', () => {
             expect((children![0] as any).id).toContain('error-info');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             expect((children![1] as any).id).toContain('retry');
+            expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalled();
         });
 
@@ -360,11 +382,15 @@ describe('KubernetesContextItem', () => {
 
             expect(children).toBeDefined();
             // broken-ns (pre-scan failed, kept visible) + working-ns (has targets)
-            // default is hidden (confirmed empty)
-            expect(children).toHaveLength(2);
+            // default is grouped under Others (confirmed empty)
+            expect(children).toHaveLength(3);
             const brokenNamespace = children!.find((child) => getNamespaceName(child) === 'broken-ns');
             expect(brokenNamespace).toBeDefined();
             expect(getCollapsibleState(brokenNamespace)).toBe(1);
+            const others = children!.find((child) => getTreeItemLabel(child) === 'Others');
+            expect(others).toBeDefined();
+            const otherChildren = await others!.getChildren!();
+            expect(otherChildren!.map((child) => getChildLabel(child))).toEqual(['default']);
             expect(telemetryContextMock.telemetry.properties).toHaveProperty('namespaceServiceFetchError', 'true');
         });
 

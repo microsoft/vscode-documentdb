@@ -20,6 +20,8 @@ import {
     type KubeServiceInfo,
 } from '../kubernetesClient';
 import { KubernetesNamespaceItem } from './KubernetesNamespaceItem';
+import { KubernetesOtherNamespacesItem } from './KubernetesOtherNamespacesItem';
+import { hasRetryActionNode } from './retryNodeDetection';
 
 interface NamespaceDiscoveryResult {
     readonly namespace: string;
@@ -116,24 +118,14 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                     (result) => result.services !== undefined && result.services.length > 0,
                 ).length;
 
-                // Show only namespaces with targets or failed pre-scans (which need retry).
-                // Hide confirmed-empty namespaces to reduce noise.
-                const visibleResults = sortedNamespaceResults.filter(
+                const targetOrRetryResults = sortedNamespaceResults.filter(
                     (result) => result.services === undefined || result.services.length > 0,
                 );
+                const emptyNamespaceNames = sortedNamespaceResults
+                    .filter((result) => result.services !== undefined && result.services.length === 0)
+                    .map((result) => result.namespace);
 
-                if (visibleResults.length === 0) {
-                    return [
-                        createGenericElementWithContext({
-                            contextValue: 'informational',
-                            id: `${this.id}/no-targets`,
-                            label: vscode.l10n.t('No DocumentDB targets found in this context.'),
-                            iconPath: new vscode.ThemeIcon('info'),
-                        }),
-                    ];
-                }
-
-                return visibleResults.map(
+                const children: TreeElement[] = targetOrRetryResults.map(
                     (result) =>
                         new KubernetesNamespaceItem(
                             this.id,
@@ -144,8 +136,18 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                             result.services,
                         ),
                 );
+
+                if (emptyNamespaceNames.length > 0) {
+                    children.push(new KubernetesOtherNamespacesItem(this.id, emptyNamespaceNames));
+                }
+
+                return children;
             },
         );
+    }
+
+    public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
+        return hasRetryActionNode(children);
     }
 
     public getTreeItem(): vscode.TreeItem {

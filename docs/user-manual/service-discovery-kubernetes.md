@@ -58,6 +58,7 @@ v Discovery
       v aks-prod (AKS / eastus)
         v app
           > db-primary
+        > Others (DocumentDB not detected)
     v team.yaml
       v eks-staging
         ...
@@ -65,8 +66,10 @@ v Discovery
 
 1. Each source lists its contexts after a lightweight kubeconfig load.
 2. Expanding a context checks its namespaces for DocumentDB targets.
-3. Namespaces with DocumentDB targets are expandable and sorted first; namespaces without targets remain visible as leaf items with a "No DocumentDB targets" description.
-4. Expanding a DocumentDB namespace lists the discovered targets.
+3. Namespaces with DocumentDB targets are shown directly under the context.
+4. Namespaces where DocumentDB targets were not detected are grouped under **Others** with the description "DocumentDB not detected".
+5. Namespaces whose pre-scan failed remain visible directly under the context so the error and **Retry** action are easy to find.
+6. Expanding a DocumentDB namespace lists the discovered targets.
 
 ## Rename a context (display alias)
 

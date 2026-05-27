@@ -19,6 +19,7 @@ import {
 } from '../kubernetesClient';
 import { aliasMapForSource, pruneAliasesForSource } from '../sources/aliasStore';
 import { KubernetesContextItem } from './KubernetesContextItem';
+import { hasRetryActionNode } from './retryNodeDetection';
 
 /**
  * Tree node representing a single kubeconfig source (Default / file / pasted YAML).
@@ -100,6 +101,10 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             iconPath: buildIcon(this.source),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
+        return hasRetryActionNode(children);
     }
 
     private createKubeconfigRecoveryChildren(message: string): ExtTreeElementBase[] {

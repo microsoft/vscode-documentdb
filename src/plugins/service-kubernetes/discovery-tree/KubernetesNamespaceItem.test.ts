@@ -211,6 +211,7 @@ describe('KubernetesNamespaceItem', () => {
             const retryNode = children![1] as any;
             expect(retryNode.contextValue).toBe('error');
             expect(retryNode.id).toContain('retry');
+            expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalledWith(
                 expect.stringContaining('Failed to list services in "my-context/my-ns"'),
             );
@@ -229,6 +230,7 @@ describe('KubernetesNamespaceItem', () => {
             expect((children![0] as any).contextValue).toBe('error');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             expect((children![1] as any).id).toContain('retry');
+            expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalled();
         });
 

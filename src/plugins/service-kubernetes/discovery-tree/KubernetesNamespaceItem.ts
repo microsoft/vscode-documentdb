@@ -19,6 +19,7 @@ import {
     type KubeServiceInfo,
 } from '../kubernetesClient';
 import { KubernetesServiceItem } from './KubernetesServiceItem';
+import { hasRetryActionNode } from './retryNodeDetection';
 
 export class KubernetesNamespaceItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
@@ -103,6 +104,10 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                     ? vscode.TreeItemCollapsibleState.None
                     : vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
+        return hasRetryActionNode(children);
     }
 }
 
