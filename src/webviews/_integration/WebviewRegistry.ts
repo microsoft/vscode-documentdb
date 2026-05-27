@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CollectionView } from '../../documentdb/collectionView/CollectionView';
-import { DocumentView } from '../../documentdb/documentView/documentView';
+import { CollectionView } from '../documentdb/collectionView/CollectionView';
+import { DocumentView } from '../documentdb/documentView/documentView';
 
 export const WebviewRegistry = {
     collectionView: CollectionView,

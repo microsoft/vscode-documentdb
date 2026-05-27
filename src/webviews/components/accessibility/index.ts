@@ -3,5 +3,4 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { Announcer } from './Announcer';
-export type { AnnouncerProps } from './Announcer';
+export { Announcer, type AnnouncerProps } from './Announcer';
