@@ -146,11 +146,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             contextValue: this.contextValue,
             label: l10n.t('Indexes'),
             description:
-                typeof this.indexCount === 'number'
-                    ? this.indexCount === 1
-                        ? l10n.t('1 index')
-                        : l10n.t('{0} indexes', this.indexCount)
-                    : undefined,
+                typeof this.indexCount === 'number' && this.indexCount > 0 ? String(this.indexCount) : undefined,
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
