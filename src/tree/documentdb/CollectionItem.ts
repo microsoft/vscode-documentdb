@@ -143,13 +143,11 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
             if (shardKeyEntries.length > 0) {
                 const entries = shardKeyEntries
                     .map(([k, v]) => {
-                        const escapedKey = escapeMarkdown(k);
                         const valueText = typeof v === 'string' ? `"${v}"` : String(v);
-                        const escapedValue = escapeMarkdown(valueText);
-                        return `${escapedKey}: ${escapedValue}`;
+                        return `\`${k}: ${valueText}\``; // e.g. `userId: 1`
                     })
-                    .join(', ');
-                md.appendMarkdown(`**${l10n.t('Shard Key')}:** \`{ ${entries} }\`\n\n`);
+                    .join(', '); // e.g. `userId: 1`, `tenantId: "hashed"`
+                md.appendMarkdown(`**${l10n.t('Shard Key')}:** ${entries}\n\n`);
             }
         }
 
