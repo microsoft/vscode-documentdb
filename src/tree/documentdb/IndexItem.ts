@@ -29,9 +29,9 @@ export class IndexItem implements TreeElement, TreeElementWithExperience, TreeEl
         this.experience = cluster.dbExperience;
         const contextValues = ['treeItem_index'];
         if (this.indexInfo.name === '_id_') {
-            contextValues.push('index_default');
+            contextValues.push('state_default');
         } else if (this.indexInfo.hidden) {
-            contextValues.push('index_hidden');
+            contextValues.push('state_hidden');
         }
         this.experienceContextValue = `experience_${this.experience.api}`;
         contextValues.push(this.experienceContextValue);
