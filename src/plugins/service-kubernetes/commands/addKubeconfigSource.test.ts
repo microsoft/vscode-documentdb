@@ -204,6 +204,15 @@ function createFileSelectingUi(): MockUi {
     };
 }
 
+function createDefaultSelectingUi(): MockUi {
+    return {
+        showQuickPick: jest.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
+            const defaultItem = picks.find((p: IAzureQuickPickItem<AddBranch>) => p.data === 'default');
+            return defaultItem;
+        }),
+    };
+}
+
 interface OpenDialogOptionsWithDefaultUri {
     readonly defaultUri?: { readonly fsPath: string };
 }
@@ -256,6 +265,50 @@ describe('addKubeconfigSource file branch open dialog defaultUri', () => {
         await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
 
         expect(getOpenDialogOptions().defaultUri?.fsPath).toBe('/work/kube/team.yaml');
+    });
+});
+
+describe('addKubeconfigSource default branch validation', () => {
+    it('adds default source only after validation succeeds', async () => {
+        const context = makeContext(createDefaultSelectingUi());
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([{ name: 'kind-documentdb-dev' }]);
+        mockAddDefaultSource.mockResolvedValue({ id: 'default', label: 'Default kubeconfig', kind: 'default' });
+
+        await addKubeconfigSource(context);
+
+        expect(mockAddDefaultSource).toHaveBeenCalledTimes(1);
+        expect(context.telemetry.properties.kubeconfigSourceResult).toBe('added');
+        expect(mockShowInformationMessage).toHaveBeenCalledWith('Added kubeconfig source "Default kubeconfig".');
+    });
+
+    it('does not add default source when the default kubeconfig cannot be loaded', async () => {
+        const context = makeContext(createDefaultSelectingUi());
+        mockLoadKubeConfig.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+        await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
+
+        expect(mockAddDefaultSource).not.toHaveBeenCalled();
+        expect(mockShowInformationMessage).not.toHaveBeenCalled();
+        expect(mockShowWarningMessage).toHaveBeenCalledWith(
+            'Default kubeconfig could not be loaded: ENOENT: no such file or directory. Fix the kubeconfig and try again.',
+        );
+        expect(context.telemetry.properties.kubeconfigSourceResult).toBe('invalidDefault');
+    });
+
+    it('does not add default source when the default kubeconfig has no contexts', async () => {
+        const context = makeContext(createDefaultSelectingUi());
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([]);
+
+        await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
+
+        expect(mockAddDefaultSource).not.toHaveBeenCalled();
+        expect(mockShowInformationMessage).not.toHaveBeenCalled();
+        expect(mockShowWarningMessage).toHaveBeenCalledWith(
+            'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG env or ~/.kube/config). Fix the kubeconfig and try again.',
+        );
+        expect(context.telemetry.properties.kubeconfigSourceResult).toBe('noContexts');
     });
 });
 

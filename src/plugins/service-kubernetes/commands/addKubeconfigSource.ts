@@ -49,21 +49,24 @@ async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSour
             context.telemetry.properties.kubeconfigSourceResult = 'noContexts';
             void vscode.window.showWarningMessage(
                 vscode.l10n.t(
-                    'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG env or ~/.kube/config). The source will still be added so you can wire it up later.',
+                    'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG env or ~/.kube/config). Fix the kubeconfig and try again.',
                 ),
             );
+            throw new UserCancelledError();
         }
     } catch (error) {
+        if (error instanceof UserCancelledError) {
+            throw error;
+        }
+
         const message = error instanceof Error ? error.message : String(error);
         const stack = error instanceof Error && error.stack ? error.stack : message;
         ext.outputChannel.error(`[KubernetesDiscovery] Default kubeconfig load/validate failed: ${stack}`);
         context.telemetry.properties.kubeconfigSourceResult = 'invalidDefault';
         void vscode.window.showWarningMessage(
-            vscode.l10n.t(
-                'Default kubeconfig could not be loaded: {0}. The source will still be added so you can fix the underlying file later.',
-                message,
-            ),
+            vscode.l10n.t('Default kubeconfig could not be loaded: {0}. Fix the kubeconfig and try again.', message),
         );
+        throw new UserCancelledError();
     }
 
     const record = await addDefaultSource();
