@@ -9,6 +9,10 @@ jest.mock('vscode', () => ({
     },
     MarkdownString: class MarkdownString {
         constructor(public readonly value?: string) {}
+
+        public toString(): string {
+            return this.value ?? '';
+        }
     },
     TreeItemCollapsibleState: { None: 0, Collapsed: 1, Expanded: 2 },
     l10n: {
@@ -72,6 +76,10 @@ function makeRecoveryChild(id: string): TreeElement & { contextValue: string } {
     };
 }
 
+function tooltipText(tooltip: unknown): string {
+    return (tooltip as { toString(): string }).toString();
+}
+
 describe('KubernetesKubeconfigSourceItem', () => {
     describe('getTreeItem icon', () => {
         it.each(['default', 'file', 'inline'] as const)('renders the unified plug icon for %s sources', (kind) => {
@@ -101,6 +109,25 @@ describe('KubernetesKubeconfigSourceItem', () => {
         it('shows no description for inline sources', () => {
             const item = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
             expect(item.getTreeItem().description).toBeUndefined();
+        });
+    });
+
+    describe('getTreeItem tooltip', () => {
+        it('wraps default source path in inline code so Windows backslashes are preserved', () => {
+            const item = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
+
+            expect(tooltipText(item.getTreeItem().tooltip)).toContain('**Path:** `~/.kube/config`');
+        });
+
+        it('wraps file source path in inline code', () => {
+            const item = new KubernetesKubeconfigSourceItem('parent', {
+                id: 'f1',
+                kind: 'file',
+                label: 'my-config',
+                path: 'C:\\Users\\me\\.kube\\config',
+            });
+
+            expect(tooltipText(item.getTreeItem().tooltip)).toContain('**Path:** `C:\\Users\\me\\.kube\\config`');
         });
     });
 

@@ -169,11 +169,11 @@ function buildDescription(source: KubeconfigSourceRecord): string | undefined {
 function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
     const lines: string[] = [`**Source:** ${source.label}`, `**Kind:** ${source.kind}`];
     if (source.kind === 'file' && source.path) {
-        lines.push(`**Path:** ${source.path}`);
+        lines.push(`**Path:** \`${source.path}\``);
     } else if (source.kind === 'inline') {
         lines.push('**Storage:** VS Code Secret Storage');
     } else if (source.kind === 'default') {
-        lines.push(`**Path:** ${describeDefaultKubeconfigPath()}`);
+        lines.push(`**Path:** \`${describeDefaultKubeconfigPath()}\``);
         lines.push('**Storage:** `KUBECONFIG` environment variable or Kubernetes default kubeconfig path');
     }
     return new vscode.MarkdownString(lines.join('\n\n'));
