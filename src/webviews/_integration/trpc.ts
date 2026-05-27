@@ -41,7 +41,7 @@
  *     have a single import location for everything they need.
  */
 
-import { callWithTelemetryAndErrorHandling, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, parseError, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import {
     createMiddleware,
     publicProcedure,
@@ -97,11 +97,17 @@ const trpcToTelemetry = createMiddleware(async (opts) => {
                 if (!signal?.aborted) {
                     context.telemetry.properties.result = 'Failed';
                 }
-                context.telemetry.properties.error = result.error.name;
-                context.telemetry.properties.errorMessage = result.error.message;
+
+                // Use the same `parseError` helper the rest of the codebase uses so that
+                // non-enumerable Error fields (message/name/stack) are read correctly and
+                // we never throw from the telemetry path (e.g. on circular `cause` chains,
+                // which JSON.stringify would have thrown on).
+                const parsed = parseError(result.error);
+                context.telemetry.properties.error = parsed.errorType;
+                context.telemetry.properties.errorMessage = parsed.message;
                 context.telemetry.properties.errorStack = result.error.stack ?? '';
                 if (result.error.cause) {
-                    context.telemetry.properties.errorCause = JSON.stringify(result.error.cause, null, 0);
+                    context.telemetry.properties.errorCause = parseError(result.error.cause).message;
                 }
             }
 
