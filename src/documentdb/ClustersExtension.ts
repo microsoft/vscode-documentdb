@@ -161,12 +161,12 @@ export class ClustersExtension implements vscode.Disposable {
          */
         ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
 
-        const treeView = vscode.window.createTreeView(Views.DiscoveryView, {
+        ext.discoveryTreeView = vscode.window.createTreeView(Views.DiscoveryView, {
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
         });
 
-        ext.context.subscriptions.push(treeView);
+        ext.context.subscriptions.push(ext.discoveryTreeView);
     }
 
     registerHelpAndFeedbackTree(_activateContext: IActionContext): void {

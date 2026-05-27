@@ -26,3 +26,25 @@ export function refreshKubernetesRoot(): void {
     ext.discoveryBranchDataProvider.resetNodeErrorState(KUBERNETES_ROOT_NODE_ID);
     ext.discoveryBranchDataProvider.refresh();
 }
+
+export async function revealKubernetesSource(sourceId: string): Promise<void> {
+    const sourceNodeId = `${KUBERNETES_ROOT_NODE_ID}/${sanitizeKubernetesTreeId(sourceId)}`;
+    const rootItems = await ext.discoveryBranchDataProvider.getChildren(undefined as never);
+    const kubernetesRoot = rootItems?.find((item) => item.id === KUBERNETES_ROOT_NODE_ID);
+    if (!kubernetesRoot) {
+        ext.outputChannel.warn(`[KubernetesDiscovery] Could not reveal Kubernetes root.`);
+        return;
+    }
+
+    const sourceNode = await ext.discoveryBranchDataProvider.findChildById(kubernetesRoot, sourceNodeId);
+    if (!sourceNode) {
+        ext.outputChannel.warn(`[KubernetesDiscovery] Could not reveal kubeconfig source "${sourceId}".`);
+        return;
+    }
+
+    await ext.discoveryTreeView.reveal(sourceNode, { select: true, focus: true, expand: true });
+}
+
+function sanitizeKubernetesTreeId(value: string): string {
+    return value.replace(/[/\\:@]/g, '_');
+}

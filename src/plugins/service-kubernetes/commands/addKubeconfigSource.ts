@@ -30,15 +30,20 @@ export async function addKubeconfigSource(context: IActionContext): Promise<Kube
         throw new UserCancelledError();
     }
 
+    let record: KubeconfigSourceRecord | undefined;
     if (branch === 'file') {
-        return await addFileBranch(context);
+        record = await addFileBranch(context);
+    } else if (branch === 'inline') {
+        record = await addInlineBranch(context);
+    } else {
+        record = await addDefaultBranch(context);
     }
 
-    if (branch === 'inline') {
-        return await addInlineBranch(context);
+    if (record) {
+        await revealAddedKubeconfigSource(record);
     }
 
-    return await addDefaultBranch(context);
+    return record;
 }
 
 async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSourceRecord | undefined> {
@@ -237,4 +242,17 @@ async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourc
     void vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
     ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
     return record;
+}
+
+async function revealAddedKubeconfigSource(record: KubeconfigSourceRecord): Promise<void> {
+    const { refreshKubernetesRoot, revealKubernetesSource } = await import('./refreshKubernetesRoot');
+    refreshKubernetesRoot();
+    try {
+        await revealKubernetesSource(record.id);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.warn(
+            `[KubernetesDiscovery] Failed to reveal kubeconfig source "${record.label}": ${message}`,
+        );
+    }
 }

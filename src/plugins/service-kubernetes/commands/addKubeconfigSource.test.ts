@@ -21,6 +21,8 @@ const mockAddFileSource = jest.fn();
 const mockAddInlineSource = jest.fn();
 const mockExistsSync = jest.fn();
 const mockHomedir = jest.fn(() => '/home/test');
+const mockRefreshKubernetesRoot = jest.fn();
+const mockRevealKubernetesSource = jest.fn();
 
 jest.mock('vscode', () => ({
     Uri: {
@@ -86,6 +88,11 @@ jest.mock('../sources/sourceStore', () => ({
     addInlineSource: (...args: unknown[]) => mockAddInlineSource(...args),
 }));
 
+jest.mock('./refreshKubernetesRoot', () => ({
+    refreshKubernetesRoot: () => mockRefreshKubernetesRoot(),
+    revealKubernetesSource: (...args: unknown[]) => mockRevealKubernetesSource(...args),
+}));
+
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { addKubeconfigSource } from './addKubeconfigSource';
@@ -124,6 +131,7 @@ beforeEach(() => {
     mockHomedir.mockReturnValue('/home/test');
     mockExistsSync.mockReturnValue(false);
     mockShowOpenDialog.mockResolvedValue(undefined);
+    mockRevealKubernetesSource.mockResolvedValue(undefined);
 });
 
 describe('addKubeconfigSource pickBranch picker items', () => {
@@ -280,6 +288,8 @@ describe('addKubeconfigSource default branch validation', () => {
         expect(mockAddDefaultSource).toHaveBeenCalledTimes(1);
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('added');
         expect(mockShowInformationMessage).toHaveBeenCalledWith('Added kubeconfig source "Default kubeconfig".');
+        expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('default');
     });
 
     it('does not add default source when the default kubeconfig cannot be loaded', async () => {
@@ -290,6 +300,8 @@ describe('addKubeconfigSource default branch validation', () => {
 
         expect(mockAddDefaultSource).not.toHaveBeenCalled();
         expect(mockShowInformationMessage).not.toHaveBeenCalled();
+        expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
+        expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
         expect(mockShowWarningMessage).toHaveBeenCalledWith(
             'Default kubeconfig could not be loaded: ENOENT: no such file or directory. Fix the kubeconfig and try again.',
         );
@@ -305,6 +317,8 @@ describe('addKubeconfigSource default branch validation', () => {
 
         expect(mockAddDefaultSource).not.toHaveBeenCalled();
         expect(mockShowInformationMessage).not.toHaveBeenCalled();
+        expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
+        expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
         expect(mockShowWarningMessage).toHaveBeenCalledWith(
             'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG env or ~/.kube/config). Fix the kubeconfig and try again.',
         );
@@ -364,6 +378,28 @@ describe('addKubeconfigSource inline branch modal confirmation', () => {
         expect(mockReadText).toHaveBeenCalled();
         expect(mockAddInlineSource).toHaveBeenCalledWith(yamlContent);
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('added');
+        expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('inline-1');
+    });
+
+    it('does not fail add source when reveal fails', async () => {
+        const ui = createInlineSelectingUi();
+        const context = makeContext(ui);
+        mockShowWarningMessage.mockResolvedValue('Continue');
+        mockReadText.mockResolvedValue('apiVersion: v1\nkind: Config\ncontexts:\n- name: test');
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([{ name: 'test' }]);
+        mockAddInlineSource.mockResolvedValue({ id: 'inline-1', label: 'Pasted YAML 1', kind: 'inline' });
+        mockRevealKubernetesSource.mockRejectedValue(new Error('Tree not ready'));
+
+        await expect(addKubeconfigSource(context)).resolves.toEqual({
+            id: 'inline-1',
+            label: 'Pasted YAML 1',
+            kind: 'inline',
+        });
+
+        expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('inline-1');
     });
 
     it('shows error and aborts when clipboard is empty after Continue', async () => {
