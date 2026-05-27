@@ -21,6 +21,14 @@ import { type TreeElementWithContextValue } from '../TreeElementWithContextValue
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { IndexItem } from './IndexItem';
 
+/** Comparator that sorts index names alphabetically, with `_id_` always first. */
+export function compareIndexNames(a: string, b: string): number {
+    if (a === b) return 0;
+    if (a === '_id_') return -1;
+    if (b === '_id_') return 1;
+    return a.localeCompare(b, undefined, { numeric: true });
+}
+
 export class IndexesItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
     public readonly experience: Experience;
@@ -48,8 +56,8 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
         const indexes = [...(await this.getIndexes())];
         this.indexCount = indexes.length;
 
-        // Sort indexes by name
-        indexes.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+        // Sort indexes by name, with _id_ always first
+        indexes.sort((a, b) => compareIndexNames(a.name, b.name));
 
         return indexes.map((index) => {
             return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
