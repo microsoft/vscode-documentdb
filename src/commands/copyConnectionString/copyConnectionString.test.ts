@@ -7,8 +7,12 @@ const mockClipboardWriteText = jest.fn();
 const mockShowQuickPick = jest.fn();
 const mockShowInformationMessage = jest.fn();
 const mockShowErrorMessage = jest.fn();
+const mockShowWarningMessage = jest.fn();
 
 jest.mock('vscode', () => ({
+    ThemeIcon: class ThemeIcon {
+        constructor(public readonly id: string) {}
+    },
     env: {
         clipboard: {
             writeText: (...args: unknown[]) => mockClipboardWriteText(...args),
@@ -17,6 +21,7 @@ jest.mock('vscode', () => ({
     window: {
         showInformationMessage: (...args: unknown[]) => mockShowInformationMessage(...args),
         showErrorMessage: (...args: unknown[]) => mockShowErrorMessage(...args),
+        showWarningMessage: (...args: unknown[]) => mockShowWarningMessage(...args),
     },
     l10n: {
         t: jest.fn((message: string) => message),
@@ -45,6 +50,7 @@ interface FakeNode {
     contextValue: string;
     experience: { api: string };
     getCredentials: jest.Mock;
+    getCredentialsForCopy?: jest.Mock;
 }
 
 interface FakeContext {
@@ -85,6 +91,7 @@ describe('copyConnectionString', () => {
         mockShowQuickPick.mockReset();
         mockShowInformationMessage.mockReset();
         mockShowErrorMessage.mockReset();
+        mockShowWarningMessage.mockReset();
     });
 
     it('T-01 connections view + native + password, picks WITH password -> includes password', async () => {
@@ -234,5 +241,70 @@ describe('copyConnectionString', () => {
         expect(written).not.toContain('s3cr3t');
         expect(ctx.telemetry.properties.copyOrigin).toBe('other');
         expect(ctx.telemetry.properties.passwordIncluded).toBe('notPrompted');
+    });
+
+    it('T-08 saved Kubernetes port-forward connection -> warns after copying', async () => {
+        const ctx = makeContext();
+        const node = makeNode('connectionsView;treeitem_documentdbcluster', {
+            connectionString: 'mongodb://127.0.0.1:10260/?directConnection=true',
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+            nativeAuthConfig: { connectionUser: 'alice', connectionPassword: '' },
+            connectionProperties: {
+                kubernetesPortForward: {
+                    kind: 'kubernetesClusterIpPortForward',
+                    sourceId: 'default',
+                    contextName: 'kind-documentdb-dev',
+                    namespace: 'default',
+                    serviceName: 'documentdb-service',
+                    servicePort: 10260,
+                    localPort: 10260,
+                },
+            },
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await copyConnectionString(ctx as any, node as any);
+
+        expect(mockClipboardWriteText).toHaveBeenCalledWith(expect.stringContaining('127.0.0.1:10260'));
+        expect(mockShowInformationMessage).not.toHaveBeenCalled();
+        expect(mockShowWarningMessage).toHaveBeenCalledWith(expect.stringContaining('uses port-forwarding'));
+        expect(ctx.telemetry.properties.kubernetesPortForwardCopy).toBe('true');
+    });
+
+    it('T-09 K8s discovery copy uses read-only credentials provider', async () => {
+        const ctx = makeContext();
+        const node = makeNode(
+            'treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_documentdb',
+            {
+                connectionString: 'mongodb://should-not-be-used:10260/',
+                availableAuthMethods: [AuthMethodId.NativeAuth],
+                selectedAuthMethod: AuthMethodId.NativeAuth,
+            },
+        );
+        node.getCredentialsForCopy = jest.fn().mockResolvedValue({
+            connectionString: 'mongodb://127.0.0.1:10260/?directConnection=true',
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+            connectionProperties: {
+                kubernetesPortForward: {
+                    kind: 'kubernetesClusterIpPortForward',
+                    sourceId: 'default',
+                    contextName: 'kind-documentdb-dev',
+                    namespace: 'default',
+                    serviceName: 'documentdb-service',
+                    servicePort: 10260,
+                    localPort: 10260,
+                },
+            },
+        });
+
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        await copyConnectionString(ctx as any, node as any);
+
+        expect(node.getCredentialsForCopy).toHaveBeenCalledTimes(1);
+        expect(node.getCredentials).not.toHaveBeenCalled();
+        expect(mockClipboardWriteText).toHaveBeenCalledWith(expect.stringContaining('127.0.0.1:10260'));
+        expect(mockShowWarningMessage).toHaveBeenCalledWith(expect.stringContaining('uses port-forwarding'));
     });
 });

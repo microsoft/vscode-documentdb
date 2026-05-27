@@ -10,7 +10,8 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
-import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
+import { getKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
+import { type ClusterItemBase, type EphemeralClusterCredentials } from '../../tree/documentdb/ClusterItemBase';
 import { nonNullProp, nonNullValue } from '../../utils/nonNull';
 
 /**
@@ -28,6 +29,19 @@ const containsDelimited = (fullContext: string | undefined, value: string): bool
     return new RegExp(`\\b${value}\\b`, 'i').test(fullContext);
 };
 
+interface ReadOnlyCopyCredentialsProvider {
+    getCredentialsForCopy(): Promise<EphemeralClusterCredentials | undefined>;
+}
+
+function hasReadOnlyCopyCredentialsProvider(node: unknown): node is ReadOnlyCopyCredentialsProvider {
+    return (
+        typeof node === 'object' &&
+        node !== null &&
+        'getCredentialsForCopy' in node &&
+        typeof (node as { getCredentialsForCopy?: unknown }).getCredentialsForCopy === 'function'
+    );
+}
+
 export async function copyAzureConnectionString(context: IActionContext, node: ClusterItemBase) {
     if (!node) {
         throw new Error(l10n.t('No node selected.'));
@@ -37,13 +51,25 @@ export async function copyAzureConnectionString(context: IActionContext, node: C
 }
 
 export async function copyConnectionString(context: IActionContext, node: ClusterItemBase): Promise<void> {
+    let usesKubernetesPortForward = false;
     const connectionString = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
         context.telemetry.properties.experience = node.experience.api;
+        // KubernetesServiceItem.contextValue contains "discovery.kubernetesService"; the
+        // \b boundary inside containsDelimited treats "." as a non-word boundary so this matches.
+        const isKubernetesDiscoveryItem = containsDelimited(node.contextValue, 'kubernetesService');
 
-        const credentials = await node.getCredentials();
+        const credentials =
+            isKubernetesDiscoveryItem && hasReadOnlyCopyCredentialsProvider(node)
+                ? await node.getCredentialsForCopy()
+                : await node.getCredentials();
 
         if (!credentials) {
             return;
+        }
+
+        usesKubernetesPortForward = !!getKubernetesPortForwardMetadata(credentials.connectionProperties);
+        if (usesKubernetesPortForward) {
+            context.telemetry.properties.kubernetesPortForwardCopy = 'true';
         }
 
         const parsedConnectionString = new DocumentDBConnectionString(credentials.connectionString);
@@ -53,9 +79,6 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
         // Today the prompt fires for saved connections and for Kubernetes-discovered targets,
         // both of which routinely have a real native-auth password attached to credentials.
         const isConnectionsView = containsDelimited(node.contextValue, Views.ConnectionsView);
-        // KubernetesServiceItem.contextValue contains "discovery.kubernetesService"; the
-        // \b boundary inside containsDelimited treats "." as a non-word boundary so this matches.
-        const isKubernetesDiscoveryItem = containsDelimited(node.contextValue, 'kubernetesService');
         const shouldOfferPasswordPrompt = isConnectionsView || isKubernetesDiscoveryItem;
 
         context.telemetry.properties.copyOrigin = isConnectionsView
@@ -132,6 +155,14 @@ export async function copyConnectionString(context: IActionContext, node: Cluste
         );
     } else {
         await vscode.env.clipboard.writeText(connectionString);
-        void vscode.window.showInformationMessage(l10n.t('The connection string has been copied to the clipboard'));
+        if (usesKubernetesPortForward) {
+            void vscode.window.showWarningMessage(
+                l10n.t(
+                    'The connection string has been copied. This Kubernetes connection uses port-forwarding and only works on this machine while the tunnel is active.',
+                ),
+            );
+        } else {
+            void vscode.window.showInformationMessage(l10n.t('The connection string has been copied to the clipboard'));
+        }
     }
 }
