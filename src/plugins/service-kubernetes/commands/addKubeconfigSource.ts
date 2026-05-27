@@ -4,10 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UserCancelledError, type IActionContext, type IAzureQuickPickItem } from '@microsoft/vscode-azext-utils';
+import * as fs from 'fs';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { DISCOVERY_PROVIDER_ID, type KubeconfigSourceRecord } from '../config';
-import { describeDefaultKubeconfigPath, getContexts, loadKubeConfig } from '../kubernetesClient';
+import { describeDefaultKubeconfigPath, getContexts, loadKubeConfig, resolveKubeconfigPath } from '../kubernetesClient';
 import { addDefaultSource, addFileSource, addInlineSource } from '../sources/sourceStore';
 
 type AddBranch = 'default' | 'file' | 'inline';
@@ -114,6 +117,7 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
         canSelectFiles: true,
         canSelectFolders: false,
         canSelectMany: false,
+        defaultUri: getKubeconfigFileDialogDefaultUri(),
         title: vscode.l10n.t('Select kubeconfig file'),
         filters: {
             // eslint-disable-next-line @typescript-eslint/naming-convention
@@ -154,6 +158,20 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
     void vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
     ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
     return record;
+}
+
+function getKubeconfigFileDialogDefaultUri(): vscode.Uri {
+    const resolvedKubeconfigPath = resolveKubeconfigPath();
+    if (fs.existsSync(resolvedKubeconfigPath)) {
+        return vscode.Uri.file(resolvedKubeconfigPath);
+    }
+
+    const kubeconfigDirectory = path.dirname(resolvedKubeconfigPath);
+    if (fs.existsSync(kubeconfigDirectory)) {
+        return vscode.Uri.file(kubeconfigDirectory);
+    }
+
+    return vscode.Uri.file(os.homedir());
 }
 
 async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourceRecord | undefined> {

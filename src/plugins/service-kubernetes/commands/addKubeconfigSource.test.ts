@@ -13,13 +13,19 @@ const mockShowTextDocument = jest.fn();
 const mockOpenTextDocument = jest.fn();
 const mockReadText = jest.fn(async (): Promise<string> => '');
 const mockDescribeDefaultKubeconfigPath = jest.fn(() => '~/.kube/config');
+const mockResolveKubeconfigPath = jest.fn(() => '/home/test/.kube/config');
 const mockLoadKubeConfig = jest.fn();
 const mockGetContexts = jest.fn((): { name: string }[] => []);
 const mockAddDefaultSource = jest.fn();
 const mockAddFileSource = jest.fn();
 const mockAddInlineSource = jest.fn();
+const mockExistsSync = jest.fn();
+const mockHomedir = jest.fn(() => '/home/test');
 
 jest.mock('vscode', () => ({
+    Uri: {
+        file: jest.fn((fsPath: string) => ({ fsPath, scheme: 'file' })),
+    },
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
@@ -45,6 +51,14 @@ jest.mock('vscode', () => ({
     },
 }));
 
+jest.mock('fs', () => ({
+    existsSync: (...args: unknown[]) => mockExistsSync(...args),
+}));
+
+jest.mock('os', () => ({
+    homedir: () => mockHomedir(),
+}));
+
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
@@ -61,6 +75,7 @@ jest.mock('../../../extensionVariables', () => ({
 
 jest.mock('../kubernetesClient', () => ({
     describeDefaultKubeconfigPath: () => mockDescribeDefaultKubeconfigPath(),
+    resolveKubeconfigPath: () => mockResolveKubeconfigPath(),
     loadKubeConfig: (...args: unknown[]) => mockLoadKubeConfig(...args),
     getContexts: (...args: unknown[]) => mockGetContexts(...(args as [])),
 }));
@@ -105,6 +120,10 @@ beforeEach(() => {
     capturedPicks = [];
     jest.clearAllMocks();
     mockDescribeDefaultKubeconfigPath.mockReturnValue('~/.kube/config');
+    mockResolveKubeconfigPath.mockReturnValue('/home/test/.kube/config');
+    mockHomedir.mockReturnValue('/home/test');
+    mockExistsSync.mockReturnValue(false);
+    mockShowOpenDialog.mockResolvedValue(undefined);
 });
 
 describe('addKubeconfigSource pickBranch picker items', () => {
@@ -175,6 +194,70 @@ function createInlineSelectingUi(): MockUi {
         }),
     };
 }
+
+function createFileSelectingUi(): MockUi {
+    return {
+        showQuickPick: jest.fn((picks: IAzureQuickPickItem<AddBranch>[]) => {
+            const fileItem = picks.find((p: IAzureQuickPickItem<AddBranch>) => p.data === 'file');
+            return fileItem;
+        }),
+    };
+}
+
+interface OpenDialogOptionsWithDefaultUri {
+    readonly defaultUri?: { readonly fsPath: string };
+}
+
+function getOpenDialogOptions(): OpenDialogOptionsWithDefaultUri {
+    return mockShowOpenDialog.mock.calls[0]?.[0] as OpenDialogOptionsWithDefaultUri;
+}
+
+function setExistingPaths(paths: readonly string[]): void {
+    mockExistsSync.mockImplementation((candidate: string) => paths.includes(candidate));
+}
+
+describe('addKubeconfigSource file branch open dialog defaultUri', () => {
+    it('starts at the resolved kubeconfig file when it exists', async () => {
+        mockResolveKubeconfigPath.mockReturnValue('/home/test/.kube/config');
+        setExistingPaths(['/home/test/.kube/config']);
+        const context = makeContext(createFileSelectingUi());
+
+        await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
+
+        expect(getOpenDialogOptions().defaultUri?.fsPath).toBe('/home/test/.kube/config');
+    });
+
+    it('starts at the kubeconfig directory when the file is missing but the directory exists', async () => {
+        mockResolveKubeconfigPath.mockReturnValue('/home/test/.kube/config');
+        setExistingPaths(['/home/test/.kube']);
+        const context = makeContext(createFileSelectingUi());
+
+        await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
+
+        expect(getOpenDialogOptions().defaultUri?.fsPath).toBe('/home/test/.kube');
+    });
+
+    it('starts at the user home directory when no kubeconfig path exists', async () => {
+        mockResolveKubeconfigPath.mockReturnValue('/home/test/.kube/config');
+        mockHomedir.mockReturnValue('/home/test');
+        setExistingPaths([]);
+        const context = makeContext(createFileSelectingUi());
+
+        await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
+
+        expect(getOpenDialogOptions().defaultUri?.fsPath).toBe('/home/test');
+    });
+
+    it('honors an existing KUBECONFIG-resolved file path', async () => {
+        mockResolveKubeconfigPath.mockReturnValue('/work/kube/team.yaml');
+        setExistingPaths(['/work/kube/team.yaml']);
+        const context = makeContext(createFileSelectingUi());
+
+        await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
+
+        expect(getOpenDialogOptions().defaultUri?.fsPath).toBe('/work/kube/team.yaml');
+    });
+});
 
 describe('addKubeconfigSource inline branch modal confirmation', () => {
     it('aborts without reading clipboard when user dismisses the modal', async () => {
