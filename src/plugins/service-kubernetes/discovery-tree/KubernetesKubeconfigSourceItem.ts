@@ -159,10 +159,10 @@ function buildDescription(source: KubeconfigSourceRecord): string | undefined {
         case 'file':
             return source.path ? `(file: ${shortenPath(source.path)})` : '(file)';
         case 'inline':
-            return undefined;
         case 'default':
+            return undefined;
         default:
-            return `(${describeDefaultKubeconfigPath()})`;
+            return undefined;
     }
 }
 

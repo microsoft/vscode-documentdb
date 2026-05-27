@@ -83,9 +83,9 @@ describe('KubernetesKubeconfigSourceItem', () => {
     });
 
     describe('getTreeItem description', () => {
-        it('shows path for default sources', () => {
+        it('shows no description for default sources', () => {
             const item = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
-            expect(item.getTreeItem().description).toBe('(~/.kube/config)');
+            expect(item.getTreeItem().description).toBeUndefined();
         });
 
         it('shows file path for file sources', () => {
