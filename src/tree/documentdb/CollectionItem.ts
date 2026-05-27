@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+import { getCountPrefix } from '../../utils/countPrefix';
 import { formatDocumentCount } from '../../utils/formatDocumentCount';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -99,7 +100,12 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
         // Build description based on document count state
         let description: string | undefined;
         if (typeof this.documentCount === 'number') {
-            description = formatDocumentCount(this.documentCount);
+            const prefix = getCountPrefix();
+            if (prefix) {
+                description = `${prefix}${formatDocumentCount(this.documentCount)}`;
+            } else {
+                description = formatDocumentCount(this.documentCount);
+            }
         }
 
         return {

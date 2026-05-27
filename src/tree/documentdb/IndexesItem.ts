@@ -15,6 +15,7 @@ import {
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { getCountPrefix } from '../../utils/countPrefix';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -158,12 +159,21 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     }
 
     getTreeItem(): vscode.TreeItem {
+        let description: string | undefined;
+        if (typeof this.indexCount === 'number' && this.indexCount > 0) {
+            const prefix = getCountPrefix();
+            if (prefix) {
+                description = `${prefix}${this.indexCount}`;
+            } else {
+                description = `${this.indexCount}`;
+            }
+        }
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: l10n.t('Indexes'),
-            description:
-                typeof this.indexCount === 'number' && this.indexCount > 0 ? String(this.indexCount) : undefined,
+            description,
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };

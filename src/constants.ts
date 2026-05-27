@@ -23,3 +23,10 @@ export const isEmulatorSupported = isWindows || isLinux || (isMacOS && process.a
 
 // https://docs.mongodb.com/manual/mongo/#working-with-the-mongo-shell
 export const testDb: string = 'test';
+
+/**
+ * Visual prefix shown before item counts in the tree view (e.g. "·· 12").
+ * Two middle dots (U+2027) followed by a regular space.
+ * Controlled by the `documentDB.accessibility.showCountPrefix` setting.
+ */
+export const COUNT_PREFIX = '\u2027\u2027 ';
