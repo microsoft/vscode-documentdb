@@ -31,6 +31,8 @@ Currently, the following service discovery plugins are available:
 
 See each plugin guide for provider-specific setup, filtering, credential handling, and troubleshooting steps.
 
+All service discovery plugins are visible by default. If a provider is not relevant to your workflow, you can hide it from the Service Discovery tree and show it again later with **Show Hidden Provider...**.
+
 ## API and Extensibility
 
 The Service Discovery API is under active development and refinement. At present, service providers are implemented directly within our repository. Once the API stabilizes, we plan to make it even easier to add new providers through a pluggable architecture.

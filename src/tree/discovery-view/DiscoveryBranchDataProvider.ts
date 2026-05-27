@@ -7,6 +7,10 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
 import * as l10n from '@vscode/l10n';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+import {
+    getHiddenDiscoveryProviderIds,
+    getVisibleDiscoveryProviders,
+} from '../../services/discoveryProviderVisibility';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeElement } from '../TreeElement';
@@ -75,6 +79,9 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
                 const rootItems = await this.getRootItems();
 
                 context.telemetry.measurements.activeDiscoveryProviders = rootItems?.length ?? 0;
+                context.telemetry.measurements.hiddenDiscoveryProviders = (
+                    await getHiddenDiscoveryProviderIds()
+                ).length;
 
                 return rootItems;
             }
@@ -86,7 +93,7 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
 
     /**
      * Helper to get root items for the tree.
-     * Root items here are all the regiestered and enabled discovery providers.
+     * Root items here are all registered discovery providers that are not hidden by the user.
      */
 
     private async getRootItems(): Promise<TreeElement[] | null | undefined> {
@@ -95,49 +102,12 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
 
         // Clear the parent cache when retrieving root items
         this.clearParentCache();
-
-        await this.renameLegacyProviders();
-        await this.addDiscoveryProviderPromotionIfNeeded('azure-mongo-ru-discovery');
-
-        // Get the list of active discovery provider IDs from global state.
-        // On fresh install (empty list, not yet seeded), auto-activate all registered
-        // providers so users see every discovery source without manual setup.
-        // A one-shot flag ensures this only fires once — users who explicitly remove
-        // all providers will not have them re-added on the next refresh.
-        let activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
-
-        const autoSeedDone = ext.context.globalState.get<boolean>('discoveryAutoSeedDone', false);
-        if (!autoSeedDone) {
-            if (activeDiscoveryProviderIds.length === 0) {
-                const allProviderIds = DiscoveryService.listProviders().map((p) => p.id);
-                if (allProviderIds.length > 0) {
-                    activeDiscoveryProviderIds = allProviderIds;
-                    try {
-                        await ext.context.globalState.update('activeDiscoveryProviderIds', activeDiscoveryProviderIds);
-                    } catch {
-                        // Best-effort; providers still show for this session via the local variable.
-                    }
-                }
-            }
-            // Stamp the flag regardless of whether we seeded or the user already had
-            // providers. This ensures existing users who later remove all providers
-            // won't have them re-added.
-            try {
-                await ext.context.globalState.update('discoveryAutoSeedDone', true);
-            } catch {
-                // Best-effort.
-            }
-        }
+        const visibleDiscoveryProviders = await getVisibleDiscoveryProviders();
 
         const rootItems: TreeElement[] = [];
 
-        // Iterate through all registered discovery providers
-        for (const { id } of DiscoveryService.listProviders()) {
-            // Only include providers that are currently activated
-            if (!activeDiscoveryProviderIds.includes(id)) {
-                continue;
-            }
-
+        // Iterate through all visible discovery providers
+        for (const { id } of visibleDiscoveryProviders) {
             // Retrieve the provider instance
             const discoveryProvider = DiscoveryService.getProvider(id);
 
@@ -305,84 +275,6 @@ export class DiscoveryBranchDataProvider extends BaseExtendedTreeDataProvider<Tr
 
         // If the element does not have children, return null
         return null;
-    }
-
-    /**
-     * Adds a discovery provider promotion if the user has already explored discovery.
-     * This method is public only for testing purposes.
-     *
-     * Logic:
-     * - If promotion already shown: skip
-     * - If user has NO active providers: skip (they never used discovery OR removed all)
-     * - If provider doesn't exist: skip
-     * - If user has active providers: add this provider to promote it to existing users
-     */
-    public async addDiscoveryProviderPromotionIfNeeded(providerId: string): Promise<void> {
-        const promotionFlagKey = `discoveryProviderPromotionProcessed:${providerId}`;
-        const promotionProcessed = ext.context.globalState.get<boolean>(promotionFlagKey, false);
-
-        if (promotionProcessed) {
-            // Already shown/processed previously — do nothing.
-            return;
-        }
-
-        // Read current active provider IDs
-        const activeProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
-
-        // If there are no active discovery providers, mark the promotion as shown
-        // and return early. The goal is to only show the promotion to users who have
-        // already added discovery providers (indicating they've explored the feature).
-        // We can't distinguish between new users and users who removed all providers,
-        // so we err on the side of not promoting to avoid cluttering the UI for new users.
-        if (!activeProviderIds || activeProviderIds.length === 0) {
-            try {
-                await ext.context.globalState.update(promotionFlagKey, true);
-            } catch {
-                // ignore storage errors for this best-effort write
-            }
-            return;
-        }
-
-        // Only proceed if the provider is actually available
-        const provider = DiscoveryService.getProvider(providerId);
-        if (!provider) {
-            // Provider not registered with DiscoveryService; skip for now.
-            return;
-        }
-
-        // If not present, register it
-        if (!activeProviderIds.includes(providerId)) {
-            const updated = [...activeProviderIds, providerId];
-            try {
-                await ext.context.globalState.update('activeDiscoveryProviderIds', updated);
-            } catch (error) {
-                console.error(`Failed to update activeDiscoveryProviderIds: ${(error as Error).message}`);
-            }
-        }
-
-        // Mark that we've added/shown the promotion for this provider so we don't repeat it
-        try {
-            await ext.context.globalState.update(promotionFlagKey, true);
-        } catch {
-            // ignore
-        }
-    }
-
-    private async renameLegacyProviders(): Promise<void> {
-        try {
-            const activeProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
-            if (activeProviderIds.includes('azure-discovery')) {
-                {
-                    const updated = ext.context.globalState
-                        .get<string[]>('activeDiscoveryProviderIds', [])
-                        .filter((id) => id !== 'azure-discovery');
-                    updated.push('azure-mongo-vcore-discovery');
-                    await ext.context.globalState.update('activeDiscoveryProviderIds', updated);
-                }
-            }
-        } catch {
-            // ignore storage errors for this best-effort write
-        }
     }
 
     /**

@@ -261,7 +261,7 @@
       },
       {
         "view": "discoveryView",
-        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
+        "contents": "All service discovery providers are currently hidden.\n[$(search) Show Hidden Provider…](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to make a provider visible again."
       }
     ],
     "languages": [
@@ -421,17 +421,17 @@
         "title": "Start Demo Task"
       },
       {
-        "//": "[DiscoveryView] Enable Registry",
+        "//": "[DiscoveryView] Show Hidden Provider",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.addRegistry",
-        "title": "Enable New Registry…",
+        "title": "Show Hidden Provider…",
         "icon": "$(add)"
       },
       {
-        "//": "[DiscoveryView] Disable Registry",
+        "//": "[DiscoveryView] Hide Provider",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.removeRegistry",
-        "title": "Disable Registry"
+        "title": "Hide Provider"
       },
       {
         "//": "[DiscoveryView] Save To DocumentDB Connections",

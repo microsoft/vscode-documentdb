@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+import { resetDiscoveryProviderVisibilityMigrationForTests } from '../../services/discoveryProviderVisibility';
 import { DiscoveryService, type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { removeDiscoveryRegistry } from './removeDiscoveryRegistry';
@@ -31,6 +32,7 @@ jest.mock('../../extensionVariables', () => ({
         },
         outputChannel: {
             error: jest.fn(),
+            warn: jest.fn(),
         },
     },
 }));
@@ -62,11 +64,14 @@ function createActionContext(): IActionContext {
 describe('removeDiscoveryRegistry', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        mockGlobalStateGet.mockReturnValue(['provider-with-cleanup', 'other-provider']);
+        resetDiscoveryProviderVisibilityMigrationForTests();
+        mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) =>
+            key === 'hiddenDiscoveryProviderIds' ? [] : defaultValue,
+        );
         mockGlobalStateUpdate.mockResolvedValue(undefined);
     });
 
-    it('deactivates provider resources before removing the provider from active state', async () => {
+    it('deactivates provider resources before hiding the provider', async () => {
         const deactivate = jest.fn().mockResolvedValue(undefined);
         DiscoveryService.registerProvider(createProvider('provider-with-cleanup', deactivate));
         const context = createActionContext();
@@ -74,24 +79,23 @@ describe('removeDiscoveryRegistry', () => {
         await removeDiscoveryRegistry(context, createNode(`${Views.DiscoveryView}/provider-with-cleanup/root`));
 
         expect(deactivate).toHaveBeenCalledWith(context);
-        expect(mockGlobalStateUpdate).toHaveBeenCalledWith('activeDiscoveryProviderIds', ['other-provider']);
+        expect(mockGlobalStateUpdate).toHaveBeenCalledWith('hiddenDiscoveryProviderIds', ['provider-with-cleanup']);
         expect(mockRefresh).toHaveBeenCalledTimes(1);
         expect(context.telemetry.properties.discoveryProviderId).toBe('provider-with-cleanup');
-        expect(context.telemetry.measurements.activeDiscoveryProviders).toBe(1);
+        expect(context.telemetry.measurements.hiddenDiscoveryProviders).toBe(1);
     });
 
-    it('removes providers that do not expose deactivation cleanup', async () => {
+    it('hides providers that do not expose deactivation cleanup', async () => {
         DiscoveryService.registerProvider(createProvider('provider-without-cleanup'));
-        mockGlobalStateGet.mockReturnValue(['provider-without-cleanup']);
         const context = createActionContext();
 
         await removeDiscoveryRegistry(context, createNode(`${Views.DiscoveryView}/provider-without-cleanup/root`));
 
-        expect(mockGlobalStateUpdate).toHaveBeenCalledWith('activeDiscoveryProviderIds', []);
+        expect(mockGlobalStateUpdate).toHaveBeenCalledWith('hiddenDiscoveryProviderIds', ['provider-without-cleanup']);
         expect(mockRefresh).toHaveBeenCalledTimes(1);
     });
 
-    it('does not update active providers when provider lookup fails', async () => {
+    it('does not update hidden providers when provider lookup fails', async () => {
         const context = createActionContext();
 
         await removeDiscoveryRegistry(context, createNode(`${Views.DiscoveryView}/missing-provider/root`));
