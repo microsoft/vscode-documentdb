@@ -1263,6 +1263,28 @@
             "default": 10260,
             "description": "Port to use when connecting to DocumentDB Local instance"
           },
+          "documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy": {
+            "order": 30,
+            "type": "string",
+            "default": "matchRemote",
+            "enum": [
+              "matchRemote",
+              "autoSelect"
+            ],
+            "enumDescriptions": [
+              "Use the same port number as the remote Kubernetes service port.",
+              "Automatically find a free local port starting from localPortBase."
+            ],
+            "description": "How to choose the local port when opening a port-forward tunnel to a ClusterIP Kubernetes service."
+          },
+          "documentDB.serviceDiscovery.kubernetes.portForward.localPortBase": {
+            "order": 31,
+            "type": "integer",
+            "default": 27100,
+            "minimum": 1024,
+            "maximum": 65535,
+            "description": "Starting port for automatic local port selection when localPortStrategy is 'autoSelect'. The extension scans upward until a free port is found."
+          },
           "documentDB.playground.confirmRunAll": {
             "order": 14,
             "type": "boolean",

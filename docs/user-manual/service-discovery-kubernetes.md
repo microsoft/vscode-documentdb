@@ -189,7 +189,12 @@ Missing, invalid, or unreadable credential Secrets do not block discovery. The e
 | **ClusterIP**           | Starts a local port-forward tunnel to a ready backing pod and connects through `127.0.0.1:<localPort>`.                                                             |
 | **ExternalName**        | Not resolved automatically. Use the external DNS name to connect manually.                                                                                          |
 
-For ClusterIP targets the extension prompts for a local port when needed. If the port is already in use, the extension can use an existing process on that port (such as a manually started `kubectl port-forward`) if you confirm.
+For ClusterIP targets the extension prompts for a local port when needed. By default, the suggested local port matches the remote service port. You can change this in VS Code settings with **DocumentDB > Service Discovery > Kubernetes > Port Forward: Local Port Strategy**:
+
+- **matchRemote** — suggest the same local port as the remote service port.
+- **autoSelect** — suggest the first available local port starting from **Local Port Base**.
+
+If the final port is already in use, the extension can use an existing process on that port (such as a manually started `kubectl port-forward`) if you confirm.
 
 Active tunnels are tracked and reused for the same source, context, namespace, Service, and local port. Tunnels stop automatically when the extension is disposed or when the underlying source is removed.
 
