@@ -19,7 +19,7 @@ import {
 import { ArrowUpFilled, EyeRegular, WarningRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import * as React from 'react';
-import { useTrpcClient } from '../../../../../../api/webview-client/useTrpcClient';
+import { useTrpcClient } from '../../../../../../_integration/useTrpcClient';
 import {
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,

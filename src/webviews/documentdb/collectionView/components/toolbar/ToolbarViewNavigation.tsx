@@ -8,7 +8,7 @@ import { ArrowLeftFilled, ArrowPreviousFilled, ArrowRightFilled } from '@fluentu
 import * as l10n from '@vscode/l10n';
 import { useContext } from 'react';
 import { UsageImpact } from '../../../../../utils/surveyTypes';
-import { useTrpcClient } from '../../../../api/webview-client/useTrpcClient';
+import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 

@@ -13,7 +13,7 @@ import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../api/extension-server/trpc';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 import * as l10n from '@vscode/l10n';
 import { type QueryObject } from '../../../commands/llmEnhancedCommands/indexAdvisorCommands';
@@ -48,7 +48,7 @@ import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
-import { type BaseRouterContext } from '../../api/configuration/appRouter';
+import { type BaseRouterContext } from '../../_integration/appRouter';
 import { type QueryInsightsStage3Response } from './types/queryInsights';
 
 export type RouterContext = BaseRouterContext & {

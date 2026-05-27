@@ -17,7 +17,7 @@ import {
 import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
-import { Announcer } from '../../../../../../../api/webview-client/accessibility';
+import { Announcer } from '../../../../../../../components/accessibility';
 import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 

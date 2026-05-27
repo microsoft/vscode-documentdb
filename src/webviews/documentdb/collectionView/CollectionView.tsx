@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
+import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
-import { Announcer } from '../../api/webview-client/accessibility';
-import { useConfiguration } from '../../api/webview-client/useConfiguration';
-import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
-import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
+import { useTrpcClient } from '../../_integration/useTrpcClient';
+import { Announcer } from '../../components/accessibility';
+import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
 import './collectionView.scss';
 import {

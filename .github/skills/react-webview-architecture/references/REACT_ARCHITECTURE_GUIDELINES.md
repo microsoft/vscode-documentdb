@@ -784,7 +784,7 @@ trpcClient.common.reportEvent
 The webview rendering pipeline starts in `index.tsx`:
 
 ```tsx
-import { WebviewRegistry } from './api/configuration/WebviewRegistry';
+import { WebviewRegistry } from './_integration/WebviewRegistry';
 import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
 import { WithWebviewContext } from './WebviewContext';
 

@@ -137,6 +137,20 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
             md.appendMarkdown(`**${l10n.t('Documents')}:** ${formatDocumentCount(this.documentCount)}\n\n`);
         }
 
+        // Shard key
+        if (this.collectionInfo.shardKey) {
+            const shardKeyEntries = Object.entries(this.collectionInfo.shardKey);
+            if (shardKeyEntries.length > 0) {
+                const entries = shardKeyEntries
+                    .map(([k, v]) => {
+                        const valueText = typeof v === 'string' ? `"${v}"` : String(v);
+                        return `\`${k}: ${valueText}\``; // e.g. `userId: 1`
+                    })
+                    .join(', '); // e.g. `userId: 1`, `tenantId: "hashed"`
+                md.appendMarkdown(`**${l10n.t('Shard Key')}:** ${entries}\n\n`);
+            }
+        }
+
         return md;
     }
 }
