@@ -55,4 +55,9 @@ describe('compareIndexNames', () => {
         const sorted = [...names].sort(compareIndexNames);
         expect(sorted).toEqual(['a_index', 'm_index', 'z_index']);
     });
+
+    it('returns 0 when both arguments are equal', () => {
+        expect(compareIndexNames('_id_', '_id_')).toBe(0);
+        expect(compareIndexNames('age_1', 'age_1')).toBe(0);
+    });
 });

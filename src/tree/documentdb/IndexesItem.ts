@@ -16,6 +16,7 @@ import { IndexItem } from './IndexItem';
 
 /** Comparator that sorts index names alphabetically, with `_id_` always first. */
 export function compareIndexNames(a: string, b: string): number {
+    if (a === b) return 0;
     if (a === '_id_') return -1;
     if (b === '_id_') return 1;
     return a.localeCompare(b, undefined, { numeric: true });
