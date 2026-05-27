@@ -8,29 +8,22 @@
  * with a shared `commonRouter` exposing cross-webview procedures (telemetry
  * helpers, dialog helpers, survey hooks).
  *
- * This file is also the DocumentDB-flavoured adapter on top of the tRPC
- * primitives exported by `@microsoft/vscode-ext-react-webview`:
+ * The tRPC primitives (`publicProcedureWithTelemetry`, `WithTelemetry`, and
+ * the re-exports of `publicProcedure` / `router`) live in `./trpc.ts`, a
+ * leaf module that this file and every per-view router import from. Keeping
+ * them in a separate module avoids a circular import: `appRouter.ts`
+ * imports the per-view routers, so the per-view routers must not import
+ * value bindings back from `appRouter.ts`.
  *
- *   - `router` and `publicProcedure` are re-exported below for per-view
- *     routers to import from a single location.
- *   - `publicProcedureWithTelemetry` wraps `publicProcedure` with a
- *     middleware that forwards each call to the VS Code Azure telemetry
- *     pipeline using the `documentDB.rpc.*` event-name namespace.
- *   - `WithTelemetry<T>` re-types the `telemetry` slot on `ctx` to the
- *     richer `ITelemetryContext` so procedure code can access
- *     `suppressAll`, `suppressIfSuccessful`, etc. without ad-hoc casts.
+ * This file also defines the DocumentDB-flavoured `BaseRouterContext` used
+ * across procedures.
  *
  * You can read more about tRPC here:
  * https://trpc.io/docs/quickstart
  */
 
-import { callWithTelemetryAndErrorHandling, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
-import {
-    createMiddleware,
-    publicProcedure,
-    router,
-    type BaseRouterContext as FrameworkBaseRouterContext,
-} from '@microsoft/vscode-ext-react-webview/server';
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-react-webview/server';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
@@ -40,87 +33,12 @@ import { UsageImpact } from '../../utils/surveyTypes';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { WEBVIEW_CONFIG } from './configuration';
+import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from './trpc';
 
-/**
- * DocumentDB-flavoured replacement for the package's `WithTelemetry<T>` helper.
- *
- * The package types `telemetry` as its generic `TelemetryContext`
- * (`{ properties; measurements }`). In this extension, the runtime value is
- * always the richer `ITelemetryContext` from `@microsoft/vscode-azext-utils`
- * (provides `suppressAll`, `suppressIfSuccessful`, etc.). Re-typing the helper
- * here lets procedure code access those fields without ad-hoc casts.
- */
-export type WithTelemetry<T extends { telemetry?: unknown }> = Omit<T, 'telemetry'> & {
-    telemetry: ITelemetryContext;
-};
-
-/**
- * Telemetry middleware that forwards every tRPC call to the VS Code Azure
- * telemetry pipeline. Event names follow the `documentDB.rpc.${type}.${path}`
- * convention.
- */
-const trpcToTelemetry = createMiddleware(async (opts) => {
-    const result = await callWithTelemetryAndErrorHandling(
-        `${WEBVIEW_CONFIG.telemetry.rpcEventPrefix}.${opts.type}.${opts.path}`,
-        async (context) => {
-            context.errorHandling.suppressDisplay = true;
-
-            const result = await opts.next({
-                ctx: {
-                    ...opts.ctx,
-                    telemetry: context.telemetry,
-                },
-            });
-
-            // Check if the operation was aborted via AbortSignal
-            const signal = (opts.ctx as FrameworkBaseRouterContext).signal;
-            if (signal?.aborted) {
-                context.telemetry.properties.aborted = 'true';
-                context.telemetry.properties.result = 'Canceled';
-            }
-
-            if (!result.ok) {
-                /**
-                 * we're not handling any error here as we just want to log it here and let the
-                 * caller of the RPC call handle the error there.
-                 */
-
-                if (!signal?.aborted) {
-                    context.telemetry.properties.result = 'Failed';
-                }
-                context.telemetry.properties.error = result.error.name;
-                context.telemetry.properties.errorMessage = result.error.message;
-                context.telemetry.properties.errorStack = result.error.stack ?? '';
-                if (result.error.cause) {
-                    context.telemetry.properties.errorCause = JSON.stringify(result.error.cause, null, 0);
-                }
-            }
-
-            return result;
-        },
-    );
-
-    if (!result) {
-        // This should never happen, but TypeScript requires us to handle the case where result is undefined.
-        throw new Error(`No result returned from tRPC call for ${opts.type} ${opts.path}`);
-    }
-
-    return result;
-});
-
-/**
- * Base procedure that automatically attaches DocumentDB Azure telemetry context.
- *
- * Use this instead of {@link publicProcedure} when you want every call to be
- * tracked. The `telemetry` object is available on `ctx` inside your procedure
- * handlers (cast with `WithTelemetry<YourContext>`).
- */
-export const publicProcedureWithTelemetry = publicProcedure.use(trpcToTelemetry);
-
-// Re-export the unprotected procedure builder and router factory so per-view
-// routers have a single import location for everything they need to declare
-// tRPC procedures.
-export { publicProcedure, router };
+// Re-export tRPC primitives for backward compatibility with existing imports.
+// Prefer importing directly from `./trpc` in new code.
+export { publicProcedure, publicProcedureWithTelemetry, router };
+export type { WithTelemetry };
 
 /**
  * DocumentDB-flavoured router context. Extends the framework's
