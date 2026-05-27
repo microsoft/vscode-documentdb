@@ -65,10 +65,7 @@ export async function newPlayground(context: IActionContext, node?: DatabaseItem
             databaseName: node.databaseInfo.name,
             viewId: node.cluster.viewId,
         },
-        {
-            clusterDisplayName: node.cluster.name,
-            databaseOrCollectionName: isCollectionItem(node) ? node.collectionInfo.name : node.databaseInfo.name,
-        },
+        isCollectionItem(node) ? node.collectionInfo.name : undefined,
     );
 }
 
@@ -112,19 +109,12 @@ export async function newPlaygroundWithContent(
         '',
     ].join('\n');
 
-    await createPlaygroundWithContent(
-        template,
-        {
-            clusterId: params.clusterId,
-            clusterDisplayName: params.clusterDisplayName,
-            databaseName: params.databaseName,
-            viewId: params.viewId,
-        },
-        {
-            clusterDisplayName: params.clusterDisplayName,
-            databaseOrCollectionName: params.databaseName,
-        },
-    );
+    await createPlaygroundWithContent(template, {
+        clusterId: params.clusterId,
+        clusterDisplayName: params.clusterDisplayName,
+        databaseName: params.databaseName,
+        viewId: params.viewId,
+    });
 }
 
 /**
@@ -133,14 +123,17 @@ export async function newPlaygroundWithContent(
 async function createPlaygroundWithContent(
     content: string,
     connection: PlaygroundConnection,
-    fileNameContext?: PlaygroundFileNameContext,
+    collectionName?: string,
 ): Promise<void> {
     const service = PlaygroundService.getInstance();
 
     // Create untitled file with a workspace-relative path so VS Code's hot exit
     // can persist the content across restarts. Without a real-looking path,
     // untitled documents lose their content on relaunch.
-    const fileName = createPlaygroundFileName(vscode.workspace.textDocuments, fileNameContext);
+    const fileName = createPlaygroundFileName(vscode.workspace.textDocuments, {
+        clusterDisplayName: connection.clusterDisplayName,
+        databaseOrCollectionName: collectionName ?? connection.databaseName,
+    });
     const folderPath = vscode.workspace.workspaceFolders?.[0]?.uri.fsPath ?? os.tmpdir();
     const filePath = path.join(folderPath, fileName);
     const uri = vscode.Uri.file(filePath).with({ scheme: 'untitled' });
