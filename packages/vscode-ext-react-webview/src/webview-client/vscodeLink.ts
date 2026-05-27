@@ -4,9 +4,9 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { TRPCClientError, type Operation, type TRPCLink } from '@trpc/client';
-// eslint-disable-next-line import/no-internal-modules
-import { observable } from '@trpc/server/observable'; // Their example uses a reference from /server/ and so do we: https://trpc.io/docs/client/links#example
-import { type AppRouter } from '../configuration/appRouter';
+import { type AnyRouter } from '@trpc/server';
+// eslint-disable-next-line import/no-internal-modules -- Their example uses a reference from /server/ and so do we: https://trpc.io/docs/client/links#example
+import { observable } from '@trpc/server/observable';
 
 type StopOperation<TInput = unknown> = Omit<Operation<TInput>, 'type'> & {
     type: 'subscription.stop' | 'abort';
@@ -44,7 +44,7 @@ export interface VsCodeLinkResponseMessage {
     complete?: boolean;
 }
 
-interface VSCodeLinkOptions {
+export interface VSCodeLinkOptions {
     //   Function to send a message to the server / extension
     send: (message: VsCodeLinkRequestMessage) => void;
 
@@ -54,10 +54,14 @@ interface VSCodeLinkOptions {
 
 /**
  * Creates a tRPC link that uses postMessage from vsCode for communication.
- * @param options - The options for the link, including send and onReceive functions.
+ *
+ * @template TRouter - The application's root tRPC router type. Pass this so
+ *                     the returned link is correctly typed against the consumer
+ *                     application's procedures.
+ * @param options    - The options for the link, including send and onReceive functions.
  * @returns A tRPC link for client-side usage.
  */
-function vscodeLink(options: VSCodeLinkOptions): TRPCLink<AppRouter> {
+function vscodeLink<TRouter extends AnyRouter>(options: VSCodeLinkOptions): TRPCLink<TRouter> {
     const { send, onReceive } = options;
 
     /**
@@ -198,4 +202,4 @@ function vscodeLink(options: VSCodeLinkOptions): TRPCLink<AppRouter> {
     };
 }
 
-export { vscodeLink, VSCodeLinkOptions };
+export { vscodeLink };
