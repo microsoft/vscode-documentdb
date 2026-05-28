@@ -465,11 +465,14 @@ export const QueryInsightsMain = (): JSX.Element => {
     ];
 
     /**
-     * Documentation URL for the AI Performance Insights feature.
+     * Documentation URL for the AI Performance Insights feature itself
+     * (overview, what it does, how to use it).
      *
-     * Centralised so the "Learn more about AI Performance Insights" button in
-     * the brand card, the cost-disclosure row, and the post-response "Powered
-     * by" byline all open the same page.
+     * This is *distinct* from {@link utilityModelUrl}: this page describes the
+     * feature, while the utility-model URL is the cost-disclosure page wired
+     * to the "Learn more about the utility model used." link in the
+     * cost-neutral disclosure row and to the post-response "Powered by" byline
+     * area. Keeping the two URLs separate lets us update each independently.
      */
     const aiInsightsDocsUrl = 'https://learn.microsoft.com/azure/documentdb/index-advisor';
     // aka.ms slug for the utility-model docs — register at https://aka.ms/admin before shipping
