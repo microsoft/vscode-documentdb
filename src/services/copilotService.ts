@@ -345,7 +345,7 @@ export class CopilotService {
             const durationMs = Date.now() - requestStart;
 
             if (signal?.aborted) {
-                ext.outputChannel.trace(l10n.t('[Query Insights AI] Copilot call cancelled during streaming'));
+                ext.outputChannel.trace(l10n.t('[Copilot] Call cancelled during streaming'));
                 throw new UserCancelledError('AbortSignal');
             }
 
