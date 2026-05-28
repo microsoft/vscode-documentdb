@@ -306,9 +306,14 @@ export interface QueryInsightsStage3Response {
     modelDisplayName?: string;
     /**
      * Best-effort token usage measurements for the underlying Copilot
-     * request. Surfaced in the post-response byline so users can see how
-     * much of the model's context window was consumed. Fields may be
-     * missing if `countTokens` failed.
+     * request. NOT rendered in the UI: these values are intentionally kept
+     * out of the post-response byline (which shows only the model name) to
+     * avoid suggesting a per-request cost surface in a place that does not
+     * have access to GitHub's actual billing data. They are forwarded
+     * through the Stage 3 contract solely so the extension host can mirror
+     * them onto telemetry alongside Stage-3-specific properties without
+     * needing a second event. Fields may be missing if `countTokens` failed
+     * or the request was cancelled.
      */
     usage?: {
         promptTokens?: number;
