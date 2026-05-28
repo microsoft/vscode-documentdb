@@ -903,7 +903,15 @@ export const QueryInsightsMain = (): JSX.Element => {
                                             'Powered by {0} via GitHub Copilot, a utility model intended to be cost-neutral for GitHub Copilot subscribers.',
                                             queryInsightsState.stage3Data.modelUsed,
                                         )}{' '}
-                                        <Link appearance="subtle" onClick={handleLearnMore} inline>
+                                        <Link
+                                            appearance="subtle"
+                                            onClick={handleLearnMore}
+                                            inline
+                                            style={{
+                                                fontSize: tokens.fontSizeBase200,
+                                                lineHeight: tokens.lineHeightBase200,
+                                            }}
+                                        >
                                             {l10n.t('Learn more')}
                                         </Link>
                                     </Text>

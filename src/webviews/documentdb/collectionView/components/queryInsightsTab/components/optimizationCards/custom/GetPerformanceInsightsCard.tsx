@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    Badge,
     Button,
     Card,
     CardHeader,
@@ -136,15 +135,6 @@ export function GetPerformanceInsightsCard({
                                 <Text weight="semibold" size={500}>
                                     {l10n.t('AI Performance Insights')}
                                 </Text>
-                                <Badge
-                                    appearance="tint"
-                                    color="brand"
-                                    size="small"
-                                    icon={<SparkleRegular />}
-                                    aria-label={l10n.t('Utility Model')}
-                                >
-                                    {l10n.t('Utility Model')}
-                                </Badge>
                             </div>
                         }
                         action={
@@ -209,10 +199,17 @@ export function GetPerformanceInsightsCard({
                         <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                             {l10n.t(
-                                'Uses a utility model (currently {0}), intended to be cost-neutral for GitHub Copilot subscribers.',
-                                modelHint,
+                                'Uses a utility model, intended to be cost-neutral for GitHub Copilot subscribers.',
                             )}{' '}
-                            <Link appearance="subtle" onClick={onLearnMore} inline>
+                            <Link
+                                appearance="subtle"
+                                onClick={onLearnMore}
+                                inline
+                                style={{
+                                    fontSize: tokens.fontSizeBase200,
+                                    lineHeight: tokens.lineHeightBase200,
+                                }}
+                            >
                                 {l10n.t('Learn more')}
                             </Link>
                         </Text>
