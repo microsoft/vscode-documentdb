@@ -180,7 +180,10 @@ export function GetPerformanceInsightsCard({
                     )}
                     {/* Cost-neutral disclosure row.
                         Always rendered so users see the disclosure both before clicking and during loading.
-                        The "Learn more" link reuses `onLearnMore` so the doc URL stays in one place. */}
+                        The "Learn more" link wires to `onLearnMoreUtilityModel` (the utility-model
+                        cost-disclosure page), distinct from the general feature `onLearnMore` used by
+                        the button above. Keeping the two URLs separate lets the parent panel update
+                        each independently. */}
                     <div
                         style={{
                             display: 'flex',
