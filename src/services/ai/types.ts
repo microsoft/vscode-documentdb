@@ -32,6 +32,18 @@ export interface AIOptimizationResponse {
      * used. Optional for forward compatibility.
      */
     modelUsed?: string;
+    /**
+     * Best-effort token usage measurements for the underlying Copilot
+     * request. All fields are optional and may be missing when `countTokens`
+     * fails or the request was cancelled.
+     */
+    usage?: {
+        promptTokens?: number;
+        responseTokens?: number;
+        totalTokens?: number;
+        maxInputTokens?: number;
+        promptUtilizationPct?: number;
+    };
 }
 
 /**

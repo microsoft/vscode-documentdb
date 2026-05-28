@@ -12,7 +12,7 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type CollectionStats, type IndexStats } from '../../documentdb/LlmEnhancedFeatureApis';
 import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata';
 import { ext } from '../../extensionVariables';
-import { CopilotService } from '../../services/copilotService';
+import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { FALLBACK_MODELS, PREFERRED_MODEL, getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 
@@ -84,6 +84,10 @@ export interface OptimizationResult {
     recommendations: string;
     // The model used to generate recommendations
     modelUsed: string;
+    // Best-effort token usage measurements from the underlying CopilotService
+    // request. Optional fields (see CopilotTokenUsage) — may be undefined when
+    // the model rejects countTokens or the request is cancelled.
+    usage?: CopilotTokenUsage;
 }
 
 /**
@@ -639,6 +643,27 @@ export async function optimizeQuery(
     context.telemetry.measurements.responseSize = response.text.length;
     context.telemetry.properties.modelUsed = response.modelUsed;
 
+    // Track token usage measurements when available. The fields are best-effort
+    // (see CopilotTokenUsage) so each is only recorded when populated.
+    if (response.usage) {
+        const { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct } = response.usage;
+        if (promptTokens !== undefined) {
+            context.telemetry.measurements.promptTokens = promptTokens;
+        }
+        if (responseTokens !== undefined) {
+            context.telemetry.measurements.responseTokens = responseTokens;
+        }
+        if (totalTokens !== undefined) {
+            context.telemetry.measurements.totalTokens = totalTokens;
+        }
+        if (maxInputTokens !== undefined) {
+            context.telemetry.measurements.maxInputTokens = maxInputTokens;
+        }
+        if (promptUtilizationPct !== undefined) {
+            context.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
+        }
+    }
+
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Copilot response received in {ms}ms (model: {model})', {
             ms: response.durationMs.toString(),
@@ -663,6 +688,7 @@ export async function optimizeQuery(
     return {
         recommendations: response.text,
         modelUsed: response.modelUsed,
+        usage: response.usage,
     };
 }
 

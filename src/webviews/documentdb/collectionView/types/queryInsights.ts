@@ -292,6 +292,19 @@ export interface QueryInsightsStage3Response {
      * Optional for forward compatibility.
      */
     modelUsed?: string;
+    /**
+     * Best-effort token usage measurements for the underlying Copilot
+     * request. Surfaced in the post-response byline so users can see how
+     * much of the model's context window was consumed. Fields may be
+     * missing if `countTokens` failed.
+     */
+    usage?: {
+        promptTokens?: number;
+        responseTokens?: number;
+        totalTokens?: number;
+        maxInputTokens?: number;
+        promptUtilizationPct?: number;
+    };
 }
 
 /**

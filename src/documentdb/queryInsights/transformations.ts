@@ -56,6 +56,7 @@ export function transformAIResponseForUI(
         verificationSteps,
         educationalContent: aiResponse.educationalContent,
         modelUsed: aiResponse.modelUsed,
+        usage: aiResponse.usage,
     };
 }
 

@@ -32,6 +32,29 @@ export interface CopilotMessageOptions {
 }
 
 /**
+ * Token-usage metrics for a Copilot request.
+ *
+ * The VS Code Language Model API does not expose token counts on responses,
+ * so we compute them client-side via `LanguageModelChat.countTokens(...)`.
+ * All fields are optional because token counting can fail (e.g., when the
+ * model rejects the count request, or when the request is cancelled mid-flight)
+ * and we never want to fail the user-facing flow because telemetry is
+ * unavailable.
+ */
+export interface CopilotTokenUsage {
+    /** Total token count across all input messages (prompt). */
+    promptTokens?: number;
+    /** Token count of the assistant's full streamed response. */
+    responseTokens?: number;
+    /** Sum of `promptTokens` and `responseTokens` when both are known. */
+    totalTokens?: number;
+    /** The selected model's advertised input context window (`maxInputTokens`). */
+    maxInputTokens?: number;
+    /** `promptTokens / maxInputTokens * 100`, rounded to one decimal place. */
+    promptUtilizationPct?: number;
+}
+
+/**
  * Response from the Copilot service
  */
 export interface CopilotResponse {
@@ -41,6 +64,11 @@ export interface CopilotResponse {
     modelUsed: string;
     /* Duration of the actual LLM request in milliseconds (excludes model selection overhead) */
     durationMs: number;
+    /**
+     * Best-effort token usage information for the request. Fields may be
+     * missing if `countTokens` failed or the request was cancelled.
+     */
+    usage?: CopilotTokenUsage;
 }
 
 /**
@@ -90,10 +118,35 @@ export class CopilotService {
 
                 try {
                     const response = await this.sendToModel(selectedModel, messages, options);
+
+                    // Surface usage metrics to telemetry alongside the response so
+                    // downstream events (e.g., Query Insights Stage 3) can correlate
+                    // disclosure shown in the UI with the underlying token usage.
+                    if (response.usage) {
+                        const { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct } =
+                            response.usage;
+                        if (promptTokens !== undefined) {
+                            context.telemetry.measurements.promptTokens = promptTokens;
+                        }
+                        if (responseTokens !== undefined) {
+                            context.telemetry.measurements.responseTokens = responseTokens;
+                        }
+                        if (totalTokens !== undefined) {
+                            context.telemetry.measurements.totalTokens = totalTokens;
+                        }
+                        if (maxInputTokens !== undefined) {
+                            context.telemetry.measurements.maxInputTokens = maxInputTokens;
+                        }
+                        if (promptUtilizationPct !== undefined) {
+                            context.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
+                        }
+                    }
+
                     return {
                         text: response.text,
                         modelUsed: selectedModel.id,
                         durationMs: response.durationMs,
+                        usage: response.usage,
                     };
                 } catch (error) {
                     if (error instanceof UserCancelledError) {
@@ -199,7 +252,7 @@ export class CopilotService {
         model: vscode.LanguageModelChat,
         messages: vscode.LanguageModelChatMessage[],
         options?: CopilotMessageOptions,
-    ): Promise<{ text: string; durationMs: number }> {
+    ): Promise<{ text: string; durationMs: number; usage?: CopilotTokenUsage }> {
         const signal = options?.signal;
 
         // If already aborted, throw immediately
@@ -237,11 +290,69 @@ export class CopilotService {
                 throw new UserCancelledError('AbortSignal');
             }
 
-            return { text: fullResponse, durationMs };
+            // Compute best-effort token usage. countTokens is asynchronous and may
+            // reject (e.g., if the model rejects the count request); we never want
+            // a telemetry failure to break the user-facing flow, so each step is
+            // wrapped in its own try/catch and falls back to `undefined`.
+            const usage = await this.measureTokenUsage(model, messages, fullResponse);
+
+            return { text: fullResponse, durationMs, usage };
         } finally {
             signal?.removeEventListener('abort', onAbort);
             cts.dispose();
         }
+    }
+
+    /**
+     * Computes best-effort token counts for the prompt and response.
+     *
+     * The VS Code Language Model API does not return token usage on responses,
+     * so we ask the model to count tokens client-side via `countTokens`. Both
+     * the prompt and the response counts are issued in parallel to minimise
+     * latency, and any failure is logged and degraded to `undefined` instead
+     * of bubbling up to the caller.
+     */
+    private static async measureTokenUsage(
+        model: vscode.LanguageModelChat,
+        messages: vscode.LanguageModelChatMessage[],
+        responseText: string,
+    ): Promise<CopilotTokenUsage> {
+        const maxInputTokens = typeof model.maxInputTokens === 'number' ? model.maxInputTokens : undefined;
+
+        const countSafely = async (input: string | vscode.LanguageModelChatMessage): Promise<number | undefined> => {
+            try {
+                return await model.countTokens(input);
+            } catch (error) {
+                const errorMessage = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.trace(
+                    l10n.t('[Copilot] countTokens failed; usage metric will be omitted: {0}', errorMessage),
+                );
+                return undefined;
+            }
+        };
+
+        // Count prompt tokens per-message in parallel, then sum. If any single
+        // message count fails the total is still useful as a lower bound, but
+        // we err on the side of reporting `undefined` to avoid skewed metrics.
+        const [perMessageCounts, responseTokens] = await Promise.all([
+            Promise.all(messages.map((m) => countSafely(m))),
+            responseText.length > 0 ? countSafely(responseText) : Promise.resolve<number | undefined>(0),
+        ]);
+
+        let promptTokens: number | undefined;
+        if (perMessageCounts.every((c) => typeof c === 'number')) {
+            promptTokens = perMessageCounts.reduce<number>((sum, c) => sum + (c as number), 0);
+        }
+
+        const totalTokens =
+            promptTokens !== undefined && responseTokens !== undefined ? promptTokens + responseTokens : undefined;
+
+        let promptUtilizationPct: number | undefined;
+        if (promptTokens !== undefined && maxInputTokens && maxInputTokens > 0) {
+            promptUtilizationPct = Math.round((promptTokens / maxInputTokens) * 1000) / 10;
+        }
+
+        return { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct };
     }
 
     /**

@@ -117,6 +117,7 @@ export class QueryInsightsAIService {
                 // Carry the model used through to the webview so it can be disclosed
                 // in the AI Performance Insights UI.
                 parsedResponse.modelUsed = optimizationResult.modelUsed;
+                parsedResponse.usage = optimizationResult.usage;
 
                 // Count all actionable recommendations by action type in a single pass
                 let actionableRecommendationCount = 0;
