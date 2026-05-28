@@ -11,6 +11,7 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../extensionVariables';
+import { formatTokenCount } from '../utils/formatTokenCount';
 
 /**
  * Options for sending a message to the language model
@@ -266,6 +267,11 @@ export class CopilotService {
         signal?.addEventListener('abort', onAbort);
 
         try {
+            // Diagnostic: dump what the runtime actually exposes on the selected
+            // model so we can later inspect whether richer metadata becomes
+            // available without taking a dependency on the proposed pricing API.
+            this.dumpModelMetadata(model);
+
             // GitHub copilot LLM API currently doesn't support temperature or maxTokens in
             // LanguageModelChatRequestOptions, but we keep them here for potential future use
             const requestOptions: vscode.LanguageModelChatRequestOptions = {
@@ -295,6 +301,19 @@ export class CopilotService {
             // a telemetry failure to break the user-facing flow, so each step is
             // wrapped in its own try/catch and falls back to `undefined`.
             const usage = await this.measureTokenUsage(model, messages, fullResponse);
+
+            // Trace token usage in compact form so the output channel stays scannable.
+            // The numeric measurements are still emitted to telemetry verbatim.
+            ext.outputChannel.trace(
+                l10n.t(
+                    '[Copilot] Tokens: prompt={0}, response={1}, total={2}, context={3}, utilization={4}%',
+                    usage.promptTokens !== undefined ? formatTokenCount(usage.promptTokens) : '?',
+                    usage.responseTokens !== undefined ? formatTokenCount(usage.responseTokens) : '?',
+                    usage.totalTokens !== undefined ? formatTokenCount(usage.totalTokens) : '?',
+                    usage.maxInputTokens !== undefined ? formatTokenCount(usage.maxInputTokens) : '?',
+                    usage.promptUtilizationPct !== undefined ? usage.promptUtilizationPct.toString() : '?',
+                ),
+            );
 
             return { text: fullResponse, durationMs, usage };
         } finally {
@@ -363,5 +382,51 @@ export class CopilotService {
     static async isAvailable(): Promise<boolean> {
         const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
         return models.length > 0;
+    }
+
+    /**
+     * Dumps the selected model's stable metadata (and any other own enumerable
+     * properties present at runtime) to the trace stream.
+     *
+     * Pricing and cost-per-token fields live on the proposed
+     * `languageModelPricing` API and are intentionally **not** consumed here —
+     * the extension stays on stable VS Code APIs. This dump is purely a
+     * diagnostic so we can observe what the runtime exposes today (and tell
+     * when richer information becomes available on stable in the future)
+     * without depending on it.
+     */
+    private static dumpModelMetadata(model: vscode.LanguageModelChat): void {
+        // 1) Known stable fields. Safe to log verbatim.
+        const stable = {
+            id: model.id,
+            vendor: model.vendor,
+            family: model.family,
+            version: model.version,
+            name: model.name,
+            maxInputTokens: model.maxInputTokens,
+        };
+        ext.outputChannel.trace(l10n.t('[Copilot] Selected model metadata: {0}', JSON.stringify(stable)));
+
+        // 2) Best-effort runtime introspection. We never read pricing or other
+        // proposed-API fields by name; we only enumerate whatever the host
+        // happens to expose and skip methods. This is observation only.
+        try {
+            const own: Record<string, unknown> = {};
+            for (const [key, value] of Object.entries(model as unknown as Record<string, unknown>)) {
+                if (typeof value === 'function') {
+                    continue;
+                }
+                own[key] = value;
+            }
+            const ownJson = JSON.stringify(own);
+            // Only log if the runtime actually exposed extra fields beyond the
+            // ones we already covered, to keep the trace stream tidy.
+            if (ownJson && ownJson !== '{}') {
+                ext.outputChannel.trace(l10n.t('[Copilot] Selected model own enumerable properties: {0}', ownJson));
+            }
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.trace(l10n.t('[Copilot] Could not enumerate model own properties: {0}', errorMessage));
+        }
     }
 }

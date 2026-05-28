@@ -880,60 +880,35 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                         {/* Post-response "Powered by" byline.
                             Mirrors the (i) + cost-neutral disclosure shown in the pre-invocation
-                            card and additionally surfaces best-effort token usage measurements so
-                            users can see how much of the model's context window was consumed.
-                            The byline is suppressed when the modelUsed id is unknown. */}
+                            card. Token usage measurements are intentionally NOT rendered here:
+                            they live in the trace output channel and in telemetry only. Cost
+                            (credits) is not surfaced because the stable VS Code Language Model
+                            API does not expose pricing data; the extension stays on stable APIs
+                            and avoids the proposed `languageModelPricing` API by design. */}
                         {currentStage.phase === 3 &&
                             currentStage.status === 'success' &&
-                            queryInsightsState.stage3Data?.modelUsed &&
-                            (() => {
-                                const modelUsed = queryInsightsState.stage3Data.modelUsed;
-                                const usage = queryInsightsState.stage3Data.usage;
-                                const fmt = (n: number): string => n.toLocaleString();
-                                let usageText: string | undefined;
-                                if (usage?.promptTokens !== undefined && usage.responseTokens !== undefined) {
-                                    if (usage.promptUtilizationPct !== undefined) {
-                                        usageText = l10n.t(
-                                            'Used {0} prompt + {1} response tokens ({2}% of context).',
-                                            fmt(usage.promptTokens),
-                                            fmt(usage.responseTokens),
-                                            usage.promptUtilizationPct.toString(),
-                                        );
-                                    } else {
-                                        usageText = l10n.t(
-                                            'Used {0} prompt + {1} response tokens.',
-                                            fmt(usage.promptTokens),
-                                            fmt(usage.responseTokens),
-                                        );
-                                    }
-                                } else if (usage?.promptTokens !== undefined) {
-                                    usageText = l10n.t('Used {0} prompt tokens.', fmt(usage.promptTokens));
-                                }
-                                return (
-                                    <div
-                                        className="cardSpacing"
-                                        style={{
-                                            display: 'flex',
-                                            alignItems: 'flex-start',
-                                            gap: '6px',
-                                            color: tokens.colorNeutralForeground3,
-                                        }}
-                                    >
-                                        <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                            {l10n.t(
-                                                'Powered by {0} via GitHub Copilot, a utility model intended to be cost-neutral for GitHub Copilot subscribers.',
-                                                modelUsed,
-                                            )}{' '}
-                                            <Link appearance="subtle" onClick={handleLearnMore} size={200} inline>
-                                                {l10n.t('Learn more')}
-                                            </Link>
-                                            <br />
-                                            {usageText && `${usageText}`}
-                                        </Text>
-                                    </div>
-                                );
-                            })()}
+                            queryInsightsState.stage3Data?.modelUsed && (
+                                <div
+                                    className="cardSpacing"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '6px',
+                                        color: tokens.colorNeutralForeground3,
+                                    }}
+                                >
+                                    <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                        {l10n.t(
+                                            'Powered by {0} via GitHub Copilot, a utility model intended to be cost-neutral for GitHub Copilot subscribers.',
+                                            queryInsightsState.stage3Data.modelUsed,
+                                        )}{' '}
+                                        <Link appearance="subtle" onClick={handleLearnMore} inline>
+                                            {l10n.t('Learn more')}
+                                        </Link>
+                                    </Text>
+                                </div>
+                            )}
                     </div>
                 </div>
 
