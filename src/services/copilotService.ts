@@ -68,7 +68,14 @@ export class CopilotService {
                 const preferredModels = this.getPreferredModels(options);
                 const selectedModel = this.selectBestModel(availableModels, preferredModels);
 
+                // Capture the selection chain to telemetry for offline analysis
+                // (e.g., monitoring how often each fallback level is hit in production).
+                context.telemetry.properties.modelPreferenceChain = preferredModels.join(',') || '(none)';
+                context.telemetry.properties.modelsAvailable = availableModels.map((m) => m.id).join(',');
+                context.telemetry.measurements.modelsAvailableCount = availableModels.length;
+
                 if (!selectedModel) {
+                    context.telemetry.properties.modelSelectionOutcome = 'no-models-available';
                     throw new Error(
                         l10n.t(
                             'No suitable language model found. Please ensure GitHub Copilot is installed and you have an active subscription.',
@@ -77,6 +84,9 @@ export class CopilotService {
                 }
 
                 context.telemetry.properties.modelUsed = selectedModel.id;
+                context.telemetry.properties.modelSelectionOutcome = preferredModels.includes(selectedModel.id)
+                    ? 'preferred-match'
+                    : 'first-available-fallback';
 
                 try {
                     const response = await this.sendToModel(selectedModel, messages, options);
@@ -124,7 +134,12 @@ export class CopilotService {
     }
 
     /**
-     * Selects the best available model based on preference order
+     * Selects the best available model based on preference order.
+     *
+     * Emits a structured trace of the selection chain to the output channel so
+     * users (and support) can see, per request, which models were requested,
+     * which were accepted, and which were rejected because they were not
+     * available from the Copilot vendor.
      *
      * @param availableModels - All available models from VS Code
      * @param preferredModels - Ordered list of preferred model families
@@ -134,19 +149,47 @@ export class CopilotService {
         availableModels: vscode.LanguageModelChat[],
         preferredModels: string[],
     ): vscode.LanguageModelChat | undefined {
+        const availableIds = availableModels.map((m) => m.id);
+        ext.outputChannel.trace(l10n.t('[Copilot] Available models from VS Code: {0}', JSON.stringify(availableIds)));
+        ext.outputChannel.trace(l10n.t('[Copilot] Model preference chain: {0}', JSON.stringify(preferredModels)));
+
         if (availableModels.length === 0) {
+            // Nothing the caller could possibly use — flag this clearly in the
+            // trace so users debugging "AI insights unavailable" see the root cause.
+            ext.outputChannel.warn(
+                l10n.t('[Copilot] No language models available from vendor "copilot". Aborting selection.'),
+            );
             return undefined;
         }
 
-        if (preferredModels.length !== 0) {
-            for (const preferredModel of preferredModels) {
-                const matchingModel = availableModels.find((model) => model.id === preferredModel);
-                if (matchingModel) {
-                    return matchingModel;
-                }
+        // Walk the preference chain in order; log accepted/rejected per entry
+        // so the full decision path is visible in the trace stream.
+        for (const preferredId of preferredModels) {
+            const matchingModel = availableModels.find((m) => m.id === preferredId);
+            if (matchingModel) {
+                ext.outputChannel.trace(
+                    l10n.t('[Copilot] Requested "{0}" → accepted (matched available model)', preferredId),
+                );
+                ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', matchingModel.id));
+                return matchingModel;
             }
+            ext.outputChannel.trace(l10n.t('[Copilot] Requested "{0}" → rejected (not available)', preferredId));
         }
-        return availableModels[0];
+
+        // No preference matched but models are available — fall back to the
+        // first one Copilot returned so the feature degrades gracefully.
+        const fallback = availableModels[0];
+        if (preferredModels.length === 0) {
+            ext.outputChannel.trace(
+                l10n.t('[Copilot] No model preferences supplied; using first available: {0}', fallback.id),
+            );
+        } else {
+            ext.outputChannel.warn(
+                l10n.t('[Copilot] No preferred model matched; falling back to first available: {0}', fallback.id),
+            );
+        }
+        ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', fallback.id));
+        return fallback;
     }
 
     /**
