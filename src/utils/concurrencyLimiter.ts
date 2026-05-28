@@ -53,9 +53,18 @@ export function createConcurrencyLimiter(options: ConcurrencyLimiterOptions): Li
 
     const release = (): void => {
         active--;
-        const resume = waiters.shift();
-        if (resume) {
-            resume();
+        // Defensive: a future change to this dispatch logic might introduce a
+        // throwing call (logging, telemetry, etc.). If `release` ever throws,
+        // the queued waiter would never be resumed and the limiter would
+        // deadlock. Swallow here so a single misbehaving callback can never
+        // wedge the whole limiter.
+        try {
+            const resume = waiters.shift();
+            if (resume) {
+                resume();
+            }
+        } catch {
+            // Intentional no-op: see comment above.
         }
     };
 
