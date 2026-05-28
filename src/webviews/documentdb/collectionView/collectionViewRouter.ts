@@ -1008,10 +1008,14 @@ export const collectionsViewRouter = router({
                 collectionName,
             });
 
-            // Surface the model used to telemetry so we can correlate disclosures
-            // shown in the UI with the actual model selected by CopilotService.
-            if (transformed.modelUsed) {
-                ctx.telemetry.properties.aiModelDisclosed = transformed.modelUsed;
+            // Surface the model identity to telemetry so we can correlate
+            // disclosures shown in the UI with the actual model selected by
+            // CopilotService. Use the stable id rather than the display name.
+            if (transformed.modelId) {
+                ctx.telemetry.properties.aiModelDisclosed = transformed.modelId;
+            }
+            if (transformed.modelFamily) {
+                ctx.telemetry.properties.aiModelFamily = transformed.modelFamily;
             }
 
             // Mirror token usage measurements onto the Stage 3 event so they can

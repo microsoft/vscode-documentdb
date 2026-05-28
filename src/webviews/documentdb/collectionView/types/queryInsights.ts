@@ -286,12 +286,24 @@ export interface QueryInsightsStage3Response {
     };
     metadata?: OptimizationMetadata;
     /**
-     * Id of the language model that produced the response (e.g., `gpt-4o`,
-     * `gpt-4o`, `copilot-utility`). Surfaced in the panel as a small
-     * “Powered by…” byline so users can see which model actually answered.
-     * Optional for forward compatibility.
+     * Stable opaque id of the language model that produced the response
+     * (`LanguageModelChat.id`, e.g., `copilot-gpt-4o`). Surfaced to telemetry
+     * via the `aiModelDisclosed` property. Never rendered in UI directly —
+     * use {@link modelDisplayName} for display.
      */
-    modelUsed?: string;
+    modelId?: string;
+    /**
+     * Well-known family of the model (`LanguageModelChat.family`, e.g.,
+     * `gpt-4o`). Reserved for future client-side checks; not currently
+     * rendered.
+     */
+    modelFamily?: string;
+    /**
+     * Human-readable display name (`LanguageModelChat.name`, e.g., `GPT-4o`).
+     * Rendered in the panel as a small "Powered by…" byline so users can see
+     * which model actually answered. Optional for forward compatibility.
+     */
+    modelDisplayName?: string;
     /**
      * Best-effort token usage measurements for the underlying Copilot
      * request. Surfaced in the post-response byline so users can see how

@@ -82,8 +82,14 @@ export interface QueryOptimizationContext {
 export interface OptimizationResult {
     // The optimization recommendations
     recommendations: string;
-    // The model used to generate recommendations
-    modelUsed: string;
+    // Stable opaque id of the selected model (LanguageModelChat.id).
+    // Use for telemetry and exact comparisons.
+    modelId: string;
+    // Well-known family of the selected model (LanguageModelChat.family).
+    // Use for warning checks against the preferred-model constant.
+    modelFamily: string;
+    // Human-readable display name (LanguageModelChat.name). Render in UI.
+    modelDisplayName: string;
     // Best-effort token usage measurements from the underlying CopilotService
     // request. Optional fields (see CopilotTokenUsage) — may be undefined when
     // the model rejects countTokens or the request is cancelled.
@@ -641,7 +647,8 @@ export async function optimizeQuery(
     context.telemetry.measurements.copilotDurationMs = response.durationMs;
     context.telemetry.measurements.promptSize = craftedPrompt.length + userQuery.length + contextData.length;
     context.telemetry.measurements.responseSize = response.text.length;
-    context.telemetry.properties.modelUsed = response.modelUsed;
+    context.telemetry.properties.modelId = response.modelId;
+    context.telemetry.properties.modelFamily = response.modelFamily;
 
     // Track token usage measurements when available. The fields are best-effort
     // (see CopilotTokenUsage) so each is only recorded when populated.
@@ -667,18 +674,24 @@ export async function optimizeQuery(
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Copilot response received in {ms}ms (model: {model})', {
             ms: response.durationMs.toString(),
-            model: response.modelUsed,
+            model: response.modelId,
         }),
     );
 
-    // Check if the preferred model was used
-    if (response.modelUsed !== preferredModelToUse && preferredModelToUse) {
+    // Check if the preferred model was used. Compare against family (the
+    // documented stable name) first, falling back to id for entries like
+    // `copilot-utility` that aren't expressed as a family.
+    const preferredMatched =
+        !preferredModelToUse ||
+        response.modelFamily === preferredModelToUse ||
+        response.modelId === preferredModelToUse;
+    if (!preferredMatched) {
         // Show warning if not using preferred model
         void vscode.window.showWarningMessage(
             l10n.t(
                 'Index optimization is using model "{actualModel}" instead of preferred "{preferredModel}". Recommendations may be less optimal.',
                 {
-                    actualModel: response.modelUsed,
+                    actualModel: response.modelDisplayName,
                     preferredModel: preferredModelToUse,
                 },
             ),
@@ -687,7 +700,9 @@ export async function optimizeQuery(
 
     return {
         recommendations: response.text,
-        modelUsed: response.modelUsed,
+        modelId: response.modelId,
+        modelFamily: response.modelFamily,
+        modelDisplayName: response.modelDisplayName,
         usage: response.usage,
     };
 }

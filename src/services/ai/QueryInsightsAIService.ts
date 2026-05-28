@@ -114,9 +114,13 @@ export class QueryInsightsAIService {
                 // Parse the AI response to extract structured recommendations
                 const parsedResponse = this.parseAIResponse(optimizationResult.recommendations);
 
-                // Carry the model used through to the webview so it can be disclosed
-                // in the AI Performance Insights UI.
-                parsedResponse.modelUsed = optimizationResult.modelUsed;
+                // Carry the model identity through to the webview so it can be
+                // disclosed in the AI Performance Insights UI. We surface both
+                // the stable id/family (for telemetry) and the display name
+                // (for the byline).
+                parsedResponse.modelId = optimizationResult.modelId;
+                parsedResponse.modelFamily = optimizationResult.modelFamily;
+                parsedResponse.modelDisplayName = optimizationResult.modelDisplayName;
                 parsedResponse.usage = optimizationResult.usage;
 
                 // Count all actionable recommendations by action type in a single pass

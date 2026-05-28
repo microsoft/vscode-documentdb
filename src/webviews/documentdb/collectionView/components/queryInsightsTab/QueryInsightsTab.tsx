@@ -894,7 +894,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             and avoids the proposed `languageModelPricing` API by design. */}
                         {currentStage.phase === 3 &&
                             currentStage.status === 'success' &&
-                            queryInsightsState.stage3Data?.modelUsed && (
+                            queryInsightsState.stage3Data?.modelDisplayName && (
                                 <div
                                     className="cardSpacing"
                                     style={{
@@ -923,7 +923,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                                             {l10n.t(
                                                 'Powered by {0} via GitHub Copilot',
-                                                queryInsightsState.stage3Data.modelUsed,
+                                                queryInsightsState.stage3Data.modelDisplayName,
                                             )}
                                         </Text>
                                     </div>

@@ -26,12 +26,22 @@ export interface AIOptimizationResponse {
     verification: string[];
     educationalContent?: string; // Optional markdown content for educational cards
     /**
-     * Id of the language model that produced the response (e.g., `gpt-4o`,
-     * `gpt-4o`, `copilot-utility`). Populated by
-     * `QueryInsightsAIService` so the webview can disclose which model was
-     * used. Optional for forward compatibility.
+     * Stable opaque id of the language model that produced the response
+     * (`LanguageModelChat.id`, e.g., `copilot-gpt-4o`). Use for telemetry and
+     * exact comparisons. Populated by `QueryInsightsAIService`.
      */
-    modelUsed?: string;
+    modelId?: string;
+    /**
+     * Well-known family of the model (`LanguageModelChat.family`, e.g.,
+     * `gpt-4o`). Use for warning checks against the preferred-model constant.
+     */
+    modelFamily?: string;
+    /**
+     * Human-readable display name (`LanguageModelChat.name`, e.g., `GPT-4o`).
+     * Surfaced in the panel as a small "Powered by…" byline so users can see
+     * which model actually answered. Optional for forward compatibility.
+     */
+    modelDisplayName?: string;
     /**
      * Best-effort token usage measurements for the underlying Copilot
      * request. All fields are optional and may be missing when `countTokens`

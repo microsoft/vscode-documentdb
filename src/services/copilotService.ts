@@ -61,8 +61,26 @@ export interface CopilotTokenUsage {
 export interface CopilotResponse {
     /* The generated text response */
     text: string;
-    /* The model used to generate the response */
-    modelUsed: string;
+    /**
+     * Stable opaque identifier of the selected model (`LanguageModelChat.id`,
+     * e.g., `copilot-gpt-4o`). Use this for telemetry and for comparisons that
+     * must round-trip to the VS Code Language Model API. Never render directly
+     * in UI — use {@link modelDisplayName} for display.
+     */
+    modelId: string;
+    /**
+     * Well-known family of the selected model (`LanguageModelChat.family`,
+     * e.g., `gpt-4o`). This is the documented stable name used in API
+     * selectors. Use this for warning checks against the preferred-model
+     * constant.
+     */
+    modelFamily: string;
+    /**
+     * Human-readable display name of the selected model
+     * (`LanguageModelChat.name`, e.g., `GPT-4o`). Render this in UI bylines.
+     * Falls back to {@link modelId} when `name` is empty.
+     */
+    modelDisplayName: string;
     /* Duration of the actual LLM request in milliseconds (excludes model selection overhead) */
     durationMs: number;
     /**
@@ -112,7 +130,8 @@ export class CopilotService {
                     );
                 }
 
-                context.telemetry.properties.modelUsed = selectedModel.id;
+                context.telemetry.properties.modelId = selectedModel.id;
+                context.telemetry.properties.modelFamily = selectedModel.family;
                 context.telemetry.properties.modelSelectionOutcome = preferredModels.includes(selectedModel.id)
                     ? 'preferred-match'
                     : 'first-available-fallback';
@@ -145,7 +164,9 @@ export class CopilotService {
 
                     return {
                         text: response.text,
-                        modelUsed: selectedModel.name || selectedModel.id,
+                        modelId: selectedModel.id,
+                        modelFamily: selectedModel.family,
+                        modelDisplayName: selectedModel.name || selectedModel.id,
                         durationMs: response.durationMs,
                         usage: response.usage,
                     };

@@ -60,8 +60,12 @@ export interface QueryGenerationResult {
     generatedQuery: string;
     // Explanation of the query
     explanation: string;
-    // The model used to generate the query
-    modelUsed: string;
+    // Stable opaque id of the selected model (LanguageModelChat.id).
+    modelId: string;
+    // Well-known family of the selected model (LanguageModelChat.family).
+    modelFamily: string;
+    // Human-readable display name (LanguageModelChat.name).
+    modelDisplayName: string;
 }
 
 /**
@@ -276,18 +280,22 @@ export async function generateQuery(
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Copilot response received in {ms}ms (model: {model})', {
             ms: response.durationMs.toString(),
-            model: response.modelUsed,
+            model: response.modelId,
         }),
     );
 
-    // Check if the preferred model was used
-    if (response.modelUsed !== PREFERRED_MODEL && PREFERRED_MODEL) {
+    // Check if the preferred model was used. Compare against family (the
+    // documented stable name) first, falling back to id for entries like
+    // `copilot-utility` that aren't expressed as a family.
+    const preferredMatched =
+        !PREFERRED_MODEL || response.modelFamily === PREFERRED_MODEL || response.modelId === PREFERRED_MODEL;
+    if (!preferredMatched) {
         // Show warning if not using preferred model
         void vscode.window.showWarningMessage(
             l10n.t(
                 'Query generation is using model "{actualModel}" instead of preferred "{preferredModel}". Results may vary.',
                 {
-                    actualModel: response.modelUsed,
+                    actualModel: response.modelDisplayName,
                     preferredModel: PREFERRED_MODEL,
                 },
             ),
@@ -295,7 +303,8 @@ export async function generateQuery(
     }
 
     // Add telemetry for the model used
-    context.telemetry.properties.modelUsed = response.modelUsed;
+    context.telemetry.properties.modelId = response.modelId;
+    context.telemetry.properties.modelFamily = response.modelFamily;
     context.telemetry.properties.generationType = queryContext.targetQueryType || 'Find';
 
     // Parse the response
@@ -309,7 +318,9 @@ export async function generateQuery(
         return {
             generatedQuery: JSON.stringify(result.command, null, 2),
             explanation: result.explanation,
-            modelUsed: response.modelUsed,
+            modelId: response.modelId,
+            modelFamily: response.modelFamily,
+            modelDisplayName: response.modelDisplayName,
         };
     } catch {
         throw new Error(
