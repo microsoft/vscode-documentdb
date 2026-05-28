@@ -36,12 +36,17 @@ function escapeMarkdown(text: string): string {
  *   - competes with foreground operations (queries, the collection view) for
  *     pool slots and server resources.
  *
- * We cap concurrent count fetches per cluster and add a small delay between
- * dispatches so this background work stays unobtrusive. Keyed by `clusterId`
- * (the stable cache key) so each cluster gets an independent pool.
+ * Strategy: a plain semaphore. We cap the number of in-flight count requests
+ * per cluster at `DOCUMENT_COUNT_CONCURRENCY`. As soon as one request
+ * completes, the next queued one starts — no batches, no inter-batch delay.
+ * This keeps the pipe smoothly busy without ever exceeding the cap, which is
+ * what we actually want for slow operations: the server is never hit by more
+ * than N concurrent counts, and we never sit idle while there is queued work.
+ *
+ * Keyed by `clusterId` (the stable cache key) so each cluster gets an
+ * independent pool.
  */
 const DOCUMENT_COUNT_CONCURRENCY = 5;
-const DOCUMENT_COUNT_INTER_BATCH_DELAY_MS = 250;
 const documentCountLimiters = new Map<string, LimitedRunner>();
 
 function getDocumentCountLimiter(clusterId: string): LimitedRunner {
@@ -49,7 +54,6 @@ function getDocumentCountLimiter(clusterId: string): LimitedRunner {
     if (!limiter) {
         limiter = createConcurrencyLimiter({
             concurrency: DOCUMENT_COUNT_CONCURRENCY,
-            interBatchDelayMs: DOCUMENT_COUNT_INTER_BATCH_DELAY_MS,
         });
         documentCountLimiters.set(clusterId, limiter);
     }
