@@ -7,6 +7,7 @@ import {
     Button,
     Card,
     CardHeader,
+    Link,
     MessageBar,
     MessageBarBody,
     MessageBarTitle,
@@ -14,7 +15,7 @@ import {
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { SparkleRegular } from '@fluentui/react-icons';
+import { InfoRegular, SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
 import { Announcer } from '../../../../../../../components/accessibility';
@@ -68,6 +69,18 @@ export interface GetPerformanceInsightsCardProps {
     className?: string;
 
     /**
+     * Human-readable hint for the model that will power the AI request.
+     *
+     * Used in the cost-disclosure row beneath the action buttons. The hint is
+     * a static label (e.g., "GPT-4o") rather than the actual model id because
+     * it is shown before the request runs — the real model id is disclosed in
+     * a separate "Powered by…" byline once the response returns.
+     *
+     * Defaults to "GPT-4o" when not provided.
+     */
+    modelHint?: string;
+
+    /**
      * Ref to forward to the card element
      */
     ref?: React.Ref<HTMLDivElement>;
@@ -98,6 +111,7 @@ export function GetPerformanceInsightsCard({
     onLearnMore,
     onCancel,
     className,
+    modelHint = 'GPT-4o',
     ref,
 }: GetPerformanceInsightsCardProps) {
     return (
@@ -168,6 +182,29 @@ export function GetPerformanceInsightsCard({
                             </Button>
                         </div>
                     )}
+                    {/* Cost-neutral disclosure row.
+                        Always rendered so users see the disclosure both before clicking and during loading.
+                        The "Learn more" link reuses `onLearnMore` so the doc URL stays in one place. */}
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '6px',
+                            marginTop: '12px',
+                            color: tokens.colorNeutralForeground3,
+                        }}
+                    >
+                        <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                            {l10n.t(
+                                'Uses a utility model (currently {0}), intended to be cost-neutral for GitHub Copilot subscribers.',
+                                modelHint,
+                            )}{' '}
+                            <Link appearance="subtle" onClick={onLearnMore} inline>
+                                {l10n.t('Learn more')}
+                            </Link>
+                        </Text>
+                    </div>
                 </div>
             </div>
         </Card>
