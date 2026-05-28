@@ -447,8 +447,19 @@ export class CopilotService {
      * diagnostic so we can observe what the runtime exposes today (and tell
      * when richer information becomes available on stable in the future)
      * without depending on it.
+     *
+     * Memoised by model id within a single extension host process — the
+     * metadata is static for a given id, so we only need to emit it the first
+     * time we encounter that model, not on every Copilot request.
      */
+    private static readonly dumpedModelIds = new Set<string>();
+
     private static dumpModelMetadata(model: vscode.LanguageModelChat): void {
+        if (this.dumpedModelIds.has(model.id)) {
+            return;
+        }
+        this.dumpedModelIds.add(model.id);
+
         // 1) Known stable fields. Safe to log verbatim.
         const stable = {
             id: model.id,
