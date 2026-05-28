@@ -89,8 +89,8 @@ The prompt contains only the query shape (operator structure, without actual dat
 **We use structured prompts with a clear task boundary.**
 Each request is formatted as a compact JSON block with labelled sections: query, plan, statistics, collection info. Structured input helps lightweight models parse and use context efficiently without a lengthy preamble.
 
-**We target the model's context window.**
-The extension reads `maxInputTokens` from the selected model's metadata and uses it to enforce a hard ceiling on prompt size. If the query plan or statistics exceed the budget, they are truncated before the request is sent, ensuring the model always receives a syntactically complete, well-formed prompt rather than a truncated one.
+**We measure context-window utilization after each request.**
+The extension reads `maxInputTokens` from the selected model's metadata and, after each response, asks the model to count the prompt tokens it actually consumed. The ratio is reported as `promptUtilizationPct` in telemetry and the trace output channel so we can monitor whether requests are approaching the model's limits in production. The current build does not truncate prompts pre-send; the prompts are deliberately small (see the two paragraphs above) and have stayed comfortably below the budget on the models we target.
 
 **We ask for a bounded, machine-readable response.**
 The response format requested is a structured JSON object with a defined schema (recommendations, severity, rationale). Asking for a short, structured response rather than an open-ended essay keeps output token usage predictable and reduces the chance of drift on smaller models.
@@ -104,10 +104,10 @@ If the preferred model is not available, the extension steps down to the next li
 
 After a successful AI analysis, a small **"Powered by"** byline appears at the bottom of the results panel:
 
-> _No additional cost for most GitHub Copilot subscribers. [Learn more about the utility model used.](../user-manual/ai-utility-model)_
-> _Powered by copilot-gpt-4o via GitHub Copilot_
+> _No additional cost for most GitHub Copilot subscribers. [Learn more about the utility model used.](https://aka.ms/vscode-documentdb-copilot-utility-model)_
+> _Powered by GPT-4o via GitHub Copilot_
 
-The model identifier shown there is the exact `id` returned by the VS Code Language Model API for the model that handled your request. It reflects the actual model used (not a pre-invocation guess), so you always know what processed your query.
+The name shown there is the human-readable display name (`LanguageModelChat.name`) of the model that actually handled your request, as returned by the VS Code Language Model API. The stable identifier (`LanguageModelChat.id`, e.g. `copilot-gpt-4o`) is captured in extension telemetry and the trace output channel for diagnostics. Either way the value reflects the model that produced the response — not a pre-invocation guess — so you always know what processed your query.
 
 ---
 
