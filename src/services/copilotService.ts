@@ -145,7 +145,7 @@ export class CopilotService {
 
                     return {
                         text: response.text,
-                        modelUsed: selectedModel.id,
+                        modelUsed: selectedModel.name || selectedModel.id,
                         durationMs: response.durationMs,
                         usage: response.usage,
                     };
