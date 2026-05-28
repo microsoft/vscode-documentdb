@@ -118,18 +118,28 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
      * Fetches the document count and triggers a tree refresh when complete.
      */
     private async fetchAndUpdateCount(): Promise<void> {
-        const limit = getDocumentCountLimiter(this.cluster.clusterId);
+        // Capture primitives and the stale-check closure into locals so the
+        // task we hand to the limiter does not capture `this`. The outer
+        // async frame still references `this` (it is an instance method), but
+        // the inner task that the limiter holds while it is queued only pins
+        // these few strings plus the small isCurrent closure.
+        const clusterId = this.cluster.clusterId;
+        const dbName = this.databaseInfo.name;
+        const collName = this.collectionInfo.name;
+        const isCurrent = this.isCurrent;
+        const limit = getDocumentCountLimiter(clusterId);
+
         let result: number | null;
         try {
             result = await limit(async () => {
                 // Stale-check at dispatch time: if this CollectionItem no
                 // longer belongs to the current expansion (refresh / collapse
                 // / re-expand happened while we were queued), skip the work.
-                if (!this.isCurrent()) {
+                if (!isCurrent()) {
                     return null;
                 }
-                const client = await ClustersClient.getClient(this.cluster.clusterId);
-                return client.estimateDocumentCount(this.databaseInfo.name, this.collectionInfo.name);
+                const client = await ClustersClient.getClient(clusterId);
+                return client.estimateDocumentCount(dbName, collName);
             });
         } catch {
             // On error, fall through and let the post-await stale-check decide
@@ -137,7 +147,7 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
             result = null;
         }
 
-        if (!this.isCurrent()) {
+        if (!isCurrent()) {
             // Stale: do not write back to this instance and do not fire a
             // tree refresh. The current instance owns the UI state.
             return;
