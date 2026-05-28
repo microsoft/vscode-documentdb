@@ -14,6 +14,13 @@ import { ext } from '../extensionVariables';
 import { formatTokenCount } from '../utils/formatTokenCount';
 
 /**
+ * Identifies which extension feature is calling `CopilotService` so we can
+ * disambiguate shared telemetry events (e.g., `copilot.sendMessage`) by
+ * source. Add a new value here when introducing a new AI-backed feature.
+ */
+export type CopilotFeatureSource = 'queryInsights' | 'queryGeneration';
+
+/**
  * Options for sending a message to the language model
  */
 export interface CopilotMessageOptions {
@@ -30,6 +37,13 @@ export interface CopilotMessageOptions {
 
     /* Model-specific options (e.g., reasoning_effort for GPT-5 class models) */
     modelOptions?: { [name: string]: unknown };
+
+    /**
+     * Identifies the calling feature so the shared `copilot.sendMessage`
+     * telemetry event can be filtered/grouped by source. Required for any
+     * call that should be attributable in analytics.
+     */
+    featureSource?: CopilotFeatureSource;
 }
 
 /**
@@ -109,6 +123,12 @@ export class CopilotService {
         const result = await callWithTelemetryAndErrorHandling(
             'vscode-documentdb.copilot.sendMessage',
             async (context: IActionContext) => {
+                // Tag the shared `copilot.sendMessage` event with the calling
+                // feature so analytics can split telemetry by source. Default
+                // to 'unknown' if the caller forgot to set it (caught in PR
+                // review rather than at runtime).
+                context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
+
                 // Get all available models from VS Code
                 const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
 

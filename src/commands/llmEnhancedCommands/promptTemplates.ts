@@ -9,25 +9,35 @@ import { l10n } from 'vscode';
 import { ext } from '../../extensionVariables';
 
 /**
- * Preferred language model for index optimization
- */
-export const PREFERRED_MODEL = 'gpt-4.1';
-
-/**
- * Fallback models to use if the preferred model is not available.
+ * Preferred and fallback language models, per feature.
  *
- * The chain is: gpt-4.1 -> gpt-4o -> copilot-utility.
+ * Each AI-backed feature picks its own model so the choices can diverge as
+ * we tune them (e.g., a feature may prefer a faster/cheaper model if depth
+ * of reasoning is less important). When sharing the same value, keep them
+ * as separate constants so a change in one feature does not silently affect
+ * the other.
  *
  * `copilot-utility` is the internal Copilot alias that resolves to whichever
  * chat model the CAPI marks as `is_chat_fallback`. It is published as a
  * non-user-selectable language model by the GitHub Copilot extension but
  * can still be selected programmatically by id via
  * `vscode.lm.selectChatModels({ vendor: 'copilot' })`. Adding it as the
- * final fallback keeps the AI Performance Insights flow on a model that is
- * intended to be cost-neutral for Copilot subscribers, even if `gpt-4.1` /
- * `gpt-4o` become unavailable in the future.
+ * final fallback keeps each AI flow on a model that is intended to be
+ * cost-neutral for Copilot subscribers, even if `gpt-4.1` / `gpt-4o`
+ * become unavailable in the future.
  */
-export const FALLBACK_MODELS = ['gpt-4o', 'copilot-utility'];
+
+/** Preferred model for the Query Insights / index recommender feature. */
+export const INDEX_OPTIMIZATION_PREFERRED_MODEL = 'gpt-4.1';
+
+/** Fallback chain for the Query Insights / index recommender feature. */
+export const INDEX_OPTIMIZATION_FALLBACK_MODELS = ['gpt-4o', 'copilot-utility'];
+
+/** Preferred model for the AI Query Generation feature. */
+export const QUERY_GENERATION_PREFERRED_MODEL = 'gpt-4.1';
+
+/** Fallback chain for the AI Query Generation feature. */
+export const QUERY_GENERATION_FALLBACK_MODELS = ['gpt-4o', 'copilot-utility'];
 
 /**
  * Prompt factory utility functions

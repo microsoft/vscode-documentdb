@@ -14,7 +14,12 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import { FALLBACK_MODELS, PREFERRED_MODEL, getLastPromptSource, type FilledPromptResult } from './promptTemplates';
+import {
+    INDEX_OPTIMIZATION_FALLBACK_MODELS,
+    INDEX_OPTIMIZATION_PREFERRED_MODEL,
+    getLastPromptSource,
+    type FilledPromptResult,
+} from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -613,8 +618,8 @@ export async function optimizeQuery(
     context.telemetry.properties.hasStaticAnalysisSummary = queryContext.staticAnalysisSummary ? 'true' : 'false';
 
     // Send to Copilot with configured models
-    const preferredModelToUse = queryContext.preferredModel || PREFERRED_MODEL;
-    const fallbackModelsToUse = queryContext.fallbackModels || FALLBACK_MODELS;
+    const preferredModelToUse = queryContext.preferredModel || INDEX_OPTIMIZATION_PREFERRED_MODEL;
+    const fallbackModelsToUse = queryContext.fallbackModels || INDEX_OPTIMIZATION_FALLBACK_MODELS;
 
     ext.outputChannel.trace(
         l10n.t('[Query Insights AI] Calling Copilot (model: {model})...', {
@@ -641,6 +646,7 @@ export async function optimizeQuery(
         preferredModel: preferredModelToUse,
         fallbackModels: fallbackModelsToUse,
         signal: queryContext.signal,
+        featureSource: 'queryInsights',
     });
 
     // Track Copilot call performance and response

@@ -188,3 +188,20 @@ The existing `onLearnMore` callback (and `aiInsightsDocsUrl`) already points to 
 - **VS Code proposed languageModelPricing API**: intentionally not used — see design decisions above
 - **Feature issue for credits UI** (to be filed): expose Copilot credit usage in Query Insights once `vscode.proposed.languageModelPricing` graduates to stable
 - **PR #676** (`dev/tnaum/webview-api-package`): the webview transport hardening that preceded this work; established the tRPC/telemetry patterns used here
+
+---
+
+## Model selection rationale (background research)
+
+The following comparison was used to decide which model to set as the primary preference for the index recommender. It is recorded here so the choice of `gpt-4.1` as `PREFERRED_MODEL` (with `gpt-4o` and `copilot-utility` as fallbacks) has a written rationale.
+
+If cost is irrelevant (all are utility models), choose **GPT-4.1** for the index recommender unless speed is the top constraint. It should be the most dependable of these for explain-plan reasoning and following precise instructions.
+
+| Model | Explain-plan understanding | Instruction following | Speed | Best use |
+|---|---:|---:|---:|---|
+| **GPT-4.1** | **Best** | **Best** | Medium | **Primary choice** for DocumentDB index recommendations where correctness matters. Best at reasoning through `winningPlan`, `executionStats`, compound index order, sort coverage, range predicates, and tradeoffs. |
+| **GPT-4o** | Very good | Very good | **Fast** | Best speed/quality balance. Use if you want quicker interactive recommendations and can tolerate slightly less depth on tricky plans. |
+| **GPT-4o mini** | Moderate | Moderate | **Very fast** | Useful for simple triage, summarizing explain plans, extracting query shapes, or flagging obvious missing indexes. Riskier as the final decision-maker. |
+| **GPT-5.4 nano** | Light/moderate | Light/moderate | **Fastest** | Best for routing, formatting, structured extraction, or quick "needs review / doesn't need review" checks. Not my pick for nuanced recommendations. |
+
+**Bottom line:** use **GPT-4.1** if you want the best single model. Use **GPT-4o** if you want a noticeably faster assistant and most recommendations are straightforward. Use the mini/nano models only as pre-processors or triage layers, not as the final recommender.

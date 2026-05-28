@@ -12,7 +12,12 @@ import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { generateSchemaDefinition, type SchemaDefinition } from '../../utils/schemaInference';
-import { FALLBACK_MODELS, PREFERRED_MODEL, getQueryTypeConfig, type FilledPromptResult } from './promptTemplates';
+import {
+    QUERY_GENERATION_FALLBACK_MODELS,
+    QUERY_GENERATION_PREFERRED_MODEL,
+    getQueryTypeConfig,
+    type FilledPromptResult,
+} from './promptTemplates';
 
 /**
  * Type of query generation
@@ -262,7 +267,7 @@ export async function generateQuery(
     // Send to Copilot with configured models
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Calling Copilot (model: {model})...', {
-            model: PREFERRED_MODEL || 'default',
+            model: QUERY_GENERATION_PREFERRED_MODEL || 'default',
         }),
     );
     const response = await CopilotService.sendMessage(
@@ -272,8 +277,9 @@ export async function generateQuery(
             vscode.LanguageModelChatMessage.User(contextData),
         ],
         {
-            preferredModel: PREFERRED_MODEL,
-            fallbackModels: FALLBACK_MODELS,
+            preferredModel: QUERY_GENERATION_PREFERRED_MODEL,
+            fallbackModels: QUERY_GENERATION_FALLBACK_MODELS,
+            featureSource: 'queryGeneration',
         },
     );
     context.telemetry.measurements.llmCallDurationMs = response.durationMs;
@@ -288,7 +294,9 @@ export async function generateQuery(
     // documented stable name) first, falling back to id for entries like
     // `copilot-utility` that aren't expressed as a family.
     const preferredMatched =
-        !PREFERRED_MODEL || response.modelFamily === PREFERRED_MODEL || response.modelId === PREFERRED_MODEL;
+        !QUERY_GENERATION_PREFERRED_MODEL ||
+        response.modelFamily === QUERY_GENERATION_PREFERRED_MODEL ||
+        response.modelId === QUERY_GENERATION_PREFERRED_MODEL;
     if (!preferredMatched) {
         // Show warning if not using preferred model
         void vscode.window.showWarningMessage(
@@ -296,7 +304,7 @@ export async function generateQuery(
                 'Query generation is using model "{actualModel}" instead of preferred "{preferredModel}". Results may vary.',
                 {
                     actualModel: response.modelDisplayName,
-                    preferredModel: PREFERRED_MODEL,
+                    preferredModel: QUERY_GENERATION_PREFERRED_MODEL,
                 },
             ),
         );
