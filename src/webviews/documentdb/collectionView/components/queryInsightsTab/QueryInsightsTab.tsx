@@ -472,9 +472,15 @@ export const QueryInsightsMain = (): JSX.Element => {
      * by" byline all open the same page.
      */
     const aiInsightsDocsUrl = 'https://learn.microsoft.com/azure/documentdb/index-advisor';
+    // aka.ms slug for the utility-model docs — register at https://aka.ms/admin before shipping
+    const utilityModelUrl = 'https://aka.ms/vscode-documentdb-copilot-utility-model';
 
     const handleLearnMore = useCallback((): void => {
         void trpcClient.common.openUrl.mutate({ url: aiInsightsDocsUrl });
+    }, [trpcClient]);
+
+    const handleLearnMoreUtilityModel = useCallback((): void => {
+        void trpcClient.common.openUrl.mutate({ url: utilityModelUrl });
     }, [trpcClient]);
 
     const handleGetAISuggestions = () => {
@@ -872,6 +878,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 onGetInsights={handleGetAISuggestions}
                                 onLearnMore={handleLearnMore}
                                 onCancel={handleCancelAI}
+                                onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
                             />
                         </CollapseRelaxed>
 
@@ -898,23 +905,28 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     }}
                                 >
                                     <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
-                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                        {l10n.t(
-                                            'Powered by {0} via GitHub Copilot, a utility model intended to be cost-neutral for GitHub Copilot subscribers.',
-                                            queryInsightsState.stage3Data.modelUsed,
-                                        )}{' '}
-                                        <Link
-                                            appearance="subtle"
-                                            onClick={handleLearnMore}
-                                            inline
-                                            style={{
-                                                fontSize: tokens.fontSizeBase200,
-                                                lineHeight: tokens.lineHeightBase200,
-                                            }}
-                                        >
-                                            {l10n.t('Learn more')}
-                                        </Link>
-                                    </Text>
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                            {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
+                                            <Link
+                                                appearance="subtle"
+                                                onClick={handleLearnMoreUtilityModel}
+                                                inline
+                                                style={{
+                                                    fontSize: tokens.fontSizeBase200,
+                                                    lineHeight: tokens.lineHeightBase200,
+                                                }}
+                                            >
+                                                {l10n.t('Learn more about the utility model used.')}
+                                            </Link>
+                                        </Text>
+                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                            {l10n.t(
+                                                'Powered by {0} via GitHub Copilot',
+                                                queryInsightsState.stage3Data.modelUsed,
+                                            )}
+                                        </Text>
+                                    </div>
                                 </div>
                             )}
                     </div>

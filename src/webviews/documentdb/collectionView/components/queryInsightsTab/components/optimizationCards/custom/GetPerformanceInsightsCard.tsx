@@ -64,21 +64,15 @@ export interface GetPerformanceInsightsCardProps {
     onCancel: () => void;
 
     /**
+     * Handler for the "Learn more about the utility model" link in the cost-disclosure row.
+     * Navigates to the utility-model documentation page (separate from the general AI insights docs).
+     */
+    onLearnMoreUtilityModel: () => void;
+
+    /**
      * Optional className to apply to the Card component (e.g., for spacing)
      */
     className?: string;
-
-    /**
-     * Human-readable hint for the model that will power the AI request.
-     *
-     * Used in the cost-disclosure row beneath the action buttons. The hint is
-     * a static label (e.g., "GPT-4o") rather than the actual model id because
-     * it is shown before the request runs — the real model id is disclosed in
-     * a separate "Powered by…" byline once the response returns.
-     *
-     * Defaults to "GPT-4o" when not provided.
-     */
-    modelHint?: string;
 
     /**
      * Ref to forward to the card element
@@ -110,8 +104,8 @@ export function GetPerformanceInsightsCard({
     onGetInsights,
     onLearnMore,
     onCancel,
+    onLearnMoreUtilityModel,
     className,
-    modelHint = 'GPT-4o',
     ref,
 }: GetPerformanceInsightsCardProps) {
     return (
@@ -198,19 +192,17 @@ export function GetPerformanceInsightsCard({
                     >
                         <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                            {l10n.t(
-                                'Uses a utility model, intended to be cost-neutral for GitHub Copilot subscribers.',
-                            )}{' '}
+                            {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
                             <Link
                                 appearance="subtle"
-                                onClick={onLearnMore}
+                                onClick={onLearnMoreUtilityModel}
                                 inline
                                 style={{
                                     fontSize: tokens.fontSizeBase200,
                                     lineHeight: tokens.lineHeightBase200,
                                 }}
                             >
-                                {l10n.t('Learn more')}
+                                {l10n.t('Learn more about the utility model used.')}
                             </Link>
                         </Text>
                     </div>
