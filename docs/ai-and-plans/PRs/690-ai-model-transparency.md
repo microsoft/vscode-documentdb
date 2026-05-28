@@ -18,6 +18,7 @@ The Query Insights panel uses GitHub Copilot to generate AI-powered performance 
 Both concerns surfaced during a review of the Query Insights UX. GitHub Copilot's billing model distinguishes between _premium_ requests (which consume per-seat credit from a monthly quota) and _utility_ requests (which are documented as not counting against the quota). Users running this feature would reasonably worry about unexpected costs, and the extension provided no signal either way.
 
 Additionally, the engineering team wanted better diagnostic visibility into:
+
 - **Model selection outcomes** — which models were requested, accepted, rejected.
 - **Token utilization** — how much of the model's context window is consumed per request, as a proxy for prompt health.
 
@@ -66,15 +67,16 @@ The byline is only rendered when `stage3Data.modelUsed` is present (i.e. when th
 
 ```typescript
 interface CopilotTokenUsage {
-    promptTokens?: number;
-    responseTokens?: number;
-    totalTokens?: number;
-    maxInputTokens?: number;        // from model metadata
-    promptUtilizationPct?: number;  // promptTokens / maxInputTokens * 100
+  promptTokens?: number;
+  responseTokens?: number;
+  totalTokens?: number;
+  maxInputTokens?: number; // from model metadata
+  promptUtilizationPct?: number; // promptTokens / maxInputTokens * 100
 }
 ```
 
 All five measurements are emitted to:
+
 - The trace output channel (`formatTokenCount` helper: compact K/M notation via `Intl.NumberFormat`).
 - The `indexOptimization` telemetry event (as numeric measurements).
 
@@ -136,6 +138,7 @@ Copilot's public documentation describes utility model requests as included in t
 The initial iteration used: _"Uses a utility model, intended to be cost-neutral for GitHub Copilot subscribers."_
 
 Several problems:
+
 - "Intended to be cost-neutral" is hedged but passive — it sounds uncertain rather than reassuring.
 - The word "free" was considered but rejected because pricing deals vary.
 - "Included in your subscription" (Option A in the chat exploration) was considered but "subscription" vs "plan" naming varies across Copilot SKUs.
@@ -144,6 +147,7 @@ Several problems:
 ### Why `modelHint` was removed
 
 An earlier commit added a `modelHint?: string` prop to `GetPerformanceInsightsCard` to allow the parent to pass a static hint like `"GPT-4o"` for use in the pre-invocation disclosure text. The prop was removed because:
+
 1. The simplified disclosure wording no longer interpolates a model name.
 2. Any static model name would be speculative — the actual model is only known after the VS Code LM API resolves (post-click).
 3. Dead props add maintenance surface and mislead future contributors.
@@ -151,6 +155,7 @@ An earlier commit added a `modelHint?: string` prop to `GetPerformanceInsightsCa
 ### Why `aka.ms/vscode-documentdb-copilot-utility-model` rather than the existing index-advisor URL
 
 The existing `onLearnMore` callback (and `aiInsightsDocsUrl`) already points to `https://learn.microsoft.com/azure/documentdb/index-advisor`, which covers the full Query Insights feature. That page does not explain the utility model tier or its billing implications. A dedicated `aka.ms` redirect:
+
 - Allows the docs team to point the link at the most relevant page without a code change.
 - Follows the pattern already established by `https://aka.ms/vscode-documentdb-copy-and-paste`.
 
@@ -160,20 +165,20 @@ The existing `onLearnMore` callback (and `aiInsightsDocsUrl`) already points to 
 
 ## Files changed (significant)
 
-| File | Change |
-|------|--------|
-| `src/services/copilotService.ts` | `CopilotTokenUsage` interface; token measurement; model selection tracing; `dumpModelMetadata`; `formatTokenCount` import |
-| `src/utils/formatTokenCount.ts` | New utility — compact K/M number formatter for token counts |
-| `src/commands/llmEnhancedCommands/indexAdvisorCommands.ts` | Thread `modelUsed` + `usage` through `OptimizationResult`; emit token telemetry |
-| `src/commands/llmEnhancedCommands/promptTemplates.ts` | Add `copilot-utility` to fallback chain |
-| `src/services/ai/types.ts` | `AIOptimizationResponse.modelUsed` + `.usage` |
-| `src/services/ai/QueryInsightsAIService.ts` | Propagate `modelUsed` + `usage` from optimization result |
-| `src/documentdb/queryInsights/transformations.ts` | Surface `modelUsed` + `usage` in UI transform |
-| `src/webviews/documentdb/collectionView/types/queryInsights.ts` | `QueryInsightsStage3Response.modelUsed` + `.usage` |
-| `src/webviews/documentdb/collectionView/collectionViewRouter.ts` | Emit `aiModelDisclosed` telemetry; thread token measurements to Stage 3 telemetry event |
-| `src/webviews/documentdb/collectionView/components/queryInsightsTab/components/optimizationCards/custom/GetPerformanceInsightsCard.tsx` | `onLearnMoreUtilityModel` prop; revised disclosure row text + link |
-| `src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx` | `utilityModelUrl` + `handleLearnMoreUtilityModel`; two-line post-response byline |
-| `l10n/bundle.l10n.json` | Regenerated with all new strings |
+| File                                                                                                                                    | Change                                                                                                                    |
+| --------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| `src/services/copilotService.ts`                                                                                                        | `CopilotTokenUsage` interface; token measurement; model selection tracing; `dumpModelMetadata`; `formatTokenCount` import |
+| `src/utils/formatTokenCount.ts`                                                                                                         | New utility — compact K/M number formatter for token counts                                                               |
+| `src/commands/llmEnhancedCommands/indexAdvisorCommands.ts`                                                                              | Thread `modelUsed` + `usage` through `OptimizationResult`; emit token telemetry                                           |
+| `src/commands/llmEnhancedCommands/promptTemplates.ts`                                                                                   | Add `copilot-utility` to fallback chain                                                                                   |
+| `src/services/ai/types.ts`                                                                                                              | `AIOptimizationResponse.modelUsed` + `.usage`                                                                             |
+| `src/services/ai/QueryInsightsAIService.ts`                                                                                             | Propagate `modelUsed` + `usage` from optimization result                                                                  |
+| `src/documentdb/queryInsights/transformations.ts`                                                                                       | Surface `modelUsed` + `usage` in UI transform                                                                             |
+| `src/webviews/documentdb/collectionView/types/queryInsights.ts`                                                                         | `QueryInsightsStage3Response.modelUsed` + `.usage`                                                                        |
+| `src/webviews/documentdb/collectionView/collectionViewRouter.ts`                                                                        | Emit `aiModelDisclosed` telemetry; thread token measurements to Stage 3 telemetry event                                   |
+| `src/webviews/documentdb/collectionView/components/queryInsightsTab/components/optimizationCards/custom/GetPerformanceInsightsCard.tsx` | `onLearnMoreUtilityModel` prop; revised disclosure row text + link                                                        |
+| `src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx`                                               | `utilityModelUrl` + `handleLearnMoreUtilityModel`; two-line post-response byline                                          |
+| `l10n/bundle.l10n.json`                                                                                                                 | Regenerated with all new strings                                                                                          |
 
 ---
 
