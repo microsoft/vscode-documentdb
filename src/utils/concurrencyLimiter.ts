@@ -42,7 +42,11 @@ export type LimitedRunner = <T>(fn: () => Promise<T>) => Promise<T>;
  *   await limit(() => doWork());
  */
 export function createConcurrencyLimiter(options: ConcurrencyLimiterOptions): LimitedRunner {
-    const concurrency = Math.max(1, Math.floor(options.concurrency));
+    // Reject NaN / Infinity / non-numeric inputs explicitly. Math.floor(NaN)
+    // is NaN, and Math.max(1, NaN) is NaN, which would make `active >=
+    // concurrency` always false and silently disable the limit. Clamp to 1
+    // as a safe default.
+    const concurrency = Number.isFinite(options.concurrency) ? Math.max(1, Math.floor(options.concurrency)) : 1;
 
     let active = 0;
     const waiters: Array<() => void> = [];
