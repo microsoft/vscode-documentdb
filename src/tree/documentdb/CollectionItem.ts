@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+import { createConcurrencyLimiter, type LimitedRunner } from '../../utils/concurrencyLimiter';
 import { formatDocumentCount } from '../../utils/formatDocumentCount';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -23,6 +24,36 @@ import { IndexesItem } from './IndexesItem';
  */
 function escapeMarkdown(text: string): string {
     return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+}
+
+/**
+ * Per-cluster limiter for background document-count fetches.
+ *
+ * Tree expansion can trigger one `estimateDocumentCount` call per collection,
+ * which for databases with many collections produces a burst of concurrent
+ * requests that:
+ *   - opens many sockets in the MongoDB driver's connection pool, and
+ *   - competes with foreground operations (queries, the collection view) for
+ *     pool slots and server resources.
+ *
+ * We cap concurrent count fetches per cluster and add a small delay between
+ * dispatches so this background work stays unobtrusive. Keyed by `clusterId`
+ * (the stable cache key) so each cluster gets an independent pool.
+ */
+const DOCUMENT_COUNT_CONCURRENCY = 5;
+const DOCUMENT_COUNT_INTER_BATCH_DELAY_MS = 250;
+const documentCountLimiters = new Map<string, LimitedRunner>();
+
+function getDocumentCountLimiter(clusterId: string): LimitedRunner {
+    let limiter = documentCountLimiters.get(clusterId);
+    if (!limiter) {
+        limiter = createConcurrencyLimiter({
+            concurrency: DOCUMENT_COUNT_CONCURRENCY,
+            interBatchDelayMs: DOCUMENT_COUNT_INTER_BATCH_DELAY_MS,
+        });
+        documentCountLimiters.set(clusterId, limiter);
+    }
+    return limiter;
 }
 
 export class CollectionItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
@@ -75,9 +106,12 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
      * Fetches the document count and triggers a tree refresh when complete.
      */
     private async fetchAndUpdateCount(): Promise<void> {
+        const limit = getDocumentCountLimiter(this.cluster.clusterId);
         try {
-            const client = await ClustersClient.getClient(this.cluster.clusterId);
-            this.documentCount = await client.estimateDocumentCount(this.databaseInfo.name, this.collectionInfo.name);
+            this.documentCount = await limit(async () => {
+                const client = await ClustersClient.getClient(this.cluster.clusterId);
+                return client.estimateDocumentCount(this.databaseInfo.name, this.collectionInfo.name);
+            });
         } catch {
             // On error, set to null to indicate failure (we won't retry automatically)
             this.documentCount = null;
