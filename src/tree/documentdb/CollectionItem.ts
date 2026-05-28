@@ -46,14 +46,13 @@ function escapeMarkdown(text: string): string {
  * Keyed by `clusterId` (the stable cache key) so each cluster gets an
  * independent pool.
  */
-const DOCUMENT_COUNT_CONCURRENCY = 5;
 const documentCountLimiters = new Map<string, LimitedRunner>();
 
 function getDocumentCountLimiter(clusterId: string): LimitedRunner {
     let limiter = documentCountLimiters.get(clusterId);
     if (!limiter) {
         limiter = createConcurrencyLimiter({
-            concurrency: DOCUMENT_COUNT_CONCURRENCY,
+            concurrency: 5,
         });
         documentCountLimiters.set(clusterId, limiter);
     }
