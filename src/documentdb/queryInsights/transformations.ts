@@ -55,6 +55,7 @@ export function transformAIResponseForUI(
         improvementCards,
         verificationSteps,
         educationalContent: aiResponse.educationalContent,
+        modelUsed: aiResponse.modelUsed,
     };
 }
 

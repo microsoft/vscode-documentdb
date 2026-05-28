@@ -1007,6 +1007,13 @@ export const collectionsViewRouter = router({
                 databaseName,
                 collectionName,
             });
+
+            // Surface the model used to telemetry so we can correlate disclosures
+            // shown in the UI with the actual model selected by CopilotService.
+            if (transformed.modelUsed) {
+                ctx.telemetry.properties.aiModelDisclosed = transformed.modelUsed;
+            }
+
             ext.outputChannel.trace(
                 l10n.t('[Query Insights Stage 3] Completed: {count} improvement cards generated (requestKey: {key})', {
                     count: transformed.improvementCards.length.toString(),

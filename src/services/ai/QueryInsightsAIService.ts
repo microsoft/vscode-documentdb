@@ -114,6 +114,10 @@ export class QueryInsightsAIService {
                 // Parse the AI response to extract structured recommendations
                 const parsedResponse = this.parseAIResponse(optimizationResult.recommendations);
 
+                // Carry the model used through to the webview so it can be disclosed
+                // in the AI Performance Insights UI.
+                parsedResponse.modelUsed = optimizationResult.modelUsed;
+
                 // Count all actionable recommendations by action type in a single pass
                 let actionableRecommendationCount = 0;
                 let createRecommendationCount = 0;

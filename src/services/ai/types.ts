@@ -25,6 +25,13 @@ export interface AIOptimizationResponse {
     improvements: AIIndexRecommendation[];
     verification: string[];
     educationalContent?: string; // Optional markdown content for educational cards
+    /**
+     * Id of the language model that produced the response (e.g., `gpt-4o`,
+     * `gpt-4o-mini`, `copilot-utility`). Populated by
+     * `QueryInsightsAIService` so the webview can disclose which model was
+     * used. Optional for forward compatibility.
+     */
+    modelUsed?: string;
 }
 
 /**
