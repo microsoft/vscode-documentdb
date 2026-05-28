@@ -81,6 +81,15 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
         readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
         readonly collectionInfo: CollectionItemModel,
+        /**
+         * Stale-check predicate. The owning DatabaseItem hands in a function
+         * that returns true only while this CollectionItem belongs to the
+         * current expansion. When the user refreshes / collapses / re-expands
+         * the database, the predicate flips to false and any queued or
+         * in-flight document-count work bails out before mutating state.
+         * Defaults to always-current so direct callers are unaffected.
+         */
+        private readonly isCurrent: () => boolean = () => true,
     ) {
         this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}`;
         this.experience = cluster.dbExperience;
@@ -110,19 +119,34 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
      */
     private async fetchAndUpdateCount(): Promise<void> {
         const limit = getDocumentCountLimiter(this.cluster.clusterId);
+        let result: number | null;
         try {
-            this.documentCount = await limit(async () => {
+            result = await limit(async () => {
+                // Stale-check at dispatch time: if this CollectionItem no
+                // longer belongs to the current expansion (refresh / collapse
+                // / re-expand happened while we were queued), skip the work.
+                if (!this.isCurrent()) {
+                    return null;
+                }
                 const client = await ClustersClient.getClient(this.cluster.clusterId);
                 return client.estimateDocumentCount(this.databaseInfo.name, this.collectionInfo.name);
             });
         } catch {
-            // On error, set to null to indicate failure (we won't retry automatically)
-            this.documentCount = null;
-        } finally {
-            this.isLoadingCount = false;
-            // Trigger a tree item refresh to show the updated description
-            ext.state.notifyChildrenChanged(this.id);
+            // On error, fall through and let the post-await stale-check decide
+            // whether to record the failure on this instance.
+            result = null;
         }
+
+        if (!this.isCurrent()) {
+            // Stale: do not write back to this instance and do not fire a
+            // tree refresh. The current instance owns the UI state.
+            return;
+        }
+
+        this.isLoadingCount = false;
+        this.documentCount = result;
+        // Trigger a tree item refresh to show the updated description
+        ext.state.notifyChildrenChanged(this.id);
     }
 
     async getChildren(): Promise<TreeElement[]> {
