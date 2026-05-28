@@ -11,20 +11,13 @@ import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { createConcurrencyLimiter, type LimitedRunner } from '../../utils/concurrencyLimiter';
 import { formatDocumentCount } from '../../utils/formatDocumentCount';
+import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { DocumentsItem } from './DocumentsItem';
 import { IndexesItem } from './IndexesItem';
-
-/**
- * Escapes markdown special characters so user-provided text is always rendered
- * as plain text rather than being interpreted as markdown formatting or links.
- */
-function escapeMarkdown(text: string): string {
-    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
-}
 
 /**
  * Per-cluster limiter for background document-count fetches.
