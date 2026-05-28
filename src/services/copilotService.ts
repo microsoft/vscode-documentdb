@@ -157,7 +157,7 @@ export class CopilotService {
                     context.telemetry.properties.modelSelectionOutcome = 'no-models-available';
                     throw new Error(
                         l10n.t(
-                            'No suitable language model found. Please ensure GitHub Copilot is installed and you have an active subscription.',
+                            'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
                         ),
                     );
                 }
