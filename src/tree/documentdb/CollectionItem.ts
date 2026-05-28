@@ -29,19 +29,13 @@ function escapeMarkdown(text: string): string {
 /**
  * Per-cluster limiter for background document-count fetches.
  *
- * Tree expansion can trigger one `estimateDocumentCount` call per collection,
- * which for databases with many collections produces a burst of concurrent
- * requests that:
- *   - opens many sockets in the MongoDB driver's connection pool, and
- *   - competes with foreground operations (queries, the collection view) for
- *     pool slots and server resources.
+ * Tree expansion can trigger one `estimateDocumentCount` call per collection.
+ * For databases with many collections that produces a burst of concurrent
+ * requests that opens many sockets and competes with foreground operations
+ * (queries, the collection view) for connection pool slots.
  *
- * Strategy: a plain semaphore. We cap the number of in-flight count requests
- * per cluster at `DOCUMENT_COUNT_CONCURRENCY`. As soon as one request
- * completes, the next queued one starts — no batches, no inter-batch delay.
- * This keeps the pipe smoothly busy without ever exceeding the cap, which is
- * what we actually want for slow operations: the server is never hit by more
- * than N concurrent counts, and we never sit idle while there is queued work.
+ * Strategy: a plain semaphore capped at 5 in-flight count requests per
+ * cluster. As soon as one finishes, the next queued one starts.
  *
  * Keyed by `clusterId` (the stable cache key) so each cluster gets an
  * independent pool.

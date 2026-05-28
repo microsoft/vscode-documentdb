@@ -68,19 +68,15 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
             ];
         }
 
-        // Sort collections alphabetically by name BEFORE kicking off background
-        // count loads. This is intentional and important for UI stability:
-        // counts are dispatched through a per-cluster concurrency limiter (FIFO),
-        // so the order in which we enqueue them is the order in which they will
-        // be fetched and displayed. Sorting first means counts populate
-        // predictably from the top of the visible list downward, instead of
-        // appearing "at random" relative to what the user actually sees.
+        // Sort collections alphabetically by name before kicking off background
+        // count loads. The per-cluster limiter dispatches in FIFO order, so
+        // sorting first means counts are requested in alphabetical order.
+        // Completion order still depends on per-request latency and may differ.
         collections.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
         return collections.map((collection) => {
             const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection, isCurrent);
             // Start loading document count in background (fire-and-forget).
-            // Does not block tree expansion. See sort above: enqueue order = display order.
             collectionItem.loadDocumentCount();
             return collectionItem;
         });
