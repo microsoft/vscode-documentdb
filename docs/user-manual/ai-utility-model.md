@@ -96,7 +96,7 @@ The extension reads `maxInputTokens` from the selected model's metadata and, aft
 The response format requested is a structured JSON object with a defined schema (recommendations, severity, rationale). Asking for a short, structured response rather than an open-ended essay keeps output token usage predictable and reduces the chance of drift on smaller models.
 
 **We fall back gracefully.**
-If the preferred model is not available, the extension steps down to the next lightest available model. The fallback chain (GPT-4o → GPT-4o-mini → copilot-utility) is ordered so that the cheapest capable model is always preferred over a more expensive one.
+If the preferred model is not available, the extension steps down to the next available model. The fallback chain (GPT-4.1 → GPT-4o → `copilot-utility`) is ordered so that the most capable utility-tier model is preferred, with `copilot-utility` (the Copilot extension's `is_chat_fallback` alias) as a last resort to keep AI Performance Insights on a cost-neutral path for Copilot subscribers.
 
 ---
 
