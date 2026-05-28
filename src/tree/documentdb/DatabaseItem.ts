@@ -8,19 +8,12 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
+import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { CollectionItem } from './CollectionItem';
-
-/**
- * Escapes markdown special characters so user-provided text is always rendered
- * as plain text rather than being interpreted as markdown formatting or links.
- */
-function escapeMarkdown(text: string): string {
-    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
-}
 
 export class DatabaseItem implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue {
     public readonly id: string;
@@ -28,6 +21,14 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     public contextValue: string = 'treeItem_database';
 
     private readonly experienceContextValue: string = '';
+
+    /**
+     * Monotonic counter bumped on every `getChildren` call. Used to invalidate
+     * background document-count work owned by stale CollectionItem instances
+     * (refresh / collapse / re-expand creates fresh instances; we want the
+     * previous ones to bail before mutating UI state or hitting the server).
+     */
+    private expansionGeneration = 0;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -40,6 +41,9 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     }
 
     async getChildren(): Promise<TreeElement[]> {
+        const myGeneration = ++this.expansionGeneration;
+        const isCurrent = (): boolean => this.expansionGeneration === myGeneration;
+
         const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         const collections = await client.listCollections(this.databaseInfo.name);
 
@@ -57,13 +61,15 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
             ];
         }
 
-        // Sort collections alphabetically by name
+        // Sort collections alphabetically by name before kicking off background
+        // count loads. The per-cluster limiter dispatches in FIFO order, so
+        // sorting first means counts are requested in alphabetical order.
+        // Completion order still depends on per-request latency and may differ.
         collections.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
         return collections.map((collection) => {
-            const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection);
-            // Start loading document count in background (fire-and-forget)
-            // This does not block tree expansion
+            const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection, isCurrent);
+            // Start loading document count in background (fire-and-forget).
             collectionItem.loadDocumentCount();
             return collectionItem;
         });
