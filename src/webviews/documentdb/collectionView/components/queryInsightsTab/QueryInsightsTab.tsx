@@ -922,13 +922,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                                             {l10n.t(
-                                                'Powered by {0} via GitHub Copilot \u2014 a utility model intended to be cost-neutral for GitHub Copilot subscribers.',
+                                                'Powered by {0} via GitHub Copilot, a utility model intended to be cost-neutral for GitHub Copilot subscribers.',
                                                 modelUsed,
-                                            )}
-                                            {usageText && ` ${usageText}`}{' '}
-                                            <Link appearance="subtle" onClick={handleLearnMore} inline>
+                                            )}{' '}
+                                            <Link appearance="subtle" onClick={handleLearnMore} size={200} inline>
                                                 {l10n.t('Learn more')}
                                             </Link>
+                                            <br />
+                                            {usageText && `${usageText}`}
                                         </Text>
                                     </div>
                                 );

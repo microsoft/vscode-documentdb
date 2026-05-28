@@ -1245,6 +1245,7 @@
   "Using custom prompt template for {type} query: {path}": "Using custom prompt template for {type} query: {path}",
   "Using existing resource group \"{0}\".": "Using existing resource group \"{0}\".",
   "Using the table navigation, you can explore deeper levels or move back and forth between them.": "Using the table navigation, you can explore deeper levels or move back and forth between them.",
+  "Utility Model": "Utility Model",
   "Validate": "Validate",
   "Validate document syntax": "Validate document syntax",
   "Validating source collection...": "Validating source collection...",

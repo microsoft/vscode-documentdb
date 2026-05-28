@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    Badge,
     Button,
     Card,
     CardHeader,
@@ -131,9 +132,20 @@ export function GetPerformanceInsightsCard({
                 <div style={{ flex: 1 }}>
                     <CardHeader
                         header={
-                            <Text weight="semibold" size={500}>
-                                {l10n.t('AI Performance Insights')}
-                            </Text>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <Text weight="semibold" size={500}>
+                                    {l10n.t('AI Performance Insights')}
+                                </Text>
+                                <Badge
+                                    appearance="tint"
+                                    color="brand"
+                                    size="small"
+                                    icon={<SparkleRegular />}
+                                    aria-label={l10n.t('Utility Model')}
+                                >
+                                    {l10n.t('Utility Model')}
+                                </Badge>
+                            </div>
                         }
                         action={
                             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
