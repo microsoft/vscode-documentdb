@@ -238,7 +238,7 @@ export class CopilotService {
                 l10n.t('[Copilot] No model preferences supplied; using first available: {0}', fallback.id),
             );
         } else {
-            ext.outputChannel.warn(
+            ext.outputChannel.trace(
                 l10n.t('[Copilot] No preferred model matched; falling back to first available: {0}', fallback.id),
             );
         }
