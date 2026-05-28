@@ -30,7 +30,7 @@
  * - Integration with actual explain data
  */
 
-import { MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
+import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens } from '@fluentui/react-components';
 import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
@@ -464,6 +464,19 @@ export const QueryInsightsMain = (): JSX.Element => {
         },
     ];
 
+    /**
+     * Documentation URL for the AI Performance Insights feature.
+     *
+     * Centralised so the "Learn more about AI Performance Insights" button in
+     * the brand card, the cost-disclosure row, and the post-response "Powered
+     * by" byline all open the same page.
+     */
+    const aiInsightsDocsUrl = 'https://learn.microsoft.com/azure/documentdb/index-advisor';
+
+    const handleLearnMore = useCallback((): void => {
+        void trpcClient.common.openUrl.mutate({ url: aiInsightsDocsUrl });
+    }, [trpcClient]);
+
     const handleGetAISuggestions = () => {
         // Transition to Stage 3 loading (this will reset UI flags)
         transitionToStage(3, 'loading');
@@ -857,17 +870,41 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 enabled={currentStage.phase >= 2 && currentStage.status !== 'loading'}
                                 errorMessage={queryInsightsState.stage3ErrorMessage ?? undefined}
                                 onGetInsights={handleGetAISuggestions}
-                                onLearnMore={() => {
-                                    void trpcClient.common.openUrl.mutate({
-                                        url: 'https://learn.microsoft.com/azure/documentdb/index-advisor',
-                                    });
-                                }}
+                                onLearnMore={handleLearnMore}
                                 onCancel={handleCancelAI}
                             />
                         </CollapseRelaxed>
 
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList items={insightCards} exitDuration={300} />
+
+                        {/* Post-response "Powered by" byline.
+                            Surfaces the actual model id returned by CopilotService so the user
+                            can see when fallbacks (e.g., gpt-4o-mini, copilot-utility) kick in.
+                            Styled to match the existing "AI responses may be inaccurate" caption. */}
+                        {currentStage.phase === 3 &&
+                            currentStage.status === 'success' &&
+                            queryInsightsState.stage3Data?.modelUsed && (
+                                <div
+                                    className="cardSpacing"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: '6px',
+                                        color: tokens.colorNeutralForeground3,
+                                    }}
+                                >
+                                    <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                        {l10n.t(
+                                            'Powered by {0} via GitHub Copilot.',
+                                            queryInsightsState.stage3Data.modelUsed,
+                                        )}{' '}
+                                        <Link appearance="subtle" onClick={handleLearnMore} inline>
+                                            {l10n.t('Learn more')}
+                                        </Link>
+                                    </Text>
+                                </div>
+                            )}
                     </div>
                 </div>
 
