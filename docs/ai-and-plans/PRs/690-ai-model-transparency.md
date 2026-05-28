@@ -205,3 +205,60 @@ If cost is irrelevant (all are utility models), choose **GPT-4.1** for the index
 | **GPT-5.4 nano** | Light/moderate | Light/moderate | **Fastest** | Best for routing, formatting, structured extraction, or quick "needs review / doesn't need review" checks. Not my pick for nuanced recommendations. |
 
 **Bottom line:** use **GPT-4.1** if you want the best single model. Use **GPT-4o** if you want a noticeably faster assistant and most recommendations are straightforward. Use the mini/nano models only as pre-processors or triage layers, not as the final recommender.
+
+---
+
+## Review-feedback follow-up (post-initial-push)
+
+After the first push, [`docs/analysis/pr-690-review.md`](../../analysis/pr-690-review.md) was used to drive a second round of changes addressing reviewer findings. Items below are **significant** changes only — comment-only / wording-only fixes are recorded in the per-fix PR comments. See [`docs/analysis/pr-690-high-finding-research.md`](../../analysis/pr-690-high-finding-research.md) for the research note that informed the High finding direction.
+
+### `CopilotResponse` now exposes id / family / display-name separately (Medium #2)
+
+`CopilotResponse.modelUsed: string` is removed. The contract now carries three distinct fields:
+
+```typescript
+interface CopilotResponse {
+    modelId: string;            // stable LanguageModelChat.id (telemetry, exact compare)
+    modelFamily: string;        // stable LanguageModelChat.family (preferred-model check)
+    modelDisplayName: string;   // human-readable LanguageModelChat.name (byline only)
+    // ...
+}
+```
+
+This propagates through `OptimizationResult`, `AIOptimizationResponse`, `transformations.ts`, `QueryInsightsStage3Response`, and the webview (`QueryInsightsTab` reads `modelDisplayName`). The Stage 3 telemetry property is split into `aiModelDisclosed` (id) and `aiModelFamily`.
+
+The warning toast that used to fire on every Copilot response (because `display name !== preferred id`) now compares against `modelFamily` first, falling back to `modelId` for `copilot-utility`-style entries that aren't expressed as a family.
+
+### Per-feature model constants + telemetry `featureSource` (Medium #4)
+
+The previously shared `PREFERRED_MODEL` / `FALLBACK_MODELS` in `promptTemplates.ts` are split into per-feature constants:
+
+- `INDEX_OPTIMIZATION_PREFERRED_MODEL` / `INDEX_OPTIMIZATION_FALLBACK_MODELS`
+- `QUERY_GENERATION_PREFERRED_MODEL` / `QUERY_GENERATION_FALLBACK_MODELS`
+
+Values are unchanged (`gpt-4.1` -> `gpt-4o` -> `copilot-utility` for both) but the structure makes it safe to diverge later. `CopilotMessageOptions.featureSource: 'queryInsights' | 'queryGeneration'` is plumbed in so the shared `vscode-documentdb.copilot.sendMessage` telemetry event is now attributable by source via a `featureSource` property.
+
+### Manual softened: post-response token measurement, not pre-send budgeting (Medium #3, Additional #1)
+
+`docs/user-manual/ai-utility-model.md` previously claimed the extension truncates query plan / statistics pre-send when they exceed `maxInputTokens`. No such truncation exists. The "We target the model's context window" paragraph is rewritten to describe what is actually implemented: `maxInputTokens` is read from model metadata, prompt tokens are counted **after** the response, and `promptUtilizationPct` is surfaced via telemetry and the trace output channel for diagnostics.
+
+The "Which model was actually used?" paragraph is also corrected to match the byline change: the byline shows `LanguageModelChat.name` (e.g. `GPT-4o`), not the opaque id, and the stable id is captured in telemetry / trace for diagnostics.
+
+The fallback-chain advertisement is updated to `GPT-4.1 -> GPT-4o -> copilot-utility` to match the code (Low #5).
+
+### `modelsAvailable` telemetry capped and deduped (Additional Low)
+
+The `modelsAvailable` property used to join every `LanguageModelChat.id` verbatim and routinely exceeded downstream property-size limits. It now uses families (short stable names), dedupes via `Set`, sorts, caps at 8 entries, and appends `+N-more` when truncated.
+
+### `dumpModelMetadata` memoised per model id (Additional Low)
+
+Static metadata for a given `LanguageModelChat.id` is now emitted at most once per extension-host process instead of on every Copilot request, keeping the trace stream readable.
+
+### Consent-missing error message clarified (Additional Nit)
+
+The "No suitable language model found" error now also mentions the VS Code language-model access consent prompt, so users who dismissed it know to re-run the feature to re-trigger it.
+
+### Service-internal trace prefix unified to `[Copilot]` (Additional Nit)
+
+The cancellation trace inside `CopilotService` no longer says `[Query Insights AI]`; service-internal traces are now consistently prefixed `[Copilot]` while caller-side traces keep their feature prefixes (`[Query Insights AI]`, `[Query Generation]`).
+
