@@ -138,7 +138,19 @@ export class CopilotService {
                 // Capture the selection chain to telemetry for offline analysis
                 // (e.g., monitoring how often each fallback level is hit in production).
                 context.telemetry.properties.modelPreferenceChain = preferredModels.join(',') || '(none)';
-                context.telemetry.properties.modelsAvailable = availableModels.map((m) => m.id).join(',');
+                // Use families (well-known names) rather than opaque ids, dedupe,
+                // and cap to keep the property within downstream size limits — long
+                // id strings like `copilot-gpt-4o-mini-2024-07-18` repeated across
+                // 10+ models can blow past telemetry property caps and get
+                // truncated, hiding the very data the field is meant to expose.
+                const MAX_MODELS_REPORTED = 8;
+                const availableFamilies = Array.from(new Set(availableModels.map((m) => m.family))).sort();
+                const reportedFamilies = availableFamilies.slice(0, MAX_MODELS_REPORTED);
+                const truncatedCount = availableFamilies.length - reportedFamilies.length;
+                context.telemetry.properties.modelsAvailable =
+                    truncatedCount > 0
+                        ? `${reportedFamilies.join(',')},+${truncatedCount}-more`
+                        : reportedFamilies.join(',');
                 context.telemetry.measurements.modelsAvailableCount = availableModels.length;
 
                 if (!selectedModel) {
