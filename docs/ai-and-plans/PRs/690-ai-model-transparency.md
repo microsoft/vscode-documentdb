@@ -87,8 +87,8 @@ All five measurements are emitted to:
 `selectBestModel` now emits per-candidate trace lines:
 
 ```
-[AI] Model requested: gpt-4o — accepted (id: copilot-gpt-4o)
-[AI] Model requested: gpt-4o-mini — rejected (not available)
+[AI] Model requested: gpt-4.1 -- accepted (id: copilot-gpt-4.1)
+[AI] Model requested: gpt-4o -- rejected (not available)
 ```
 
 `sendMessage` records four telemetry properties: `modelPreferenceChain`, `modelsAvailable`, `modelSelectionOutcome`, `modelsAvailableCount`.
@@ -97,7 +97,7 @@ All five measurements are emitted to:
 
 ### 6. copilot-utility fallback
 
-`FALLBACK_MODELS` in `promptTemplates.ts` was extended with `copilot-utility` as the last resort. The model selection order is now: `gpt-4o` → `gpt-4o-mini` → `copilot-utility`.
+`FALLBACK_MODELS` in `promptTemplates.ts` was extended with `copilot-utility` as the last resort. The model selection order is now: `gpt-4.1` -> `gpt-4o` -> `copilot-utility`.
 
 ### 7. Link font-size fix
 

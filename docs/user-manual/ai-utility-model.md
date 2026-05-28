@@ -41,8 +41,8 @@ The extension tries models in the following order, stopping at the first one ava
 
 | Priority | Model family      | Notes                                                                    |
 | -------- | ----------------- | ------------------------------------------------------------------------ |
-| 1        | `gpt-4o`          | Preferred; strong reasoning, included on paid plans                     |
-| 2        | `gpt-4o-mini`     | Fallback; faster, lighter, also included on paid plans                  |
+| 1        | `gpt-4.1`         | Preferred; strong reasoning, included on paid plans (multiplier 0)      |
+| 2        | `gpt-4o`          | Fallback; also included on paid plans (multiplier 0)                    |
 | 3        | `copilot-utility` | Final fallback; the generic utility model exposed by the VS Code LM API |
 
 The model that was ultimately selected for a response is shown in the **"Powered by"** byline that appears below the AI suggestions after a successful analysis.

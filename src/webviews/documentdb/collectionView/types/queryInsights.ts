@@ -287,7 +287,7 @@ export interface QueryInsightsStage3Response {
     metadata?: OptimizationMetadata;
     /**
      * Id of the language model that produced the response (e.g., `gpt-4o`,
-     * `gpt-4o-mini`, `copilot-utility`). Surfaced in the panel as a small
+     * `gpt-4o`, `copilot-utility`). Surfaced in the panel as a small
      * “Powered by…” byline so users can see which model actually answered.
      * Optional for forward compatibility.
      */

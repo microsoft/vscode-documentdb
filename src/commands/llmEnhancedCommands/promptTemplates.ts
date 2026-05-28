@@ -11,12 +11,12 @@ import { ext } from '../../extensionVariables';
 /**
  * Preferred language model for index optimization
  */
-export const PREFERRED_MODEL = 'gpt-4o';
+export const PREFERRED_MODEL = 'gpt-4.1';
 
 /**
  * Fallback models to use if the preferred model is not available.
  *
- * The chain is: gpt-4o → gpt-4o-mini → copilot-utility.
+ * The chain is: gpt-4.1 -> gpt-4o -> copilot-utility.
  *
  * `copilot-utility` is the internal Copilot alias that resolves to whichever
  * chat model the CAPI marks as `is_chat_fallback`. It is published as a
@@ -24,10 +24,10 @@ export const PREFERRED_MODEL = 'gpt-4o';
  * can still be selected programmatically by id via
  * `vscode.lm.selectChatModels({ vendor: 'copilot' })`. Adding it as the
  * final fallback keeps the AI Performance Insights flow on a model that is
- * intended to be cost-neutral for Copilot subscribers, even if `gpt-4o` /
- * `gpt-4o-mini` become unavailable in the future.
+ * intended to be cost-neutral for Copilot subscribers, even if `gpt-4.1` /
+ * `gpt-4o` become unavailable in the future.
  */
-export const FALLBACK_MODELS = ['gpt-4o-mini', 'copilot-utility'];
+export const FALLBACK_MODELS = ['gpt-4o', 'copilot-utility'];
 
 /**
  * Prompt factory utility functions
