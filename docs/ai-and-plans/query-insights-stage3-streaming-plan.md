@@ -407,7 +407,7 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
 
 ### Phase 2 — Tolerant incremental parser (the real win)
 
-- [ ] **WI-7 — Streaming parser module.** New module (e.g.
+- [x] **WI-7 — Streaming parser module.** New module (e.g.
       `src/documentdb/queryInsights/streamingResponseParser.ts`) that consumes the growing buffer
       and produces `QueryInsightsStreamEvent`s:
   - Extract the **growing string value** of `analysis` → emit `summary` events with cumulative
@@ -423,6 +423,31 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
   - _Acceptance:_ unit tests covering: growing-string extraction, escaped quotes/braces in
     markdown, multiple improvements, zero improvements, truncated/aborted buffer, malformed
     JSON fallback. `npx jest` green.
+  - _Outcome:_ Added `StreamingResponseParser` in
+    `src/documentdb/queryInsights/streamingResponseParser.ts` plus 25 Jest cases in
+    `streamingResponseParser.test.ts` (covers basic happy path; byte-at-a-time feeding;
+    progressive emission at `\n\n` boundaries; simple + `\uXXXX` escapes incl. fragment
+    boundaries between `\\` and the escaped char and inside the 4 hex digits; multiple
+    improvements with stream-order indices; braces / brackets inside `shellCommand` /
+    `justification` / `risks` strings (no false-positive item boundary); nested arrays in
+    `indexOptions`; empty improvements; verification reconciliation; unknown top-level keys
+    incl. nested object, negative number, bool, null, array; truncation tolerance; malformed
+    / empty / whitespace-only buffer; double-finalize + post-finalize-feed guards;
+    out-of-order keys both ways). Implementation is a pure char-by-char state-machine
+    tokenizer with string-aware brace counting; `feed()` returns events incrementally and
+    `finalize()` returns `{events, parsed, parseError}` where `parsed` is the canonical
+    `JSON.parse` reconciliation (always wins per plan §3 / D6). Decision deviating from
+    plan §4: the `verification` event is sourced **only** from the reconciled
+    `JSON.parse` on `finalize()` rather than emitted streaming-side — items don't benefit
+    from progressive reveal in the UI, and reconciliation avoids any risk of partial-string
+    truncation mid-stream (confidence ≥ 80%, no user consult needed; documented in
+    Deviation Log). Also: progressive markdown emission triggers on `\n\n` only, not on
+    `###` separately — `###` headings always follow a `\n\n` paragraph break in practice,
+    so a single trigger covers both. Also extended `QueryInsightsStreamEvent` union with
+    the structured `summary` / `educational` / `recommendationStarted` / `recommendation`
+    / `verification` / `complete` variants (kept the WI-5 transitional `result` as
+    `@deprecated`; WI-8 will remove it from the subscription path). l10n / prettier /
+    lint / jest (2014 ✓, +25 new) / build all pass.
 - [ ] **WI-8 — Emit structured events from the subscription.** Replace WI-5's coarse-only
       output: feed each fragment from the async-iterable into the parser and `yield` the resulting domain events
       (`summary`/`educational`/`recommendationStarted`/`recommendation`/`verification`), then a
@@ -519,3 +544,15 @@ source** into the stream; reintroducing it is a deviation worth logging (and con
 if confidence < 80%).
 
 _(none yet)_
+
+2026-05-29 — WI-7 — `verification` items are sourced from the reconciled `JSON.parse` on
+`finalize()` rather than streamed per-item — Items don't benefit from progressive reveal
+(short text, all-or-nothing list at the end of the UI flow), and the reconciled source
+avoids any risk of partial-string truncation mid-stream. Streaming-side extraction would
+have added meaningful state-machine complexity for zero user-visible win. — 90% — n.
+
+2026-05-29 — WI-7 — Progressive markdown emission triggers on `\n\n` only (not separately
+on `###` as plan §4/WI-7 lists "split on `###` / blank line") — In practice the LLM always
+puts a blank line before `### Heading`, so `\n\n` detection covers the same boundaries.
+Detecting `\n###` mid-stream would require 3-char lookbehind for negligible additional UX
+benefit. — 85% — n.
