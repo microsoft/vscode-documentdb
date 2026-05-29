@@ -692,13 +692,18 @@ export async function optimizeQuery(
     // stable across Copilot extension updates.
     const preferredMatched = !preferredFamilyToUse || response.modelFamily === preferredFamilyToUse;
     if (!preferredMatched) {
-        // Show warning if not using preferred model
-        void vscode.window.showWarningMessage(
+        // Surface as a trace-channel warning rather than a notification toast:
+        // the fallback is automatic and there is nothing the user can act on,
+        // so a popup would only add confusion. The information stays
+        // available for diagnostics via the output channel and telemetry
+        // (`modelSelectionOutcome` on the shared sendMessage event).
+        ext.outputChannel.warn(
             l10n.t(
-                'Index optimization is using model "{actualModel}" instead of preferred "{preferredModel}". Recommendations may be less optimal.',
+                '[Query Insights AI] Preferred model family "{preferredFamily}" was not available; used "{actualModel}" (family: {actualFamily}) instead. Recommendations may be less optimal.',
                 {
+                    preferredFamily: preferredFamilyToUse,
                     actualModel: response.modelDisplayName,
-                    preferredModel: preferredFamilyToUse,
+                    actualFamily: response.modelFamily,
                 },
             ),
         );

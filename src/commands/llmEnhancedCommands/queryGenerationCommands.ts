@@ -298,13 +298,18 @@ export async function generateQuery(
     const preferredMatched =
         !QUERY_GENERATION_PREFERRED_FAMILY || response.modelFamily === QUERY_GENERATION_PREFERRED_FAMILY;
     if (!preferredMatched) {
-        // Show warning if not using preferred model
-        void vscode.window.showWarningMessage(
+        // Surface as a trace-channel warning rather than a notification toast:
+        // the fallback is automatic and there is nothing the user can act on,
+        // so a popup would only add confusion. The information stays
+        // available for diagnostics via the output channel and telemetry
+        // (`modelSelectionOutcome` on the shared sendMessage event).
+        ext.outputChannel.warn(
             l10n.t(
-                'Query generation is using model "{actualModel}" instead of preferred "{preferredModel}". Results may vary.',
+                '[Query Generation] Preferred model family "{preferredFamily}" was not available; used "{actualModel}" (family: {actualFamily}) instead. Results may vary.',
                 {
+                    preferredFamily: QUERY_GENERATION_PREFERRED_FAMILY,
                     actualModel: response.modelDisplayName,
-                    preferredModel: QUERY_GENERATION_PREFERRED_FAMILY,
+                    actualFamily: response.modelFamily,
                 },
             ),
         );
