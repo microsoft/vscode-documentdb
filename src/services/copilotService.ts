@@ -24,13 +24,21 @@ export type CopilotFeatureSource = 'queryInsights' | 'queryGeneration';
  * Options for sending a message to the language model
  */
 export interface CopilotMessageOptions {
-    /* The preferred model to use
-       If the specified model is not available, will fall back to available models
-    */
-    preferredModel?: string;
+    /**
+     * Preferred model **family** (`LanguageModelChat.family`, e.g.
+     * `'gpt-4.1'`). We key the preference chain on family rather than id
+     * because `LanguageModelChat.id` is documented as opaque and can change
+     * between Copilot extension versions (or include date-stamped suffixes
+     * like `copilot-gpt-4o-mini-2024-07-18`), whereas `family` is the
+     * well-known stable name that survives id churn.
+     *
+     * If the requested family is not available, the service falls back to
+     * {@link fallbackFamilies} in order.
+     */
+    preferredFamily?: string;
 
-    /* List of fallback models */
-    fallbackModels?: string[];
+    /** Ordered list of fallback model families. See {@link preferredFamily}. */
+    fallbackFamilies?: string[];
 
     /* AbortSignal for cancellation support */
     signal?: AbortSignal;
@@ -132,12 +140,12 @@ export class CopilotService {
                 // Get all available models from VS Code
                 const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
 
-                const preferredModels = this.getPreferredModels(options);
-                const selectedModel = this.selectBestModel(availableModels, preferredModels);
+                const preferredFamilies = this.getPreferredFamilies(options);
+                const selectedModel = this.selectBestModel(availableModels, preferredFamilies);
 
                 // Capture the selection chain to telemetry for offline analysis
                 // (e.g., monitoring how often each fallback level is hit in production).
-                context.telemetry.properties.modelPreferenceChain = preferredModels.join(',') || '(none)';
+                context.telemetry.properties.modelPreferenceChain = preferredFamilies.join(',') || '(none)';
                 // Use families (well-known names) rather than opaque ids, dedupe,
                 // and cap to keep the property within downstream size limits — long
                 // id strings like `copilot-gpt-4o-mini-2024-07-18` repeated across
@@ -164,7 +172,7 @@ export class CopilotService {
 
                 context.telemetry.properties.modelId = selectedModel.id;
                 context.telemetry.properties.modelFamily = selectedModel.family;
-                context.telemetry.properties.modelSelectionOutcome = preferredModels.includes(selectedModel.id)
+                context.telemetry.properties.modelSelectionOutcome = preferredFamilies.includes(selectedModel.family)
                     ? 'preferred-match'
                     : 'first-available-fallback';
 
@@ -224,41 +232,56 @@ export class CopilotService {
     }
 
     /**
-     * Builds the ordered list of preferred models
+     * Builds the ordered list of preferred model families.
      */
-    private static getPreferredModels(options?: CopilotMessageOptions): string[] {
-        const models: string[] = [];
+    private static getPreferredFamilies(options?: CopilotMessageOptions): string[] {
+        const families: string[] = [];
 
-        if (options?.preferredModel) {
-            models.push(options.preferredModel);
+        if (options?.preferredFamily) {
+            families.push(options.preferredFamily);
         }
 
-        if (options?.fallbackModels && options.fallbackModels.length > 0) {
-            models.push(...options.fallbackModels);
+        if (options?.fallbackFamilies && options.fallbackFamilies.length > 0) {
+            families.push(...options.fallbackFamilies);
         }
 
-        return models;
+        return families;
     }
 
     /**
      * Selects the best available model based on preference order.
      *
+     * **Matching is performed by `LanguageModelChat.family`** — the
+     * documented stable well-known name (`gpt-4.1`, `gpt-4o`, …) —
+     * not by `LanguageModelChat.id`. The id is documented as opaque and
+     * may change between Copilot extension versions (or carry
+     * date-stamped suffixes like `copilot-gpt-4o-mini-2024-07-18`); the
+     * family is the surface we expect to outlive id churn. Internal
+     * aliases like `copilot-utility` are published by the Copilot
+     * extension with the alias string used as **both** id and family,
+     * so they also match the family-based selector without needing a
+     * special id-fallback path.
+     *
      * Emits a structured trace of the selection chain to the output channel so
-     * users (and support) can see, per request, which models were requested,
+     * users (and support) can see, per request, which families were requested,
      * which were accepted, and which were rejected because they were not
      * available from the Copilot vendor.
      *
      * @param availableModels - All available models from VS Code
-     * @param preferredModels - Ordered list of preferred model families
+     * @param preferredFamilies - Ordered list of preferred model families
      * @returns The best matching model, or the first available model if no matches
      */
     private static selectBestModel(
         availableModels: vscode.LanguageModelChat[],
-        preferredModels: string[],
+        preferredFamilies: string[],
     ): vscode.LanguageModelChat | undefined {
-        const availableIds = availableModels.map((m) => m.id);
-        ext.outputChannel.trace(l10n.t('[Copilot] Available models from VS Code: {0}', JSON.stringify(availableIds)));
-        ext.outputChannel.trace(l10n.t('[Copilot] Model preference chain: {0}', JSON.stringify(preferredModels)));
+        const availableSummary = availableModels.map((m) => `${m.family} (${m.id})`);
+        ext.outputChannel.trace(
+            l10n.t('[Copilot] Available models from VS Code: {0}', JSON.stringify(availableSummary)),
+        );
+        ext.outputChannel.trace(
+            l10n.t('[Copilot] Model family preference chain: {0}', JSON.stringify(preferredFamilies)),
+        );
 
         if (availableModels.length === 0) {
             // Nothing the caller could possibly use — flag this clearly in the
@@ -269,30 +292,40 @@ export class CopilotService {
             return undefined;
         }
 
-        // Walk the preference chain in order; log accepted/rejected per entry
-        // so the full decision path is visible in the trace stream.
-        for (const preferredId of preferredModels) {
-            const matchingModel = availableModels.find((m) => m.id === preferredId);
+        // Walk the preference chain in order, matching on `family`; log
+        // accepted/rejected per entry so the full decision path is visible in
+        // the trace stream.
+        for (const preferredFamily of preferredFamilies) {
+            const matchingModel = availableModels.find((m) => m.family === preferredFamily);
             if (matchingModel) {
                 ext.outputChannel.trace(
-                    l10n.t('[Copilot] Requested "{0}" → accepted (matched available model)', preferredId),
+                    l10n.t(
+                        '[Copilot] Requested family "{0}" → accepted (matched id: {1})',
+                        preferredFamily,
+                        matchingModel.id,
+                    ),
                 );
                 ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', matchingModel.id));
                 return matchingModel;
             }
-            ext.outputChannel.trace(l10n.t('[Copilot] Requested "{0}" → rejected (not available)', preferredId));
+            ext.outputChannel.trace(
+                l10n.t(
+                    '[Copilot] Requested family "{0}" → rejected (no available model in this family)',
+                    preferredFamily,
+                ),
+            );
         }
 
         // No preference matched but models are available — fall back to the
         // first one Copilot returned so the feature degrades gracefully.
         const fallback = availableModels[0];
-        if (preferredModels.length === 0) {
+        if (preferredFamilies.length === 0) {
             ext.outputChannel.trace(
-                l10n.t('[Copilot] No model preferences supplied; using first available: {0}', fallback.id),
+                l10n.t('[Copilot] No family preferences supplied; using first available: {0}', fallback.id),
             );
         } else {
             ext.outputChannel.trace(
-                l10n.t('[Copilot] No preferred model matched; falling back to first available: {0}', fallback.id),
+                l10n.t('[Copilot] No preferred family matched; falling back to first available: {0}', fallback.id),
             );
         }
         ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', fallback.id));

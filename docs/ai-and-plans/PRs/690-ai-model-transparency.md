@@ -231,12 +231,61 @@ The warning toast that used to fire on every Copilot response (because `display 
 
 ### Per-feature model constants + telemetry `featureSource` (Medium #4)
 
-The previously shared `PREFERRED_MODEL` / `FALLBACK_MODELS` in `promptTemplates.ts` are split into per-feature constants:
+The previously shared `PREFERRED_MODEL` / `FALLBACK_MODELS` in `promptTemplates.ts` are split into per-feature constants. The constants are deliberately named after `LanguageModelChat.family` (see "Family-based model selection" below):
 
-- `INDEX_OPTIMIZATION_PREFERRED_MODEL` / `INDEX_OPTIMIZATION_FALLBACK_MODELS`
-- `QUERY_GENERATION_PREFERRED_MODEL` / `QUERY_GENERATION_FALLBACK_MODELS`
+- `INDEX_OPTIMIZATION_PREFERRED_FAMILY` / `INDEX_OPTIMIZATION_FALLBACK_FAMILIES`
+- `QUERY_GENERATION_PREFERRED_FAMILY` / `QUERY_GENERATION_FALLBACK_FAMILIES`
 
 Values are unchanged (`gpt-4.1` -> `gpt-4o` -> `copilot-utility` for both) but the structure makes it safe to diverge later. `CopilotMessageOptions.featureSource: 'queryInsights' | 'queryGeneration'` is plumbed in so the shared `vscode-documentdb.copilot.sendMessage` telemetry event is now attributable by source via a `featureSource` property.
+
+### Family-based model selection (High #1 follow-up)
+
+`CopilotService.selectBestModel` now matches the preferred-model chain against `LanguageModelChat.family` (the well-known stable name returned by the VS Code Language Model API — `gpt-4.1`, `gpt-4o`, …) rather than `LanguageModelChat.id`. Public `CopilotMessageOptions` fields are renamed in lockstep:
+
+- `preferredModel` → `preferredFamily`
+- `fallbackModels` → `fallbackFamilies`
+- `getPreferredModels` (helper) → `getPreferredFamilies`
+
+The naming pivot is intentional: `LanguageModelChat.id` is documented as **opaque** and can change between Copilot extension versions or carry date-stamped suffixes like `copilot-gpt-4o-mini-2024-07-18`. `LanguageModelChat.family` is the documented stable surface and is what the official VS Code Language Model API examples use:
+
+```typescript
+const [model] = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'gpt-4o' });
+```
+
+#### Why this is safe for `copilot-utility`
+
+`copilot-utility` is not a "real" model family — it's an alias the Copilot extension publishes for whichever endpoint is currently marked `is_chat_fallback`. We verified directly against the Copilot Chat extension source (`microsoft/vscode-copilot-chat`, `src/extension/conversation/vscode-node/languageModelAccess.ts`) that **alias entries are registered with the alias string used as *both* `id` and `family`**:
+
+```typescript
+// Primary model entry: id and family DIFFER
+models.push({
+  id: endpoint.model,        // e.g. "copilot-gpt-4.1"
+  family: endpoint.family,   // e.g. "gpt-4.1"
+  name: endpoint.name,       // e.g. "GPT-4.1"
+  // ...
+});
+
+// Alias entries: id and family are the SAME alias string
+const aliases = ModelAliasRegistry.getAliases(model.id);
+for (const alias of aliases) {
+  models.push({
+    ...model,
+    id: alias,        // e.g. "copilot-utility"
+    family: alias,    // same alias string for family too
+    isUserSelectable: false,
+  });
+}
+```
+
+So every entry in our preferred/fallback chain — `gpt-4.1`, `gpt-4o`, `copilot-utility` — matches by family today, and the matcher does not need an `|| id === preferred` belt-and-braces fallback to handle aliases.
+
+#### Why this was a real bug
+
+Before this change, `selectBestModel` matched on `m.id === preferredId`. With Copilot exposing real model ids like `copilot-gpt-4.1` and `copilot-gpt-4o`, our `'gpt-4.1'` / `'gpt-4o'` chain entries never matched, and the code silently fell through to `availableModels[0]`. The `copilot-utility` entry happened to match (because aliases register the alias string as the id), which masked the bug in casual testing. Family-based matching fixes the silent fallback for the primary entries while keeping `copilot-utility` selectable.
+
+#### Warning-toast check follows the same rule
+
+The "preferred model not used" warning checks in `indexAdvisorCommands.ts` and `queryGenerationCommands.ts` now also compare strictly on family (`response.modelFamily === preferredFamilyToUse`). The earlier defensive `|| modelId === ...` fallback was removed once we confirmed aliases register family alongside id — it added a branch that could never fire in practice for any entry in our chain, and would only matter if we ever pinned a date-stamped snapshot id, which we do not.
 
 ### Manual softened: post-response token measurement, not pre-send budgeting (Medium #3, Additional #1)
 

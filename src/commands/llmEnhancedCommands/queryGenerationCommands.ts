@@ -13,8 +13,8 @@ import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { generateSchemaDefinition, type SchemaDefinition } from '../../utils/schemaInference';
 import {
-    QUERY_GENERATION_FALLBACK_MODELS,
-    QUERY_GENERATION_PREFERRED_MODEL,
+    QUERY_GENERATION_FALLBACK_FAMILIES,
+    QUERY_GENERATION_PREFERRED_FAMILY,
     getQueryTypeConfig,
     type FilledPromptResult,
 } from './promptTemplates';
@@ -264,10 +264,11 @@ export async function generateQuery(
         schemas,
     );
 
-    // Send to Copilot with configured models
+    // Send to Copilot with configured model families. Selection is keyed on
+    // LanguageModelChat.family (the stable well-known name), not id.
     ext.outputChannel.trace(
-        l10n.t('[Query Generation] Calling Copilot (model: {model})...', {
-            model: QUERY_GENERATION_PREFERRED_MODEL || 'default',
+        l10n.t('[Query Generation] Calling Copilot (family: {family})...', {
+            family: QUERY_GENERATION_PREFERRED_FAMILY || 'default',
         }),
     );
     const response = await CopilotService.sendMessage(
@@ -277,8 +278,8 @@ export async function generateQuery(
             vscode.LanguageModelChatMessage.User(contextData),
         ],
         {
-            preferredModel: QUERY_GENERATION_PREFERRED_MODEL,
-            fallbackModels: QUERY_GENERATION_FALLBACK_MODELS,
+            preferredFamily: QUERY_GENERATION_PREFERRED_FAMILY,
+            fallbackFamilies: QUERY_GENERATION_FALLBACK_FAMILIES,
             featureSource: 'queryGeneration',
         },
     );
@@ -290,13 +291,12 @@ export async function generateQuery(
         }),
     );
 
-    // Check if the preferred model was used. Compare against family (the
-    // documented stable name) first, falling back to id for entries like
-    // `copilot-utility` that aren't expressed as a family.
+    // Check if the preferred model family was used. Match strictly on family
+    // (LanguageModelChat.family) — the stable well-known name. Ids are opaque
+    // and version-suffixed, families are the contract we expect to remain
+    // stable across Copilot extension updates.
     const preferredMatched =
-        !QUERY_GENERATION_PREFERRED_MODEL ||
-        response.modelFamily === QUERY_GENERATION_PREFERRED_MODEL ||
-        response.modelId === QUERY_GENERATION_PREFERRED_MODEL;
+        !QUERY_GENERATION_PREFERRED_FAMILY || response.modelFamily === QUERY_GENERATION_PREFERRED_FAMILY;
     if (!preferredMatched) {
         // Show warning if not using preferred model
         void vscode.window.showWarningMessage(
@@ -304,7 +304,7 @@ export async function generateQuery(
                 'Query generation is using model "{actualModel}" instead of preferred "{preferredModel}". Results may vary.',
                 {
                     actualModel: response.modelDisplayName,
-                    preferredModel: QUERY_GENERATION_PREFERRED_MODEL,
+                    preferredModel: QUERY_GENERATION_PREFERRED_FAMILY,
                 },
             ),
         );

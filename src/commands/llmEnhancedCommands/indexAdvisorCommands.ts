@@ -15,8 +15,8 @@ import { ext } from '../../extensionVariables';
 import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import {
-    INDEX_OPTIMIZATION_FALLBACK_MODELS,
-    INDEX_OPTIMIZATION_PREFERRED_MODEL,
+    INDEX_OPTIMIZATION_FALLBACK_FAMILIES,
+    INDEX_OPTIMIZATION_PREFERRED_FAMILY,
     getLastPromptSource,
     type FilledPromptResult,
 } from './promptTemplates';
@@ -73,10 +73,11 @@ export interface QueryOptimizationContext {
     indexStats?: IndexStats[];
     // Static analysis summary from Stage 2 (what the user has already been shown)
     staticAnalysisSummary?: string;
-    // Preferred LLM model for optimization
-    preferredModel?: string;
-    // Fallback LLM models
-    fallbackModels?: string[];
+    // Preferred LLM model family for optimization (e.g., 'gpt-4.1').
+    // Matched against `LanguageModelChat.family`.
+    preferredFamily?: string;
+    // Fallback LLM model families, tried in order.
+    fallbackFamilies?: string[];
     // AbortSignal for cancellation support
     signal?: AbortSignal;
 }
@@ -617,13 +618,14 @@ export async function optimizeQuery(
     context.telemetry.properties.promptSource = getLastPromptSource();
     context.telemetry.properties.hasStaticAnalysisSummary = queryContext.staticAnalysisSummary ? 'true' : 'false';
 
-    // Send to Copilot with configured models
-    const preferredModelToUse = queryContext.preferredModel || INDEX_OPTIMIZATION_PREFERRED_MODEL;
-    const fallbackModelsToUse = queryContext.fallbackModels || INDEX_OPTIMIZATION_FALLBACK_MODELS;
+    // Send to Copilot with configured model families. Selection is keyed on
+    // LanguageModelChat.family (the stable well-known name), not id.
+    const preferredFamilyToUse = queryContext.preferredFamily || INDEX_OPTIMIZATION_PREFERRED_FAMILY;
+    const fallbackFamiliesToUse = queryContext.fallbackFamilies || INDEX_OPTIMIZATION_FALLBACK_FAMILIES;
 
     ext.outputChannel.trace(
-        l10n.t('[Query Insights AI] Calling Copilot (model: {model})...', {
-            model: preferredModelToUse,
+        l10n.t('[Query Insights AI] Calling Copilot (family: {family})...', {
+            family: preferredFamilyToUse,
         }),
     );
 
@@ -643,8 +645,8 @@ export async function optimizeQuery(
     }
 
     const response = await CopilotService.sendMessage(messages, {
-        preferredModel: preferredModelToUse,
-        fallbackModels: fallbackModelsToUse,
+        preferredFamily: preferredFamilyToUse,
+        fallbackFamilies: fallbackFamiliesToUse,
         signal: queryContext.signal,
         featureSource: 'queryInsights',
     });
@@ -684,13 +686,11 @@ export async function optimizeQuery(
         }),
     );
 
-    // Check if the preferred model was used. Compare against family (the
-    // documented stable name) first, falling back to id for entries like
-    // `copilot-utility` that aren't expressed as a family.
-    const preferredMatched =
-        !preferredModelToUse ||
-        response.modelFamily === preferredModelToUse ||
-        response.modelId === preferredModelToUse;
+    // Check if the preferred model family was used. Match strictly on family
+    // (LanguageModelChat.family) — the stable well-known name. Ids are opaque
+    // and version-suffixed, families are the contract we expect to remain
+    // stable across Copilot extension updates.
+    const preferredMatched = !preferredFamilyToUse || response.modelFamily === preferredFamilyToUse;
     if (!preferredMatched) {
         // Show warning if not using preferred model
         void vscode.window.showWarningMessage(
@@ -698,7 +698,7 @@ export async function optimizeQuery(
                 'Index optimization is using model "{actualModel}" instead of preferred "{preferredModel}". Recommendations may be less optimal.',
                 {
                     actualModel: response.modelDisplayName,
-                    preferredModel: preferredModelToUse,
+                    preferredModel: preferredFamilyToUse,
                 },
             ),
         );
