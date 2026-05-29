@@ -64,7 +64,7 @@ extends:
             suppression:
                 suppressionFile: $(Build.SourcesDirectory)/.config/guardian/.gdnsuppress
             codeql:
-                excludePathPatterns: '**/.vscode-test, dist' # Exclude .vscode-test and dist directories from CodeQL alerting
+                excludePathPatterns: 'dist' # Exclude .vscode-test and dist directories from CodeQL alerting
                 compiled:
                     ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
                         enabled: true
