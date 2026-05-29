@@ -41,6 +41,65 @@ import { type QueryInsightsStreamEvent } from '../types/queryInsightsStream';
 const STATUS_EVENT_INTERVAL_MS = 250;
 
 /**
+ * **Debug-only** artificial delay applied before every yield to the
+ * webview, in milliseconds. Set to a non-zero value to make the
+ * progressive UI easier to observe during manual verification when the
+ * LLM responds quickly (paragraphs appearing one at a time, recommendation
+ * shells visible before they fill, etc.). Should be `0` in shipped code.
+ *
+ * Setting this to e.g. `1000` slows the stream substantially: every
+ * structured event (and every throttled `status: receiving` event) waits
+ * this long before being sent. Iteration over `streamHandle.fragments`
+ * also pauses for this long per parser-emitted event, so the underlying
+ * LLM call effectively stalls between yields too — which is what makes
+ * the progressive cards visible to the eye.
+ */
+const DEBUG_YIELD_DELAY_MS = 1000;
+
+/**
+ * Sleep helper used to insert {@link DEBUG_YIELD_DELAY_MS} before each
+ * yield. A no-op fast path when the delay is `0` so shipping the change
+ * has zero cost.
+ */
+function delayYield(): Promise<void> {
+    if (DEBUG_YIELD_DELAY_MS <= 0) {
+        return Promise.resolve();
+    }
+    return new Promise((resolve) => setTimeout(resolve, DEBUG_YIELD_DELAY_MS));
+}
+
+/**
+ * One-line, low-cardinality human-readable description of a
+ * {@link QueryInsightsStreamEvent} for the trace channel. Keeps the
+ * per-event log lines compact so the full stream is scannable end-to-end
+ * during manual verification.
+ *
+ * Markdown / recommendation payloads are summarised by length / index
+ * only — the full content lives in the parser's reconciled snapshot if
+ * deeper debugging is required.
+ */
+function describeEvent(event: QueryInsightsStreamEvent): string {
+    switch (event.type) {
+        case 'status':
+            return `status(phase=${event.phase}, chars=${event.charsReceived ?? 0})`;
+        case 'summary':
+            return `summary(complete=${event.complete}, len=${event.markdown.length})`;
+        case 'educational':
+            return `educational(complete=${event.complete}, len=${event.markdown.length})`;
+        case 'recommendationStarted':
+            return `recommendationStarted(index=${event.index})`;
+        case 'recommendation':
+            return `recommendation(index=${event.index}, action=${event.recommendation.action}, indexName=${event.recommendation.indexName})`;
+        case 'verification':
+            return `verification(items=${event.items.length})`;
+        case 'complete':
+            return `complete(modelDisplayName=${event.modelDisplayName ?? 'unknown'}, modelFamily=${event.modelFamily ?? 'unknown'}, totalTokens=${event.usage?.totalTokens ?? 'n/a'})`;
+        default:
+            return 'unknown';
+    }
+}
+
+/**
  * Dedicated telemetry event name for the Stage 3 streaming subscription.
  *
  * Per plan §7 / WI-10, the auto rpc event
@@ -175,12 +234,26 @@ export const queryInsightsEventsRoutes = {
                     }),
                 );
 
-                yield {
-                    type: 'status',
-                    phase: 'connecting',
-                    elapsedMs: elapsed(),
-                    charsReceived: 0,
-                };
+                {
+                    const connectingEvent: QueryInsightsStreamEvent = {
+                        type: 'status',
+                        phase: 'connecting',
+                        elapsedMs: elapsed(),
+                        charsReceived: 0,
+                    };
+                    ext.outputChannel.trace(
+                        l10n.t('[Query Insights Stage 3 stream] [+{ms}ms] yield: {desc} (requestKey: {key})', {
+                            ms: elapsed().toString(),
+                            desc: describeEvent(connectingEvent),
+                            key: requestKey,
+                        }),
+                    );
+                    await delayYield();
+                    if (abortController.signal.aborted) {
+                        return;
+                    }
+                    yield connectingEvent;
+                }
 
                 // Build the same queryContext + staticAnalysisSummary that
                 // the buffered `getQueryInsightsStage3` builds today. The
@@ -274,6 +347,14 @@ export const queryInsightsEventsRoutes = {
                     // fragment so progressive UI gets first-priority data.
                     const parserEvents = parser.feed(fragment);
                     for (const event of parserEvents) {
+                        ext.outputChannel.trace(
+                            l10n.t('[Query Insights Stage 3 stream] [+{ms}ms] yield: {desc} (requestKey: {key})', {
+                                ms: elapsed().toString(),
+                                desc: describeEvent(event),
+                                key: requestKey,
+                            }),
+                        );
+                        await delayYield();
                         if (abortController.signal.aborted) {
                             return;
                         }
@@ -283,12 +364,24 @@ export const queryInsightsEventsRoutes = {
                     const now = elapsed();
                     if (now - lastStatusYieldAt >= STATUS_EVENT_INTERVAL_MS) {
                         lastStatusYieldAt = now;
-                        yield {
+                        const receivingEvent: QueryInsightsStreamEvent = {
                             type: 'status',
                             phase: 'receiving',
                             elapsedMs: now,
                             charsReceived,
                         };
+                        ext.outputChannel.trace(
+                            l10n.t('[Query Insights Stage 3 stream] [+{ms}ms] yield: {desc} (requestKey: {key})', {
+                                ms: elapsed().toString(),
+                                desc: describeEvent(receivingEvent),
+                                key: requestKey,
+                            }),
+                        );
+                        await delayYield();
+                        if (abortController.signal.aborted) {
+                            return;
+                        }
+                        yield receivingEvent;
                     }
                 }
 
@@ -296,12 +389,26 @@ export const queryInsightsEventsRoutes = {
                     return;
                 }
 
-                yield {
-                    type: 'status',
-                    phase: 'parsing',
-                    elapsedMs: elapsed(),
-                    charsReceived,
-                };
+                {
+                    const parsingEvent: QueryInsightsStreamEvent = {
+                        type: 'status',
+                        phase: 'parsing',
+                        elapsedMs: elapsed(),
+                        charsReceived,
+                    };
+                    ext.outputChannel.trace(
+                        l10n.t('[Query Insights Stage 3 stream] [+{ms}ms] yield: {desc} (requestKey: {key})', {
+                            ms: elapsed().toString(),
+                            desc: describeEvent(parsingEvent),
+                            key: requestKey,
+                        }),
+                    );
+                    await delayYield();
+                    if (abortController.signal.aborted) {
+                        return;
+                    }
+                    yield parsingEvent;
+                }
 
                 // `streamHandle.completion` runs the canonical full
                 // `JSON.parse` and adds model + usage metadata. Our parser
@@ -322,6 +429,14 @@ export const queryInsightsEventsRoutes = {
                 // reconciled `JSON.parse`).
                 const finalize = parser.finalize();
                 for (const event of finalize.events) {
+                    ext.outputChannel.trace(
+                        l10n.t('[Query Insights Stage 3 stream] [+{ms}ms] yield: {desc} (requestKey: {key})', {
+                            ms: elapsed().toString(),
+                            desc: describeEvent(event),
+                            key: requestKey,
+                        }),
+                    );
+                    await delayYield();
                     if (abortController.signal.aborted) {
                         return;
                     }
@@ -401,13 +516,27 @@ export const queryInsightsEventsRoutes = {
                     ),
                 );
 
-                yield {
-                    type: 'complete',
-                    modelDisplayName: aiResponse.modelDisplayName,
-                    modelId: aiResponse.modelId,
-                    modelFamily: aiResponse.modelFamily,
-                    usage: aiResponse.usage,
-                };
+                {
+                    const completeEvent: QueryInsightsStreamEvent = {
+                        type: 'complete',
+                        modelDisplayName: aiResponse.modelDisplayName,
+                        modelId: aiResponse.modelId,
+                        modelFamily: aiResponse.modelFamily,
+                        usage: aiResponse.usage,
+                    };
+                    ext.outputChannel.trace(
+                        l10n.t('[Query Insights Stage 3 stream] [+{ms}ms] yield: {desc} (requestKey: {key})', {
+                            ms: elapsed().toString(),
+                            desc: describeEvent(completeEvent),
+                            key: requestKey,
+                        }),
+                    );
+                    await delayYield();
+                    if (abortController.signal.aborted) {
+                        return;
+                    }
+                    yield completeEvent;
+                }
             } finally {
                 myCtx.signal?.removeEventListener('abort', onCtxAbort);
                 abortController.abort();

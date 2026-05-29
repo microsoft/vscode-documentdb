@@ -1071,21 +1071,15 @@ export const QueryInsightsMain = (): JSX.Element => {
                             </Skeleton>
                         )}
 
-                        {/* GetPerformanceInsightsCard with CollapseRelaxed animation
-                            Shown in Stage 2 when AI insights haven't been requested yet, or when there's an error.
-                            Collapses as soon as the first Stage 3 streaming event arrives
-                            (`stage3Streaming` becomes non-null) so the progressive cards take over
-                            the screen real estate. Falls back to the materialized `stage3Data`
-                            snapshot for the post-complete window (legacy buffered path also relies
-                            on this fallback).
+                        {/* GetPerformanceInsightsCard with CollapseRelaxed animation.
+                            Shown in Stage 2 when AI insights haven't been requested yet, or when
+                            there's an error. Stays visible throughout the entire Stage 3 stream
+                            (while `currentStage.status === 'loading'` the inner stepper is shown
+                            via `isLoading`); collapses only once the terminal `complete` event
+                            materialises `stage3Data`, so the progress indicator does not disappear
+                            as soon as the first streamed card arrives.
                             Note: Component supports ref forwarding and applies its own spacing via className. */}
-                        <CollapseRelaxed
-                            visible={
-                                currentStage.phase >= 2 &&
-                                !queryInsightsState.stage3Data &&
-                                !queryInsightsState.stage3Streaming
-                            }
-                        >
+                        <CollapseRelaxed visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data}>
                             <GetPerformanceInsightsCard
                                 className="cardSpacing"
                                 bodyText={
