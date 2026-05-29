@@ -100,6 +100,23 @@ function describeEvent(event: QueryInsightsStreamEvent): string {
 }
 
 /**
+ * Truncate + sanitise a raw LLM fragment for the trace channel. Replaces
+ * newlines / tabs with their literal escapes so each fragment fits on one
+ * log line, and caps the preview at a fixed width to keep the channel
+ * scannable. Used by the per-fragment trace inside the subscription to
+ * surface the LLM's actual chunking (helps debug whether the parser's
+ * paragraph-boundary detection is granular enough).
+ */
+function previewFragment(fragment: string): string {
+    const MAX = 80;
+    const escaped = fragment.replace(/\\/g, '\\\\').replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+    if (escaped.length <= MAX) {
+        return JSON.stringify(escaped);
+    }
+    return JSON.stringify(escaped.slice(0, MAX) + '…');
+}
+
+/**
  * Dedicated telemetry event name for the Stage 3 streaming subscription.
  *
  * Per plan §7 / WI-10, the auto rpc event
@@ -340,6 +357,25 @@ export const queryInsightsEventsRoutes = {
                         return;
                     }
                     charsReceived += fragment.length;
+
+                    // Per-fragment trace to make the LLM's chunking visible
+                    // in the output channel — helps decide whether the
+                    // parser's paragraph-boundary detection is granular
+                    // enough for what the model is actually streaming. The
+                    // preview replaces newlines / tabs with their literal
+                    // escapes so each fragment fits on one log line.
+                    ext.outputChannel.trace(
+                        l10n.t(
+                            '[Query Insights Stage 3 stream] [+{ms}ms] fragment: len={len}, totalChars={total}, preview={preview} (requestKey: {key})',
+                            {
+                                ms: elapsed().toString(),
+                                len: fragment.length.toString(),
+                                total: charsReceived.toString(),
+                                preview: previewFragment(fragment),
+                                key: requestKey,
+                            },
+                        ),
+                    );
 
                     // Feed the parser and yield each structured event in
                     // stream order. Structured events are emitted ahead of
