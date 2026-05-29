@@ -106,8 +106,13 @@ export const QueryInsightsMain = (): JSX.Element => {
     const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
 
-    // AbortController ref for cancelling in-flight Stage 3 AI requests
-    const stage3AbortControllerRef = useRef<AbortController | null>(null);
+    // Subscription handle for the in-flight Stage 3 streaming subscription
+    // (collectionView.queryInsights.streamStage3). Calling `unsubscribe()`
+    // sends `subscription.stop` to the host, which both aborts the
+    // per-operation `AbortController` and calls `iterator.return()` on the
+    // procedure's async generator — so the underlying LLM call is cancelled
+    // in lock step. See packages/vscode-ext-react-webview README.
+    const stage3SubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
 
     // Timer ref for the delayed tips/error card shown during Stage 3 loading
     const stage3TipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -122,9 +127,9 @@ export const QueryInsightsMain = (): JSX.Element => {
                 clearTimeout(stage3TipsTimerRef.current);
                 stage3TipsTimerRef.current = null;
             }
-            if (stage3AbortControllerRef.current) {
-                stage3AbortControllerRef.current.abort();
-                stage3AbortControllerRef.current = null;
+            if (stage3SubscriptionRef.current) {
+                stage3SubscriptionRef.current.unsubscribe();
+                stage3SubscriptionRef.current = null;
             }
         };
     }, []);
@@ -519,83 +524,93 @@ export const QueryInsightsMain = (): JSX.Element => {
             stage3RequestKey: requestKey,
         }));
 
-        // Create an AbortController for this request so Cancel can abort server-side work
-        // Abort any previous in-flight request before creating a new controller
-        stage3AbortControllerRef.current?.abort();
-        const abortController = new AbortController();
-        stage3AbortControllerRef.current = abortController;
+        // Stop any previous in-flight subscription before starting a new one.
+        // `unsubscribe()` sends `subscription.stop` to the host, which both
+        // aborts the per-operation AbortController and calls `iterator.return()`
+        // on the procedure's async generator — so the underlying LLM call is
+        // cancelled in lock step.
+        stage3SubscriptionRef.current?.unsubscribe();
 
-        // Call the tRPC endpoint (10+ second delay expected from AI service)
-        const promise = trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage3
-            .query({ requestKey }, { signal: abortController.signal })
-            .then((response) => {
-                // Only update state if this request is still the current one
-                let wasAccepted = false;
-                setQueryInsightsStateHelper((prev) => {
-                    if (prev.stage3RequestKey !== requestKey) {
-                        // Request was cancelled or superseded by a newer request
-                        return prev;
+        // Subscribe to the Stage 3 streaming subscription. WI-5 emits only
+        // coarse `status` events plus a single terminal `result` event;
+        // WI-9 will start consuming the `status` events for progressive UI.
+        // For now we only react to the `result` event (final payload) and
+        // preserve the existing requestKey staleness guard for late/raced
+        // callbacks (e.g. if the user kicks off a fresh request before the
+        // previous one has fully unwound).
+        const subscription = trpcClient.mongoClusters.collectionView.queryInsights.streamStage3.subscribe(
+            { requestKey },
+            {
+                onData(event) {
+                    if (event.type !== 'result') {
+                        // 'status' events are intentionally ignored in WI-6;
+                        // WI-9 will wire them into progressive UI.
+                        return;
                     }
-                    wasAccepted = true;
-                    return {
-                        ...prev,
-                        stage3Data: response,
-                        stage3Promise: null,
-                        stage3RequestKey: null,
-                    };
-                });
 
-                // Only transition to success if the response was accepted
-                if (wasAccepted) {
-                    transitionToStage(3, 'success');
-                }
-                return response;
-            })
-            .catch((error: unknown) => {
-                // If the request was aborted (user clicked Cancel), silently discard
-                if (abortController.signal.aborted) {
-                    return undefined as never;
-                }
+                    let wasAccepted = false;
+                    setQueryInsightsStateHelper((prev) => {
+                        if (prev.stage3RequestKey !== requestKey) {
+                            // Request was cancelled or superseded by a newer request
+                            return prev;
+                        }
+                        wasAccepted = true;
+                        return {
+                            ...prev,
+                            stage3Data: event.data,
+                            stage3Promise: null,
+                            stage3RequestKey: null,
+                        };
+                    });
 
-                const errorMessage = error instanceof Error ? error.message : String(error);
-                const errorCode = extractErrorCode(error);
-
-                // Only update state if this request is still the current one
-                let wasAccepted = false;
-                setQueryInsightsStateHelper((prev) => {
-                    if (prev.stage3RequestKey !== requestKey) {
-                        // Request was cancelled or superseded by a newer request
-                        return prev;
+                    // Only transition to success if the response was accepted
+                    if (wasAccepted) {
+                        transitionToStage(3, 'success');
                     }
-                    wasAccepted = true;
-                    return {
-                        ...prev,
-                        stage3ErrorMessage: errorMessage,
-                        stage3ErrorCode: errorCode,
-                        stage3Promise: null,
-                        stage3RequestKey: null,
-                    };
-                });
+                },
+                onError(error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    const errorCode = extractErrorCode(error);
 
-                // Only transition to error and display message if the error was accepted
-                if (wasAccepted) {
-                    transitionToStage(3, 'error');
-                    // Error display is handled by useEffect when error state changes
-                }
-                // Return undefined to satisfy TypeScript without creating unhandled rejection
-                return undefined as never;
-            })
-            .finally(() => {
-                // Clear the ref only if it still points to this request's controller
-                if (stage3AbortControllerRef.current === abortController) {
-                    stage3AbortControllerRef.current = null;
-                }
-            });
+                    // Only update state if this request is still the current one.
+                    // After `handleCancelAI` (or a superseding request) clears
+                    // `stage3RequestKey`, any late `onError` from the framework's
+                    // unsubscribe race is silently discarded by this guard.
+                    let wasAccepted = false;
+                    setQueryInsightsStateHelper((prev) => {
+                        if (prev.stage3RequestKey !== requestKey) {
+                            return prev;
+                        }
+                        wasAccepted = true;
+                        return {
+                            ...prev,
+                            stage3ErrorMessage: errorMessage,
+                            stage3ErrorCode: errorCode,
+                            stage3Promise: null,
+                            stage3RequestKey: null,
+                        };
+                    });
 
-        setQueryInsightsStateHelper((prev) => ({
-            ...prev,
-            stage3Promise: promise,
-        }));
+                    if (wasAccepted) {
+                        transitionToStage(3, 'error');
+                        // Error display is handled by useEffect when error state changes
+                    }
+
+                    if (stage3SubscriptionRef.current === subscription) {
+                        stage3SubscriptionRef.current = null;
+                    }
+                },
+                onComplete() {
+                    // Clear the ref only if it still points to this request's
+                    // subscription. Don't drive any UI state from here — the
+                    // terminal `result` event already drove the success path.
+                    if (stage3SubscriptionRef.current === subscription) {
+                        stage3SubscriptionRef.current = null;
+                    }
+                },
+            },
+        );
+        stage3SubscriptionRef.current = subscription;
     };
 
     const handleCancelAI = () => {
@@ -605,14 +620,17 @@ export const QueryInsightsMain = (): JSX.Element => {
             stage3TipsTimerRef.current = null;
         }
 
-        // Abort the in-flight tRPC request so the server can stop work early
-        if (stage3AbortControllerRef.current) {
-            stage3AbortControllerRef.current.abort();
-            stage3AbortControllerRef.current = null;
+        // Stop the in-flight subscription so the host stops the LLM call early.
+        // `unsubscribe()` triggers `subscription.stop` → server AbortController
+        // abort + `iterator.return()` on the generator.
+        if (stage3SubscriptionRef.current) {
+            stage3SubscriptionRef.current.unsubscribe();
+            stage3SubscriptionRef.current = null;
         }
 
-        // Cancel the loading state and clear the request key
-        // When the promise eventually returns, it will check the key and ignore the result
+        // Cancel the loading state and clear the request key. If any onData /
+        // onComplete / onError still fires from a race with unsubscribe, the
+        // requestKey guard in the subscription callbacks will discard it.
         setQueryInsightsStateHelper((prev) => ({
             ...prev,
             stage3Promise: null,

@@ -383,11 +383,27 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     `finally` aborts on `iterator.return()` (panel dispose / `subscription.stop`).
     Webview migration is deferred to WI-6. l10n / prettier / lint / jest (1989 ✓) / build
     all pass.
-- [ ] **WI-6 — Webview `.subscribe()` migration.** Convert `QueryInsightsTab` from `.query()`
+- [x] **WI-6 — Webview `.subscribe()` migration.** Convert `QueryInsightsTab` from `.query()`
       to `.subscribe({onData,onComplete,onError})`. Preserve requestKey staleness guard; cancel
       via `sub.unsubscribe()`; keep error/tips behavior.
   - _Acceptance:_ full Stage-3 flow works via subscription; abort + stale-request handling
     verified; no regression in final UI.
+  - _Outcome:_ Replaced `stage3AbortControllerRef` with `stage3SubscriptionRef`
+    (`{ unsubscribe(): void } | null`) and swapped the
+    `collectionView.queryInsights.getQueryInsightsStage3.query({...}, {signal})` call for
+    `collectionView.queryInsights.streamStage3.subscribe({requestKey}, {onData,onComplete,onError})`.
+    `onData` routes only the terminal `type: 'result'` event to the existing requestKey-guarded
+    success path (writing `stage3Data` + `transitionToStage(3, 'success')`); coarse
+    `type: 'status'` events are intentionally ignored in WI-6 and will be wired up by WI-9.
+    `onError` reuses the existing extractErrorCode / `displayedErrors` flow; `onComplete`
+    only clears the ref (no UI state, since `result` already drove success). `handleCancelAI`
+    now calls `unsubscribe()` (which sends `subscription.stop` → server AbortController abort +
+    `iterator.return()` on the generator per the package README) and clears
+    `stage3RequestKey`; the requestKey guard silently discards any racing late callbacks from
+    the framework's unsubscribe path. Unmount cleanup uses `unsubscribe()` for the same reason.
+    `stage3Promise` field kept as `null` everywhere (no longer assigned a real Promise; it was
+    write-only state — never read — and removing it would be a wider refactor). l10n /
+    prettier / lint / jest (1989 ✓) / build all pass.
 
 ### Phase 2 — Tolerant incremental parser (the real win)
 
