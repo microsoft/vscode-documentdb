@@ -19,7 +19,6 @@ import { InfoRegular, SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
 import { Announcer } from '../../../../../../../components/accessibility';
-import { CurrentActionLine } from '../../streamingPlaceholder';
 import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
@@ -158,19 +157,9 @@ export function GetPerformanceInsightsCard({
                     <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing...')} />
                     {isLoading ? (
                         <div className="get-performance-insights-card-loading">
-                            <div className="get-performance-insights-card-loading-status">
-                                <Spinner size="tiny" label={l10n.t('AI is analyzing…')} labelPosition="after" />
-                                <CurrentActionLine
-                                    active={isLoading}
-                                    className="get-performance-insights-card-loading-action"
-                                />
-                            </div>
-                            <Button
-                                appearance="subtle"
-                                size="small"
-                                onClick={onCancel}
-                                className="get-performance-insights-card-loading-cancel"
-                            >
+                            <Spinner size="small" aria-hidden="true" />
+                            <Text size={300}>{l10n.t('AI is analyzing...')}</Text>
+                            <Button appearance="subtle" size="small" onClick={onCancel}>
                                 {l10n.t('Cancel')}
                             </Button>
                         </div>

@@ -25,9 +25,8 @@ export type StreamingPlaceholderVariant = 'standalone' | 'inline';
  *   pre-first-block "Generating…" indicator) where the label is the primary
  *   visual element.
  * - `leading`: the bar sits BEFORE everything else, in the same horizontal
- *   slot the surrounding stepper / list uses for bullet markers. Used by
- *   {@link StreamingProgressStepper}'s active step so the bar visually
- *   replaces the bullet rather than crowding into the right edge.
+ *   slot the surrounding stepper / list uses for bullet markers. Available
+ *   for future stepper-style callers; not exercised by any current consumer.
  */
 export type StreamingPlaceholderBarPosition = 'leading' | 'trailing';
 

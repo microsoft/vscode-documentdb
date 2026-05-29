@@ -432,12 +432,20 @@ export class StreamingResponseParser {
 
     private maybeEmitProgressive(events: ParserEmittedEvent[]): void {
         if (!this.valueIsReported) return;
-        // Emit at paragraph boundaries (`\n\n`) when there's new content
-        // to publish. We detect the boundary by checking the last two
-        // chars of the decoded buffer.
+        // Emit at line boundaries when there's new content to publish.
+        // The trigger is "the most recent decoded char is a `\n`", which
+        // fires once per newline in the cumulative markdown value (so
+        // each list item / heading / blank-line break shows up as its
+        // own progressive event). The previous `\n\n` (paragraph-only)
+        // trigger emitted at most once per several hundred chars
+        // because the LLM's chunking spans many lines per fragment;
+        // the per-`\n` trigger raises the granularity by roughly 5×
+        // for our observed Stage 3 output without changing the
+        // markdown shape (cumulative + complete:false until the
+        // value's closing `"`).
         const len = this.valueBuf.length;
-        if (len < 2) return;
-        if (this.valueBuf.charAt(len - 1) !== '\n' || this.valueBuf.charAt(len - 2) !== '\n') {
+        if (len < 1) return;
+        if (this.valueBuf.charAt(len - 1) !== '\n') {
             return;
         }
         if (len === this.lastEmittedLen) return;

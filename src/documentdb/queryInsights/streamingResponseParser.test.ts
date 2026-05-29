@@ -56,19 +56,25 @@ describe('StreamingResponseParser', () => {
             const educational = all.filter(
                 (e): e is Extract<ParserEmittedEvent, { type: 'educational' }> => e.type === 'educational',
             );
-            // One emission at the \n\n paragraph boundary + one final complete.
-            expect(educational).toHaveLength(2);
+            // Per-`\n` emission policy: "Para 1.\n\nPara 2." has two `\n`s
+            // (positions 8 and 9) and emits a progressive event at each, plus
+            // one final `complete: true` once the closing `"` is seen.
+            expect(educational).toHaveLength(3);
             expect(educational[0].complete).toBe(false);
-            expect(educational[0].markdown).toBe('Para 1.\n\n');
-            expect(educational[1].complete).toBe(true);
-            expect(educational[1].markdown).toBe('Para 1.\n\nPara 2.');
+            expect(educational[0].markdown).toBe('Para 1.\n');
+            expect(educational[1].complete).toBe(false);
+            expect(educational[1].markdown).toBe('Para 1.\n\n');
+            expect(educational[2].complete).toBe(true);
+            expect(educational[2].markdown).toBe('Para 1.\n\nPara 2.');
 
             const summary = all.filter(
                 (e): e is Extract<ParserEmittedEvent, { type: 'summary' }> => e.type === 'summary',
             );
-            expect(summary).toHaveLength(2);
-            expect(summary[1].complete).toBe(true);
-            expect(summary[1].markdown).toBe('Analysis line 1.\n\nAnalysis line 2.');
+            // Same emission policy: two `\n`s in the cumulative value + one
+            // final complete:true.
+            expect(summary).toHaveLength(3);
+            expect(summary[summary.length - 1].complete).toBe(true);
+            expect(summary[summary.length - 1].markdown).toBe('Analysis line 1.\n\nAnalysis line 2.');
 
             const started = all.filter(
                 (e): e is Extract<ParserEmittedEvent, { type: 'recommendationStarted' }> =>
@@ -109,7 +115,7 @@ describe('StreamingResponseParser', () => {
             expect(finalize.parsed!.analysis).toBe('hello');
             expect(finalize.parsed!.improvements).toHaveLength(1);
 
-            // "hello" has no \n\n, so only the final complete:true event is emitted.
+            // "hello" has no `\n`, so only the final complete:true event is emitted.
             const summary = all.filter(
                 (e): e is Extract<ParserEmittedEvent, { type: 'summary' }> => e.type === 'summary',
             );
@@ -122,47 +128,52 @@ describe('StreamingResponseParser', () => {
     });
 
     describe('progressive emission for markdown', () => {
-        it('emits cumulative summary at each \\n\\n boundary and once at close', () => {
+        it('emits cumulative summary at each \\n boundary and once at close', () => {
             const json = '{"analysis":"P1.\\n\\nP2.\\n\\nP3."}';
             const { events, finalEvents } = runOnce(json);
             const all = [...events, ...finalEvents];
             const summary = all.filter(
                 (e): e is Extract<ParserEmittedEvent, { type: 'summary' }> => e.type === 'summary',
             );
-            expect(summary).toHaveLength(3);
-            expect(summary[0]).toEqual({ type: 'summary', markdown: 'P1.\n\n', complete: false });
-            expect(summary[1]).toEqual({
+            // Four `\n`s in "P1.\n\nP2.\n\nP3." emit four progressive
+            // events; the closing `"` adds the final complete:true event.
+            expect(summary).toHaveLength(5);
+            expect(summary[0]).toEqual({ type: 'summary', markdown: 'P1.\n', complete: false });
+            expect(summary[1]).toEqual({ type: 'summary', markdown: 'P1.\n\n', complete: false });
+            expect(summary[2]).toEqual({
+                type: 'summary',
+                markdown: 'P1.\n\nP2.\n',
+                complete: false,
+            });
+            expect(summary[3]).toEqual({
                 type: 'summary',
                 markdown: 'P1.\n\nP2.\n\n',
                 complete: false,
             });
-            expect(summary[2]).toEqual({
+            expect(summary[4]).toEqual({
                 type: 'summary',
                 markdown: 'P1.\n\nP2.\n\nP3.',
                 complete: true,
             });
         });
 
-        it('does not emit duplicate progressive events for repeated \\n', () => {
-            // Three consecutive \n chars create only one boundary (between
-            // chars 2 and 3) — but the emission depends on the LAST two
-            // chars being \n. So after "\n\n\n" the third \n still has
-            // lastTwo = "\n\n" — we should NOT re-emit because lastEmittedLen
-            // is unchanged.
+        it('emits a separate event for each consecutive \\n', () => {
+            // Per-`\n` policy: every newline grows the value by 1 and ends in
+            // `\n`, so each of the three consecutive `\n` chars triggers a
+            // distinct progressive emission; then `B` extends the value
+            // without a trailing `\n` (no emission), and the closing `"`
+            // emits the final complete:true.
             const json = '{"analysis":"A\\n\\n\\nB"}';
             const { events, finalEvents } = runOnce(json);
             const all = [...events, ...finalEvents];
             const summary = all.filter(
                 (e): e is Extract<ParserEmittedEvent, { type: 'summary' }> => e.type === 'summary',
             );
-            // "A\n\n" → emit at first \n\n boundary; then "\n" added → still
-            // boundary but len changed so a second emission occurs; then "B"
-            // added → no boundary; final "B" emits complete:true.
-            // The middle emission is acceptable since each new \n grows the
-            // buffer; the contract says we emit cumulative markdown at \n\n,
-            // not that we de-dupe across overlapping boundaries.
-            expect(summary[summary.length - 1].complete).toBe(true);
-            expect(summary[summary.length - 1].markdown).toBe('A\n\n\nB');
+            expect(summary).toHaveLength(4);
+            expect(summary[0]).toEqual({ type: 'summary', markdown: 'A\n', complete: false });
+            expect(summary[1]).toEqual({ type: 'summary', markdown: 'A\n\n', complete: false });
+            expect(summary[2]).toEqual({ type: 'summary', markdown: 'A\n\n\n', complete: false });
+            expect(summary[3]).toEqual({ type: 'summary', markdown: 'A\n\n\nB', complete: true });
         });
     });
 
