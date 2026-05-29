@@ -448,11 +448,33 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     / `verification` / `complete` variants (kept the WI-5 transitional `result` as
     `@deprecated`; WI-8 will remove it from the subscription path). l10n / prettier /
     lint / jest (2014 ✓, +25 new) / build all pass.
-- [ ] **WI-8 — Emit structured events from the subscription.** Replace WI-5's coarse-only
+- [x] **WI-8 — Emit structured events from the subscription.** Replace WI-5's coarse-only
       output: feed each fragment from the async-iterable into the parser and `yield` the resulting domain events
       (`summary`/`educational`/`recommendationStarted`/`recommendation`/`verification`), then a
       final `complete`. Keep `status` events for the pre-summary window.
   - _Acceptance:_ events arrive in stream order; final reconstructed state equals today's.
+  - _Outcome:_ Rewrote the `streamStage3` subscription body to drive a per-subscription
+    `StreamingResponseParser`: each fragment is fed to the parser and the parser's
+    `summary` / `educational` / `recommendationStarted` / `recommendation` events are
+    yielded ahead of the throttled `status: receiving` for the same fragment (so structured
+    data takes priority over coarse progress). After `streamHandle.completion` resolves, the
+    subscription yields `status: parsing`, then the parser's trailing events via
+    `parser.finalize()` (final `summary` / `educational` with `complete: true` for
+    truncation tolerance plus the `verification` event sourced from the reconciled
+    `JSON.parse`), then a terminal `complete` carrying `modelDisplayName` / `modelId` /
+    `usage` from `streamHandle.completion`'s parsed response (whose `usage` shape is
+    structurally identical to the webview-safe `QueryInsightsStreamUsage` mirror, no
+    re-mapping needed). Removed the `transformAIResponseForUI` call from this subscription
+    (the per-recommendation transform that turns `AIIndexRecommendation` into
+    `ImprovementCard` will move to the webview in WI-9, per plan §4 "letting the webview own
+    card-component choice"); also dropped the now-unused `clusterId` destructure and
+    the `transformations` import. ⚠️ **Webview transient regression by design:** because
+    the `result` event is no longer emitted (it stays in the union as `@deprecated` for
+    one more WI for type-safety), the WI-6 webview handler (which only reacts to
+    `result`) will no longer populate `stage3Data` until WI-9 wires the structured
+    events into UI state. This matches the WI-8 acceptance ("events arrive in stream
+    order"; webview reconstruction is WI-9's job). l10n / prettier / lint / jest
+    (2014 ✓) / build all pass.
 
 ### Phase 3 — Progressive UI rendering
 

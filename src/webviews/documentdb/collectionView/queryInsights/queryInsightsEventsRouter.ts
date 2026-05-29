@@ -24,7 +24,7 @@ import * as l10n from '@vscode/l10n';
 import { type QueryObject } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
 import { buildStaticAnalysisSummary } from '../../../../documentdb/queryInsights/staticAnalysisSummary';
-import { transformAIResponseForUI } from '../../../../documentdb/queryInsights/transformations';
+import { StreamingResponseParser } from '../../../../documentdb/queryInsights/streamingResponseParser';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
 import { publicProcedureWithTelemetry, type WithTelemetry } from '../../../_integration/trpc';
@@ -52,17 +52,28 @@ export const queryInsightsEventsRoutes = {
      * Conceptually the streaming equivalent of `getQueryInsightsStage3`.
      * Yields a sequence of {@link QueryInsightsStreamEvent}s:
      *  - `status` with `phase: 'connecting'` once setup begins,
-     *  - throttled `status` with `phase: 'receiving'` while LLM fragments
-     *    arrive (carrying `elapsedMs` + cumulative `charsReceived`),
-     *  - `status` with `phase: 'parsing'` after the stream completes,
-     *  - a final single `result` carrying the same payload
-     *    {@link QueryInsightsStage3Response} the buffered procedure
-     *    returns today.
+     *  - structured domain events fed by
+     *    {@link StreamingResponseParser} as fragments arrive (`summary` /
+     *    `educational` with cumulative markdown at paragraph boundaries,
+     *    `recommendationStarted` / `recommendation` per improvement
+     *    item),
+     *  - throttled `status` with `phase: 'receiving'` interleaved while
+     *    fragments are arriving (carrying `elapsedMs` + cumulative
+     *    `charsReceived`),
+     *  - `status` with `phase: 'parsing'` once the stream completes,
+     *  - any trailing events from `parser.finalize()` (final
+     *    `summary`/`educational` with `complete: true` for truncated
+     *    streams, plus the `verification` event sourced from the
+     *    reconciled `JSON.parse`),
+     *  - a single terminal `complete` event carrying model + token
+     *    metadata (sourced from {@link streamHandle.completion}, which
+     *    runs the canonical full parse and adds those fields).
      *
-     * WI-5 deliberately emits only the coarse `status` / `result` subset.
-     * WI-7/WI-8 will add per-domain events (`summary`, `educational`,
-     * `recommendationStarted`, `recommendation`, `verification`,
-     * `complete`) fed by the incremental parser.
+     * The per-recommendation UI transform that the buffered
+     * `getQueryInsightsStage3` does (via `transformAIResponseForUI`) is
+     * deliberately NOT applied here — the subscription speaks in domain
+     * terms only (plan D7), and WI-9 will move that transform into the
+     * webview so it owns the card-component choice.
      *
      * Cancellation: a per-subscription `AbortController` is wired so its
      * signal aborts when either the framework signals stop (`iterator.return()`
@@ -76,7 +87,7 @@ export const queryInsightsEventsRoutes = {
         .input(z.object({ requestKey: z.string() }))
         .subscription(async function* ({ ctx, input }): AsyncGenerator<QueryInsightsStreamEvent, void, void> {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            const { sessionId, clusterId, databaseName, collectionName } = myCtx;
+            const { sessionId, databaseName, collectionName } = myCtx;
             const { requestKey } = input;
 
             const startTime = Date.now();
@@ -168,12 +179,26 @@ export const queryInsightsEventsRoutes = {
 
                 let charsReceived = 0;
                 let lastStatusYieldAt = 0;
+                const parser = new StreamingResponseParser();
 
                 for await (const fragment of streamHandle.fragments) {
                     if (abortController.signal.aborted) {
                         return;
                     }
                     charsReceived += fragment.length;
+
+                    // Feed the parser and yield each structured event in
+                    // stream order. Structured events are emitted ahead of
+                    // the coarse `status: receiving` event for the same
+                    // fragment so progressive UI gets first-priority data.
+                    const parserEvents = parser.feed(fragment);
+                    for (const event of parserEvents) {
+                        if (abortController.signal.aborted) {
+                            return;
+                        }
+                        yield event;
+                    }
+
                     const now = elapsed();
                     if (now - lastStatusYieldAt >= STATUS_EVENT_INTERVAL_MS) {
                         lastStatusYieldAt = now;
@@ -197,22 +222,36 @@ export const queryInsightsEventsRoutes = {
                     charsReceived,
                 };
 
-                const aiRecommendations = await streamHandle.completion;
-                const transformed = transformAIResponseForUI(aiRecommendations, {
-                    clusterId,
-                    databaseName,
-                    collectionName,
-                });
+                // `streamHandle.completion` runs the canonical full
+                // `JSON.parse` and adds model + usage metadata. Our parser
+                // runs the same `JSON.parse` inside `finalize()` for its
+                // own reconciliation, but `completion` is the source of
+                // truth for the model metadata that gets surfaced in the
+                // terminal `complete` event below.
+                const aiResponse = await streamHandle.completion;
 
                 if (abortController.signal.aborted) {
                     return;
                 }
 
+                // Trailing structured events the parser couldn't flush
+                // mid-stream (final `summary` / `educational` with
+                // `complete: true` for a value still open at end-of-stream,
+                // plus the `verification` event sourced from the
+                // reconciled `JSON.parse`).
+                const finalize = parser.finalize();
+                for (const event of finalize.events) {
+                    if (abortController.signal.aborted) {
+                        return;
+                    }
+                    yield event;
+                }
+
                 ext.outputChannel.trace(
                     l10n.t(
-                        '[Query Insights Stage 3 stream] Completed: {count} improvement cards generated, {chars} chars in {ms}ms (requestKey: {key})',
+                        '[Query Insights Stage 3 stream] Completed: {count} recommendations, {chars} chars in {ms}ms (requestKey: {key})',
                         {
-                            count: transformed.improvementCards.length.toString(),
+                            count: aiResponse.improvements.length.toString(),
                             chars: charsReceived.toString(),
                             ms: elapsed().toString(),
                             key: requestKey,
@@ -221,8 +260,10 @@ export const queryInsightsEventsRoutes = {
                 );
 
                 yield {
-                    type: 'result',
-                    data: transformed,
+                    type: 'complete',
+                    modelDisplayName: aiResponse.modelDisplayName,
+                    modelId: aiResponse.modelId,
+                    usage: aiResponse.usage,
                 };
             } finally {
                 myCtx.signal?.removeEventListener('abort', onCtxAbort);
