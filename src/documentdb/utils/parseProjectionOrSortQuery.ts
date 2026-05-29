@@ -13,7 +13,16 @@ import { EJSON } from 'bson';
 export function parseProjectionOrSortQuery(query: string): unknown {
     try {
         return EJSON.parse(query);
-    } catch {
-        return parseShellBSON(query, { mode: ParseMode.Loose });
+    } catch (strictError) {
+        try {
+            return parseShellBSON(query, { mode: ParseMode.Loose });
+        } catch (looseError) {
+            const strictMessage = strictError instanceof Error ? strictError.message : String(strictError);
+            const looseMessage = looseError instanceof Error ? looseError.message : String(looseError);
+            throw new Error(
+                `Unable to parse projection or sort query. Strict EJSON parse failed: ${strictMessage}. Loose shell BSON parse failed: ${looseMessage}.`,
+                { cause: looseError instanceof Error ? looseError : undefined },
+            );
+        }
     }
 }
