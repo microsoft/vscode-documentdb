@@ -44,7 +44,7 @@ extends:
           enabled: false
         tsaEnabled: false
       componentgovernance:
-        ignoreDirectories: $(Build.SourcesDirectory)/.vscode-test
+        ignoreDirectories: $''
     featureFlags:
       linuxEsrpSigning: true
       WindowsHostVersion:
