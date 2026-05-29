@@ -58,6 +58,7 @@ export class StagePropertyExtractor {
 
     /**
      * Collects all stages from the queryPlanner winning plan tree into a flat array.
+     * Traverses single inputStage, multiple inputStages, and shard branches (sharded clusters).
      */
     private static collectPlannerStages(stage: Document, accumulator: Document[]): void {
         if (!stage || !stage.stage) {
@@ -73,6 +74,11 @@ export class StagePropertyExtractor {
             (stage.inputStages as Document[]).forEach((child: Document) => {
                 this.collectPlannerStages(child, accumulator);
             });
+        }
+        if (stage.shards && Array.isArray(stage.shards)) {
+            for (const shard of stage.shards) {
+                this.collectPlannerStages(shard as Document, accumulator);
+            }
         }
     }
 

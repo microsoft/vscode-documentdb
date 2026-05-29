@@ -770,6 +770,16 @@ export class ExplainPlanAnalyzer {
             }
         }
 
+        // Traverse shard branches (sharded clusters)
+        if (plan.shards && Array.isArray(plan.shards)) {
+            for (const shard of plan.shards) {
+                const found = this.findStageInPlan(shard as Document, stageName);
+                if (found) {
+                    return found;
+                }
+            }
+        }
+
         return undefined;
     }
 
