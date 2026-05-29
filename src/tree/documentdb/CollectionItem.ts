@@ -65,12 +65,13 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     private isLoadingCount: boolean = false;
 
     /**
-     * Monotonic counter bumped on every `getChildren` call. Used to invalidate
-     * background index-count work owned by stale IndexesItem instances
-     * (refresh / collapse / re-expand creates fresh instances; we want the
-     * previous ones to bail before mutating UI state or hitting the server).
+     * AbortController used to cancel in-flight index-fetch work owned by
+     * stale IndexesItem instances. A new controller is created on every
+     * `getChildren()` call and the previous one is aborted — a standard,
+     * composable cancellation primitive that also lets underlying client
+     * calls be aborted rather than only discarding their results.
      */
-    private expansionGeneration = 0;
+    private indexFetchAbortController: AbortController = new AbortController();
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -155,16 +156,16 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        // Bump the generation counter so any in-flight index-count work from a
-        // previous expansion of this same collection will bail before mutating
-        // state. Combine with the parent (database-level) stale check so that
-        // a database refresh also invalidates background work.
-        const myGeneration = ++this.expansionGeneration;
-        const parentIsCurrent = this.isCurrent;
-        const isCurrent = (): boolean => parentIsCurrent() && this.expansionGeneration === myGeneration;
+        // Cancel any in-flight index-fetch work from a previous expansion
+        this.indexFetchAbortController.abort();
+        this.indexFetchAbortController = new AbortController();
 
-        const indexesItem = new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo, isCurrent);
-        // Start loading index count in background (fire-and-forget).
+        const indexesItem = new IndexesItem(
+            this.cluster,
+            this.databaseInfo,
+            this.collectionInfo,
+            this.indexFetchAbortController.signal,
+        );
         indexesItem.loadIndexCount();
         return [new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this), indexesItem];
     }

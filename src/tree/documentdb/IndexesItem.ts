@@ -36,32 +36,32 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
      */
     private indexCount: number | undefined | null = undefined;
 
-    /**
-     * Flag indicating if a count fetch is in progress.
-     */
+    /** Flag indicating if a count fetch is in progress. */
     private isLoadingCount: boolean = false;
 
     /**
      * Cached combined index list (regular + search) from the most recent
-     * fetch, so `getChildren()` can reuse it instead of making a second
-     * round-trip to the server.
-     * undefined means not yet fetched.
+     * fetch, already sorted. undefined means not yet fetched.
      */
     private cachedIndexes: IndexItemModel[] | undefined = undefined;
+
+    /**
+     * Shared in-flight fetch promise so concurrent callers
+     * (`fetchAndUpdateCount` + `getChildren`) reuse the same round-trip.
+     */
+    private inFlightFetch: Promise<IndexItemModel[]> | null = null;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
         readonly collectionInfo: CollectionItemModel,
         /**
-         * Stale-check predicate. The owning CollectionItem hands in a function
-         * that returns true only while this IndexesItem belongs to the
-         * current expansion. When the user refreshes / collapses / re-expands
-         * the collection, the predicate flips to false and any queued or
-         * in-flight count work bails out before mutating state.
-         * Defaults to always-current so direct callers are unaffected.
+         * AbortSignal from the owning CollectionItem. When the user refreshes /
+         * collapses / re-expands the collection, the CollectionItem aborts this
+         * signal so in-flight work bails before mutating UI state.
+         * Defaults to a never-aborted signal.
          */
-        private readonly isCurrent: () => boolean = () => true,
+        private readonly signal: AbortSignal = new AbortController().signal,
     ) {
         this.id = `${cluster.treeId}/${databaseInfo.name}/${collectionInfo.name}/indexes`;
         this.experience = cluster.dbExperience;
@@ -69,50 +69,56 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
     }
 
-    /**
-     * Starts loading the index count asynchronously.
-     * When the count is retrieved, it triggers a tree item refresh to update the description.
-     * This method is fire-and-forget and does not block tree expansion.
-     */
+    /** Fire-and-forget: load index count in background. */
     public loadIndexCount(): void {
-        // Skip if already loading or if we already have a valid count
         if (this.isLoadingCount || typeof this.indexCount === 'number') {
             return;
         }
-
         this.isLoadingCount = true;
-
-        // Fire-and-forget: load count in background
         void this.fetchAndUpdateCount();
     }
 
-    /**
-     * Fetches the index count and triggers a tree refresh when complete.
-     * As a side effect, caches the combined index list on the instance so
-     * that a subsequent `getChildren()` call can reuse it and avoid a second
-     * round-trip to the server.
-     */
+    /** Background count loader. Delegates to {@link fetchAndCacheIndexes}. */
     private async fetchAndUpdateCount(): Promise<void> {
+        try {
+            await this.fetchAndCacheIndexes();
+        } catch {
+            // fetchAndCacheIndexes already logged; just clear the loading flag.
+        } finally {
+            if (!this.signal.aborted) {
+                this.isLoadingCount = false;
+            }
+        }
+        if (!this.signal.aborted) {
+            ext.state.notifyChildrenChanged(this.id);
+        }
+    }
+
+    /**
+     * Shared fetch-and-cache helper used by both `getChildren()` and
+     * `fetchAndUpdateCount()`. Deduplicates concurrent callers through
+     * {@link inFlightFetch} so only one round-trip is issued.
+     */
+    private async fetchAndCacheIndexes(): Promise<IndexItemModel[]> {
+        if (this.inFlightFetch) {
+            return this.inFlightFetch;
+        }
+
         const clusterId = this.cluster.clusterId;
         const dbName = this.databaseInfo.name;
         const collName = this.collectionInfo.name;
-        const isCurrent = this.isCurrent;
 
-        let result: number | null;
-        let combinedIndexes: IndexItemModel[] = [];
-        try {
+        this.inFlightFetch = (async (): Promise<IndexItemModel[]> => {
             const client = await ClustersClient.getClient(clusterId);
-            if (!isCurrent()) {
-                return;
+            if (this.signal.aborted) {
+                throw new DOMException('Aborted', 'AbortError');
             }
             const indexes = await client.listIndexes(dbName, collName);
 
-            // Also try to fetch search indexes, but silently fail if not supported
             let searchIndexes: IndexItemModel[] = [];
             try {
                 searchIndexes = await client.listSearchIndexesForAtlas(dbName, collName);
             } catch (err) {
-                // Log so transient network/auth errors are diagnosable
                 ext.outputChannel.warn(
                     l10n.t(
                         'Failed to list search indexes for {0}.{1}: {2}',
@@ -123,11 +129,19 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
                 );
             }
 
-            combinedIndexes = [...indexes, ...searchIndexes];
-            // Sort before caching so getChildren() never mutates the shared array in-place
+            const combinedIndexes = [...indexes, ...searchIndexes];
             combinedIndexes.sort((a, b) => compareIndexNames(a.name, b.name));
-            result = combinedIndexes.length;
+            this.cachedIndexes = combinedIndexes;
+            this.indexCount = combinedIndexes.length;
+            return combinedIndexes;
+        })();
+
+        try {
+            return await this.inFlightFetch;
         } catch (err) {
+            if (err instanceof DOMException && err.name === 'AbortError') {
+                throw err;
+            }
             ext.outputChannel.warn(
                 l10n.t(
                     'Failed to load indexes for {0}.{1}: {2}',
@@ -136,80 +150,47 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
                     err instanceof Error ? err.message : String(err),
                 ),
             );
-            result = null;
+            this.indexCount = null;
+            throw err;
         } finally {
-            // Only clear the loading flag when still current so we don't
-            // mutate a stale instance that no longer owns the UI state.
-            if (isCurrent()) {
-                this.isLoadingCount = false;
-            }
+            this.inFlightFetch = null;
         }
-
-        if (!isCurrent()) {
-            // Stale: do not write back to this instance and do not fire a
-            // tree refresh. The current instance owns the UI state.
-            return;
-        }
-
-        this.indexCount = result;
-        if (result !== null) {
-            this.cachedIndexes = combinedIndexes;
-        }
-        // Trigger a tree item refresh to show the updated description
-        ext.state.notifyChildrenChanged(this.id);
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        // Reuse the cached index list from the background count fetch when
-        // available — avoids a second round-trip for the same data. Fall
-        // back to fetching on-demand if the cache hasn't been populated yet
-        // (e.g. count load is still in-flight or failed).
         if (!this.cachedIndexes) {
-            const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
-            const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
-
-            // Also try to fetch search indexes, but silently fail if not supported
             try {
-                const searchIndexes = await client.listSearchIndexesForAtlas(
-                    this.databaseInfo.name,
-                    this.collectionInfo.name,
-                );
-                indexes.push(...searchIndexes);
-            } catch (err) {
-                // Log so transient network/auth errors are diagnosable
-                ext.outputChannel.warn(
-                    l10n.t(
-                        'Failed to list search indexes for {0}.{1}: {2}',
-                        this.databaseInfo.name,
-                        this.collectionInfo.name,
-                        err instanceof Error ? err.message : String(err),
-                    ),
-                );
+                await this.fetchAndCacheIndexes();
+            } catch {
+                // Error already logged; render empty tree.
             }
-
-            // Sort before caching so subsequent calls never mutate the shared array in-place
-            indexes.sort((a, b) => compareIndexNames(a.name, b.name));
-            this.cachedIndexes = indexes;
         }
-
-        return this.cachedIndexes.map((index) => {
-            return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
-        });
+        return (this.cachedIndexes ?? []).map(
+            (index) => new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index),
+        );
     }
 
     getTreeItem(): vscode.TreeItem {
-        // Build description based on index count state
         let description: string | undefined;
-        if (typeof this.indexCount === 'number') {
-            description = this.indexCount === 1 ? l10n.t('1 index') : l10n.t('{0} indexes', this.indexCount);
+        if (this.isLoadingCount) {
+            description = l10n.t('…');
+        } else if (typeof this.indexCount === 'number') {
+            if (this.indexCount === 0) {
+                description = l10n.t('No indexes');
+            } else if (this.indexCount === 1) {
+                description = l10n.t('1 index');
+            } else {
+                description = l10n.t('{0} indexes', this.indexCount);
+            }
         }
+        // undefined (not started) or null (failed): no badge.
 
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: l10n.t('Indexes'),
             description,
-            iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
+            iconPath: new vscode.ThemeIcon('combine'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }

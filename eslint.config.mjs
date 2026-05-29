@@ -8,7 +8,7 @@ import importPlugin from 'eslint-plugin-import';
 import jest from 'eslint-plugin-jest';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import licenseHeader from 'eslint-plugin-license-header';
-import mocha from 'eslint-plugin-mocha';
+REPLACED
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
