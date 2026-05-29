@@ -113,6 +113,51 @@ export interface CopilotResponse {
 }
 
 /**
+ * Pull-based streaming handle returned by {@link CopilotService.streamMessage}.
+ *
+ * Consumers iterate {@link fragments} with `for await` to receive partial
+ * text as the model produces it (matching what {@link CopilotService.sendMessage}
+ * would have accumulated internally), then `await` {@link completion} to obtain
+ * the same full response metadata (model id/family/display name, durationMs,
+ * usage) that the buffered API returns.
+ *
+ * The iteration drives the underlying `LanguageModelChat.sendRequest` call —
+ * a consumer that stops iterating early (e.g. by aborting the signal in
+ * {@link CopilotMessageOptions}) will cause the streaming loop to exit and the
+ * model call to be cancelled via the AbortSignal → CancellationToken bridge.
+ *
+ * @example
+ * ```ts
+ * const handle = CopilotService.streamMessage(messages, { signal, featureSource: 'queryInsights' });
+ * for await (const fragment of handle.fragments) {
+ *     // feed fragment into the incremental parser
+ * }
+ * const response = await handle.completion; // { text, modelId, durationMs, usage, … }
+ * ```
+ */
+export interface CopilotStreamHandle {
+    /**
+     * Async iterable of text fragments in the order produced by the model.
+     * Iteration of this iterable is what advances the underlying model call.
+     */
+    fragments: AsyncIterable<string>;
+    /**
+     * Resolves with the full response (including accumulated text, model
+     * identity, durationMs and best-effort token usage) once {@link fragments}
+     * iteration has completed. Rejects with the same kind of error
+     * {@link CopilotService.sendMessage} would have thrown (e.g.
+     * `UserCancelledError` on abort, or a generic error if no suitable model
+     * is available).
+     *
+     * The promise is already chained internally to swallow the global
+     * unhandled-rejection warning when consumers do not await it (e.g.,
+     * because they handled cancellation via the abort signal); always await
+     * it (or attach a `.catch()` of your own) to react to failures.
+     */
+    completion: Promise<CopilotResponse>;
+}
+
+/**
  * Service for interacting with GitHub Copilot's LLM
  */
 export class CopilotService {
@@ -232,6 +277,163 @@ export class CopilotService {
     }
 
     /**
+     * Streaming variant of {@link sendMessage} that exposes the LLM response
+     * as a pull-based `AsyncIterable<string>` of fragments. See
+     * {@link CopilotStreamHandle} for the consumer contract and rationale.
+     *
+     * Identical telemetry to {@link sendMessage} is emitted on completion
+     * (model selection chain, model id/family, featureSource, token usage,
+     * etc.) under the `copilot.streamMessage` event. The buffering API and
+     * the streaming API share the same {@link streamToModel} primitive, so
+     * the two paths cannot drift apart.
+     *
+     * The producer runs in the background as soon as this method is called.
+     * Consumers must iterate {@link CopilotStreamHandle.fragments} promptly
+     * (or abort via {@link CopilotMessageOptions.signal}) — fragments are
+     * buffered until they are consumed.
+     */
+    static streamMessage(
+        messages: vscode.LanguageModelChatMessage[],
+        options?: CopilotMessageOptions,
+    ): CopilotStreamHandle {
+        const channel = new FragmentChannel();
+
+        let resolveCompletion!: (response: CopilotResponse) => void;
+        let rejectCompletion!: (error: unknown) => void;
+        const completion = new Promise<CopilotResponse>((resolve, reject) => {
+            resolveCompletion = resolve;
+            rejectCompletion = reject;
+        });
+        // Prevent a global unhandled-rejection warning when consumers only
+        // observe completion via the abort signal and never await this
+        // promise. Real consumers are expected to attach their own handler.
+        completion.catch(() => {
+            /* swallow: consumer chose not to observe */
+        });
+
+        // Fire-and-forget producer; all error paths are captured by the
+        // telemetry wrapper or surfaced through `rejectCompletion` below.
+        void this.runStream(messages, options, channel, resolveCompletion, rejectCompletion);
+
+        return {
+            fragments: channel,
+            completion,
+        };
+    }
+
+    /**
+     * Background producer for {@link streamMessage}. Performs model
+     * selection inside a single `callWithTelemetryAndErrorHandling` wrapper
+     * (mirroring {@link sendMessage}), runs {@link streamToModel} pushing
+     * each fragment into {@link channel}, and resolves/rejects the caller's
+     * completion deferred when the operation ends.
+     */
+    private static async runStream(
+        messages: vscode.LanguageModelChatMessage[],
+        options: CopilotMessageOptions | undefined,
+        channel: FragmentChannel,
+        resolveCompletion: (response: CopilotResponse) => void,
+        rejectCompletion: (error: unknown) => void,
+    ): Promise<void> {
+        try {
+            const result = await callWithTelemetryAndErrorHandling(
+                'vscode-documentdb.copilot.streamMessage',
+                async (context: IActionContext) => {
+                    // Tag the shared `copilot.streamMessage` event with the
+                    // calling feature so analytics can split telemetry by source.
+                    context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
+
+                    const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+                    const preferredFamilies = this.getPreferredFamilies(options);
+                    const selectedModel = this.selectBestModel(availableModels, preferredFamilies);
+
+                    context.telemetry.properties.modelPreferenceChain = preferredFamilies.join(',') || '(none)';
+                    const MAX_MODELS_REPORTED = 8;
+                    const availableFamilies = Array.from(new Set(availableModels.map((m) => m.family))).sort();
+                    const reportedFamilies = availableFamilies.slice(0, MAX_MODELS_REPORTED);
+                    const truncatedCount = availableFamilies.length - reportedFamilies.length;
+                    context.telemetry.properties.modelsAvailable =
+                        truncatedCount > 0
+                            ? `${reportedFamilies.join(',')},+${truncatedCount}-more`
+                            : reportedFamilies.join(',');
+                    context.telemetry.measurements.modelsAvailableCount = availableModels.length;
+
+                    if (!selectedModel) {
+                        context.telemetry.properties.modelSelectionOutcome = 'no-models-available';
+                        throw new Error(
+                            l10n.t(
+                                'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
+                            ),
+                        );
+                    }
+
+                    context.telemetry.properties.modelId = selectedModel.id;
+                    context.telemetry.properties.modelFamily = selectedModel.family;
+                    context.telemetry.properties.modelSelectionOutcome = preferredFamilies.includes(
+                        selectedModel.family,
+                    )
+                        ? 'preferred-match'
+                        : 'first-available-fallback';
+
+                    try {
+                        const response = await this.streamToModel(selectedModel, messages, options, (fragment) =>
+                            channel.push(fragment),
+                        );
+
+                        if (response.usage) {
+                            const { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct } =
+                                response.usage;
+                            if (promptTokens !== undefined) {
+                                context.telemetry.measurements.promptTokens = promptTokens;
+                            }
+                            if (responseTokens !== undefined) {
+                                context.telemetry.measurements.responseTokens = responseTokens;
+                            }
+                            if (totalTokens !== undefined) {
+                                context.telemetry.measurements.totalTokens = totalTokens;
+                            }
+                            if (maxInputTokens !== undefined) {
+                                context.telemetry.measurements.maxInputTokens = maxInputTokens;
+                            }
+                            if (promptUtilizationPct !== undefined) {
+                                context.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
+                            }
+                        }
+
+                        return {
+                            text: response.text,
+                            modelId: selectedModel.id,
+                            modelFamily: selectedModel.family,
+                            modelDisplayName: selectedModel.name || selectedModel.id,
+                            durationMs: response.durationMs,
+                            usage: response.usage,
+                        };
+                    } catch (error) {
+                        if (error instanceof UserCancelledError) {
+                            throw error;
+                        }
+                        context.telemetry.properties.llmError = 'llmGenerateResponseCallFailed';
+                        throw error;
+                    }
+                },
+            );
+
+            if (!result) {
+                if (options?.signal?.aborted) {
+                    throw new UserCancelledError('AbortSignal');
+                }
+                throw new Error(l10n.t('Failed to get response from language model'));
+            }
+
+            channel.close();
+            resolveCompletion(result);
+        } catch (error) {
+            channel.close(error);
+            rejectCompletion(error);
+        }
+    }
+
+    /**
      * Builds the ordered list of preferred model families.
      */
     private static getPreferredFamilies(options?: CopilotMessageOptions): string[] {
@@ -340,6 +542,32 @@ export class CopilotService {
         messages: vscode.LanguageModelChatMessage[],
         options?: CopilotMessageOptions,
     ): Promise<{ text: string; durationMs: number; usage?: CopilotTokenUsage }> {
+        // Delegate to the streaming primitive with a no-op fragment sink. This
+        // keeps a single implementation of the model-iteration + token-counting
+        // pipeline so the buffered and streamed paths cannot drift apart.
+        return this.streamToModel(model, messages, options, () => {
+            /* no-op: buffered API only needs the final text */
+        });
+    }
+
+    /**
+     * Iterates a `LanguageModelChat` response, delivering each text fragment
+     * to {@link onFragment} as it arrives while also accumulating the full
+     * text for the caller. This is the single source of truth for the
+     * AbortSignal → CancellationToken bridge, the per-fragment cancellation
+     * check, the duration measurement and the best-effort token-usage
+     * computation.
+     *
+     * Used directly by {@link streamMessage} (which pipes fragments into its
+     * pull-based channel) and indirectly by {@link sendToModel} (which passes
+     * a no-op sink and only consumes the buffered text).
+     */
+    private static async streamToModel(
+        model: vscode.LanguageModelChat,
+        messages: vscode.LanguageModelChatMessage[],
+        options: CopilotMessageOptions | undefined,
+        onFragment: (fragment: string) => void,
+    ): Promise<{ text: string; durationMs: number; usage?: CopilotTokenUsage }> {
         const signal = options?.signal;
 
         // If already aborted, throw immediately
@@ -374,6 +602,11 @@ export class CopilotService {
                     break;
                 }
                 fullResponse += fragment;
+                // Surface the fragment to the streaming consumer. We do this
+                // *after* accumulation so consumers see exactly what the buffered
+                // response contains; any throw here will propagate and abort
+                // iteration, which is the behaviour we want for backpressure.
+                onFragment(fragment);
             }
             const durationMs = Date.now() - requestStart;
 
@@ -525,5 +758,102 @@ export class CopilotService {
             const errorMessage = error instanceof Error ? error.message : String(error);
             ext.outputChannel.trace(l10n.t('[Copilot] Could not enumerate model own properties: {0}', errorMessage));
         }
+    }
+}
+
+/**
+ * Single-consumer async-iterable channel used by {@link CopilotService.streamMessage}
+ * to bridge the push-style per-fragment callback from {@link CopilotService.streamToModel}
+ * into the pull-style `AsyncIterable<string>` returned to webview consumers.
+ *
+ * Backpressure-aware in spirit: producers may call {@link push} as fast as
+ * they like (matching the pace of the underlying `for await ... chatResponse.text`
+ * loop, which itself respects the model's pacing). When the consumer is
+ * slower, fragments are buffered in memory; this is acceptable for the
+ * Query Insights Stage 3 use case where total responses fit comfortably
+ * under a few hundred KB.
+ *
+ * Not exported: the only intended use site is inside `CopilotService`.
+ */
+class FragmentChannel implements AsyncIterableIterator<string> {
+    private readonly buffer: string[] = [];
+    private deferred: {
+        resolve: (result: IteratorResult<string>) => void;
+        reject: (error: unknown) => void;
+    } | null = null;
+    private closed = false;
+    private closeError: unknown = undefined;
+
+    push(fragment: string): void {
+        if (this.closed) {
+            return;
+        }
+        if (this.deferred) {
+            const { resolve } = this.deferred;
+            this.deferred = null;
+            resolve({ value: fragment, done: false });
+            return;
+        }
+        this.buffer.push(fragment);
+    }
+
+    /**
+     * Mark the stream complete. Pending `next()` calls receive `{done: true}`
+     * (when `error` is undefined) or reject with `error` (when provided).
+     * Once closed, further calls are silently ignored.
+     */
+    close(error?: unknown): void {
+        if (this.closed) {
+            return;
+        }
+        this.closed = true;
+        this.closeError = error;
+
+        if (!this.deferred) {
+            return;
+        }
+        const { resolve, reject } = this.deferred;
+        this.deferred = null;
+        if (error !== undefined) {
+            reject(error);
+        } else {
+            resolve({ value: undefined as unknown as string, done: true });
+        }
+    }
+
+    next(): Promise<IteratorResult<string>> {
+        if (this.buffer.length > 0) {
+            return Promise.resolve({ value: this.buffer.shift() as string, done: false });
+        }
+        if (this.closed) {
+            if (this.closeError !== undefined) {
+                // `closeError` is typed `unknown` because it originates from a
+                // catch block; wrap non-Error values so we can satisfy
+                // `@typescript-eslint/prefer-promise-reject-errors` without
+                // dropping the original Error instance (e.g. `UserCancelledError`).
+                const reason = this.closeError instanceof Error ? this.closeError : new Error(String(this.closeError));
+                return Promise.reject(reason);
+            }
+            return Promise.resolve({ value: undefined as unknown as string, done: true });
+        }
+        return new Promise<IteratorResult<string>>((resolve, reject) => {
+            this.deferred = { resolve, reject };
+        });
+    }
+
+    /**
+     * Called by `for await` when the consumer breaks out of the loop early.
+     * Marks the channel done and drops any buffered fragments so memory is
+     * reclaimed. The upstream model call is cancelled separately via the
+     * `AbortSignal` plumbed through {@link CopilotMessageOptions}.
+     */
+    return(): Promise<IteratorResult<string>> {
+        this.close();
+        this.buffer.length = 0;
+        return Promise.resolve({ value: undefined as unknown as string, done: true });
+    }
+
+    [Symbol.asyncIterator](): AsyncIterableIterator<string> {
+        return this;
     }
 }

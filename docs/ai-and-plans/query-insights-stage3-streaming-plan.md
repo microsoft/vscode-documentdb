@@ -292,7 +292,7 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
 
 ### Phase 1 — Plumb the stream end-to-end (coarse progress)
 
-- [ ] **WI-2 — Async-iterable streaming in CopilotService (Option A).** Add a streaming
+- [x] **WI-2 — Async-iterable streaming in CopilotService (Option A).** Add a streaming
       variant that exposes the LLM response as an `AsyncIterable<string>` of fragments (e.g.
       `async *streamMessage(...)` / `stream(...)`), built on the existing
       `for await (const fragment of chatResponse.text)` loop. Each fragment is `yield`ed;
@@ -302,6 +302,18 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
       AbortSignal→CancellationToken bridge so aborting the iterator stops the model call.
   - _Acceptance:_ existing callers unaffected; unit test that the iterable yields fragments
     in order and that aborting the signal ends iteration; usage/duration still available.
+  - _Outcome:_ Added `CopilotStreamHandle` (sibling-accessor pattern: `fragments` async
+    iterable + `completion` promise) and `CopilotService.streamMessage(...)` under
+    `vscode-documentdb.copilot.streamMessage` telemetry. Extracted the model iteration
+    loop into a private `streamToModel(...)` primitive shared by `streamMessage` and the
+    existing `sendToModel` (no-op fragment sink for the buffered path) so the two paths
+    cannot drift apart. Producer runs in the background, pushes into a private
+    `FragmentChannel` (pull-based, single-consumer, supports `return()` for early break).
+    AbortSignal → `CancellationTokenSource` bridge preserved. Added
+    `src/services/copilotService.test.ts` with three Jest cases (fragments in order +
+    usage/duration on completion, mid-stream abort rejects with `UserCancelledError`, no
+    suitable model rejects with explanatory error). l10n / prettier / lint / jest
+    (1987 ✓) / build all pass.
 - [ ] **WI-3 — Thread the async-iterable through orchestration.** Expose the streaming
       iterable from `optimizeQuery` → `getOptimizationRecommendations` so a caller can
       `for await` the fragments end-to-end. No parsing yet. Keep the existing buffered path
