@@ -91,8 +91,6 @@
   "[Query Insights Stage 2] Query execution failed: {error}": "[Query Insights Stage 2] Query execution failed: {error}",
   "[Query Insights Stage 2] Started for {db}.{collection}": "[Query Insights Stage 2] Started for {db}.{collection}",
   "[Query Insights Stage 2] Using debug data file": "[Query Insights Stage 2] Using debug data file",
-  "[Query Insights Stage 3 stream] [+{ms}ms] fragment: len={len}, totalChars={total}, preview={preview} (requestKey: {key})": "[Query Insights Stage 3 stream] [+{ms}ms] fragment: len={len}, totalChars={total}, preview={preview} (requestKey: {key})",
-  "[Query Insights Stage 3 stream] [+{ms}ms] yield: {desc} (requestKey: {key})": "[Query Insights Stage 3 stream] [+{ms}ms] yield: {desc} (requestKey: {key})",
   "[Query Insights Stage 3 stream] Completed: {count} recommendations, {chars} chars in {ms}ms (requestKey: {key})": "[Query Insights Stage 3 stream] Completed: {count} recommendations, {chars} chars in {ms}ms (requestKey: {key})",
   "[Query Insights Stage 3 stream] Failed to build static analysis summary (requestKey: {key}): {error}": "[Query Insights Stage 3 stream] Failed to build static analysis summary (requestKey: {key}): {error}",
   "[Query Insights Stage 3 stream] Started for {db}.{collection} (requestKey: {key})": "[Query Insights Stage 3 stream] Started for {db}.{collection} (requestKey: {key})",

@@ -873,6 +873,15 @@ export const QueryInsightsMain = (): JSX.Element => {
         if (summarySource) {
             insightCards.push({
                 key: `${keyPrefix}analysis-card`,
+                // Mark as in-flight while streaming so AnimatedCardList
+                // uses Fade (no `maxHeight`/`overflow:hidden` clipping)
+                // instead of CollapseRelaxed. CollapseRelaxed measures
+                // scrollHeight once at mount (when content is ~empty) and
+                // then clips with overflow:hidden for 400 ms, which hides
+                // most of the early streaming and makes the card appear to
+                // pop from "title only" to "fully filled" in two frames.
+                // Fade lets the markdown grow visibly as chunks arrive.
+                inFlight: !summarySource.complete,
                 component: (
                     <MarkdownCard
                         icon={<SparkleRegular />}
@@ -972,6 +981,11 @@ export const QueryInsightsMain = (): JSX.Element => {
         if (educationalSource) {
             insightCards.push({
                 key: `${keyPrefix}understanding-execution`,
+                // See `analysis-card` above: Fade while streaming so the
+                // markdown chunks are actually visible as they arrive,
+                // instead of being clipped by CollapseRelaxed's 400 ms
+                // maxHeight enter animation.
+                inFlight: !educationalSource.complete,
                 component: (
                     <MarkdownCard
                         icon={<SparkleRegular />}
