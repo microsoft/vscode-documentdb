@@ -197,12 +197,12 @@ The following comparison was used to decide which model to set as the primary pr
 
 If cost is irrelevant (all are utility models), choose **GPT-4.1** for the index recommender unless speed is the top constraint. It should be the most dependable of these for explain-plan reasoning and following precise instructions.
 
-| Model | Explain-plan understanding | Instruction following | Speed | Best use |
-|---|---:|---:|---:|---|
-| **GPT-4.1** | **Best** | **Best** | Medium | **Primary choice** for DocumentDB index recommendations where correctness matters. Best at reasoning through `winningPlan`, `executionStats`, compound index order, sort coverage, range predicates, and tradeoffs. |
-| **GPT-4o** | Very good | Very good | **Fast** | Best speed/quality balance. Use if you want quicker interactive recommendations and can tolerate slightly less depth on tricky plans. |
-| **GPT-4o mini** | Moderate | Moderate | **Very fast** | Useful for simple triage, summarizing explain plans, extracting query shapes, or flagging obvious missing indexes. Riskier as the final decision-maker. |
-| **GPT-5.4 nano** | Light/moderate | Light/moderate | **Fastest** | Best for routing, formatting, structured extraction, or quick "needs review / doesn't need review" checks. Not my pick for nuanced recommendations. |
+| Model            | Explain-plan understanding | Instruction following |         Speed | Best use                                                                                                                                                                                                            |
+| ---------------- | -------------------------: | --------------------: | ------------: | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **GPT-4.1**      |                   **Best** |              **Best** |        Medium | **Primary choice** for DocumentDB index recommendations where correctness matters. Best at reasoning through `winningPlan`, `executionStats`, compound index order, sort coverage, range predicates, and tradeoffs. |
+| **GPT-4o**       |                  Very good |             Very good |      **Fast** | Best speed/quality balance. Use if you want quicker interactive recommendations and can tolerate slightly less depth on tricky plans.                                                                               |
+| **GPT-4o mini**  |                   Moderate |              Moderate | **Very fast** | Useful for simple triage, summarizing explain plans, extracting query shapes, or flagging obvious missing indexes. Riskier as the final decision-maker.                                                             |
+| **GPT-5.4 nano** |             Light/moderate |        Light/moderate |   **Fastest** | Best for routing, formatting, structured extraction, or quick "needs review / doesn't need review" checks. Not my pick for nuanced recommendations.                                                                 |
 
 **Bottom line:** use **GPT-4.1** if you want the best single model. Use **GPT-4o** if you want a noticeably faster assistant and most recommendations are straightforward. Use the mini/nano models only as pre-processors or triage layers, not as the final recommender.
 
@@ -218,10 +218,10 @@ After the first push, [`docs/analysis/pr-690-review.md`](../../analysis/pr-690-r
 
 ```typescript
 interface CopilotResponse {
-    modelId: string;            // stable LanguageModelChat.id (telemetry, exact compare)
-    modelFamily: string;        // stable LanguageModelChat.family (preferred-model check)
-    modelDisplayName: string;   // human-readable LanguageModelChat.name (byline only)
-    // ...
+  modelId: string; // stable LanguageModelChat.id (telemetry, exact compare)
+  modelFamily: string; // stable LanguageModelChat.family (preferred-model check)
+  modelDisplayName: string; // human-readable LanguageModelChat.name (byline only)
+  // ...
 }
 ```
 
@@ -254,14 +254,14 @@ const [model] = await vscode.lm.selectChatModels({ vendor: 'copilot', family: 'g
 
 #### Why this is safe for `copilot-utility`
 
-`copilot-utility` is not a "real" model family — it's an alias the Copilot extension publishes for whichever endpoint is currently marked `is_chat_fallback`. We verified directly against the Copilot Chat extension source (`microsoft/vscode-copilot-chat`, `src/extension/conversation/vscode-node/languageModelAccess.ts`) that **alias entries are registered with the alias string used as *both* `id` and `family`**:
+`copilot-utility` is not a "real" model family — it's an alias the Copilot extension publishes for whichever endpoint is currently marked `is_chat_fallback`. We verified directly against the Copilot Chat extension source (`microsoft/vscode-copilot-chat`, `src/extension/conversation/vscode-node/languageModelAccess.ts`) that **alias entries are registered with the alias string used as _both_ `id` and `family`**:
 
 ```typescript
 // Primary model entry: id and family DIFFER
 models.push({
-  id: endpoint.model,        // e.g. "copilot-gpt-4.1"
-  family: endpoint.family,   // e.g. "gpt-4.1"
-  name: endpoint.name,       // e.g. "GPT-4.1"
+  id: endpoint.model, // e.g. "copilot-gpt-4.1"
+  family: endpoint.family, // e.g. "gpt-4.1"
+  name: endpoint.name, // e.g. "GPT-4.1"
   // ...
 });
 
@@ -270,8 +270,8 @@ const aliases = ModelAliasRegistry.getAliases(model.id);
 for (const alias of aliases) {
   models.push({
     ...model,
-    id: alias,        // e.g. "copilot-utility"
-    family: alias,    // same alias string for family too
+    id: alias, // e.g. "copilot-utility"
+    family: alias, // same alias string for family too
     isUserSelectable: false,
   });
 }
@@ -310,4 +310,3 @@ The "No suitable language model found" error now also mentions the VS Code langu
 ### Service-internal trace prefix unified to `[Copilot]` (Additional Nit)
 
 The cancellation trace inside `CopilotService` no longer says `[Query Insights AI]`; service-internal traces are now consistently prefixed `[Copilot]` while caller-side traces keep their feature prefixes (`[Query Insights AI]`, `[Query Generation]`).
-
