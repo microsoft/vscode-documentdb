@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../../../extensionVariables';
 import { nonNullProp, nonNullValue } from '../../../../utils/nonNull';
+import { tenantSignInLimiter } from '../tenantSignInLimiter';
 import {
     type AccountWithTenantInfo,
     type CredentialsManagementWizardContext,
@@ -142,11 +143,13 @@ export class SelectAccountStep extends AzureWizardPromptStep<CredentialsManageme
             // Get all tenants which include the accounts
             const tenants = await context.azureSubscriptionProvider.getTenants();
 
-            // Check sign-in status for all tenants in parallel
+            // Check sign-in status for all tenants with bounded parallelism
             const knownTenantsWithStatus: TenantWithSignInStatus[] = await Promise.all(
                 tenants.map(async (tenant) => {
                     const tenantId = nonNullProp(tenant, 'tenantId', 'tenant.tenantId', 'SelectAccountStep.ts');
-                    const isSignedIn = await context.azureSubscriptionProvider.isSignedIn(tenantId, tenant.account);
+                    const isSignedIn = await tenantSignInLimiter(() =>
+                        context.azureSubscriptionProvider.isSignedIn(tenantId, tenant.account),
+                    );
                     return { tenant, isSignedIn };
                 }),
             );
