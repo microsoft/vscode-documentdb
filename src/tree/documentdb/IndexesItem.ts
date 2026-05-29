@@ -6,7 +6,7 @@
 import { createContextValue } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { ClustersClient, type CollectionItemModel, type DatabaseItemModel, type IndexItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -41,6 +41,14 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
      */
     private isLoadingCount: boolean = false;
 
+    /**
+     * Cached combined index list (regular + search) from the most recent
+     * fetch, so `getChildren()` can reuse it instead of making a second
+     * round-trip to the server.
+     * undefined means not yet fetched.
+     */
+    private cachedIndexes: IndexItemModel[] | undefined = undefined;
+
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
@@ -67,8 +75,8 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
      * This method is fire-and-forget and does not block tree expansion.
      */
     public loadIndexCount(): void {
-        // Skip if already loading or already loaded
-        if (this.isLoadingCount || this.indexCount !== undefined) {
+        // Skip if already loading or if we already have a valid count
+        if (this.isLoadingCount || typeof this.indexCount === 'number') {
             return;
         }
 
@@ -80,6 +88,9 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     /**
      * Fetches the index count and triggers a tree refresh when complete.
+     * As a side effect, caches the combined index list on the instance so
+     * that a subsequent `getChildren()` call can reuse it and avoid a second
+     * round-trip to the server.
      */
     private async fetchAndUpdateCount(): Promise<void> {
         const clusterId = this.cluster.clusterId;
@@ -88,6 +99,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
         const isCurrent = this.isCurrent;
 
         let result: number | null;
+        let combinedIndexes: IndexItemModel[] = [];
         try {
             const client = await ClustersClient.getClient(clusterId);
             if (!isCurrent()) {
@@ -95,18 +107,24 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             }
             const indexes = await client.listIndexes(dbName, collName);
 
-            // Also try to count search indexes, but silently fail if not supported
-            let searchIndexCount = 0;
+            // Also try to fetch search indexes, but silently fail if not supported
+            let searchIndexes: IndexItemModel[] = [];
             try {
-                const searchIndexes = await client.listSearchIndexesForAtlas(dbName, collName);
-                searchIndexCount = searchIndexes.length;
+                searchIndexes = await client.listSearchIndexesForAtlas(dbName, collName);
             } catch {
                 // Search indexes not supported on this platform
             }
 
-            result = indexes.length + searchIndexCount;
+            combinedIndexes = [...indexes, ...searchIndexes];
+            result = combinedIndexes.length;
         } catch {
             result = null;
+        } finally {
+            // Only clear the loading flag when still current so we don't
+            // mutate a stale instance that no longer owns the UI state.
+            if (isCurrent()) {
+                this.isLoadingCount = false;
+            }
         }
 
         if (!isCurrent()) {
@@ -115,31 +133,41 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             return;
         }
 
-        this.isLoadingCount = false;
         this.indexCount = result;
+        if (result !== null) {
+            this.cachedIndexes = combinedIndexes;
+        }
         // Trigger a tree item refresh to show the updated description
         ext.state.notifyChildrenChanged(this.id);
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
-        const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
+        // Reuse the cached index list from the background count fetch when
+        // available — avoids a second round-trip for the same data. Fall
+        // back to fetching on-demand if the cache hasn't been populated yet
+        // (e.g. count load is still in-flight or failed).
+        if (!this.cachedIndexes) {
+            const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+            const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
 
-        // Try to get search indexes, but silently fail if not supported by the platform
-        try {
-            const searchIndexes = await client.listSearchIndexesForAtlas(
-                this.databaseInfo.name,
-                this.collectionInfo.name,
-            );
-            indexes.push(...searchIndexes);
-        } catch {
-            // Search indexes not supported on this platform, continue without them
+            // Try to get search indexes, but silently fail if not supported by the platform
+            try {
+                const searchIndexes = await client.listSearchIndexesForAtlas(
+                    this.databaseInfo.name,
+                    this.collectionInfo.name,
+                );
+                indexes.push(...searchIndexes);
+            } catch {
+                // Search indexes not supported on this platform, continue without them
+            }
+
+            this.cachedIndexes = indexes;
         }
 
         // Sort indexes by name, with _id_ always first
-        indexes.sort((a, b) => compareIndexNames(a.name, b.name));
+        this.cachedIndexes.sort((a, b) => compareIndexNames(a.name, b.name));
 
-        return indexes.map((index) => {
+        return this.cachedIndexes.map((index) => {
             return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
         });
     }
