@@ -169,6 +169,9 @@ export async function executePlaygroundCode(
 
                 token.onCancellationRequested(() => {
                     cancelled = true;
+                    // killWorker() terminates the worker thread but the evaluator
+                    // instance stays in the pool. The next evaluate() call will
+                    // detect the dead worker and transparently spawn a new one.
                     evaluator?.killWorker();
                 });
 
