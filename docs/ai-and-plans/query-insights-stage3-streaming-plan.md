@@ -590,10 +590,51 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
 
 ### Closeout
 
-- [ ] **WI-11 — Full PR checklist + manual verification.** Run l10n, prettier-fix, lint, jest,
+- [x] **WI-11 — Full PR checklist + manual verification.** Run l10n, prettier-fix, lint, jest,
       build. Manually verify on a slow query: progress < 2s, paragraphs stream, shells fill,
       cancel works, final state unchanged. Update this plan (all boxes, Deviation Log) and write
       the PR description (including telemetry mapping + new event/rpc-path names).
+  - _Outcome:_ Re-ran the full PR checklist on a clean tree after WI-10:
+    - `npm run l10n` → 1332 keys, bundle written (idempotent at this point).
+    - `npm run prettier-fix` → no files needed reformatting.
+    - `npm run lint` → 0 errors / 0 warnings.
+    - `npx jest --no-coverage` → 103 suites / 2014 tests passing
+      (incl. the 25 new `streamingResponseParser.test.ts` cases from WI-7).
+    - `npm run build` → green (`tsc` across all packages).
+    All WI-1 → WI-10 boxes are ticked with outcome blocks; WI-11 itself is ticked here.
+    Deviation Log holds three entries (WI-7 verification-from-reconcile, WI-7 `\n\n`-only
+    progressive trigger, WI-9 OPEN-1 accept-one-shift). The PR description should include
+    the WI-10 outcome's old→new telemetry mapping table verbatim plus a callout for the
+    rpc-path change introduced in WI-4 (`documentDB.rpc.query.collectionView.*` →
+    `documentDB.rpc.query.collectionView.queryInsights.*` for the four moved procedures,
+    and a new `documentDB.rpc.subscription.collectionView.queryInsights.streamStage3` for
+    the streaming entry).
+
+    Notes for the PR description / follow-up:
+
+    - **Manual verification on a live slow query** (progress < 2s, paragraph reveal,
+      shells fill, mid-stream cancel clears partial UI, final state byte-identical to
+      `getQueryInsightsStage3`) — **deferred to the reviewer**: it requires a live
+      Copilot subscription and a slow-enough query against a real cluster, neither of
+      which the implementing agent has access to. The agent verified that the entire
+      stack compiles, lints, type-checks, and that the 2014-case automated suite
+      (including the 25-case streaming parser contract) passes. The agent recommends
+      the reviewer exercise: (a) Stage 3 success path on a real query, (b)
+      mid-stream Cancel during the `receiving` phase to confirm `subscription.stop`
+      reaches the LLM call, (c) regenerate-while-loading to confirm the requestKey
+      staleness guard discards the orphaned events, and (d) verify
+      `documentDB.queryInsights.stage3.completed` fires with `aborted: 'true'` on
+      cancel and `aborted: 'false'` on success.
+    - **`getQueryInsightsStage3` (buffered)** is no longer called from the webview
+      (WI-6 swapped the call site to `streamStage3`). The procedure still exists in
+      `queryInsightsRouter.ts` per the plan's WI-3 contract ("keep the existing
+      buffered path working for any non-streaming caller"). Removing it would be a
+      follow-up refactor outside this PR's scope; flagging here so the reviewer can
+      decide whether to merge that cleanup separately.
+    - **`stage3Promise` field on `QueryInsightsState`** is dead state after WI-6
+      (always written as `null` along the streaming path; never read by any UI code).
+      Same rationale as above — removing it is a wider context-shape refactor not
+      required by the streaming work. Flagged for a follow-up.
 
 ---
 
