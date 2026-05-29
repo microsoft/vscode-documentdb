@@ -263,6 +263,7 @@ export const queryInsightsEventsRoutes = {
                     type: 'complete',
                     modelDisplayName: aiResponse.modelDisplayName,
                     modelId: aiResponse.modelId,
+                    modelFamily: aiResponse.modelFamily,
                     usage: aiResponse.usage,
                 };
             } finally {

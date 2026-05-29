@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createContext } from 'react';
+import { type AIIndexRecommendation } from '../../../services/ai/types';
 import {
     type QueryInsightsStage1Response,
     type QueryInsightsStage2Response,
@@ -52,8 +53,41 @@ export interface QueryInsightsState {
     stage3Promise: Promise<QueryInsightsStage3Response> | null;
     stage3RequestKey: string | null; // Unique key to track if the response is still valid
 
+    /**
+     * Progressive state populated by the `collectionView.queryInsights.streamStage3`
+     * subscription (WI-8 emits structured events that this state mirrors).
+     * Render code consumes this during Stage-3 loading; on the terminal
+     * `complete` event the equivalent fully-formed snapshot is materialized
+     * into {@link stage3Data} so byline / collapse code paths that look at
+     * `stage3Data` keep working unchanged. `null` whenever no Stage-3 stream
+     * is in flight (initial, post-cancel, or post-success-snapshot-only).
+     */
+    stage3Streaming: QueryInsightsStreamingState | null;
+
     // Track which errors have been displayed to the user (to prevent duplicate toasts)
     displayedErrors: string[]; // Array of error keys that have been shown
+}
+
+/**
+ * Per-stream progressive state. Mirrors a strict subset of the
+ * `QueryInsightsStreamEvent` union (structured events only — `status` and
+ * `complete` drive UI lifecycle elsewhere). Resets to `null` whenever a new
+ * Stage 3 request starts.
+ */
+export interface QueryInsightsStreamingState {
+    /** Cumulative markdown from `summary` events (the AI `analysis` JSON key). */
+    summary: { markdown: string; complete: boolean } | null;
+    /** Cumulative markdown from `educational` events (the AI `educationalContent` key). */
+    educational: { markdown: string; complete: boolean } | null;
+    /**
+     * Sparse-by-index list of streamed improvements. `null` means the
+     * `recommendationStarted` event has arrived (render a shell); a value
+     * means the matching `recommendation` event has arrived (render the
+     * filled card). Indexed by `event.index` (0-based, monotonic per stream).
+     */
+    recommendations: Array<AIIndexRecommendation | null>;
+    /** Reconciled verification items, populated on the terminal `verification` event. */
+    verification: string[] | null;
 }
 
 export type TableViewState = {
@@ -156,6 +190,7 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         stage3ErrorCode: null,
         stage3Promise: null,
         stage3RequestKey: null,
+        stage3Streaming: null,
 
         displayedErrors: [],
     },

@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type AIIndexRecommendation } from '../../../../services/ai/types';
-import { type QueryInsightsStage3Response } from './queryInsights';
 
 /**
  * Best-effort Copilot token-usage measurements, mirrored here in a
@@ -126,14 +125,6 @@ export type QueryInsightsStreamEvent =
           type: 'complete';
           modelDisplayName?: string;
           modelId?: string;
+          modelFamily?: string;
           usage?: QueryInsightsStreamUsage;
-      }
-    | {
-          /**
-           * @deprecated WI-5 transitional event carrying the buffered
-           * Stage 3 payload. WI-8 will remove this in favor of the
-           * structured events above + a terminal `complete`.
-           */
-          type: 'result';
-          data: QueryInsightsStage3Response;
       };

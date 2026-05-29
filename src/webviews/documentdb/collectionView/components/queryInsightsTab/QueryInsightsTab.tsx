@@ -36,10 +36,17 @@ import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useRef, useState, type JSX } from 'react';
+import { type AIIndexRecommendation } from '../../../../../services/ai/types';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
-import { CollectionViewContext } from '../../collectionViewContext';
+import { CollectionViewContext, type QueryInsightsStreamingState } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
-import { type ImprovementCard as ImprovementCardConfig } from '../../types/queryInsights';
+import {
+    type AnalysisCard as AnalysisCardConfig,
+    type ImprovementCard as ImprovementCardConfig,
+    type QueryInsightsStage3Response,
+} from '../../types/queryInsights';
+import { type QueryInsightsStreamEvent } from '../../types/queryInsightsStream';
+import { createImprovementCardConfig } from '../../utils/createImprovementCard';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
 import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
@@ -48,6 +55,7 @@ import { TimeMetric } from './components/metricsRow/TimeMetric';
 import {
     GetPerformanceInsightsCard,
     ImprovementCard,
+    ImprovementCardShell,
     MarkdownCard,
     MarkdownCardEx,
     TipsCard,
@@ -56,6 +64,49 @@ import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
 import './QueryInsightsTab.scss';
+
+/**
+ * Materialize a fully-formed {@link QueryInsightsStage3Response} from the
+ * per-stream {@link QueryInsightsStreamingState} + the terminal `complete`
+ * event. Called once on `complete` so byline / collapse / "powered by"
+ * render paths that read `stage3Data` keep working unchanged.
+ *
+ * `recommendations` may contain `null` entries (a `recommendationStarted`
+ * event with no matching `recommendation` — e.g. if the LLM produced a
+ * malformed item that the parser silently skipped); those are filtered
+ * out so the snapshot is dense. WI-9.
+ */
+function synthesizeStage3Data(
+    streaming: QueryInsightsStreamingState,
+    completeEvent: Extract<QueryInsightsStreamEvent, { type: 'complete' }>,
+    configuration: Pick<CollectionViewWebviewConfigurationType, 'clusterId' | 'databaseName' | 'collectionName'>,
+): QueryInsightsStage3Response {
+    const analysisCard: AnalysisCardConfig = {
+        type: 'analysis',
+        content: streaming.summary?.markdown ?? l10n.t('No analysis provided.'),
+    };
+
+    const improvementCards: ImprovementCardConfig[] = streaming.recommendations
+        .filter((rec): rec is AIIndexRecommendation => rec !== null)
+        .map((rec, index) =>
+            createImprovementCardConfig(rec, index, {
+                clusterId: configuration.clusterId,
+                databaseName: configuration.databaseName,
+                collectionName: configuration.collectionName,
+            }),
+        );
+
+    return {
+        analysisCard,
+        improvementCards,
+        verificationSteps: (streaming.verification ?? []).join('\n'),
+        educationalContent: streaming.educational?.markdown,
+        modelId: completeEvent.modelId,
+        modelFamily: completeEvent.modelFamily,
+        modelDisplayName: completeEvent.modelDisplayName,
+        usage: completeEvent.usage,
+    };
+}
 
 export const QueryInsightsMain = (): JSX.Element => {
     // Stage management:
@@ -213,6 +264,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     newState.stage3ErrorCode = null;
                     newState.stage3Promise = null;
                     newState.stage3RequestKey = null;
+                    newState.stage3Streaming = null;
 
                     // Reset UI flags
                     setShowTipsCard(false);
@@ -225,10 +277,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                     newState.stage3ErrorCode = null;
                     newState.stage3Promise = null;
                     newState.stage3RequestKey = null;
+                    newState.stage3Streaming = null;
 
                     // Don't reset UI flags here - they should persist for the same query session
                     // They will be reset by phase 1 or phase 3 loading transitions
                 } else if (phase === 3 && status === 'loading') {
+                    // Starting a new Stage-3 request: clear any leftover
+                    // streaming snapshot from a previous run so the
+                    // progressive render path starts from a clean slate.
+                    newState.stage3Data = null;
+                    newState.stage3Streaming = null;
                     // Reset UI flags when starting new AI request
                     setShowTipsCard(false);
                     setIsTipsCardDismissed(false);
@@ -531,20 +589,25 @@ export const QueryInsightsMain = (): JSX.Element => {
         // cancelled in lock step.
         stage3SubscriptionRef.current?.unsubscribe();
 
-        // Subscribe to the Stage 3 streaming subscription. WI-5 emits only
-        // coarse `status` events plus a single terminal `result` event;
-        // WI-9 will start consuming the `status` events for progressive UI.
-        // For now we only react to the `result` event (final payload) and
-        // preserve the existing requestKey staleness guard for late/raced
-        // callbacks (e.g. if the user kicks off a fresh request before the
-        // previous one has fully unwound).
+        // Subscribe to the Stage 3 streaming subscription. WI-9 wires
+        // each structured event type to a slot in `stage3Streaming` (the
+        // progressive state the render path reads during phase=3 /
+        // status=loading) and synthesizes a full `stage3Data` snapshot on
+        // the terminal `complete` event so byline / collapse code paths
+        // that read `stage3Data` keep working unchanged. The requestKey
+        // staleness guard around every state update silently discards
+        // late callbacks from the framework's unsubscribe race (e.g. when
+        // the user kicks off a fresh request before the previous one has
+        // fully unwound).
         const subscription = trpcClient.mongoClusters.collectionView.queryInsights.streamStage3.subscribe(
             { requestKey },
             {
                 onData(event) {
-                    if (event.type !== 'result') {
-                        // 'status' events are intentionally ignored in WI-6;
-                        // WI-9 will wire them into progressive UI.
+                    if (event.type === 'status') {
+                        // The pre-content client-side stepper inside
+                        // GetPerformanceInsightsCard already covers
+                        // perceived progress; WI-10 may surface server
+                        // elapsed/chars later if useful.
                         return;
                     }
 
@@ -555,16 +618,83 @@ export const QueryInsightsMain = (): JSX.Element => {
                             return prev;
                         }
                         wasAccepted = true;
-                        return {
-                            ...prev,
-                            stage3Data: event.data,
-                            stage3Promise: null,
-                            stage3RequestKey: null,
+
+                        const prevStreaming: QueryInsightsStreamingState = prev.stage3Streaming ?? {
+                            summary: null,
+                            educational: null,
+                            recommendations: [],
+                            verification: null,
                         };
+
+                        switch (event.type) {
+                            case 'summary':
+                                return {
+                                    ...prev,
+                                    stage3Streaming: {
+                                        ...prevStreaming,
+                                        summary: { markdown: event.markdown, complete: event.complete },
+                                    },
+                                };
+                            case 'educational':
+                                return {
+                                    ...prev,
+                                    stage3Streaming: {
+                                        ...prevStreaming,
+                                        educational: { markdown: event.markdown, complete: event.complete },
+                                    },
+                                };
+                            case 'recommendationStarted': {
+                                const recs = prevStreaming.recommendations.slice();
+                                while (recs.length <= event.index) {
+                                    recs.push(null);
+                                }
+                                return {
+                                    ...prev,
+                                    stage3Streaming: {
+                                        ...prevStreaming,
+                                        recommendations: recs,
+                                    },
+                                };
+                            }
+                            case 'recommendation': {
+                                const recs = prevStreaming.recommendations.slice();
+                                while (recs.length <= event.index) {
+                                    recs.push(null);
+                                }
+                                recs[event.index] = event.recommendation;
+                                return {
+                                    ...prev,
+                                    stage3Streaming: {
+                                        ...prevStreaming,
+                                        recommendations: recs,
+                                    },
+                                };
+                            }
+                            case 'verification':
+                                return {
+                                    ...prev,
+                                    stage3Streaming: {
+                                        ...prevStreaming,
+                                        verification: event.items,
+                                    },
+                                };
+                            case 'complete': {
+                                const synthesized = synthesizeStage3Data(prevStreaming, event, configuration);
+                                return {
+                                    ...prev,
+                                    stage3Data: synthesized,
+                                    stage3Promise: null,
+                                    stage3RequestKey: null,
+                                };
+                            }
+                            default:
+                                return prev;
+                        }
                     });
 
-                    // Only transition to success if the response was accepted
-                    if (wasAccepted) {
+                    // Transition to success only when the terminal event
+                    // arrives for the still-current request.
+                    if (event.type === 'complete' && wasAccepted) {
                         transitionToStage(3, 'success');
                     }
                 },
@@ -588,6 +718,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             stage3ErrorCode: errorCode,
                             stage3Promise: null,
                             stage3RequestKey: null,
+                            stage3Streaming: null,
                         };
                     });
 
@@ -602,8 +733,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                 },
                 onComplete() {
                     // Clear the ref only if it still points to this request's
-                    // subscription. Don't drive any UI state from here — the
-                    // terminal `result` event already drove the success path.
+                    // subscription. UI state was driven by the terminal
+                    // `complete` event in onData; nothing else to do here.
                     if (stage3SubscriptionRef.current === subscription) {
                         stage3SubscriptionRef.current = null;
                     }
@@ -635,6 +766,7 @@ export const QueryInsightsMain = (): JSX.Element => {
             ...prev,
             stage3Promise: null,
             stage3RequestKey: null,
+            stage3Streaming: null,
         }));
 
         // Transition to Stage 3 cancelled state
@@ -715,18 +847,41 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Include requestKey in card keys to force remount on regeneration
     const keyPrefix = queryInsightsState.stage3RequestKey ? `${queryInsightsState.stage3RequestKey}-` : '';
 
+    // Stage 3 render sources (WI-9 progressive streaming):
+    //   - `streaming` carries the in-flight progressive state populated by
+    //     the `streamStage3` subscription's structured events. It's the
+    //     primary source during phase=3 / status=loading and stays
+    //     populated after `complete` for a glitch-free hand-off.
+    //   - `stage3Data` is the materialized success snapshot (populated by
+    //     `synthesizeStage3Data` on the terminal `complete` event). The
+    //     render path here prefers `streaming` for cards (so the
+    //     shell-to-fill transition stays granular), but the byline /
+    //     `GetPerformanceInsightsCard` collapse below still read
+    //     `stage3Data` to detect "Stage 3 has succeeded at least once".
+    const streaming = queryInsightsState.stage3Streaming;
+
     // Analysis Card (if AI data available)
-    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.analysisCard) {
-        insightCards.push({
-            key: `${keyPrefix}analysis-card`,
-            component: (
-                <MarkdownCard
-                    icon={<SparkleRegular />}
-                    title={l10n.t('Query Performance Analysis')}
-                    content={queryInsightsState.stage3Data.analysisCard.content}
-                />
-            ),
-        });
+    if (currentStage.phase === 3) {
+        const summarySource =
+            streaming?.summary ??
+            (queryInsightsState.stage3Data?.analysisCard
+                ? {
+                      markdown: queryInsightsState.stage3Data.analysisCard.content,
+                      complete: true,
+                  }
+                : null);
+        if (summarySource) {
+            insightCards.push({
+                key: `${keyPrefix}analysis-card`,
+                component: (
+                    <MarkdownCard
+                        icon={<SparkleRegular />}
+                        title={l10n.t('Query Performance Analysis')}
+                        content={summarySource.markdown}
+                    />
+                ),
+            });
+        }
     }
 
     // Error Card - shown when query execution failed
@@ -749,13 +904,46 @@ export const QueryInsightsMain = (): JSX.Element => {
         });
     }
 
-    // Improvement Cards (dynamic from AI response)
-    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.improvementCards) {
+    // Improvement Cards (progressive: shell on `recommendationStarted`,
+    // filled on `recommendation`; per D11 the shell reuses the same outer
+    // Card + ArrowTrendingSparkleRegular icon as the filled card via
+    // `ImprovementCardShell`, so the card's identity never changes when
+    // content arrives). Uses a single stable key per index so the
+    // shell-to-filled transition is in-place (no unmount/remount).
+    if (currentStage.phase === 3 && streaming && streaming.recommendations.length > 0) {
+        streaming.recommendations.forEach((rec, index) => {
+            const key = `${keyPrefix}rec-${index}`;
+            if (rec === null) {
+                insightCards.push({ key, component: <ImprovementCardShell /> });
+                return;
+            }
+            const config = createImprovementCardConfig(rec, index, {
+                clusterId: configuration.clusterId,
+                databaseName: configuration.databaseName,
+                collectionName: configuration.collectionName,
+            });
+            insightCards.push({
+                key,
+                component: (
+                    <ImprovementCard
+                        config={config}
+                        onPrimaryAction={handlePrimaryAction}
+                        onSecondaryAction={handleSecondaryAction}
+                    />
+                ),
+            });
+        });
+    } else if (currentStage.phase === 3 && queryInsightsState.stage3Data?.improvementCards) {
+        // Fallback: no streaming state (legacy buffered path or
+        // post-success after streaming was cleared) — render from the
+        // materialized snapshot using the same per-index key so a
+        // streaming → snapshot transition (if it ever happens) is also
+        // in-place.
         queryInsightsState.stage3Data.improvementCards.forEach((card: ImprovementCardConfig, index: number) => {
-            // If any button exists, render ImprovementCard; otherwise render MarkdownCard
+            const key = `${keyPrefix}rec-${index}`;
             if (card.primaryButton || card.secondaryButton) {
                 insightCards.push({
-                    key: `${keyPrefix}${card.cardId}`,
+                    key,
                     component: (
                         <ImprovementCard
                             config={card}
@@ -765,9 +953,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                     ),
                 });
             } else {
-                // For informational cards (no buttons), use MarkdownCard
                 insightCards.push({
-                    key: `${keyPrefix}${card.cardId || `card-${index}`}`,
+                    key,
                     component: <MarkdownCard icon={<SparkleRegular />} title={card.title} content={card.description} />,
                 });
             }
@@ -775,17 +962,24 @@ export const QueryInsightsMain = (): JSX.Element => {
     }
 
     // Educational Markdown Card - Understanding Query Execution
-    if (currentStage.phase === 3 && queryInsightsState.stage3Data?.educationalContent) {
-        insightCards.push({
-            key: `${keyPrefix}understanding-execution`,
-            component: (
-                <MarkdownCard
-                    icon={<SparkleRegular />}
-                    title={l10n.t('Understanding Your Query Execution Plan')}
-                    content={queryInsightsState.stage3Data.educationalContent}
-                />
-            ),
-        });
+    if (currentStage.phase === 3) {
+        const educationalSource =
+            streaming?.educational ??
+            (queryInsightsState.stage3Data?.educationalContent
+                ? { markdown: queryInsightsState.stage3Data.educationalContent, complete: true }
+                : null);
+        if (educationalSource) {
+            insightCards.push({
+                key: `${keyPrefix}understanding-execution`,
+                component: (
+                    <MarkdownCard
+                        icon={<SparkleRegular />}
+                        title={l10n.t('Understanding Your Query Execution Plan')}
+                        content={educationalSource.markdown}
+                    />
+                ),
+            });
+        }
     }
 
     // Performance Tips Card
@@ -879,8 +1073,19 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                         {/* GetPerformanceInsightsCard with CollapseRelaxed animation
                             Shown in Stage 2 when AI insights haven't been requested yet, or when there's an error.
+                            Collapses as soon as the first Stage 3 streaming event arrives
+                            (`stage3Streaming` becomes non-null) so the progressive cards take over
+                            the screen real estate. Falls back to the materialized `stage3Data`
+                            snapshot for the post-complete window (legacy buffered path also relies
+                            on this fallback).
                             Note: Component supports ref forwarding and applies its own spacing via className. */}
-                        <CollapseRelaxed visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data}>
+                        <CollapseRelaxed
+                            visible={
+                                currentStage.phase >= 2 &&
+                                !queryInsightsState.stage3Data &&
+                                !queryInsightsState.stage3Streaming
+                            }
+                        >
                             <GetPerformanceInsightsCard
                                 className="cardSpacing"
                                 bodyText={

@@ -478,7 +478,7 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
 
 ### Phase 3 — Progressive UI rendering
 
-- [ ] **WI-9 — Progressive rendering in `QueryInsightsTab`.** Maintain streaming state from
+- [x] **WI-9 — Progressive rendering in `QueryInsightsTab`.** Maintain streaming state from
       events. Render: `summary` and `educational` markdown cards that grow paragraph-by-paragraph;
       recommendation **shell** on `recommendationStarted`, filled on `recommendation`. No up-front
       skeletons. **Per-type icons (D11):** every shell must already carry the icon its filled card
@@ -490,6 +490,41 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
       it in the Deviation Log if it differs from "accept one shift". Clear loading on `complete`.
   - _Acceptance:_ matches §6 sequence; no card appears fully-formed out of nowhere; each shell's
     icon matches its final card; final UI identical to today; a11y live regions announce progress.
+  - _Outcome:_ Added `QueryInsightsStreamingState` to `collectionViewContext.ts` (per-stream
+    `{ summary, educational, recommendations[], verification }`, mirroring the structured event
+    union) and `stage3Streaming: QueryInsightsStreamingState | null` to `QueryInsightsState`.
+    `transitionToStage` clears it alongside `stage3Data` on phase=1 reset, phase=2 loading,
+    and phase=3 loading (so a re-run starts from a blank slate); `handleCancelAI` clears it
+    too. Rewrote the subscription `onData` handler to dispatch each structured event into the
+    matching slot in `stage3Streaming` (initializing the per-stream object lazily on the first
+    structured event), and to synthesize a full-snapshot `stage3Data` from `stage3Streaming +
+    completeEvent` on the terminal `complete` event via a new local `synthesizeStage3Data`
+    helper. `recommendationStarted` extends the recommendations array with a sentinel `null`
+    at the right index; `recommendation` fills the same slot. Added a new
+    `src/webviews/documentdb/collectionView/utils/createImprovementCard.ts` (webview-side
+    pure transform mirroring the server-side `createImprovementCard` in
+    `transformations.ts` — strings + button payloads kept byte-identical) and a new
+    `ImprovementCardShell.tsx` (shell version of `ImprovementCard` that reuses the same
+    outer `Card` + `ArrowTrendingSparkleRegular` icon — D11) so the card's identity never
+    changes when content arrives. Rewrote the render path so phase-3 cards now read from
+    `streaming` first (cards grow paragraph-by-paragraph as `summary` / `educational` events
+    update; recommendation index `i` renders `<ImprovementCardShell />` while
+    `streaming.recommendations[i]` is `null` and the filled `<ImprovementCard>` once it
+    fills) and fall back to `stage3Data` for the post-`complete` window / legacy buffered
+    callers; every card uses the stable `${keyPrefix}rec-${index}` key so the shell→filled
+    transition is in-place (no remount). The `GetPerformanceInsightsCard` collapse condition
+    was extended to `!stage3Data && !stage3Streaming` so it collapses the moment the first
+    structured event arrives. Extended `QueryInsightsStreamEvent`'s `complete` variant with
+    `modelFamily` (needed for the `stage3Data.modelFamily` parity that the byline /
+    telemetry preserve in WI-10) and threaded it through the subscription. ⚠️ **Layout jump
+    (OPEN-1):** accepted the default "one downward shift" mitigation per plan — the
+    educational block fills first (per the LLM's emission order) and gets pushed down once
+    the summary block arrives. No layout reservation was added; the `AnimatedCardList`'s
+    `CollapseRelaxed` transitions already smooth the insert. Deviation Log: stayed with the
+    plan's default; logging it explicitly per WI-9 instructions. ⚠️ **Per-stream priority**
+    `setQueryInsightsStateHelper` updates use the existing requestKey staleness guard to
+    silently drop late callbacks from unsubscribe races. l10n / prettier / lint / jest
+    (2014 ✓) / build all pass.
 - [ ] **WI-10 — Telemetry completion event (§7).** Emit
       `documentDB.queryInsights.stage3.completed` from the generator with all preserved keys +
       `durationMs` + `aborted`. Verify `optimizeQuery`/`CopilotService` duration events still fire.
@@ -578,3 +613,10 @@ on `###` as plan §4/WI-7 lists "split on `###` / blank line") — In practice t
 puts a blank line before `### Heading`, so `\n\n` detection covers the same boundaries.
 Detecting `\n###` mid-stream would require 3-char lookbehind for negligible additional UX
 benefit. — 85% — n.
+
+2026-05-29 — WI-9 — OPEN-1 (layout jump under R1) — accepted the plan's default "one
+downward shift" mitigation: the educational block fills first (because the LLM emits
+`educationalContent` before `analysis`) and is pushed down once the `summary` arrives.
+No layout reservation / fixed top region was introduced. The `AnimatedCardList`'s existing
+`CollapseRelaxed` insert animation already softens the transition; a more elaborate
+mitigation can be revisited if the visible shift is reported as disruptive. — 85% — n.
