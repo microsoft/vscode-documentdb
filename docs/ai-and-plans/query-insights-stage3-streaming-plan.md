@@ -525,12 +525,68 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     `setQueryInsightsStateHelper` updates use the existing requestKey staleness guard to
     silently drop late callbacks from unsubscribe races. l10n / prettier / lint / jest
     (2014 ✓) / build all pass.
-- [ ] **WI-10 — Telemetry completion event (§7).** Emit
+- [x] **WI-10 — Telemetry completion event (§7).** Emit
       `documentDB.queryInsights.stage3.completed` from the generator with all preserved keys +
       `durationMs` + `aborted`. Verify `optimizeQuery`/`CopilotService` duration events still fire.
       Produce the old→new key mapping table for the PR.
   - _Acceptance:_ event fires once per completed/aborted stream with correct values; mapping
     table complete; "no data lost" confirmed (or gaps escalated to user).
+  - _Outcome:_ Added a per-subscription `CompletionTelemetry` accumulator
+    (`{ properties: Record<string,string>; measurements: Record<string,number> }`) populated
+    incrementally throughout the subscription body (platform via
+    `session.getClient().getClusterMetadata()`; `hasCachedExecutionPlan` from the cached
+    explain output; `hasStaticAnalysisSummary` / `staticAnalysisSummaryLength` /
+    `staticAnalysisSummaryError` / `staticAnalysisSummaryErrorKind` from the
+    `buildStaticAnalysisSummary` call; `recommendationCount` +
+    `actionableRecommendationCount` + `createRecommendationCount` + `dropRecommendationCount`
+    + `modifyRecommendationCount` from the parsed `aiResponse.improvements`;
+    `aiModelDisclosed` / `aiModelFamily` from `aiResponse.model*`;
+    `promptTokens` / `responseTokens` / `totalTokens` / `maxInputTokens` /
+    `promptUtilizationPct` from `aiResponse.usage`). A `flushCompletionEvent()` helper —
+    idempotent, fire-and-forget — wraps `callWithTelemetryAndErrorHandling` with the new
+    event name `documentDB.queryInsights.stage3.completed`, sets
+    `errorHandling.suppressDisplay = true`, copies the accumulator into
+    `context.telemetry.{properties,measurements}`, and adds `durationMs` (wall-clock from
+    request to flush via the existing `elapsed()` helper) + `aborted: 'true'|'false'`. The
+    flush is called from the subscription's `finally`, so it fires exactly once per stream
+    on success, abort (panel dispose / `subscription.stop` / user-clicked Cancel), and the
+    rare throw path. Verified `vscode-documentdb.copilot.streamMessage` and
+    `vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming` events still
+    fire from their existing `callWithTelemetryAndErrorHandling` wrappers in
+    `copilotService.ts` and `QueryInsightsAIService.ts` respectively (unchanged in WI-10).
+    Old→new key mapping table (for the PR description):
+
+    | Old event/key                                                      | New event/key                                                  | Notes                                                       |
+    | ------------------------------------------------------------------ | -------------------------------------------------------------- | ----------------------------------------------------------- |
+    | `documentDB.rpc.query.collectionView.queryInsights.getQueryInsightsStage3` → `properties.platform`                          | `documentDB.queryInsights.stage3.completed` → `properties.platform`                          | Identical population: `clusterMetadata?.domainInfo_api ?? 'unknown'`. |
+    | ↑ `properties.hasStaticAnalysisSummary`                            | ↑ `properties.hasStaticAnalysisSummary`                        | Identical.                                                  |
+    | ↑ `properties.staticAnalysisSummaryError`                          | ↑ `properties.staticAnalysisSummaryError`                      | Identical (only set on the catch branch).                   |
+    | ↑ `properties.staticAnalysisSummaryErrorKind`                      | ↑ `properties.staticAnalysisSummaryErrorKind`                  | Identical.                                                  |
+    | ↑ `properties.hasCachedExecutionPlan`                              | ↑ `properties.hasCachedExecutionPlan`                          | Identical.                                                  |
+    | ↑ `properties.aiModelDisclosed`                                    | ↑ `properties.aiModelDisclosed`                                | Identical (only set when `modelId` is known).               |
+    | ↑ `properties.aiModelFamily`                                       | ↑ `properties.aiModelFamily`                                   | Identical (only set when `modelFamily` is known).           |
+    | ↑ `measurements.staticAnalysisSummaryLength`                       | ↑ `measurements.staticAnalysisSummaryLength`                   | Identical.                                                  |
+    | ↑ `measurements.recommendationCount`                               | ↑ `measurements.recommendationCount`                           | Identical.                                                  |
+    | ↑ `measurements.actionableRecommendationCount`                     | ↑ `measurements.actionableRecommendationCount`                 | Identical.                                                  |
+    | ↑ `measurements.createRecommendationCount`                         | ↑ `measurements.createRecommendationCount`                     | Identical.                                                  |
+    | ↑ `measurements.dropRecommendationCount`                           | ↑ `measurements.dropRecommendationCount`                       | Identical.                                                  |
+    | ↑ `measurements.modifyRecommendationCount`                         | ↑ `measurements.modifyRecommendationCount`                     | Identical.                                                  |
+    | ↑ `measurements.promptTokens`                                      | ↑ `measurements.promptTokens`                                  | Identical.                                                  |
+    | ↑ `measurements.responseTokens`                                    | ↑ `measurements.responseTokens`                                | Identical.                                                  |
+    | ↑ `measurements.totalTokens`                                       | ↑ `measurements.totalTokens`                                   | Identical.                                                  |
+    | ↑ `measurements.maxInputTokens`                                    | ↑ `measurements.maxInputTokens`                                | Identical.                                                  |
+    | ↑ `measurements.promptUtilizationPct`                              | ↑ `measurements.promptUtilizationPct`                          | Identical.                                                  |
+    | _(none)_                                                           | `documentDB.queryInsights.stage3.completed` → `measurements.durationMs` | New: wall-clock subscription duration in ms.       |
+    | _(none)_                                                           | ↑ `properties.aborted` (`'true'`/`'false'`)                    | New: terminal abort state (cancel / dispose).               |
+
+    The auto rpc event `documentDB.rpc.subscription.collectionView.queryInsights.streamStage3`
+    still fires for every subscription (unchanged framework behaviour) but \u2014 because
+    `trpcToTelemetry` wraps `opts.next()` which for a subscription resolves at
+    generator-creation time, not at completion \u2014 carries ~0 duration and **no** custom
+    properties/measurements. Telemetry queries should switch to
+    `documentDB.queryInsights.stage3.completed` as the canonical Stage 3 source for the
+    streaming path; the old rpc event remains useful only for subscription create-rate
+    metrics. **No data lost.** l10n / prettier / lint / jest (2014 \u2713) / build all pass.
 
 ### Closeout
 

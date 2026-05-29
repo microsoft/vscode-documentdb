@@ -20,6 +20,7 @@
 
 import { z } from 'zod';
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type QueryObject } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
@@ -38,6 +39,38 @@ import { type QueryInsightsStreamEvent } from '../types/queryInsightsStream';
  * webview a smooth progress feel without flooding the message channel.
  */
 const STATUS_EVENT_INTERVAL_MS = 250;
+
+/**
+ * Dedicated telemetry event name for the Stage 3 streaming subscription.
+ *
+ * Per plan §7 / WI-10, the auto rpc event
+ * (`documentDB.rpc.subscription.collectionView.queryInsights.streamStage3`)
+ * still fires but — because `trpcToTelemetry` wraps `opts.next()` which
+ * for a subscription resolves at generator-creation time — carries ~0
+ * duration and no custom measurements. This dedicated event is the
+ * canonical source of all Stage 3 telemetry for the streaming path and
+ * carries every key the buffered procedure's rpc event used to carry,
+ * plus an explicit `durationMs` (wall-clock from request to terminal
+ * yield) and an `aborted` flag.
+ */
+const STAGE3_COMPLETION_EVENT = 'documentDB.queryInsights.stage3.completed';
+
+/**
+ * Accumulator for the dedicated completion event. Populated during
+ * iteration and flushed once on subscription unwind (success or abort)
+ * via {@link callWithTelemetryAndErrorHandling}. Keys mirror those
+ * recorded onto the buffered `getQueryInsightsStage3` procedure's
+ * `ctx.telemetry` 1:1 (plan §7), so the new event is a drop-in source
+ * for any telemetry query that targeted the old keys.
+ */
+interface CompletionTelemetry {
+    properties: Record<string, string>;
+    measurements: Record<string, number>;
+}
+
+function newCompletionTelemetry(): CompletionTelemetry {
+    return { properties: {}, measurements: {} };
+}
 
 /**
  * Record of push-style (subscription) procedures contributed by
@@ -107,6 +140,32 @@ export const queryInsightsEventsRoutes = {
                 myCtx.signal?.addEventListener('abort', onCtxAbort);
             }
 
+            // Dedicated completion-event accumulator (WI-10 / plan §7). The
+            // surrounding subscription's auto rpc event fires with ~0
+            // duration and no measurements because `trpcToTelemetry` wraps
+            // `opts.next()` which resolves at generator-creation time; we
+            // flush this accumulator from the `finally` below so it
+            // captures success, aborts, and the (rare) error path with
+            // their final values + `aborted` flag + wall-clock `durationMs`.
+            const completionTelemetry = newCompletionTelemetry();
+            let completionFlushed = false;
+
+            const flushCompletionEvent = (): void => {
+                if (completionFlushed) return;
+                completionFlushed = true;
+                completionTelemetry.measurements.durationMs = elapsed();
+                completionTelemetry.properties.aborted = abortController.signal.aborted ? 'true' : 'false';
+                // Fire-and-forget: the streaming subscription is a push
+                // path and we don't have a useful Promise to await on here
+                // — errors flushing telemetry are swallowed by
+                // callWithTelemetryAndErrorHandling itself.
+                void callWithTelemetryAndErrorHandling(STAGE3_COMPLETION_EVENT, (telemetryCtx: IActionContext) => {
+                    telemetryCtx.errorHandling.suppressDisplay = true;
+                    Object.assign(telemetryCtx.telemetry.properties, completionTelemetry.properties);
+                    Object.assign(telemetryCtx.telemetry.measurements, completionTelemetry.measurements);
+                });
+            };
+
             try {
                 ext.outputChannel.trace(
                     l10n.t('[Query Insights Stage 3 stream] Started for {db}.{collection} (requestKey: {key})', {
@@ -128,6 +187,19 @@ export const queryInsightsEventsRoutes = {
                 // logic is intentionally a near-duplicate; WI-8 will refactor
                 // to share a single helper once the incremental parser is in.
                 const session: ClusterSession = ClusterSession.getSession(sessionId);
+
+                // Record the platform on the dedicated completion event so
+                // it lines up with the buffered procedure's rpc event. Best
+                // effort — a metadata fetch failure here must not abort
+                // Stage 3 streaming (the buffered procedure has the same
+                // contract).
+                try {
+                    const clusterMetadata = await session.getClient().getClusterMetadata();
+                    completionTelemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+                } catch {
+                    completionTelemetry.properties.platform = 'unknown';
+                }
+
                 const parsedQueryParams = session.getCurrentFindQueryParamsWithObjects();
                 const queryObject: QueryObject = {
                     filter: parsedQueryParams.filterObj,
@@ -138,6 +210,7 @@ export const queryInsightsEventsRoutes = {
                 };
 
                 const cachedExecutionPlan = session.getRawExplainOutput(databaseName, collectionName);
+                completionTelemetry.properties.hasCachedExecutionPlan = cachedExecutionPlan ? 'true' : 'false';
 
                 let staticAnalysisSummary: string | undefined;
                 const stage2Cache = session.getStage2Response();
@@ -147,7 +220,13 @@ export const queryInsightsEventsRoutes = {
                             stage2Cache.response,
                             stage2Cache.totalCollectionDocs,
                         );
+                        completionTelemetry.properties.hasStaticAnalysisSummary = 'true';
+                        completionTelemetry.measurements.staticAnalysisSummaryLength = staticAnalysisSummary.length;
                     } catch (error) {
+                        completionTelemetry.properties.hasStaticAnalysisSummary = 'false';
+                        completionTelemetry.properties.staticAnalysisSummaryError = 'true';
+                        completionTelemetry.properties.staticAnalysisSummaryErrorKind =
+                            error instanceof Error ? error.constructor.name : 'unknown';
                         // Non-critical — proceed without the summary just
                         // like the buffered procedure does.
                         ext.outputChannel.error(
@@ -160,6 +239,8 @@ export const queryInsightsEventsRoutes = {
                             ),
                         );
                     }
+                } else {
+                    completionTelemetry.properties.hasStaticAnalysisSummary = 'false';
                 }
 
                 if (abortController.signal.aborted) {
@@ -247,6 +328,67 @@ export const queryInsightsEventsRoutes = {
                     yield event;
                 }
 
+                // Populate the completion-event accumulator with the
+                // recommendation counts + model identity + token usage so
+                // the dedicated event carries the same keys the buffered
+                // procedure's rpc event used to carry. Done here —
+                // unconditional after the LLM call resolves — so abort
+                // paths still record platform / staticAnalysisSummary*
+                // /  hasCachedExecutionPlan etc., while only successful
+                // runs carry the recommendation + usage numbers.
+                completionTelemetry.measurements.recommendationCount = aiResponse.improvements.length;
+                let actionableRecommendationCount = 0;
+                let createRecommendationCount = 0;
+                let dropRecommendationCount = 0;
+                let modifyRecommendationCount = 0;
+                for (const rec of aiResponse.improvements) {
+                    switch (rec.action) {
+                        case 'create':
+                            actionableRecommendationCount++;
+                            createRecommendationCount++;
+                            break;
+                        case 'drop':
+                            actionableRecommendationCount++;
+                            dropRecommendationCount++;
+                            break;
+                        case 'modify':
+                            actionableRecommendationCount++;
+                            modifyRecommendationCount++;
+                            break;
+                    }
+                }
+                completionTelemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
+                completionTelemetry.measurements.createRecommendationCount = createRecommendationCount;
+                completionTelemetry.measurements.dropRecommendationCount = dropRecommendationCount;
+                completionTelemetry.measurements.modifyRecommendationCount = modifyRecommendationCount;
+
+                if (aiResponse.modelId) {
+                    completionTelemetry.properties.aiModelDisclosed = aiResponse.modelId;
+                }
+                if (aiResponse.modelFamily) {
+                    completionTelemetry.properties.aiModelFamily = aiResponse.modelFamily;
+                }
+
+                if (aiResponse.usage) {
+                    const { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct } =
+                        aiResponse.usage;
+                    if (promptTokens !== undefined) {
+                        completionTelemetry.measurements.promptTokens = promptTokens;
+                    }
+                    if (responseTokens !== undefined) {
+                        completionTelemetry.measurements.responseTokens = responseTokens;
+                    }
+                    if (totalTokens !== undefined) {
+                        completionTelemetry.measurements.totalTokens = totalTokens;
+                    }
+                    if (maxInputTokens !== undefined) {
+                        completionTelemetry.measurements.maxInputTokens = maxInputTokens;
+                    }
+                    if (promptUtilizationPct !== undefined) {
+                        completionTelemetry.measurements.promptUtilizationPct = promptUtilizationPct;
+                    }
+                }
+
                 ext.outputChannel.trace(
                     l10n.t(
                         '[Query Insights Stage 3 stream] Completed: {count} recommendations, {chars} chars in {ms}ms (requestKey: {key})',
@@ -269,6 +411,10 @@ export const queryInsightsEventsRoutes = {
             } finally {
                 myCtx.signal?.removeEventListener('abort', onCtxAbort);
                 abortController.abort();
+                // Always emit the dedicated completion event — success,
+                // abort, or the (rare) thrown-error path. The `aborted`
+                // flag + `durationMs` measurement disambiguate outcomes.
+                flushCompletionEvent();
             }
         }),
 };
