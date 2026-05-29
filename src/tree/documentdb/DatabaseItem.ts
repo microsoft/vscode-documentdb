@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -21,6 +22,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     public contextValue: string = 'treeItem_database';
 
     private readonly experienceContextValue: string = '';
+
+    /**
+     * Cached collection count for the database.
+     * undefined means not yet loaded (getChildren hasn't been called).
+     */
+    private collectionCount: number | undefined = undefined;
 
     /**
      * Monotonic counter bumped on every `getChildren` call. Used to invalidate
@@ -67,6 +74,11 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         // Completion order still depends on per-request latency and may differ.
         collections.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
+        // Update the collection count for the tree item description and
+        // trigger a refresh so the count appears without re-expanding.
+        this.collectionCount = collections.length;
+        ext.state.notifyChildrenChanged(this.id);
+
         return collections.map((collection) => {
             const collectionItem = new CollectionItem(this.cluster, this.databaseInfo, collection, isCurrent);
             // Start loading document count in background (fire-and-forget).
@@ -76,10 +88,17 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     }
 
     getTreeItem(): vscode.TreeItem {
+        // Build description based on collection count state
+        let description: string | undefined;
+        if (typeof this.collectionCount === 'number') {
+            description = this.collectionCount === 1 ? l10n.t('1 collection') : l10n.t('{0} collections', this.collectionCount);
+        }
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.databaseInfo.name,
+            description,
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('database'), // TODO: create our own icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
@@ -96,6 +115,11 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         md.appendMarkdown(`### ${escapeMarkdown(this.databaseInfo.name)}\n\n`);
 
         md.appendMarkdown(`\`${l10n.t('Database')}\`\n\n`);
+
+        // Collection count
+        if (typeof this.collectionCount === 'number') {
+            md.appendMarkdown(`**${l10n.t('Collections')}:** ${this.collectionCount}\n\n`);
+        }
 
         return md;
     }
