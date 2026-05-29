@@ -36,7 +36,12 @@
         color: var(--vscode-descriptionForeground);
     }
 
-    // Indeterminate shimmer bar — pure CSS animation, no JS timer required.
+    // Indeterminate bar — two render modes:
+    //  - shimmer (default): a thin highlight strip travels left → right across
+    //    a short fixed-width bar.
+    //  - pulse: the bar's opacity pulsates between dim and bright. Used by the
+    //    stepper's active step where a moving shimmer would compete with the
+    //    surrounding step markers.
     &__bar {
         position: relative;
         flex-shrink: 0;
@@ -59,6 +64,26 @@
             );
             animation: streaming-placeholder-shimmer 1.4s linear infinite;
         }
+    }
+
+    // Pulse style: replace the traveling-gradient overlay with a calm opacity
+    // pulse on a solid-colored bar. The ::after pseudo-element is suppressed
+    // (no motion overlay) and the bar itself animates its opacity.
+    &--bar-pulse &__bar {
+        background-color: var(--colorBrandForeground1, var(--vscode-progressBar-background));
+        animation: streaming-placeholder-pulse 1.2s ease-in-out infinite;
+
+        &::after {
+            display: none;
+        }
+    }
+
+    // Leading-position bar (used by the stepper's active step): occupy roughly
+    // the same horizontal slot the surrounding bullet markers use, so the bar
+    // visually replaces the bullet rather than crowding into the right edge.
+    &--bar-leading &__bar {
+        width: 18px;
+        margin: 0;
     }
 
     &--standalone {
@@ -85,8 +110,74 @@
     }
 }
 
+@keyframes streaming-placeholder-pulse {
+    0%,
+    100% {
+        opacity: 0.35;
+    }
+    50% {
+        opacity: 1;
+    }
+}
+
 @media (prefers-reduced-motion: reduce) {
     .streaming-placeholder__bar::after {
+        animation: none;
+        transform: translateX(0);
+        opacity: 0.5;
+    }
+
+    .streaming-placeholder--bar-pulse .streaming-placeholder__bar {
+        animation: none;
+        opacity: 0.6;
+    }
+}
+
+// Skeleton-style "content lines" shown inside an in-flight markdown card
+// (MarkdownCard `inFlight` prop). Two thin lines — 80% then 30% of the
+// container width — sharing the same shimmer animation as the placeholder
+// bar above, so the user sees that more content is still arriving even while
+// the rendered paragraphs sit between updates.
+.streaming-content-lines {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    margin-top: 12px;
+    width: 100%;
+
+    &__line {
+        position: relative;
+        height: 10px;
+        border-radius: 4px;
+        background-color: var(--vscode-progressBar-background, rgba(127, 127, 127, 0.2));
+        overflow: hidden;
+
+        &::after {
+            content: '';
+            position: absolute;
+            inset: 0;
+            transform: translateX(-100%);
+            background: linear-gradient(
+                90deg,
+                transparent,
+                var(--colorBrandForeground1, var(--vscode-progressBar-background)),
+                transparent
+            );
+            animation: streaming-placeholder-shimmer 1.6s linear infinite;
+        }
+    }
+
+    &__line--long {
+        width: 80%;
+    }
+
+    &__line--short {
+        width: 30%;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .streaming-content-lines__line::after {
         animation: none;
         transform: translateX(0);
         opacity: 0.5;

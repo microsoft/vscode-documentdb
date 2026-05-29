@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { CheckmarkCircleFilled, SparkleRegular } from '@fluentui/react-icons';
+import { CheckmarkCircleFilled } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { StreamingPlaceholder } from './StreamingPlaceholder';
@@ -123,7 +123,8 @@ export function StreamingProgressStepper({
                             <div className="streaming-progress-stepper__active">
                                 <StreamingPlaceholder
                                     variant="inline"
-                                    icon={<SparkleRegular />}
+                                    barPosition="leading"
+                                    barStyle="pulse"
                                     label={step.activeLabel}
                                     elapsedMs={elapsedMs}
                                 />

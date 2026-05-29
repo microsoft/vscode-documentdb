@@ -54,7 +54,7 @@ const STATUS_EVENT_INTERVAL_MS = 250;
  * LLM call effectively stalls between yields too — which is what makes
  * the progressive cards visible to the eye.
  */
-const DEBUG_YIELD_DELAY_MS = 1000;
+const DEBUG_YIELD_DELAY_MS = 10;
 
 /**
  * Sleep helper used to insert {@link DEBUG_YIELD_DELAY_MS} before each

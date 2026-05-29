@@ -17,6 +17,31 @@ import './StreamingPlaceholder.scss';
  */
 export type StreamingPlaceholderVariant = 'standalone' | 'inline';
 
+/**
+ * Where the indeterminate bar renders inside the row.
+ *
+ * - `trailing` (default): the bar sits AFTER the label, near the right edge
+ *   of the row — used by in-card placeholders (recommendation shells, the
+ *   pre-first-block "Generating…" indicator) where the label is the primary
+ *   visual element.
+ * - `leading`: the bar sits BEFORE everything else, in the same horizontal
+ *   slot the surrounding stepper / list uses for bullet markers. Used by
+ *   {@link StreamingProgressStepper}'s active step so the bar visually
+ *   replaces the bullet rather than crowding into the right edge.
+ */
+export type StreamingPlaceholderBarPosition = 'leading' | 'trailing';
+
+/**
+ * Animation style of the indeterminate bar.
+ *
+ * - `shimmer` (default): a thin highlight strip travels left → right across
+ *   a short fixed-width bar. Good for compact in-card placeholders.
+ * - `pulse`: the bar's opacity pulsates between dim and bright without any
+ *   moving overlay — calmer, better suited to a vertical stepper where a
+ *   traveling shimmer would compete with the surrounding step markers.
+ */
+export type StreamingPlaceholderBarStyle = 'shimmer' | 'pulse';
+
 export interface StreamingPlaceholderProps {
     /**
      * Optional descriptive label, e.g. "Generating AI analysis…" or "writing…".
@@ -47,6 +72,16 @@ export interface StreamingPlaceholderProps {
      * Visual size variant. Defaults to `standalone`.
      */
     variant?: StreamingPlaceholderVariant;
+
+    /**
+     * Where the indeterminate bar renders. Defaults to `trailing`.
+     */
+    barPosition?: StreamingPlaceholderBarPosition;
+
+    /**
+     * Animation style of the indeterminate bar. Defaults to `shimmer`.
+     */
+    barStyle?: StreamingPlaceholderBarStyle;
 
     /**
      * Optional className for the outer row (e.g. for spacing in a card list).
@@ -84,6 +119,8 @@ export function StreamingPlaceholder({
     elapsedMs,
     charsReceived,
     variant = 'standalone',
+    barPosition = 'trailing',
+    barStyle = 'shimmer',
     className,
 }: StreamingPlaceholderProps): JSX.Element {
     const meta: string[] = [];
@@ -97,6 +134,8 @@ export function StreamingPlaceholder({
     const rootClass = [
         'streaming-placeholder',
         variant === 'standalone' ? 'streaming-placeholder--standalone' : 'streaming-placeholder--inline',
+        barPosition === 'leading' ? 'streaming-placeholder--bar-leading' : 'streaming-placeholder--bar-trailing',
+        barStyle === 'pulse' ? 'streaming-placeholder--bar-pulse' : 'streaming-placeholder--bar-shimmer',
         className,
     ]
         .filter(Boolean)
@@ -108,11 +147,14 @@ export function StreamingPlaceholder({
             ? cloneElement(icon as ReactElement<{ 'aria-hidden'?: boolean }>, { 'aria-hidden': true })
             : null;
 
+    const bar = <span className="streaming-placeholder__bar" aria-hidden="true" />;
+
     return (
         <div role="status" aria-live="polite" aria-atomic="false" className={rootClass}>
+            {barPosition === 'leading' && bar}
             {renderedIcon && <span className="streaming-placeholder__icon">{renderedIcon}</span>}
             {label && <span className="streaming-placeholder__label">{label}</span>}
-            <span className="streaming-placeholder__bar" aria-hidden="true" />
+            {barPosition === 'trailing' && bar}
             {meta.length > 0 && <span className="streaming-placeholder__meta">{meta.join(' · ')}</span>}
         </div>
     );

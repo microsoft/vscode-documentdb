@@ -878,6 +878,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         icon={<SparkleRegular />}
                         title={l10n.t('Query Performance Analysis')}
                         content={summarySource.markdown}
+                        inFlight={!summarySource.complete}
                     />
                 ),
             });
@@ -976,6 +977,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         icon={<SparkleRegular />}
                         title={l10n.t('Understanding Your Query Execution Plan')}
                         content={educationalSource.markdown}
+                        inFlight={!educationalSource.complete}
                     />
                 ),
             });

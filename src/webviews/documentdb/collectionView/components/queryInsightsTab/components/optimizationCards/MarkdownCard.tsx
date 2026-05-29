@@ -10,6 +10,7 @@ import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
+import '../streamingPlaceholder/StreamingPlaceholder.scss';
 import './baseOptimizationCard.scss';
 
 const useStyles = makeStyles({
@@ -129,6 +130,18 @@ interface MarkdownCardProps {
     showAiDisclaimer?: boolean;
 
     /**
+     * When `true`, render two indeterminate "skeleton" lines (80% then 30%
+     * width) below the rendered markdown. Used by the Stage 3 progressive
+     * streaming path on the summary / educational cards while their values
+     * are still growing (`complete: false`) so the user can see at a glance
+     * that more content is on the way — the markdown itself is paused
+     * between paragraph-boundary updates, which by itself looks frozen.
+     * The lines disappear as soon as the value's closing `"` is observed
+     * (`complete: true`).
+     */
+    inFlight?: boolean;
+
+    /**
      * Ref to forward to the card element
      */
     ref?: React.Ref<HTMLDivElement>;
@@ -156,6 +169,7 @@ export function MarkdownCard({
     icon,
     onCopy: _onCopy,
     showAiDisclaimer = true,
+    inFlight = false,
     ref,
 }: MarkdownCardProps) {
     const styles = useStyles();
@@ -183,6 +197,23 @@ export function MarkdownCard({
                     />
                     <div className={styles.content}>
                         <ReactMarkdown>{content}</ReactMarkdown>
+                        {inFlight && (
+                            <div
+                                className="streaming-content-lines"
+                                role="status"
+                                aria-live="polite"
+                                aria-label={l10n.t('More content is loading')}
+                            >
+                                <span
+                                    className="streaming-content-lines__line streaming-content-lines__line--long"
+                                    aria-hidden="true"
+                                />
+                                <span
+                                    className="streaming-content-lines__line streaming-content-lines__line--short"
+                                    aria-hidden="true"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
