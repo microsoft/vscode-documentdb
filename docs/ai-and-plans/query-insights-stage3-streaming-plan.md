@@ -354,7 +354,7 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     `documentDB.rpc.query.collectionView.queryInsights.getQueryInsightsStage3` —
     previously `…collectionView.getQueryInsightsStage3`). Telemetry queries that hard-coded
     the old path must be updated. l10n / prettier / lint / jest (1989 ✓) / build all pass.
-- [ ] **WI-5 — Convert Stage 3 to a subscription with coarse `status` events (Option A).** Add
+- [x] **WI-5 — Convert Stage 3 to a subscription with coarse `status` events (Option A).** Add
       `streamStage3` `.subscription(async function* …)` to `queryInsightsEventsRouter`. The
       generator iterates the `CopilotService` async-iterable directly
       (`for await (const fragment of copilotService.stream(...)) { … }`) — **no `TypedEventSink`**
@@ -367,6 +367,22 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
       confidence < 80%.
   - _Acceptance:_ webview subscribes, shows live "receiving…" status, then the same final
     result as today; cancel mid-stream stops the LLM call and clears partial UI.
+  - _Outcome:_ Added `QueryInsightsStreamEvent` discriminated union in
+    `types/queryInsightsStream.ts` (coarse subset for WI-5: `status` + `result`; WI-8
+    extends with per-domain events). Added `queryInsightsEventsRouter.ts` exporting a
+    `queryInsightsEventsRoutes` record (procedures spread into `queryInsightsRouter` rather
+    than nesting under a sub-namespace, so paths stay flat —
+    `collectionView.queryInsights.streamStage3`). The `streamStage3` subscription is an
+    `async function*` that: (1) yields `status: connecting`, (2) builds queryContext +
+    staticAnalysisSummary like the buffered procedure, (3) calls
+    `getOptimizationRecommendationsStreaming` (Option A — no `TypedEventSink`),
+    (4) iterates `fragments` emitting throttled (250ms) `status: receiving`
+    with `elapsedMs`+`charsReceived`, (5) yields `status: parsing` then awaits the parsed
+    completion, (6) yields a single `result` carrying today's `QueryInsightsStage3Response`.
+    Per-subscription `AbortController` forwards `ctx.signal` aborts down to the LLM call;
+    `finally` aborts on `iterator.return()` (panel dispose / `subscription.stop`).
+    Webview migration is deferred to WI-6. l10n / prettier / lint / jest (1989 ✓) / build
+    all pass.
 - [ ] **WI-6 — Webview `.subscribe()` migration.** Convert `QueryInsightsTab` from `.query()`
       to `.subscribe({onData,onComplete,onError})`. Preserve requestKey staleness guard; cancel
       via `sub.unsubscribe()`; keep error/tips behavior.

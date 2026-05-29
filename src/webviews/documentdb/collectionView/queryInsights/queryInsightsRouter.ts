@@ -50,6 +50,7 @@ import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIS
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { type RouterContext } from '../collectionViewRouter';
 import { type QueryInsightsStage3Response } from '../types/queryInsights';
+import { queryInsightsEventsRoutes } from './queryInsightsEventsRouter';
 
 /**
  * Debug helper: Read debug override file for Query Insights testing
@@ -609,4 +610,9 @@ export const queryInsightsRouter = router({
 
             return result;
         }),
+
+    // Push-style (subscription) procedures live in a sibling file per D12 /
+    // the package README convention. Spread here so the webview-visible
+    // paths stay flat (e.g. `collectionView.queryInsights.streamStage3`).
+    ...queryInsightsEventsRoutes,
 });
