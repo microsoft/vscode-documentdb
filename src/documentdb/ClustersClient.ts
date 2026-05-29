@@ -295,8 +295,17 @@ export class ClustersClient {
             throw new UserCancelledError('abortConnection');
         }
 
+        // Track whether connect() has resolved so the abort handler can avoid
+        // closing an already-connected client during the micro window between
+        // connect() resolving and removeEventListener firing.
+        let connected = false;
+
         // Wire up abort: closing the client causes the pending connect() to reject
         const onAbort = (): void => {
+            if (connected) {
+                // connect() already resolved — do not close the connected client.
+                return;
+            }
             ext.outputChannel.debug('AbortSignal fired — closing MongoClient to interrupt connection handshake.');
             void this._mongoClient.close().catch(() => {
                 // Ignore close errors during abort cleanup
@@ -306,6 +315,7 @@ export class ClustersClient {
 
         try {
             await this._mongoClient.connect();
+            connected = true;
 
             // Remove the abort listener immediately after connect() resolves so that
             // a late cancellation during synchronous API init below cannot close an
