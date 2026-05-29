@@ -314,12 +314,24 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     usage/duration on completion, mid-stream abort rejects with `UserCancelledError`, no
     suitable model rejects with explanatory error). l10n / prettier / lint / jest
     (1987 ✓) / build all pass.
-- [ ] **WI-3 — Thread the async-iterable through orchestration.** Expose the streaming
+- [x] **WI-3 — Thread the async-iterable through orchestration.** Expose the streaming
       iterable from `optimizeQuery` → `getOptimizationRecommendations` so a caller can
       `for await` the fragments end-to-end. No parsing yet. Keep the existing buffered path
       working for any non-streaming caller.
   - _Acceptance:_ a caller can iterate streamed fragments end-to-end (test); the buffered
     path still returns the full text + usage as before.
+  - _Outcome:_ Added `OptimizationStreamHandle` + `optimizeQueryStreaming(...)` in
+    `indexAdvisorCommands.ts` (extracted a shared `prepareOptimizationRequest` helper plus
+    a `finalizeOptimizationResponse` helper so the buffered `optimizeQuery` and the new
+    streaming variant cannot drift apart — only the LLM-call line differs:
+    `CopilotService.sendMessage` vs. `CopilotService.streamMessage`). Added
+    `AIOptimizationStreamHandle` + `QueryInsightsAIService.getOptimizationRecommendationsStreaming(...)`
+    under `vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming`
+    telemetry; the final `JSON.parse` still runs once on completion (WI-7/WI-8 will
+    introduce incremental parsing). Added a Jest test covering end-to-end fragment
+    iteration + parsed completion and malformed-JSON rejection. Existing buffered callers
+    untouched (still call `optimizeQuery` / `getOptimizationRecommendations`). l10n /
+    prettier / lint / jest (1989 ✓) / build all pass.
 - [ ] **WI-4 — Dedicated `queryInsights` sub-router (D8).** Create
       `src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts` exporting a
       `queryInsightsRouter`; mount it under `collectionView.queryInsights`. Move the existing

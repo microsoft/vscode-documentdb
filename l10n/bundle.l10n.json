@@ -580,6 +580,7 @@
   "Failed to start a session: {0}": "Failed to start a session: {0}",
   "Failed to start a transaction with the provided session: {0}": "Failed to start a transaction with the provided session: {0}",
   "Failed to start a transaction: {0}": "Failed to start a transaction: {0}",
+  "Failed to start streaming optimization recommendations.": "Failed to start streaming optimization recommendations.",
   "Failed to store secrets for key {0}:": "Failed to store secrets for key {0}:",
   "Failed to unhide index.": "Failed to unhide index.",
   "Failed to update connection: {0}": "Failed to update connection: {0}",

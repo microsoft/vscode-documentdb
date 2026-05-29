@@ -13,6 +13,7 @@ import { type Document } from 'mongodb';
 import {
     CommandType,
     optimizeQuery,
+    optimizeQueryStreaming,
     type QueryObject,
     type QueryOptimizationContext,
 } from '../../commands/llmEnhancedCommands/indexAdvisorCommands';
@@ -51,6 +52,25 @@ interface ModifyIndexPayload {
     databaseName: string;
     collectionName: string;
     shellCommand: string;
+}
+
+/**
+ * Pull-based streaming handle returned by
+ * {@link QueryInsightsAIService.getOptimizationRecommendationsStreaming}.
+ *
+ * Mirrors the {@link CopilotService.streamMessage} /
+ * {@link OptimizationStreamHandle} shape: `fragments` yields each text
+ * fragment from the LLM as it arrives, and `completion` resolves with the
+ * same parsed {@link AIOptimizationResponse} the buffered
+ * {@link QueryInsightsAIService.getOptimizationRecommendations} produces.
+ *
+ * Final parsing still happens once at completion time in this work item
+ * (WI-3 only threads the iterable end-to-end). Incremental parsing into
+ * domain events arrives in WI-7 / WI-8.
+ */
+export interface AIOptimizationStreamHandle {
+    fragments: AsyncIterable<string>;
+    completion: Promise<AIOptimizationResponse>;
 }
 
 /**
@@ -160,6 +180,95 @@ export class QueryInsightsAIService {
                 throw new UserCancelledError('AbortSignal');
             }
             throw new Error(l10n.t('Failed to get optimization recommendations from index advisor.'));
+        }
+
+        return result;
+    }
+
+    /**
+     * Streaming variant of {@link getOptimizationRecommendations}. Returns a
+     * handle whose `fragments` iterable yields each LLM text fragment as it
+     * arrives end-to-end (CopilotService → optimizeQueryStreaming →
+     * QueryInsightsAIService), and whose `completion` promise resolves with
+     * the same fully-parsed {@link AIOptimizationResponse} the buffered
+     * variant produces.
+     *
+     * Per the WI-3 plan, this work item only threads the iterable through —
+     * the final response is still produced by a single `JSON.parse` at the
+     * end of the stream. WI-7 introduces a tolerant incremental parser and
+     * WI-8 turns this completion-only path into a per-event domain stream.
+     */
+    public async getOptimizationRecommendationsStreaming(
+        sessionId: string,
+        query: string | QueryObject,
+        databaseName: string,
+        collectionName: string,
+        executionPlan?: unknown,
+        signal?: AbortSignal,
+        staticAnalysisSummary?: string,
+    ): Promise<AIOptimizationStreamHandle> {
+        const result = await callWithTelemetryAndErrorHandling(
+            'vscode-documentdb.queryInsights.getOptimizationRecommendationsStreaming',
+            async (context: IActionContext): Promise<AIOptimizationStreamHandle> => {
+                let queryContext: QueryOptimizationContext;
+                if (typeof query !== 'string') {
+                    queryContext = {
+                        sessionId,
+                        databaseName,
+                        collectionName,
+                        queryObject: query,
+                        commandType: CommandType.Find,
+                        executionPlan,
+                        signal,
+                        staticAnalysisSummary,
+                    };
+                } else {
+                    queryContext = {
+                        sessionId,
+                        databaseName,
+                        collectionName,
+                        query,
+                        commandType: CommandType.Find,
+                        executionPlan,
+                        signal,
+                        staticAnalysisSummary,
+                    };
+                }
+
+                const streamHandle = await optimizeQueryStreaming(context, queryContext);
+
+                // Final parse + per-action counts happen once at completion time.
+                // The dedicated Stage 3 completion event (plan §7 / WI-10) will
+                // carry the recommendation counters for the streaming path —
+                // recording them here is best-effort because the wrapping
+                // callWithTelemetryAndErrorHandling will have already closed by
+                // the time `completion` resolves.
+                const completion: Promise<AIOptimizationResponse> = streamHandle.completion.then(
+                    (optimizationResult) => {
+                        const parsedResponse = this.parseAIResponse(optimizationResult.recommendations);
+                        parsedResponse.modelId = optimizationResult.modelId;
+                        parsedResponse.modelFamily = optimizationResult.modelFamily;
+                        parsedResponse.modelDisplayName = optimizationResult.modelDisplayName;
+                        parsedResponse.usage = optimizationResult.usage;
+                        return parsedResponse;
+                    },
+                );
+                completion.catch(() => {
+                    /* swallow: consumer chose not to observe */
+                });
+
+                return {
+                    fragments: streamHandle.fragments,
+                    completion,
+                };
+            },
+        );
+
+        if (!result) {
+            if (signal?.aborted) {
+                throw new UserCancelledError('AbortSignal');
+            }
+            throw new Error(l10n.t('Failed to start streaming optimization recommendations.'));
         }
 
         return result;

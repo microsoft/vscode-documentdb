@@ -103,6 +103,37 @@ export interface OptimizationResult {
 }
 
 /**
+ * Pull-based streaming handle returned by {@link optimizeQueryStreaming}.
+ *
+ * `fragments` yields each text fragment from the LLM as it arrives (matching
+ * what {@link CopilotService.streamMessage} exposes); `completion` resolves
+ * with the same {@link OptimizationResult} that the buffered
+ * {@link optimizeQuery} would return.
+ */
+export interface OptimizationStreamHandle {
+    fragments: AsyncIterable<string>;
+    completion: Promise<OptimizationResult>;
+}
+
+/**
+ * Output of the shared pre-LLM preparation step. Carries everything
+ * {@link optimizeQuery} / {@link optimizeQueryStreaming} need to invoke the
+ * model and later record telemetry, without committing the call site to
+ * either the buffered or the streaming variant.
+ */
+interface PreparedOptimizationRequest {
+    messages: vscode.LanguageModelChatMessage[];
+    preferredFamily: string;
+    fallbackFamilies: string[];
+    /**
+     * Combined length of the prompt template, user's original query and
+     * system-retrieved context data. Recorded as the `promptSize` measurement
+     * on the post-LLM telemetry call.
+     */
+    promptTotalLength: number;
+}
+
+/**
  * Recursively removes constant values from query filters while preserving field names and operators
  * @param obj The object to process
  * @returns Processed object with constants removed
@@ -357,6 +388,92 @@ export async function optimizeQuery(
     context: IActionContext,
     queryContext: QueryOptimizationContext,
 ): Promise<OptimizationResult> {
+    const prepared = await prepareOptimizationRequest(context, queryContext);
+
+    // Check if the request was cancelled before calling Copilot (the most expensive operation)
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before calling Copilot'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
+    const response = await CopilotService.sendMessage(prepared.messages, {
+        preferredFamily: prepared.preferredFamily,
+        fallbackFamilies: prepared.fallbackFamilies,
+        signal: queryContext.signal,
+        featureSource: 'queryInsights',
+    });
+
+    return finalizeOptimizationResponse(context, prepared, response);
+}
+
+/**
+ * Streaming variant of {@link optimizeQuery}: returns a handle whose
+ * `fragments` async iterable yields each LLM text fragment as it arrives,
+ * and whose `completion` promise resolves with the same
+ * {@link OptimizationResult} {@link optimizeQuery} would have returned.
+ *
+ * Setup (explain, stats, prompt construction, message build, model-family
+ * selection) is fully awaited before the handle is returned, so consumers
+ * that immediately start iterating see fragments back-to-back from the
+ * model. Telemetry recorded *before* the LLM call (explain duration,
+ * stats availability, prompt source, hasStaticAnalysisSummary, …) lands on
+ * the caller's `context`. Post-LLM telemetry (duration, response size,
+ * token usage, modelId/Family) is recorded onto `context` only if the
+ * caller's `callWithTelemetryAndErrorHandling` wrapper is still open when
+ * `completion` resolves — for subscription-style callers, those values are
+ * preserved separately via {@link CopilotService.streamMessage}'s own
+ * telemetry event and, in the streaming pipeline, the dedicated Stage 3
+ * completion event (see plan §7 / WI-10).
+ */
+export async function optimizeQueryStreaming(
+    context: IActionContext,
+    queryContext: QueryOptimizationContext,
+): Promise<OptimizationStreamHandle> {
+    const prepared = await prepareOptimizationRequest(context, queryContext);
+
+    // Check if the request was cancelled before calling Copilot (the most expensive operation)
+    if (queryContext.signal?.aborted) {
+        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before calling Copilot'));
+        throw new UserCancelledError('AbortSignal');
+    }
+
+    const streamHandle = CopilotService.streamMessage(prepared.messages, {
+        preferredFamily: prepared.preferredFamily,
+        fallbackFamilies: prepared.fallbackFamilies,
+        signal: queryContext.signal,
+        featureSource: 'queryInsights',
+    });
+
+    const completion: Promise<OptimizationResult> = streamHandle.completion.then((response) =>
+        finalizeOptimizationResponse(context, prepared, response),
+    );
+    // Avoid an unhandled-rejection warning when callers only observe the
+    // failure through fragments iteration. Real consumers are expected to
+    // await `completion` (or attach their own catch).
+    completion.catch(() => {
+        /* swallow: consumer chose not to observe */
+    });
+
+    return {
+        fragments: streamHandle.fragments,
+        completion,
+    };
+}
+
+/**
+ * Performs everything {@link optimizeQuery} / {@link optimizeQueryStreaming}
+ * need to do *before* invoking the LLM: copilot availability check, explain,
+ * collection/index stats, prompt build, message construction, and pre-LLM
+ * telemetry. Records pre-LLM telemetry directly onto {@link context}.
+ *
+ * Extracted as a shared helper so the buffered and streaming entry points
+ * cannot drift apart, mirroring the `streamToModel`/`sendToModel` split
+ * inside {@link CopilotService}.
+ */
+async function prepareOptimizationRequest(
+    context: IActionContext,
+    queryContext: QueryOptimizationContext,
+): Promise<PreparedOptimizationRequest> {
     // Check if the request was already cancelled before starting
     if (queryContext.signal?.aborted) {
         ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before starting optimization'));
@@ -638,22 +755,42 @@ export async function optimizeQuery(
         vscode.LanguageModelChatMessage.User(contextData),
     ];
 
-    // Check if the request was cancelled before calling Copilot (the most expensive operation)
-    if (queryContext.signal?.aborted) {
-        ext.outputChannel.trace(l10n.t('[Query Insights AI] Cancelled before calling Copilot'));
-        throw new UserCancelledError('AbortSignal');
-    }
-
-    const response = await CopilotService.sendMessage(messages, {
+    return {
+        messages,
         preferredFamily: preferredFamilyToUse,
         fallbackFamilies: fallbackFamiliesToUse,
-        signal: queryContext.signal,
-        featureSource: 'queryInsights',
-    });
+        promptTotalLength: craftedPrompt.length + userQuery.length + contextData.length,
+    };
+}
 
+/**
+ * Records post-LLM telemetry (duration, response size, token usage, model
+ * identity) and the preferred-family warning onto the caller's `context`,
+ * then maps the {@link CopilotResponse} (or equivalent shape) into the
+ * exported {@link OptimizationResult}.
+ *
+ * For subscription-style callers (Stage 3 streaming) the caller's
+ * `callWithTelemetryAndErrorHandling` wrapper has typically already closed
+ * by the time the LLM finishes, so these recordings are best-effort — the
+ * dedicated Stage 3 completion event (plan §7 / WI-10) and
+ * {@link CopilotService.streamMessage}'s own telemetry event are the
+ * authoritative sources for the streaming path.
+ */
+function finalizeOptimizationResponse(
+    context: IActionContext,
+    prepared: PreparedOptimizationRequest,
+    response: {
+        text: string;
+        modelId: string;
+        modelFamily: string;
+        modelDisplayName: string;
+        durationMs: number;
+        usage?: CopilotTokenUsage;
+    },
+): OptimizationResult {
     // Track Copilot call performance and response
     context.telemetry.measurements.copilotDurationMs = response.durationMs;
-    context.telemetry.measurements.promptSize = craftedPrompt.length + userQuery.length + contextData.length;
+    context.telemetry.measurements.promptSize = prepared.promptTotalLength;
     context.telemetry.measurements.responseSize = response.text.length;
     context.telemetry.properties.modelId = response.modelId;
     context.telemetry.properties.modelFamily = response.modelFamily;
@@ -690,7 +827,7 @@ export async function optimizeQuery(
     // (LanguageModelChat.family) — the stable well-known name. Ids are opaque
     // and version-suffixed, families are the contract we expect to remain
     // stable across Copilot extension updates.
-    const preferredMatched = !preferredFamilyToUse || response.modelFamily === preferredFamilyToUse;
+    const preferredMatched = !prepared.preferredFamily || response.modelFamily === prepared.preferredFamily;
     if (!preferredMatched) {
         // Surface as a trace-channel warning rather than a notification toast:
         // the fallback is automatic and there is nothing the user can act on,
@@ -701,7 +838,7 @@ export async function optimizeQuery(
             l10n.t(
                 '[Query Insights AI] Preferred model family "{preferredFamily}" was not available; used "{actualModel}" (family: {actualFamily}) instead. Recommendations may be less optimal.',
                 {
-                    preferredFamily: preferredFamilyToUse,
+                    preferredFamily: prepared.preferredFamily,
                     actualModel: response.modelDisplayName,
                     actualFamily: response.modelFamily,
                 },
