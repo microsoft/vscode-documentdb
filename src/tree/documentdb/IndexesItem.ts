@@ -111,13 +111,31 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             let searchIndexes: IndexItemModel[] = [];
             try {
                 searchIndexes = await client.listSearchIndexesForAtlas(dbName, collName);
-            } catch {
-                // Search indexes not supported on this platform
+            } catch (err) {
+                // Log so transient network/auth errors are diagnosable
+                ext.outputChannel.warn(
+                    l10n.t(
+                        'Failed to list search indexes for {0}.{1}: {2}',
+                        dbName,
+                        collName,
+                        err instanceof Error ? err.message : String(err),
+                    ),
+                );
             }
 
             combinedIndexes = [...indexes, ...searchIndexes];
+            // Sort before caching so getChildren() never mutates the shared array in-place
+            combinedIndexes.sort((a, b) => compareIndexNames(a.name, b.name));
             result = combinedIndexes.length;
-        } catch {
+        } catch (err) {
+            ext.outputChannel.warn(
+                l10n.t(
+                    'Failed to load indexes for {0}.{1}: {2}',
+                    dbName,
+                    collName,
+                    err instanceof Error ? err.message : String(err),
+                ),
+            );
             result = null;
         } finally {
             // Only clear the loading flag when still current so we don't
@@ -150,22 +168,29 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
             const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
 
-            // Try to get search indexes, but silently fail if not supported by the platform
+            // Also try to fetch search indexes, but silently fail if not supported
             try {
                 const searchIndexes = await client.listSearchIndexesForAtlas(
                     this.databaseInfo.name,
                     this.collectionInfo.name,
                 );
                 indexes.push(...searchIndexes);
-            } catch {
-                // Search indexes not supported on this platform, continue without them
+            } catch (err) {
+                // Log so transient network/auth errors are diagnosable
+                ext.outputChannel.warn(
+                    l10n.t(
+                        'Failed to list search indexes for {0}.{1}: {2}',
+                        this.databaseInfo.name,
+                        this.collectionInfo.name,
+                        err instanceof Error ? err.message : String(err),
+                    ),
+                );
             }
 
+            // Sort before caching so subsequent calls never mutate the shared array in-place
+            indexes.sort((a, b) => compareIndexNames(a.name, b.name));
             this.cachedIndexes = indexes;
         }
-
-        // Sort indexes by name, with _id_ always first
-        this.cachedIndexes.sort((a, b) => compareIndexNames(a.name, b.name));
 
         return this.cachedIndexes.map((index) => {
             return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
