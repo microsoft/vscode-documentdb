@@ -55,6 +55,10 @@ export function transformAIResponseForUI(
         improvementCards,
         verificationSteps,
         educationalContent: aiResponse.educationalContent,
+        modelId: aiResponse.modelId,
+        modelFamily: aiResponse.modelFamily,
+        modelDisplayName: aiResponse.modelDisplayName,
+        usage: aiResponse.usage,
     };
 }
 

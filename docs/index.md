@@ -69,6 +69,10 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 - [Interactive Shell](./user-manual/interactive-shell)
 - [How It Works Behind the Scenes](./user-manual/query-runtime)
 
+### AI Features
+
+- [AI Performance Insights: Model and Billing](./user-manual/ai-utility-model)
+
 ## Release Notes
 
 Explore the history of updates and improvements to the DocumentDB for VS Code extension. Each release brings new features, enhancements, and fixes to improve your experience.

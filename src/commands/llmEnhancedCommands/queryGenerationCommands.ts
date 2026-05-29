@@ -12,7 +12,12 @@ import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { generateSchemaDefinition, type SchemaDefinition } from '../../utils/schemaInference';
-import { FALLBACK_MODELS, PREFERRED_MODEL, getQueryTypeConfig, type FilledPromptResult } from './promptTemplates';
+import {
+    QUERY_GENERATION_FALLBACK_FAMILIES,
+    QUERY_GENERATION_PREFERRED_FAMILY,
+    getQueryTypeConfig,
+    type FilledPromptResult,
+} from './promptTemplates';
 
 /**
  * Type of query generation
@@ -60,8 +65,12 @@ export interface QueryGenerationResult {
     generatedQuery: string;
     // Explanation of the query
     explanation: string;
-    // The model used to generate the query
-    modelUsed: string;
+    // Stable opaque id of the selected model (LanguageModelChat.id).
+    modelId: string;
+    // Well-known family of the selected model (LanguageModelChat.family).
+    modelFamily: string;
+    // Human-readable display name (LanguageModelChat.name).
+    modelDisplayName: string;
 }
 
 /**
@@ -255,10 +264,11 @@ export async function generateQuery(
         schemas,
     );
 
-    // Send to Copilot with configured models
+    // Send to Copilot with configured model families. Selection is keyed on
+    // LanguageModelChat.family (the stable well-known name), not id.
     ext.outputChannel.trace(
-        l10n.t('[Query Generation] Calling Copilot (model: {model})...', {
-            model: PREFERRED_MODEL || 'default',
+        l10n.t('[Query Generation] Calling Copilot (family: {family})...', {
+            family: QUERY_GENERATION_PREFERRED_FAMILY || 'default',
         }),
     );
     const response = await CopilotService.sendMessage(
@@ -268,34 +278,46 @@ export async function generateQuery(
             vscode.LanguageModelChatMessage.User(contextData),
         ],
         {
-            preferredModel: PREFERRED_MODEL,
-            fallbackModels: FALLBACK_MODELS,
+            preferredFamily: QUERY_GENERATION_PREFERRED_FAMILY,
+            fallbackFamilies: QUERY_GENERATION_FALLBACK_FAMILIES,
+            featureSource: 'queryGeneration',
         },
     );
     context.telemetry.measurements.llmCallDurationMs = response.durationMs;
     ext.outputChannel.trace(
         l10n.t('[Query Generation] Copilot response received in {ms}ms (model: {model})', {
             ms: response.durationMs.toString(),
-            model: response.modelUsed,
+            model: response.modelId,
         }),
     );
 
-    // Check if the preferred model was used
-    if (response.modelUsed !== PREFERRED_MODEL && PREFERRED_MODEL) {
-        // Show warning if not using preferred model
-        void vscode.window.showWarningMessage(
+    // Check if the preferred model family was used. Match strictly on family
+    // (LanguageModelChat.family) — the stable well-known name. Ids are opaque
+    // and version-suffixed, families are the contract we expect to remain
+    // stable across Copilot extension updates.
+    const preferredMatched =
+        !QUERY_GENERATION_PREFERRED_FAMILY || response.modelFamily === QUERY_GENERATION_PREFERRED_FAMILY;
+    if (!preferredMatched) {
+        // Surface as a trace-channel warning rather than a notification toast:
+        // the fallback is automatic and there is nothing the user can act on,
+        // so a popup would only add confusion. The information stays
+        // available for diagnostics via the output channel and telemetry
+        // (`modelSelectionOutcome` on the shared sendMessage event).
+        ext.outputChannel.warn(
             l10n.t(
-                'Query generation is using model "{actualModel}" instead of preferred "{preferredModel}". Results may vary.',
+                '[Query Generation] Preferred model family "{preferredFamily}" was not available; used "{actualModel}" (family: {actualFamily}) instead. Results may vary.',
                 {
-                    actualModel: response.modelUsed,
-                    preferredModel: PREFERRED_MODEL,
+                    preferredFamily: QUERY_GENERATION_PREFERRED_FAMILY,
+                    actualModel: response.modelDisplayName,
+                    actualFamily: response.modelFamily,
                 },
             ),
         );
     }
 
     // Add telemetry for the model used
-    context.telemetry.properties.modelUsed = response.modelUsed;
+    context.telemetry.properties.modelId = response.modelId;
+    context.telemetry.properties.modelFamily = response.modelFamily;
     context.telemetry.properties.generationType = queryContext.targetQueryType || 'Find';
 
     // Parse the response
@@ -309,7 +331,9 @@ export async function generateQuery(
         return {
             generatedQuery: JSON.stringify(result.command, null, 2),
             explanation: result.explanation,
-            modelUsed: response.modelUsed,
+            modelId: response.modelId,
+            modelFamily: response.modelFamily,
+            modelDisplayName: response.modelDisplayName,
         };
     } catch {
         throw new Error(

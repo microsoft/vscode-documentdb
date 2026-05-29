@@ -1007,6 +1007,40 @@ export const collectionsViewRouter = router({
                 databaseName,
                 collectionName,
             });
+
+            // Surface the model identity to telemetry so we can correlate
+            // disclosures shown in the UI with the actual model selected by
+            // CopilotService. Use the stable id rather than the display name.
+            if (transformed.modelId) {
+                ctx.telemetry.properties.aiModelDisclosed = transformed.modelId;
+            }
+            if (transformed.modelFamily) {
+                ctx.telemetry.properties.aiModelFamily = transformed.modelFamily;
+            }
+
+            // Mirror token usage measurements onto the Stage 3 event so they can
+            // be analysed alongside Stage 3-specific properties (e.g., platform,
+            // hasStaticAnalysisSummary) without joining across telemetry events.
+            if (transformed.usage) {
+                const { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct } =
+                    transformed.usage;
+                if (promptTokens !== undefined) {
+                    ctx.telemetry.measurements.promptTokens = promptTokens;
+                }
+                if (responseTokens !== undefined) {
+                    ctx.telemetry.measurements.responseTokens = responseTokens;
+                }
+                if (totalTokens !== undefined) {
+                    ctx.telemetry.measurements.totalTokens = totalTokens;
+                }
+                if (maxInputTokens !== undefined) {
+                    ctx.telemetry.measurements.maxInputTokens = maxInputTokens;
+                }
+                if (promptUtilizationPct !== undefined) {
+                    ctx.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
+                }
+            }
+
             ext.outputChannel.trace(
                 l10n.t('[Query Insights Stage 3] Completed: {count} improvement cards generated (requestKey: {key})', {
                     count: transformed.improvementCards.length.toString(),

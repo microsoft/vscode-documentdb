@@ -30,8 +30,8 @@
  * - Integration with actual explain data
  */
 
-import { MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text } from '@fluentui/react-components';
-import { ChatMailRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
+import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens } from '@fluentui/react-components';
+import { ChatMailRegular, InfoRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
@@ -464,6 +464,28 @@ export const QueryInsightsMain = (): JSX.Element => {
         },
     ];
 
+    /**
+     * Documentation URL for the AI Performance Insights feature itself
+     * (overview, what it does, how to use it).
+     *
+     * This is *distinct* from {@link utilityModelUrl}: this page describes the
+     * feature, while the utility-model URL is the cost-disclosure page wired
+     * to the "Learn more about the utility model used." link in the
+     * cost-neutral disclosure row and to the post-response "Powered by" byline
+     * area. Keeping the two URLs separate lets us update each independently.
+     */
+    const aiInsightsDocsUrl = 'https://learn.microsoft.com/azure/documentdb/index-advisor';
+    // aka.ms slug for the utility-model docs — register at https://aka.ms/admin before shipping
+    const utilityModelUrl = 'https://aka.ms/vscode-documentdb-copilot-utility-model';
+
+    const handleLearnMore = useCallback((): void => {
+        void trpcClient.common.openUrl.mutate({ url: aiInsightsDocsUrl });
+    }, [trpcClient]);
+
+    const handleLearnMoreUtilityModel = useCallback((): void => {
+        void trpcClient.common.openUrl.mutate({ url: utilityModelUrl });
+    }, [trpcClient]);
+
     const handleGetAISuggestions = () => {
         // Transition to Stage 3 loading (this will reset UI flags)
         transitionToStage(3, 'loading');
@@ -857,17 +879,59 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 enabled={currentStage.phase >= 2 && currentStage.status !== 'loading'}
                                 errorMessage={queryInsightsState.stage3ErrorMessage ?? undefined}
                                 onGetInsights={handleGetAISuggestions}
-                                onLearnMore={() => {
-                                    void trpcClient.common.openUrl.mutate({
-                                        url: 'https://learn.microsoft.com/azure/documentdb/index-advisor',
-                                    });
-                                }}
+                                onLearnMore={handleLearnMore}
                                 onCancel={handleCancelAI}
+                                onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
                             />
                         </CollapseRelaxed>
 
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList items={insightCards} exitDuration={300} />
+
+                        {/* Post-response "Powered by" byline.
+                            Mirrors the (i) + cost-neutral disclosure shown in the pre-invocation
+                            card. Token usage measurements are intentionally NOT rendered here:
+                            they live in the trace output channel and in telemetry only. Cost
+                            (credits) is not surfaced because the stable VS Code Language Model
+                            API does not expose pricing data; the extension stays on stable APIs
+                            and avoids the proposed `languageModelPricing` API by design. */}
+                        {currentStage.phase === 3 &&
+                            currentStage.status === 'success' &&
+                            queryInsightsState.stage3Data?.modelDisplayName && (
+                                <div
+                                    className="cardSpacing"
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'flex-start',
+                                        gap: '6px',
+                                        color: tokens.colorNeutralForeground3,
+                                    }}
+                                >
+                                    <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
+                                    <div style={{ display: 'flex', flexDirection: 'column', gap: '2px' }}>
+                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                            {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
+                                            <Link
+                                                appearance="subtle"
+                                                onClick={handleLearnMoreUtilityModel}
+                                                inline
+                                                style={{
+                                                    fontSize: tokens.fontSizeBase200,
+                                                    lineHeight: tokens.lineHeightBase200,
+                                                }}
+                                            >
+                                                {l10n.t('Learn more about the utility model used.')}
+                                            </Link>
+                                        </Text>
+                                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                            {l10n.t(
+                                                'Powered by {0} via GitHub Copilot',
+                                                queryInsightsState.stage3Data.modelDisplayName,
+                                            )}
+                                        </Text>
+                                    </div>
+                                </div>
+                            )}
                     </div>
                 </div>
 
