@@ -195,6 +195,11 @@ export class PlaygroundEvaluator implements vscode.Disposable {
     /**
      * Force-terminate the worker thread immediately.
      * Used for infinite loop recovery (timeout) and cancellation.
+     *
+     * The PlaygroundEvaluator instance itself is kept by the caller and reused
+     * on the next run. Only the worker thread is discarded here; the next
+     * `evaluate()` call will lazily spawn a fresh worker and reset session
+     * telemetry for that new worker lifecycle.
      */
     killWorker(): void {
         this._workerManager.killWorker();
