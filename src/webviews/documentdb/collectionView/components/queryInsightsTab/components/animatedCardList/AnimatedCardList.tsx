@@ -43,6 +43,19 @@ interface ItemState {
     component: ReactNode;
     isExiting: boolean;
     /**
+     * `true` for the single render between "item just added to source"
+     * and "item committed visible". The render with `pendingEnter: true`
+     * passes `visible={false}` to the presence component; a `requestAnimationFrame`
+     * then flips it to `false`, producing the `false → true` transition
+     * that `createPresenceComponent` requires to play the enter motion.
+     *
+     * Without this two-step, new items mount with `visible=true` and
+     * `appear=false` (Fluent's default), and the framework treats them as
+     * "already in" → the enter animation is silently skipped. That's the
+     * "cards just pop in without animation" bug.
+     */
+    pendingEnter: boolean;
+    /**
      * Captured on first mount from `AnimatedCardItem.inFlight`. Determines
      * which presence wrapper (`CollapseRelaxed` vs. `Fade`) renders this
      * item. Frozen for the item's lifetime so the wrapper doesn't swap out
@@ -60,19 +73,21 @@ export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardList
     const exitTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
 
     useEffect(() => {
-        const newKeys = new Set(items.map((item) => item.key));
-
         // Use functional update to get current state without dependency
         setDisplayItems((currentDisplayItems) => {
-            const currentKeys = new Set(currentDisplayItems.map((item) => item.key));
-
-            // Find which items to add and which to remove
-            const toAdd = items.filter((item) => !currentKeys.has(item.key));
-            const toRemove = currentDisplayItems.filter((item) => !newKeys.has(item.key) && !item.isExiting);
-
-            if (toAdd.length === 0 && toRemove.length === 0) {
-                return currentDisplayItems;
-            }
+            // NOTE: do NOT early-return when no keys were added/removed.
+            // The parent passes a fresh `items` array on every render (e.g.
+            // when a card's `component` prop carries new streaming content),
+            // and if we skip the update here those new component references
+            // never reach `displayItems` — meaning the rendered tree keeps
+            // showing the stale `ReactNode` from the previous render and
+            // the card looks frozen even though its source content is
+            // changing. The general case below already handles "no
+            // additions, no removals" correctly: it walks `items` in order,
+            // updates `component` for matched keys, and produces a fresh
+            // `displayItems` array. The shallow comparison React uses on
+            // the children inside `<CollapseRelaxed>` then sees the new
+            // component and re-renders.
 
             // Build new display list maintaining source order
             const updated: ItemState[] = [];
@@ -90,11 +105,19 @@ export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardList
                     updated.push({ ...existing, component: sourceItem.component });
                     displayMap.delete(sourceItem.key); // Mark as processed
                 } else {
-                    // New item
+                    // New item. `pendingEnter: true` keeps it in `visible=false`
+                    // for the first render so the presence component sees a
+                    // `false → true` transition and actually runs the enter
+                    // animation. Without this the item mounts with
+                    // `visible=true` and Fluent's `createPresenceComponent`
+                    // (which defaults `appear=false`) treats first-mount as
+                    // "already in" and silently skips the enter motion — that
+                    // is the "cards just pop in with no animation" bug.
                     updated.push({
                         key: sourceItem.key,
                         component: sourceItem.component,
                         isExiting: false,
+                        pendingEnter: true,
                         motion: sourceItem.inFlight ? 'fade' : 'collapse',
                     });
                 }
@@ -120,6 +143,20 @@ export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardList
                 }
             }
 
+            // If any items still carry `pendingEnter`, schedule a follow-up
+            // tick to clear the flag so they transition to `visible=true`
+            // and the presence component animates them in. A `requestAnimationFrame`
+            // is enough — we just need React to commit the `visible=false`
+            // render before flipping to `true`. `setTimeout(…, 0)` also
+            // works but rAF aligns better with the browser's paint cycle.
+            if (updated.some((item) => item.pendingEnter)) {
+                requestAnimationFrame(() => {
+                    setDisplayItems((current) =>
+                        current.map((item) => (item.pendingEnter ? { ...item, pendingEnter: false } : item)),
+                    );
+                });
+            }
+
             return updated;
         });
     }, [items, exitDuration]);
@@ -134,23 +171,29 @@ export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardList
 
     return (
         <div style={{ display: 'flex', flexDirection: 'column' }}>
-            {displayItems.map((item) =>
+            {displayItems.map((item) => {
+                // `visible` flips from `false → true` on the second render
+                // after mount (see `pendingEnter` machinery above) so the
+                // presence component actually plays its enter animation.
+                // For already-mounted items, `pendingEnter` is `false` from
+                // the start so they behave normally.
+                const visible = !item.isExiting && !item.pendingEnter;
                 // Per-item motion: `Fade` for cards whose content streams
                 // in (no `maxHeight`/`overflow:hidden` clipping during the
                 // enter animation), `CollapseRelaxed` otherwise. Rendered
                 // inline rather than via a `Wrapper` variable because the
                 // Fluent presence components lose their callable JSX type
                 // when assigned to a union-typed local.
-                item.motion === 'fade' ? (
-                    <Fade key={item.key} visible={!item.isExiting}>
+                return item.motion === 'fade' ? (
+                    <Fade key={item.key} visible={visible}>
                         <div>{item.component}</div>
                     </Fade>
                 ) : (
-                    <CollapseRelaxed key={item.key} visible={!item.isExiting}>
+                    <CollapseRelaxed key={item.key} visible={visible}>
                         <div>{item.component}</div>
                     </CollapseRelaxed>
-                ),
-            )}
+                );
+            })}
         </div>
     );
 };
