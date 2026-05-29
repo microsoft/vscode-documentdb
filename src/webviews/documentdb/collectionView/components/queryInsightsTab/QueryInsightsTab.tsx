@@ -262,7 +262,7 @@ export const QueryInsightsMain = (): JSX.Element => {
             !queryInsightsState.stage1Promise
         ) {
             // Query parameters are now retrieved from ClusterSession - no need to pass them
-            const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1
+            const promise = trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
                 .query()
                 .then((data) => {
                     setQueryInsightsStateHelper((prev) => ({
@@ -348,7 +348,7 @@ export const QueryInsightsMain = (): JSX.Element => {
             const startTime = performance.now();
 
             // Query parameters are now retrieved from ClusterSession - no need to pass them
-            const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage2
+            const promise = trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage2
                 .query()
                 .then(async (data) => {
                     // Ensure minimum execution time for better UX (avoid jarring instant transitions)
@@ -526,7 +526,7 @@ export const QueryInsightsMain = (): JSX.Element => {
         stage3AbortControllerRef.current = abortController;
 
         // Call the tRPC endpoint (10+ second delay expected from AI service)
-        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage3
+        const promise = trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage3
             .query({ requestKey }, { signal: abortController.signal })
             .then((response) => {
                 // Only update state if this request is still the current one
@@ -627,7 +627,7 @@ export const QueryInsightsMain = (): JSX.Element => {
         actionId: string,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> => {
-        return await trpcClient.mongoClusters.collectionView.executeQueryInsightsAction.mutate({
+        return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
             actionId,
             payload,
         });
@@ -637,7 +637,7 @@ export const QueryInsightsMain = (): JSX.Element => {
         actionId: string,
         payload: unknown,
     ): Promise<{ success: boolean; message?: string }> => {
-        return await trpcClient.mongoClusters.collectionView.executeQueryInsightsAction.mutate({
+        return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
             actionId,
             payload,
         });

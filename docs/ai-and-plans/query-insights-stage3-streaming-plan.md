@@ -332,7 +332,7 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
     iteration + parsed completion and malformed-JSON rejection. Existing buffered callers
     untouched (still call `optimizeQuery` / `getOptimizationRecommendations`). l10n /
     prettier / lint / jest (1989 ✓) / build all pass.
-- [ ] **WI-4 — Dedicated `queryInsights` sub-router (D8).** Create
+- [x] **WI-4 — Dedicated `queryInsights` sub-router (D8).** Create
       `src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts` exporting a
       `queryInsightsRouter`; mount it under `collectionView.queryInsights`. Move the existing
       `getQueryInsightsStage3` (and any closely related Stage-3 procedures) into it **unchanged**
@@ -342,6 +342,18 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
       separate from "things the host pushes" (subscriptions).
   - _Acceptance:_ webview still works via the new path; old call sites updated; build/jest pass.
   - _Note:_ this changes the rpc event name/path — call it out for the user (telemetry).
+  - _Outcome:_ Created `queryInsightsRouter` and moved Stage 1/2/3 + `executeQueryInsightsAction`
+    procedures and the `readQueryInsightsDebugFile` helper into it (pure relocation, bodies
+    unchanged). Mounted under `collectionView.queryInsights`. Updated all four webview call
+    sites (`QueryInsightsTab.tsx`, `CollectionView.tsx`) to the new
+    `collectionView.queryInsights.*` paths. Removed now-unused imports
+    (`Document`/`fs`/`path`/`Explain*`/`StagePropertyExtractor`/`buildStaticAnalysisSummary`/
+    `transformations`/`QueryInsightsAIService`/`QueryInsightsStage3Response`/`QueryObject`)
+    from `collectionViewRouter.ts`. ⚠️ **Telemetry path change:** rpc events for these four
+    procedures now carry a `queryInsights` segment (e.g.
+    `documentDB.rpc.query.collectionView.queryInsights.getQueryInsightsStage3` —
+    previously `…collectionView.getQueryInsightsStage3`). Telemetry queries that hard-coded
+    the old path must be updated. l10n / prettier / lint / jest (1989 ✓) / build all pass.
 - [ ] **WI-5 — Convert Stage 3 to a subscription with coarse `status` events (Option A).** Add
       `streamStage3` `.subscription(async function* …)` to `queryInsightsEventsRouter`. The
       generator iterates the `CopilotService` async-iterable directly

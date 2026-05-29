@@ -167,7 +167,7 @@ export const CollectionView = (): JSX.Element => {
         }
 
         // Query parameters are now retrieved from ClusterSession - no need to pass them
-        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1.query();
+        const promise = trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1.query();
 
         // Track the promise immediately
         setCurrentContext((prev) => ({
