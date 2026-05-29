@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -30,14 +31,83 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
      */
     private expansionGeneration = 0;
 
+    /**
+     * Cached collection count for the database.
+     * undefined means not yet loaded, null means loading failed.
+     */
+    private collectionCount: number | undefined | null = undefined;
+
+    /**
+     * Flag indicating if a count fetch is in progress.
+     */
+    private isLoadingCount: boolean = false;
+
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
+        /**
+         * Stale-check predicate. The owning ClusterItemBase hands in a function
+         * that returns true only while this DatabaseItem belongs to the
+         * current expansion. When the user refreshes / collapses / re-expands
+         * the cluster, the predicate flips to false and any queued or
+         * in-flight count work bails out before mutating state.
+         * Defaults to always-current so direct callers are unaffected.
+         */
+        private readonly isCurrent: () => boolean = () => true,
     ) {
         this.id = `${cluster.treeId}/${databaseInfo.name}`;
         this.experience = cluster.dbExperience;
         this.experienceContextValue = `experience_${this.experience?.api}`;
         this.contextValue = createContextValue([this.contextValue, this.experienceContextValue]);
+    }
+
+    /**
+     * Starts loading the collection count asynchronously.
+     * When the count is retrieved, it triggers a tree item refresh to update the description.
+     * This method is fire-and-forget and does not block tree expansion.
+     */
+    public loadCollectionCount(): void {
+        // Skip if already loading or already loaded
+        if (this.isLoadingCount || this.collectionCount !== undefined) {
+            return;
+        }
+
+        this.isLoadingCount = true;
+
+        // Fire-and-forget: load count in background
+        void this.fetchAndUpdateCount();
+    }
+
+    /**
+     * Fetches the collection count and triggers a tree refresh when complete.
+     */
+    private async fetchAndUpdateCount(): Promise<void> {
+        const clusterId = this.cluster.clusterId;
+        const dbName = this.databaseInfo.name;
+        const isCurrent = this.isCurrent;
+
+        let result: number | null;
+        try {
+            const client = await ClustersClient.getClient(clusterId);
+            if (!isCurrent()) {
+                return;
+            }
+            const collections = await client.listCollections(dbName);
+            result = collections.length;
+        } catch {
+            result = null;
+        }
+
+        if (!isCurrent()) {
+            // Stale: do not write back to this instance and do not fire a
+            // tree refresh. The current instance owns the UI state.
+            return;
+        }
+
+        this.isLoadingCount = false;
+        this.collectionCount = result;
+        // Trigger a tree item refresh to show the updated description
+        ext.state.notifyChildrenChanged(this.id);
     }
 
     async getChildren(): Promise<TreeElement[]> {
@@ -76,10 +146,18 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     }
 
     getTreeItem(): vscode.TreeItem {
+        // Build description based on collection count state
+        let description: string | undefined;
+        if (typeof this.collectionCount === 'number') {
+            description =
+                this.collectionCount === 1 ? l10n.t('1 collection') : l10n.t('{0} collections', this.collectionCount);
+        }
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.databaseInfo.name,
+            description,
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('database'), // TODO: create our own icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,

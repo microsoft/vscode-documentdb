@@ -69,6 +69,14 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      */
     public journeyCorrelationId?: string;
 
+    /**
+     * Monotonic counter bumped on every `getChildren` call. Used to invalidate
+     * background collection-count work owned by stale DatabaseItem instances
+     * (refresh / collapse / re-expand creates fresh instances; we want the
+     * previous ones to bail before mutating UI state or hitting the server).
+     */
+    private expansionGeneration = 0;
+
     protected descriptionOverride?: string;
     protected tooltipOverride?: string | vscode.MarkdownString;
 
@@ -196,6 +204,12 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             ];
         }
 
+        // Bump generation counter to invalidate any in-flight background work
+        // from previous expansions of this cluster node (refresh / collapse /
+        // re-expand creates fresh DatabaseItem instances).
+        const myGeneration = ++this.expansionGeneration;
+        const isCurrent = (): boolean => this.expansionGeneration === myGeneration;
+
         // List the databases
         return clustersClient.listDatabases().then((databases: DatabaseItemModel[]) => {
             if (databases.length === 0) {
@@ -214,8 +228,13 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             // Sort databases alphabetically by name
             databases.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
 
-            // Map the databases to DatabaseItem elements
-            return databases.map((database) => new DatabaseItem(this.cluster, database));
+            // Map the databases to DatabaseItem elements and start
+            // loading collection counts in the background.
+            return databases.map((database) => {
+                const databaseItem = new DatabaseItem(this.cluster, database, isCurrent);
+                databaseItem.loadCollectionCount();
+                return databaseItem;
+            });
         });
     }
 
