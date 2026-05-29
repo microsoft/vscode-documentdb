@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type FieldEntry } from '@documentdb-js/schema-analyzer';
-import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
@@ -14,6 +13,7 @@ import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlick
 import { type QueryInsightsStage2Response } from '../webviews/documentdb/collectionView/types/queryInsights';
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
 import { SchemaStore } from './SchemaStore';
+import { parseProjectionOrSortQuery } from './utils/parseProjectionOrSortQuery';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
@@ -571,9 +571,7 @@ export class ClusterSession {
         let projectionObj: Document | undefined;
         if (stringParams.project && stringParams.project.trim() !== '{}') {
             try {
-                projectionObj = parseShellBSON(stringParams.project, {
-                    mode: ParseMode.Loose,
-                }) as Document;
+                projectionObj = parseProjectionOrSortQuery(stringParams.project) as Document;
             } catch (error) {
                 throw new Error(
                     l10n.t('Invalid projection syntax: {0}', error instanceof Error ? error.message : String(error)),
@@ -585,9 +583,7 @@ export class ClusterSession {
         let sortObj: Document | undefined;
         if (stringParams.sort && stringParams.sort.trim() !== '{}') {
             try {
-                sortObj = parseShellBSON(stringParams.sort, {
-                    mode: ParseMode.Loose,
-                }) as Document;
+                sortObj = parseProjectionOrSortQuery(stringParams.sort) as Document;
             } catch (error) {
                 throw new Error(
                     l10n.t('Invalid sort syntax: {0}', error instanceof Error ? error.message : String(error)),

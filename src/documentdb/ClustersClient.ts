@@ -15,7 +15,6 @@ import {
     callWithTelemetryAndErrorHandling,
     parseError,
 } from '@microsoft/vscode-azext-utils';
-import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
@@ -57,6 +56,7 @@ import {
     type IndexStats,
 } from './LlmEnhancedFeatureApis';
 import { SchemaStore } from './SchemaStore';
+import { parseProjectionOrSortQuery } from './utils/parseProjectionOrSortQuery';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
@@ -694,9 +694,7 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                const parsed: unknown = parseShellBSON(queryParams.project, {
-                    mode: ParseMode.Loose,
-                });
+                const parsed: unknown = parseProjectionOrSortQuery(queryParams.project);
                 options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
             } catch (error) {
                 if (error instanceof QueryError) throw error;
@@ -715,9 +713,7 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                const parsed: unknown = parseShellBSON(queryParams.sort, {
-                    mode: ParseMode.Loose,
-                });
+                const parsed: unknown = parseProjectionOrSortQuery(queryParams.sort);
                 options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
             } catch (error) {
                 if (error instanceof QueryError) throw error;
@@ -851,9 +847,7 @@ export class ClustersClient {
         // Parse and add projection if provided
         if (queryParams.project && queryParams.project.trim() !== '{}') {
             try {
-                const parsed: unknown = parseShellBSON(queryParams.project, {
-                    mode: ParseMode.Loose,
-                });
+                const parsed: unknown = parseProjectionOrSortQuery(queryParams.project);
                 options.projection = assertDocumentObject(parsed, 'INVALID_PROJECTION');
             } catch (error) {
                 if (error instanceof QueryError) throw error;
@@ -872,9 +866,7 @@ export class ClustersClient {
         // Parse and add sort if provided
         if (queryParams.sort && queryParams.sort.trim() !== '{}') {
             try {
-                const parsed: unknown = parseShellBSON(queryParams.sort, {
-                    mode: ParseMode.Loose,
-                });
+                const parsed: unknown = parseProjectionOrSortQuery(queryParams.sort);
                 options.sort = assertDocumentObject(parsed, 'INVALID_SORT');
             } catch (error) {
                 if (error instanceof QueryError) throw error;
