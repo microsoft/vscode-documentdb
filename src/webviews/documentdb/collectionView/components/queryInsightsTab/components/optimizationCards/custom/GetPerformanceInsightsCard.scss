@@ -19,9 +19,22 @@
         gap: 12px;
     }
 
-    &-loading-stepper {
+    // Vertical stack inside the loading row: spinner + "AI is analyzing…"
+    // label on top, then a single sub-line carrying the current action
+    // ("Analyzing query plan…" / "Identifying issues…" / …).
+    &-loading-status {
         flex: 1;
         min-width: 0;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+    }
+
+    // Indent the sub-line so it visually aligns with the spinner's label
+    // (8px Fluent Spinner gap + the spinner's own width). Caller passes
+    // this className to the CurrentActionLine.
+    &-loading-action {
+        padding-left: 24px;
     }
 
     &-loading-cancel {

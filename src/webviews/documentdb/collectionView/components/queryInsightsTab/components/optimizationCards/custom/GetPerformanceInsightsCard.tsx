@@ -11,6 +11,7 @@ import {
     MessageBar,
     MessageBarBody,
     MessageBarTitle,
+    Spinner,
     Text,
     tokens,
 } from '@fluentui/react-components';
@@ -18,7 +19,7 @@ import { InfoRegular, SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
 import { Announcer } from '../../../../../../../components/accessibility';
-import { StreamingProgressStepper } from '../../streamingPlaceholder';
+import { CurrentActionLine } from '../../streamingPlaceholder';
 import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
@@ -157,8 +158,12 @@ export function GetPerformanceInsightsCard({
                     <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing...')} />
                     {isLoading ? (
                         <div className="get-performance-insights-card-loading">
-                            <div className="get-performance-insights-card-loading-stepper">
-                                <StreamingProgressStepper active={isLoading} />
+                            <div className="get-performance-insights-card-loading-status">
+                                <Spinner size="tiny" label={l10n.t('AI is analyzing…')} labelPosition="after" />
+                                <CurrentActionLine
+                                    active={isLoading}
+                                    className="get-performance-insights-card-loading-action"
+                                />
                             </div>
                             <Button
                                 appearance="subtle"
