@@ -32,7 +32,9 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     /**
      * Cached index count for the collection.
-     * undefined means not yet loaded, null means loading failed.
+     * `undefined` means not yet loaded. `null` means loading failed (treated
+     * the same as not-loaded in the UI — no description is shown — so callers
+     * don't need to distinguish the two states).
      */
     private indexCount: number | undefined | null = undefined;
 
@@ -40,6 +42,14 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
      * Flag indicating if a count fetch is in progress.
      */
     private isLoadingCount: boolean = false;
+
+    /**
+     * Cached index arrays from the last `fetchAndUpdateCount()` call.
+     * When set, `getChildren()` reuses these instead of making a second
+     * `listIndexes()` / `listSearchIndexesForAtlas()` round-trip.
+     */
+    private cachedIndexes: CollectionItemModel[] | undefined;
+    private cachedSearchIndexes: CollectionItemModel[] | undefined;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -79,7 +89,8 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     }
 
     /**
-     * Fetches the index count and triggers a tree refresh when complete.
+     * Fetches the index count and caches the index arrays for reuse by
+     * {@link getChildren}. Triggers a tree refresh when complete.
      */
     private async fetchAndUpdateCount(): Promise<void> {
         const clusterId = this.cluster.clusterId;
@@ -91,22 +102,36 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
         try {
             const client = await ClustersClient.getClient(clusterId);
             if (!isCurrent()) {
+                // Stale: don't write back. The current instance owns the UI.
                 return;
             }
             const indexes = await client.listIndexes(dbName, collName);
 
             // Also try to count search indexes, but silently fail if not supported
-            let searchIndexCount = 0;
+            let searchIndexes: CollectionItemModel[] = [];
             try {
-                const searchIndexes = await client.listSearchIndexesForAtlas(dbName, collName);
-                searchIndexCount = searchIndexes.length;
+                searchIndexes = await client.listSearchIndexesForAtlas(dbName, collName);
             } catch {
                 // Search indexes not supported on this platform
             }
 
-            result = indexes.length + searchIndexCount;
+            // Cache the arrays so getChildren() can reuse them
+            this.cachedIndexes = indexes;
+            this.cachedSearchIndexes = searchIndexes.length > 0 ? searchIndexes : undefined;
+
+            result = indexes.length + searchIndexes.length;
         } catch {
             result = null;
+            // Clear any partial cache on failure so getChildren() does a
+            // fresh fetch.
+            this.cachedIndexes = undefined;
+            this.cachedSearchIndexes = undefined;
+        } finally {
+            // Always reset isLoadingCount so that:
+            // - Stale instances that skipped mutation in the early return above
+            //   don't silently stay in "loading" state.
+            // - Error paths reset the guard for potential retry.
+            this.isLoadingCount = false;
         }
 
         if (!isCurrent()) {
@@ -115,7 +140,6 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             return;
         }
 
-        this.isLoadingCount = false;
         this.indexCount = result;
         // Trigger a tree item refresh to show the updated description
         ext.state.notifyChildrenChanged(this.id);
@@ -123,23 +147,35 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     async getChildren(): Promise<TreeElement[]> {
         const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
-        const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
 
-        // Try to get search indexes, but silently fail if not supported by the platform
-        try {
-            const searchIndexes = await client.listSearchIndexesForAtlas(
-                this.databaseInfo.name,
-                this.collectionInfo.name,
-            );
-            indexes.push(...searchIndexes);
-        } catch {
-            // Search indexes not supported on this platform, continue without them
+        // Reuse cached arrays from a completed fetchAndUpdateCount() to avoid
+        // a second listIndexes + listSearchIndexesForAtlas round-trip.
+        const indexes =
+            this.cachedIndexes ??
+            (await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name));
+        let searchIndexes: CollectionItemModel[] = [];
+        if (this.cachedSearchIndexes) {
+            searchIndexes = this.cachedSearchIndexes;
+        } else {
+            try {
+                searchIndexes = await client.listSearchIndexesForAtlas(
+                    this.databaseInfo.name,
+                    this.collectionInfo.name,
+                );
+            } catch {
+                // Search indexes not supported on this platform, continue without them
+            }
         }
 
-        // Sort indexes by name, with _id_ always first
-        indexes.sort((a, b) => compareIndexNames(a.name, b.name));
+        // Clear caches after use so the next expand always gets fresh data.
+        this.cachedIndexes = undefined;
+        this.cachedSearchIndexes = undefined;
 
-        return indexes.map((index) => {
+        // Combine and sort
+        const allIndexes = [...indexes, ...searchIndexes];
+        allIndexes.sort((a, b) => compareIndexNames(a.name, b.name));
+
+        return allIndexes.map((index) => {
             return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
         });
     }

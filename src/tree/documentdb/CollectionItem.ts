@@ -147,7 +147,12 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const indexesItem = new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo);
+        const indexesItem = new IndexesItem(
+            this.cluster,
+            this.databaseInfo,
+            this.collectionInfo,
+            this.isCurrent,
+        );
         // Start loading index count in background (fire-and-forget).
         indexesItem.loadIndexCount();
         return [new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this), indexesItem];
