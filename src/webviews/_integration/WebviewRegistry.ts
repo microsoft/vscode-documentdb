@@ -5,10 +5,12 @@
 
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
+import { MotionSandbox } from '../documentdb/motionSandbox/MotionSandbox';
 
 export const WebviewRegistry = {
     collectionView: CollectionView,
     documentView: DocumentView,
+    motionSandbox: MotionSandbox,
 } as const;
 
 /**

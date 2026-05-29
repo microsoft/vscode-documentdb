@@ -420,6 +420,12 @@
         "title": "Start Demo Task"
       },
       {
+        "//": "[Testing] Open Motion Sandbox (dev-only experiment webview)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.testing.openMotionSandbox",
+        "title": "Open Motion Sandbox (dev)"
+      },
+      {
         "//": "[DiscoveryView] Enable Registry",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.addRegistry",

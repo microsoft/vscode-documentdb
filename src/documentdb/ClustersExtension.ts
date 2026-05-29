@@ -802,6 +802,22 @@ export class ClustersExtension implements vscode.Disposable {
                     void task.start();
                 });
 
+                // Testing command — opens the standalone Motion Sandbox
+                // webview. Pure UI experiment, no business logic, no
+                // tRPC payloads. Shipped behind a command palette entry
+                // only; not bound to any UI surface and not part of any
+                // user-facing flow.
+                registerCommand(
+                    'vscode-documentdb.command.testing.openMotionSandbox',
+                    async (_context: IActionContext) => {
+                        const { MotionSandboxController } = await import(
+                            '../webviews/documentdb/motionSandbox/motionSandboxController'
+                        );
+                        const view = new MotionSandboxController();
+                        view.revealToForeground(vscode.ViewColumn.Active);
+                    },
+                );
+
                 // This is an optional task - if it fails, we don't want to break extension activation,
                 // but we should log the error for diagnostics
                 try {
