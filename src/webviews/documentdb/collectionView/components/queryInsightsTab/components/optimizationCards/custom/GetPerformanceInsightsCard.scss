@@ -15,7 +15,17 @@
 
     &-loading {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 12px;
+    }
+
+    &-loading-stepper {
+        flex: 1;
+        min-width: 0;
+    }
+
+    &-loading-cancel {
+        flex-shrink: 0;
+        align-self: flex-start;
     }
 }

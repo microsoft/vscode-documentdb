@@ -275,13 +275,20 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
 
 ### Phase 0 — Perceived progress (client-only, independently shippable)
 
-- [ ] **WI-1 — `StreamingPlaceholder` component + stepper.** Build the shared placeholder
+- [x] **WI-1 — `StreamingPlaceholder` component + stepper.** Build the shared placeholder
       (§5). Replace the current 1s spinner gap in `QueryInsightsTab` Stage-3 loading with a
       stepper/checklist ("Analyzing plan → Identifying issues → Generating recommendations →
       Finalizing") + elapsed timer, driven by a client-side timer (no backend change). Keep
       existing tips/error card behavior.
   - _Acceptance:_ on Stage 3 request, visible animated progress within <1s; no regression in
     final rendered content; lint/jest/build pass. Suitable for a Sonnet-class agent.
+  - _Outcome:_ Added `StreamingPlaceholder` (shared shimmer row with `role="status"` /
+    `aria-live="polite"`, icon, label, elapsed/chars meta, standalone/inline variants) and
+    `StreamingProgressStepper` (client-side timer, 4 sticky steps using `StreamingPlaceholder`
+    on the active step) under `.../components/streamingPlaceholder/`. Wired the stepper into
+    `GetPerformanceInsightsCard` in place of the previous `Spinner`+"AI is analyzing…" row,
+    keeping the Cancel button anchored on the right. Loading announcer preserved.
+    l10n / prettier / lint / jest (1984 ✓) / build all pass.
 
 ### Phase 1 — Plumb the stream end-to-end (coarse progress)
 
