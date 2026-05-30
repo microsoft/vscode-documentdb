@@ -83,16 +83,44 @@ describe('toFieldCompletionItems', () => {
         expect(result[2].insertText).toBe('$type');
     });
 
-    it('adds $ prefix to referenceText', () => {
+    it('emits $field.path for safe identifiers and nested paths with safe segments', () => {
         const fields: FieldEntry[] = [
             { path: 'age', type: 'number', bsonType: 'int32' },
             { path: 'address.city', type: 'string', bsonType: 'string' },
+            { path: '_id', type: 'string', bsonType: 'objectid' },
         ];
 
         const result = toFieldCompletionItems(fields);
 
         expect(result[0].referenceText).toBe('$age');
         expect(result[1].referenceText).toBe('$address.city');
+        expect(result[2].referenceText).toBe('$_id');
+    });
+
+    it('emits $getField for flat fields with special-character names', () => {
+        const fields: FieldEntry[] = [
+            { path: 'order-items', type: 'string', bsonType: 'string' },
+            { path: 'my field', type: 'string', bsonType: 'string' },
+            { path: 'say"hi"', type: 'string', bsonType: 'string' },
+        ];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: "order-items" }');
+        expect(result[1].referenceText).toBe('{ $getField: "my field" }');
+        expect(result[2].referenceText).toBe('{ $getField: "say\\"hi\\"" }');
+    });
+
+    it('returns undefined referenceText for nested paths with an unsafe segment', () => {
+        const fields: FieldEntry[] = [
+            { path: 'order.item-count', type: 'number', bsonType: 'int32' },
+            { path: 'user.full name', type: 'string', bsonType: 'string' },
+        ];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBeUndefined();
+        expect(result[1].referenceText).toBeUndefined();
     });
 
     it('preserves isSparse', () => {

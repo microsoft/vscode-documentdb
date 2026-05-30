@@ -14,7 +14,9 @@ import { BSONTypes, type FieldEntry } from '@documentdb-js/schema-analyzer';
  * - `insertText` is the escaped/quoted form that gets inserted when the user selects a
  *   completion item. For simple identifiers it matches `fieldName`; for names containing
  *   special characters (dots, spaces, `$`, etc.) it is wrapped in double quotes.
- * - `referenceText` is the `$`-prefixed aggregation field reference (e.g., "$age").
+ * - `referenceText` is the aggregation field reference (e.g., `"$age"`), or `undefined`
+ *   when no safe single-expression form exists (e.g., a nested path with a special-character
+ *   segment whose `$getField` form would require chaining).
  */
 export interface FieldCompletionData {
     /** The full dot-notated field name, e.g., "address.city" — kept unescaped for display */
@@ -32,15 +34,14 @@ export interface FieldCompletionData {
     /** Text to insert when the user selects this completion — quoted/escaped if the field name contains special chars */
     insertText: string;
     /**
-     * Field reference for aggregation expressions, e.g., "$age", "$address.city".
+     * Field reference for aggregation expressions.
      *
-     * TODO: The simple `$field.path` syntax is invalid MQL for field names containing dots,
-     * spaces, or `$` characters. For such fields, the correct MQL syntax is
-     * `{ $getField: "fieldName" }`. This should be addressed when the aggregation
-     * completion provider is wired up — either by using `$getField` for special names
-     * or by making `referenceText` optional for fields that cannot use the `$` prefix syntax.
+     * - Safe paths (every dot-separated segment is a plain identifier): `"$age"`, `"$address.city"`.
+     * - Flat fields with special characters: `'{ $getField: "order-items" }'`.
+     * - Nested paths with a special-character segment: absent — the correct
+     *   `$getField` form requires chaining and is deferred to a follow-up.
      */
-    referenceText: string;
+    referenceText?: string;
 }
 
 /**
@@ -72,6 +73,23 @@ export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionDat
             insertText = entry.path;
         }
 
+        // Build referenceText: check each dot-separated segment individually because
+        // $field.path is valid MQL even when the full path contains dots (nested traversal),
+        // but breaks when any segment contains characters outside plain identifiers.
+        const segments = entry.path.split('.');
+        const hasUnsafeSegment = segments.some((seg) => !JS_IDENTIFIER_PATTERN.test(seg));
+        let referenceText: string | undefined;
+        if (!hasUnsafeSegment) {
+            referenceText = `$${entry.path}`;
+        } else if (segments.length === 1) {
+            // Flat field with special characters — $getField is the correct single-expression form.
+            const escapedForGetField = entry.path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            referenceText = `{ $getField: "${escapedForGetField}" }`;
+        } else {
+            // Nested path with an unsafe segment — $getField chaining is complex; omit for now.
+            referenceText = undefined;
+        }
+
         return {
             fieldName: entry.path,
             displayType,
@@ -80,7 +98,7 @@ export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionDat
             displayTypes: entry.bsonTypes?.map((t) => BSONTypes.toDisplayString(t as BSONTypes)),
             isSparse: entry.isSparse ?? false,
             insertText,
-            referenceText: `$${entry.path}`,
+            referenceText,
         };
     });
 }

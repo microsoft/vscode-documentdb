@@ -15,41 +15,16 @@ Tests cover dashes, brackets, digits, embedded quotes, and backslashes.
 
 ---
 
-## 2. `referenceText` is invalid MQL for special field names
+## ~~2. `referenceText` is invalid MQL for special field names~~ ✅ RESOLVED
 
-**Severity:** Medium — will generate broken aggregation expressions
-**File:** `toFieldCompletionItems.ts` — `referenceText` construction
-**When to fix:** Before the aggregation completion provider is wired up
+**Resolved in:** PR #709 fix
 
-### Problem
+Per-segment check (`JS_IDENTIFIER_PATTERN` applied to each dot-separated segment):
+- All segments valid → `$field.path` (e.g., `$address.city`)
+- Flat field with unsafe name → `{ $getField: "name" }` (e.g., `{ $getField: "order-items" }`)
+- Nested path with unsafe segment → `undefined` (chained `$getField` deferred; see item 3)
 
-`referenceText` is always `$${entry.path}` (e.g., `$address.city`). In MQL, the `$field.path` syntax only works when every segment is a valid identifier without dots, spaces, or `$`. For field names like `order-items`, `a.b`, or `my field`, the `$` prefix syntax produces invalid references.
-
-### Examples
-
-| Field name          | Current `referenceText` | Valid?         | Correct MQL                          |
-| ------------------- | ----------------------- | -------------- | ------------------------------------ |
-| `age`               | `$age`                  | ✅             | `$age`                               |
-| `address.city`      | `$address.city`         | ✅ (nested)    | `$address.city`                      |
-| `order-items`       | `$order-items`          | ❌             | `{ $getField: "order-items" }`       |
-| `a.b` (literal dot) | `$a.b`                  | ❌ (ambiguous) | `{ $getField: { $literal: "a.b" } }` |
-| `my field`          | `$my field`             | ❌             | `{ $getField: "my field" }`          |
-
-### Proposed approaches
-
-**Option A — Make `referenceText` optional:** Return `undefined` for fields that can't use `$`-prefix syntax. The completion provider would omit the reference suggestion for those fields.
-
-**Option B — Use `$getField` for special names:**
-
-```typescript
-referenceText: needsQuoting
-    ? `{ $getField: "${escaped}" }`
-    : `$${entry.path}`,
-```
-
-**Option C — Provide both forms:** Add a `referenceTextRaw` (always `$path`) and `referenceTextSafe` (uses `$getField` when needed). Let the completion provider choose based on context.
-
-**Recommendation:** Option B is pragmatic. Option C is more flexible if we later need to support both forms in different contexts (e.g., `$match` vs `$project`).
+`referenceText` type widened to `string | undefined` in `FieldCompletionData`.
 
 ---
 
