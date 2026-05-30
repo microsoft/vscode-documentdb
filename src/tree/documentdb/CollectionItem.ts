@@ -147,10 +147,10 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        return [
-            new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this),
-            new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo),
-        ];
+        const indexesItem = new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo);
+        // Start loading index count in background (fire-and-forget).
+        indexesItem.loadIndexCount();
+        return [new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this), indexesItem];
     }
 
     getTreeItem(): vscode.TreeItem {
