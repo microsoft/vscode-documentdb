@@ -64,6 +64,14 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
      */
     private isLoadingCount: boolean = false;
 
+    /**
+     * Monotonic counter bumped on every `getChildren` call. Used to invalidate
+     * background index-count work owned by stale IndexesItem instances
+     * (refresh / collapse / re-expand creates fresh instances; we want the
+     * previous ones to bail before mutating UI state or hitting the server).
+     */
+    private expansionGeneration = 0;
+
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
@@ -147,10 +155,18 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        return [
-            new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this),
-            new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo),
-        ];
+        // Bump the generation counter so any in-flight index-count work from a
+        // previous expansion of this same collection will bail before mutating
+        // state. Combine with the parent (database-level) stale check so that
+        // a database refresh also invalidates background work.
+        const myGeneration = ++this.expansionGeneration;
+        const parentIsCurrent = this.isCurrent;
+        const isCurrent = (): boolean => parentIsCurrent() && this.expansionGeneration === myGeneration;
+
+        const indexesItem = new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo, isCurrent);
+        // Start loading index count in background (fire-and-forget).
+        indexesItem.loadIndexCount();
+        return [new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this), indexesItem];
     }
 
     getTreeItem(): vscode.TreeItem {
