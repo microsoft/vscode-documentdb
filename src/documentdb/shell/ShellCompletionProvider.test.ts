@@ -149,6 +149,18 @@ describe('ShellCompletionProvider', () => {
             const ctx = provider.detectContext('db.users.find({ ', 17);
             expect(ctx.kind).toBe('method-argument');
         });
+
+        it('should detect method argument when a string contains parentheses', () => {
+            const input = 'db.users.find({ note: ")" , na';
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('method-argument');
+        });
+
+        it('should detect method argument when a regex contains parentheses', () => {
+            const input = 'db.users.find({ name: /foo(bar)/, na';
+            const ctx = provider.detectContext(input, input.length);
+            expect(ctx.kind).toBe('method-argument');
+        });
     });
 
     describe('top-level completions', () => {
