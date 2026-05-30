@@ -64,6 +64,15 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
      */
     private isLoadingCount: boolean = false;
 
+    /**
+     * AbortController used to cancel in-flight index-fetch work owned by
+     * stale IndexesItem instances. A new controller is created on every
+     * `getChildren()` call and the previous one is aborted — a standard,
+     * composable cancellation primitive that also lets underlying client
+     * calls be aborted rather than only discarding their results.
+     */
+    private indexFetchAbortController: AbortController = new AbortController();
+
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
         readonly databaseInfo: DatabaseItemModel,
@@ -147,10 +156,18 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        return [
-            new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this),
-            new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo),
-        ];
+        // Cancel any in-flight index-fetch work from a previous expansion
+        this.indexFetchAbortController.abort();
+        this.indexFetchAbortController = new AbortController();
+
+        const indexesItem = new IndexesItem(
+            this.cluster,
+            this.databaseInfo,
+            this.collectionInfo,
+            this.indexFetchAbortController.signal,
+        );
+        indexesItem.loadIndexCount();
+        return [new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this), indexesItem];
     }
 
     getTreeItem(): vscode.TreeItem {
