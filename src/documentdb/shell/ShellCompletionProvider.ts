@@ -342,6 +342,31 @@ export class ShellCompletionProvider {
 
         for (let i = text.length - 1; i >= 0; i--) {
             const ch = text[i];
+
+            // Skip string literals: when we see a quote that closes a string,
+            // jump backward past the matching opening quote.
+            if (ch === '"' || ch === "'") {
+                const newPos = this.skipStringBackward(text, i);
+                if (newPos >= 0) {
+                    i = newPos;
+                }
+                continue;
+            }
+
+            // Skip regex literals: when '/' is encountered in a context where
+            // it is a regex delimiter (not a division operator), jump backward
+            // past the matching opening '/'.
+            if (ch === '/' && i > 0) {
+                const prev = text[i - 1];
+                if (/[\s(,:=[\]!&|{}?;^~]/.test(prev)) {
+                    const newPos = this.skipRegexBackward(text, i);
+                    if (newPos >= 0) {
+                        i = newPos;
+                    }
+                    continue;
+                }
+            }
+
             if (ch === ')') {
                 depth++;
             } else if (ch === '(') {
@@ -398,6 +423,48 @@ export class ShellCompletionProvider {
             argumentText,
             cursorOffsetInArg,
         };
+    }
+
+    /**
+     * Skip backward past a string literal starting from a quote position.
+     * Returns the index before the matching opening quote, or -1 if not found.
+     */
+    private skipStringBackward(text: string, quotePos: number): number {
+        const quote = text[quotePos];
+        let pos = quotePos - 1;
+        while (pos >= 0) {
+            if (text[pos] === quote) {
+                let backslashes = 0;
+                let checkPos = pos - 1;
+                while (checkPos >= 0 && text[checkPos] === '\\') {
+                    backslashes++;
+                    checkPos--;
+                }
+                if (backslashes % 2 === 0) {
+                    return pos - 1; // Position before the opening quote
+                }
+            }
+            pos--;
+        }
+        return -1;
+    }
+
+    /**
+     * Skip backward past a regex literal starting from the closing `/`.
+     * Returns the index before the opening `/`, or -1 if not found.
+     */
+    private skipRegexBackward(text: string, closePos: number): number {
+        let pos = closePos - 1;
+        while (pos >= 0) {
+            if (text[pos] === '/' && (pos === 0 || text[pos - 1] !== '\\')) {
+                return pos - 1; // Position before the opening '/'
+            }
+            if (text[pos] === '\\') {
+                pos--; // Skip escaped character
+            }
+            pos--;
+        }
+        return -1;
     }
 
     /**
