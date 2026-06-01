@@ -6,8 +6,11 @@
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
+import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { getCountPrefix } from '../../utils/countPrefix';
 import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -21,6 +24,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     public contextValue: string = 'treeItem_database';
 
     private readonly experienceContextValue: string = '';
+
+    private collectionCount: number | undefined;
+    private cachedCollections: CollectionItemModel[] | undefined;
+    private isLoadingCount: boolean = false;
+    private collectionsPromise: Promise<CollectionItemModel[]> | undefined;
+    private isRefreshingCollectionCount: boolean = false;
 
     /**
      * Monotonic counter bumped on every `getChildren` call. Used to invalidate
@@ -44,8 +53,23 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         const myGeneration = ++this.expansionGeneration;
         const isCurrent = (): boolean => this.expansionGeneration === myGeneration;
 
-        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
-        const collections = await client.listCollections(this.databaseInfo.name);
+        const collections = [...(await this.getCollections())];
+        const previousCount = this.collectionCount;
+        this.collectionCount = collections.length;
+
+        // If the count changed (e.g. user-initiated refresh after an external
+        // mutation), re-render this node so the description matches the children
+        // we are about to return.
+        if (previousCount !== this.collectionCount) {
+            this.isRefreshingCollectionCount = true;
+            try {
+                ext.state.notifyChildrenChanged(this.id);
+            } finally {
+                queueMicrotask(() => {
+                    this.isRefreshingCollectionCount = false;
+                });
+            }
+        }
 
         if (collections.length === 0) {
             // no databases in there:
@@ -75,11 +99,85 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         });
     }
 
+    /**
+     * Starts loading the collection count asynchronously.
+     * When the count is retrieved, it triggers a tree item refresh to update the description.
+     * This method is fire-and-forget and does not block tree expansion.
+     */
+    public loadCollectionCount(): void {
+        if (this.isLoadingCount || this.collectionCount !== undefined) {
+            return;
+        }
+
+        this.isLoadingCount = true;
+        void this.fetchAndUpdateCount();
+    }
+
+    private async fetchAndUpdateCount(): Promise<void> {
+        try {
+            const collections = await this.getCollections();
+            this.collectionCount = collections.length;
+        } catch {
+            meterSilentCatch('DatabaseItem_loadCollectionCount');
+            this.collectionCount = undefined;
+        } finally {
+            this.isLoadingCount = false;
+            this.isRefreshingCollectionCount = true;
+            try {
+                ext.state.notifyChildrenChanged(this.id);
+            } finally {
+                queueMicrotask(() => {
+                    this.isRefreshingCollectionCount = false;
+                });
+            }
+        }
+    }
+
+    private getCollections(): Promise<CollectionItemModel[]> {
+        if (this.cachedCollections) {
+            return Promise.resolve(this.cachedCollections);
+        }
+
+        if (!this.collectionsPromise) {
+            this.collectionsPromise = ClustersClient.getClient(this.cluster.clusterId)
+                .then((client) => client.listCollections(this.databaseInfo.name))
+                .then((collections) => {
+                    this.cachedCollections = collections;
+                    return collections;
+                })
+                .finally(() => {
+                    this.collectionsPromise = undefined;
+                });
+        }
+
+        return this.collectionsPromise;
+    }
+
+    public invalidateChildrenCache(): void {
+        if (this.isRefreshingCollectionCount) {
+            return;
+        }
+
+        this.cachedCollections = undefined;
+        this.collectionsPromise = undefined;
+    }
+
     getTreeItem(): vscode.TreeItem {
+        let description: string | undefined;
+        if (typeof this.collectionCount === 'number' && this.collectionCount > 0) {
+            const prefix = getCountPrefix();
+            if (prefix) {
+                description = `${prefix}${this.collectionCount}`;
+            } else {
+                description = `${this.collectionCount}`;
+            }
+        }
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.databaseInfo.name,
+            description,
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('database'), // TODO: create our own icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
@@ -87,7 +185,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     }
 
     /**
-     * Builds a markdown tooltip showing the database name.
+     * Builds a markdown tooltip showing the database name and collection count.
      */
     private buildTooltip(): vscode.MarkdownString {
         const md = new vscode.MarkdownString();
@@ -96,6 +194,10 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         md.appendMarkdown(`### ${escapeMarkdown(this.databaseInfo.name)}\n\n`);
 
         md.appendMarkdown(`\`${l10n.t('Database')}\`\n\n`);
+
+        if (typeof this.collectionCount === 'number') {
+            md.appendMarkdown(`**${l10n.t('Collections')}:** ${this.collectionCount}\n\n`);
+        }
 
         return md;
     }
