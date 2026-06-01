@@ -29,6 +29,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     private collectionCount: number | undefined;
     /** When true, the actual count exceeds COLLECTION_COUNT_LIMIT. */
     private collectionCountExceeded: boolean = false;
+    /**
+     * When true, `collectionCount` is the exact value obtained from a full
+     * `listCollections` in `getChildren()`. Once exact, the background
+     * cursor-based count must not overwrite it with a capped/approximate value.
+     */
+    private collectionCountIsExact: boolean = false;
     private isLoadingCount: boolean = false;
 
     /**
@@ -56,10 +62,14 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         const collections = await client.listCollections(this.databaseInfo.name);
 
-        // Update the collection count from the full list we just fetched.
+        // Update the collection count from the full list we just fetched. This
+        // is the exact value, so mark it authoritative: a still-running
+        // background count must not later overwrite it with a capped result.
         const previousCount = this.collectionCount;
         this.collectionCount = collections.length;
         this.collectionCountExceeded = false;
+        this.collectionCountIsExact = true;
+        this.isLoadingCount = false;
 
         if (previousCount !== this.collectionCount) {
             ext.state.notifyChildrenChanged(this.id);
@@ -111,12 +121,19 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         try {
             const client = await ClustersClient.getClient(this.cluster.clusterId);
             const { count, hasMore } = await client.countCollections(this.databaseInfo.name, COLLECTION_COUNT_LIMIT);
-            this.collectionCount = count;
-            this.collectionCountExceeded = hasMore;
+            // `getChildren()` may have run while this request was in flight and
+            // established the exact count. Never replace an exact count with
+            // this capped/approximate result.
+            if (!this.collectionCountIsExact) {
+                this.collectionCount = count;
+                this.collectionCountExceeded = hasMore;
+            }
         } catch {
             meterSilentCatch('DatabaseItem_loadCollectionCount');
-            this.collectionCount = undefined;
-            this.collectionCountExceeded = false;
+            if (!this.collectionCountIsExact) {
+                this.collectionCount = undefined;
+                this.collectionCountExceeded = false;
+            }
         } finally {
             this.isLoadingCount = false;
             ext.state.notifyChildrenChanged(this.id);

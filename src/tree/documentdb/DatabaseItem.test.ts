@@ -151,4 +151,33 @@ describe('DatabaseItem - async collection count loading', () => {
 
         expect(item.getTreeItem().description as string).toContain('0');
     });
+
+    it('does not let a slow background count overwrite the exact count from getChildren', async () => {
+        // Background count stays pending until we resolve it manually.
+        let resolveCount!: (value: { count: number; hasMore: boolean }) => void;
+        countCollectionsMock.mockReturnValue(
+            new Promise<{ count: number; hasMore: boolean }>((resolve) => {
+                resolveCount = resolve;
+            }),
+        );
+
+        const item = new DatabaseItem(cluster, databaseInfo);
+
+        // Background load starts but does not resolve yet.
+        item.loadCollectionCount();
+
+        // User expands the database before the background count resolves; this
+        // establishes the exact count (3).
+        await item.getChildren();
+        expect(item.getTreeItem().description as string).toContain('3');
+
+        // The background count now resolves with a larger, capped value.
+        resolveCount({ count: COLLECTION_COUNT_LIMIT, hasMore: true });
+        await flushAsync();
+
+        // The exact count must be preserved; it must not regress to "N+".
+        const desc = item.getTreeItem().description as string;
+        expect(desc).toContain('3');
+        expect(desc).not.toContain('+');
+    });
 });
