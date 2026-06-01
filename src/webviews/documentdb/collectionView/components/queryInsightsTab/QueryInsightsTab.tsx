@@ -58,7 +58,6 @@ import {
     ImprovementCardShell,
     MarkdownCard,
     MarkdownCardEx,
-    TipsCard,
 } from './components/optimizationCards';
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
@@ -156,8 +155,6 @@ export const QueryInsightsMain = (): JSX.Element => {
      */
     const currentStage = queryInsightsState.currentStage;
 
-    const [showTipsCard, setShowTipsCard] = useState(false);
-    const [isTipsCardDismissed, setIsTipsCardDismissed] = useState(false);
     const [showErrorCard, setShowErrorCard] = useState(false);
 
     // Subscription handle for the in-flight Stage 3 streaming subscription
@@ -168,7 +165,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     // in lock step. See packages/vscode-ext-react-webview README.
     const stage3SubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
 
-    // Timer ref for the delayed tips/error card shown during Stage 3 loading
+    // Timer ref for the delayed Stage 2 'Query Execution Failed' card
+    // shown when Stage 3 loading starts on top of a failed query. The
+    // 1s delay lets the user notice the AI request kicked off before the
+    // error card pops in. Reset on cancel / unmount.
     const stage3TipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     // Feedback dialog state
@@ -269,8 +269,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     newState.stage3Streaming = null;
 
                     // Reset UI flags
-                    setShowTipsCard(false);
-                    setIsTipsCardDismissed(false);
                     setShowErrorCard(false);
                 } else if (phase === 2 && status === 'loading') {
                     // When entering stage 2 loading, clear stage 3 data only
@@ -289,8 +287,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     newState.stage3Data = null;
                     newState.stage3Streaming = null;
                     // Reset UI flags when starting new AI request
-                    setShowTipsCard(false);
-                    setIsTipsCardDismissed(false);
                     setShowErrorCard(false);
                 }
 
@@ -507,26 +503,6 @@ export const QueryInsightsMain = (): JSX.Element => {
     const docsReturned = getMetricValue(queryInsightsState.stage2Data?.documentsReturned);
     const keysExamined = getMetricValue(queryInsightsState.stage2Data?.totalKeysExamined);
     const docsExamined = getMetricValue(queryInsightsState.stage2Data?.totalDocsExamined);
-    const performanceTips = [
-        {
-            title: l10n.t('Optimize Index Strategy'),
-            description: l10n.t(
-                'Create compound indexes for queries that filter on multiple fields. Order matters: place equality filters first, then sort fields, then range filters.',
-            ),
-        },
-        {
-            title: l10n.t('Limit Returned Fields'),
-            description: l10n.t(
-                'Use projection to return only necessary fields. This reduces network transfer and memory usage, especially important for documents with large embedded arrays or binary data.',
-            ),
-        },
-        {
-            title: l10n.t('Monitor Index Usage'),
-            description: l10n.t(
-                'Regularly review index statistics to identify unused indexes. Each index adds overhead to write operations, so remove indexes that are not being utilized.',
-            ),
-        },
-    ];
 
     /**
      * Documentation URL for the AI Performance Insights feature itself
@@ -554,25 +530,26 @@ export const QueryInsightsMain = (): JSX.Element => {
         // Transition to Stage 3 loading (this will reset UI flags)
         transitionToStage(3, 'loading');
 
-        // Clear any pending tips/error card timer from a previous request
+        // Clear any pending error-card timer from a previous request
         if (stage3TipsTimerRef.current) {
             clearTimeout(stage3TipsTimerRef.current);
             stage3TipsTimerRef.current = null;
         }
 
-        // Check if Stage 2 has query execution errors
+        // If Stage 2 detected a query execution error, surface a dedicated
+        // 'Query Execution Failed' card. The 1s delay lets the user notice
+        // the AI request kicked off first; the streaming summary /
+        // recommendation cards entertain in the meantime, so there is no
+        // longer a dedicated "Performance Tips" stalling card.
         const hasExecutionError =
             queryInsightsState.stage2Data?.concerns &&
             queryInsightsState.stage2Data.concerns.some((concern) => concern.includes('Query Execution Failed'));
 
-        // Show appropriate card after 1 second delay
-        stage3TipsTimerRef.current = setTimeout(() => {
-            if (hasExecutionError) {
+        if (hasExecutionError) {
+            stage3TipsTimerRef.current = setTimeout(() => {
                 setShowErrorCard(true);
-            } else {
-                setShowTipsCard(true);
-            }
-        }, 1000);
+            }, 1000);
+        }
 
         // Generate a unique request key to track if this request is still valid when it returns.
         //
@@ -809,11 +786,6 @@ export const QueryInsightsMain = (): JSX.Element => {
         });
     };
 
-    const handleDismissTips = () => {
-        setIsTipsCardDismissed(true);
-        setShowTipsCard(false);
-    };
-
     // Feedback handlers
     const handleFeedbackClick = (sentiment: 'positive' | 'negative') => {
         // Fire-and-forget event so we capture sentiment immediately when the user clicks
@@ -977,20 +949,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     content={educationalSource.markdown}
                     inFlight={!educationalSource.complete}
                     inFlightLabel={l10n.t('Writing explanation…')}
-                />
-            ),
-        });
-    }
-
-    // Performance Tips Card
-    if (showTipsCard && !isTipsCardDismissed) {
-        insightCards.push({
-            key: 'performance-tips',
-            component: (
-                <TipsCard
-                    title={l10n.t('DocumentDB Performance Tips')}
-                    tips={performanceTips}
-                    onDismiss={handleDismissTips}
                 />
             ),
         });

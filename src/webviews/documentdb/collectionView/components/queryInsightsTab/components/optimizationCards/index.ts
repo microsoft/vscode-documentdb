@@ -8,4 +8,3 @@ export * from './ImprovementCard';
 export * from './ImprovementCardShell';
 export * from './MarkdownCard';
 export * from './MarkdownCardEx';
-export * from './TipsCard';
