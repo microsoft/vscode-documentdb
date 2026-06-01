@@ -973,7 +973,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         icon={<CheckmarkCircleRegular />}
                         title={l10n.t('No index changes recommended')}
                         content={l10n.t(
-                            'Based on the analysis above, your query is already running efficiently and no index changes are necessary. Review the analysis and educational notes for context.',
+                            'Your query is already running efficiently — no index changes are necessary. The other cards explain the analysis and how the query executes.',
                         )}
                         showAiDisclaimer={false}
                     />
