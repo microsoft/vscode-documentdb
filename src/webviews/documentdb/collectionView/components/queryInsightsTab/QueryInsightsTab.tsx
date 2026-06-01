@@ -973,7 +973,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         icon={<CheckmarkCircleRegular />}
                         title={l10n.t('No index changes recommended')}
                         content={l10n.t(
-                            'Your query is already running efficiently — no index changes are necessary. The other cards explain the analysis and how the query executes.',
+                            'Your query is already running efficiently. No index changes are necessary. The other cards explain the analysis and how the query executes.',
                         )}
                         showAiDisclaimer={false}
                     />
@@ -1015,7 +1015,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     title={l10n.t('Understanding Your Query Execution Plan')}
                     content={educationalSource?.markdown ?? ''}
                     inFlight={!educationalSource?.complete}
-                    inFlightLabel={l10n.t('Writing explanation…')}
+                    inFlightLabel={l10n.t('Explaining…')}
                 />
             ),
         });

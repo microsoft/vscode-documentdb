@@ -42,7 +42,7 @@ export function ImprovementCardShell({ ref }: ImprovementCardShellProps): JSX.El
                             </div>
                         }
                     />
-                    <StreamingInlineProgress label={l10n.t('Writing recommendation…')} />
+                    <StreamingInlineProgress label={l10n.t('Drafting…')} />
                 </div>
             </div>
         </Card>
