@@ -30,3 +30,10 @@ export const testDb: string = 'test';
  * Controlled by the `documentDB.accessibility.hideCountPrefix` setting.
  */
 export const COUNT_PREFIX = '\u2027\u2027 ';
+
+/**
+ * Maximum number of collections to count via cursor before showing "N+".
+ * The cursor fetches `COLLECTION_COUNT_LIMIT + 1` items; if it gets more
+ * than the limit the description shows e.g. "5+".
+ */
+export const COLLECTION_COUNT_LIMIT = 5;

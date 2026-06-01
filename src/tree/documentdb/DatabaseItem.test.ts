@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { COLLECTION_COUNT_LIMIT } from '../../constants';
 import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -50,6 +51,7 @@ describe('DatabaseItem - async collection count loading', () => {
     ] as CollectionItemModel[];
 
     let listCollectionsMock: jest.Mock;
+    let countCollectionsMock: jest.Mock;
     let estimateDocumentCountMock: jest.Mock;
 
     beforeEach(() => {
@@ -57,10 +59,12 @@ describe('DatabaseItem - async collection count loading', () => {
         notifyChildrenChangedMock.mockReset();
 
         listCollectionsMock = jest.fn().mockResolvedValue([...sampleCollections]);
+        countCollectionsMock = jest.fn().mockResolvedValue({ count: 3, hasMore: false });
         estimateDocumentCountMock = jest.fn().mockResolvedValue(0);
 
         (ClustersClient.getClient as jest.Mock).mockResolvedValue({
             listCollections: listCollectionsMock,
+            countCollections: countCollectionsMock,
             estimateDocumentCount: estimateDocumentCountMock,
         });
     });
@@ -69,13 +73,14 @@ describe('DatabaseItem - async collection count loading', () => {
         return new Promise((resolve) => setImmediate(resolve));
     }
 
-    it('loadCollectionCount fetches collections once and exposes the count via description', async () => {
+    it('loadCollectionCount uses countCollections and exposes the count via description', async () => {
         const item = new DatabaseItem(cluster, databaseInfo);
 
         item.loadCollectionCount();
         await flushAsync();
 
-        expect(listCollectionsMock).toHaveBeenCalledTimes(1);
+        expect(countCollectionsMock).toHaveBeenCalledWith('testdb', COLLECTION_COUNT_LIMIT);
+        expect(listCollectionsMock).not.toHaveBeenCalled();
         expect(notifyChildrenChangedMock).toHaveBeenCalledWith(item.id);
         expect(item.getTreeItem().description).toContain('3');
     });
@@ -88,34 +93,41 @@ describe('DatabaseItem - async collection count loading', () => {
         item.loadCollectionCount();
         await flushAsync();
 
-        expect(listCollectionsMock).toHaveBeenCalledTimes(1);
+        expect(countCollectionsMock).toHaveBeenCalledTimes(1);
     });
 
-    it('getChildren reuses collections already fetched by loadCollectionCount (no second API call)', async () => {
+    it('shows "N+" when collection count exceeds the limit', async () => {
+        countCollectionsMock.mockResolvedValue({ count: COLLECTION_COUNT_LIMIT, hasMore: true });
+
         const item = new DatabaseItem(cluster, databaseInfo);
 
         item.loadCollectionCount();
         await flushAsync();
 
+        const description = item.getTreeItem().description as string;
+        expect(description).toContain(`${COLLECTION_COUNT_LIMIT}+`);
+    });
+
+    it('getChildren updates the count to the exact value from the full list', async () => {
+        countCollectionsMock.mockResolvedValue({ count: COLLECTION_COUNT_LIMIT, hasMore: true });
+
+        const item = new DatabaseItem(cluster, databaseInfo);
+
+        item.loadCollectionCount();
+        await flushAsync();
+
+        // Description shows "N+" from the cursor count
+        expect(item.getTreeItem().description as string).toContain('+');
+
+        // Now expand the node, which fetches the full list
         const children = await item.getChildren();
 
-        // Only one listCollections call total (from loadCollectionCount, reused by getChildren)
         expect(listCollectionsMock).toHaveBeenCalledTimes(1);
         expect(children).toHaveLength(3);
-    });
-
-    it('invalidateChildrenCache clears the cache so next call refetches', async () => {
-        const item = new DatabaseItem(cluster, databaseInfo);
-
-        item.loadCollectionCount();
-        await flushAsync();
-        expect(listCollectionsMock).toHaveBeenCalledTimes(1);
-
-        item.invalidateChildrenCache();
-
-        await item.getChildren();
-        // Second fetch after invalidation
-        expect(listCollectionsMock).toHaveBeenCalledTimes(2);
+        // Description now shows exact count, no "+"
+        const desc = item.getTreeItem().description as string;
+        expect(desc).toContain('3');
+        expect(desc).not.toContain('+');
     });
 
     it('includes collection count in tooltip when loaded', async () => {

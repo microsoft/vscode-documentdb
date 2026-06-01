@@ -560,7 +560,10 @@ export class ClustersClient {
             return this._databasesCache;
         }
 
-        const rawDatabases: ListDatabasesResult = await this._mongoClient.db().admin().listDatabases();
+        const rawDatabases: ListDatabasesResult = await this._mongoClient
+            .db()
+            .admin()
+            .listDatabases({ nameOnly: true });
         const databases: DatabaseItemModel[] = rawDatabases.databases.filter(
             // Filter out the 'admin' database if it's empty
             (databaseInfo) => !(databaseInfo.name && databaseInfo.name.toLowerCase() === 'admin' && databaseInfo.empty),
@@ -615,6 +618,35 @@ export class ClustersClient {
         this._collectionsCache.set(databaseName, collections);
 
         return collections;
+    }
+
+    /**
+     * Counts collections in a database using a cursor with `nameOnly: true`.
+     * Fetches at most `limit + 1` items and closes the cursor early.
+     *
+     * @returns An object with `count` (capped at `limit`) and `hasMore`
+     *          (`true` when the database has more than `limit` collections).
+     */
+    async countCollections(databaseName: string, limit: number): Promise<{ count: number; hasMore: boolean }> {
+        const cursor = this._mongoClient
+            .db(databaseName)
+            .listCollections({}, { nameOnly: true })
+            .batchSize(limit + 1);
+
+        try {
+            let count = 0;
+            while (count <= limit && (await cursor.hasNext())) {
+                await cursor.next();
+                count++;
+            }
+
+            if (count > limit) {
+                return { count: limit, hasMore: true };
+            }
+            return { count, hasMore: false };
+        } finally {
+            await cursor.close();
+        }
     }
 
     /**

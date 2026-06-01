@@ -6,7 +6,8 @@
 import { createContextValue, createGenericElement } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { COLLECTION_COUNT_LIMIT } from '../../constants';
+import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
@@ -26,10 +27,9 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     private readonly experienceContextValue: string = '';
 
     private collectionCount: number | undefined;
-    private cachedCollections: CollectionItemModel[] | undefined;
+    /** When true, the actual count exceeds COLLECTION_COUNT_LIMIT. */
+    private collectionCountExceeded: boolean = false;
     private isLoadingCount: boolean = false;
-    private collectionsPromise: Promise<CollectionItemModel[]> | undefined;
-    private isRefreshingCollectionCount: boolean = false;
 
     /**
      * Monotonic counter bumped on every `getChildren` call. Used to invalidate
@@ -53,22 +53,16 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         const myGeneration = ++this.expansionGeneration;
         const isCurrent = (): boolean => this.expansionGeneration === myGeneration;
 
-        const collections = [...(await this.getCollections())];
+        const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
+        const collections = await client.listCollections(this.databaseInfo.name);
+
+        // Update the collection count from the full list we just fetched.
         const previousCount = this.collectionCount;
         this.collectionCount = collections.length;
+        this.collectionCountExceeded = false;
 
-        // If the count changed (e.g. user-initiated refresh after an external
-        // mutation), re-render this node so the description matches the children
-        // we are about to return.
         if (previousCount !== this.collectionCount) {
-            this.isRefreshingCollectionCount = true;
-            try {
-                ext.state.notifyChildrenChanged(this.id);
-            } finally {
-                queueMicrotask(() => {
-                    this.isRefreshingCollectionCount = false;
-                });
-            }
+            ext.state.notifyChildrenChanged(this.id);
         }
 
         if (collections.length === 0) {
@@ -100,8 +94,8 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
     }
 
     /**
-     * Starts loading the collection count asynchronously.
-     * When the count is retrieved, it triggers a tree item refresh to update the description.
+     * Starts loading the collection count asynchronously using a lightweight
+     * cursor-based count (nameOnly, early termination at COLLECTION_COUNT_LIMIT).
      * This method is fire-and-forget and does not block tree expansion.
      */
     public loadCollectionCount(): void {
@@ -115,62 +109,26 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
     private async fetchAndUpdateCount(): Promise<void> {
         try {
-            const collections = await this.getCollections();
-            this.collectionCount = collections.length;
+            const client = await ClustersClient.getClient(this.cluster.clusterId);
+            const { count, hasMore } = await client.countCollections(this.databaseInfo.name, COLLECTION_COUNT_LIMIT);
+            this.collectionCount = count;
+            this.collectionCountExceeded = hasMore;
         } catch {
             meterSilentCatch('DatabaseItem_loadCollectionCount');
             this.collectionCount = undefined;
+            this.collectionCountExceeded = false;
         } finally {
             this.isLoadingCount = false;
-            this.isRefreshingCollectionCount = true;
-            try {
-                ext.state.notifyChildrenChanged(this.id);
-            } finally {
-                queueMicrotask(() => {
-                    this.isRefreshingCollectionCount = false;
-                });
-            }
+            ext.state.notifyChildrenChanged(this.id);
         }
-    }
-
-    private getCollections(): Promise<CollectionItemModel[]> {
-        if (this.cachedCollections) {
-            return Promise.resolve(this.cachedCollections);
-        }
-
-        if (!this.collectionsPromise) {
-            this.collectionsPromise = ClustersClient.getClient(this.cluster.clusterId)
-                .then((client) => client.listCollections(this.databaseInfo.name))
-                .then((collections) => {
-                    this.cachedCollections = collections;
-                    return collections;
-                })
-                .finally(() => {
-                    this.collectionsPromise = undefined;
-                });
-        }
-
-        return this.collectionsPromise;
-    }
-
-    public invalidateChildrenCache(): void {
-        if (this.isRefreshingCollectionCount) {
-            return;
-        }
-
-        this.cachedCollections = undefined;
-        this.collectionsPromise = undefined;
     }
 
     getTreeItem(): vscode.TreeItem {
         let description: string | undefined;
         if (typeof this.collectionCount === 'number' && this.collectionCount > 0) {
             const prefix = getCountPrefix();
-            if (prefix) {
-                description = `${prefix}${this.collectionCount}`;
-            } else {
-                description = `${this.collectionCount}`;
-            }
+            const countText = this.collectionCountExceeded ? `${this.collectionCount}+` : `${this.collectionCount}`;
+            description = prefix ? `${prefix}${countText}` : countText;
         }
 
         return {
@@ -196,7 +154,8 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         md.appendMarkdown(`\`${l10n.t('Database')}\`\n\n`);
 
         if (typeof this.collectionCount === 'number') {
-            md.appendMarkdown(`**${l10n.t('Collections')}:** ${this.collectionCount}\n\n`);
+            const countText = this.collectionCountExceeded ? `${this.collectionCount}+` : `${this.collectionCount}`;
+            md.appendMarkdown(`**${l10n.t('Collections')}:** ${countText}\n\n`);
         }
 
         return md;
