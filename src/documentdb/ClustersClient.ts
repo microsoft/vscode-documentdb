@@ -560,10 +560,11 @@ export class ClustersClient {
             return this._databasesCache;
         }
 
-        const rawDatabases: ListDatabasesResult = await this._mongoClient
-            .db()
-            .admin()
-            .listDatabases({ nameOnly: true });
+        // Note: we intentionally do NOT pass `{ nameOnly: true }` here. The empty-`admin`
+        // filter below relies on the `empty` field, which `nameOnly` omits (along with
+        // `sizeOnDisk`). Keeping the full listing ensures an empty `admin` database stays
+        // hidden while a non-empty `admin` (user-managed roles/collections) remains visible.
+        const rawDatabases: ListDatabasesResult = await this._mongoClient.db().admin().listDatabases();
         const databases: DatabaseItemModel[] = rawDatabases.databases.filter(
             // Filter out the 'admin' database if it's empty
             (databaseInfo) => !(databaseInfo.name && databaseInfo.name.toLowerCase() === 'admin' && databaseInfo.empty),
