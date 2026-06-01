@@ -35,7 +35,7 @@ A **kubeconfig** file tells tools such as `kubectl` and the VS Code extension ho
 - contexts, which are named combinations of cluster, user, and namespace information,
 - authentication information or references to an authentication plugin.
 
-The extension can read the default kubeconfig from `KUBECONFIG` or `~/.kube/config`, a custom kubeconfig file, or pasted kubeconfig YAML stored in VS Code Secret Storage.
+The extension can read the default kubeconfig from `KUBECONFIG` or the Kubernetes default kubeconfig path (`~/.kube/config` on macOS/Linux, `%USERPROFILE%\.kube\config` on Windows), a custom kubeconfig file, or pasted kubeconfig YAML stored in VS Code Secret Storage.
 
 ### DocumentDB Kubernetes Operator
 
