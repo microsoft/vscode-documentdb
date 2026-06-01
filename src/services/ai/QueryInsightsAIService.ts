@@ -294,14 +294,12 @@ export class QueryInsightsAIService {
                     priority: 'high' | 'medium' | 'low';
                     risks?: string;
                 }>;
-                verification?: string[];
                 educationalContent?: string;
             };
 
             return {
                 analysis: parsedJson.analysis || 'No analysis provided.',
                 improvements: parsedJson.improvements || [],
-                verification: parsedJson.verification || [],
                 educationalContent: parsedJson.educationalContent,
             };
         } catch (error) {

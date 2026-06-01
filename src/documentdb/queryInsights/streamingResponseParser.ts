@@ -30,16 +30,12 @@
  *    `recommendation` event (the item's substring is re-parsed via
  *    `JSON.parse`; if that fails, the item is silently skipped and the
  *    reconciled `parsed.improvements` will still contain it).
- *  - The `verification` items are **not** extracted streaming-side;
- *    they are emitted once on `finalize()` from the reconciled
- *    `JSON.parse`. This avoids any risk of partial-string truncation
- *    mid-stream and keeps the parser's scanner-state-machine focused.
  *  - Top-level keys not in our known set (e.g. unexpected model
  *    metadata) are skip-consumed without emitting events.
  *
  * Expected input shape — the LLM produces a single JSON object with
  * (typically) the keys in this order: `educationalContent`, `analysis`,
- * `improvements`, `verification`. The parser does not require any
+ * `improvements`. The parser does not require any
  * particular key order; it works for any permutation.
  */
 
@@ -54,18 +50,16 @@ import { type QueryInsightsStreamEvent } from '../../webviews/documentdb/collect
  */
 export type ParserEmittedEvent = Extract<
     QueryInsightsStreamEvent,
-    { type: 'summary' | 'educational' | 'recommendationStarted' | 'recommendation' | 'verification' }
+    { type: 'summary' | 'educational' | 'recommendationStarted' | 'recommendation' }
 >;
 
 /** Result of {@link StreamingResponseParser.finalize}. */
 export interface ParserFinalizeResult {
     /**
      * Trailing structured events not yet flushed by {@link
-     * StreamingResponseParser.feed}. Always includes a `verification`
-     * event when `parsed` is non-null and `parsed.verification` is
-     * non-empty. May include a final `summary` / `educational` with
-     * `complete: true` if the corresponding string value was still open
-     * when the stream ended (truncation tolerance).
+     * StreamingResponseParser.feed}. May include a final `summary` /
+     * `educational` with `complete: true` if the corresponding string
+     * value was still open when the stream ended (truncation tolerance).
      */
     events: ParserEmittedEvent[];
     /**
@@ -112,8 +106,8 @@ export class StreamingResponseParser {
     //   'beforeValue'    — ':' consumed, expecting the value's first char.
     //   'inStringValue'  — reading a top-level string value (analysis /
     //                       educationalContent, or an unknown string).
-    //   'inArrayValue'   — reading a top-level array value (improvements /
-    //                       verification, or an unknown array).
+    //   'inArrayValue'   — reading a top-level array value (improvements,
+    //                       or an unknown array).
     //   'inSkipValue'    — consuming a top-level value we don't care about
     //                       (primitive / nested object / unknown array).
     //   'done'           — root '}' consumed.
@@ -203,7 +197,7 @@ export class StreamingResponseParser {
      * Signal that no more chunks will arrive. Runs the canonical
      * `JSON.parse` on the buffer and returns any trailing structured
      * events (final `summary` / `educational` flushes for truncated
-     * values, plus a `verification` event from the reconciled items).
+     * values).
      */
     public finalize(): ParserFinalizeResult {
         if (this.finalized) {
@@ -230,23 +224,15 @@ export class StreamingResponseParser {
             try {
                 const obj = JSON.parse(raw) as Partial<AIOptimizationResponse> & {
                     improvements?: AIIndexRecommendation[];
-                    verification?: string[];
                 };
                 parsed = {
                     analysis: obj.analysis ?? 'No analysis provided.',
                     improvements: obj.improvements ?? [],
-                    verification: obj.verification ?? [],
                     educationalContent: obj.educationalContent,
                 };
             } catch (error) {
                 parseError = error instanceof Error ? error : new Error(String(error));
             }
-        }
-
-        // Emit `verification` from the reconciled object (never from the
-        // streaming scan — see the class-level doc comment).
-        if (parsed && parsed.verification.length > 0) {
-            trailing.push({ type: 'verification', items: parsed.verification });
         }
 
         return { events: trailing, parsed, parseError };
@@ -370,9 +356,8 @@ export class StreamingResponseParser {
             this.arrayItemDepth = 0;
             this.currentImprovementStart = -1;
             this.arrayIsImprovements = this.currentKey === 'improvements';
-            // Note: TOP_LEVEL_ARRAY_KEYS includes 'verification' too; for that
-            // we still scan the array (so we know when it closes) but emit
-            // nothing — verification items are sourced from finalize().
+            // Any non-`improvements` array (e.g. an unknown key) is still
+            // scanned so we know when it closes, but emits no events.
             return;
         }
         if (ch === '{') {

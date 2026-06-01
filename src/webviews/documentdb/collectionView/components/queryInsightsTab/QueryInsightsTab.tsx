@@ -98,9 +98,8 @@ function synthesizeStage3Data(
     return {
         analysisCard,
         improvementCards,
-        // verificationSteps is intentionally omitted — nothing in the UI
-        // surfaces verification items today. See QueryInsightsStreamingState
-        // for the rationale (mirrored on the reducer side).
+        // verificationSteps is a legacy display field; the AI response no
+        // longer produces verification content, so it is always empty.
         verificationSteps: '',
         educationalContent: streaming.educational?.markdown,
         modelId: completeEvent.modelId,
@@ -692,13 +691,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     },
                                 };
                             }
-                            case 'verification':
-                                // Intentionally ignored. The parser still emits this event
-                                // (the canonical `JSON.parse` always produces it on finalize),
-                                // but nothing in the UI surfaces verification items today.
-                                // Keeping the wire payload simplifies a future change that
-                                // wants to render them without renegotiating the protocol.
-                                return prev;
                             case 'complete': {
                                 const synthesized = synthesizeStage3Data(prevStreaming, event, configuration);
                                 // Intentionally DO NOT clear `stage3RequestKey` here.

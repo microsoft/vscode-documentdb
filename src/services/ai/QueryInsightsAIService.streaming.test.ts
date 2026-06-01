@@ -69,7 +69,6 @@ describe('QueryInsightsAIService.getOptimizationRecommendationsStreaming (WI-3)'
                 priority: 'high',
             },
         ],
-        verification: ['Verify with .explain()'],
         educationalContent: '# Education\nUseful info.',
     });
 

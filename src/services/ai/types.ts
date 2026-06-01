@@ -23,7 +23,6 @@ export interface AIOptimizationRequest {
 export interface AIOptimizationResponse {
     analysis: string;
     improvements: AIIndexRecommendation[];
-    verification: string[];
     educationalContent?: string; // Optional markdown content for educational cards
     /**
      * Stable opaque id of the language model that produced the response

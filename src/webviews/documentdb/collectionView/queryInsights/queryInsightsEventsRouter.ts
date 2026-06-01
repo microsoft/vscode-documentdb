@@ -97,8 +97,7 @@ export const queryInsightsEventsRoutes = {
      *  - `status` with `phase: 'parsing'` once the stream completes,
      *  - any trailing events from `parser.finalize()` (final
      *    `summary`/`educational` with `complete: true` for truncated
-     *    streams, plus the `verification` event sourced from the
-     *    reconciled `JSON.parse`),
+     *    streams),
      *  - a single terminal `complete` event carrying model + token
      *    metadata (sourced from {@link streamHandle.completion}, which
      *    runs the canonical full parse and adds those fields).
@@ -281,6 +280,16 @@ export const queryInsightsEventsRoutes = {
                 let lastStatusYieldAt = 0;
                 const parser = new StreamingResponseParser();
 
+                // ── Section lifecycle timestamps (elapsed-ms) for
+                //    tracing and telemetry. Each is set once on the first
+                //    occurrence of the matching event type. ──
+                let summaryStartedAt: number | undefined;
+                let summaryCompletedAt: number | undefined;
+                let educationalStartedAt: number | undefined;
+                let educationalCompletedAt: number | undefined;
+                let firstRecStartedAt: number | undefined;
+                let lastRecCompletedAt: number | undefined;
+
                 for await (const fragment of streamHandle.fragments) {
                     if (abortController.signal.aborted) {
                         return;
@@ -296,6 +305,48 @@ export const queryInsightsEventsRoutes = {
                         if (abortController.signal.aborted) {
                             return;
                         }
+
+                        // ── Section lifecycle tracing (committable) ──
+                        if (event.type === 'summary') {
+                            if (summaryStartedAt === undefined) {
+                                summaryStartedAt = elapsed();
+                                ext.outputChannel.trace(
+                                    `[Query Insights Stage 3 stream] Analysis started streaming at ${summaryStartedAt}ms (requestKey: ${requestKey})`,
+                                );
+                            }
+                            if (event.complete) {
+                                summaryCompletedAt = elapsed();
+                                ext.outputChannel.trace(
+                                    `[Query Insights Stage 3 stream] Analysis ended streaming at ${summaryCompletedAt}ms (requestKey: ${requestKey})`,
+                                );
+                            }
+                        } else if (event.type === 'educational') {
+                            if (educationalStartedAt === undefined) {
+                                educationalStartedAt = elapsed();
+                                ext.outputChannel.trace(
+                                    `[Query Insights Stage 3 stream] Educational started streaming at ${educationalStartedAt}ms (requestKey: ${requestKey})`,
+                                );
+                            }
+                            if (event.complete) {
+                                educationalCompletedAt = elapsed();
+                                ext.outputChannel.trace(
+                                    `[Query Insights Stage 3 stream] Educational ended streaming at ${educationalCompletedAt}ms (requestKey: ${requestKey})`,
+                                );
+                            }
+                        } else if (event.type === 'recommendationStarted') {
+                            if (firstRecStartedAt === undefined) {
+                                firstRecStartedAt = elapsed();
+                            }
+                            ext.outputChannel.trace(
+                                `[Query Insights Stage 3 stream] Card #${event.index} started streaming at ${elapsed()}ms (requestKey: ${requestKey})`,
+                            );
+                        } else if (event.type === 'recommendation') {
+                            lastRecCompletedAt = elapsed();
+                            ext.outputChannel.trace(
+                                `[Query Insights Stage 3 stream] Card #${event.index} ended streaming at ${elapsed()}ms (requestKey: ${requestKey})`,
+                            );
+                        }
+
                         yield event;
                     }
 
@@ -346,14 +397,13 @@ export const queryInsightsEventsRoutes = {
 
                 // Trailing structured events the parser couldn't flush
                 // mid-stream (final `summary` / `educational` with
-                // `complete: true` for a value still open at end-of-stream,
-                // plus the `verification` event sourced from the
-                // reconciled `JSON.parse`).
+                // `complete: true` for a value still open at end-of-stream).
                 const finalize = parser.finalize();
                 for (const event of finalize.events) {
                     if (abortController.signal.aborted) {
                         return;
                     }
+
                     yield event;
                 }
 
@@ -390,6 +440,44 @@ export const queryInsightsEventsRoutes = {
                 completionTelemetry.measurements.createRecommendationCount = createRecommendationCount;
                 completionTelemetry.measurements.dropRecommendationCount = dropRecommendationCount;
                 completionTelemetry.measurements.modifyRecommendationCount = modifyRecommendationCount;
+
+                // Section-level timing measurements so we can see where
+                // wall-clock time is spent during the stream.
+                if (summaryStartedAt !== undefined) {
+                    completionTelemetry.measurements.summaryStartMs = summaryStartedAt;
+                }
+                if (summaryCompletedAt !== undefined) {
+                    completionTelemetry.measurements.summaryEndMs = summaryCompletedAt;
+                    if (summaryStartedAt !== undefined) {
+                        completionTelemetry.measurements.summaryDurationMs = summaryCompletedAt - summaryStartedAt;
+                    }
+                }
+                if (firstRecStartedAt !== undefined) {
+                    completionTelemetry.measurements.firstRecStartMs = firstRecStartedAt;
+                }
+                if (lastRecCompletedAt !== undefined) {
+                    completionTelemetry.measurements.lastRecEndMs = lastRecCompletedAt;
+                    if (firstRecStartedAt !== undefined) {
+                        completionTelemetry.measurements.recStreamingDurationMs =
+                            lastRecCompletedAt - firstRecStartedAt;
+                    }
+                }
+                if (educationalStartedAt !== undefined) {
+                    completionTelemetry.measurements.educationalStartMs = educationalStartedAt;
+                }
+                if (educationalCompletedAt !== undefined) {
+                    completionTelemetry.measurements.educationalEndMs = educationalCompletedAt;
+                    if (educationalStartedAt !== undefined) {
+                        completionTelemetry.measurements.educationalDurationMs =
+                            educationalCompletedAt - educationalStartedAt;
+                    }
+                }
+                // Gap between the last recommendation completing and the
+                // terminal `complete` event — this is the "tail latency"
+                // the user perceives as the AI card lingering.
+                if (lastRecCompletedAt !== undefined) {
+                    completionTelemetry.measurements.postRecGapMs = elapsed() - lastRecCompletedAt;
+                }
 
                 if (aiResponse.modelId) {
                     completionTelemetry.properties.aiModelDisclosed = aiResponse.modelId;

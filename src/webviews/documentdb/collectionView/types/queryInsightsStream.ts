@@ -37,16 +37,13 @@ export interface QueryInsightsStreamUsage {
  *    opens in the stream (UI renders a shell); the matching
  *    `recommendation` carries the fully parsed domain object (UI fills
  *    the shell). `index` is monotonic per stream.
- *  - `verification` is emitted once on stream end with the reconciled
- *    items (sourced from the canonical `JSON.parse`, not from streaming
- *    extraction).
  *  - `complete` is the terminal event, carrying model + token metadata
  *    that the buffered procedure used to return inline.
  *
  * WI-5 deliberately emits only the coarse subset (`status` + the
  * transitional `result` event). The parser added in WI-7 produces the
  * structured `summary` / `educational` / `recommendationStarted` /
- * `recommendation` / `verification` events; WI-8 wires the parser into
+ * `recommendation` events; WI-8 wires the parser into
  * the subscription, replacing `result` with the structured events plus a
  * final `complete`.
  */
@@ -105,16 +102,6 @@ export type QueryInsightsStreamEvent =
           type: 'recommendation';
           index: number;
           recommendation: AIIndexRecommendation;
-      }
-    | {
-          /**
-           * The `verification` items, emitted once on stream end. Sourced
-           * from the canonical `JSON.parse` of the full response so the
-           * items are guaranteed reconciled (no risk of partial-string
-           * truncation mid-stream).
-           */
-          type: 'verification';
-          items: string[];
       }
     | {
           /**

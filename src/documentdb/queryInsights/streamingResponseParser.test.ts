@@ -36,12 +36,11 @@ function makeRecommendation(overrides: Partial<AIIndexRecommendation> = {}): AII
 
 describe('StreamingResponseParser', () => {
     describe('basic happy path', () => {
-        it('parses a complete JSON with all four canonical keys', () => {
+        it('parses a complete JSON with all canonical keys', () => {
             const payload = {
                 educationalContent: 'Para 1.\n\nPara 2.',
                 analysis: 'Analysis line 1.\n\nAnalysis line 2.',
                 improvements: [makeRecommendation()],
-                verification: ['Verify A', 'Verify B'],
             };
             const { events, finalEvents, finalize } = runOnce(JSON.stringify(payload));
             const all = [...events, ...finalEvents];
@@ -50,7 +49,6 @@ describe('StreamingResponseParser', () => {
             expect(finalize.parsed!.educationalContent).toBe('Para 1.\n\nPara 2.');
             expect(finalize.parsed!.analysis).toBe('Analysis line 1.\n\nAnalysis line 2.');
             expect(finalize.parsed!.improvements).toHaveLength(1);
-            expect(finalize.parsed!.verification).toEqual(['Verify A', 'Verify B']);
             expect(finalize.parseError).toBeUndefined();
 
             const educational = all.filter(
@@ -88,19 +86,12 @@ describe('StreamingResponseParser', () => {
             expect(recs).toHaveLength(1);
             expect(recs[0].index).toBe(0);
             expect(recs[0].recommendation.indexName).toBe('a_1');
-
-            const ver = all.filter(
-                (e): e is Extract<ParserEmittedEvent, { type: 'verification' }> => e.type === 'verification',
-            );
-            expect(ver).toHaveLength(1);
-            expect(ver[0].items).toEqual(['Verify A', 'Verify B']);
         });
 
         it('works when fed one byte at a time', () => {
             const payload = {
                 analysis: 'hello',
                 improvements: [makeRecommendation({ indexName: 'x_1' })],
-                verification: [],
             };
             const json = JSON.stringify(payload);
 
@@ -265,13 +256,12 @@ describe('StreamingResponseParser', () => {
         });
 
         it('handles empty improvements array', () => {
-            const json = '{"analysis":"x","improvements":[],"verification":["v"]}';
+            const json = '{"analysis":"x","improvements":[]}';
             const { events, finalEvents, finalize } = runOnce(json);
             const all = [...events, ...finalEvents];
             expect(all.filter((e) => e.type === 'recommendationStarted')).toHaveLength(0);
             expect(all.filter((e) => e.type === 'recommendation')).toHaveLength(0);
             expect(finalize.parsed!.improvements).toEqual([]);
-            expect(finalize.parsed!.verification).toEqual(['v']);
         });
 
         it('handles nested arrays inside an improvement item without losing item boundary', () => {
@@ -293,32 +283,6 @@ describe('StreamingResponseParser', () => {
         });
     });
 
-    describe('verification array', () => {
-        it('emits verification once on finalize with reconciled items (not streaming-extracted)', () => {
-            const json = JSON.stringify({
-                improvements: [],
-                verification: ['Check 1', 'Check 2'],
-            });
-            const { events, finalEvents } = runOnce(json);
-
-            // No verification event during the streaming pass.
-            expect(events.filter((e) => e.type === 'verification')).toHaveLength(0);
-            // Exactly one verification event in the trailing flush.
-            const ver = finalEvents.filter(
-                (e): e is Extract<ParserEmittedEvent, { type: 'verification' }> => e.type === 'verification',
-            );
-            expect(ver).toHaveLength(1);
-            expect(ver[0].items).toEqual(['Check 1', 'Check 2']);
-        });
-
-        it('does not emit a verification event when the list is empty', () => {
-            const json = JSON.stringify({ improvements: [], verification: [] });
-            const { events, finalEvents } = runOnce(json);
-            const all = [...events, ...finalEvents];
-            expect(all.filter((e) => e.type === 'verification')).toHaveLength(0);
-        });
-    });
-
     describe('unknown / extra top-level keys', () => {
         it('skips unknown object, array, number, bool, and null values', () => {
             const json = JSON.stringify({
@@ -329,7 +293,6 @@ describe('StreamingResponseParser', () => {
                 extraArray: ['a', 'b'],
                 analysis: 'hello',
                 improvements: [makeRecommendation()],
-                verification: [],
             });
             const { events, finalEvents, finalize } = runOnce(json);
             const all = [...events, ...finalEvents];
@@ -415,7 +378,6 @@ describe('StreamingResponseParser', () => {
             const json = JSON.stringify({
                 improvements: [makeRecommendation()],
                 analysis: 'hi',
-                verification: [],
             });
             const { events, finalEvents } = runOnce(json);
             const all = [...events, ...finalEvents];
@@ -424,20 +386,6 @@ describe('StreamingResponseParser', () => {
                 (e): e is Extract<ParserEmittedEvent, { type: 'summary' }> => e.type === 'summary',
             );
             expect(summary.some((s) => s.complete && s.markdown === 'hi')).toBe(true);
-        });
-
-        it('handles verification before improvements', () => {
-            const json = JSON.stringify({
-                verification: ['v1'],
-                improvements: [makeRecommendation()],
-                analysis: 'a',
-                educationalContent: 'e',
-            });
-            const { events, finalEvents, finalize } = runOnce(json);
-            const all = [...events, ...finalEvents];
-            expect(finalize.parsed!.verification).toEqual(['v1']);
-            const ver = all.filter((e) => e.type === 'verification');
-            expect(ver).toHaveLength(1);
         });
     });
 });
