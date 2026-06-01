@@ -30,7 +30,6 @@ import * as path from 'path';
 import { z } from 'zod';
 
 import * as l10n from '@vscode/l10n';
-import { type QueryObject } from '../../../../commands/llmEnhancedCommands/indexAdvisorCommands';
 import { ClusterSession } from '../../../../documentdb/ClusterSession';
 import {
     ExplainPlanAnalyzer,
@@ -38,10 +37,8 @@ import {
     type QueryPlannerAnalysis,
 } from '../../../../documentdb/queryInsights/ExplainPlanAnalyzer';
 import { StagePropertyExtractor } from '../../../../documentdb/queryInsights/StagePropertyExtractor';
-import { buildStaticAnalysisSummary } from '../../../../documentdb/queryInsights/staticAnalysisSummary';
 import {
     createFailedQueryResponse,
-    transformAIResponseForUI,
     transformStage1Response,
     transformStage2Response,
 } from '../../../../documentdb/queryInsights/transformations';
@@ -49,7 +46,6 @@ import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { type RouterContext } from '../collectionViewRouter';
-import { type QueryInsightsStage3Response } from '../types/queryInsights';
 import { queryInsightsEventsRoutes } from './queryInsightsEventsRouter';
 
 /**
@@ -388,201 +384,6 @@ export const queryInsightsRouter = router({
         );
         return transformed;
     }),
-
-    /**
-     * Get Query Insights - Stage 3 (AI-powered recommendations)
-     * Opt-in AI analysis of query performance with actionable suggestions
-     *
-     * This endpoint:
-     * 1. Retrieves the current query from ClusterSession (no parameters needed)
-     * 2. Retrieves cached execution plan from Stage 2
-     * 3. Calls AI service with query, database, collection info, and execution plan
-     * 4. Transforms AI response into UI-friendly format with action buttons
-     */
-    getQueryInsightsStage3: publicProcedureWithTelemetry
-        .input(z.object({ requestKey: z.string() }))
-        .query(async ({ input, ctx }): Promise<QueryInsightsStage3Response> => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
-            const { sessionId, clusterId, databaseName, collectionName } = myCtx;
-            const { requestKey } = input;
-
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] Started for {db}.{collection} (requestKey: {key})', {
-                    db: databaseName,
-                    collection: collectionName,
-                    key: requestKey,
-                }),
-            );
-
-            // Get ClusterSession
-            const session: ClusterSession = ClusterSession.getSession(sessionId);
-            const clusterMetadata = await session.getClient().getClusterMetadata();
-            ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
-
-            // Get parsed query parameters from session.
-            // Using the parsed variant (rather than raw strings) ensures we apply the same relaxed
-            // BSON parsing used everywhere else in the collection view (handles unquoted keys,
-            // single quotes, ObjectId()/UUID()/Date()/MinKey()/MaxKey() constructors, etc.).
-            const parsedQueryParams = session.getCurrentFindQueryParamsWithObjects();
-            const queryObject: QueryObject = {
-                filter: parsedQueryParams.filterObj,
-                sort: parsedQueryParams.sortObj,
-                projection: parsedQueryParams.projectionObj,
-                skip: parsedQueryParams.skip,
-                limit: parsedQueryParams.limit,
-            };
-
-            // Get cached execution plan from Stage 2
-            const cachedExecutionPlan = session.getRawExplainOutput(databaseName, collectionName);
-            if (cachedExecutionPlan) {
-                ext.outputChannel.trace(
-                    l10n.t('[Query Insights Stage 3] Using cached execution plan from Stage 2 (requestKey: {key})', {
-                        key: requestKey,
-                    }),
-                );
-            }
-
-            // Create AI service instance
-            const aiService = new QueryInsightsAIService();
-
-            // Build static analysis summary from cached Stage 2 response
-            let staticAnalysisSummary: string | undefined;
-            const stage2Cache = session.getStage2Response();
-            if (stage2Cache?.response) {
-                try {
-                    staticAnalysisSummary = buildStaticAnalysisSummary(
-                        stage2Cache.response,
-                        stage2Cache.totalCollectionDocs,
-                    );
-                    ctx.telemetry.properties.hasStaticAnalysisSummary = 'true';
-                    ctx.telemetry.measurements.staticAnalysisSummaryLength = staticAnalysisSummary.length;
-                    ext.outputChannel.trace(
-                        l10n.t(
-                            '[Query Insights Stage 3] Static analysis summary built ({len} chars, requestKey: {key})',
-                            {
-                                len: staticAnalysisSummary.length.toString(),
-                                key: requestKey,
-                            },
-                        ),
-                    );
-                } catch (error) {
-                    ctx.telemetry.properties.hasStaticAnalysisSummary = 'false';
-                    ctx.telemetry.properties.staticAnalysisSummaryError = 'true';
-                    ctx.telemetry.properties.staticAnalysisSummaryErrorKind =
-                        error instanceof Error ? error.constructor.name : 'unknown';
-                    const errorMessage = error instanceof Error ? error.message : String(error);
-                    // Non-critical: proceed without summary if it fails
-                    ext.outputChannel.error(
-                        l10n.t(
-                            '[Query Insights Stage 3] Failed to build static analysis summary (requestKey: {key}): {error}',
-                            {
-                                key: requestKey,
-                                error: errorMessage,
-                            },
-                        ),
-                    );
-                }
-            } else {
-                ctx.telemetry.properties.hasStaticAnalysisSummary = 'false';
-            }
-
-            ctx.telemetry.properties.hasCachedExecutionPlan = cachedExecutionPlan ? 'true' : 'false';
-
-            // Call AI service with execution plan
-            const aiServiceStart = Date.now();
-            const aiRecommendations = await aiService.getOptimizationRecommendations(
-                sessionId,
-                queryObject,
-                databaseName,
-                collectionName,
-                cachedExecutionPlan ?? undefined,
-                myCtx.signal,
-                staticAnalysisSummary,
-            );
-            const aiServiceDuration = Date.now() - aiServiceStart;
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] AI service completed in {ms}ms (requestKey: {key})', {
-                    ms: aiServiceDuration.toString(),
-                    key: requestKey,
-                }),
-            );
-
-            ctx.telemetry.measurements.recommendationCount = aiRecommendations.improvements.length;
-            let actionableRecommendationCount = 0;
-            let createRecommendationCount = 0;
-            let dropRecommendationCount = 0;
-            let modifyRecommendationCount = 0;
-            for (const rec of aiRecommendations.improvements) {
-                switch (rec.action) {
-                    case 'create':
-                        actionableRecommendationCount++;
-                        createRecommendationCount++;
-                        break;
-                    case 'drop':
-                        actionableRecommendationCount++;
-                        dropRecommendationCount++;
-                        break;
-                    case 'modify':
-                        actionableRecommendationCount++;
-                        modifyRecommendationCount++;
-                        break;
-                }
-            }
-
-            ctx.telemetry.measurements.actionableRecommendationCount = actionableRecommendationCount;
-            ctx.telemetry.measurements.createRecommendationCount = createRecommendationCount;
-            ctx.telemetry.measurements.dropRecommendationCount = dropRecommendationCount;
-            ctx.telemetry.measurements.modifyRecommendationCount = modifyRecommendationCount;
-
-            // Transform AI response to UI format with button payloads
-            const transformed = transformAIResponseForUI(aiRecommendations, {
-                clusterId,
-                databaseName,
-                collectionName,
-            });
-
-            // Surface the model identity to telemetry so we can correlate
-            // disclosures shown in the UI with the actual model selected by
-            // CopilotService. Use the stable id rather than the display name.
-            if (transformed.modelId) {
-                ctx.telemetry.properties.aiModelDisclosed = transformed.modelId;
-            }
-            if (transformed.modelFamily) {
-                ctx.telemetry.properties.aiModelFamily = transformed.modelFamily;
-            }
-
-            // Mirror token usage measurements onto the Stage 3 event so they can
-            // be analysed alongside Stage 3-specific properties (e.g., platform,
-            // hasStaticAnalysisSummary) without joining across telemetry events.
-            if (transformed.usage) {
-                const { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct } =
-                    transformed.usage;
-                if (promptTokens !== undefined) {
-                    ctx.telemetry.measurements.promptTokens = promptTokens;
-                }
-                if (responseTokens !== undefined) {
-                    ctx.telemetry.measurements.responseTokens = responseTokens;
-                }
-                if (totalTokens !== undefined) {
-                    ctx.telemetry.measurements.totalTokens = totalTokens;
-                }
-                if (maxInputTokens !== undefined) {
-                    ctx.telemetry.measurements.maxInputTokens = maxInputTokens;
-                }
-                if (promptUtilizationPct !== undefined) {
-                    ctx.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
-                }
-            }
-
-            ext.outputChannel.trace(
-                l10n.t('[Query Insights Stage 3] Completed: {count} improvement cards generated (requestKey: {key})', {
-                    count: transformed.improvementCards.length.toString(),
-                    key: requestKey,
-                }),
-            );
-
-            return transformed;
-        }),
 
     /**
      * Execute a recommendation action (create index, drop index, learn more, etc.)

@@ -50,7 +50,6 @@ export interface QueryInsightsState {
     stage3Data: QueryInsightsStage3Response | null;
     stage3ErrorMessage: string | null;
     stage3ErrorCode: string | null; // Error code for UI pattern matching
-    stage3Promise: Promise<QueryInsightsStage3Response> | null;
     stage3RequestKey: string | null; // Unique key to track if the response is still valid
 
     /**
@@ -188,7 +187,6 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         stage3Data: null,
         stage3ErrorMessage: null,
         stage3ErrorCode: null,
-        stage3Promise: null,
         stage3RequestKey: null,
         stage3Streaming: null,
 

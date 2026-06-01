@@ -262,7 +262,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     newState.stage3Data = null;
                     newState.stage3ErrorMessage = null;
                     newState.stage3ErrorCode = null;
-                    newState.stage3Promise = null;
                     newState.stage3RequestKey = null;
                     newState.stage3Streaming = null;
 
@@ -275,7 +274,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     newState.stage3Data = null;
                     newState.stage3ErrorMessage = null;
                     newState.stage3ErrorCode = null;
-                    newState.stage3Promise = null;
                     newState.stage3RequestKey = null;
                     newState.stage3Streaming = null;
 
@@ -683,7 +681,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 return {
                                     ...prev,
                                     stage3Data: synthesized,
-                                    stage3Promise: null,
                                     stage3RequestKey: null,
                                 };
                             }
@@ -716,7 +713,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                             ...prev,
                             stage3ErrorMessage: errorMessage,
                             stage3ErrorCode: errorCode,
-                            stage3Promise: null,
                             stage3RequestKey: null,
                             stage3Streaming: null,
                         };
@@ -764,7 +760,6 @@ export const QueryInsightsMain = (): JSX.Element => {
         // requestKey guard in the subscription callbacks will discard it.
         setQueryInsightsStateHelper((prev) => ({
             ...prev,
-            stage3Promise: null,
             stage3RequestKey: null,
             stage3Streaming: null,
         }));
