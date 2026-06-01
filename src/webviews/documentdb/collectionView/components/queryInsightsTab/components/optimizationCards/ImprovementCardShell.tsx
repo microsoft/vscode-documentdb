@@ -78,6 +78,19 @@ export function ImprovementCardShell({ mode = 'loading', ref }: ImprovementCardS
                                 </Text>
                             </div>
                         }
+                        // Match {@link ImprovementCard}: the AI disclaimer is
+                        // visible on every state the recommendation slot can
+                        // be in (loading shell, filled card, empty state).
+                        // Showing it only after content arrives created a
+                        // perceived inconsistency — the disclaimer would
+                        // appear at the same moment the user starts reading,
+                        // i.e. exactly the wrong moment to ask them to be
+                        // sceptical.
+                        action={
+                            <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                                {l10n.t('AI responses may be inaccurate')}
+                            </Text>
+                        }
                     />
                     {isEmpty ? (
                         <Text size={300} style={{ display: 'block', marginTop: tokens.spacingVerticalS }}>
