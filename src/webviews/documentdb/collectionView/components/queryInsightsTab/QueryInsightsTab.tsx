@@ -32,7 +32,7 @@
 
 import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens } from '@fluentui/react-components';
 import { ChatMailRegular, InfoRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
-import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
+import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview';
 import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useRef, useState, type JSX } from 'react';
@@ -174,6 +174,31 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Feedback dialog state
     const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
     const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
+
+    // Two-step visibility for the post-response "Powered by …" byline so it
+    // fades in instead of popping in. The byline is gated by Stage 3
+    // success + a populated `modelDisplayName`; without this two-step the
+    // byline would mount with `visible={true}` and Fluent's Fade (whose
+    // `appear` defaults to false) would skip the enter motion — the same
+    // first-mount quirk we work around in `AnimatedCardList`. Holding the
+    // Fade at `visible={false}` for one render and flipping it on the next
+    // `requestAnimationFrame` gives the presence component the real
+    // `false → true` transition it needs to animate.
+    const shouldShowByline =
+        queryInsightsState.currentStage.phase === 3 &&
+        queryInsightsState.currentStage.status === 'success' &&
+        !!queryInsightsState.stage3Data?.modelDisplayName;
+    const [bylineVisible, setBylineVisible] = useState(false);
+    useEffect(() => {
+        // Both setState calls are deferred into a `requestAnimationFrame`
+        // callback to satisfy `react-hooks/set-state-in-effect`, which
+        // (correctly) forbids synchronous setState in an effect body to
+        // avoid cascading renders. One frame's latency on the false flip
+        // is invisible — the Fade unmounts via the surrounding conditional
+        // render anyway.
+        const handle = requestAnimationFrame(() => setBylineVisible(shouldShowByline));
+        return () => cancelAnimationFrame(handle);
+    }, [shouldShowByline]);
 
     useEffect(() => {
         return () => {
@@ -1177,10 +1202,17 @@ export const QueryInsightsMain = (): JSX.Element => {
                             they live in the trace output channel and in telemetry only. Cost
                             (credits) is not surfaced because the stable VS Code Language Model
                             API does not expose pricing data; the extension stays on stable APIs
-                            and avoids the proposed `languageModelPricing` API by design. */}
-                        {currentStage.phase === 3 &&
-                            currentStage.status === 'success' &&
-                            queryInsightsState.stage3Data?.modelDisplayName && (
+                            and avoids the proposed `languageModelPricing` API by design.
+
+                            Wrapped in `Fade` so it slides in over the same window the
+                            GetPerformanceInsightsCard above is collapsing out — without the
+                            wrap the byline used to pop in on the same React commit as the
+                            collapse started, which read as two unrelated motions stacked on
+                            top of each other. The `bylineVisible` state up top handles the
+                            two-step `false → true` flip Fluent needs to actually animate
+                            (see `pendingEnter` in AnimatedCardList for the same pattern). */}
+                        {shouldShowByline && (
+                            <Fade visible={bylineVisible}>
                                 <div
                                     className="cardSpacing"
                                     style={{
@@ -1209,12 +1241,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                                             {l10n.t(
                                                 'Powered by {0} via GitHub Copilot',
-                                                queryInsightsState.stage3Data.modelDisplayName,
+                                                // Guaranteed non-null by `shouldShowByline`
+                                                // (see useEffect above); non-null assertion
+                                                // keeps l10n.t's string-only overload happy.
+                                                queryInsightsState.stage3Data!.modelDisplayName!,
                                             )}
                                         </Text>
                                     </div>
                                 </div>
-                            )}
+                            </Fade>
+                        )}
                     </div>
                 </div>
 
