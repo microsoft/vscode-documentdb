@@ -65,6 +65,7 @@ import {
     renameSource,
     resetSourceStoreCacheForMigration,
     setHiddenSourceIds,
+    tryAddFileSource,
 } from './sourceStore';
 
 const STORAGE_PREFIX = `test-extension.${KUBECONFIG_STORAGE_NAME}/${KUBECONFIG_STORAGE_WORKSPACE}/`;
@@ -135,6 +136,113 @@ describe('addFileSource', () => {
         const b = await addFileSource('/personal/team.yaml');
         expect(a.label).toBe('team.yaml');
         expect(b.label).toBe('team.yaml (2)');
+    });
+});
+
+describe('tryAddFileSource', () => {
+    it('reports created=true on first add and created=false on dedup', async () => {
+        const first = await tryAddFileSource('/abs/team.yaml');
+        expect(first.created).toBe(true);
+        expect(first.record.kind).toBe('file');
+
+        const second = await tryAddFileSource('/abs/team.yaml');
+        expect(second.created).toBe(false);
+        expect(second.record.id).toBe(first.record.id);
+
+        expect((await readSources()).filter((s) => s.kind === 'file')).toHaveLength(1);
+    });
+
+    it('serializes concurrent adds for the SAME path — exactly one record, one created:true', async () => {
+        // This is the race the in-flight map guards against: without it, two
+        // concurrent callers would both see "not present" in the cache snapshot
+        // and both write distinct UUID records for the same normalized path.
+        const [a, b, c] = await Promise.all([
+            tryAddFileSource('/abs/team.yaml'),
+            tryAddFileSource('/abs/team.yaml'),
+            tryAddFileSource('/abs/team.yaml'),
+        ]);
+
+        const createdFlags = [a.created, b.created, c.created];
+        expect(createdFlags.filter((v) => v === true)).toHaveLength(1);
+        expect(createdFlags.filter((v) => v === false)).toHaveLength(2);
+
+        // All three callers see the SAME record id (the winner's).
+        expect(a.record.id).toBe(b.record.id);
+        expect(b.record.id).toBe(c.record.id);
+
+        // Storage holds exactly one file-kind record for that path.
+        const fileRecords = (await readSources()).filter((s) => s.kind === 'file');
+        expect(fileRecords).toHaveLength(1);
+        expect(fileRecords[0].path).toBe(path.normalize('/abs/team.yaml'));
+    });
+
+    it('does NOT serialize adds for DIFFERENT paths', async () => {
+        // Sanity check that the per-path lock doesn't accidentally serialize
+        // unrelated adds (which would hurt throughput and could mask future
+        // regressions in the keying logic).
+        const [a, b] = await Promise.all([tryAddFileSource('/work/alpha.yaml'), tryAddFileSource('/work/beta.yaml')]);
+
+        expect(a.created).toBe(true);
+        expect(b.created).toBe(true);
+        expect(a.record.id).not.toBe(b.record.id);
+        expect((await readSources()).filter((s) => s.kind === 'file')).toHaveLength(2);
+    });
+
+    it('serializes the leader-fails-then-follower-retry path so only ONE record is written', async () => {
+        // Regression test for the leader-failure fallback race: when the
+        // in-flight leader rejects, every follower wakes from `await inFlight`
+        // and must re-acquire the lock before becoming the new leader. Without
+        // the while-true loop, N followers would each call doTryAddFileSource
+        // directly and produce N records (the round-3 race, just gated behind
+        // a transient failure). With the loop, only one follower becomes the
+        // new leader; the rest see its in-flight entry and report created:false.
+
+        // Inject a one-shot failure on the FIRST globalState.update call so
+        // the original leader's pushItem rejects. Subsequent calls succeed.
+        // We can simulate this without going through `jest.spyOn` on the
+        // mocked module because the mock's `update` writes through to the
+        // shared `globalStateBacking` Map — temporarily monkey-patching
+        // `globalStateBacking.set` is the simplest one-shot fault injector.
+        let storageWriteCount = 0;
+        const realSet = globalStateBacking.set.bind(globalStateBacking);
+        globalStateBacking.set = ((key: string, value: unknown) => {
+            storageWriteCount++;
+            if (storageWriteCount === 1) {
+                throw new Error('transient storage failure');
+            }
+            return realSet(key, value);
+        }) as typeof globalStateBacking.set;
+
+        try {
+            const settled = await Promise.allSettled([
+                tryAddFileSource('/abs/team.yaml'),
+                tryAddFileSource('/abs/team.yaml'),
+                tryAddFileSource('/abs/team.yaml'),
+            ]);
+
+            // Exactly one rejection (the original leader) and two fulfilled
+            // results among the followers.
+            const rejected = settled.filter((s) => s.status === 'rejected');
+            expect(rejected).toHaveLength(1);
+
+            const fulfilled = settled.filter(
+                (s): s is Extract<typeof s, { status: 'fulfilled' }> => s.status === 'fulfilled',
+            );
+            expect(fulfilled).toHaveLength(2);
+
+            // Among the two fulfilled: exactly one new-leader create + one
+            // dedup follower. (If the race were still open, both could be
+            // `created: true` with distinct record ids.)
+            const createdCount = fulfilled.filter((s) => s.value.created === true).length;
+            expect(createdCount).toBe(1);
+            expect(fulfilled[0].value.record.id).toBe(fulfilled[1].value.record.id);
+
+            // Storage holds exactly one file-kind record for the path.
+            const fileRecords = (await readSources()).filter((s) => s.kind === 'file');
+            expect(fileRecords).toHaveLength(1);
+        } finally {
+            globalStateBacking.set = realSet;
+        }
     });
 });
 

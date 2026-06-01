@@ -98,6 +98,7 @@ import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-vie
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
+import { DiscoveryViewDragAndDropController } from '../tree/discovery-view/DiscoveryViewDragAndDropController';
 import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
@@ -164,6 +165,7 @@ export class ClustersExtension implements vscode.Disposable {
         ext.discoveryTreeView = vscode.window.createTreeView(Views.DiscoveryView, {
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
+            dragAndDropController: new DiscoveryViewDragAndDropController(),
         });
 
         ext.context.subscriptions.push(ext.discoveryTreeView);

@@ -141,16 +141,101 @@ export async function addDefaultSource(): Promise<KubeconfigSourceRecord> {
 /**
  * Adds (or reuses) a file source.
  *
- * If a file source with the same absolute path already exists, returns
- * that record without creating a duplicate.
+ * If a file source with the same absolute path already exists, returns that
+ * record without creating a duplicate. Callers that need to know whether the
+ * record was newly created should use {@link tryAddFileSource} instead.
  */
 export async function addFileSource(absolutePath: string): Promise<KubeconfigSourceRecord> {
+    const { record } = await tryAddFileSource(absolutePath);
+    return record;
+}
+
+/**
+ * Result of {@link tryAddFileSource}: the persisted record plus whether this
+ * call actually created it.
+ */
+export interface TryAddFileSourceResult {
+    readonly record: KubeconfigSourceRecord;
+    /**
+     * `true` when this call created a new entry in storage, `false` when an
+     * existing entry with the same normalized path was returned unchanged.
+     */
+    readonly created: boolean;
+}
+
+/**
+ * Adds (or reuses) a file source and reports whether storage actually changed.
+ *
+ * Returning a `created` flag from this single source of truth lets callers
+ * (e.g., the drag-and-drop handler) detect "already there" without falling
+ * back to a snapshot-and-compare against the cache.
+ *
+ * Concurrent calls for the same normalized path are serialized through a
+ * per-path in-flight promise map. Without that guard, two callers could both
+ * await `ensureCache()`, both see the same "not present" snapshot, both
+ * generate a fresh UUID, and both call `pushItem` — producing two storage
+ * entries with the same normalized path. Followers of an already-in-flight
+ * add receive `{ record: <leader's record>, created: false }` so the toast /
+ * telemetry on the caller side stays honest.
+ *
+ * Callers that don't need the created/reused distinction can keep using
+ * {@link addFileSource}.
+ */
+export async function tryAddFileSource(absolutePath: string): Promise<TryAddFileSourceResult> {
     const normalizedPath = path.normalize(absolutePath);
+
+    // Retry-through-the-lock loop. The while-true is necessary so that when a
+    // leader rejects, every awaiting follower re-acquires the lock instead of
+    // each one racing to call doTryAddFileSource directly — without this loop,
+    // N followers behind a failing leader could each become a concurrent
+    // duplicate creator. With it, the follower whose catch happens to run
+    // first wins the lock; the rest see its in-flight entry on the next
+    // iteration and await it normally.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const inFlight = inFlightFileAdds.get(normalizedPath);
+        if (inFlight) {
+            try {
+                const winner = await inFlight;
+                return { record: winner.record, created: false };
+            } catch {
+                // Leader rejected; loop to re-check the map and possibly
+                // become the new leader ourselves.
+                continue;
+            }
+        }
+
+        const work = doTryAddFileSource(absolutePath, normalizedPath);
+        // Install the in-flight entry SYNCHRONOUSLY between the get() above
+        // and the await below — any other follower that runs its catch handler
+        // after this point will see our promise on the next loop iteration.
+        inFlightFileAdds.set(normalizedPath, work);
+        try {
+            return await work;
+        } finally {
+            // Only clear if the map still points to OUR promise. A late
+            // follower that fell through after we cleared could have already
+            // installed its own promise.
+            if (inFlightFileAdds.get(normalizedPath) === work) {
+                inFlightFileAdds.delete(normalizedPath);
+            }
+        }
+    }
+}
+
+/**
+ * Tracks the in-flight write for each normalized path. Keyed by the result of
+ * `path.normalize(absolutePath)` so the same file can never produce two
+ * concurrent storage writes that would each insert a new record.
+ */
+const inFlightFileAdds = new Map<string, Promise<TryAddFileSourceResult>>();
+
+async function doTryAddFileSource(_absolutePath: string, normalizedPath: string): Promise<TryAddFileSourceResult> {
     const sources = await ensureCache();
 
     const existing = sources.find((s) => s.kind === 'file' && s.path && path.normalize(s.path) === normalizedPath);
     if (existing) {
-        return existing;
+        return { record: existing, created: false };
     }
 
     const baseLabel = path.basename(normalizedPath) || normalizedPath;
@@ -163,7 +248,7 @@ export async function addFileSource(absolutePath: string): Promise<KubeconfigSou
 
     await pushItem(newRecord, await nextOrder(sources));
     invalidateCache();
-    return newRecord;
+    return { record: newRecord, created: true };
 }
 
 /**
