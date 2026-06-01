@@ -182,13 +182,30 @@ export function resolveKubeconfigPath(kubeconfigPath?: string): string {
 
 /**
  * Returns `true` when a default kubeconfig is likely available — either via the
- * `KUBECONFIG` env var or the standard Kubernetes default kubeconfig fallback. Performs a
- * synchronous `fs.existsSync` check so callers (e.g. migration) can cheaply
+ * `KUBECONFIG` env var or the standard Kubernetes default kubeconfig fallback.
+ * When `KUBECONFIG` lists multiple paths (kubectl-style merge), returns true
+ * if **any** of the listed paths exists, since `loadFromDefault()` will succeed
+ * on the first reachable entry. Falls back to checking `~/.kube/config` when
+ * `KUBECONFIG` is unset. Synchronous so callers (e.g. migration) can cheaply
  * gate whether the default source should be pre-populated.
  */
 export function defaultKubeconfigExists(): boolean {
-    const resolvedPath = resolveKubeconfigPath();
-    return fs.existsSync(resolvedPath);
+    const envValue = process.env.KUBECONFIG;
+    if (envValue) {
+        const separator = process.platform === 'win32' ? ';' : ':';
+        const paths = envValue
+            .split(separator)
+            .map((p) => p.trim())
+            .filter((p) => p.length > 0);
+        for (const candidate of paths) {
+            const expanded = candidate.startsWith('~') ? path.join(os.homedir(), candidate.slice(1)) : candidate;
+            if (fs.existsSync(expanded)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    return fs.existsSync(path.join(os.homedir(), '.kube', 'config'));
 }
 
 /**
@@ -456,7 +473,13 @@ function getUrlHostname(server: string): string {
 /**
  * Creates a CoreV1Api client for the specified kubeconfig context.
  *
- * @param kubeConfig A loaded KubeConfig instance
+ * NOTE: This mutates `kubeConfig` by calling `setCurrentContext(contextName)`.
+ * The current code paths each create a fresh `KubeConfig` per call, so this is
+ * safe today. A future caller that loads a `KubeConfig` once and fans out to
+ * multiple contexts concurrently must clone first — otherwise the last
+ * `setCurrentContext` win silently re-targets earlier-issued clients.
+ *
+ * @param kubeConfig A loaded KubeConfig instance (mutated)
  * @param contextName The context to use
  * @returns A CoreV1Api client
  */
@@ -869,6 +892,27 @@ const ALLOWED_CONNECTION_PARAMS = new Set([
 ]);
 
 /**
+ * Formats a host string for inclusion in a connection URI.
+ *
+ * Bare IPv6 literals must be wrapped in square brackets per RFC 3986 / RFC 6874
+ * so the colon-separated host segments are not parsed as a port delimiter.
+ * Hostnames, IPv4 addresses, and pre-bracketed IPv6 literals are returned unchanged.
+ */
+function formatHostForUri(host: string): string {
+    if (host.length === 0 || host.startsWith('[')) {
+        return host;
+    }
+    // A bare IPv6 literal always contains at least two colons (it has ≥ 2 groups
+    // and uses ':' as the group separator), so a single ':' is unambiguously a
+    // hostname or IPv4 — never an IPv6 literal that needs bracketing.
+    const firstColon = host.indexOf(':');
+    if (firstColon === -1 || host.indexOf(':', firstColon + 1) === -1) {
+        return host;
+    }
+    return `[${host}]`;
+}
+
+/**
  * Builds a connection string in the DocumentDB API connection string format WITHOUT
  * credentials (credentials go in nativeAuthConfig).
  * Connection parameters are validated against an allowlist to prevent injection.
@@ -889,7 +933,7 @@ function buildConnectionString(host: string, port: number, service: KubeServiceI
             paramPart = `?${validated}`;
         }
     }
-    return `mongodb://${host}:${String(port)}/${paramPart}`;
+    return `mongodb://${formatHostForUri(host)}:${String(port)}/${paramPart}`;
 }
 
 export function buildPortForwardConnectionString(service: KubeServiceInfo, localPort: number): string {
