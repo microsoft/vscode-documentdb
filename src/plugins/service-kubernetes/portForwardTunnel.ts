@@ -418,8 +418,22 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                 );
             }
 
-            const stillBusy = bindError?.code === 'EADDRINUSE' || bindError?.code === 'EACCES';
-            if (stillBusy) {
+            // EACCES is a different failure: the OS rejected the bind for
+            // permission reasons (typically a privileged port < 1024 or a
+            // sandbox restriction), not a port-in-use collision. There is no
+            // "existing tunnel" to fall through to, so offering "Use
+            // existing" would build a connection string against a port the
+            // extension never opened and that the user has no way to bind.
+            if (bindError?.code === 'EACCES') {
+                throw new Error(
+                    vscode.l10n.t(
+                        'Cannot bind 127.0.0.1:{0}: permission denied. Choose a different local port (typically 1024 or higher).',
+                        String(params.localPort),
+                    ),
+                );
+            }
+
+            if (bindError?.code === 'EADDRINUSE') {
                 const useExisting = vscode.l10n.t('Use existing');
                 const choice = await vscode.window.showWarningMessage(
                     vscode.l10n.t(
@@ -524,6 +538,21 @@ export class PortForwardTunnelManager implements vscode.Disposable {
             }
         };
 
+        // Declared outside the try so the catch can always release the
+        // PassThrough — otherwise a rejection from forward.portForward leaves
+        // the stream registered in tunnel.errorStreams (and its listeners
+        // attached) until the whole tunnel is closed, which leaks one stream
+        // per failed connection under a flapping backend.
+        let errStream: PassThrough | undefined;
+        const cleanupErrorStream = (): void => {
+            if (!errStream) {
+                return;
+            }
+            tunnel.errorStreams.delete(errStream);
+            errStream.destroy();
+            errStream = undefined;
+        };
+
         try {
             const backend = await resolveServiceBackend(
                 params.coreApi,
@@ -533,12 +562,8 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                 params.servicePortName,
             );
 
-            const errStream = new PassThrough();
+            errStream = new PassThrough();
             tunnel.errorStreams.add(errStream);
-            const cleanupErrorStream = (): void => {
-                tunnel.errorStreams.delete(errStream);
-                errStream.destroy();
-            };
 
             errStream.once('data', (chunk: Buffer) => {
                 ext.outputChannel.appendLine(
@@ -548,7 +573,9 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                 cleanup();
             });
             errStream.once('close', () => {
-                tunnel.errorStreams.delete(errStream);
+                if (errStream) {
+                    tunnel.errorStreams.delete(errStream);
+                }
             });
 
             const ws = await forward.portForward(
@@ -603,6 +630,7 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                     errMsg,
                 ),
             );
+            cleanupErrorStream();
             cleanup();
         }
     }
