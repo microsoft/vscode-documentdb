@@ -31,7 +31,13 @@
  */
 
 import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens } from '@fluentui/react-components';
-import { ChatMailRegular, InfoRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
+import {
+    ChatMailRegular,
+    CheckmarkCircleRegular,
+    InfoRegular,
+    SparkleRegular,
+    WarningRegular,
+} from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
@@ -856,7 +862,13 @@ export const QueryInsightsMain = (): JSX.Element => {
     const streaming = queryInsightsState.stage3Streaming;
 
     // Analysis Card
-    if (currentStage.phase === 3 && streaming?.summary) {
+    //
+    // Option A layout: as soon as the Stage 3 stream opens (`streaming` is
+    // non-null), the analysis slot is reserved at the canonical top
+    // position with a spinner placeholder. The placeholder uses the same
+    // key as the filled card so the swap is in-place — the rest of the
+    // page never reflows because of the analysis card.
+    if (currentStage.phase === 3 && streaming) {
         const summarySource = streaming.summary;
         insightCards.push({
             key: `${keyPrefix}analysis-card`,
@@ -868,13 +880,13 @@ export const QueryInsightsMain = (): JSX.Element => {
             // most of the early streaming and makes the card appear to
             // pop from "title only" to "fully filled" in two frames.
             // Fade lets the markdown grow visibly as chunks arrive.
-            inFlight: !summarySource.complete,
+            inFlight: !summarySource?.complete,
             component: (
                 <MarkdownCard
                     icon={<SparkleRegular />}
                     title={l10n.t('Query Performance Analysis')}
-                    content={summarySource.markdown}
-                    inFlight={!summarySource.complete}
+                    content={summarySource?.markdown ?? ''}
+                    inFlight={!summarySource?.complete}
                     inFlightLabel={l10n.t('Analyzing…')}
                 />
             ),
@@ -901,39 +913,94 @@ export const QueryInsightsMain = (): JSX.Element => {
         });
     }
 
-    // Improvement Cards (progressive: shell on `recommendationStarted`,
-    // filled on `recommendation`; per D11 the shell reuses the same outer
-    // Card + ArrowTrendingSparkleRegular icon as the filled card via
-    // `ImprovementCardShell`, so the card's identity never changes when
-    // content arrives). Uses a single stable key per index so the
-    // shell-to-filled transition is in-place (no unmount/remount).
-    if (currentStage.phase === 3 && streaming && streaming.recommendations.length > 0) {
-        streaming.recommendations.forEach((rec, index) => {
-            const key = `${keyPrefix}rec-${index}`;
-            if (rec === null) {
-                insightCards.push({ key, component: <ImprovementCardShell /> });
-                return;
-            }
-            const config = createImprovementCardConfig(rec, index, {
-                clusterId: configuration.clusterId,
-                databaseName: configuration.databaseName,
-                collectionName: configuration.collectionName,
+    // Recommendation Cards (Option A layout, see Analysis Card above).
+    //
+    // Three rendering modes, mutually exclusive:
+    //   1. Pending placeholder. Subscription open, no `recommendationStarted`
+    //      event yet, terminal `complete` not seen. Reserves the
+    //      recommendations slot with a single `ImprovementCardShell` so the
+    //      page layout is final from t=0.
+    //   2. Progressive shells / filled cards. After the first
+    //      `recommendationStarted` event we know how many items the LLM is
+    //      writing; render one card per index (`ImprovementCardShell` while
+    //      the item is `null`, `ImprovementCard` once it fills). Stable
+    //      keys per index so each shell→filled transition is in-place.
+    //   3. Empty-state "no recommendations needed". On the terminal
+    //      `complete` event with `improvementCards.length === 0` (the
+    //      "query is already optimal" path) the slot becomes a positive
+    //      info card so the user understands the absence is intentional
+    //      rather than a missing fetch.
+    if (currentStage.phase === 3 && streaming) {
+        const hasStartedRecs = streaming.recommendations.length > 0;
+        const completedWithNoRecs =
+            queryInsightsState.stage3Data !== null && queryInsightsState.stage3Data.improvementCards.length === 0;
+
+        if (hasStartedRecs) {
+            // Mode 2: progressive shells / filled cards (per D11: shell uses
+            // the same icon and outer Card as the filled `ImprovementCard`
+            // via `ImprovementCardShell`, so the card's identity never
+            // changes when content arrives).
+            streaming.recommendations.forEach((rec, index) => {
+                const key = `${keyPrefix}rec-${index}`;
+                if (rec === null) {
+                    insightCards.push({ key, component: <ImprovementCardShell /> });
+                    return;
+                }
+                const config = createImprovementCardConfig(rec, index, {
+                    clusterId: configuration.clusterId,
+                    databaseName: configuration.databaseName,
+                    collectionName: configuration.collectionName,
+                });
+                insightCards.push({
+                    key,
+                    component: (
+                        <ImprovementCard
+                            config={config}
+                            onPrimaryAction={handlePrimaryAction}
+                            onSecondaryAction={handleSecondaryAction}
+                        />
+                    ),
+                });
             });
+        } else if (completedWithNoRecs) {
+            // Mode 3: empty-state, terminal complete with zero
+            // recommendations. CheckmarkCircle reads as positive
+            // affirmation rather than "data missing".
             insightCards.push({
-                key,
+                key: `${keyPrefix}no-recommendations`,
                 component: (
-                    <ImprovementCard
-                        config={config}
-                        onPrimaryAction={handlePrimaryAction}
-                        onSecondaryAction={handleSecondaryAction}
+                    <MarkdownCard
+                        icon={<CheckmarkCircleRegular />}
+                        title={l10n.t('No index changes recommended')}
+                        content={l10n.t(
+                            'Based on the analysis above, your query is already running efficiently and no index changes are necessary. Review the analysis and educational notes for context.',
+                        )}
+                        showAiDisclaimer={false}
                     />
                 ),
             });
-        });
+        } else {
+            // Mode 1: pending placeholder. Uses the SAME key the first
+            // filled shell will use (`rec-0`) so the swap to Mode 2 on
+            // the first `recommendationStarted` event is in-place \u2014 no
+            // remount, no flicker. If `complete` instead arrives with
+            // zero recommendations the key differs from the empty-state
+            // (`no-recommendations`), and that swap is deliberate \u2014 the
+            // user notices the message change.
+            insightCards.push({
+                key: `${keyPrefix}rec-0`,
+                component: <ImprovementCardShell />,
+            });
+        }
     }
 
     // Educational Markdown Card — Understanding Query Execution
-    if (currentStage.phase === 3 && streaming?.educational) {
+    //
+    // Option A layout: same pre-reserved slot pattern as the Analysis
+    // Card above — the educational slot is reserved as soon as the
+    // Stage 3 stream opens, and the same key is used for the spinner
+    // placeholder and the filled card so the swap is in-place.
+    if (currentStage.phase === 3 && streaming) {
         const educationalSource = streaming.educational;
         insightCards.push({
             key: `${keyPrefix}understanding-execution`,
@@ -941,13 +1008,13 @@ export const QueryInsightsMain = (): JSX.Element => {
             // markdown chunks are actually visible as they arrive,
             // instead of being clipped by CollapseRelaxed's 400 ms
             // maxHeight enter animation.
-            inFlight: !educationalSource.complete,
+            inFlight: !educationalSource?.complete,
             component: (
                 <MarkdownCard
                     icon={<SparkleRegular />}
                     title={l10n.t('Understanding Your Query Execution Plan')}
-                    content={educationalSource.markdown}
-                    inFlight={!educationalSource.complete}
+                    content={educationalSource?.markdown ?? ''}
+                    inFlight={!educationalSource?.complete}
                     inFlightLabel={l10n.t('Writing explanation…')}
                 />
             ),
