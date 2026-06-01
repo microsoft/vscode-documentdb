@@ -539,7 +539,9 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
                         this.registerRelationshipInCache(element, child);
                     }
 
-                    return ext.state.wrapItemInStateHandling(child, () => this.refresh(child)) as T;
+                    return ext.state.wrapItemInStateHandling(child, () => {
+                        this.refresh(child);
+                    }) as T;
                 }
                 return child;
             });

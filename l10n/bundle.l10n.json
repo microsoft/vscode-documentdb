@@ -290,6 +290,7 @@
   "Collection View": "Collection View",
   "Collection: \"{collectionName}\"": "Collection: \"{collectionName}\"",
   "Collection: \"{targetCollectionName}\" {annotation}": "Collection: \"{targetCollectionName}\" {annotation}",
+  "Collections": "Collections",
   "Configure Azure Discovery Filters": "Configure Azure Discovery Filters",
   "Configure Azure VM Discovery Filters": "Configure Azure VM Discovery Filters",
   "Configure in Settings": "Configure in Settings",
