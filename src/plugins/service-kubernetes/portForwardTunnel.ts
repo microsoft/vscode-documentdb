@@ -324,40 +324,102 @@ export class PortForwardTunnelManager implements vscode.Disposable {
         const k8s = await import('@kubernetes/client-node');
         const forward = new k8s.PortForward(params.kubeConfig, true);
 
-        const tunnel: ActiveTunnel = {
-            server: net.createServer(),
-            params,
-            startTime: new Date(),
-            sockets: new Set<net.Socket>(),
-            webSockets: new Set<TunnelWebSocket>(),
-            errorStreams: new Set<PassThrough>(),
-        };
-
-        const server = tunnel.server;
-        server.on('connection', (socket) => {
-            void this._handleConnection(socket, forward, params, tunnel);
-        });
-
-        try {
-            await new Promise<void>((resolve, reject) => {
-                server.once('error', (err: NodeJS.ErrnoException) => {
-                    if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
-                        reject(
-                            new PortInUseError(vscode.l10n.t('Port {0} is already in use.', String(params.localPort))),
-                        );
-                    } else {
-                        reject(err);
-                    }
+        // Bind 127.0.0.1:localPort with a single retry on EADDRINUSE.
+        //
+        // Background: after an extension reload (e.g. "Reload Window" or a
+        // fast VS Code restart shortly after the previous instance exited),
+        // the previous extension host may still be tearing down its TCP
+        // listener for the same local port. A naive single-shot listen()
+        // then fails with EADDRINUSE and the user gets a misleading
+        // "Use existing port-forward?" prompt for what is actually the
+        // outgoing extension host's own dying socket — clicking "Use
+        // existing" routes the DocumentDB-API client at a port nothing
+        // is listening on. One short retry covers the common race window
+        // without bothering the user.
+        //
+        // EACCES is intentionally NOT retried: permission-denied on a
+        // privileged port is a hard configuration error and 750 ms of
+        // waiting cannot change the outcome — fall straight through to
+        // the prompt so the user can pick a different local port.
+        let server: net.Server | undefined;
+        let bindError: NodeJS.ErrnoException | undefined;
+        const MAX_BIND_ATTEMPTS = 2;
+        const RETRY_DELAY_MS = 750;
+        for (let attempt = 0; attempt < MAX_BIND_ATTEMPTS; attempt++) {
+            if (attempt > 0) {
+                ext.outputChannel.appendLine(
+                    vscode.l10n.t(
+                        'Port 127.0.0.1:{0} appeared busy on the first attempt; retrying after {1}ms before prompting…',
+                        String(params.localPort),
+                        String(RETRY_DELAY_MS),
+                    ),
+                );
+                await new Promise<void>((resolve) => setTimeout(resolve, RETRY_DELAY_MS));
+                // The retry delay is the longest window in which an
+                // overlapping stopAll() / stopTunnel() can land. Drop out
+                // of the loop quietly so a cancelled start does NOT show
+                // the "Use existing" prompt for a port the caller already
+                // gave up on.
+                if (this._isStartInvalidated(key, startGeneration)) {
+                    throw new Error(
+                        vscode.l10n.t(
+                            'Port-forward tunnel start was cancelled because Kubernetes configuration changed. Try connecting again.',
+                        ),
+                    );
+                }
+            }
+            const candidate = net.createServer();
+            try {
+                await new Promise<void>((resolve, reject) => {
+                    candidate.once('error', (err: NodeJS.ErrnoException) => reject(err));
+                    candidate.listen(params.localPort, '127.0.0.1', () => resolve());
                 });
+                server = candidate;
+                break;
+            } catch (err) {
+                bindError = err as NodeJS.ErrnoException;
+                candidate.close();
+                // Only EADDRINUSE is transient (previous listener tearing
+                // down). Anything else (EACCES privileged-port, EINVAL,
+                // ENOTSOCK, …) won't go away by waiting — exit the loop
+                // and let the post-loop handler decide what to do.
+                if (bindError.code !== 'EADDRINUSE') {
+                    break;
+                }
+            }
+        }
 
-                server.listen(params.localPort, '127.0.0.1', () => {
-                    resolve();
-                });
-            });
-        } catch (err) {
-            server.close();
+        if (!server) {
+            // Audit every bind failure in the output channel so the OP of
+            // an "after restart, port forwarding stopped working" report
+            // has a concrete error code + cause to share rather than a
+            // bare toast.
+            ext.outputChannel.appendLine(
+                vscode.l10n.t(
+                    'Port-forward bind failed for 127.0.0.1:{0} ({1}/{2}): {3}',
+                    String(params.localPort),
+                    params.namespace,
+                    params.serviceName,
+                    bindError ? `${bindError.code ?? 'unknown'}: ${bindError.message}` : 'unknown error',
+                ),
+            );
 
-            if (err instanceof PortInUseError) {
+            // A start that was cancelled while the second listen() was in
+            // flight must NOT surface the misleading "Use existing" prompt
+            // for a port the caller already gave up on. Mirror the
+            // post-success cancellation check (line ~457) so the two
+            // outcomes of the second bind (success / fail-busy) are
+            // symmetric with respect to invalidation.
+            if (this._isStartInvalidated(key, startGeneration)) {
+                throw new Error(
+                    vscode.l10n.t(
+                        'Port-forward tunnel start was cancelled because Kubernetes configuration changed. Try connecting again.',
+                    ),
+                );
+            }
+
+            const stillBusy = bindError?.code === 'EADDRINUSE' || bindError?.code === 'EACCES';
+            if (stillBusy) {
                 const useExisting = vscode.l10n.t('Use existing');
                 const choice = await vscode.window.showWarningMessage(
                     vscode.l10n.t(
@@ -367,6 +429,21 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                     { modal: false },
                     useExisting,
                 );
+
+                // showWarningMessage is an arbitrarily long await (the user
+                // can leave the prompt up for minutes). Re-check invalidation
+                // before honouring their choice — otherwise a stopAll() that
+                // landed while the prompt was open would still produce an
+                // externalAssumed outcome for a cancelled start, and the
+                // calling wizard / discovery flow would build a connection
+                // against a tunnel nobody asked for.
+                if (this._isStartInvalidated(key, startGeneration)) {
+                    throw new Error(
+                        vscode.l10n.t(
+                            'Port-forward tunnel start was cancelled because Kubernetes configuration changed. Try connecting again.',
+                        ),
+                    );
+                }
 
                 if (choice === useExisting) {
                     ext.outputChannel.appendLine(
@@ -388,8 +465,21 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                 );
             }
 
-            throw err;
+            throw bindError ?? new Error(vscode.l10n.t('Failed to bind 127.0.0.1:{0}.', String(params.localPort)));
         }
+
+        const tunnel: ActiveTunnel = {
+            server,
+            params,
+            startTime: new Date(),
+            sockets: new Set<net.Socket>(),
+            webSockets: new Set<TunnelWebSocket>(),
+            errorStreams: new Set<PassThrough>(),
+        };
+
+        server.on('connection', (socket) => {
+            void this._handleConnection(socket, forward, params, tunnel);
+        });
 
         // Register immediately after successful listen to avoid window where
         // the server is running but not tracked.
@@ -592,8 +682,6 @@ export class PortForwardTunnelManager implements vscode.Disposable {
         return undefined;
     }
 }
-
-class PortInUseError extends Error {}
 
 function createManagedPortConflictError(existingParams: TunnelParams, requestedParams: TunnelParams): Error {
     return new Error(

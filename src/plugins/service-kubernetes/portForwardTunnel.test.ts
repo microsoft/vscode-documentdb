@@ -651,6 +651,125 @@ describe('PortForwardTunnelManager', () => {
         }
     });
 
+    it('should silently retry EADDRINUSE once before prompting the user', async () => {
+        // Simulates a port held by a previous extension instance (e.g.,
+        // "Reload Window" while the old extension host is still tearing
+        // down its TCP listener) that gets released a few hundred ms
+        // later. The new code should bind successfully on the retry
+        // without surfacing the "Use existing" prompt at all.
+        mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
+
+        const blockingServer = net.createServer();
+        const port = await new Promise<number>((resolve) => {
+            blockingServer.listen(0, '127.0.0.1', () => {
+                resolve((blockingServer.address() as net.AddressInfo).port);
+            });
+        });
+
+        // Schedule the blocker to release BEFORE the retry window (750ms)
+        // elapses. The first listen attempt fails; the retry succeeds.
+        setTimeout(() => blockingServer.close(), 100);
+
+        try {
+            const result = await manager.startTunnel(createMockParams({ localPort: port }));
+            expect(result.outcome).toBe('started');
+            // Critically, the user is NOT prompted — the retry handled it.
+            expect(mockShowWarningMessage).not.toHaveBeenCalled();
+            expect(hasTunnel({ localPort: port })).toBe(true);
+        } finally {
+            // blockingServer is already closed by the setTimeout above; close
+            // again is a safe no-op.
+            blockingServer.close();
+        }
+    });
+
+    it('should bail out of the EADDRINUSE retry window when the start is cancelled', async () => {
+        // Simulates the user (or a sibling code path) invoking stopAll() /
+        // stopTunnel() while we're mid-way through the 750ms retry sleep.
+        // The fix must not show the misleading "Use existing" prompt for a
+        // start the caller has already abandoned — the retry path must
+        // observe the invalidation and throw the cancellation error.
+        //
+        // The complementary case of a cancellation landing while the
+        // "Use existing" prompt itself is open is covered by the next test.
+        const blockingServer = net.createServer();
+        const port = await new Promise<number>((resolve) => {
+            blockingServer.listen(0, '127.0.0.1', () => {
+                resolve((blockingServer.address() as net.AddressInfo).port);
+            });
+        });
+
+        // Cancel the start partway through the retry delay. The blocking
+        // server stays up so the second listen() would also fail — without
+        // the invalidation check the user would be prompted.
+        setTimeout(() => manager.stopAll(), 200);
+
+        try {
+            await expect(manager.startTunnel(createMockParams({ localPort: port }))).rejects.toThrow(
+                /cancelled because Kubernetes configuration changed/,
+            );
+            expect(mockShowWarningMessage).not.toHaveBeenCalled();
+            expect(hasTunnel({ localPort: port })).toBe(false);
+        } finally {
+            blockingServer.close();
+        }
+    });
+
+    it('should bail out when the start is cancelled while the "Use existing" prompt is open', async () => {
+        // Cancellation that lands while the user is staring at the prompt
+        // must NOT honour their eventual click — returning externalAssumed
+        // for an abandoned start would route the caller (wizard / discovery
+        // flow) at a tunnel nobody asked for.
+        //
+        // Test structure: we synchronize on the prompt actually being
+        // invoked (via a promise the mock resolves on first call) instead
+        // of sleeping a fixed wall-clock duration, so the test does NOT
+        // depend on the implementation's retry-sleep being any specific
+        // length and cannot flake on a loaded CI worker.
+        let promptInvoked!: () => void;
+        const promptInvokedPromise = new Promise<void>((resolve) => {
+            promptInvoked = resolve;
+        });
+        let resolvePrompt: ((value: string) => void) | undefined;
+        mockShowWarningMessage.mockImplementation(
+            () =>
+                new Promise<string>((resolve) => {
+                    resolvePrompt = resolve;
+                    promptInvoked();
+                }),
+        );
+
+        const blockingServer = net.createServer();
+        const port = await new Promise<number>((resolve) => {
+            blockingServer.listen(0, '127.0.0.1', () => {
+                resolve((blockingServer.address() as net.AddressInfo).port);
+            });
+        });
+
+        try {
+            const tunnelPromise = manager.startTunnel(createMockParams({ localPort: port }));
+
+            // Wait until the implementation has actually reached the prompt
+            // (whatever that takes — the retry sleep may change). No fixed
+            // wall-clock dependency.
+            await promptInvokedPromise;
+            expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+
+            // Now cancel — analogous to stopAll() landing mid-prompt.
+            manager.stopAll();
+
+            // Simulate the user clicking "Use existing" AFTER the cancel.
+            expect(resolvePrompt).toBeDefined();
+            resolvePrompt!('Use existing');
+
+            await expect(tunnelPromise).rejects.toThrow(/cancelled because Kubernetes configuration changed/);
+            // Critically: no tunnel registered, no externalAssumed result.
+            expect(hasTunnel({ localPort: port })).toBe(false);
+        } finally {
+            blockingServer.close();
+        }
+    });
+
     it('should report a managed port conflict instead of reusing a tunnel from a different sourceId', async () => {
         mockPortForward.mockResolvedValue({ on: jest.fn(), close: jest.fn() });
         const port = await new Promise<number>((resolve) => {
