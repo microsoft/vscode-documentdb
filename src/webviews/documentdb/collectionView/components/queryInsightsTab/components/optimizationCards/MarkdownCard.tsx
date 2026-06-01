@@ -10,7 +10,7 @@ import { SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import ReactMarkdown from 'react-markdown';
-import '../streamingPlaceholder/StreamingPlaceholder.scss';
+import { StreamingInlineProgress } from '../streamingPlaceholder/StreamingInlineProgress';
 import './baseOptimizationCard.scss';
 
 const useStyles = makeStyles({
@@ -130,16 +130,26 @@ interface MarkdownCardProps {
     showAiDisclaimer?: boolean;
 
     /**
-     * When `true`, render two indeterminate "skeleton" lines (80% then 30%
-     * width) below the rendered markdown. Used by the Stage 3 progressive
-     * streaming path on the summary / educational cards while their values
-     * are still growing (`complete: false`) so the user can see at a glance
-     * that more content is on the way — the markdown itself is paused
-     * between paragraph-boundary updates, which by itself looks frozen.
-     * The lines disappear as soon as the value's closing `"` is observed
+     * When `true`, render a {@link StreamingInlineProgress} (spinner + label)
+     * below the rendered markdown to make it visually obvious that the
+     * value is still streaming in. Used by the Stage 3 progressive
+     * streaming path on the summary / educational cards while their
+     * values are still growing (`complete: false`); the indicator
+     * disappears as soon as the value's closing `"` is observed
      * (`complete: true`).
+     *
+     * Caller is responsible for clearing this on the terminal event.
      */
     inFlight?: boolean;
+
+    /**
+     * Localized label shown next to the in-flight spinner. Defaults to
+     * a generic "Writing…" label; callers should pass a card-specific
+     * verb so the row reads naturally (e.g. "Analyzing…" for the
+     * analysis card, "Writing explanation…" for the educational card).
+     * Ignored when {@link inFlight} is `false`.
+     */
+    inFlightLabel?: string;
 
     /**
      * Ref to forward to the card element
@@ -170,6 +180,7 @@ export function MarkdownCard({
     onCopy: _onCopy,
     showAiDisclaimer = true,
     inFlight = false,
+    inFlightLabel,
     ref,
 }: MarkdownCardProps) {
     const styles = useStyles();
@@ -197,23 +208,7 @@ export function MarkdownCard({
                     />
                     <div className={styles.content}>
                         <ReactMarkdown>{content}</ReactMarkdown>
-                        {inFlight && (
-                            <div
-                                className="streaming-content-lines"
-                                role="status"
-                                aria-live="polite"
-                                aria-label={l10n.t('More content is loading')}
-                            >
-                                <span
-                                    className="streaming-content-lines__line streaming-content-lines__line--long"
-                                    aria-hidden="true"
-                                />
-                                <span
-                                    className="streaming-content-lines__line streaming-content-lines__line--short"
-                                    aria-hidden="true"
-                                />
-                            </div>
-                        )}
+                        {inFlight && <StreamingInlineProgress label={inFlightLabel ?? l10n.t('Writing…')} />}
                     </div>
                 </div>
             </div>

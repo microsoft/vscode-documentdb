@@ -8,10 +8,10 @@
  *
  * Renders the same outer `Card` layout and the same `ArrowTrendingSparkleRegular`
  * icon as the filled recommendation card, with a generic title and a
- * {@link StreamingPlaceholder} body. This component is used between the
+ * {@link StreamingInlineProgress} body. This component is used between the
  * `recommendationStarted` and `recommendation` streaming events (WI-7 / WI-8)
  * so the card's identity (frame, icon, layout) never changes when content
- * arrives — only the body swaps from the shimmer placeholder to the real
+ * arrives — only the body swaps from the spinner progress row to the real
  * recommendation content. See plan D11 / WI-9.
  */
 
@@ -19,7 +19,7 @@ import { Card, CardHeader, Text } from '@fluentui/react-components';
 import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX, type Ref } from 'react';
-import { StreamingPlaceholder } from '../streamingPlaceholder/StreamingPlaceholder';
+import { StreamingInlineProgress } from '../streamingPlaceholder/StreamingInlineProgress';
 import './baseOptimizationCard.scss';
 
 export interface ImprovementCardShellProps {
@@ -42,9 +42,7 @@ export function ImprovementCardShell({ ref }: ImprovementCardShellProps): JSX.El
                             </div>
                         }
                     />
-                    <div style={{ marginTop: '12px' }}>
-                        <StreamingPlaceholder variant="inline" label={l10n.t('Writing…')} />
-                    </div>
+                    <StreamingInlineProgress label={l10n.t('Writing recommendation…')} />
                 </div>
             </div>
         </Card>
