@@ -81,20 +81,20 @@ The `sizeOnDisk` field from `listDatabases` was defined in `DatabaseItemModel` b
 
 ## Files changed
 
-| File | Purpose |
-|---|---|
-| `src/constants.ts` | `COUNT_PREFIX`, `COLLECTION_COUNT_LIMIT` |
-| `src/utils/countPrefix.ts` | `getCountPrefix()` utility |
-| `src/documentdb/ClustersClient.ts` | `countCollections()` method, `listDatabases` nameOnly |
-| `src/tree/BaseExtendedTreeDataProvider.ts` | `invalidateChildrenCache` hook |
-| `src/tree/documentdb/IndexesItem.ts` | Index caching, `loadIndexCount()`, count description |
-| `src/tree/documentdb/CollectionItem.ts` | Count prefix on document count description |
-| `src/tree/documentdb/DatabaseItem.ts` | Collection count loading, "N+" display |
-| `src/tree/documentdb/ClusterItemBase.ts` | Trigger `loadCollectionCount()` on database creation |
-| `src/tree/documentdb/IndexesItem.test.ts` | 3 async index loading tests |
-| `src/tree/documentdb/DatabaseItem.test.ts` | 5 cursor-based collection count tests |
-| `package.json` | `documentDB.accessibility.hideCountPrefix` setting |
-| `l10n/bundle.l10n.json` | New localization keys |
+| File                                       | Purpose                                               |
+| ------------------------------------------ | ----------------------------------------------------- |
+| `src/constants.ts`                         | `COUNT_PREFIX`, `COLLECTION_COUNT_LIMIT`              |
+| `src/utils/countPrefix.ts`                 | `getCountPrefix()` utility                            |
+| `src/documentdb/ClustersClient.ts`         | `countCollections()` method, `listDatabases` nameOnly |
+| `src/tree/BaseExtendedTreeDataProvider.ts` | `invalidateChildrenCache` hook                        |
+| `src/tree/documentdb/IndexesItem.ts`       | Index caching, `loadIndexCount()`, count description  |
+| `src/tree/documentdb/CollectionItem.ts`    | Count prefix on document count description            |
+| `src/tree/documentdb/DatabaseItem.ts`      | Collection count loading, "N+" display                |
+| `src/tree/documentdb/ClusterItemBase.ts`   | Trigger `loadCollectionCount()` on database creation  |
+| `src/tree/documentdb/IndexesItem.test.ts`  | 3 async index loading tests                           |
+| `src/tree/documentdb/DatabaseItem.test.ts` | 5 cursor-based collection count tests                 |
+| `package.json`                             | `documentDB.accessibility.hideCountPrefix` setting    |
+| `l10n/bundle.l10n.json`                    | New localization keys                                 |
 
 ---
 
