@@ -1124,14 +1124,28 @@ export const QueryInsightsMain = (): JSX.Element => {
                         )}
 
                         {/* GetPerformanceInsightsCard with CollapseRelaxed animation.
-                            Shown in Stage 2 when AI insights haven't been requested yet, or when
-                            there's an error. Stays visible throughout the entire Stage 3 stream
-                            (while `currentStage.status === 'loading'` the inner stepper is shown
-                            via `isLoading`); collapses only once the terminal `complete` event
-                            materialises `stage3Data`, so the progress indicator does not disappear
-                            as soon as the first streamed card arrives.
-                            Note: Component supports ref forwarding and applies its own spacing via className. */}
-                        <CollapseRelaxed visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data}>
+                            Shown in Stage 2 when AI insights haven't been requested yet, or
+                            when there's an error. Stays visible throughout the Stage 3 stream
+                            (during loading it shows just a Cancel button — the slot spinners
+                            below carry the "I'm working" message); collapses only once the
+                            terminal `complete` event materialises `stage3Data`, so the user
+                            still sees the card and its Cancel button for the whole stream.
+
+                            `unmountOnExit` (Fix 3): after the 400 ms collapse exit animation
+                            completes, the card is removed from the DOM entirely. On
+                            regenerate, `stage3Data` clears via `transitionToStage(3, 'loading')`,
+                            the wrapper's `visible` flips back to true, the card re-mounts,
+                            and Fluent plays the enter animation cleanly. Without this prop
+                            the card sat in the DOM collapsed-to-zero-height between requests,
+                            and the enter animation on regenerate was a maxHeight expand on
+                            an already-mounted element instead of a fresh card materialising.
+
+                            Note: Component supports ref forwarding and applies its own
+                            spacing via className. */}
+                        <CollapseRelaxed
+                            visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data}
+                            unmountOnExit
+                        >
                             <GetPerformanceInsightsCard
                                 className="cardSpacing"
                                 bodyText={
