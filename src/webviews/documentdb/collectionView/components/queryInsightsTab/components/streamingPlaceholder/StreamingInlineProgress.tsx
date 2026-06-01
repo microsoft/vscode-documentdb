@@ -26,7 +26,7 @@
  * meaning.
  */
 
-import { Spinner, Text, tokens, makeStyles } from '@fluentui/react-components';
+import { makeStyles, Spinner, Text, tokens } from '@fluentui/react-components';
 import { type JSX } from 'react';
 
 const useStyles = makeStyles({
