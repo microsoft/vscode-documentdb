@@ -217,6 +217,48 @@ Triggered by hands-on testing of the streaming UX:
   in `Fade` with the same `pendingEnter` two-step so it glides in over
   the same window the card collapses out, instead of popping.
 
+### Cancel-UX finalization (supersedes "Plan B" above)
+
+Hands-on testing of the loading state showed the thinned-out
+`GetPerformanceInsightsCard` (Cancel button + disclosure, no spinner —
+"Plan B") still read as a large, mostly-empty card sitting above the three
+working slots. The final iteration replaces it during loading with a
+dedicated slim affordance:
+
+- **`Stage3AnalyzingCard`** (new): a one-line brand-tinted card —
+  `Spinner size="tiny"` + "AI is analyzing…" + an `outline` **Cancel**
+  button. Rendered as a **plain conditional on `isStage3Loading`** (no
+  motion wrapper). During loading the full `GetPerformanceInsightsCard`
+  collapses out entirely and this slim row is the only Stage-3 control.
+- **Two independent elements, not one shared wrapper.** The request card
+  keeps its own `CollapseRelaxed` (visible only when
+  `phase >= 2 && !stage3Data && !isStage3Loading`); the slim row is a bare
+  conditional. An earlier attempt to merge both into a single
+  `CollapseRelaxed` whose content swapped between the two reintroduced a
+  lingering-card bug: `stage3Data` stays truthy after completion, and the
+  content-swap at the wrapper's exit edge stopped it from unmounting, so
+  the slim row stuck on screen. A plain conditional is deterministic —
+  the instant `isStage3Loading` is false the row leaves the DOM, so it can
+  neither flash nor get stuck.
+- **Cancel semantics:** "Cancel" (not "Abort"/"Stop") — platform-standard,
+  low-anxiety, and pairs with a full state revert so the request can be
+  re-issued. `handleCancelAI` does one race-free reducer commit
+  (`currentStage → cancelled`, all Stage-3 stream/data/error fields → null),
+  which drops the slim row and animates the request card back in.
+- **No resize-in-place motion.** Fluent ships no built-in component that
+  animates between two non-zero heights (verified against
+  `@fluentui/react-components@9.73.3` and
+  `@fluentui/react-motion-components-preview@0.15.4` — all presence
+  components animate only on the `visible` boolean). The request-card ↔
+  slim-row swap is therefore an instant height change by design; building
+  a custom `createMotionComponent` resize wrapper was scoped out as polish
+  not worth the complexity.
+
+The `complete`/`error`/`cancel` reducer transitions all set `currentStage`
+in the **same commit** that materialises (or clears) `stage3Data`, so
+`isStage3Loading` and the card visibility flip atomically — no batched-flag
+staleness, no intermediate frame where both cards or neither card shows.
+
 ---
 
 ## Key decisions and rationale
@@ -329,6 +371,11 @@ location and moving it would be an unrelated UX change, (b) the
 cost-neutral disclosure row stays visible alongside the slots which
 matched the "always show the disclaimer" intent that drove a related
 sibling commit, and (c) it required less code.
+
+> **Superseded.** Later testing showed the thinned card still read as a
+> large empty box above the slots. The final design collapses it during
+> loading and shows the slim `Stage3AnalyzingCard` instead — see
+> "Cancel-UX finalization" under *Post-implementation* above.
 
 ### Why the card-key cascade fix lives in the reducer, not in `AnimatedCardList`
 
@@ -459,7 +506,8 @@ deleted entirely.
 | `.../components/optimizationCards/ImprovementCardShell.tsx` | `mode: 'loading' \| 'empty'` shared shell |
 | `.../components/optimizationCards/TipsCard.tsx + .scss` | Removed (no longer needed) |
 | `.../components/streamingPlaceholder/StreamingInlineProgress.tsx` | New Spinner + label primitive |
-| `.../components/optimizationCards/custom/GetPerformanceInsightsCard.tsx` | Drop inner spinner during loading; Cancel button stays |
+| `.../components/optimizationCards/custom/GetPerformanceInsightsCard.tsx` | Drop inner spinner during loading; collapses out entirely while loading |
+| `.../components/optimizationCards/custom/Stage3AnalyzingCard.tsx` | New slim loading affordance (Spinner + "AI is analyzing…" + Cancel) shown during Stage 3 streaming |
 | `l10n/bundle.l10n.json` | Regenerated |
 
 ---

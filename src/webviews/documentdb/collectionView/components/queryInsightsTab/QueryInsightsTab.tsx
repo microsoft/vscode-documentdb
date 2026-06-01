@@ -58,6 +58,7 @@ import {
     ImprovementCardShell,
     MarkdownCard,
     MarkdownCardEx,
+    Stage3AnalyzingCard,
 } from './components/optimizationCards';
 import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
@@ -633,13 +634,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                         return;
                     }
 
-                    let wasAccepted = false;
                     setQueryInsightsStateHelper((prev) => {
                         if (prev.stage3RequestKey !== requestKey) {
                             // Request was cancelled or superseded by a newer request
                             return prev;
                         }
-                        wasAccepted = true;
 
                         const prevStreaming: QueryInsightsStreamingState = prev.stage3Streaming ?? {
                             summary: null,
@@ -726,18 +725,29 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 return {
                                     ...prev,
                                     stage3Data: synthesized,
+                                    // Drive the Stage-3 success transition in the
+                                    // SAME commit that materialises `stage3Data`.
+                                    // Previously this relied on a `wasAccepted`
+                                    // closure flag that was set inside this updater
+                                    // and read AFTER setQueryInsightsStateHelper()
+                                    // returned, to gate a separate
+                                    // transitionToStage(3,'success') call. But React
+                                    // batches/defers the updater, so the flag was
+                                    // frequently still `false` when read — the
+                                    // success transition was skipped and
+                                    // `currentStage.status` stayed `'loading'`. With
+                                    // status stuck at loading, `isStage3Loading`
+                                    // never cleared and the loading affordance (the
+                                    // “Get AI” request card / slim cancel bar) never
+                                    // collapsed even though the stream had finished.
+                                    // Setting `currentStage` here is race-free.
+                                    currentStage: { phase: 3, status: 'success' },
                                 };
                             }
                             default:
                                 return prev;
                         }
                     });
-
-                    // Transition to success only when the terminal event
-                    // arrives for the still-current request.
-                    if (event.type === 'complete' && wasAccepted) {
-                        transitionToStage(3, 'success');
-                    }
                 },
                 onError(error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
@@ -747,25 +757,25 @@ export const QueryInsightsMain = (): JSX.Element => {
                     // After `handleCancelAI` (or a superseding request) clears
                     // `stage3RequestKey`, any late `onError` from the framework's
                     // unsubscribe race is silently discarded by this guard.
-                    let wasAccepted = false;
                     setQueryInsightsStateHelper((prev) => {
                         if (prev.stage3RequestKey !== requestKey) {
                             return prev;
                         }
-                        wasAccepted = true;
                         return {
                             ...prev,
                             stage3ErrorMessage: errorMessage,
                             stage3ErrorCode: errorCode,
                             stage3RequestKey: null,
                             stage3Streaming: null,
+                            // Drive the error transition in the same commit (see
+                            // the matching note in the `complete` handler): a
+                            // `wasAccepted` flag read after the batched updater was
+                            // unreliable and could leave `currentStage` stuck at
+                            // {3,'loading'}. Error display is handled by the
+                            // useEffect that watches Stage-3 error state.
+                            currentStage: { phase: 3, status: 'error' },
                         };
                     });
-
-                    if (wasAccepted) {
-                        transitionToStage(3, 'error');
-                        // Error display is handled by useEffect when error state changes
-                    }
 
                     if (stage3SubscriptionRef.current === subscription) {
                         stage3SubscriptionRef.current = null;
@@ -799,17 +809,32 @@ export const QueryInsightsMain = (): JSX.Element => {
             stage3SubscriptionRef.current = null;
         }
 
-        // Cancel the loading state and clear the request key. If any onData /
-        // onComplete / onError still fires from a race with unsubscribe, the
-        // requestKey guard in the subscription callbacks will discard it.
+        // Fully revert Stage 3 to a clean pre-request slate in a SINGLE commit
+        // so "Get AI Performance Insights" can be requested again immediately:
+        //   - currentStage → {3, 'cancelled'}: not 'loading', so `isStage3Loading`
+        //     and the card's `isLoading` both go false → the request card
+        //     re-shows and its button re-enables.
+        //   - stage3RequestKey → null: any late onData/onComplete/onError from
+        //     the unsubscribe race is discarded by the requestKey guard.
+        //   - stage3Streaming / stage3Data → null: drop partial stream output so
+        //     no half-rendered cards linger.
+        //   - stage3Error* → null: clear any error surfaced from a prior run.
+        // Doing this in one updater (instead of a separate setState +
+        // transitionToStage call) avoids an intermediate render where some
+        // fields are reset but `currentStage` is not — the same batched-updater
+        // hazard that previously left the loading affordance stuck on complete.
         setQueryInsightsStateHelper((prev) => ({
             ...prev,
+            currentStage: { phase: 3, status: 'cancelled' },
             stage3RequestKey: null,
             stage3Streaming: null,
+            stage3Data: null,
+            stage3ErrorMessage: null,
+            stage3ErrorCode: null,
         }));
 
-        // Transition to Stage 3 cancelled state
-        transitionToStage(3, 'cancelled');
+        // Drop any error card that a previous run may have surfaced.
+        setShowErrorCard(false);
     };
 
     const handlePrimaryAction = async (
@@ -900,6 +925,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     //     with a derived `hasCompletedAtLeastOnce` flag and move
     //     `modelDisplayName` onto the `complete` event slot.
     const streaming = queryInsightsState.stage3Streaming;
+
+    // EXPERIMENTAL: true while the Stage 3 AI request is streaming. Used by the
+    // cancel-UX proposals to decide where to surface the Cancel affordance.
+    const isStage3Loading = currentStage.phase === 3 && currentStage.status === 'loading';
 
     // Analysis Card
     //
@@ -1101,6 +1130,7 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                     {/* Optimization Opportunities */}
                     <div className="optimizationSection">
+                        {/* Section title */}
                         <Text size={400} weight="semibold" className="cardSpacing" style={{ display: 'block' }}>
                             {l10n.t('Optimization Opportunities')}
                         </Text>
@@ -1140,27 +1170,35 @@ export const QueryInsightsMain = (): JSX.Element => {
                             </Skeleton>
                         )}
 
-                        {/* GetPerformanceInsightsCard with CollapseRelaxed animation.
-                            Shown in Stage 2 when AI insights haven't been requested yet, or
-                            when there's an error. Stays visible throughout the Stage 3 stream
-                            (during loading it shows just a Cancel button — the slot spinners
-                            below carry the "I'm working" message); collapses only once the
-                            terminal `complete` event materialises `stage3Data`, so the user
-                            still sees the card and its Cancel button for the whole stream.
+                        {/* Stage 3 affordance — TWO independent elements:
 
-                            `unmountOnExit` (Fix 3): after the 400 ms collapse exit animation
-                            completes, the card is removed from the DOM entirely. On
-                            regenerate, `stage3Data` clears via `transitionToStage(3, 'loading')`,
-                            the wrapper's `visible` flips back to true, the card re-mounts,
-                            and Fluent plays the enter animation cleanly. Without this prop
-                            the card sat in the DOM collapsed-to-zero-height between requests,
-                            and the enter animation on regenerate was a maxHeight expand on
-                            an already-mounted element instead of a fresh card materialising.
+                            (1) The full request card, in its own CollapseRelaxed,
+                                visible only when there is genuinely a request to
+                                offer: phase >= 2, no result yet, and NOT loading.
+                                So the moment loading starts it collapses out, and
+                                after completion (stage3Data set) it stays out — it
+                                never flashes back during/after the stream.
 
-                            Note: Component supports ref forwarding and applies its own
-                            spacing via className. */}
+                            (2) The slim "AI is analyzing…" row, rendered as a PLAIN
+                                conditional on `isStage3Loading` (no motion wrapper).
+                                A presence/motion wrapper here was the source of two
+                                separate bugs: a ghost card that never collapsed
+                                (first-mount `appear` quirk on a wrapper that starts
+                                unmounted), and — when merged into one shared wrapper
+                                with the request card — a slim row that lingered after
+                                completion because `stage3Data` stays truthy and the
+                                content-swap-at-the-exit-edge stopped the wrapper from
+                                unmounting. A plain conditional is deterministic: the
+                                instant `isStage3Loading` is false the row leaves the
+                                DOM, so it can neither flash nor get stuck. The swap is
+                                instant (Fluent ships no resize-in-place motion; see
+                                the research note in PR #711).
+
+                            On cancel: isStage3Loading→false and stage3Data stays null,
+                            so the slim row vanishes immediately and the request card
+                            (1) animates back in. */}
                         <CollapseRelaxed
-                            visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data}
+                            visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data && !isStage3Loading}
                             unmountOnExit
                         >
                             <GetPerformanceInsightsCard
@@ -1184,6 +1222,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
                             />
                         </CollapseRelaxed>
+
+                        {isStage3Loading && <Stage3AnalyzingCard onCancel={handleCancelAI} />}
 
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList items={insightCards} exitDuration={300} />
