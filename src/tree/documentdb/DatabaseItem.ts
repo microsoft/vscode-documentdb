@@ -26,7 +26,12 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
     private readonly experienceContextValue: string = '';
 
-    private collectionCount: number | undefined;
+    /**
+     * Cached collection count for the database.
+     * `undefined` means not yet loaded, `null` means loading failed (used as a
+     * sentinel so a failed load is not retried for this item instance).
+     */
+    private collectionCount: number | undefined | null;
     /** When true, the actual count exceeds COLLECTION_COUNT_LIMIT. */
     private collectionCountExceeded: boolean = false;
     /**
@@ -131,7 +136,9 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
         } catch {
             meterSilentCatch('DatabaseItem_loadCollectionCount');
             if (!this.collectionCountIsExact) {
-                this.collectionCount = undefined;
+                // Use null (not undefined) so loadCollectionCount() does not
+                // retry a known-failing request for this item instance.
+                this.collectionCount = null;
                 this.collectionCountExceeded = false;
             }
         } finally {

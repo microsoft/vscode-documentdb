@@ -36,7 +36,12 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     public contextValue: string = 'treeItem_indexes';
 
     private readonly experienceContextValue: string = '';
-    private indexCount: number | undefined;
+    /**
+     * Cached index count for the collection.
+     * `undefined` means not yet loaded, `null` means loading failed (used as a
+     * sentinel so a failed load is not retried for this item instance).
+     */
+    private indexCount: number | undefined | null;
     private isLoadingCount: boolean = false;
 
     constructor(
@@ -89,7 +94,9 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             this.indexCount = indexes.length;
         } catch {
             meterSilentCatch('IndexesItem_loadIndexCount');
-            this.indexCount = undefined;
+            // Use null (not undefined) so loadIndexCount() does not retry a
+            // known-failing request for this item instance.
+            this.indexCount = null;
         } finally {
             this.isLoadingCount = false;
             ext.state.notifyChildrenChanged(this.id);
