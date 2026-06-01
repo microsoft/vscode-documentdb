@@ -37,10 +37,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     private readonly experienceContextValue: string = '';
     private indexCount: number | undefined;
-    private cachedIndexes: IndexItemModel[] | undefined;
     private isLoadingCount: boolean = false;
-    private indexesPromise: Promise<IndexItemModel[]> | undefined;
-    private isRefreshingIndexCount: boolean = false;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -54,23 +51,14 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        const indexes = [...(await this.getIndexes())];
+        const indexes = await this.fetchIndexes();
+
+        // Update the index count from the full list we just fetched.
         const previousCount = this.indexCount;
         this.indexCount = indexes.length;
 
-        // If the count changed (e.g. user-initiated refresh after an external
-        // mutation), re-render this node so the description matches the children
-        // we are about to return. The `isRefreshingIndexCount` guard prevents the
-        // resulting refresh from wiping the cache we just populated.
         if (previousCount !== this.indexCount) {
-            this.isRefreshingIndexCount = true;
-            try {
-                ext.state.notifyChildrenChanged(this.id);
-            } finally {
-                queueMicrotask(() => {
-                    this.isRefreshingIndexCount = false;
-                });
-            }
+            ext.state.notifyChildrenChanged(this.id);
         }
 
         // Sort indexes by name, with _id_ always first
@@ -97,50 +85,15 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     private async fetchAndUpdateCount(): Promise<void> {
         try {
-            const indexes = await this.getIndexes();
+            const indexes = await this.fetchIndexes();
             this.indexCount = indexes.length;
         } catch {
             meterSilentCatch('IndexesItem_loadIndexCount');
             this.indexCount = undefined;
         } finally {
             this.isLoadingCount = false;
-            this.isRefreshingIndexCount = true;
-            try {
-                ext.state.notifyChildrenChanged(this.id);
-            } finally {
-                queueMicrotask(() => {
-                    this.isRefreshingIndexCount = false;
-                });
-            }
+            ext.state.notifyChildrenChanged(this.id);
         }
-    }
-
-    private getIndexes(): Promise<IndexItemModel[]> {
-        if (this.cachedIndexes) {
-            return Promise.resolve(this.cachedIndexes);
-        }
-
-        if (!this.indexesPromise) {
-            this.indexesPromise = this.fetchIndexes()
-                .then((indexes) => {
-                    this.cachedIndexes = indexes;
-                    return indexes;
-                })
-                .finally(() => {
-                    this.indexesPromise = undefined;
-                });
-        }
-
-        return this.indexesPromise;
-    }
-
-    public invalidateChildrenCache(): void {
-        if (this.isRefreshingIndexCount) {
-            return;
-        }
-
-        this.cachedIndexes = undefined;
-        this.indexesPromise = undefined;
     }
 
     private async fetchIndexes(): Promise<IndexItemModel[]> {

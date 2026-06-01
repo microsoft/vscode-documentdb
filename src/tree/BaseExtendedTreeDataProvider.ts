@@ -13,14 +13,6 @@ import { isTreeElementWithContextValue, type TreeElementWithContextValue } from 
 import { isTreeElementWithRetryChildren } from './TreeElementWithRetryChildren';
 import { TreeParentCache } from './TreeParentCache';
 
-interface TreeElementWithInvalidatableChildrenCache extends TreeElement {
-    invalidateChildrenCache(): void;
-}
-
-function hasInvalidatableChildrenCache(element: TreeElement): element is TreeElementWithInvalidatableChildrenCache {
-    return 'invalidateChildrenCache' in element && typeof element.invalidateChildrenCache === 'function';
-}
-
 /**
  * Base implementation of the ExtendedTreeDataProvider interface that provides
  * parent-child relationship caching, error handling, and state management.
@@ -548,10 +540,6 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
                     }
 
                     return ext.state.wrapItemInStateHandling(child, () => {
-                        if (hasInvalidatableChildrenCache(child)) {
-                            child.invalidateChildrenCache();
-                        }
-
                         this.refresh(child);
                     }) as T;
                 }

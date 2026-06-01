@@ -150,15 +150,13 @@ describe('IndexesItem - async index loading', () => {
         expect(listIndexesMock).toHaveBeenCalledTimes(1);
     });
 
-    it('getChildren reuses indexes already fetched by loadIndexCount (no second API call)', async () => {
+    it('getChildren fetches indexes independently and updates the count', async () => {
         const item = new IndexesItem(cluster, databaseInfo, collectionInfo);
-
-        item.loadIndexCount();
-        await flushAsync();
 
         const children = await item.getChildren();
 
         expect(listIndexesMock).toHaveBeenCalledTimes(1);
         expect(children).toHaveLength(3);
+        expect(item.getTreeItem().description).toContain('3');
     });
 });

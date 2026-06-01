@@ -20,16 +20,15 @@ The core idea from the community PRs (background count loading with tree refresh
 
 ### Commit 1: Show index count on Indexes tree item
 
-- Cached index results in `IndexesItem` via a promise-dedup pattern (`getIndexes()` / `indexesPromise` / `cachedIndexes`) so the background count load and the subsequent `getChildren()` expansion share a single `listIndexes` + `listSearchIndexesForAtlas` round-trip.
 - Added `loadIndexCount()` as a fire-and-forget entry point called from `CollectionItem.getChildren()`.
-- Added `invalidateChildrenCache()` on `IndexesItem`, hooked into the `wrapItemInStateHandling` refresh path in `BaseExtendedTreeDataProvider` so user-initiated refreshes clear stale caches without wiping caches populated by a count-refresh notification (guarded by `isRefreshingIndexCount` + `queueMicrotask`).
+- `fetchAndUpdateCount()` calls `fetchIndexes()` directly (no caching layer).
 - Added `documentDB.accessibility.hideCountPrefix` setting and `getCountPrefix()` utility.
 - Applied the count prefix to existing document count descriptions on `CollectionItem`.
 - Added 3 unit tests for the async index loading contract.
 
 ### Commit 2: Show collection count on database tree items
 
-- Added `loadCollectionCount()` / `fetchAndUpdateCount()` / `getCollections()` on `DatabaseItem`, following the same caching and promise-dedup pattern as `IndexesItem`.
+- Added `loadCollectionCount()` / `fetchAndUpdateCount()` on `DatabaseItem`.
 - Triggered from `ClusterItemBase.getChildren()` when database nodes are created.
 - Added collection count to the database tooltip.
 - Added 5 unit tests.
@@ -37,7 +36,7 @@ The core idea from the community PRs (background count loading with tree refresh
 ### Commit 3: Cursor-based collection count and nameOnly for listDatabases
 
 - Added `ClustersClient.countCollections(dbName, limit)` which opens a `listCollections` cursor with `nameOnly: true` and `batchSize(limit + 1)`, iterates at most `limit + 1` items, then closes the cursor early. Returns `{ count, hasMore }`.
-- Simplified `DatabaseItem`: dropped the collection cache entirely (no longer shared between count and expansion), `fetchAndUpdateCount` now calls the lightweight `countCollections`. When `hasMore` is true, the description shows "N+". When the user expands the node, `getChildren()` calls the full `listCollections` and updates the count to the exact value.
+- Simplified `DatabaseItem`: `fetchAndUpdateCount` calls the lightweight `countCollections`. When `hasMore` is true, the description shows "N+". When the user expands the node, `getChildren()` calls the full `listCollections` and updates the count to the exact value.
 - Switched `ClustersClient.listDatabases()` to use `nameOnly: true`. The `sizeOnDisk` field was never read by any caller. The `empty` field, used only to filter out an empty `admin` database, is still present in `nameOnly` results from the server.
 - Added `COLLECTION_COUNT_LIMIT` constant (set to 50).
 - Updated tests to verify cursor-based counting, idempotency, "N+" display, and exact count on expansion.
@@ -45,6 +44,14 @@ The core idea from the community PRs (background count loading with tree refresh
 ### Commit 4: Bumped COLLECTION_COUNT_LIMIT from 5 to 50
 
 The limit was set to 5 during development for easy manual testing. Final value is 50.
+
+### Commit 5: Drop index cache, simplify IndexesItem
+
+Removed the index result caching layer (`cachedIndexes`, `indexesPromise`, `getIndexes()`, `invalidateChildrenCache()`) and the `isRefreshingIndexCount` + `queueMicrotask` guard. Both `loadIndexCount()` and `getChildren()` now call `fetchIndexes()` directly.
+
+Also removed the `invalidateChildrenCache` interface, type guard, and hook from `BaseExtendedTreeDataProvider.wrapItemInStateHandling`, since `IndexesItem` was the only consumer.
+
+**Reasoning:** The cache saved exactly one `listIndexes` round-trip in a narrow scenario (user expands the Indexes node right after the background count loads). But users rarely inspect indexes (it is a diagnostic/admin action), and `listIndexes` is a fast metadata query on a single collection (typically single-digit ms). The `listSearchIndexesForAtlas` call usually fails silently on most platforms (not supported), so it is also cheap. The cost of the cache was ~30 lines of state management code (promise-dedup, invalidation guards, queueMicrotask dance, BaseExtendedTreeDataProvider hook) with subtle timing semantics, for negligible user-facing gain. The same simplification was already applied to `DatabaseItem` for collection counts, which is a more frequent operation.
 
 ---
 
@@ -86,8 +93,8 @@ The `sizeOnDisk` field from `listDatabases` was defined in `DatabaseItemModel` b
 | `src/constants.ts`                         | `COUNT_PREFIX`, `COLLECTION_COUNT_LIMIT`              |
 | `src/utils/countPrefix.ts`                 | `getCountPrefix()` utility                            |
 | `src/documentdb/ClustersClient.ts`         | `countCollections()` method, `listDatabases` nameOnly |
-| `src/tree/BaseExtendedTreeDataProvider.ts` | `invalidateChildrenCache` hook                        |
-| `src/tree/documentdb/IndexesItem.ts`       | Index caching, `loadIndexCount()`, count description  |
+| `src/tree/BaseExtendedTreeDataProvider.ts` | Removed `invalidateChildrenCache` hook (no longer needed) |
+| `src/tree/documentdb/IndexesItem.ts`       | `loadIndexCount()`, count description (no caching)    |
 | `src/tree/documentdb/CollectionItem.ts`    | Count prefix on document count description            |
 | `src/tree/documentdb/DatabaseItem.ts`      | Collection count loading, "N+" display                |
 | `src/tree/documentdb/ClusterItemBase.ts`   | Trigger `loadCollectionCount()` on database creation  |
