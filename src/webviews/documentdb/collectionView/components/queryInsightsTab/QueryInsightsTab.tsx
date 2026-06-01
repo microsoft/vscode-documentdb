@@ -574,7 +574,27 @@ export const QueryInsightsMain = (): JSX.Element => {
             }
         }, 1000);
 
-        // Generate a unique request key to track if this request is still valid when it returns
+        // Generate a unique request key to track if this request is still valid when it returns.
+        //
+        // WHY THIS GUARD MATTERS — for future maintainers:
+        // tRPC subscriptions over the webview message channel are NOT
+        // strictly synchronous to `unsubscribe()`. When the user clicks
+        // Cancel and immediately clicks "Get AI Insights" again, the
+        // sequence is roughly:
+        //   1. handleCancelAI() → subscription.unsubscribe() (queues
+        //      `subscription.stop` to the host).
+        //   2. handleGetAISuggestions() → new subscription opens with a
+        //      NEW requestKey, which we capture into `stage3RequestKey`.
+        //   3. The host processes `subscription.stop` for #1 → may flush
+        //      one or two trailing `onData` / `onComplete` / `onError`
+        //      callbacks from the *old* subscription that were already
+        //      in flight.
+        // Without the requestKey check inside every state update below,
+        // those late callbacks would mutate `stage3Streaming` /
+        // `stage3Data` and corrupt the new request's state. The check
+        // `if (prev.stage3RequestKey !== requestKey) return prev;` is
+        // the single line keeping that race quiet — DO NOT REMOVE IT in
+        // a refactor "because the framework promises cleanup".
         const requestKey = crypto.randomUUID();
 
         // Set request key in queryInsights context
