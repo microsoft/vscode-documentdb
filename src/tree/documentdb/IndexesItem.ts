@@ -6,8 +6,16 @@
 import { createContextValue } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import {
+    ClustersClient,
+    type CollectionItemModel,
+    type DatabaseItemModel,
+    type IndexItemModel,
+} from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
+import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { getCountPrefix } from '../../utils/countPrefix';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { type TreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -28,6 +36,11 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     public contextValue: string = 'treeItem_indexes';
 
     private readonly experienceContextValue: string = '';
+    private indexCount: number | undefined;
+    private cachedIndexes: IndexItemModel[] | undefined;
+    private isLoadingCount: boolean = false;
+    private indexesPromise: Promise<IndexItemModel[]> | undefined;
+    private isRefreshingIndexCount: boolean = false;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -41,6 +54,96 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
     }
 
     async getChildren(): Promise<TreeElement[]> {
+        const indexes = [...(await this.getIndexes())];
+        const previousCount = this.indexCount;
+        this.indexCount = indexes.length;
+
+        // If the count changed (e.g. user-initiated refresh after an external
+        // mutation), re-render this node so the description matches the children
+        // we are about to return. The `isRefreshingIndexCount` guard prevents the
+        // resulting refresh from wiping the cache we just populated.
+        if (previousCount !== this.indexCount) {
+            this.isRefreshingIndexCount = true;
+            try {
+                ext.state.notifyChildrenChanged(this.id);
+            } finally {
+                queueMicrotask(() => {
+                    this.isRefreshingIndexCount = false;
+                });
+            }
+        }
+
+        // Sort indexes by name, with _id_ always first
+        indexes.sort((a, b) => compareIndexNames(a.name, b.name));
+
+        return indexes.map((index) => {
+            return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
+        });
+    }
+
+    /**
+     * Starts loading the index count asynchronously.
+     * When the count is retrieved, it triggers a tree item refresh to update the description.
+     * This method is fire-and-forget and does not block tree expansion.
+     */
+    public loadIndexCount(): void {
+        if (this.isLoadingCount || this.indexCount !== undefined) {
+            return;
+        }
+
+        this.isLoadingCount = true;
+        void this.fetchAndUpdateCount();
+    }
+
+    private async fetchAndUpdateCount(): Promise<void> {
+        try {
+            const indexes = await this.getIndexes();
+            this.indexCount = indexes.length;
+        } catch {
+            meterSilentCatch('IndexesItem_loadIndexCount');
+            this.indexCount = undefined;
+        } finally {
+            this.isLoadingCount = false;
+            this.isRefreshingIndexCount = true;
+            try {
+                ext.state.notifyChildrenChanged(this.id);
+            } finally {
+                queueMicrotask(() => {
+                    this.isRefreshingIndexCount = false;
+                });
+            }
+        }
+    }
+
+    private getIndexes(): Promise<IndexItemModel[]> {
+        if (this.cachedIndexes) {
+            return Promise.resolve(this.cachedIndexes);
+        }
+
+        if (!this.indexesPromise) {
+            this.indexesPromise = this.fetchIndexes()
+                .then((indexes) => {
+                    this.cachedIndexes = indexes;
+                    return indexes;
+                })
+                .finally(() => {
+                    this.indexesPromise = undefined;
+                });
+        }
+
+        return this.indexesPromise;
+    }
+
+    public invalidateChildrenCache(): void {
+        if (this.isRefreshingIndexCount) {
+            return;
+        }
+
+        this.cachedIndexes = undefined;
+        this.indexesPromise = undefined;
+    }
+
+    private async fetchIndexes(): Promise<IndexItemModel[]> {
         const client: ClustersClient = await ClustersClient.getClient(this.cluster.clusterId);
         const indexes = await client.listIndexes(this.databaseInfo.name, this.collectionInfo.name);
 
@@ -55,19 +158,25 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             // Search indexes not supported on this platform, continue without them
         }
 
-        // Sort indexes by name, with _id_ always first
-        indexes.sort((a, b) => compareIndexNames(a.name, b.name));
-
-        return indexes.map((index) => {
-            return new IndexItem(this.cluster, this.databaseInfo, this.collectionInfo, index);
-        });
+        return indexes;
     }
 
     getTreeItem(): vscode.TreeItem {
+        let description: string | undefined;
+        if (typeof this.indexCount === 'number' && this.indexCount > 0) {
+            const prefix = getCountPrefix();
+            if (prefix) {
+                description = `${prefix}${this.indexCount}`;
+            } else {
+                description = `${this.indexCount}`;
+            }
+        }
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: l10n.t('Indexes'),
+            description,
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };

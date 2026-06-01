@@ -1299,6 +1299,17 @@
             "default": null
           }
         }
+      },
+      {
+        "title": "Accessibility",
+        "properties": {
+          "documentDB.accessibility.hideCountPrefix": {
+            "order": 1,
+            "type": "boolean",
+            "default": false,
+            "description": "Hide the visual prefix indicator before item counts in the tree view, to reduce distractions and help with screen readers."
+          }
+        }
       }
     ],
     "walkthroughs": [

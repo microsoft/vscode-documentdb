@@ -3,7 +3,38 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { compareIndexNames } from './IndexesItem';
+import {
+    ClustersClient,
+    type CollectionItemModel,
+    type DatabaseItemModel,
+    type IndexItemModel,
+} from '../../documentdb/ClustersClient';
+import { type Experience } from '../../DocumentDBExperiences';
+import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
+import { compareIndexNames, IndexesItem } from './IndexesItem';
+
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    createContextValue: jest.fn((values: string[]) => values.join(';')),
+}));
+
+const notifyChildrenChangedMock = jest.fn();
+jest.mock('../../extensionVariables', () => ({
+    ext: {
+        state: {
+            notifyChildrenChanged: (...args: unknown[]) => notifyChildrenChangedMock(...args),
+        },
+    },
+}));
+
+jest.mock('../../utils/callWithAccumulatingTelemetry', () => ({
+    meterSilentCatch: jest.fn(),
+}));
+
+jest.mock('../../documentdb/ClustersClient', () => ({
+    ClustersClient: {
+        getClient: jest.fn(),
+    },
+}));
 
 describe('compareIndexNames', () => {
     it('places _id_ before any other index', () => {
@@ -59,5 +90,75 @@ describe('compareIndexNames', () => {
     it('returns 0 when both arguments are equal', () => {
         expect(compareIndexNames('_id_', '_id_')).toBe(0);
         expect(compareIndexNames('age_1', 'age_1')).toBe(0);
+    });
+});
+
+describe('IndexesItem - async index loading', () => {
+    const cluster = {
+        treeId: 'cluster1',
+        clusterId: 'cluster1',
+        dbExperience: { api: 'MongoDB' } as unknown as Experience,
+    } as TreeCluster<BaseClusterModel>;
+    const databaseInfo: DatabaseItemModel = { name: 'db1' };
+    const collectionInfo: CollectionItemModel = { name: 'coll1' };
+
+    const sampleIndexes: IndexItemModel[] = [
+        { name: '_id_', key: { _id: 1 } } as unknown as IndexItemModel,
+        { name: 'age_1', key: { age: 1 } } as unknown as IndexItemModel,
+        { name: 'name_1', key: { name: 1 } } as unknown as IndexItemModel,
+    ];
+
+    let listIndexesMock: jest.Mock;
+    let listSearchIndexesMock: jest.Mock;
+
+    beforeEach(() => {
+        jest.clearAllMocks();
+        notifyChildrenChangedMock.mockReset();
+
+        listIndexesMock = jest.fn().mockResolvedValue([...sampleIndexes]);
+        listSearchIndexesMock = jest.fn().mockRejectedValue(new Error('not supported'));
+
+        (ClustersClient.getClient as jest.Mock).mockResolvedValue({
+            listIndexes: listIndexesMock,
+            listSearchIndexesForAtlas: listSearchIndexesMock,
+        });
+    });
+
+    function flushAsync(): Promise<void> {
+        return new Promise((resolve) => setImmediate(resolve));
+    }
+
+    it('loadIndexCount fetches indexes once and exposes the count via description', async () => {
+        const item = new IndexesItem(cluster, databaseInfo, collectionInfo);
+
+        item.loadIndexCount();
+        await flushAsync();
+
+        expect(listIndexesMock).toHaveBeenCalledTimes(1);
+        expect(notifyChildrenChangedMock).toHaveBeenCalledWith(item.id);
+        expect(item.getTreeItem().description).toContain('3');
+    });
+
+    it('loadIndexCount is idempotent: a second call does not refetch', async () => {
+        const item = new IndexesItem(cluster, databaseInfo, collectionInfo);
+
+        item.loadIndexCount();
+        await flushAsync();
+        item.loadIndexCount();
+        await flushAsync();
+
+        expect(listIndexesMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('getChildren reuses indexes already fetched by loadIndexCount (no second API call)', async () => {
+        const item = new IndexesItem(cluster, databaseInfo, collectionInfo);
+
+        item.loadIndexCount();
+        await flushAsync();
+
+        const children = await item.getChildren();
+
+        expect(listIndexesMock).toHaveBeenCalledTimes(1);
+        expect(children).toHaveLength(3);
     });
 });
