@@ -58,9 +58,14 @@ async function ensureCache(): Promise<ContextAliasEntry[]> {
     if (!inflight) {
         inflight = loadFromStorage();
     }
-    const loaded = await inflight;
-    cache = loaded;
-    inflight = undefined;
+    // Same race fix as sourceStore.ensureCache: a concurrent `invalidate()`
+    // must not allow a stale snapshot to be committed back into `cache`.
+    const currentLoad = inflight;
+    const loaded = await currentLoad;
+    if (inflight === currentLoad) {
+        cache = loaded;
+        inflight = undefined;
+    }
     return loaded;
 }
 
@@ -115,24 +120,41 @@ export async function readAliases(): Promise<ContextAliasEntry[]> {
 }
 
 /**
+ * Serializes all mutating writes (setAlias / clearAliasesForSource /
+ * pruneAliasesForSource) so concurrent read-modify-write callers cannot
+ * each derive a filtered list from the same cached snapshot and then
+ * clobber each other on persist. Reads are not serialized because they
+ * never modify the cache.
+ */
+let writeChain: Promise<unknown> = Promise.resolve();
+
+function serializeWrite<T>(work: () => Promise<T>): Promise<T> {
+    const next = writeChain.then(work, work);
+    writeChain = next.catch(() => undefined);
+    return next;
+}
+
+/**
  * Sets or clears the alias for `(sourceId, contextName)`. Passing `undefined`
  * or an empty/whitespace-only string removes any existing entry.
  */
 export async function setAlias(sourceId: string, contextName: string, alias: string | undefined): Promise<void> {
-    const trimmed = alias?.trim() ?? '';
-    const entries = await ensureCache();
-    const filtered = entries.filter((e) => !(e.sourceId === sourceId && e.contextName === contextName));
+    return serializeWrite(async () => {
+        const trimmed = alias?.trim() ?? '';
+        const entries = await ensureCache();
+        const filtered = entries.filter((e) => !(e.sourceId === sourceId && e.contextName === contextName));
 
-    if (trimmed.length === 0) {
-        if (filtered.length === entries.length) {
-            return; // No change.
+        if (trimmed.length === 0) {
+            if (filtered.length === entries.length) {
+                return; // No change.
+            }
+            await persist(filtered);
+            return;
         }
-        await persist(filtered);
-        return;
-    }
 
-    filtered.push({ sourceId, contextName, alias: trimmed });
-    await persist(filtered);
+        filtered.push({ sourceId, contextName, alias: trimmed });
+        await persist(filtered);
+    });
 }
 
 /**
@@ -140,12 +162,14 @@ export async function setAlias(sourceId: string, contextName: string, alias: str
  * removed (right-click Remove or Manage UI trash button).
  */
 export async function clearAliasesForSource(sourceId: string): Promise<void> {
-    const entries = await ensureCache();
-    const filtered = entries.filter((e) => e.sourceId !== sourceId);
-    if (filtered.length === entries.length) {
-        return;
-    }
-    await persist(filtered);
+    return serializeWrite(async () => {
+        const entries = await ensureCache();
+        const filtered = entries.filter((e) => e.sourceId !== sourceId);
+        if (filtered.length === entries.length) {
+            return;
+        }
+        await persist(filtered);
+    });
 }
 
 /**
@@ -153,13 +177,15 @@ export async function clearAliasesForSource(sourceId: string): Promise<void> {
  * in `knownContextNames`. Best-effort: callers may invoke fire-and-forget.
  */
 export async function pruneAliasesForSource(sourceId: string, knownContextNames: readonly string[]): Promise<void> {
-    const known = new Set(knownContextNames);
-    const entries = await ensureCache();
-    const filtered = entries.filter((e) => e.sourceId !== sourceId || known.has(e.contextName));
-    if (filtered.length === entries.length) {
-        return;
-    }
-    await persist(filtered);
+    return serializeWrite(async () => {
+        const known = new Set(knownContextNames);
+        const entries = await ensureCache();
+        const filtered = entries.filter((e) => e.sourceId !== sourceId || known.has(e.contextName));
+        if (filtered.length === entries.length) {
+            return;
+        }
+        await persist(filtered);
+    });
 }
 
 /**

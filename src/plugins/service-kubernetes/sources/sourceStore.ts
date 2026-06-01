@@ -82,9 +82,15 @@ async function ensureCache(): Promise<KubeconfigSourceRecord[]> {
     if (!inflightLoad) {
         inflightLoad = loadFromStorage();
     }
-    const loaded = await inflightLoad;
-    cache = loaded;
-    inflightLoad = undefined;
+    // Capture the current inflight promise locally so that an `invalidateCache()`
+    // racing this load (which would null out the module-level `inflightLoad`)
+    // cannot trick us into committing a now-stale snapshot back into `cache`.
+    const currentLoad = inflightLoad;
+    const loaded = await currentLoad;
+    if (inflightLoad === currentLoad) {
+        cache = loaded;
+        inflightLoad = undefined;
+    }
     return loaded;
 }
 
@@ -257,6 +263,14 @@ async function doTryAddFileSource(_absolutePath: string, normalizedPath: string)
  * If an inline source already exists whose stored YAML matches the provided
  * YAML (after trimming), the existing record is returned unchanged.
  */
+/**
+ * Tracks the in-flight inline add for each YAML hash. Mirrors
+ * {@link inFlightFileAdds} so concurrent paste-or-import attempts for the
+ * same YAML resolve to a single shared record instead of producing
+ * duplicates with colliding `nextInlineLabel` numbering.
+ */
+const inFlightInlineAdds = new Map<string, Promise<KubeconfigSourceRecord>>();
+
 export async function addInlineSource(yaml: string): Promise<KubeconfigSourceRecord> {
     const trimmed = yaml.trim();
     if (trimmed.length === 0) {
@@ -264,6 +278,34 @@ export async function addInlineSource(yaml: string): Promise<KubeconfigSourceRec
     }
 
     const incomingHash = sha256(trimmed);
+
+    // Same retry-through-the-lock pattern used by tryAddFileSource: keyed by
+    // the YAML hash so two concurrent pastes of the same content share a
+    // single underlying create instead of each generating a fresh UUID.
+    // eslint-disable-next-line no-constant-condition
+    while (true) {
+        const inFlight = inFlightInlineAdds.get(incomingHash);
+        if (inFlight) {
+            try {
+                return await inFlight;
+            } catch {
+                continue;
+            }
+        }
+
+        const work = doAddInlineSource(trimmed, incomingHash);
+        inFlightInlineAdds.set(incomingHash, work);
+        try {
+            return await work;
+        } finally {
+            if (inFlightInlineAdds.get(incomingHash) === work) {
+                inFlightInlineAdds.delete(incomingHash);
+            }
+        }
+    }
+}
+
+async function doAddInlineSource(trimmed: string, incomingHash: string): Promise<KubeconfigSourceRecord> {
     const sources = await ensureCache();
 
     for (const record of sources) {
@@ -300,10 +342,21 @@ export async function renameSource(id: string, newLabel: string): Promise<void> 
         return;
     }
 
-    const order = sources.indexOf(record);
+    // Preserve the persisted `order` rather than re-deriving it from the
+    // current cache index. The cache is sorted by stored order, but stored
+    // orders are sparse (default uses -1, file/inline use nextOrder() which
+    // is monotonic but skips holes after deletions) — so `indexOf` is not a
+    // round-trip-safe representation. Read the original order from storage
+    // and forward it unchanged.
+    const existingItem = await StorageService.get(KUBECONFIG_STORAGE_NAME).getItem<SourceItemProperties>(
+        KUBECONFIG_STORAGE_WORKSPACE,
+        id,
+    );
+    const preservedOrder = orderOf(existingItem ?? { id, name: '', properties: { kind: record.kind, order: 0 } });
+
     const updated: KubeconfigSourceRecord = { ...record, label: trimmed };
     const secrets = await readSecretsForExistingItem(id);
-    await pushItem(updated, order, secrets);
+    await pushItem(updated, preservedOrder, secrets);
     invalidateCache();
 }
 
