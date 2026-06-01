@@ -63,6 +63,19 @@ export async function removeKubeconfigSource(
         );
     }
     context.telemetry.properties.kubeconfigSourceResult = 'removed';
+
+    // Clear any cached error/recovery children for the removed source node.
+    // The Default source uses a stable reserved id, so a remove + re-add round
+    // trip would otherwise re-serve the previous failure cache for that node.
+    // File / inline sources get fresh UUIDs on re-add, so their entries are
+    // just orphaned map noise rather than a behavior bug, but clearing them
+    // here keeps the cache bounded.
+    try {
+        ext.discoveryBranchDataProvider.resetNodeErrorState(node.id);
+    } catch {
+        // Discovery provider may not yet be wired during early activation.
+    }
+
     const { refreshKubernetesRoot } = await import('./refreshKubernetesRoot');
     refreshKubernetesRoot();
     ext.outputChannel.appendLine(vscode.l10n.t('Removed kubeconfig source "{0}".', node.source.label));

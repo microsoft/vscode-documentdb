@@ -60,7 +60,7 @@ async function migrateDiscoveryProviderVisibility(): Promise<void> {
     const existingHiddenProviderIds = ext.context.globalState.get<string[]>(HIDDEN_DISCOVERY_PROVIDER_IDS_KEY);
 
     if (Array.isArray(existingHiddenProviderIds)) {
-        hiddenProviderIdsCache = sanitizeProviderIds(existingHiddenProviderIds);
+        hiddenProviderIdsCache = normalizeProviderIds(existingHiddenProviderIds);
         return;
     }
 
@@ -84,29 +84,43 @@ function readHiddenDiscoveryProviderIds(): string[] {
     }
 
     const hiddenProviderIds = ext.context.globalState.get<string[]>(HIDDEN_DISCOVERY_PROVIDER_IDS_KEY, []);
-    hiddenProviderIdsCache = sanitizeProviderIds(hiddenProviderIds);
+    hiddenProviderIdsCache = normalizeProviderIds(hiddenProviderIds);
     return [...hiddenProviderIdsCache];
 }
 
 async function writeHiddenDiscoveryProviderIds(providerIds: readonly string[]): Promise<void> {
-    const sanitizedProviderIds = sanitizeProviderIds(providerIds);
-    await ext.context.globalState.update(HIDDEN_DISCOVERY_PROVIDER_IDS_KEY, sanitizedProviderIds);
-    hiddenProviderIdsCache = sanitizedProviderIds;
+    // Persist the full normalized denylist (including ids for providers that
+    // are not currently registered, e.g. a plugin loaded later or in a future
+    // build). Filtering against `DiscoveryService.listProviders()` only at
+    // read/filter time prevents a user's hide preference from being silently
+    // forgotten when registration timing changes.
+    const persistedProviderIds = normalizeProviderIds(providerIds);
+    await ext.context.globalState.update(HIDDEN_DISCOVERY_PROVIDER_IDS_KEY, persistedProviderIds);
+    hiddenProviderIdsCache = persistedProviderIds;
 }
 
 async function tryWriteHiddenDiscoveryProviderIds(providerIds: readonly string[]): Promise<void> {
     try {
         await writeHiddenDiscoveryProviderIds(providerIds);
     } catch (error) {
-        hiddenProviderIdsCache = sanitizeProviderIds(providerIds);
+        hiddenProviderIdsCache = normalizeProviderIds(providerIds);
         const message = error instanceof Error ? error.message : String(error);
         ext.outputChannel.warn(`[DiscoveryProviderVisibility] Failed to migrate discovery visibility: ${message}`);
     }
 }
 
-function sanitizeProviderIds(providerIds: readonly string[]): string[] {
-    const registeredProviderIds = new Set(DiscoveryService.listProviders().map((provider) => provider.id));
-    return Array.from(new Set(providerIds.map(normalizeProviderId).filter((id) => registeredProviderIds.has(id))));
+/**
+ * Deduplicates and renames legacy ids without dropping unknown providers.
+ * Use this for storage round-trips so that hide preferences for plugins that
+ * aren't currently registered (timing-dependent activation, future builds)
+ * survive read/write cycles.
+ */
+function normalizeProviderIds(providerIds: readonly string[]): string[] {
+    return Array.from(
+        new Set(
+            providerIds.filter((id): id is string => typeof id === 'string' && id.length > 0).map(normalizeProviderId),
+        ),
+    );
 }
 
 function normalizeProviderId(providerId: string): string {

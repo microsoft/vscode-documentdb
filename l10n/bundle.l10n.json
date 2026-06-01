@@ -267,6 +267,7 @@
   "Cancel this operation": "Cancel this operation",
   "Cannot {0}": "Cannot {0}",
   "Cannot add \"{0}\" as a kubeconfig source: not a regular file.": "Cannot add \"{0}\" as a kubeconfig source: not a regular file.",
+  "Cannot bind 127.0.0.1:{0}: permission denied. Choose a different local port (typically 1024 or higher).": "Cannot bind 127.0.0.1:{0}: permission denied. Choose a different local port (typically 1024 or higher).",
   "Cannot copy collection to itself": "Cannot copy collection to itself",
   "Cannot delete folder \"{0}\". The following {1} task(s) are using connections within this folder:": "Cannot delete folder \"{0}\". The following {1} task(s) are using connections within this folder:",
   "Cannot move {0} {1}. The following {2} task(s) are using connections being moved:": "Cannot move {0} {1}. The following {2} task(s) are using connections being moved:",

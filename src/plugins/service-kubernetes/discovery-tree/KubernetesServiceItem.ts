@@ -102,8 +102,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         const sanitizedContext = sanitizeForId(contextInfo.name);
         const sanitizedNs = sanitizeForId(serviceInfo.namespace);
         const sanitizedSvc = sanitizeForId(serviceInfo.name);
-        const sanitizedId = `${sanitizedNs}__${sanitizedSvc}`;
-        const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedSource}_${sanitizedContext}__${sanitizedId}`;
+        const sanitizedClusterSuffix = `${sanitizedSource}_${sanitizedContext}__${sanitizedNs}__${sanitizedSvc}`;
+        const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedClusterSuffix}`;
 
         const cluster: TreeCluster<KubernetesServiceModel> = {
             name: serviceInfo.displayName,
@@ -116,7 +116,14 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
             servicePort: serviceInfo.port,
             nodePort: serviceInfo.nodePort,
             externalAddress: serviceInfo.externalAddress,
-            treeId: `${parentId}/${sanitizedId}`,
+            // The tree element id intentionally ends with the same suffix that
+            // `clusterId` carries (the part after the provider-id prefix).
+            // `DiscoveryBranchDataProvider.findClusterNodeByClusterId` strips
+            // the provider prefix from `clusterId` and searches the tree for a
+            // node whose id ends with `/${suffix}` — so the leaf path
+            // component must equal that suffix for "open collection by
+            // clusterId" / "reveal saved cluster" flows to resolve.
+            treeId: `${parentId}/${sanitizedClusterSuffix}`,
             viewId: Views.DiscoveryView,
         };
 
