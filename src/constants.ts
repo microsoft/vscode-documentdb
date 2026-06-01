@@ -36,4 +36,4 @@ export const COUNT_PREFIX = '\u2027\u2027 ';
  * The cursor fetches `COLLECTION_COUNT_LIMIT + 1` items; if it gets more
  * than the limit the description shows e.g. "5+".
  */
-export const COLLECTION_COUNT_LIMIT = 5;
+export const COLLECTION_COUNT_LIMIT = 50;
