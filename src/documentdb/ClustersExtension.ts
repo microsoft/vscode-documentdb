@@ -613,6 +613,15 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { reloadKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/reloadKubeconfigSource');
+                        await reloadKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.kubernetes.renameContext',
                     withTreeNodeCommandCorrelation(async (context, node) => {
                         const { renameKubernetesContext } =

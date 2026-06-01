@@ -1042,6 +1042,8 @@
   "Reload": "Reload",
   "Reload document from the database": "Reload document from the database",
   "Reload Window": "Reload Window",
+  "Reloaded kubeconfig source \"{0}\". Found {1} context(s).": "Reloaded kubeconfig source \"{0}\". Found {1} context(s).",
+  "Reloading kubeconfig source \"{0}\"…": "Reloading kubeconfig source \"{0}\"…",
   "Remind Me Later": "Remind Me Later",
   "Remove": "Remove",
   "Remove kubeconfig source \"{0}\"?": "Remove kubeconfig source \"{0}\"?",

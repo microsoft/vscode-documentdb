@@ -132,9 +132,9 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/retry`,
-                label: vscode.l10n.t('Retry'),
+                label: vscode.l10n.t('Reload'),
                 iconPath: new vscode.ThemeIcon('refresh'),
-                commandId: 'vscode-documentdb.command.internal.retry',
+                commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
                 commandArgs: [this],
             }),
         ];
