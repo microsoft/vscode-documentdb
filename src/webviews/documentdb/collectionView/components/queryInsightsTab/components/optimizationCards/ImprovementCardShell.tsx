@@ -95,7 +95,7 @@ export function ImprovementCardShell({ mode = 'loading', ref }: ImprovementCardS
                     {isEmpty ? (
                         <Text size={300} style={{ display: 'block', marginTop: tokens.spacingVerticalS }}>
                             {l10n.t(
-                                'Your query is already running efficiently. No index changes are necessary. The other cards explain the analysis and how the query executes.',
+                                'No index changes were recommended for this query. See the other cards for the full analysis and query execution details.',
                             )}
                         </Text>
                     ) : (
