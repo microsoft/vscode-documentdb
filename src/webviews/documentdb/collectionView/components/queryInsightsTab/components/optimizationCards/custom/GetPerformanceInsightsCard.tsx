@@ -11,7 +11,6 @@ import {
     MessageBar,
     MessageBarBody,
     MessageBarTitle,
-    Spinner,
     Text,
     tokens,
 } from '@fluentui/react-components';
@@ -156,9 +155,18 @@ export function GetPerformanceInsightsCard({
                     )}
                     <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing...')} />
                     {isLoading ? (
-                        <div className="get-performance-insights-card-loading">
-                            <Spinner size="small" aria-hidden="true" />
-                            <Text size={300}>{l10n.t('AI is analyzing...')}</Text>
+                        // During Stage 3 loading we no longer render an
+                        // in-card spinner + "AI is analyzing…" row. The
+                        // three pre-reserved Stage 3 slots below the
+                        // card each carry their own StreamingInlineProgress
+                        // spinner (Analyzing… / Drafting… / Explaining…),
+                        // so a fourth spinner inside this card was
+                        // visually redundant. We keep ONLY the Cancel
+                        // affordance so the user can still stop the
+                        // request from this card. The accessibility
+                        // announcer above continues to fire so screen
+                        // readers hear "AI is analyzing…" once.
+                        <div className="get-performance-insights-card-actions">
                             <Button appearance="subtle" size="small" onClick={onCancel}>
                                 {l10n.t('Cancel')}
                             </Button>

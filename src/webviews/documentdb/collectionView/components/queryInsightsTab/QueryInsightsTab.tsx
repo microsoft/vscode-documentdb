@@ -857,13 +857,16 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     // Analysis Card
     //
-    // Option A layout: as soon as the Stage 3 stream opens (`streaming` is
-    // non-null), the analysis slot is reserved at the canonical top
-    // position with a spinner placeholder. The placeholder uses the same
-    // key as the filled card so the swap is in-place — the rest of the
-    // page never reflows because of the analysis card.
-    if (currentStage.phase === 3 && streaming) {
-        const summarySource = streaming.summary;
+    // Option A layout: as soon as Stage 3 loading STARTS (status='loading',
+    // before any structured event has arrived) the analysis slot is
+    // reserved at the canonical top position with a spinner placeholder.
+    // We then continue to render it while `streaming` is non-null and on
+    // success too. The slot only disappears on cancel/error (both clear
+    // `streaming` and move status away from 'loading'). The placeholder
+    // uses the same key as the filled card so the swap is in-place —
+    // the rest of the page never reflows because of the analysis card.
+    if (currentStage.phase === 3 && (currentStage.status === 'loading' || streaming)) {
+        const summarySource = streaming?.summary;
         insightCards.push({
             key: `${keyPrefix}analysis-card`,
             // Mark as in-flight while streaming so AnimatedCardList
@@ -910,10 +913,12 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Recommendation Cards (Option A layout, see Analysis Card above).
     //
     // Three rendering modes, mutually exclusive:
-    //   1. Pending placeholder. Subscription open, no `recommendationStarted`
-    //      event yet, terminal `complete` not seen. Reserves the
-    //      recommendations slot with a single `ImprovementCardShell` so the
-    //      page layout is final from t=0.
+    //   1. Pending placeholder. Stage 3 is loading and no
+    //      `recommendationStarted` event has arrived yet (covers both
+    //      pre-first-event time-to-first-token AND the case where the
+    //      LLM is still writing earlier sections). Reserves the
+    //      recommendations slot with one `ImprovementCardShell mode='loading'`
+    //      so the page layout is final from t=0.
     //   2. Progressive shells / filled cards. After the first
     //      `recommendationStarted` event we know how many items the LLM is
     //      writing; render one card per index (`ImprovementCardShell` while
@@ -921,11 +926,11 @@ export const QueryInsightsMain = (): JSX.Element => {
     //      keys per index so each shell→filled transition is in-place.
     //   3. Empty-state "no recommendations needed". On the terminal
     //      `complete` event with `improvementCards.length === 0` (the
-    //      "query is already optimal" path) the slot becomes a positive
-    //      info card so the user understands the absence is intentional
-    //      rather than a missing fetch.
-    if (currentStage.phase === 3 && streaming) {
-        const hasStartedRecs = streaming.recommendations.length > 0;
+    //      "query is already optimal" path) we re-render the same key
+    //      `rec-0` with `<ImprovementCardShell mode='empty' />` so the
+    //      card stays in place — only the icon, title and body swap.
+    if (currentStage.phase === 3 && (currentStage.status === 'loading' || streaming)) {
+        const hasStartedRecs = (streaming?.recommendations.length ?? 0) > 0;
         const completedWithNoRecs =
             queryInsightsState.stage3Data !== null && queryInsightsState.stage3Data.improvementCards.length === 0;
 
@@ -934,7 +939,9 @@ export const QueryInsightsMain = (): JSX.Element => {
             // the same icon and outer Card as the filled `ImprovementCard`
             // via `ImprovementCardShell`, so the card's identity never
             // changes when content arrives).
-            streaming.recommendations.forEach((rec, index) => {
+            // `streaming` is guaranteed non-null here because `hasStartedRecs`
+            // is true (it required `streaming?.recommendations.length > 0`).
+            streaming!.recommendations.forEach((rec, index) => {
                 const key = `${keyPrefix}rec-${index}`;
                 if (rec === null) {
                     insightCards.push({ key, component: <ImprovementCardShell /> });
@@ -988,11 +995,11 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Educational Markdown Card — Understanding Query Execution
     //
     // Option A layout: same pre-reserved slot pattern as the Analysis
-    // Card above — the educational slot is reserved as soon as the
-    // Stage 3 stream opens, and the same key is used for the spinner
+    // Card above — the educational slot is reserved from the moment
+    // Stage 3 loading starts, and the same key is used for the spinner
     // placeholder and the filled card so the swap is in-place.
-    if (currentStage.phase === 3 && streaming) {
-        const educationalSource = streaming.educational;
+    if (currentStage.phase === 3 && (currentStage.status === 'loading' || streaming)) {
+        const educationalSource = streaming?.educational;
         insightCards.push({
             key: `${keyPrefix}understanding-execution`,
             // See `analysis-card` above: Fade while streaming so the
