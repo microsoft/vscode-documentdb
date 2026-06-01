@@ -31,13 +31,7 @@
  */
 
 import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens } from '@fluentui/react-components';
-import {
-    ChatMailRegular,
-    CheckmarkCircleRegular,
-    InfoRegular,
-    SparkleRegular,
-    WarningRegular,
-} from '@fluentui/react-icons';
+import { ChatMailRegular, InfoRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
@@ -964,20 +958,17 @@ export const QueryInsightsMain = (): JSX.Element => {
             });
         } else if (completedWithNoRecs) {
             // Mode 3: empty-state, terminal complete with zero
-            // recommendations. CheckmarkCircle reads as positive
-            // affirmation rather than "data missing".
+            // recommendations. Reuses the SAME React key as the Mode 1
+            // placeholder (`rec-0`) and the SAME component
+            // (ImprovementCardShell). The component renders differently
+            // based on the `mode` prop (icon swaps to CheckmarkCircle,
+            // title and body swap to the empty-state copy). React renders
+            // the change in place — the card frame stays put, no remount,
+            // no card disappearing and reappearing. See
+            // ImprovementCardShell's JSDoc for the per-mode table.
             insightCards.push({
-                key: `${keyPrefix}no-recommendations`,
-                component: (
-                    <MarkdownCard
-                        icon={<CheckmarkCircleRegular />}
-                        title={l10n.t('No index changes recommended')}
-                        content={l10n.t(
-                            'Your query is already running efficiently. No index changes are necessary. The other cards explain the analysis and how the query executes.',
-                        )}
-                        showAiDisclaimer={false}
-                    />
-                ),
+                key: `${keyPrefix}rec-0`,
+                component: <ImprovementCardShell mode="empty" />,
             });
         } else {
             // Mode 1: pending placeholder. Uses the SAME key the first
