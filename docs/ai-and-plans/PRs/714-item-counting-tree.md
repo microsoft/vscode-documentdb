@@ -88,23 +88,47 @@ The `sizeOnDisk` field from `listDatabases` was defined in `DatabaseItemModel` b
 
 ## Files changed
 
-| File                                       | Purpose                                               |
-| ------------------------------------------ | ----------------------------------------------------- |
-| `src/constants.ts`                         | `COUNT_PREFIX`, `COLLECTION_COUNT_LIMIT`              |
-| `src/utils/countPrefix.ts`                 | `getCountPrefix()` utility                            |
-| `src/documentdb/ClustersClient.ts`         | `countCollections()` method, `listDatabases` nameOnly |
+| File                                       | Purpose                                                   |
+| ------------------------------------------ | --------------------------------------------------------- |
+| `src/constants.ts`                         | `COUNT_PREFIX`, `COLLECTION_COUNT_LIMIT`                  |
+| `src/utils/countPrefix.ts`                 | `getCountPrefix()` utility                                |
+| `src/documentdb/ClustersClient.ts`         | `countCollections()` method, `listDatabases` nameOnly     |
 | `src/tree/BaseExtendedTreeDataProvider.ts` | Removed `invalidateChildrenCache` hook (no longer needed) |
-| `src/tree/documentdb/IndexesItem.ts`       | `loadIndexCount()`, count description (no caching)    |
-| `src/tree/documentdb/CollectionItem.ts`    | Count prefix on document count description            |
-| `src/tree/documentdb/DatabaseItem.ts`      | Collection count loading, "N+" display                |
-| `src/tree/documentdb/ClusterItemBase.ts`   | Trigger `loadCollectionCount()` on database creation  |
-| `src/tree/documentdb/IndexesItem.test.ts`  | 3 async index loading tests                           |
-| `src/tree/documentdb/DatabaseItem.test.ts` | 5 cursor-based collection count tests                 |
-| `package.json`                             | `documentDB.accessibility.hideCountPrefix` setting    |
-| `l10n/bundle.l10n.json`                    | New localization keys                                 |
+| `src/tree/documentdb/IndexesItem.ts`       | `loadIndexCount()`, count description (no caching)        |
+| `src/tree/documentdb/CollectionItem.ts`    | Count prefix on document count description                |
+| `src/tree/documentdb/DatabaseItem.ts`      | Collection count loading, "N+" display                    |
+| `src/tree/documentdb/ClusterItemBase.ts`   | Trigger `loadCollectionCount()` on database creation      |
+| `src/tree/documentdb/IndexesItem.test.ts`  | 3 async index loading tests                               |
+| `src/tree/documentdb/DatabaseItem.test.ts` | 5 cursor-based collection count tests                     |
+| `package.json`                             | `documentDB.accessibility.hideCountPrefix` setting        |
+| `l10n/bundle.l10n.json`                    | New localization keys                                     |
 
 ---
 
 ## Acknowledgments
 
 The core idea of background count loading with `notifyChildrenChanged` originated from community contributor @P-r-e-m-i-u-m in PRs #671 and #675. Their caching approach and the fire-and-forget pattern informed the architecture used here. The PRs could not be merged due to an unresolved Contributor License Agreement, but the contribution is acknowledged in the closing comments on those PRs.
+
+---
+
+## Review follow-ups and decisions
+
+This section records the outcomes of the PR #714 review (Copilot reviewer plus a manual review). Bug fixes landed as separate commits; the architectural decisions below are captured here for future reference.
+
+### Fixed
+
+- **Show zero counts.** `getTreeItem()` on `DatabaseItem` and `IndexesItem` now displays any numeric count, including `0` (guard changed from `count > 0` to `typeof count === 'number'`). This makes the description consistent with the tooltip and lets users distinguish a loaded-and-empty node from a not-yet-loaded one. Covered by unit tests.
+- **Exact-count race.** A background `countCollections()` request could resolve after `getChildren()` had already established the exact collection count, regressing the description from the exact value back to a capped `N+`. Fixed with an authoritative `collectionCountIsExact` flag: `getChildren()` sets it (and clears `isLoadingCount`), and the background fetch skips its write once the count is exact. Covered by a regression test.
+- **Failed-load sentinel.** `collectionCount` and `indexCount` were widened to `number | undefined | null`. A failed load now stores `null` (not `undefined`) so the load is not retried for that item instance, matching the existing `CollectionItem.documentCount` convention. The description stays hidden because the guard checks `typeof === 'number'`.
+
+### Decisions
+
+- **Empty `admin` filtering vs. `nameOnly` (open decision).** The tree hides the `admin` database only when it is empty, so that an `admin` database containing user-managed content (users, roles, custom collections) remains visible. That conditional hide depends on the `empty` field from `listDatabases`. The `nameOnly: true` optimization omits `empty` (and `sizeOnDisk`), so the empty-`admin` filter currently does not take effect. Options: (a) revert `listDatabases()` to a full listing so `empty` is available again, accepting a slightly larger payload; (b) keep `nameOnly` and always hide `admin`, accepting that a non-empty `admin` becomes unreachable from the tree; (c) keep `nameOnly` and special-case `admin` with a targeted empty check. Recommendation: option (a), because the database-list payload is small and hide-when-empty is the behavior users rely on. This decision is pending and the `nameOnly` change should not ship as-is without resolving it.
+
+- **`notifyChildrenChanged` from inside `getChildren()` (accepted, bounded tradeoff).** Updating only a node's description requires a refresh, and neither the VS Code TreeDataProvider API nor `TreeElementStateManager` offers an item-only (no-children) refresh; `notifyChildrenChanged(id)` always re-resolves an expanded node's children too. The refresh fired from `getChildren()` is guarded by `previousCount !== count`, so in the common case (a database with `<= COLLECTION_COUNT_LIMIT` collections) the background count already matches and no extra fetch occurs. The one redundant `listCollections` only happens in the `N+` to exact correction path for large databases. Accepted as a bounded cost.
+
+- **Double `listIndexes` on expansion (accepted, future optimization noted).** Commit 5 removed the index cache, so `loadIndexCount()` and `getChildren()` each call `fetchIndexes()` (one extra `listIndexes` plus a usually-failing `listSearchIndexesForAtlas` per expansion). This is consistent with the PR's "indexes are cheap metadata" stance and avoids reintroducing cache-invalidation complexity. A future optimization is to source the background count from a count-only path (for example `$collStats.nindexes`) so the count never lists indexes, leaving `getChildren()` as the only `listIndexes` call. Left as future work.
+
+- **Concurrency / batching deferred.** Background collection-count loading currently starts one request per database with no concurrency limit. This is deferred to issue #715 (draft, on-hold), which proposes bounded batch reads on expansion with a "Load more" tree item and a per-cluster concurrency limiter consistent with the existing document-count limiter.
+
+- **Count-prefix accessibility default (unchanged).** The `\u2027\u2027` count prefix remains enabled by default with the `documentDB.accessibility.hideCountPrefix` opt-out. Left as-is by design.
