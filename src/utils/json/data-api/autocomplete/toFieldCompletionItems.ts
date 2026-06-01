@@ -35,9 +35,11 @@ export interface FieldCompletionData {
      * Field reference for aggregation expressions, e.g., "$age", "$address.city".
      *
      * When every dot-separated segment is a valid identifier the `$field` prefix
-     * syntax is used.  If any segment contains special characters (dashes, spaces,
-     * quotes, etc.) — including in nested paths like `a.order-items` — the
-     * `$getField` form is emitted instead, e.g., `{ $getField: "order-items" }`.
+     * syntax is used.  When the first segment is unsafe (e.g. `order-items`) the
+     * top-level `$getField` form is emitted.  For nested paths where an unsafe
+     * segment appears after a safe prefix (e.g. `a.order-items`) the `$getField`
+     * expression uses the `input` parameter to reference the parent, producing
+     * e.g. `{ $getField: { field: "order-items", input: "$a" } }`.
      */
     referenceText: string;
 }
@@ -62,17 +64,33 @@ function escapeFieldName(path: string): string {
 }
 
 /**
- * Returns true when every dot-separated segment of `path` is a valid
- * identifier, meaning the `$field`-prefix aggregation syntax is safe.
+ * Build a valid MQL aggregation field reference for the given path.
  *
- * The `$` prefix syntax (e.g. `$address.city`) is valid MQL only when
- * each segment between dots is a valid identifier.  Paths where any
- * segment contains dashes, spaces, or quotes (e.g. `order-items`,
- * `a.order-items`, `my field`, `say"hi"`) cannot use the `$` prefix
- * and must fall back to `$getField`.
+ * - All segments safe (e.g. `age`, `address.city`) → `$path`
+ * - First segment unsafe (e.g. `order-items`) → `{ $getField: "name" }`
+ * - Unsafe segment after safe prefix (e.g. `a.order-items`) →
+ *   `{ $getField: { field: "order-items", input: "$a" } }`
  */
-function isSafeAggregationReference(path: string): boolean {
-    return path.split('.').every((segment) => JS_IDENTIFIER_PATTERN.test(segment));
+function buildAggregationReference(path: string): string {
+    const segments = path.split('.');
+
+    const firstUnsafeIdx = segments.findIndex((s) => !JS_IDENTIFIER_PATTERN.test(s));
+
+    if (firstUnsafeIdx === -1) {
+        // All segments are valid identifiers — use $prefix syntax
+        return `$${path}`;
+    }
+
+    const escaped = escapeFieldName(segments[firstUnsafeIdx]);
+
+    if (firstUnsafeIdx === 0) {
+        // First segment is unsafe — top-level $getField
+        return `{ $getField: "${escaped}" }`;
+    }
+
+    // Unsafe segment has a safe prefix — use $getField with input
+    const safePrefix = segments.slice(0, firstUnsafeIdx).join('.');
+    return `{ $getField: { field: "${escaped}", input: "$${safePrefix}" } }`;
 }
 
 /**
@@ -93,12 +111,7 @@ export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionDat
             insertText = entry.path;
         }
 
-        let referenceText: string;
-        if (isSafeAggregationReference(entry.path)) {
-            referenceText = `$${entry.path}`;
-        } else {
-            referenceText = `{ $getField: "${escapeFieldName(entry.path)}" }`;
-        }
+        const referenceText = buildAggregationReference(entry.path);
 
         return {
             fieldName: entry.path,

@@ -107,6 +107,22 @@ describe('toFieldCompletionItems', () => {
         expect(result[1].referenceText).toBe('{ $getField: "my field" }');
     });
 
+    it('uses $getField with input for nested paths with unsafe segment', () => {
+        const fields: FieldEntry[] = [
+            { path: 'a.order-items', type: 'string', bsonType: 'string' },
+            { path: 'x.y.special-field', type: 'string', bsonType: 'string' },
+        ];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe(
+            '{ $getField: { field: "order-items", input: "$a" } }',
+        );
+        expect(result[1].referenceText).toBe(
+            '{ $getField: { field: "special-field", input: "$x.y" } }',
+        );
+    });
+
     it('escapes embedded double quotes in $getField referenceText', () => {
         const fields: FieldEntry[] = [{ path: 'say"hi"', type: 'string', bsonType: 'string' }];
         const result = toFieldCompletionItems(fields);
