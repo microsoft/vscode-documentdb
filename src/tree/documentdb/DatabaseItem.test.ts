@@ -140,4 +140,15 @@ describe('DatabaseItem - async collection count loading', () => {
         const tooltip = treeItem.tooltip as { value: string };
         expect(tooltip.value).toContain('3');
     });
+
+    it('shows a zero count when the database has no collections', async () => {
+        countCollectionsMock.mockResolvedValue({ count: 0, hasMore: false });
+
+        const item = new DatabaseItem(cluster, databaseInfo);
+
+        item.loadCollectionCount();
+        await flushAsync();
+
+        expect(item.getTreeItem().description as string).toContain('0');
+    });
 });

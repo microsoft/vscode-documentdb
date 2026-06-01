@@ -116,7 +116,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
 
     getTreeItem(): vscode.TreeItem {
         let description: string | undefined;
-        if (typeof this.indexCount === 'number' && this.indexCount > 0) {
+        if (typeof this.indexCount === 'number') {
             const prefix = getCountPrefix();
             if (prefix) {
                 description = `${prefix}${this.indexCount}`;

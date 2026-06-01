@@ -125,7 +125,7 @@ export class DatabaseItem implements TreeElement, TreeElementWithExperience, Tre
 
     getTreeItem(): vscode.TreeItem {
         let description: string | undefined;
-        if (typeof this.collectionCount === 'number' && this.collectionCount > 0) {
+        if (typeof this.collectionCount === 'number') {
             const prefix = getCountPrefix();
             const countText = this.collectionCountExceeded ? `${this.collectionCount}+` : `${this.collectionCount}`;
             description = prefix ? `${prefix}${countText}` : countText;

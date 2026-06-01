@@ -159,4 +159,15 @@ describe('IndexesItem - async index loading', () => {
         expect(children).toHaveLength(3);
         expect(item.getTreeItem().description).toContain('3');
     });
+
+    it('shows a zero count when the collection has no indexes', async () => {
+        listIndexesMock.mockResolvedValue([]);
+
+        const item = new IndexesItem(cluster, databaseInfo, collectionInfo);
+
+        item.loadIndexCount();
+        await flushAsync();
+
+        expect(item.getTreeItem().description as string).toContain('0');
+    });
 });
