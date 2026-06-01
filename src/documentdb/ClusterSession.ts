@@ -335,11 +335,9 @@ export class ClusterSession {
 
         if (acknowledged) {
             this._currentRawDocuments = this._currentRawDocuments.filter((doc) => {
-                // Convert documentIds to BSON types and compare them with doc._id
                 return !documentIds.some((id) => {
-                    let parsedId;
+                    let parsedId: unknown;
                     try {
-                        // eslint-disable-next-line
                         parsedId = EJSON.parse(id);
                     } catch {
                         if (ObjectId.isValid(id)) {
@@ -349,17 +347,8 @@ export class ClusterSession {
                         }
                     }
 
-                    /**
-                     * deep equality for _id is tricky as we'd have to consider embedded objects,
-                     * arrays, etc. For now, we'll just stringify the _id and compare the strings.
-                     * The reasoning here is that this operation is used during interactive work
-                     * and were not expecting to delete a large number of documents at once.
-                     * Hence, the performance impact of this approach is negligible, and it's more
-                     * about simplicity here.
-                     */
-
                     const docIdStr = EJSON.stringify(doc._id, { relaxed: false }, 0);
-                    const parsedIdStr = EJSON.stringify(parsedId, { relaxed: false }, 0);
+                    const parsedIdStr = EJSON.stringify(parsedId as Document, { relaxed: false }, 0);
 
                     return docIdStr === parsedIdStr;
                 });
