@@ -83,7 +83,7 @@ describe('toFieldCompletionItems', () => {
         expect(result[2].insertText).toBe('$type');
     });
 
-    it('adds $ prefix to referenceText', () => {
+    it('adds $ prefix to referenceText for safe field names', () => {
         const fields: FieldEntry[] = [
             { path: 'age', type: 'number', bsonType: 'int32' },
             { path: 'address.city', type: 'string', bsonType: 'string' },
@@ -93,6 +93,24 @@ describe('toFieldCompletionItems', () => {
 
         expect(result[0].referenceText).toBe('$age');
         expect(result[1].referenceText).toBe('$address.city');
+    });
+
+    it('uses $getField for unsafe field names in referenceText', () => {
+        const fields: FieldEntry[] = [
+            { path: 'order-items', type: 'string', bsonType: 'string' },
+            { path: 'my field', type: 'string', bsonType: 'string' },
+        ];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe('{ $getField: "order-items" }');
+        expect(result[1].referenceText).toBe('{ $getField: "my field" }');
+    });
+
+    it('escapes embedded double quotes in $getField referenceText', () => {
+        const fields: FieldEntry[] = [{ path: 'say"hi"', type: 'string', bsonType: 'string' }];
+        const result = toFieldCompletionItems(fields);
+        expect(result[0].referenceText).toBe('{ $getField: "say\\"hi\\"" }');
     });
 
     it('preserves isSparse', () => {
