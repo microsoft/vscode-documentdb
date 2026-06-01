@@ -110,7 +110,6 @@ describe('toFieldCompletionItems', () => {
     it('uses $getField with input for nested paths with unsafe segment', () => {
         const fields: FieldEntry[] = [
             { path: 'a.order-items', type: 'string', bsonType: 'string' },
-            { path: 'x.y.special-field', type: 'string', bsonType: 'string' },
         ];
 
         const result = toFieldCompletionItems(fields);
@@ -118,8 +117,21 @@ describe('toFieldCompletionItems', () => {
         expect(result[0].referenceText).toBe(
             '{ $getField: { field: "order-items", input: "$a" } }',
         );
+    });
+
+    it('chains $getField for paths with trailing segments after unsafe', () => {
+        const fields: FieldEntry[] = [
+            { path: 'a.order-items.total', type: 'string', bsonType: 'string' },
+            { path: 'order-items.total', type: 'string', bsonType: 'string' },
+        ];
+
+        const result = toFieldCompletionItems(fields);
+
+        expect(result[0].referenceText).toBe(
+            '{ $getField: { field: "total", input: { $getField: { field: "order-items", input: "$a" } } } }',
+        );
         expect(result[1].referenceText).toBe(
-            '{ $getField: { field: "special-field", input: "$x.y" } }',
+            '{ $getField: { field: "total", input: { $getField: "order-items" } } }',
         );
     });
 

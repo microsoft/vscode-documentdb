@@ -944,7 +944,7 @@ export class ClustersClient {
         // Connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
         // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-        const deleteResult: DeleteResult = await collection.deleteMany({ _id: { $in: parsedDocumentIds } as Filter<Document> });
+        const deleteResult: DeleteResult = await collection.deleteMany({ _id: { $in: parsedDocumentIds } } as Filter<Document>);
 
         return deleteResult.acknowledged;
     }

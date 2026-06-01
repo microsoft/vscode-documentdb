@@ -91,7 +91,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             contextValue: this.contextValue,
             label: l10n.t('Indexes'),
             description,
-            iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
+            iconPath: new vscode.ThemeIcon('combine'), // TODO: create our own icon here
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
