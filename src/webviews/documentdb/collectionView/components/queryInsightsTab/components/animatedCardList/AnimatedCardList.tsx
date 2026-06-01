@@ -53,6 +53,15 @@ interface ItemState {
      * `appear=false` (Fluent's default), and the framework treats them as
      * "already in" → the enter animation is silently skipped. That's the
      * "cards just pop in without animation" bug.
+     *
+     * **For future maintainers:** do NOT simplify this to
+     * `<CollapseRelaxed appear={true} visible={true}>`. We tried; it
+     * doesn't fix the bug consistently in our usage (items are added
+     * from a parent reducer that re-renders the list synchronously, and
+     * by the time the presence component's effect runs, `visible=true`
+     * is already the initial value — Fluent only animates on a
+     * subsequent `visible` *change*). The two-step ensures the change
+     * actually happens after first paint.
      */
     pendingEnter: boolean;
     /**
