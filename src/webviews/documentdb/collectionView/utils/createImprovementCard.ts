@@ -9,13 +9,17 @@
  * The Stage 3 streaming subscription emits raw {@link AIIndexRecommendation}
  * domain objects (one per `recommendations[]` item), and the webview owns
  * the construction of the {@link ImprovementCardConfig} that
- * {@link ImprovementCard} renders. This file is the webview's counterpart
- * to the server-side `createImprovementCard` in
- * `src/documentdb/queryInsights/transformations.ts`; the logic is
- * intentionally kept in sync (pure function, no Node / vscode APIs, only
- * `@vscode/l10n` strings + `JSON.stringify`), so cards built progressively
- * during streaming are byte-identical to what the buffered procedure used
- * to produce.
+ * {@link ImprovementCard} renders.
+ *
+ * Historical note (for future maintainers): this used to be the webview
+ * twin of a server-side `createImprovementCard` inside
+ * `src/documentdb/queryInsights/transformations.ts` (paired with the
+ * buffered `getQueryInsightsStage3` procedure). When that buffered path
+ * was removed, the server twin went with it — so this is now the SINGLE
+ * source of truth for the AIIndexRecommendation → ImprovementCardConfig
+ * shape. If you add a property here, no server-side counterpart needs
+ * the same edit. If you ever reintroduce a server-side renderer, port
+ * this file rather than diverging from it.
  *
  * WI-9 of the Stage 3 progressive-streaming plan (D7: webview owns the
  * card-component choice; D11: the shell version uses the same icon as the
