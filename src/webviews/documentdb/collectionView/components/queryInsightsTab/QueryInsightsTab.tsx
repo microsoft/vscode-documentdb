@@ -676,10 +676,39 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 return prev;
                             case 'complete': {
                                 const synthesized = synthesizeStage3Data(prevStreaming, event, configuration);
+                                // Intentionally DO NOT clear `stage3RequestKey` here.
+                                //
+                                // The render path derives `keyPrefix` from
+                                // `stage3RequestKey` and uses it on every card key
+                                // (analysis-card, rec-N, understanding-execution).
+                                // If we set `stage3RequestKey: null` on the same
+                                // commit that sets `stage3Data`, every card key
+                                // changes from `${uuid}-…` to `…` in a single
+                                // React render. AnimatedCardList sees that as
+                                // "all old keys gone, all new keys arrived" and
+                                // animates a full exit + enter cascade — visible
+                                // as a flash / re-render at the exact moment the
+                                // GetPerformanceInsightsCard collapses. (See PR
+                                // #711 investigation; flagged by the user on
+                                // remote-desktop renders where the cascade is
+                                // most pronounced.)
+                                //
+                                // `stage3RequestKey` is cleared on the NEXT
+                                // lifecycle transition instead:
+                                //   - `transitionToStage(1, …)` / `(2, 'loading')` /
+                                //     `(3, 'loading')` (fresh request), and
+                                //   - `handleCancelAI`, and
+                                //   - the `onError` branch below.
+                                // The requestKey staleness guard inside this
+                                // reducer still works in the meantime: any racing
+                                // event arriving between `complete` and the next
+                                // lifecycle transition still matches `requestKey`
+                                // and is applied; but the subscription generator
+                                // returns immediately after yielding `complete`,
+                                // so no further events should arrive on this path.
                                 return {
                                     ...prev,
                                     stage3Data: synthesized,
-                                    stage3RequestKey: null,
                                 };
                             }
                             default:
