@@ -843,51 +843,49 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Include requestKey in card keys to force remount on regeneration
     const keyPrefix = queryInsightsState.stage3RequestKey ? `${queryInsightsState.stage3RequestKey}-` : '';
 
-    // Stage 3 render sources (WI-9 progressive streaming):
-    //   - `streaming` carries the in-flight progressive state populated by
-    //     the `streamStage3` subscription's structured events. It's the
-    //     primary source during phase=3 / status=loading and stays
-    //     populated after `complete` for a glitch-free hand-off.
-    //   - `stage3Data` is the materialized success snapshot (populated by
-    //     `synthesizeStage3Data` on the terminal `complete` event). The
-    //     render path here prefers `streaming` for cards (so the
-    //     shell-to-fill transition stays granular), but the byline /
-    //     `GetPerformanceInsightsCard` collapse below still read
-    //     `stage3Data` to detect "Stage 3 has succeeded at least once".
+    // Stage 3 render sources (post-cleanup #2 / WI-9 progressive streaming):
+    //   - `streaming` carries the progressive state populated by the
+    //     `streamStage3` subscription's structured events. It is the
+    //     SOLE source of truth for the Stage-3 cards (analysis / shells
+    //     / improvements / educational). Populated from the first event
+    //     and preserved past the terminal `complete` event.
+    //   - `stage3Data` is the materialised success snapshot, populated
+    //     by `synthesizeStage3Data` on `complete`. The CARDS no longer
+    //     read it (the old fallback was for the now-deleted buffered
+    //     `getQueryInsightsStage3` path); only two consumers remain:
+    //       (a) the `GetPerformanceInsightsCard` collapse condition
+    //           uses `!stage3Data` as a "has succeeded at least once"
+    //           sentinel so the card only collapses on terminal complete;
+    //       (b) the byline / model-disclosure footer reads
+    //           `stage3Data.modelDisplayName`.
+    //     If you ever want to delete `stage3Data` entirely, replace (a)
+    //     with a derived `hasCompletedAtLeastOnce` flag and move
+    //     `modelDisplayName` onto the `complete` event slot.
     const streaming = queryInsightsState.stage3Streaming;
 
-    // Analysis Card (if AI data available)
-    if (currentStage.phase === 3) {
-        const summarySource =
-            streaming?.summary ??
-            (queryInsightsState.stage3Data?.analysisCard
-                ? {
-                      markdown: queryInsightsState.stage3Data.analysisCard.content,
-                      complete: true,
-                  }
-                : null);
-        if (summarySource) {
-            insightCards.push({
-                key: `${keyPrefix}analysis-card`,
-                // Mark as in-flight while streaming so AnimatedCardList
-                // uses Fade (no `maxHeight`/`overflow:hidden` clipping)
-                // instead of CollapseRelaxed. CollapseRelaxed measures
-                // scrollHeight once at mount (when content is ~empty) and
-                // then clips with overflow:hidden for 400 ms, which hides
-                // most of the early streaming and makes the card appear to
-                // pop from "title only" to "fully filled" in two frames.
-                // Fade lets the markdown grow visibly as chunks arrive.
-                inFlight: !summarySource.complete,
-                component: (
-                    <MarkdownCard
-                        icon={<SparkleRegular />}
-                        title={l10n.t('Query Performance Analysis')}
-                        content={summarySource.markdown}
-                        inFlight={!summarySource.complete}
-                    />
-                ),
-            });
-        }
+    // Analysis Card
+    if (currentStage.phase === 3 && streaming?.summary) {
+        const summarySource = streaming.summary;
+        insightCards.push({
+            key: `${keyPrefix}analysis-card`,
+            // Mark as in-flight while streaming so AnimatedCardList
+            // uses Fade (no `maxHeight`/`overflow:hidden` clipping)
+            // instead of CollapseRelaxed. CollapseRelaxed measures
+            // scrollHeight once at mount (when content is ~empty) and
+            // then clips with overflow:hidden for 400 ms, which hides
+            // most of the early streaming and makes the card appear to
+            // pop from "title only" to "fully filled" in two frames.
+            // Fade lets the markdown grow visibly as chunks arrive.
+            inFlight: !summarySource.complete,
+            component: (
+                <MarkdownCard
+                    icon={<SparkleRegular />}
+                    title={l10n.t('Query Performance Analysis')}
+                    content={summarySource.markdown}
+                    inFlight={!summarySource.complete}
+                />
+            ),
+        });
     }
 
     // Error Card - shown when query execution failed
@@ -939,59 +937,27 @@ export const QueryInsightsMain = (): JSX.Element => {
                 ),
             });
         });
-    } else if (currentStage.phase === 3 && queryInsightsState.stage3Data?.improvementCards) {
-        // Fallback: no streaming state (legacy buffered path or
-        // post-success after streaming was cleared) — render from the
-        // materialized snapshot using the same per-index key so a
-        // streaming → snapshot transition (if it ever happens) is also
-        // in-place.
-        queryInsightsState.stage3Data.improvementCards.forEach((card: ImprovementCardConfig, index: number) => {
-            const key = `${keyPrefix}rec-${index}`;
-            if (card.primaryButton || card.secondaryButton) {
-                insightCards.push({
-                    key,
-                    component: (
-                        <ImprovementCard
-                            config={card}
-                            onPrimaryAction={handlePrimaryAction}
-                            onSecondaryAction={handleSecondaryAction}
-                        />
-                    ),
-                });
-            } else {
-                insightCards.push({
-                    key,
-                    component: <MarkdownCard icon={<SparkleRegular />} title={card.title} content={card.description} />,
-                });
-            }
-        });
     }
 
-    // Educational Markdown Card - Understanding Query Execution
-    if (currentStage.phase === 3) {
-        const educationalSource =
-            streaming?.educational ??
-            (queryInsightsState.stage3Data?.educationalContent
-                ? { markdown: queryInsightsState.stage3Data.educationalContent, complete: true }
-                : null);
-        if (educationalSource) {
-            insightCards.push({
-                key: `${keyPrefix}understanding-execution`,
-                // See `analysis-card` above: Fade while streaming so the
-                // markdown chunks are actually visible as they arrive,
-                // instead of being clipped by CollapseRelaxed's 400 ms
-                // maxHeight enter animation.
-                inFlight: !educationalSource.complete,
-                component: (
-                    <MarkdownCard
-                        icon={<SparkleRegular />}
-                        title={l10n.t('Understanding Your Query Execution Plan')}
-                        content={educationalSource.markdown}
-                        inFlight={!educationalSource.complete}
-                    />
-                ),
-            });
-        }
+    // Educational Markdown Card — Understanding Query Execution
+    if (currentStage.phase === 3 && streaming?.educational) {
+        const educationalSource = streaming.educational;
+        insightCards.push({
+            key: `${keyPrefix}understanding-execution`,
+            // See `analysis-card` above: Fade while streaming so the
+            // markdown chunks are actually visible as they arrive,
+            // instead of being clipped by CollapseRelaxed's 400 ms
+            // maxHeight enter animation.
+            inFlight: !educationalSource.complete,
+            component: (
+                <MarkdownCard
+                    icon={<SparkleRegular />}
+                    title={l10n.t('Understanding Your Query Execution Plan')}
+                    content={educationalSource.markdown}
+                    inFlight={!educationalSource.complete}
+                />
+            ),
+        });
     }
 
     // Performance Tips Card
