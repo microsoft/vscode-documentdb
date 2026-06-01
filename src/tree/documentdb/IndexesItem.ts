@@ -62,12 +62,12 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             // Search indexes not supported on this platform, continue without them
         }
 
-        // Cache the count. Schedule a tree item refresh on the next tick
-        // to avoid re-entrant getChildren calls from notifyChildrenChanged.
+        // Cache the count. Schedule a tree item refresh after the current
+        // task completes to avoid re-entrant getChildren calls.
         const previousCount = this.indexCount;
         this.indexCount = indexes.length;
         if (this.indexCount !== previousCount) {
-            setTimeout(() => ext.state.notifyChildrenChanged(this.id), 0);
+            queueMicrotask(() => ext.state.notifyChildrenChanged(this.id));
         }
 
         // Sort indexes by name, with _id_ always first

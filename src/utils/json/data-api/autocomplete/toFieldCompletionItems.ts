@@ -34,9 +34,10 @@ export interface FieldCompletionData {
     /**
      * Field reference for aggregation expressions, e.g., "$age", "$address.city".
      *
-     * For field names containing special characters (dashes, spaces, quotes, etc.)
-     * that cannot use the `$field` prefix syntax, this emits the `$getField` form
-     * instead, e.g., `{ $getField: "order-items" }`.
+     * When every dot-separated segment is a valid identifier the `$field` prefix
+     * syntax is used.  If any segment contains special characters (dashes, spaces,
+     * quotes, etc.) — including in nested paths like `a.order-items` — the
+     * `$getField` form is emitted instead, e.g., `{ $getField: "order-items" }`.
      */
     referenceText: string;
 }
@@ -52,13 +53,23 @@ export interface FieldCompletionData {
 const JS_IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
 
 /**
+ * Escapes backslashes and double-quotes in a field path so it can be
+ * safely wrapped in a double-quoted string (for `insertText` quoting
+ * and `$getField` expressions).
+ */
+function escapeFieldName(path: string): string {
+    return path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+}
+
+/**
  * Returns true when every dot-separated segment of `path` is a valid
  * identifier, meaning the `$field`-prefix aggregation syntax is safe.
  *
  * The `$` prefix syntax (e.g. `$address.city`) is valid MQL only when
- * each segment between dots is a valid identifier.  Single-segment
- * fields containing dashes, spaces, or quotes (e.g. `order-items`,
- * `my field`, `say"hi"`) cannot use the `$` prefix.
+ * each segment between dots is a valid identifier.  Paths where any
+ * segment contains dashes, spaces, or quotes (e.g. `order-items`,
+ * `a.order-items`, `my field`, `say"hi"`) cannot use the `$` prefix
+ * and must fall back to `$getField`.
  */
 function isSafeAggregationReference(path: string): boolean {
     return path.split('.').every((segment) => JS_IDENTIFIER_PATTERN.test(segment));
@@ -77,8 +88,7 @@ export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionDat
 
         let insertText: string;
         if (needsQuoting) {
-            const escaped = entry.path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            insertText = `"${escaped}"`;
+            insertText = `"${escapeFieldName(entry.path)}"`;
         } else {
             insertText = entry.path;
         }
@@ -87,10 +97,7 @@ export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionDat
         if (isSafeAggregationReference(entry.path)) {
             referenceText = `$${entry.path}`;
         } else {
-            const escaped = entry.path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-            referenceText = needsQuoting
-                ? `{ $getField: "${escaped}" }`
-                : `{ $getField: "${entry.path}" }`;
+            referenceText = `{ $getField: "${escapeFieldName(entry.path)}" }`;
         }
 
         return {
