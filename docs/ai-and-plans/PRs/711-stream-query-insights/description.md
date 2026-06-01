@@ -5,6 +5,7 @@
 **Date:** 2026-06-01
 **PR URL:** https://github.com/microsoft/vscode-documentdb/pull/711
 **Commits:** 44 on top of `main` (+5603 / −1712 lines, 34 files)
+**Companion document:** [original-plan.md](./original-plan.md) — the 11-work-item plan that drove implementation, preserved as-is.
 
 ---
 
@@ -43,7 +44,7 @@ ambiguous dual-source render logic).
 ## What was done
 
 The work landed in four phases, each scoped tightly enough to ship and review
-independently. See [docs/ai-and-plans/query-insights-stage3-streaming-plan.md](../query-insights-stage3-streaming-plan.md)
+independently. See [original-plan.md](./original-plan.md)
 for the original 11-work-item plan ("WI-1" through "WI-11").
 
 ### Phase 1 — Plumb the stream
@@ -500,7 +501,7 @@ subscription create-rate metrics. **No data lost.**
 
 ## Related issues and references
 
-- **Plan**: [docs/ai-and-plans/query-insights-stage3-streaming-plan.md](../query-insights-stage3-streaming-plan.md) — full 11-WI plan with per-WI outcome blocks and deviation log.
+- **Plan**: [original-plan.md](./original-plan.md) — full 11-WI plan with per-WI outcome blocks and deviation log.
 - **PR #690** (`dev/tnaum/query-insights-model-transparency`) — added the model byline and the cost-neutral disclosure that this PR's UX choreography integrates with.
 - **PR #676** (`dev/tnaum/webview-api-package`) — established the tRPC subscription transport that `streamStage3` is the first real consumer of in `src/`.
 - **Tracking issue**: #665.

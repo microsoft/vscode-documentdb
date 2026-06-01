@@ -1,5 +1,14 @@
 # Query Insights Stage 3 — Progressive Streaming — IMPLEMENTATION PLAN
 
+> **Historical note (2026-06-01):** this is the original plan that drove
+> [PR #711](https://github.com/microsoft/vscode-documentdb/pull/711). It was
+> moved here (`docs/ai-and-plans/PRs/711-stream-query-insights/`) alongside
+> the PR's [description.md](./description.md) so both artifacts live together.
+> The plan itself is preserved as-is (work-item outcome blocks, deviation log,
+> and all) so future contributors can read how the streaming work was scoped
+> and executed. For a higher-level narrative, decisions, and telemetry mapping,
+> read [description.md](./description.md) first.
+
 > Tracking issue: [#665](https://github.com/microsoft/vscode-documentdb/issues/665)
 > Audience: an **Opus-class implementation agent**.
 > Status: **Approved for implementation, not started.**
@@ -75,22 +84,22 @@ Non-goal (explicitly out of scope): ChatGPT-style token-by-token rendering.
 
 | Concern       | Where                                                                                                                                                                                       | Notes                                                                                                                                                                                                                                                                                                                                           |
 | ------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| LLM call      | `CopilotService.sendToModel` — [src/services/copilotService.ts](../../src/services/copilotService.ts) (~L339)                                                                               | Already iterates `for await (const fragment of chatResponse.text)` but **buffers** into `fullResponse`. AbortSignal→CancellationToken bridge present. Returns `{text, durationMs, usage}`. For Option A, expose the same loop as an `AsyncIterable<string>` of fragments (WI-2) while still computing usage/`durationMs` for the buffered path. |
+| LLM call      | `CopilotService.sendToModel` — [src/services/copilotService.ts](../../../../src/services/copilotService.ts) (~L339)                                                                               | Already iterates `for await (const fragment of chatResponse.text)` but **buffers** into `fullResponse`. AbortSignal→CancellationToken bridge present. Returns `{text, durationMs, usage}`. For Option A, expose the same loop as an `AsyncIterable<string>` of fragments (WI-2) while still computing usage/`durationMs` for the buffered path. |
 | Public entry  | `CopilotService.sendMessage` + `CopilotMessageOptions`                                                                                                                                      | Options carry `signal`, `preferredFamily`, `fallbackFamilies`, `modelOptions`. Add a streaming variant that returns `AsyncIterable<string>` (Option A; see D12).                                                                                                                                                                                |
-| Orchestration | `optimizeQuery` — [src/commands/llmEnhancedCommands/indexAdvisorCommands.ts](../../src/commands/llmEnhancedCommands/indexAdvisorCommands.ts) (~L356–650)                                    | Builds 3 user messages, calls `CopilotService.sendMessage`, returns text. Wrapped in its own `callWithTelemetryAndErrorHandling` (carries `copilotDurationMs`, model props, etc. — **keep as-is**).                                                                                                                                             |
-| Parse         | `QueryInsightsAIService.parseAIResponse` — [src/services/ai/QueryInsightsAIService.ts](../../src/services/ai/QueryInsightsAIService.ts) (~L173)                                             | `JSON.parse` → `AIOptimizationResponse {analysis, improvements[], verification[], educationalContent}`.                                                                                                                                                                                                                                         |
-| Transport     | `getQueryInsightsStage3` — [src/webviews/documentdb/collectionView/collectionViewRouter.ts](../../src/webviews/documentdb/collectionView/collectionViewRouter.ts) (~L867)                   | A tRPC `.query()`. Records counts + token usage onto `ctx.telemetry` at the end. Returns `QueryInsightsStage3Response`.                                                                                                                                                                                                                         |
-| Transform     | `transformAIResponseForUI` — [src/documentdb/queryInsights/transformations.ts](../../src/documentdb/queryInsights/transformations.ts) (~L41)                                                | → `analysisCard` + `improvementCards[]` + `educationalContent`.                                                                                                                                                                                                                                                                                 |
+| Orchestration | `optimizeQuery` — [src/commands/llmEnhancedCommands/indexAdvisorCommands.ts](../../../../src/commands/llmEnhancedCommands/indexAdvisorCommands.ts) (~L356–650)                                    | Builds 3 user messages, calls `CopilotService.sendMessage`, returns text. Wrapped in its own `callWithTelemetryAndErrorHandling` (carries `copilotDurationMs`, model props, etc. — **keep as-is**).                                                                                                                                             |
+| Parse         | `QueryInsightsAIService.parseAIResponse` — [src/services/ai/QueryInsightsAIService.ts](../../../../src/services/ai/QueryInsightsAIService.ts) (~L173)                                             | `JSON.parse` → `AIOptimizationResponse {analysis, improvements[], verification[], educationalContent}`.                                                                                                                                                                                                                                         |
+| Transport     | `getQueryInsightsStage3` — [src/webviews/documentdb/collectionView/collectionViewRouter.ts](../../../../src/webviews/documentdb/collectionView/collectionViewRouter.ts) (~L867)                   | A tRPC `.query()`. Records counts + token usage onto `ctx.telemetry` at the end. Returns `QueryInsightsStage3Response`.                                                                                                                                                                                                                         |
+| Transform     | `transformAIResponseForUI` — [src/documentdb/queryInsights/transformations.ts](../../../../src/documentdb/queryInsights/transformations.ts) (~L41)                                                | → `analysisCard` + `improvementCards[]` + `educationalContent`.                                                                                                                                                                                                                                                                                 |
 | Webview       | `QueryInsightsTab.tsx` (~L490–600, render ~L693–770)                                                                                                                                        | Calls `.query({requestKey},{signal})`, single `.then()` sets `stage3Data`. Has AbortController (`stage3AbortControllerRef`), requestKey staleness guard, 1s-delayed tips/error card, `transitionToStage` states. Builds `insightCards: AnimatedCardItem[]` in canonical order.                                                                  |
-| Card list     | `AnimatedCardList` — [.../animatedCardList/AnimatedCardList.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/animatedCardList/AnimatedCardList.tsx) | `AnimatedCardItem = { key, component }`. **No priority field.** Renders in **source-array order**, animates inserts via `CollapseRelaxed`.                                                                                                                                                                                                      |
-| Types         | [.../types/queryInsights.ts](../../src/webviews/documentdb/collectionView/types/queryInsights.ts)                                                                                           | `AnalysisCard` (L227), `ImprovementCard` (L235), `QueryInsightsStage3Response` (L272).                                                                                                                                                                                                                                                          |
+| Card list     | `AnimatedCardList` — [.../animatedCardList/AnimatedCardList.tsx](../../../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/animatedCardList/AnimatedCardList.tsx) | `AnimatedCardItem = { key, component }`. **No priority field.** Renders in **source-array order**, animates inserts via `CollapseRelaxed`.                                                                                                                                                                                                      |
+| Types         | [.../types/queryInsights.ts](../../../../src/webviews/documentdb/collectionView/types/queryInsights.ts)                                                                                           | `AnalysisCard` (L227), `ImprovementCard` (L235), `QueryInsightsStage3Response` (L272).                                                                                                                                                                                                                                                          |
 
 ### Critical framework facts
 
 1. **Subscription infra exists but is unused in `src/`.** The tRPC subscription transport
    (`WebviewController.handleSubscriptionMessage` + client `.subscribe({onData,onComplete,onError})`)
    and the `TypedEventSink` push→pull adapter
-   ([.../extension-server/TypedEventSink.ts](../../packages/vscode-ext-react-webview/src/extension-server/TypedEventSink.ts))
+   ([.../extension-server/TypedEventSink.ts](../../../../packages/vscode-ext-react-webview/src/extension-server/TypedEventSink.ts))
    are implemented and tested. Stage 3 will be the **first real consumer** — no in-repo
    reference to copy. Read the framework sources **and the package README's "Push events
    from the extension host to the webview" section** before writing the subscription.
@@ -138,7 +147,7 @@ Non-goal (explicitly out of scope): ChatGPT-style token-by-token rendering.
    - Recommended layout: a sibling `<view>EventsRouter.ts` merged into the view router.
 
 2. **Telemetry timing trap (drives D9).** `trpcToTelemetry`
-   ([src/webviews/\_integration/trpc.ts](../../src/webviews/_integration/trpc.ts)) wraps
+   ([src/webviews/\_integration/trpc.ts](../../../../src/webviews/_integration/trpc.ts)) wraps
    `opts.next()` in `callWithTelemetryAndErrorHandling`. For a subscription, `opts.next()`
    resolves when the **generator object is created**, not when streaming finishes. Any
    measurement set **during** iteration is therefore lost on the auto rpc event. ⇒ We must
@@ -640,21 +649,21 @@ explicit "no data lost" confirmation. If any key cannot be carried, list it and 
 
 ## 9. Relevant files
 
-- [src/services/copilotService.ts](../../src/services/copilotService.ts) — `onChunk` (WI-2).
-- [src/commands/llmEnhancedCommands/indexAdvisorCommands.ts](../../src/commands/llmEnhancedCommands/indexAdvisorCommands.ts) — thread `onChunk` (WI-3).
-- [src/services/ai/QueryInsightsAIService.ts](../../src/services/ai/QueryInsightsAIService.ts) — streaming entry + `parseAIResponse` fallback (WI-3/WI-8).
+- [src/services/copilotService.ts](../../../../src/services/copilotService.ts) — `onChunk` (WI-2).
+- [src/commands/llmEnhancedCommands/indexAdvisorCommands.ts](../../../../src/commands/llmEnhancedCommands/indexAdvisorCommands.ts) — thread `onChunk` (WI-3).
+- [src/services/ai/QueryInsightsAIService.ts](../../../../src/services/ai/QueryInsightsAIService.ts) — streaming entry + `parseAIResponse` fallback (WI-3/WI-8).
 - `src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts` — **new** sub-router (WI-4/5/8/10).
 - `src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts` — **new** push/subscription router per D12 convention (WI-4/5/8).
-- [src/webviews/documentdb/collectionView/collectionViewRouter.ts](../../src/webviews/documentdb/collectionView/collectionViewRouter.ts) — mount sub-router; relocate Stage 3 (WI-4).
+- [src/webviews/documentdb/collectionView/collectionViewRouter.ts](../../../../src/webviews/documentdb/collectionView/collectionViewRouter.ts) — mount sub-router; relocate Stage 3 (WI-4).
 - `src/documentdb/queryInsights/streamingResponseParser.ts` — **new** parser (WI-7).
-- [src/documentdb/queryInsights/transformations.ts](../../src/documentdb/queryInsights/transformations.ts) — per-recommendation transform (WI-7/8).
+- [src/documentdb/queryInsights/transformations.ts](../../../../src/documentdb/queryInsights/transformations.ts) — per-recommendation transform (WI-7/8).
 - `src/webviews/documentdb/collectionView/types/queryInsightsStream.ts` — **new** event union (WI-5).
-- [.../types/queryInsights.ts](../../src/webviews/documentdb/collectionView/types/queryInsights.ts) — existing types (reference).
+- [.../types/queryInsights.ts](../../../../src/webviews/documentdb/collectionView/types/queryInsights.ts) — existing types (reference).
 - `.../queryInsightsTab/QueryInsightsTab.tsx` — subscribe + progressive render (WI-6/9).
 - `.../queryInsightsTab/components/streamingPlaceholder/StreamingPlaceholder.tsx` — **new** shared element (WI-1).
-- [.../queryInsightsTab/components/optimizationCards/ImprovementCard.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/optimizationCards/ImprovementCard.tsx) — recommendation card; owns `ArrowTrendingSparkleRegular` icon; render in partial state for the shell (D11/WI-9).
-- [.../queryInsightsTab/QueryInsightsTab.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx) — per-type icon usage (`SparkleRegular`/`WarningRegular`) to mirror in shells (D11/WI-9).
-- [src/webviews/\_integration/trpc.ts](../../src/webviews/_integration/trpc.ts) — telemetry middleware (reference for §7).
+- [.../queryInsightsTab/components/optimizationCards/ImprovementCard.tsx](../../../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/optimizationCards/ImprovementCard.tsx) — recommendation card; owns `ArrowTrendingSparkleRegular` icon; render in partial state for the shell (D11/WI-9).
+- [.../queryInsightsTab/QueryInsightsTab.tsx](../../../../src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx) — per-type icon usage (`SparkleRegular`/`WarningRegular`) to mirror in shells (D11/WI-9).
+- [src/webviews/\_integration/trpc.ts](../../../../src/webviews/_integration/trpc.ts) — telemetry middleware (reference for §7).
 - `packages/vscode-ext-react-webview` — `TypedEventSink`, `WebviewController`, and the README's **"Push events from the extension host to the webview"** section (the authoritative streaming/subscription reference; no change expected).
 
 ---
