@@ -99,7 +99,10 @@ function synthesizeStage3Data(
     return {
         analysisCard,
         improvementCards,
-        verificationSteps: (streaming.verification ?? []).join('\n'),
+        // verificationSteps is intentionally omitted — nothing in the UI
+        // surfaces verification items today. See QueryInsightsStreamingState
+        // for the rationale (mirrored on the reducer side).
+        verificationSteps: '',
         educationalContent: streaming.educational?.markdown,
         modelId: completeEvent.modelId,
         modelFamily: completeEvent.modelFamily,
@@ -621,7 +624,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                             summary: null,
                             educational: null,
                             recommendations: [],
-                            verification: null,
                         };
 
                         switch (event.type) {
@@ -669,13 +671,12 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 };
                             }
                             case 'verification':
-                                return {
-                                    ...prev,
-                                    stage3Streaming: {
-                                        ...prevStreaming,
-                                        verification: event.items,
-                                    },
-                                };
+                                // Intentionally ignored. The parser still emits this event
+                                // (the canonical `JSON.parse` always produces it on finalize),
+                                // but nothing in the UI surfaces verification items today.
+                                // Keeping the wire payload simplifies a future change that
+                                // wants to render them without renegotiating the protocol.
+                                return prev;
                             case 'complete': {
                                 const synthesized = synthesizeStage3Data(prevStreaming, event, configuration);
                                 return {

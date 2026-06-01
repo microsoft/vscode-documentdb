@@ -72,6 +72,13 @@ export interface QueryInsightsState {
  * `QueryInsightsStreamEvent` union (structured events only — `status` and
  * `complete` drive UI lifecycle elsewhere). Resets to `null` whenever a new
  * Stage 3 request starts.
+ *
+ * Note: the parser still emits a `verification` event on the wire (the
+ * canonical `JSON.parse` always materialises it), but it's intentionally
+ * not stored here — nothing in the UI surfaces verification items today,
+ * and accumulating them invited bugs around "why is this field populated
+ * but never shown". If a future card surfaces verification items, restore
+ * a `verification: string[] | null` slot and a matching reducer case.
  */
 export interface QueryInsightsStreamingState {
     /** Cumulative markdown from `summary` events (the AI `analysis` JSON key). */
@@ -85,8 +92,6 @@ export interface QueryInsightsStreamingState {
      * filled card). Indexed by `event.index` (0-based, monotonic per stream).
      */
     recommendations: Array<AIIndexRecommendation | null>;
-    /** Reconciled verification items, populated on the terminal `verification` event. */
-    verification: string[] | null;
 }
 
 export type TableViewState = {
