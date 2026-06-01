@@ -341,12 +341,12 @@ Earlier behaviour: cards appeared in **LLM emission order**
 on screen looked like new cards landing in arbitrary positions and pushing
 the existing ones down. Three other options were evaluated:
 
-| Option | Trade-off | Verdict |
-|---|---|---|
-| **B**: render in canonical order, hide each slot until its data exists | Order is correct but late slots still pop in suddenly | Worse than A |
-| **C**: render in arrival order, animate position swap when analysis lands | Visible re-order draws attention; looks clever, risks looking like a glitch | Rejected |
-| **D**: keep status quo, accept one shift | Cheap but jumpy | Rejected once Option A's implementation cost turned out to be modest |
-| **A**: pre-reserve all three slots in canonical order at click time | Layout is final from t=0; cards fill in place | Adopted |
+| Option                                                                    | Trade-off                                                                   | Verdict                                                              |
+| ------------------------------------------------------------------------- | --------------------------------------------------------------------------- | -------------------------------------------------------------------- |
+| **B**: render in canonical order, hide each slot until its data exists    | Order is correct but late slots still pop in suddenly                       | Worse than A                                                         |
+| **C**: render in arrival order, animate position swap when analysis lands | Visible re-order draws attention; looks clever, risks looking like a glitch | Rejected                                                             |
+| **D**: keep status quo, accept one shift                                  | Cheap but jumpy                                                             | Rejected once Option A's implementation cost turned out to be modest |
+| **A**: pre-reserve all three slots in canonical order at click time       | Layout is final from t=0; cards fill in place                               | Adopted                                                              |
 
 Option A required only a gate change on the existing render code plus
 `MarkdownCard` accepting empty `content=""` (which `ReactMarkdown` renders
@@ -375,7 +375,7 @@ sibling commit, and (c) it required less code.
 > **Superseded.** Later testing showed the thinned card still read as a
 > large empty box above the slots. The final design collapses it during
 > loading and shows the slim `Stage3AnalyzingCard` instead — see
-> "Cancel-UX finalization" under *Post-implementation* above.
+> "Cancel-UX finalization" under _Post-implementation_ above.
 
 ### Why the card-key cascade fix lives in the reducer, not in `AnimatedCardList`
 
@@ -484,59 +484,59 @@ deleted entirely.
 
 ## Files changed (significant)
 
-| File | Change |
-|---|---|
-| `src/services/copilotService.ts` | `streamMessage` async-iterable API; private `streamToModel` primitive shared with buffered path; `CopilotStreamHandle` |
-| `src/services/copilotService.test.ts` | New unit tests for streaming + abort + no-model paths |
-| `src/services/ai/QueryInsightsAIService.ts` | `getOptimizationRecommendationsStreaming` + handle type |
-| `src/services/ai/QueryInsightsAIService.streaming.test.ts` | End-to-end streaming integration test |
-| `src/commands/llmEnhancedCommands/indexAdvisorCommands.ts` | `optimizeQueryStreaming` + shared `prepareOptimizationRequest` / `finalizeOptimizationResponse` helpers |
-| `src/documentdb/queryInsights/streamingResponseParser.ts` | New tolerant incremental parser (state machine; string-aware brace counting; reconciliation on `finalize()`) |
-| `src/documentdb/queryInsights/streamingResponseParser.test.ts` | 25 unit tests covering happy path, fragment boundaries, escapes, malformed input, truncation, etc. |
-| `src/documentdb/queryInsights/transformations.ts` | Dead `transformAIResponseForUI` + helpers removed (cleanup) |
-| `src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts` | New sub-router (Stage 1/2/3 + action handler relocated from `collectionViewRouter.ts`) |
-| `src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts` | New push-style router carrying `streamStage3` subscription + completion telemetry |
-| `src/webviews/documentdb/collectionView/collectionViewRouter.ts` | Stage 3 procedures relocated; sub-router mounted |
-| `src/webviews/documentdb/collectionView/types/queryInsightsStream.ts` | Discriminated union for the wire-format streaming events |
-| `src/webviews/documentdb/collectionView/utils/createImprovementCard.ts` | Webview-side per-recommendation transform (sole source of truth post-cleanup) |
-| `src/webviews/documentdb/collectionView/collectionViewContext.ts` | `QueryInsightsStreamingState` + `stage3Streaming` slot; `stage3Promise` removed |
-| `src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx` | Subscription wiring, reducer for structured events, render rewrite for pre-reserved slots, byline fade |
-| `.../components/animatedCardList/AnimatedCardList.tsx` | `pendingEnter` two-step + per-item `inFlight` motion picker (Fade vs CollapseRelaxed) |
-| `.../components/optimizationCards/MarkdownCard.tsx` | `inFlight` + `inFlightLabel` props; shimmer dropped |
-| `.../components/optimizationCards/ImprovementCardShell.tsx` | `mode: 'loading' \| 'empty'` shared shell |
-| `.../components/optimizationCards/TipsCard.tsx + .scss` | Removed (no longer needed) |
-| `.../components/streamingPlaceholder/StreamingInlineProgress.tsx` | New Spinner + label primitive |
-| `.../components/optimizationCards/custom/GetPerformanceInsightsCard.tsx` | Drop inner spinner during loading; collapses out entirely while loading |
-| `.../components/optimizationCards/custom/Stage3AnalyzingCard.tsx` | New slim loading affordance (Spinner + "AI is analyzing…" + Cancel) shown during Stage 3 streaming |
-| `l10n/bundle.l10n.json` | Regenerated |
+| File                                                                                      | Change                                                                                                                 |
+| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| `src/services/copilotService.ts`                                                          | `streamMessage` async-iterable API; private `streamToModel` primitive shared with buffered path; `CopilotStreamHandle` |
+| `src/services/copilotService.test.ts`                                                     | New unit tests for streaming + abort + no-model paths                                                                  |
+| `src/services/ai/QueryInsightsAIService.ts`                                               | `getOptimizationRecommendationsStreaming` + handle type                                                                |
+| `src/services/ai/QueryInsightsAIService.streaming.test.ts`                                | End-to-end streaming integration test                                                                                  |
+| `src/commands/llmEnhancedCommands/indexAdvisorCommands.ts`                                | `optimizeQueryStreaming` + shared `prepareOptimizationRequest` / `finalizeOptimizationResponse` helpers                |
+| `src/documentdb/queryInsights/streamingResponseParser.ts`                                 | New tolerant incremental parser (state machine; string-aware brace counting; reconciliation on `finalize()`)           |
+| `src/documentdb/queryInsights/streamingResponseParser.test.ts`                            | 25 unit tests covering happy path, fragment boundaries, escapes, malformed input, truncation, etc.                     |
+| `src/documentdb/queryInsights/transformations.ts`                                         | Dead `transformAIResponseForUI` + helpers removed (cleanup)                                                            |
+| `src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts`             | New sub-router (Stage 1/2/3 + action handler relocated from `collectionViewRouter.ts`)                                 |
+| `src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts`       | New push-style router carrying `streamStage3` subscription + completion telemetry                                      |
+| `src/webviews/documentdb/collectionView/collectionViewRouter.ts`                          | Stage 3 procedures relocated; sub-router mounted                                                                       |
+| `src/webviews/documentdb/collectionView/types/queryInsightsStream.ts`                     | Discriminated union for the wire-format streaming events                                                               |
+| `src/webviews/documentdb/collectionView/utils/createImprovementCard.ts`                   | Webview-side per-recommendation transform (sole source of truth post-cleanup)                                          |
+| `src/webviews/documentdb/collectionView/collectionViewContext.ts`                         | `QueryInsightsStreamingState` + `stage3Streaming` slot; `stage3Promise` removed                                        |
+| `src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx` | Subscription wiring, reducer for structured events, render rewrite for pre-reserved slots, byline fade                 |
+| `.../components/animatedCardList/AnimatedCardList.tsx`                                    | `pendingEnter` two-step + per-item `inFlight` motion picker (Fade vs CollapseRelaxed)                                  |
+| `.../components/optimizationCards/MarkdownCard.tsx`                                       | `inFlight` + `inFlightLabel` props; shimmer dropped                                                                    |
+| `.../components/optimizationCards/ImprovementCardShell.tsx`                               | `mode: 'loading' \| 'empty'` shared shell                                                                              |
+| `.../components/optimizationCards/TipsCard.tsx + .scss`                                   | Removed (no longer needed)                                                                                             |
+| `.../components/streamingPlaceholder/StreamingInlineProgress.tsx`                         | New Spinner + label primitive                                                                                          |
+| `.../components/optimizationCards/custom/GetPerformanceInsightsCard.tsx`                  | Drop inner spinner during loading; collapses out entirely while loading                                                |
+| `.../components/optimizationCards/custom/Stage3AnalyzingCard.tsx`                         | New slim loading affordance (Spinner + "AI is analyzing…" + Cancel) shown during Stage 3 streaming                     |
+| `l10n/bundle.l10n.json`                                                                   | Regenerated                                                                                                            |
 
 ---
 
 ## Telemetry mapping
 
-| Old event/key | New event/key | Notes |
-|---|---|---|
+| Old event/key                                                | New event/key                                                                                                                                   | Notes                                                  |
+| ------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
 | `documentDB.rpc.query.collectionView.getQueryInsightsStage3` | `documentDB.rpc.query.collectionView.queryInsights.getQueryInsightsStage3` (path moved by WI-4) → **removed entirely** by buffered-path cleanup | Stage 3 webview path is now exclusively `streamStage3` |
-| `…getQueryInsightsStage3 → properties.platform` | `documentDB.queryInsights.stage3.completed → properties.platform` | Identical population |
-| ↑ `properties.hasStaticAnalysisSummary` | ↑ `properties.hasStaticAnalysisSummary` | Identical |
-| ↑ `properties.staticAnalysisSummaryError` | ↑ `properties.staticAnalysisSummaryError` | Identical |
-| ↑ `properties.staticAnalysisSummaryErrorKind` | ↑ `properties.staticAnalysisSummaryErrorKind` | Identical |
-| ↑ `properties.hasCachedExecutionPlan` | ↑ `properties.hasCachedExecutionPlan` | Identical |
-| ↑ `properties.aiModelDisclosed` | ↑ `properties.aiModelDisclosed` | Identical |
-| ↑ `properties.aiModelFamily` | ↑ `properties.aiModelFamily` | Identical |
-| ↑ `measurements.staticAnalysisSummaryLength` | ↑ `measurements.staticAnalysisSummaryLength` | Identical |
-| ↑ `measurements.recommendationCount` | ↑ `measurements.recommendationCount` | Identical |
-| ↑ `measurements.actionableRecommendationCount` | ↑ `measurements.actionableRecommendationCount` | Identical |
-| ↑ `measurements.createRecommendationCount` | ↑ `measurements.createRecommendationCount` | Identical |
-| ↑ `measurements.dropRecommendationCount` | ↑ `measurements.dropRecommendationCount` | Identical |
-| ↑ `measurements.modifyRecommendationCount` | ↑ `measurements.modifyRecommendationCount` | Identical |
-| ↑ `measurements.promptTokens` | ↑ `measurements.promptTokens` | Identical |
-| ↑ `measurements.responseTokens` | ↑ `measurements.responseTokens` | Identical |
-| ↑ `measurements.totalTokens` | ↑ `measurements.totalTokens` | Identical |
-| ↑ `measurements.maxInputTokens` | ↑ `measurements.maxInputTokens` | Identical |
-| ↑ `measurements.promptUtilizationPct` | ↑ `measurements.promptUtilizationPct` | Identical |
-| _(none)_ | `documentDB.queryInsights.stage3.completed → measurements.durationMs` | New: wall-clock subscription duration |
-| _(none)_ | ↑ `properties.aborted` (`'true'` / `'false'`) | New: terminal abort state |
+| `…getQueryInsightsStage3 → properties.platform`              | `documentDB.queryInsights.stage3.completed → properties.platform`                                                                               | Identical population                                   |
+| ↑ `properties.hasStaticAnalysisSummary`                      | ↑ `properties.hasStaticAnalysisSummary`                                                                                                         | Identical                                              |
+| ↑ `properties.staticAnalysisSummaryError`                    | ↑ `properties.staticAnalysisSummaryError`                                                                                                       | Identical                                              |
+| ↑ `properties.staticAnalysisSummaryErrorKind`                | ↑ `properties.staticAnalysisSummaryErrorKind`                                                                                                   | Identical                                              |
+| ↑ `properties.hasCachedExecutionPlan`                        | ↑ `properties.hasCachedExecutionPlan`                                                                                                           | Identical                                              |
+| ↑ `properties.aiModelDisclosed`                              | ↑ `properties.aiModelDisclosed`                                                                                                                 | Identical                                              |
+| ↑ `properties.aiModelFamily`                                 | ↑ `properties.aiModelFamily`                                                                                                                    | Identical                                              |
+| ↑ `measurements.staticAnalysisSummaryLength`                 | ↑ `measurements.staticAnalysisSummaryLength`                                                                                                    | Identical                                              |
+| ↑ `measurements.recommendationCount`                         | ↑ `measurements.recommendationCount`                                                                                                            | Identical                                              |
+| ↑ `measurements.actionableRecommendationCount`               | ↑ `measurements.actionableRecommendationCount`                                                                                                  | Identical                                              |
+| ↑ `measurements.createRecommendationCount`                   | ↑ `measurements.createRecommendationCount`                                                                                                      | Identical                                              |
+| ↑ `measurements.dropRecommendationCount`                     | ↑ `measurements.dropRecommendationCount`                                                                                                        | Identical                                              |
+| ↑ `measurements.modifyRecommendationCount`                   | ↑ `measurements.modifyRecommendationCount`                                                                                                      | Identical                                              |
+| ↑ `measurements.promptTokens`                                | ↑ `measurements.promptTokens`                                                                                                                   | Identical                                              |
+| ↑ `measurements.responseTokens`                              | ↑ `measurements.responseTokens`                                                                                                                 | Identical                                              |
+| ↑ `measurements.totalTokens`                                 | ↑ `measurements.totalTokens`                                                                                                                    | Identical                                              |
+| ↑ `measurements.maxInputTokens`                              | ↑ `measurements.maxInputTokens`                                                                                                                 | Identical                                              |
+| ↑ `measurements.promptUtilizationPct`                        | ↑ `measurements.promptUtilizationPct`                                                                                                           | Identical                                              |
+| _(none)_                                                     | `documentDB.queryInsights.stage3.completed → measurements.durationMs`                                                                           | New: wall-clock subscription duration                  |
+| _(none)_                                                     | ↑ `properties.aborted` (`'true'` / `'false'`)                                                                                                   | New: terminal abort state                              |
 
 The auto rpc event `documentDB.rpc.subscription.collectionView.queryInsights.streamStage3`
 still fires for every subscription, but carries ~0 duration and no custom

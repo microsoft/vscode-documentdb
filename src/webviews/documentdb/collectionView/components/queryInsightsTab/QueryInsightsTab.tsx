@@ -1170,60 +1170,70 @@ export const QueryInsightsMain = (): JSX.Element => {
                             </Skeleton>
                         )}
 
-                        {/* Stage 3 affordance — TWO independent elements:
+                        {/* Stage 3 affordance — ONE CollapseRelaxed whose content
+                            swaps in place between the full request card and the slim
+                            "AI is analyzing…" row. A single wrapper (rather than two
+                            separate cards) is what makes both transitions clean:
 
-                            (1) The full request card, in its own CollapseRelaxed,
-                                visible only when there is genuinely a request to
-                                offer: phase >= 2, no result yet, and NOT loading.
-                                So the moment loading starts it collapses out, and
-                                after completion (stage3Data set) it stays out — it
-                                never flashes back during/after the stream.
+                              • No entry overlap. There is exactly one element, so the
+                                request card never visibly collapses *while* a second
+                                analyzing card animates in. On "Get AI" the content
+                                swaps in place (an instant height change between the
+                                two heights — Fluent has no resize-in-place motion, so
+                                this jump is accepted by design).
 
-                            (2) The slim "AI is analyzing…" row, rendered as a PLAIN
-                                conditional on `isStage3Loading` (no motion wrapper).
-                                A presence/motion wrapper here was the source of two
-                                separate bugs: a ghost card that never collapsed
-                                (first-mount `appear` quirk on a wrapper that starts
-                                unmounted), and — when merged into one shared wrapper
-                                with the request card — a slim row that lingered after
-                                completion because `stage3Data` stays truthy and the
-                                content-swap-at-the-exit-edge stopped the wrapper from
-                                unmounting. A plain conditional is deterministic: the
-                                instant `isStage3Loading` is false the row leaves the
-                                DOM, so it can neither flash nor get stuck. The swap is
-                                instant (Fluent ships no resize-in-place motion; see
-                                the research note in PR #711).
+                              • Smooth exit. On success the wrapper collapses to
+                                nothing, so the analyzing row animates away instead of
+                                vanishing with a layout shift. The result cards in the
+                                AnimatedCardList below grow in over the same window — a
+                                clean handoff.
 
-                            On cancel: isStage3Loading→false and stage3Data stays null,
-                            so the slim row vanishes immediately and the request card
-                            (1) animates back in. */}
+                            Visibility is gated on `status` (NOT on `stage3Data`) so it
+                            flips reliably in the SAME commit the success transition is
+                            applied:
+                                phase >= 2 && status !== 'success'
+                            • phase 2 idle / phase 3 cancelled / phase 3 error → request
+                            • phase 3 loading                                  → analyzing
+                            • phase 3 success                                  → collapses + unmounts
+                            An earlier version gated on `!stage3Data`; if the synthesized
+                            snapshot was ever falsy the card never hid. Keying off the
+                            status enum removes that failure mode.
+
+                            Content keeps showing the analyzing row while
+                            `isStage3Loading || status === 'success'`, so the request
+                            card never flashes back during the success collapse.
+
+                            `unmountOnExit` removes the card after the 400 ms collapse so
+                            a regenerate re-mounts and plays a clean enter. */}
                         <CollapseRelaxed
-                            visible={currentStage.phase >= 2 && !queryInsightsState.stage3Data && !isStage3Loading}
+                            visible={currentStage.phase >= 2 && currentStage.status !== 'success'}
                             unmountOnExit
                         >
-                            <GetPerformanceInsightsCard
-                                className="cardSpacing"
-                                bodyText={
-                                    queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score ===
-                                    'excellent'
-                                        ? l10n.t(
-                                              'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
-                                          )
-                                        : l10n.t(
-                                              'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
-                                          )
-                                }
-                                isLoading={currentStage.phase === 3 && currentStage.status === 'loading'}
-                                enabled={currentStage.phase >= 2 && currentStage.status !== 'loading'}
-                                errorMessage={queryInsightsState.stage3ErrorMessage ?? undefined}
-                                onGetInsights={handleGetAISuggestions}
-                                onLearnMore={handleLearnMore}
-                                onCancel={handleCancelAI}
-                                onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
-                            />
+                            {isStage3Loading || currentStage.status === 'success' ? (
+                                <Stage3AnalyzingCard onCancel={handleCancelAI} />
+                            ) : (
+                                <GetPerformanceInsightsCard
+                                    className="cardSpacing"
+                                    bodyText={
+                                        queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score ===
+                                        'excellent'
+                                            ? l10n.t(
+                                                  'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
+                                              )
+                                            : l10n.t(
+                                                  'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
+                                              )
+                                    }
+                                    isLoading={currentStage.phase === 3 && currentStage.status === 'loading'}
+                                    enabled={currentStage.phase >= 2 && currentStage.status !== 'loading'}
+                                    errorMessage={queryInsightsState.stage3ErrorMessage ?? undefined}
+                                    onGetInsights={handleGetAISuggestions}
+                                    onLearnMore={handleLearnMore}
+                                    onCancel={handleCancelAI}
+                                    onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
+                                />
+                            )}
                         </CollapseRelaxed>
-
-                        {isStage3Loading && <Stage3AnalyzingCard onCancel={handleCancelAI} />}
 
                         {/* AnimatedCardList for AI suggestions and tips */}
                         <AnimatedCardList items={insightCards} exitDuration={300} />
