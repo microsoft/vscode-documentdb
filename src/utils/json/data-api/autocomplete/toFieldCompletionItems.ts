@@ -34,11 +34,9 @@ export interface FieldCompletionData {
     /**
      * Field reference for aggregation expressions, e.g., "$age", "$address.city".
      *
-     * TODO: The simple `$field.path` syntax is invalid MQL for field names containing dots,
-     * spaces, or `$` characters. For such fields, the correct MQL syntax is
-     * `{ $getField: "fieldName" }`. This should be addressed when the aggregation
-     * completion provider is wired up — either by using `$getField` for special names
-     * or by making `referenceText` optional for fields that cannot use the `$` prefix syntax.
+     * For field names containing special characters (dashes, spaces, quotes, etc.)
+     * that cannot use the `$field` prefix syntax, this emits the `$getField` form
+     * instead, e.g., `{ $getField: "order-items" }`.
      */
     referenceText: string;
 }
@@ -52,6 +50,19 @@ export interface FieldCompletionData {
  * in `insertText` to produce valid query expressions.
  */
 const JS_IDENTIFIER_PATTERN = /^[a-zA-Z_$][a-zA-Z0-9_$]*$/;
+
+/**
+ * Returns true when every dot-separated segment of `path` is a valid
+ * identifier, meaning the `$field`-prefix aggregation syntax is safe.
+ *
+ * The `$` prefix syntax (e.g. `$address.city`) is valid MQL only when
+ * each segment between dots is a valid identifier.  Single-segment
+ * fields containing dashes, spaces, or quotes (e.g. `order-items`,
+ * `my field`, `say"hi"`) cannot use the `$` prefix.
+ */
+function isSafeAggregationReference(path: string): boolean {
+    return path.split('.').every((segment) => JS_IDENTIFIER_PATTERN.test(segment));
+}
 
 /**
  * Converts an array of FieldEntry objects into completion-ready FieldCompletionData items.
@@ -72,6 +83,16 @@ export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionDat
             insertText = entry.path;
         }
 
+        let referenceText: string;
+        if (isSafeAggregationReference(entry.path)) {
+            referenceText = `$${entry.path}`;
+        } else {
+            const escaped = entry.path.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+            referenceText = needsQuoting
+                ? `{ $getField: "${escaped}" }`
+                : `{ $getField: "${entry.path}" }`;
+        }
+
         return {
             fieldName: entry.path,
             displayType,
@@ -80,7 +101,7 @@ export function toFieldCompletionItems(fields: FieldEntry[]): FieldCompletionDat
             displayTypes: entry.bsonTypes?.map((t) => BSONTypes.toDisplayString(t as BSONTypes)),
             isSparse: entry.isSparse ?? false,
             insertText,
-            referenceText: `$${entry.path}`,
+            referenceText,
         };
     });
 }
