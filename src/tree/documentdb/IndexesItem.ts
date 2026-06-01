@@ -34,7 +34,7 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
      * Cached index count for the collection.
      * undefined means not yet loaded (node not expanded).
      */
-    private indexCount: number | undefined = undefined;
+    private indexCount: number | undefined;
 
     constructor(
         readonly cluster: TreeCluster<BaseClusterModel>,
@@ -62,9 +62,13 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             // Search indexes not supported on this platform, continue without them
         }
 
-        // Cache the count and refresh the tree item to show it
+        // Cache the count. Schedule a tree item refresh on the next tick
+        // to avoid re-entrant getChildren calls from notifyChildrenChanged.
+        const previousCount = this.indexCount;
         this.indexCount = indexes.length;
-        ext.state.notifyChildrenChanged(this.id);
+        if (this.indexCount !== previousCount) {
+            setTimeout(() => ext.state.notifyChildrenChanged(this.id), 0);
+        }
 
         // Sort indexes by name, with _id_ always first
         indexes.sort((a, b) => compareIndexNames(a.name, b.name));
