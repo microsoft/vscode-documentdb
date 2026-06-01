@@ -58,10 +58,10 @@ const STAGE3_COMPLETION_EVENT = 'documentDB.queryInsights.stage3.completed';
 /**
  * Accumulator for the dedicated completion event. Populated during
  * iteration and flushed once on subscription unwind (success or abort)
- * via {@link callWithTelemetryAndErrorHandling}. Keys mirror those
- * recorded onto the buffered `getQueryInsightsStage3` procedure's
- * `ctx.telemetry` 1:1 (plan §7), so the new event is a drop-in source
- * for any telemetry query that targeted the old keys.
+ * via {@link callWithTelemetryAndErrorHandling}. Keys mirror the ones
+ * the (now-deleted) buffered `getQueryInsightsStage3` procedure used to
+ * record onto `ctx.telemetry` 1:1 (plan §7), so the new event is a
+ * drop-in source for any telemetry query that targeted the old keys.
  */
 interface CompletionTelemetry {
     properties: Record<string, string>;
@@ -82,8 +82,9 @@ export const queryInsightsEventsRoutes = {
     /**
      * Stage 3 progressive streaming subscription.
      *
-     * Conceptually the streaming equivalent of `getQueryInsightsStage3`.
-     * Yields a sequence of {@link QueryInsightsStreamEvent}s:
+     * The streaming Stage 3 entry point (and, since cleanup #2, the
+     * only Stage 3 entry point). Yields a sequence of
+     * {@link QueryInsightsStreamEvent}s:
      *  - `status` with `phase: 'connecting'` once setup begins,
      *  - structured domain events fed by
      *    {@link StreamingResponseParser} as fragments arrive (`summary` /
@@ -102,11 +103,10 @@ export const queryInsightsEventsRoutes = {
      *    metadata (sourced from {@link streamHandle.completion}, which
      *    runs the canonical full parse and adds those fields).
      *
-     * The per-recommendation UI transform that the buffered
-     * `getQueryInsightsStage3` does (via `transformAIResponseForUI`) is
-     * deliberately NOT applied here — the subscription speaks in domain
-     * terms only (plan D7), and WI-9 will move that transform into the
-     * webview so it owns the card-component choice.
+     * The per-recommendation UI transform is deliberately NOT applied
+     * here — the subscription speaks in domain terms only (plan D7).
+     * The webview owns the card-component choice via
+     * `utils/createImprovementCard.ts` (WI-9).
      *
      * Cancellation: a per-subscription `AbortController` is wired so its
      * signal aborts when either the framework signals stop (`iterator.return()`
@@ -159,6 +159,19 @@ export const queryInsightsEventsRoutes = {
                 // path and we don't have a useful Promise to await on here
                 // — errors flushing telemetry are swallowed by
                 // callWithTelemetryAndErrorHandling itself.
+                //
+                // Delivery guarantees (for future maintainers — see PR #711):
+                //  - Cancel button / panel close / regenerate mid-stream →
+                //    `finally` runs, event is built synchronously and
+                //    queued to App Insights. **Reaches the wire.**
+                //  - User closes VS Code normally → extension host receives
+                //    shutdown signal; telemetry batch flushes during the
+                //    grace window. **Usually reaches the wire.**
+                //  - Force-quit / OS kill / extension host crash → batched
+                //    events lost. **May not reach the wire.**
+                // Acceptable for our analytics use case; do NOT promote
+                // to at-least-once semantics without first deciding on a
+                // backing store + dedupe key.
                 void callWithTelemetryAndErrorHandling(STAGE3_COMPLETION_EVENT, (telemetryCtx: IActionContext) => {
                     telemetryCtx.errorHandling.suppressDisplay = true;
                     Object.assign(telemetryCtx.telemetry.properties, completionTelemetry.properties);
@@ -189,9 +202,9 @@ export const queryInsightsEventsRoutes = {
                 }
 
                 // Build the same queryContext + staticAnalysisSummary that
-                // the buffered `getQueryInsightsStage3` builds today. The
-                // logic is intentionally a near-duplicate; WI-8 will refactor
-                // to share a single helper once the incremental parser is in.
+                // the (now-deleted) buffered Stage 3 procedure used to build.
+                // Kept structurally identical so the dedicated completion
+                // telemetry (§7) records the same shape of inputs.
                 const session: ClusterSession = ClusterSession.getSession(sessionId);
 
                 // Record the platform on the dedicated completion event so
