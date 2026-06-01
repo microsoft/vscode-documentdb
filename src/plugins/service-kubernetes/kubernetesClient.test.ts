@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as path from 'path';
 import {
     CREDENTIAL_SECRET_ANNOTATION,
     DEFAULT_SOURCE_ID,
@@ -279,14 +280,19 @@ describe('kubernetesClient', () => {
             Object.defineProperty(process, 'platform', { value: 'darwin' });
             delete process.env.KUBECONFIG;
 
-            expect(describeDefaultKubeconfigPath()).toBe('~/.kube/config');
+            // describeDefaultKubeconfigPath preserves the OS-native path separator,
+            // so the expected value must use path.sep (the real separator of the
+            // machine running the test, not the mocked process.platform).
+            expect(describeDefaultKubeconfigPath()).toBe(`~${path.sep}.kube${path.sep}config`);
         });
 
         it('uses USERPROFILE shorthand on Windows', () => {
             Object.defineProperty(process, 'platform', { value: 'win32' });
             delete process.env.KUBECONFIG;
 
-            expect(describeDefaultKubeconfigPath()).toBe('%USERPROFILE%/.kube/config');
+            // See note above: path.sep reflects the real host OS, while the home
+            // prefix (%USERPROFILE%) is chosen from the mocked process.platform.
+            expect(describeDefaultKubeconfigPath()).toBe(`%USERPROFILE%${path.sep}.kube${path.sep}config`);
         });
     });
 

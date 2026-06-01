@@ -49,6 +49,7 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
+import * as path from 'path';
 import { DEFAULT_SOURCE_ID } from '../config';
 import {
     addDefaultSource,
@@ -115,7 +116,10 @@ describe('addFileSource', () => {
         const record = await addFileSource('/abs/team.yaml');
         expect(record.kind).toBe('file');
         expect(record.label).toBe('team.yaml');
-        expect(record.path).toBe('/abs/team.yaml');
+        // addFileSource calls path.normalize on the input, which converts forward
+        // slashes to backslashes on Windows. Normalize the expected value the same
+        // way so the assertion passes on both POSIX and Windows hosts.
+        expect(record.path).toBe(path.normalize('/abs/team.yaml'));
         expect((await readSources()).some((s) => s.id === record.id)).toBe(true);
     });
 
