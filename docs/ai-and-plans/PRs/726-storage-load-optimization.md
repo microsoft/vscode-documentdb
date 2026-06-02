@@ -3,7 +3,7 @@
 **Branch:** `dev/tnaum/storeage-optimization`
 **Base:** `main`
 **PR URL:** https://github.com/microsoft/vscode-documentdb/pull/726
-**Commits:** 6 on top of `main` (5 code/perf + 1 l10n)
+**Commits:** 7 on top of `main` (6 code/perf + 1 l10n)
 
 ---
 
@@ -31,6 +31,9 @@ Diagnosing the second point revealed three compounding costs during startup:
   clean.
 - `getItems()` itself awaited secret reads **one item at a time** in a loop, so
   N items meant N sequential round trips.
+- Even after batching, **independent activation-time consumers each called
+  `getItems()` separately**, so the same zone was fully re-read several times
+  back-to-back within the first seconds of launch.
 
 The fixes are split into one commit per concern so each can be reviewed,
 reasoned about, and reverted independently. The reasoning behind each decision
@@ -138,16 +141,45 @@ existed in the deleted migration code.
 **Reasoning.** Mechanical follow-up required by the PR checklist so the
 localization bundle doesn't carry dead keys.
 
+### Commit 7 — `perf(storage): coalesce and briefly cache getItems during activation`
+
+Added a short-lived, per-workspace cache to `StorageImpl.getItems()`. The first
+caller starts the read and registers its promise; concurrent callers share that
+same in-flight promise (request coalescing), and callers within a 10s TTL reuse
+the resolved snapshot instead of issuing a fresh read. Every `getItems` caller
+receives a defensive copy (item + secrets array) so a shared snapshot can't be
+mutated across consumers. `push` and `delete` invalidate the affected
+workspace's entry immediately, and a rejected read is evicted so the next call
+retries rather than replaying the failure. Added a dedicated
+`storageService.test.ts` (6 tests) covering coalescing, cache hits, defensive
+copies, invalidation on write, and failure eviction.
+
+**Reasoning.** Commits 2–4 made each individual read cheaper, but launch traces
+still showed the *same* zone being fully re-read several times: tree providers,
+the post-migration cleanup, and the URI handler each call `getItems()`
+independently during activation, and those calls don't overlap perfectly, so
+per-call concurrency (Commit 4) couldn't collapse them. A read-through cache
+keyed by workspace turns that burst into a single underlying read. Correctness
+hinges on invalidation: every write to a connection-namespaced key flows through
+`push`/`delete` (verified — no other writer touches those keys), so dropping the
+entry there guarantees the cache never serves data stale with respect to a local
+mutation. The 10s TTL is only a backstop bounding how long an untracked external
+change could go unseen; in practice the cache is invalidated long before it
+expires. The defensive copy preserves the previous contract that callers can
+freely mutate the array they get back.
+
 ---
 
 ## Validation
 
 Full PR checklist, in order:
 
-- `npm run l10n` — removed 3 obsolete strings (committed in Commit 6)
+- `npm run l10n` — removed 3 obsolete strings (committed in Commit 6); no new
+  strings added by the caching commit
 - `npm run prettier-fix` — no changes
 - `npm run lint` — clean (only the pre-existing `eslint-env` webpack warning)
-- `npx jest --no-coverage` — 1995 tests / 101 suites pass
+- `npx jest --no-coverage` — 2001 tests / 102 suites pass (added
+  `storageService.test.ts`, 6 tests)
 - `npm run build` — clean (no type errors)
 
 The storage suites (`connectionStorageService.{test,cleanup,orphans,contract}`

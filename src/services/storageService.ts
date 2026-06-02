@@ -129,12 +129,86 @@ export interface Storage {
 class StorageImpl implements Storage {
     private readonly storageName: string;
 
+    /**
+     * Short-lived, per-workspace cache for `getItems` results.
+     *
+     * During extension activation several independent consumers (tree providers, post-migration
+     * cleanup, the URI handler, …) each call `getItems` for the same workspace within a short
+     * window. Every call fans out one secret-storage round trip per item, which under Remote-WSL
+     * crosses the WSL2 <-> Windows boundary and is latency-dominated. Without coalescing, the same
+     * zone is re-read several times back-to-back, stretching the launch read-path over seconds.
+     *
+     * Each entry holds the in-flight (or already-resolved) read promise plus the time it was
+     * created. While an entry is in flight, concurrent callers share it (request coalescing); once
+     * resolved, callers within {@link GET_ITEMS_CACHE_TTL_MS} reuse the snapshot instead of issuing
+     * a fresh read. Writes (`push`/`delete`) invalidate the affected workspace immediately, so the
+     * cache never serves data that is stale with respect to a local mutation. The TTL is only a
+     * safety backstop that bounds how long any untracked external change could go unseen.
+     */
+    private readonly getItemsCache = new Map<
+        string,
+        { promise: Promise<StorageItem<Record<string, unknown>>[]>; timestamp: number }
+    >();
+
+    /**
+     * How long a resolved `getItems` snapshot remains reusable. Chosen to comfortably cover the
+     * activation read-storm while remaining short enough that a manual refresh shortly afterwards
+     * re-reads storage. Local writes invalidate the cache regardless of this value.
+     */
+    private static readonly GET_ITEMS_CACHE_TTL_MS = 10_000;
+
     constructor(storageName: string) {
         this.storageName = storageName;
     }
 
     /**
      * Implementation of Storage.getItems that retrieves all items along with their secrets.
+     *
+     * Results are coalesced and briefly cached per workspace — see {@link getItemsCache} for the
+     * rationale. Callers always receive a defensive copy of the cached snapshot so they cannot
+     * mutate state shared with other concurrent consumers.
+     */
+    public async getItems<T extends Record<string, unknown>>(workspace: string): Promise<StorageItem<T>[]> {
+        const items = await this.getOrLoadItems<T>(workspace);
+
+        // Hand back a shallow copy (including a copied secrets array) so that callers sharing the
+        // cached snapshot cannot affect one another by mutating the returned items.
+        return items.map((item) => ({
+            ...item,
+            secrets: item.secrets ? [...item.secrets] : item.secrets,
+        }));
+    }
+
+    /**
+     * Returns the cached `getItems` promise for the workspace when it is still fresh, otherwise
+     * starts a new read and caches it. A rejected read is evicted so the next call retries instead
+     * of replaying the failure.
+     */
+    private getOrLoadItems<T extends Record<string, unknown>>(workspace: string): Promise<StorageItem<T>[]> {
+        const cached = this.getItemsCache.get(workspace);
+        if (cached && Date.now() - cached.timestamp < StorageImpl.GET_ITEMS_CACHE_TTL_MS) {
+            return cached.promise as unknown as Promise<StorageItem<T>[]>;
+        }
+
+        const promise = this.loadItemsFromStorage<T>(workspace);
+        const entry = {
+            promise: promise as unknown as Promise<StorageItem<Record<string, unknown>>[]>,
+            timestamp: Date.now(),
+        };
+        this.getItemsCache.set(workspace, entry);
+
+        // Evict failed reads so we don't keep serving (or awaiting) a rejected promise.
+        void promise.catch(() => {
+            if (this.getItemsCache.get(workspace) === entry) {
+                this.getItemsCache.delete(workspace);
+            }
+        });
+
+        return promise;
+    }
+
+    /**
+     * Reads all items and their secrets directly from storage, bypassing the cache.
      *
      * Secret reads are issued concurrently via `Promise.all`. Each `ext.secretStorage.get` is a
      * round trip to the main process (and, under Remote-WSL, across the WSL2 <-> Windows boundary),
@@ -144,7 +218,9 @@ class StorageImpl implements Storage {
      * access per-key (not globally) and caches the decrypted store in memory after the first read,
      * so distinct item keys do not block each other.
      */
-    public async getItems<T extends Record<string, unknown>>(workspace: string): Promise<StorageItem<T>[]> {
+    private async loadItemsFromStorage<T extends Record<string, unknown>>(
+        workspace: string,
+    ): Promise<StorageItem<T>[]> {
         const storageKeyPrefix = `${this.storageName}/${workspace}/`;
         const keys = ext.context.globalState.keys().filter((key) => key.startsWith(storageKeyPrefix));
 
@@ -250,6 +326,9 @@ class StorageImpl implements Storage {
 
         // Save the item in globalState
         await ext.context.globalState.update(storageKey, itemToStore);
+
+        // A mutation occurred: drop the cached snapshot so subsequent reads reflect this write.
+        this.getItemsCache.delete(workspace);
     }
 
     /**
@@ -273,6 +352,11 @@ class StorageImpl implements Storage {
         try {
             // First delete the item from globalState
             await ext.context.globalState.update(storageKey, undefined);
+
+            // The stored set changed: invalidate the cached snapshot so reads re-resolve from truth.
+            // (If secret deletion below fails and we restore the item, the next read still sees the
+            // correct state because the cache has already been dropped.)
+            this.getItemsCache.delete(workspace);
 
             try {
                 // Then delete its secrets
