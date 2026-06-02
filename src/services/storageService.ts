@@ -135,35 +135,50 @@ class StorageImpl implements Storage {
 
     /**
      * Implementation of Storage.getItems that retrieves all items along with their secrets.
+     *
+     * Secret reads are issued concurrently via `Promise.all`. Each `ext.secretStorage.get` is a
+     * round trip to the main process (and, under Remote-WSL, across the WSL2 <-> Windows boundary),
+     * so the per-item cost is dominated by latency rather than CPU. Awaiting them one-by-one in a
+     * loop paid that latency N times sequentially; dispatching them together pipelines the round
+     * trips so the total wait is roughly one round trip instead of N. VS Code serializes secret
+     * access per-key (not globally) and caches the decrypted store in memory after the first read,
+     * so distinct item keys do not block each other.
      */
     public async getItems<T extends Record<string, unknown>>(workspace: string): Promise<StorageItem<T>[]> {
         const storageKeyPrefix = `${this.storageName}/${workspace}/`;
         const keys = ext.context.globalState.keys().filter((key) => key.startsWith(storageKeyPrefix));
+
+        // Read each item's metadata from globalState (synchronous, in-memory) and keep only those
+        // that exist, so secret reads line up 1:1 with the resolved items below.
+        const itemsWithKeys = keys
+            .map((key) => ({ key, item: ext.context.globalState.get<StorageItem<T>>(key) }))
+            .filter((entry): entry is { key: string; item: StorageItem<T> } => entry.item !== undefined);
+
+        // Issue all secret reads concurrently — see the method doc comment for why this matters.
+        const secretsJsonList = await Promise.all(
+            itemsWithKeys.map(({ key }) => ext.secretStorage.get(`${key}/secrets`)),
+        );
+
         const items: StorageItem<T>[] = [];
+        for (let i = 0; i < itemsWithKeys.length; i++) {
+            const { key, item } = itemsWithKeys[i];
 
-        for (const key of keys) {
-            const item = ext.context.globalState.get<StorageItem<T>>(key);
-            if (item) {
-                // ensure that the real id is used, same as the one used in the storage
-                item.id = key.substring(storageKeyPrefix.length);
+            // ensure that the real id is used, same as the one used in the storage
+            item.id = key.substring(storageKeyPrefix.length);
 
-                // Read secrets associated with the item
-                const secretKey = `${key}/secrets`;
-                const secretsJson = await ext.secretStorage.get(secretKey);
-
-                let secrets: string[] = [];
-                if (secretsJson) {
-                    try {
-                        secrets = JSON.parse(secretsJson) as string[];
-                    } catch (error) {
-                        console.error(l10n.t('Failed to parse secrets for key {0}:', key), error);
-                        secrets = [];
-                    }
+            let secrets: string[] = [];
+            const secretsJson = secretsJsonList[i];
+            if (secretsJson) {
+                try {
+                    secrets = JSON.parse(secretsJson) as string[];
+                } catch (error) {
+                    console.error(l10n.t('Failed to parse secrets for key {0}:', key), error);
+                    secrets = [];
                 }
-
-                item.secrets = secrets;
-                items.push(item);
             }
+
+            item.secrets = secrets;
+            items.push(item);
         }
 
         return items;
