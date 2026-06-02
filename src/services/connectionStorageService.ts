@@ -3,30 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { apiUtils, callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type EntraIdAuthConfig, type NativeAuthConfig } from '../documentdb/auth/AuthConfig';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { redactCredentialsFromConnectionString } from '../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
-import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { StorageNames, StorageService, type Storage, type StorageItem } from './storageService';
-
-/**
- * API for migrating MongoDB cluster connections from Azure Databases extension
- */
-interface MongoConnectionMigrationApi {
-    apiVersion: string;
-    exportMongoClusterConnections(context: vscode.ExtensionContext): Promise<unknown[] | undefined>;
-    renameMongoClusterConnectionStorageId(
-        context: vscode.ExtensionContext,
-        oldId: string,
-        newId: string,
-    ): Promise<boolean>;
-}
 
 /**
  * Storage zones represent the top-level groupings in the connections view.
@@ -250,9 +234,6 @@ const enum SecretIndex {
  * underlying storage and migration complexity.
  */
 export class ConnectionStorageService {
-    private static readonly MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY =
-        'ConnectionStorageService.migrationAttemptsFromAzureDatabases';
-
     /**
      * globalState key recording the cleanup-schema version that has already completed for this install.
      */
@@ -281,27 +262,6 @@ export class ConnectionStorageService {
     private static async getStorageService(): Promise<Storage> {
         if (!this._storageService) {
             this._storageService = StorageService.get(StorageNames.Connections);
-
-            if (await isVCoreAndRURolloutEnabled()) {
-                try {
-                    // Trigger migration on first access, but only if we haven't reached the attempt limit
-                    const migrationAttempts = ext.context.globalState.get<number>(
-                        this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
-                        0,
-                    );
-
-                    if (migrationAttempts < 20) {
-                        // this is a good number as any, just keep trying for a while to account for failures
-                        await this.migrateFromAzureDatabases();
-                    }
-                } catch (error) {
-                    // Migration is optional - output error for debugging but don't break storage service initialization
-                    console.debug(
-                        'Optional migration check failed:',
-                        error instanceof Error ? error.message : String(error),
-                    );
-                }
-            }
 
             // Resolve critical post-migration errors before proceeding
             await this.resolvePostMigrationErrors();
@@ -1287,182 +1247,5 @@ export class ConnectionStorageService {
 
         const parentPath = await this.getPath(item.properties.parentId, connectionType);
         return `${parentPath}/${item.name}`;
-    }
-
-    /**
-     * Gets the MongoDB Migration API from the Azure Databases extension
-     */
-    private static async getMongoMigrationApi(): Promise<MongoConnectionMigrationApi | undefined> {
-        try {
-            const cosmosDbExtension = vscode.extensions.getExtension('ms-azuretools.vscode-cosmosdb');
-            if (!cosmosDbExtension) {
-                console.debug('getMongoMigrationApi: ms-azuretools.vscode-cosmosdb is not installed.');
-                return undefined;
-            }
-
-            const api = await apiUtils.getAzureExtensionApi<MongoConnectionMigrationApi>(
-                ext.context,
-                'ms-azuretools.vscode-cosmosdb',
-                '2.0.0',
-            );
-
-            if (
-                !api ||
-                typeof api.exportMongoClusterConnections !== 'function' ||
-                typeof api.renameMongoClusterConnectionStorageId !== 'function'
-            ) {
-                console.debug('getMongoMigrationApi: Requested API version is not available.');
-                return undefined;
-            }
-
-            return api;
-        } catch (error) {
-            console.debug(
-                `getMongoMigrationApi: Error accessing MongoDB Migration API: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            return undefined;
-        }
-    }
-
-    /**
-     * Migrates connections from Azure Databases extension storage to DocumentDB extension storage.
-     * This function is called automatically on first storage access to ensure one-time migration.
-     *
-     * @returns Promise resolving to migration statistics
-     */
-    private static async migrateFromAzureDatabases(): Promise<{ migrated: number; skipped: number }> {
-        const result = await callWithTelemetryAndErrorHandling(
-            'migrateFromAzureDatabases',
-            async (context: IActionContext) => {
-                // Increment migration attempt counter at the start of each attempt
-                const currentAttempts = ext.context.globalState.get<number>(
-                    this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
-                    0,
-                );
-                await ext.context.globalState.update(
-                    this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
-                    currentAttempts + 1,
-                );
-                context.telemetry.measurements.migrationAttemptNumber = currentAttempts + 1;
-
-                const MIGRATION_PREFIX = 'migrated-to-vscode-documentdb-';
-                let migratedCount = 0;
-                let skippedCount = 0;
-                const startTime = Date.now();
-
-                try {
-                    const mongoMigrationApi = await this.getMongoMigrationApi();
-
-                    if (!mongoMigrationApi) {
-                        context.telemetry.properties.migrationAttempted = 'false';
-                        context.telemetry.properties.reason = 'api_not_available';
-                        return { migrated: 0, skipped: 0 };
-                    }
-
-                    // Use the API to get MongoDB connections - cast to local StorageItem[]
-                    const allLegacyItems = (await mongoMigrationApi.exportMongoClusterConnections(ext.context)) as
-                        | StorageItem[]
-                        | undefined;
-
-                    if (!allLegacyItems || allLegacyItems.length === 0) {
-                        context.telemetry.properties.migrationAttempted = 'true';
-                        context.telemetry.properties.hasOldStorage = 'false';
-                        return { migrated: 0, skipped: 0 };
-                    }
-
-                    context.telemetry.properties.migrationAttempted = 'true';
-                    context.telemetry.properties.hasOldStorage = 'true';
-                    context.telemetry.measurements.itemsReadFromLegacyStorage = allLegacyItems.length;
-
-                    const currentDate = new Date().toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                    });
-
-                    for (const legacyItem of allLegacyItems) {
-                        if (legacyItem.id.startsWith(MIGRATION_PREFIX)) {
-                            skippedCount++;
-                            continue;
-                        }
-
-                        try {
-                            // Reshape the legacy item using the existing v1 wrapping logic
-                            const migratedItem = this.wrapV1AsV2(legacyItem);
-
-                            migratedItem.name = l10n.t('Imported: {name} (imported on {date})', {
-                                name: migratedItem.name,
-                                date: currentDate,
-                            });
-
-                            // Determine connection type based on emulator flag
-                            const connectionType = legacyItem.properties?.isEmulator
-                                ? ConnectionType.Emulators
-                                : ConnectionType.Clusters;
-
-                            // Save to new storage
-                            await this.save(connectionType, migratedItem, true);
-
-                            // Use the API to rename the connection ID in the legacy storage
-                            const newId = `${MIGRATION_PREFIX}${legacyItem.id}`;
-                            const renameSuccess = await mongoMigrationApi.renameMongoClusterConnectionStorageId(
-                                ext.context,
-                                legacyItem.id,
-                                newId,
-                            );
-
-                            if (renameSuccess) {
-                                migratedCount++;
-                            } else {
-                                ext.outputChannel.appendLog(
-                                    `Failed to rename connection in Azure Databases extension: ${legacyItem.id}`,
-                                );
-                                skippedCount++;
-                            }
-                        } catch (error) {
-                            // Log individual item migration errors but continue with others
-                            ext.outputChannel.appendLog(
-                                `Failed to migrate from Azure Databases VS Code Extension: connection item ${legacyItem.id}: ${error instanceof Error ? error.message : String(error)}`,
-                            );
-                            skippedCount++;
-                        }
-                    }
-
-                    // Set success telemetry
-                    context.telemetry.properties.migrationSuccessful = 'true';
-                    context.telemetry.measurements.migrationDurationMs = Date.now() - startTime;
-                    context.telemetry.measurements.itemsMigrated = migratedCount;
-                    context.telemetry.measurements.itemsSkipped = skippedCount;
-
-                    if (migratedCount > 0) {
-                        ext.outputChannel.appendLog(
-                            l10n.t(
-                                'Migration of connections from the Azure Databases VS Code Extension to the DocumentDB for VS Code Extension completed: {migratedCount} connections migrated.',
-                                { migratedCount },
-                            ),
-                        );
-                    }
-                } catch (error) {
-                    // Set failure telemetry
-                    context.telemetry.properties.migrationSuccessful = 'false';
-                    context.telemetry.properties.errorType =
-                        error instanceof Error ? error.constructor.name : 'UnknownError';
-                    context.telemetry.measurements.migrationDurationMs = Date.now() - startTime;
-                    context.telemetry.measurements.itemsMigrated = migratedCount;
-                    context.telemetry.measurements.itemsSkipped = skippedCount;
-
-                    // Log errors but don't throw
-                    ext.outputChannel.appendLog(
-                        l10n.t('Failed to access Azure Databases VS Code Extension storage for migration: {error}', {
-                            error: error instanceof Error ? error.message : String(error),
-                        }),
-                    );
-                }
-
-                return { migrated: migratedCount, skipped: skippedCount };
-            },
-        );
-
-        return result ?? { migrated: 0, skipped: 0 };
     }
 }
