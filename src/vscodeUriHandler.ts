@@ -63,6 +63,13 @@ interface UriParams {
  */
 export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
     return callWithTelemetryAndErrorHandling('globalUriHandler', async (context: IActionContext) => {
+        // Record non-sensitive URI diagnostics to help investigate failures.
+        context.telemetry.properties.uriScheme = uri.scheme;
+        context.telemetry.properties.uriAuthority = uri.authority;
+        context.telemetry.properties.uriPathLength = String(uri.path.length);
+        context.telemetry.properties.uriQueryLength = String((uri.query ?? '').length);
+        context.telemetry.properties.uriHasQuery = uri.query ? 'true' : 'false';
+
         try {
             // Extract and validate parameters
             // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
@@ -72,6 +79,7 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             await handleConnectionStringRequest(context, params);
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
+            context.telemetry.properties.failureStage = 'unwrap';
             throw new Error(l10n.t('Failed to process URI: {0}', errMsg));
         }
     });
@@ -394,7 +402,17 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
     // Add sensitive values to valuesToMask to prevent sensitive data in logs
     maskParamsInTelemetry(context, params);
 
+    // Record whether the query was non-empty for diagnostic purposes.
+    context.telemetry.properties.queryFragmentNonEmpty = queryFragment ? 'true' : 'false';
+
     if (!params.connectionString) {
+        // Surface a user-visible message for the most common failure case
+        // instead of an opaque telemetry-only error.
+        void vscode.window.showWarningMessage(
+            l10n.t(
+                'A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.',
+            ),
+        );
         throw new Error(l10n.t('The connection string is required.'));
     }
 
