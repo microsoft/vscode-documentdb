@@ -316,9 +316,10 @@ export class ClustersExtension implements vscode.Disposable {
                 // extension was discovered, so its TS server might not include our plugin.
                 // We restart it once when the first query playground file is opened.
                 let tsRestarted = false;
+                let tsPluginUnavailable = false;
 
                 const ensureTsRestart = async (): Promise<void> => {
-                    if (tsRestarted) {
+                    if (tsRestarted || tsPluginUnavailable) {
                         return;
                     }
                     // Mark attempted up front to prevent concurrent bootstraps from racing.
@@ -391,14 +392,40 @@ export class ClustersExtension implements vscode.Disposable {
 
                             stage = 'complete';
                         } catch (error) {
-                            // Reset so the next playground open retries the bootstrap.
-                            // This matters for read-only extension installs (Snap, system
-                            // package, locked enterprise) where the first attempt fails
-                            // but a later run after a workspace setting change may succeed,
-                            // and for slow-init environments where the TS server was not
-                            // ready in time.
-                            tsRestarted = false;
                             const message = error instanceof Error ? error.message : String(error);
+                            const errorCode = (error as NodeJS.ErrnoException)?.code;
+
+                            // EACCES / EROFS signal a read-only extension install
+                            // (Snap, system package, locked enterprise, network share).
+                            // Retrying won't help — surface a status bar warning so users
+                            // understand the limitation instead of silently failing.
+                            if (errorCode === 'EACCES' || errorCode === 'EROFS') {
+                                tsPluginUnavailable = true;
+                                const statusBarItem = vscode.window.createStatusBarItem(
+                                    vscode.StatusBarAlignment.Right,
+                                    100,
+                                );
+                                statusBarItem.text = '$(warning) DocumentDB TS Plugin';
+                                statusBarItem.tooltip =
+                                    'TypeScript-powered completions are unavailable on this read-only extension install.';
+                                statusBarItem.command = {
+                                    title: 'Show details',
+                                    command: 'vscode-documentdb.command.playground.new',
+                                    arguments: [],
+                                };
+                                statusBarItem.show();
+                                ext.context.subscriptions.push(statusBarItem);
+
+                                ext.outputChannel.debug(
+                                    `[Playground] TS plugin stub unavailable (read-only install): ${message}`,
+                                );
+                            } else {
+                                // Reset so the next playground open retries the bootstrap
+                                // for transient failures (e.g., slow-init environments
+                                // where the TS server was not ready in time).
+                                tsRestarted = false;
+                            }
+
                             ext.outputChannel.debug(
                                 `[Playground] TS server bootstrap failed at stage=${stage}: ${message}`,
                             );
