@@ -297,7 +297,11 @@ export class ClustersClient {
 
         // Track whether connect() has resolved so the abort handler can avoid
         // closing an already-connected client during the micro window between
-        // connect() resolving and removeEventListener firing.
+        // connect() resolving and removeEventListener firing. This window exists
+        // because abort events are dispatched synchronously when abort() is
+        // called: if abort() fires during the synchronous continuation after
+        // connect() resolves but before the listener is removed, the handler
+        // would close the now-connected client without this guard.
         let connected = false;
 
         // Wire up abort: closing the client causes the pending connect() to reject
@@ -317,9 +321,11 @@ export class ClustersClient {
             await this._mongoClient.connect();
             connected = true;
 
-            // Remove the abort listener immediately after connect() resolves so that
-            // a late cancellation during synchronous API init below cannot close an
-            // already-connected client while the method continues as "successful".
+            // Remove the abort listener immediately after connect() resolves so
+            // that a late cancellation during synchronous API init below cannot
+            // close an already-connected client while the method continues as
+            // "successful". The connected flag above serves as a belt-and-suspenders
+            // guard in case abort fires between the assignment and this removal.
             abortSignal?.removeEventListener('abort', onAbort);
 
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
@@ -346,7 +352,12 @@ export class ClustersClient {
             }
             throw error;
         } finally {
-            abortSignal?.removeEventListener('abort', onAbort);
+            // Clean up the abort listener if we didn't already remove it in the
+            // success path (i.e., connect() failed). In the success path the
+            // listener was already removed above.
+            if (abortSignal && !connected) {
+                abortSignal.removeEventListener('abort', onAbort);
+            }
         }
     }
 
