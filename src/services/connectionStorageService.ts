@@ -982,22 +982,26 @@ export class ConnectionStorageService {
     }
 
     private static fromStorageItem(item: StorageItem<StoredItemProperties>): StoredItem {
+        // NOTE: Any "upgrade" performed below is a pure in-memory transformation used to wrap the
+        // raw stored item into the current `StoredItem` shape. It is NOT a persisted migration —
+        // nothing is written back to storage here. The wrapped result is recomputed on every read,
+        // which is intentional and cheap (string parsing + object reshaping, no I/O).
         ext.outputChannel.trace(
-            `[Storage] fromStorageItem: id=${item.id}, name="${item.name}", version=${item.version ?? 'none'}, type=${item.properties?.type ?? 'undefined'}`,
+            `[Storage] fromStorageItem (in-memory wrap): id=${item.id}, name="${item.name}", version=${item.version ?? 'none'}, type=${item.properties?.type ?? 'undefined'}`,
         );
 
         switch (item.version) {
             case '3.0':
-                // v3.0 - reconstruct directly from storage
+                // v3.0 - already current shape, reconstruct directly from storage
                 return this.reconstructStoredItemFromSecrets(item);
 
             case '2.0':
-                // v2.0 - convert v2.0 format to intermediate ConnectionItem, then migrate to v3
-                return this.migrateToV3(this.convertV2ToConnectionItem(item));
+                // v2.0 - wrap v2.0 format into the current shape (in-memory only, not persisted)
+                return this.wrapV2AsCurrent(this.convertV2ToConnectionItem(item));
 
             default:
-                // v1.0 (no version field) - migrate to v2 then v3
-                return this.migrateToV3(this.migrateToV2(item));
+                // v1.0 (no version field) - wrap v1.0 → v2 shape → current shape (in-memory only)
+                return this.wrapV2AsCurrent(this.wrapV1AsV2(item));
         }
     }
 
@@ -1059,31 +1063,30 @@ export class ConnectionStorageService {
     }
 
     /**
-     * Migrates an unversioned `StorageItem` (v1) to the `StoredItem` (v2) format.
+     * Wraps an unversioned `StorageItem` (v1) into the v2 `StoredItem` shape, in memory.
      *
-     * This function handles the transformation of the old data structure to the new,
-     * more structured format. It ensures backward compatibility by converting legacy
-     * connection data on the fly.
+     * This is a pure read-time transformation: it reshapes the legacy data structure into the
+     * newer, more structured format so consumers always see a consistent type. Nothing is written
+     * back to storage — the result is recomputed on every read. It is therefore cheap (string
+     * parsing + object reshaping only) and intentionally not persisted.
      *
-     * The migration logic is simple because we currently only support one legacy version.
+     * The logic is simple because we currently only support one legacy version.
      *
-     * @param item The legacy `StorageItem` to migrate.
-     * @returns A `StoredItem` in the v2 format.
+     * @param item The legacy `StorageItem` to wrap.
+     * @returns A `StoredItem` in the v2 shape.
      */
-    private static migrateToV2(item: StorageItem): StoredItem {
+    private static wrapV1AsV2(item: StorageItem): StoredItem {
         // in V2, the connection string shouldn't contain the username/password combo
         const rawSecret = item?.secrets?.[0] ?? '';
 
         ext.outputChannel.trace(
-            `[Storage] migrateToV2: id=${item.id}, name="${item.name}", secret length=${rawSecret.length}`,
+            `[Storage] wrapV1AsV2 (in-memory): id=${item.id}, name="${item.name}", secret length=${rawSecret.length}`,
         );
 
         // Guard: If the stored connection string is empty or clearly invalid, we cannot
         // parse it. Throw a descriptive error so the caller (getAllItems) can skip it.
         if (!rawSecret || rawSecret.trim().length === 0) {
-            throw new Error(
-                `Cannot migrate v1 item "${item.name}" (id: ${item.id}): stored connection string is empty`,
-            );
+            throw new Error(`Cannot wrap v1 item "${item.name}" (id: ${item.id}): stored connection string is empty`);
         }
 
         const parsedCS = new DocumentDBConnectionString(rawSecret);
@@ -1132,9 +1135,10 @@ export class ConnectionStorageService {
     }
 
     /**
-     * Migrates v2 items to v3 by adding type and parentId fields
+     * Wraps a v2 item into the current (v3) shape by ensuring the `type` and `parentId` fields
+     * exist. In-memory only — not persisted back to storage.
      */
-    private static migrateToV3(item: StoredItem): StoredItem {
+    private static wrapV2AsCurrent(item: StoredItem): StoredItem {
         // Ensure type and parentId exist (defaults for v3)
         if (!item.properties.type) {
             (item.properties as StoredItemProperties).type = ItemType.Connection;
@@ -1327,8 +1331,8 @@ export class ConnectionStorageService {
                         }
 
                         try {
-                            // Migrate the item using existing migrateToV2 logic
-                            const migratedItem = this.migrateToV2(legacyItem);
+                            // Reshape the legacy item using the existing v1 wrapping logic
+                            const migratedItem = this.wrapV1AsV2(legacyItem);
 
                             migratedItem.name = l10n.t('Imported: {name} (imported on {date})', {
                                 name: migratedItem.name,
