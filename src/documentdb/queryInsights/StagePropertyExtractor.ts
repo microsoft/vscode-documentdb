@@ -75,9 +75,12 @@ export class StagePropertyExtractor {
                 this.collectPlannerStages(child, accumulator);
             });
         }
-        if (stage.shards && Array.isArray(stage.shards)) {
-            for (const shard of stage.shards) {
-                this.collectPlannerStages(shard as Document, accumulator);
+        if (stage.shards) {
+            const shardEntries = Array.isArray(stage.shards) ? stage.shards : Object.values(stage.shards);
+            for (const shardEntry of shardEntries) {
+                const shard = shardEntry as Document;
+                const planRoot = shard.winningPlan || shard;
+                this.collectPlannerStages(planRoot, accumulator);
             }
         }
     }
@@ -111,9 +114,12 @@ export class StagePropertyExtractor {
             });
         }
         if (stage.shards) {
-            (stage.shards as Document[]).forEach((shard: Document) => {
-                this.traverseStages(shard, accumulator);
-            });
+            const shardEntries = Array.isArray(stage.shards) ? stage.shards : Object.values(stage.shards);
+            for (const shardEntry of shardEntries) {
+                const shard = shardEntry as Document;
+                const planRoot = shard.executionStages || shard.inputStage || shard;
+                this.traverseStages(planRoot, accumulator);
+            }
         }
     }
 

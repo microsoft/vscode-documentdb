@@ -771,9 +771,12 @@ export class ExplainPlanAnalyzer {
         }
 
         // Traverse shard branches (sharded clusters)
-        if (plan.shards && Array.isArray(plan.shards)) {
-            for (const shard of plan.shards) {
-                const found = this.findStageInPlan(shard as Document, stageName);
+        if (plan.shards) {
+            const shardEntries = Array.isArray(plan.shards) ? plan.shards : Object.values(plan.shards);
+            for (const shardEntry of shardEntries) {
+                const shard = shardEntry as Document;
+                const planRoot = shard.winningPlan || shard.executionStages || shard.inputStage || shard;
+                const found = this.findStageInPlan(planRoot, stageName);
                 if (found) {
                     return found;
                 }

@@ -349,7 +349,12 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
         });
 
         it('detects IXSCAN in planner shards even when exec stats use flat structure', () => {
-            // Edge case: planner is sharded, execution stats may not be
+            // Verifies that bitmap index detection works when the queryPlanner
+            // includes shard info (SHARD_MERGE > SINGLE_SHARD > IXSCAN) but
+            // executionStats use a simplified flat structure (FETCH > IXSCAN)
+            // without shard wrappers. This is important because production
+            // sharded clusters may return plan trees in either format, and the
+            // bitmap detector must be able to traverse both shapes correctly.
             const analysis = makeAnalysis();
             const explainResult: Document = {
                 queryPlanner: {
