@@ -300,53 +300,48 @@ export class ConnectionStorageService {
      * This function is intended for beta testers who created folders before this fix was added.
      * It runs once during cleanup and updates folders that have an empty connection string.
      *
-     * @param context - The action context for telemetry
-     * @param storageService - The storage service to use (avoids circular getStorageService call)
+     * @param zone - The storage zone whose items are being processed
+     * @param items - Pre-loaded items for the zone (loaded once by the caller to avoid re-reading storage)
+     * @returns The number of folders that were fixed
      */
-    private static async fixFolderConnectionStrings(context: IActionContext, storageService: Storage): Promise<void> {
+    private static async fixFolderConnectionStrings(
+        zone: StorageZone,
+        items: StorageItem<StoredItemProperties>[],
+    ): Promise<number> {
         let foldersFixed = 0;
 
-        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+        // Find folders without the placeholder connection string
+        // (items created before this fix will have empty string or undefined)
+        const foldersToFix = items.filter(
+            (item) =>
+                KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                item.properties?.type === ItemType.Folder &&
+                (!item.secrets?.[SecretIndex.ConnectionString] ||
+                    item.secrets[SecretIndex.ConnectionString] === ''),
+        );
 
-            // Find folders without the placeholder connection string
-            // (items created before this fix will have empty string or undefined)
-            const foldersToFix = items.filter(
-                (item) =>
-                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
-                    item.properties?.type === ItemType.Folder &&
-                    (!item.secrets?.[SecretIndex.ConnectionString] ||
-                        item.secrets[SecretIndex.ConnectionString] === ''),
-            );
+        for (const folder of foldersToFix) {
+            try {
+                // Convert to ConnectionItem (wraps into current shape if needed)
+                const connectionItem = this.fromStorageItem(folder);
 
-            for (const folder of foldersToFix) {
-                try {
-                    // Convert to ConnectionItem (triggers migration if needed)
-                    const connectionItem = this.fromStorageItem(folder);
+                // Re-save to apply the placeholder connection string
+                // toStorageItem will automatically add FOLDER_PLACEHOLDER_CONNECTION_STRING for folders
+                await this.save(zone, connectionItem, true);
+                foldersFixed++;
 
-                    // Re-save to apply the placeholder connection string
-                    // toStorageItem will automatically add FOLDER_PLACEHOLDER_CONNECTION_STRING for folders
-                    await this.save(connectionType, connectionItem, true);
-                    foldersFixed++;
-
-                    ext.outputChannel.appendLog(
-                        `Fixed folder "${folder.name}" (id: ${folder.id}) - added placeholder connection string for backward compatibility.`,
-                    );
-                } catch (error) {
-                    console.debug(
-                        `Failed to fix folder ${folder.id}:`,
-                        error instanceof Error ? error.message : String(error),
-                    );
-                }
+                ext.outputChannel.appendLog(
+                    `Fixed folder "${folder.name}" (id: ${folder.id}) - added placeholder connection string for backward compatibility.`,
+                );
+            } catch (error) {
+                console.debug(
+                    `Failed to fix folder ${folder.id}:`,
+                    error instanceof Error ? error.message : String(error),
+                );
             }
         }
 
-        context.telemetry.measurements.foldersFixed = foldersFixed;
-        if (foldersFixed > 0) {
-            ext.outputChannel.appendLog(
-                `Fixed ${foldersFixed} folder(s) with placeholder connection string for backward compatibility.`,
-            );
-        }
+        return foldersFixed;
     }
 
     /**
@@ -354,71 +349,65 @@ export class ConnectionStorageService {
      * This can happen due to bugs in previous versions where parameters were doubled
      * during migration or editing.
      *
-     * @param context - The action context for telemetry
-     * @param storageService - The storage service to use (avoids circular getStorageService call)
+     * @param zone - The storage zone whose items are being processed
+     * @param items - Pre-loaded items for the zone (loaded once by the caller to avoid re-reading storage)
+     * @returns The number of connections that were fixed
      */
     private static async cleanupDuplicateConnectionStringParameters(
-        context: IActionContext,
-        storageService: Storage,
-    ): Promise<void> {
+        zone: StorageZone,
+        items: StorageItem<StoredItemProperties>[],
+    ): Promise<number> {
         let connectionsFixed = 0;
 
-        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+        // Find connections (not folders) that might have duplicate parameters
+        const connectionsToCheck = items.filter(
+            (item) =>
+                KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                item.properties?.type === ItemType.Connection &&
+                item.secrets?.[SecretIndex.ConnectionString],
+        );
 
-            // Find connections (not folders) that might have duplicate parameters
-            const connectionsToCheck = items.filter(
-                (item) =>
-                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
-                    item.properties?.type === ItemType.Connection &&
-                    item.secrets?.[SecretIndex.ConnectionString],
-            );
+        for (const item of connectionsToCheck) {
+            try {
+                const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
 
-            for (const item of connectionsToCheck) {
-                try {
-                    const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
+                // Skip placeholder or empty connection strings
+                if (!connectionString || connectionString === FOLDER_PLACEHOLDER_CONNECTION_STRING) {
+                    continue;
+                }
 
-                    // Skip placeholder or empty connection strings
-                    if (!connectionString || connectionString === FOLDER_PLACEHOLDER_CONNECTION_STRING) {
-                        continue;
-                    }
+                // Check if the connection string has duplicate parameters
+                const parsed = new DocumentDBConnectionString(connectionString);
+                if (!parsed.hasDuplicateParameters()) {
+                    continue;
+                }
 
-                    // Check if the connection string has duplicate parameters
-                    const parsed = new DocumentDBConnectionString(connectionString);
-                    if (!parsed.hasDuplicateParameters()) {
-                        continue;
-                    }
+                // Normalize the connection string to remove duplicates
+                const normalizedConnectionString = parsed.deduplicateQueryParameters();
 
-                    // Normalize the connection string to remove duplicates
-                    const normalizedConnectionString = parsed.deduplicateQueryParameters();
+                // Only update if something changed
+                if (normalizedConnectionString !== connectionString) {
+                    // Convert to ConnectionItem and update the connection string
+                    const connectionItem = this.fromStorageItem(item);
+                    connectionItem.secrets.connectionString = normalizedConnectionString;
 
-                    // Only update if something changed
-                    if (normalizedConnectionString !== connectionString) {
-                        // Convert to ConnectionItem and update the connection string
-                        const connectionItem = this.fromStorageItem(item);
-                        connectionItem.secrets.connectionString = normalizedConnectionString;
+                    // Re-save with the cleaned connection string
+                    await this.save(zone, connectionItem, true);
+                    connectionsFixed++;
 
-                        // Re-save with the cleaned connection string
-                        await this.save(connectionType, connectionItem, true);
-                        connectionsFixed++;
-
-                        ext.outputChannel.appendLog(
-                            `Fixed connection "${item.name}" (id: ${item.id}) - removed duplicate query parameters.`,
-                        );
-                    }
-                } catch (error) {
-                    console.debug(
-                        `Failed to check/fix connection ${item.id} for duplicate parameters:`,
-                        error instanceof Error ? error.message : String(error),
+                    ext.outputChannel.appendLog(
+                        `Fixed connection "${item.name}" (id: ${item.id}) - removed duplicate query parameters.`,
                     );
                 }
+            } catch (error) {
+                console.debug(
+                    `Failed to check/fix connection ${item.id} for duplicate parameters:`,
+                    error instanceof Error ? error.message : String(error),
+                );
             }
         }
 
-        context.telemetry.measurements.duplicateParamsFixed = connectionsFixed;
-        if (connectionsFixed > 0) {
-            ext.outputChannel.appendLog(`Fixed ${connectionsFixed} connection(s) with duplicate query parameters.`);
-        }
+        return connectionsFixed;
     }
 
     /**
@@ -434,20 +423,52 @@ export class ConnectionStorageService {
         await callWithTelemetryAndErrorHandling('resolvePostMigrationErrors', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
 
-            // Get storage service once to pass to cleanup methods
             const storageService = await this.getStorageService();
 
-            // 1. Fix any existing folders that don't have the placeholder connection string
-            // This ensures backward compatibility for beta testers who created folders before this fix
-            await this.fixFolderConnectionStrings(context, storageService);
+            let foldersFixed = 0;
+            let duplicateParamsFixed = 0;
+            let invalidConnectionsRemoved = 0;
 
-            // 2. Clean up any connection strings with duplicate query parameters
-            // This fixes corruption from previous bugs in migration or editing
-            await this.cleanupDuplicateConnectionStringParameters(context, storageService);
+            // Load each zone's items exactly once and thread the same array through every cleaner.
+            // Previously each cleaner re-read every zone from storage, multiplying the (WSL2-expensive)
+            // SecretStorage round-trips. The cleaners do not overlap on the items they mutate
+            // (folders vs. connections vs. invalid/unparseable connections), so a single read per zone
+            // is safe and substantially cheaper.
+            for (const zone of [StorageZone.Clusters, StorageZone.Emulators]) {
+                const items = await storageService.getItems<StoredItemProperties>(zone);
 
-            // 3. Remove connections with invalid/empty connection strings that cannot be parsed
-            // This prevents corrupt stored items from blocking operations like duplicate checking
-            await this.cleanupInvalidConnectionStrings(context, storageService);
+                // 1. Fix any existing folders that don't have the placeholder connection string
+                // This ensures backward compatibility for beta testers who created folders before this fix
+                foldersFixed += await this.fixFolderConnectionStrings(zone, items);
+
+                // 2. Clean up any connection strings with duplicate query parameters
+                // This fixes corruption from previous bugs in editing
+                duplicateParamsFixed += await this.cleanupDuplicateConnectionStringParameters(zone, items);
+
+                // 3. Remove connections with invalid/empty connection strings that cannot be parsed
+                // This prevents corrupt stored items from blocking operations like duplicate checking
+                invalidConnectionsRemoved += await this.cleanupInvalidConnectionStrings(storageService, zone, items);
+            }
+
+            context.telemetry.measurements.foldersFixed = foldersFixed;
+            context.telemetry.measurements.duplicateParamsFixed = duplicateParamsFixed;
+            context.telemetry.measurements.invalidConnectionsRemoved = invalidConnectionsRemoved;
+
+            if (foldersFixed > 0) {
+                ext.outputChannel.appendLog(
+                    `Fixed ${foldersFixed} folder(s) with placeholder connection string for backward compatibility.`,
+                );
+            }
+            if (duplicateParamsFixed > 0) {
+                ext.outputChannel.appendLog(
+                    `Fixed ${duplicateParamsFixed} connection(s) with duplicate query parameters.`,
+                );
+            }
+            if (invalidConnectionsRemoved > 0) {
+                ext.outputChannel.appendLog(
+                    `Cleaned up ${invalidConnectionsRemoved} connection(s) with invalid or empty connection strings.`,
+                );
+            }
 
             // 4. Clean up orphaned items after folder and connection string fixes (fire-and-forget)
             void this.cleanupOrphanedItems();
@@ -470,65 +491,59 @@ export class ConnectionStorageService {
      *   3. All removals are logged at warn level and reported via telemetry
      *      (`invalidConnectionsRemoved`) so they remain auditable.
      *
-     * @param context - The action context for telemetry
-     * @param storageService - The storage service to use (avoids circular getStorageService call)
+     * @param storageService - The storage service to use for deletions
+     * @param zone - The storage zone whose items are being processed
+     * @param items - Pre-loaded items for the zone (loaded once by the caller to avoid re-reading storage)
+     * @returns The number of invalid connections that were removed
      */
     private static async cleanupInvalidConnectionStrings(
-        context: IActionContext,
         storageService: Storage,
-    ): Promise<void> {
+        zone: StorageZone,
+        items: StorageItem<StoredItemProperties>[],
+    ): Promise<number> {
         let invalidRemoved = 0;
 
-        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+        // Only check connection items with known versions (skip folders and unknown versions)
+        const connectionsToCheck = items.filter(
+            (item) =>
+                KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                item.properties?.type === ItemType.Connection &&
+                item.secrets?.[SecretIndex.ConnectionString] !== FOLDER_PLACEHOLDER_CONNECTION_STRING,
+        );
 
-            // Only check connection items with known versions (skip folders and unknown versions)
-            const connectionsToCheck = items.filter(
-                (item) =>
-                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
-                    item.properties?.type === ItemType.Connection &&
-                    item.secrets?.[SecretIndex.ConnectionString] !== FOLDER_PLACEHOLDER_CONNECTION_STRING,
-            );
+        for (const item of connectionsToCheck) {
+            const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
 
-            for (const item of connectionsToCheck) {
-                const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
-
-                // Skip connections with a non-empty, parseable connection string
-                if (connectionString) {
-                    try {
-                        new DocumentDBConnectionString(connectionString);
-                        continue; // Valid — nothing to do
-                    } catch {
-                        // Falls through to removal below
-                    }
-                }
-
-                // Connection string is empty or unparseable — remove the item
+            // Skip connections with a non-empty, parseable connection string
+            if (connectionString) {
                 try {
-                    await storageService.delete(connectionType, item.id);
-                    invalidRemoved++;
-
-                    ext.outputChannel.warn(
-                        `[Storage] Removed invalid connection "${item.name}" (id: ${item.id}, zone: ${connectionType}) — ` +
-                            `connection string was ${connectionString ? 'unparseable' : 'empty'}.`,
-                    );
-                    ext.outputChannel.trace(
-                        `[Storage]   └ version: ${item.version ?? 'none'}, secrets[0] length: ${connectionString.length}`,
-                    );
-                } catch (error) {
-                    ext.outputChannel.trace(
-                        `[Storage] Failed to remove invalid connection ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
-                    );
+                    new DocumentDBConnectionString(connectionString);
+                    continue; // Valid — nothing to do
+                } catch {
+                    // Falls through to removal below
                 }
+            }
+
+            // Connection string is empty or unparseable — remove the item
+            try {
+                await storageService.delete(zone, item.id);
+                invalidRemoved++;
+
+                ext.outputChannel.warn(
+                    `[Storage] Removed invalid connection "${item.name}" (id: ${item.id}, zone: ${zone}) — ` +
+                        `connection string was ${connectionString ? 'unparseable' : 'empty'}.`,
+                );
+                ext.outputChannel.trace(
+                    `[Storage]   └ version: ${item.version ?? 'none'}, secrets[0] length: ${connectionString.length}`,
+                );
+            } catch (error) {
+                ext.outputChannel.trace(
+                    `[Storage] Failed to remove invalid connection ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
+                );
             }
         }
 
-        context.telemetry.measurements.invalidConnectionsRemoved = invalidRemoved;
-        if (invalidRemoved > 0) {
-            ext.outputChannel.appendLog(
-                `Cleaned up ${invalidRemoved} connection(s) with invalid or empty connection strings.`,
-            );
-        }
+        return invalidRemoved;
     }
 
     /**
