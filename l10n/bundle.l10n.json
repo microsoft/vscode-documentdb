@@ -546,7 +546,9 @@
   "Failed to hide index.": "Failed to hide index.",
   "Failed to initialize Azure management clients": "Failed to initialize Azure management clients",
   "Failed to initialize task": "Failed to initialize task",
+  "Failed to list search indexes for {0}.{1}: {2}": "Failed to list search indexes for {0}.{1}: {2}",
   "Failed to load {0}": "Failed to load {0}",
+  "Failed to load indexes for {0}.{1}: {2}": "Failed to load indexes for {0}.{1}: {2}",
   "Failed to load custom prompt template from {path}: {error}. Using built-in template.": "Failed to load custom prompt template from {path}: {error}. Using built-in template.",
   "Failed to load selected items from storage.": "Failed to load selected items from storage.",
   "Failed to load template file for {type}: {error}": "Failed to load template file for {type}: {error}",
@@ -823,6 +825,7 @@
   "No scope was provided for the role assignment.": "No scope was provided for the role assignment.",
   "No session found for id {sessionId}": "No session found for id {sessionId}",
   "No sorting required": "No sorting required",
+  "No indexes": "No indexes",
   "No subscriptions found": "No subscriptions found",
   "No subscriptions found for the selected tenants. Please adjust your tenant selection or check your Azure permissions.": "No subscriptions found for the selected tenants. Please adjust your tenant selection or check your Azure permissions.",
   "No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).": "No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).",
@@ -1315,5 +1318,6 @@
   "Your query returns {0}% of the collection.\n\nWhen returning more than half the documents, a collection scan may actually be faster than an index lookup because sequential reads are more efficient than random index-pointer chasing.": "Your query returns {0}% of the collection.\n\nWhen returning more than half the documents, a collection scan may actually be faster than an index lookup because sequential reads are more efficient than random index-pointer chasing.",
   "Your query uses an index.\n\nThis allows the database to efficiently locate matching documents without scanning the entire collection.": "Your query uses an index.\n\nThis allows the database to efficiently locate matching documents without scanning the entire collection.",
   "Your query uses index-based sorting, which is efficient and avoids memory constraints.\n\nThis improves performance by leveraging the natural order of the index.": "Your query uses index-based sorting, which is efficient and avoids memory constraints.\n\nThis improves performance by leveraging the natural order of the index.",
-  "Your VS Code window must be reloaded to perform this action.": "Your VS Code window must be reloaded to perform this action."
+  "Your VS Code window must be reloaded to perform this action.": "Your VS Code window must be reloaded to perform this action.",
+  "…": "…"
 }
