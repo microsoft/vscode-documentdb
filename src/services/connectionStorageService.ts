@@ -253,6 +253,26 @@ export class ConnectionStorageService {
     private static readonly MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY =
         'ConnectionStorageService.migrationAttemptsFromAzureDatabases';
 
+    /**
+     * globalState key recording the cleanup-schema version that has already completed for this install.
+     */
+    private static readonly STORAGE_CLEANUP_COMPLETED_VERSION_KEY =
+        'ConnectionStorageService.cleanupCompletedVersion';
+
+    /**
+     * The current startup cleanup-schema version. Once `resolvePostMigrationErrors` completes, this
+     * value is written to globalState. On subsequent loads, if the stored value matches, the whole
+     * cleanup pass is skipped — the most common case for an established install.
+     *
+     * This is deliberately set to the extension version that first ships this gating ('0.8.1'). Any
+     * install carrying this marker is known to have run every one-time format upgrade and corruption
+     * cleanup that existed up to and including 0.8.1.
+     *
+     * Bump this constant ONLY when a new one-time cleanup/upgrade step is added that existing installs
+     * must run exactly once; existing users will then re-run the cleanup pass a single time.
+     */
+    private static readonly STORAGE_CLEANUP_VERSION = '0.8.1';
+
     // Lazily-initialized underlying storage instance. We must not call StorageService.get
     // at module-load time because `ext.context` may not be available until the extension
     // is activated. Create the Storage on first access instead.
@@ -423,6 +443,19 @@ export class ConnectionStorageService {
         await callWithTelemetryAndErrorHandling('resolvePostMigrationErrors', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
 
+            // Skip the entire cleanup pass if this install has already completed it for the current
+            // cleanup-schema version. This is the common path for an established install: no folders to
+            // fix, no duplicate params, no invalid connections, no orphans — yet we used to re-scan every
+            // zone on every load. The marker is only written after a successful run, so an interrupted
+            // run simply retries next time.
+            const completedVersion = ext.context.globalState.get<string>(this.STORAGE_CLEANUP_COMPLETED_VERSION_KEY);
+            if (completedVersion === this.STORAGE_CLEANUP_VERSION) {
+                context.telemetry.properties.cleanupSkipped = 'true';
+                context.telemetry.properties.cleanupVersion = completedVersion;
+                return;
+            }
+            context.telemetry.properties.cleanupSkipped = 'false';
+
             const storageService = await this.getStorageService();
 
             let foldersFixed = 0;
@@ -472,6 +505,14 @@ export class ConnectionStorageService {
 
             // 4. Clean up orphaned items after folder and connection string fixes (fire-and-forget)
             void this.cleanupOrphanedItems();
+
+            // Record that the cleanup pass has completed for this schema version so future loads can
+            // skip it entirely. Orphan cleanup is best-effort and self-healing, so we don't wait for it.
+            await ext.context.globalState.update(
+                this.STORAGE_CLEANUP_COMPLETED_VERSION_KEY,
+                this.STORAGE_CLEANUP_VERSION,
+            );
+            context.telemetry.properties.cleanupVersion = this.STORAGE_CLEANUP_VERSION;
         });
     }
 
