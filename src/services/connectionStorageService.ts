@@ -237,8 +237,7 @@ export class ConnectionStorageService {
     /**
      * globalState key recording the cleanup-schema version that has already completed for this install.
      */
-    private static readonly STORAGE_CLEANUP_COMPLETED_VERSION_KEY =
-        'ConnectionStorageService.cleanupCompletedVersion';
+    private static readonly STORAGE_CLEANUP_COMPLETED_VERSION_KEY = 'ConnectionStorageService.cleanupCompletedVersion';
 
     /**
      * The current startup cleanup-schema version. Once `resolvePostMigrationErrors` completes, this
@@ -296,8 +295,7 @@ export class ConnectionStorageService {
             (item) =>
                 KNOWN_STORAGE_VERSIONS.has(item.version) &&
                 item.properties?.type === ItemType.Folder &&
-                (!item.secrets?.[SecretIndex.ConnectionString] ||
-                    item.secrets[SecretIndex.ConnectionString] === ''),
+                (!item.secrets?.[SecretIndex.ConnectionString] || item.secrets[SecretIndex.ConnectionString] === ''),
         );
 
         for (const folder of foldersToFix) {
