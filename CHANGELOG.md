@@ -21,7 +21,6 @@
 
 ### Fixes
 
-- **Extension Activation Crash (TDZ Error)**: Resolved a circular module-evaluation dependency introduced in v0.8.0 that caused the extension to fail on activation with `Cannot access 'publicProcedureWithTelemetry' before initialization`. [#682](https://github.com/microsoft/vscode-documentdb/pull/682)
 - **Node 24 Compatibility**: Updated `@microsoft/vscode-azext-utils` (~3.3.1 → ~4.1.0) and `@microsoft/vscode-azext-azureutils` (~3.4.5 → ~4.2.0) to fix a crash caused by the removal of `node:util.isNullOrUndefined` in Node 24. [#699](https://github.com/microsoft/vscode-documentdb/pull/699)
 
 ### Dependencies
