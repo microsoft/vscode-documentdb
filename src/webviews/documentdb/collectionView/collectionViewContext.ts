@@ -40,12 +40,21 @@ export interface QueryInsightsState {
     stage1Data: QueryInsightsStage1Response | null;
     stage1ErrorMessage: string | null;
     stage1ErrorCode: string | null; // Error code for UI pattern matching (e.g., 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU')
-    stage1Promise: Promise<QueryInsightsStage1Response> | null;
+    /**
+     * True while a Stage 1 fetch is in flight. Used to dedupe between the
+     * background prefetch (kicked off by `runQuery` in CollectionView) and
+     * the fallback fetch in QueryInsightsTab when the user is already on
+     * the tab. Previously this field stored the Promise itself, but only
+     * its null/non-null check was ever read — storing Promises in React
+     * state is also a known anti-pattern (StrictMode double-invoke etc.).
+     */
+    stage1InFlight: boolean;
 
     stage2Data: QueryInsightsStage2Response | null;
     stage2ErrorMessage: string | null;
     stage2ErrorCode: string | null; // Error code for UI pattern matching
-    stage2Promise: Promise<QueryInsightsStage2Response> | null;
+    /** See {@link stage1InFlight}. */
+    stage2InFlight: boolean;
 
     stage3Data: QueryInsightsStage3Response | null;
     stage3ErrorMessage: string | null;
@@ -176,12 +185,12 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         stage1Data: null,
         stage1ErrorMessage: null,
         stage1ErrorCode: null,
-        stage1Promise: null,
+        stage1InFlight: false,
 
         stage2Data: null,
         stage2ErrorMessage: null,
         stage2ErrorCode: null,
-        stage2Promise: null,
+        stage2InFlight: false,
 
         stage3Data: null,
         stage3ErrorMessage: null,

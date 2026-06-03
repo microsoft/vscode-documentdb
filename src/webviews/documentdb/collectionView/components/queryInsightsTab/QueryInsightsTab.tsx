@@ -310,7 +310,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     newState.stage2Data = null;
                     newState.stage2ErrorMessage = null;
                     newState.stage2ErrorCode = null;
-                    newState.stage2Promise = null;
+                    newState.stage2InFlight = false;
 
                     newState.stage3Data = null;
                     newState.stage3ErrorMessage = null;
@@ -360,7 +360,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     // - This effect only runs when status === 'loading' (initial state after query execution)
     // - If prefetch succeeded: stage1Data exists → this effect won't run
     // - If prefetch failed: currentStage.status === 'error' → this effect won't run
-    // - Only runs when: status === 'loading' AND no data AND no in-flight promise
+    // - Only runs when: status === 'loading' AND no data AND not already in-flight
     //
     // IMPORTANT: Wait for query execution to complete (isLoading=false) before fetching insights
     useEffect(() => {
@@ -369,16 +369,20 @@ export const QueryInsightsMain = (): JSX.Element => {
             currentStage.phase === 1 &&
             currentStage.status === 'loading' &&
             !queryInsightsState.stage1Data &&
-            !queryInsightsState.stage1Promise
+            !queryInsightsState.stage1InFlight
         ) {
+            // Mark in-flight FIRST so a re-render before the await resolves
+            // does not trigger a parallel fetch from this same effect.
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1InFlight: true }));
+
             // Query parameters are now retrieved from ClusterSession - no need to pass them
-            const promise = trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
+            void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
                 .query()
                 .then((data) => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage1Data: data,
-                        stage1Promise: null,
+                        stage1InFlight: false,
                     }));
                     transitionToStage(1, 'success');
                     return data;
@@ -391,23 +395,19 @@ export const QueryInsightsMain = (): JSX.Element => {
                         ...prev,
                         stage1ErrorMessage: errorMessage,
                         stage1ErrorCode: errorCode,
-                        stage1Promise: null,
+                        stage1InFlight: false,
                     }));
                     transitionToStage(1, 'error');
                     // Display error message since user is actively on this tab
                     displayStageError(1, errorMessage);
-                    // Return undefined to satisfy TypeScript without creating unhandled rejection
-                    return undefined as never;
                 });
-
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1Promise: promise }));
         }
     }, [
         currentContext.isLoading,
         currentStage.phase,
         currentStage.status,
         queryInsightsState.stage1Data,
-        queryInsightsState.stage1Promise,
+        queryInsightsState.stage1InFlight,
         trpcClient,
         setQueryInsightsStateHelper,
         transitionToStage,
@@ -449,8 +449,11 @@ export const QueryInsightsMain = (): JSX.Element => {
             currentStage.status === 'success' &&
             queryInsightsState.stage1Data &&
             !queryInsightsState.stage2Data &&
-            !queryInsightsState.stage2Promise
+            !queryInsightsState.stage2InFlight
         ) {
+            // Mark in-flight BEFORE the transition + fetch so a re-render
+            // before the await resolves cannot double-fire this effect.
+            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2InFlight: true }));
             // Transition to Stage 2 loading
             transitionToStage(2, 'loading');
 
@@ -458,7 +461,7 @@ export const QueryInsightsMain = (): JSX.Element => {
             const startTime = performance.now();
 
             // Query parameters are now retrieved from ClusterSession - no need to pass them
-            const promise = trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage2
+            void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage2
                 .query()
                 .then(async (data) => {
                     // Ensure minimum execution time for better UX (avoid jarring instant transitions)
@@ -471,7 +474,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setQueryInsightsStateHelper((prev) => ({
                         ...prev,
                         stage2Data: data,
-                        stage2Promise: null,
+                        stage2InFlight: false,
                     }));
                     transitionToStage(2, 'success');
                     return data;
@@ -491,21 +494,17 @@ export const QueryInsightsMain = (): JSX.Element => {
                         ...prev,
                         stage2ErrorMessage: errorMessage,
                         stage2ErrorCode: errorCode,
-                        stage2Promise: null,
+                        stage2InFlight: false,
                     }));
                     transitionToStage(2, 'error');
-                    // Return undefined to satisfy TypeScript without creating unhandled rejection
-                    return undefined as never;
                 });
-
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2Promise: promise }));
         }
     }, [
         currentStage.phase,
         currentStage.status,
         queryInsightsState.stage1Data,
         queryInsightsState.stage2Data,
-        queryInsightsState.stage2Promise,
+        queryInsightsState.stage2InFlight,
         trpcClient,
         setQueryInsightsStateHelper,
         transitionToStage,

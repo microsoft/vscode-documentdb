@@ -155,31 +155,34 @@ export const CollectionView = (): JSX.Element => {
     }, [currentContext.activeQuery]);
 
     /**
-     * Non-blocking Stage 1 prefetch after query execution
-     * Populates ClusterSession cache so data is ready when user switches to Query Insights tab
-     * Uses promise tracking to prevent duplicate requests
+     * Non-blocking Stage 1 prefetch after query execution.
+     * Populates ClusterSession cache so data is ready when user switches
+     * to the Query Insights tab. The in-flight marker (`stage1InFlight`)
+     * is set BEFORE the request fires so the fallback fetch in
+     * QueryInsightsTab.tsx will not race a duplicate request if the user
+     * switches to the tab mid-prefetch.
      */
     const prefetchQueryInsights = (): void => {
-        // Check if already loaded or in-flight promise
-        // Don't check status === 'loading' because we just reset to that state before calling this
-        if (currentContext.queryInsights.stage1Data || currentContext.queryInsights.stage1Promise) {
+        // Bail out if already cached or already running (the prefetch may
+        // be invoked again before the previous run settled, e.g. during
+        // rapid query re-runs).
+        if (currentContext.queryInsights.stage1Data || currentContext.queryInsights.stage1InFlight) {
             return; // Already handled
         }
 
-        // Query parameters are now retrieved from ClusterSession - no need to pass them
-        const promise = trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1.query();
-
-        // Track the promise immediately
+        // Mark in-flight immediately so the fallback fetch in
+        // QueryInsightsTab will short-circuit on the same dedupe check.
         setCurrentContext((prev) => ({
             ...prev,
             queryInsights: {
                 ...prev.queryInsights,
-                stage1Promise: promise,
+                stage1InFlight: true,
             },
         }));
 
-        // Handle completion
-        void promise
+        // Query parameters are now retrieved from ClusterSession - no need to pass them
+        void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
+            .query()
             .then((stage1Data) => {
                 // Update state with data and mark stage as successful
                 // This prevents redundant fetch when user switches to Query Insights tab
@@ -189,7 +192,7 @@ export const CollectionView = (): JSX.Element => {
                         ...prev.queryInsights,
                         currentStage: { phase: 1, status: 'success' },
                         stage1Data: stage1Data,
-                        stage1Promise: null,
+                        stage1InFlight: false,
                     },
                 }));
                 console.debug('Stage 1 data prefetched:', stage1Data);
@@ -207,7 +210,7 @@ export const CollectionView = (): JSX.Element => {
                         currentStage: { phase: 1, status: 'error' },
                         stage1ErrorMessage: error instanceof Error ? error.message : String(error),
                         stage1ErrorCode: errorCode,
-                        stage1Promise: null,
+                        stage1InFlight: false,
                     },
                 }));
                 console.warn('Stage 1 prefetch failed:', error);
