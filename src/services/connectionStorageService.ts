@@ -256,19 +256,35 @@ export class ConnectionStorageService {
     // Lazily-initialized underlying storage instance. We must not call StorageService.get
     // at module-load time because `ext.context` may not be available until the extension
     // is activated. Create the Storage on first access instead.
+    //
+    // `_storageService` is only published AFTER bootstrap (cleanup + stats) finishes. Concurrent
+    // callers race-share the `_bootstrap` promise instead. This guarantees no external consumer
+    // ever observes the service before cleanup completes — the previous code assigned the field
+    // before awaiting cleanup, so a second concurrent caller would see it truthy and read dirty
+    // data while cleanup was still running.
     private static _storageService: Storage | undefined;
+    private static _bootstrap: Promise<Storage> | undefined;
 
     private static async getStorageService(): Promise<Storage> {
-        if (!this._storageService) {
-            this._storageService = StorageService.get(StorageNames.Connections);
-
-            // Resolve critical post-migration errors before proceeding
-            await this.resolvePostMigrationErrors();
-
-            // Collect storage stats after cleanup completes
-            await this.collectStorageStats();
+        if (this._storageService) {
+            return this._storageService;
         }
-        return this._storageService;
+        if (!this._bootstrap) {
+            this._bootstrap = (async () => {
+                const service = StorageService.get(StorageNames.Connections);
+
+                // Cleanup and stats receive the service explicitly so they never re-enter
+                // getStorageService during bootstrap. Only after both succeed do we publish the
+                // field, so any caller arriving via `if (this._storageService)` above sees a
+                // fully-bootstrapped service.
+                await this.resolvePostMigrationErrors(service);
+                await this.collectStorageStats(service);
+
+                this._storageService = service;
+                return service;
+            })();
+        }
+        return this._bootstrap;
     }
 
     /**
@@ -284,6 +300,7 @@ export class ConnectionStorageService {
      * @returns The number of folders that were fixed
      */
     private static async fixFolderConnectionStrings(
+        storageService: Storage,
         zone: StorageZone,
         items: StorageItem<StoredItemProperties>[],
     ): Promise<number> {
@@ -303,9 +320,9 @@ export class ConnectionStorageService {
                 // Convert to ConnectionItem (wraps into current shape if needed)
                 const connectionItem = this.fromStorageItem(folder);
 
-                // Re-save to apply the placeholder connection string
-                // toStorageItem will automatically add FOLDER_PLACEHOLDER_CONNECTION_STRING for folders
-                await this.save(zone, connectionItem, true);
+                // Re-save through the provided service to avoid re-entering getStorageService
+                // during bootstrap. toStorageItem adds FOLDER_PLACEHOLDER_CONNECTION_STRING for folders.
+                await storageService.push(zone, this.toStorageItem(connectionItem), true);
                 foldersFixed++;
 
                 ext.outputChannel.appendLog(
@@ -332,6 +349,7 @@ export class ConnectionStorageService {
      * @returns The number of connections that were fixed
      */
     private static async cleanupDuplicateConnectionStringParameters(
+        storageService: Storage,
         zone: StorageZone,
         items: StorageItem<StoredItemProperties>[],
     ): Promise<number> {
@@ -369,8 +387,8 @@ export class ConnectionStorageService {
                     const connectionItem = this.fromStorageItem(item);
                     connectionItem.secrets.connectionString = normalizedConnectionString;
 
-                    // Re-save with the cleaned connection string
-                    await this.save(zone, connectionItem, true);
+                    // Re-save through the provided service (see bootstrap note in fixFolderConnectionStrings).
+                    await storageService.push(zone, this.toStorageItem(connectionItem), true);
                     connectionsFixed++;
 
                     ext.outputChannel.appendLog(
@@ -397,7 +415,7 @@ export class ConnectionStorageService {
      * 3. Remove connections with invalid/empty connection strings
      * 4. Clean up orphaned items
      */
-    private static async resolvePostMigrationErrors(): Promise<void> {
+    private static async resolvePostMigrationErrors(storageService: Storage): Promise<void> {
         await callWithTelemetryAndErrorHandling('resolvePostMigrationErrors', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
 
@@ -414,8 +432,6 @@ export class ConnectionStorageService {
             }
             context.telemetry.properties.cleanupSkipped = 'false';
 
-            const storageService = await this.getStorageService();
-
             let foldersFixed = 0;
             let duplicateParamsFixed = 0;
             let invalidConnectionsRemoved = 0;
@@ -430,11 +446,15 @@ export class ConnectionStorageService {
 
                 // 1. Fix any existing folders that don't have the placeholder connection string
                 // This ensures backward compatibility for beta testers who created folders before this fix
-                foldersFixed += await this.fixFolderConnectionStrings(zone, items);
+                foldersFixed += await this.fixFolderConnectionStrings(storageService, zone, items);
 
                 // 2. Clean up any connection strings with duplicate query parameters
                 // This fixes corruption from previous bugs in editing
-                duplicateParamsFixed += await this.cleanupDuplicateConnectionStringParameters(zone, items);
+                duplicateParamsFixed += await this.cleanupDuplicateConnectionStringParameters(
+                    storageService,
+                    zone,
+                    items,
+                );
 
                 // 3. Remove connections with invalid/empty connection strings that cannot be parsed
                 // This prevents corrupt stored items from blocking operations like duplicate checking
@@ -465,7 +485,7 @@ export class ConnectionStorageService {
             // Awaited so that the cleanup-completed marker is only written when the orphan pass has
             // actually finished. If this throws (telemetry helper swallows it) or the user closes
             // the window mid-run, the marker is not written and the next activation retries.
-            await this.cleanupOrphanedItems();
+            await this.cleanupOrphanedItems(storageService);
 
             // Record that the cleanup pass has completed for this schema version so future loads can
             // skip it entirely.
@@ -553,7 +573,7 @@ export class ConnectionStorageService {
      * This can happen if a folder deletion fails to cascade to children.
      * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
      */
-    private static async cleanupOrphanedItems(): Promise<void> {
+    private static async cleanupOrphanedItems(storageService: Storage): Promise<void> {
         await callWithTelemetryAndErrorHandling('cleanupOrphanedItems', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
             let totalOrphansRemoved = 0;
@@ -570,7 +590,9 @@ export class ConnectionStorageService {
                 let orphansRemovedThisIteration = 0;
 
                 for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-                    const allItems = await this.getAllItems(connectionType);
+                    // Use the provided service directly instead of going through getAllItems,
+                    // because we're inside bootstrap and must not re-enter getStorageService.
+                    const allItems = await this.loadAllItemsFromService(storageService, connectionType);
                     const allIds = new Set(allItems.map((item) => item.id));
 
                     // Build set of valid parent IDs (only folders can be parents)
@@ -589,7 +611,7 @@ export class ConnectionStorageService {
 
                     for (const orphan of orphanedItems) {
                         try {
-                            await this.delete(connectionType, orphan.id);
+                            await storageService.delete(connectionType, orphan.id);
                             orphansRemovedThisIteration++;
                             ext.outputChannel.appendLog(
                                 `Cleaned up orphaned ${orphan.properties.type}: "${orphan.name}" (id: ${orphan.id})`,
@@ -654,7 +676,7 @@ export class ConnectionStorageService {
      * - Maximum folder nesting depth
      * - Distribution between Clusters and Emulators zones
      */
-    private static async collectStorageStats(): Promise<void> {
+    private static async collectStorageStats(storageService: Storage): Promise<void> {
         await callWithTelemetryAndErrorHandling('connectionStorage.stats', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
 
@@ -692,7 +714,8 @@ export class ConnectionStorageService {
             };
 
             for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-                const allItems = await this.getAllItems(connectionType);
+                // Same bootstrap-safety reason as cleanupOrphanedItems: use the provided service.
+                const allItems = await this.loadAllItemsFromService(storageService, connectionType);
 
                 // Create a map for efficient parent lookup
                 const itemMap = new Map(allItems.map((item) => [item.id, item]));
@@ -760,6 +783,18 @@ export class ConnectionStorageService {
      */
     public static async getAllItems(connectionType: ConnectionType): Promise<StoredItem[]> {
         const storageService = await this.getStorageService();
+        return this.loadAllItemsFromService(storageService, connectionType);
+    }
+
+    /**
+     * Internal: load + wrap all items from the given storage service. Shared by `getAllItems` and
+     * bootstrap-time cleanup helpers that already hold the service (and must not re-enter
+     * getStorageService).
+     */
+    private static async loadAllItemsFromService(
+        storageService: Storage,
+        connectionType: ConnectionType,
+    ): Promise<StoredItem[]> {
         const items = await storageService.getItems<StoredItemProperties>(connectionType);
 
         ext.outputChannel.trace(
