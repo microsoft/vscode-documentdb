@@ -13,6 +13,7 @@ import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
+import { IndexesTab } from '../indexView/IndexesTab';
 import './collectionView.scss';
 import {
     CollectionViewContext,
@@ -122,8 +123,12 @@ export const CollectionView = (): JSX.Element => {
     // TODO: it's a potential data duplication in the end, consider moving it into the global context of the view
     const [currentQueryResults, setCurrentQueryResults] = useState<QueryResults>();
 
-    // Track which tab is currently active
-    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_queryInsights'>('tab_result');
+    // Track which tab is currently active. Honors `configuration.initialTab`
+    // so an external caller (e.g. the "Indexes" tree node) can open the view
+    // pre-pinned to the Index Management tab.
+    const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_indexes' | 'tab_queryInsights'>(
+        () => configuration.initialTab ?? 'tab_result',
+    );
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -566,55 +571,57 @@ export const CollectionView = (): JSX.Element => {
                 />
 
                 <div className="toolbarMainView">
-                    <ToolbarMainView />
+                    <ToolbarMainView selectedTab={selectedTab} />
                 </div>
 
-                <QueryEditor
-                    onExecuteRequest={() => {
-                        // Get all query values from the editor at once
-                        const query = currentContext.queryEditor?.getCurrentQuery() ?? {
-                            filter: '{  }',
-                            project: '{  }',
-                            sort: '{  }',
-                            skip: 0,
-                            limit: 0,
-                        };
+                {selectedTab !== 'tab_indexes' && (
+                    <QueryEditor
+                        onExecuteRequest={() => {
+                            // Get all query values from the editor at once
+                            const query = currentContext.queryEditor?.getCurrentQuery() ?? {
+                                filter: '{  }',
+                                project: '{  }',
+                                sort: '{  }',
+                                skip: 0,
+                                limit: 0,
+                            };
 
-                        setCurrentContext((prev) => ({
-                            ...prev,
-                            activeQuery: {
-                                ...prev.activeQuery,
-                                queryText: query.filter, // deprecated: kept in sync with filter
-                                filter: query.filter,
-                                project: query.project,
-                                sort: query.sort,
-                                skip: query.skip,
-                                limit: query.limit,
-                                pageNumber: 1,
-                                executionIntent: 'initial',
-                            },
-                        }));
+                            setCurrentContext((prev) => ({
+                                ...prev,
+                                activeQuery: {
+                                    ...prev.activeQuery,
+                                    queryText: query.filter, // deprecated: kept in sync with filter
+                                    filter: query.filter,
+                                    project: query.project,
+                                    sort: query.sort,
+                                    skip: query.skip,
+                                    limit: query.limit,
+                                    pageNumber: 1,
+                                    executionIntent: 'initial',
+                                },
+                            }));
 
-                        trpcClient.common.reportEvent
-                            .mutate({
-                                eventName: 'executeQuery',
-                                properties: {
-                                    ui: 'shortcut',
-                                },
-                                measurements: {
-                                    queryLenth: query.filter.length,
-                                },
-                            })
-                            .catch((error) => {
-                                console.debug('Failed to report an event:', error);
-                            });
-                    }}
-                />
+                            trpcClient.common.reportEvent
+                                .mutate({
+                                    eventName: 'executeQuery',
+                                    properties: {
+                                        ui: 'shortcut',
+                                    },
+                                    measurements: {
+                                        queryLenth: query.filter.length,
+                                    },
+                                })
+                                .catch((error) => {
+                                    console.debug('Failed to report an event:', error);
+                                });
+                        }}
+                    />
+                )}
 
                 <TabList
                     selectedValue={selectedTab}
                     onTabSelect={(_event, data) => {
-                        const newTab = data.value as 'tab_result' | 'tab_queryInsights';
+                        const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
 
                         // Report tab switching telemetry
                         trpcClient.common.reportEvent
@@ -634,7 +641,10 @@ export const CollectionView = (): JSX.Element => {
                     style={{ marginTop: '-10px' }}
                 >
                     <Tab id="tab.results" value="tab_result">
-                        Results
+                        {l10n.t('Documents')}
+                    </Tab>
+                    <Tab id="tab.indexes" value="tab_indexes">
+                        {l10n.t('Indexes')}
                     </Tab>
                     <Tab id="tab.queryInsights" value="tab_queryInsights">
                         <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
@@ -689,6 +699,8 @@ export const CollectionView = (): JSX.Element => {
                         )}
                     </>
                 )}
+
+                {selectedTab === 'tab_indexes' && <IndexesTab collectionName={configuration.collectionName} />}
 
                 {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
             </div>

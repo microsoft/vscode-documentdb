@@ -37,6 +37,13 @@ export type CollectionViewWebviewConfigurationType = {
         skip?: number;
         limit?: number;
     };
+    /**
+     * Optional tab to land on when the view opens. Defaults to `tab_result`
+     * (the Documents tab). Used when the user double-clicks the "Indexes"
+     * node in the tree so the Index Management tab is the first thing
+     * they see.
+     */
+    initialTab?: 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
 };
 
 export class CollectionViewController extends WebviewControllerBase<CollectionViewWebviewConfigurationType> {
