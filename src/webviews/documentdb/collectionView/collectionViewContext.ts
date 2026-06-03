@@ -5,11 +5,8 @@
 
 import { createContext } from 'react';
 import { type AIIndexRecommendation } from '../../../services/ai/types';
-import {
-    type QueryInsightsStage1Response,
-    type QueryInsightsStage2Response,
-    type QueryInsightsStage3Response,
-} from './types/queryInsights';
+import { type QueryInsightsStage1Response, type QueryInsightsStage2Response } from './types/queryInsights';
+import { type QueryInsightsStreamUsage } from './types/queryInsightsStream';
 
 export enum Views {
     TABLE = 'Table View',
@@ -56,32 +53,43 @@ export interface QueryInsightsState {
     /** See {@link stage1InFlight}. */
     stage2InFlight: boolean;
 
-    stage3Data: QueryInsightsStage3Response | null;
     stage3ErrorMessage: string | null;
     stage3ErrorCode: string | null; // Error code for UI pattern matching
     stage3RequestKey: string | null; // Unique key to track if the response is still valid
 
     /**
      * Progressive state populated by the `collectionView.queryInsights.streamStage3`
-     * subscription (WI-8 emits structured events that this state mirrors).
-     * Render code consumes this during Stage-3 loading; on the terminal
-     * `complete` event the equivalent fully-formed snapshot is materialized
-     * into {@link stage3Data} so byline / collapse code paths that look at
-     * `stage3Data` keep working unchanged. `null` whenever no Stage-3 stream
-     * is in flight (initial, post-cancel, or post-success-snapshot-only).
+     * subscription. Sole source of truth for Stage 3:
+     *  - During streaming: `summary`/`educational`/`recommendations` slots
+     *    drive the in-flight render path (analysis card, shells, etc.).
+     *  - On the terminal `complete` event: `completed` is flipped to true
+     *    and model metadata is filled in. Render code uses `completed` as
+     *    the "has succeeded at least once" sentinel (e.g. gating the
+     *    post-response "Powered by ..." byline and the empty-state card)
+     *    instead of a separate `stage3Data` snapshot.
+     *
+     * `null` whenever no Stage 3 stream is in flight (initial, post-cancel).
      */
     stage3Streaming: QueryInsightsStreamingState | null;
 
     // NOTE: error-toast dedupe used to live here as `displayedErrors: string[]`.
     // It never drove a re-render, so it was moved to a component-local
     // `useRef<Set<string>>` in QueryInsightsTab. Don't reintroduce it here.
+
+    // NOTE: `stage3Data: QueryInsightsStage3Response | null` used to live
+    // here as a parallel success snapshot synthesised from the stream on
+    // `complete`. It was only consumed for (a) a `!stage3Data` "completed"
+    // sentinel and (b) the `modelDisplayName` byline. Both moved onto
+    // `stage3Streaming.completed` / `.modelDisplayName` in this commit.
+    // Don't reintroduce it; one source of truth per stream is the point.
 }
 
 /**
- * Per-stream progressive state. Mirrors a strict subset of the
- * `QueryInsightsStreamEvent` union (structured events only — `status` and
- * `complete` drive UI lifecycle elsewhere). Resets to `null` whenever a new
- * Stage 3 request starts.
+ * Per-stream progressive state. Carries the structured slots populated
+ * during streaming (`summary`, `educational`, `recommendations`) plus the
+ * terminal-event slots populated on `complete` (`completed`,
+ * `modelDisplayName`, etc.). Resets to `null` whenever a new Stage 3
+ * request starts so nothing from a previous run leaks across.
  */
 export interface QueryInsightsStreamingState {
     /** Cumulative markdown from `summary` events (the AI `analysis` JSON key). */
@@ -95,6 +103,19 @@ export interface QueryInsightsStreamingState {
      * filled card). Indexed by `event.index` (0-based, monotonic per stream).
      */
     recommendations: Array<AIIndexRecommendation | null>;
+    /**
+     * Flipped to `true` when the terminal `complete` event lands. Used as
+     * the "Stage 3 has finished at least once" sentinel by render code:
+     *  - gates the post-response "Powered by ..." byline,
+     *  - gates the "no recommendations needed" empty-state card.
+     * Remains `true` until a new Stage 3 request resets `stage3Streaming`.
+     */
+    completed: boolean;
+    /** Model metadata populated by the `complete` event (success only). */
+    modelDisplayName?: string;
+    modelId?: string;
+    modelFamily?: string;
+    usage?: QueryInsightsStreamUsage;
 }
 
 export type TableViewState = {
@@ -192,7 +213,6 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         stage2ErrorCode: null,
         stage2InFlight: false,
 
-        stage3Data: null,
         stage3ErrorMessage: null,
         stage3ErrorCode: null,
         stage3RequestKey: null,

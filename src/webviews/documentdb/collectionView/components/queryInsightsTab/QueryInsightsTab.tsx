@@ -36,16 +36,9 @@ import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview
 import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useRef, useState, type JSX } from 'react';
-import { type AIIndexRecommendation } from '../../../../../services/ai/types';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext, type QueryInsightsStreamingState } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
-import {
-    type AnalysisCard as AnalysisCardConfig,
-    type ImprovementCard as ImprovementCardConfig,
-    type QueryInsightsStage3Response,
-} from '../../types/queryInsights';
-import { type QueryInsightsStreamEvent } from '../../types/queryInsightsStream';
 import { createImprovementCardConfig } from '../../utils/createImprovementCard';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
 import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem } from './components';
@@ -64,51 +57,6 @@ import { QueryPlanSummary } from './components/queryPlanSummary';
 import { GenericCell, PerformanceRatingCell, SummaryCard } from './components/summaryCard';
 import './queryInsights.scss';
 import './QueryInsightsTab.scss';
-
-/**
- * Materialize a fully-formed {@link QueryInsightsStage3Response} from the
- * per-stream {@link QueryInsightsStreamingState} + the terminal `complete`
- * event. Called once on `complete` so byline / collapse / "powered by"
- * render paths that read `stage3Data` keep working unchanged.
- *
- * `recommendations` may contain `null` entries (a `recommendationStarted`
- * event with no matching `recommendation` — e.g. if the LLM produced a
- * malformed item that the parser silently skipped); those are filtered
- * out so the snapshot is dense. WI-9.
- */
-function synthesizeStage3Data(
-    streaming: QueryInsightsStreamingState,
-    completeEvent: Extract<QueryInsightsStreamEvent, { type: 'complete' }>,
-    configuration: Pick<CollectionViewWebviewConfigurationType, 'clusterId' | 'databaseName' | 'collectionName'>,
-): QueryInsightsStage3Response {
-    const analysisCard: AnalysisCardConfig = {
-        type: 'analysis',
-        content: streaming.summary?.markdown ?? l10n.t('No analysis provided.'),
-    };
-
-    const improvementCards: ImprovementCardConfig[] = streaming.recommendations
-        .filter((rec): rec is AIIndexRecommendation => rec !== null)
-        .map((rec, index) =>
-            createImprovementCardConfig(rec, index, {
-                clusterId: configuration.clusterId,
-                databaseName: configuration.databaseName,
-                collectionName: configuration.collectionName,
-            }),
-        );
-
-    return {
-        analysisCard,
-        improvementCards,
-        // verificationSteps is a legacy display field; the AI response no
-        // longer produces verification content, so it is always empty.
-        verificationSteps: '',
-        educationalContent: streaming.educational?.markdown,
-        modelId: completeEvent.modelId,
-        modelFamily: completeEvent.modelFamily,
-        modelDisplayName: completeEvent.modelDisplayName,
-        usage: completeEvent.usage,
-    };
-}
 
 export const QueryInsightsMain = (): JSX.Element => {
     // Stage management:
@@ -197,7 +145,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     const shouldShowByline =
         queryInsightsState.currentStage.phase === 3 &&
         queryInsightsState.currentStage.status === 'success' &&
-        !!queryInsightsState.stage3Data?.modelDisplayName;
+        !!queryInsightsState.stage3Streaming?.modelDisplayName;
     const [bylineVisible, setBylineVisible] = useState(false);
     useEffect(() => {
         // Both setState calls are deferred into a `requestAnimationFrame`
@@ -240,7 +188,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                         currentStage: { phase: 3, status: 'cancelled' },
                         stage3RequestKey: null,
                         stage3Streaming: null,
-                        stage3Data: null,
                         stage3ErrorMessage: null,
                         stage3ErrorCode: null,
                     };
@@ -312,7 +259,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     newState.stage2ErrorCode = null;
                     newState.stage2InFlight = false;
 
-                    newState.stage3Data = null;
                     newState.stage3ErrorMessage = null;
                     newState.stage3ErrorCode = null;
                     newState.stage3RequestKey = null;
@@ -322,7 +268,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                     setShowErrorCard(false);
                 } else if (phase === 2 && status === 'loading') {
                     // When entering stage 2 loading, clear stage 3 data only
-                    newState.stage3Data = null;
                     newState.stage3ErrorMessage = null;
                     newState.stage3ErrorCode = null;
                     newState.stage3RequestKey = null;
@@ -333,8 +278,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                 } else if (phase === 3 && status === 'loading') {
                     // Starting a new Stage-3 request: clear any leftover
                     // streaming snapshot from a previous run so the
-                    // progressive render path starts from a clean slate.
-                    newState.stage3Data = null;
+                    // progressive render path (and the `completed` /
+                    // model-metadata slots on it) starts from a clean slate.
                     newState.stage3Streaming = null;
                     // Reset UI flags when starting new AI request
                     setShowErrorCard(false);
@@ -517,12 +462,13 @@ export const QueryInsightsMain = (): JSX.Element => {
     }, [currentStage]);
 
     useEffect(() => {
-        console.trace('stage3Data changed:', queryInsightsState.stage3Data);
-        if (queryInsightsState.stage3Data) {
-            console.trace('  - improvementCards count:', queryInsightsState.stage3Data.improvementCards.length);
-            console.trace('  - improvementCards:', queryInsightsState.stage3Data.improvementCards);
+        const s = queryInsightsState.stage3Streaming;
+        console.trace('stage3Streaming changed:', s);
+        if (s?.completed) {
+            const filled = s.recommendations.filter((r) => r !== null).length;
+            console.trace('  - recommendations (filled/total):', filled, '/', s.recommendations.length);
         }
-    }, [queryInsightsState.stage3Data]);
+    }, [queryInsightsState.stage3Streaming]);
 
     // Derived metric values from Stage 2 data only
     // Return undefined when loading, null when in error state or no data, or the actual value
@@ -616,8 +562,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         //      callbacks from the *old* subscription that were already
         //      in flight.
         // Without the requestKey check inside every state update below,
-        // those late callbacks would mutate `stage3Streaming` /
-        // `stage3Data` and corrupt the new request's state. The check
+        // those late callbacks would mutate `stage3Streaming` and corrupt
+        // the new request's state. The check
         // `if (prev.stage3RequestKey !== requestKey) return prev;` is
         // the single line keeping that race quiet — DO NOT REMOVE IT in
         // a refactor "because the framework promises cleanup".
@@ -636,12 +582,13 @@ export const QueryInsightsMain = (): JSX.Element => {
         // cancelled in lock step.
         stage3SubscriptionRef.current?.unsubscribe();
 
-        // Subscribe to the Stage 3 streaming subscription. WI-9 wires
-        // each structured event type to a slot in `stage3Streaming` (the
-        // progressive state the render path reads during phase=3 /
-        // status=loading) and synthesizes a full `stage3Data` snapshot on
-        // the terminal `complete` event so byline / collapse code paths
-        // that read `stage3Data` keep working unchanged. The requestKey
+        // Subscribe to the Stage 3 streaming subscription. Each
+        // structured event type populates a slot on `stage3Streaming`
+        // (the single source of truth the render path reads during
+        // phase=3); the terminal `complete` event flips
+        // `stage3Streaming.completed: true` and fills in model metadata
+        // (`modelDisplayName`, `modelId`, `modelFamily`, `usage`) used
+        // by the byline and the empty-state card. The requestKey
         // staleness guard around every state update silently discards
         // late callbacks from the framework's unsubscribe race (e.g. when
         // the user kicks off a fresh request before the previous one has
@@ -668,6 +615,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                             summary: null,
                             educational: null,
                             recommendations: [],
+                            completed: false,
                         };
 
                         switch (event.type) {
@@ -715,15 +663,14 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 };
                             }
                             case 'complete': {
-                                const synthesized = synthesizeStage3Data(prevStreaming, event, configuration);
                                 // Intentionally DO NOT clear `stage3RequestKey` here.
                                 //
                                 // The render path derives `keyPrefix` from
                                 // `stage3RequestKey` and uses it on every card key
                                 // (analysis-card, rec-N, understanding-execution).
                                 // If we set `stage3RequestKey: null` on the same
-                                // commit that sets `stage3Data`, every card key
-                                // changes from `${uuid}-…` to `…` in a single
+                                // commit that flips `completed: true`, every card
+                                // key changes from `${uuid}-…` to `…` in a single
                                 // React render. AnimatedCardList sees that as
                                 // "all old keys gone, all new keys arrived" and
                                 // animates a full exit + enter cascade — visible
@@ -748,9 +695,16 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 // so no further events should arrive on this path.
                                 return {
                                     ...prev,
-                                    stage3Data: synthesized,
+                                    stage3Streaming: {
+                                        ...prevStreaming,
+                                        completed: true,
+                                        modelDisplayName: event.modelDisplayName,
+                                        modelId: event.modelId,
+                                        modelFamily: event.modelFamily,
+                                        usage: event.usage,
+                                    },
                                     // Drive the Stage-3 success transition in the
-                                    // SAME commit that materialises `stage3Data`.
+                                    // SAME commit that flips `completed: true`.
                                     // Previously this relied on a `wasAccepted`
                                     // closure flag that was set inside this updater
                                     // and read AFTER setQueryInsightsStateHelper()
@@ -840,7 +794,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         //     re-shows and its button re-enables.
         //   - stage3RequestKey → null: any late onData/onComplete/onError from
         //     the unsubscribe race is discarded by the requestKey guard.
-        //   - stage3Streaming / stage3Data → null: drop partial stream output so
+        //   - stage3Streaming → null: drop partial stream output (including
+        //     `completed`/model metadata if a previous run had succeeded) so
         //     no half-rendered cards linger.
         //   - stage3Error* → null: clear any error surfaced from a prior run.
         // Doing this in one updater (instead of a separate setState +
@@ -852,7 +807,6 @@ export const QueryInsightsMain = (): JSX.Element => {
             currentStage: { phase: 3, status: 'cancelled' },
             stage3RequestKey: null,
             stage3Streaming: null,
-            stage3Data: null,
             stage3ErrorMessage: null,
             stage3ErrorCode: null,
         }));
@@ -930,24 +884,26 @@ export const QueryInsightsMain = (): JSX.Element => {
     // Include requestKey in card keys to force remount on regeneration
     const keyPrefix = queryInsightsState.stage3RequestKey ? `${queryInsightsState.stage3RequestKey}-` : '';
 
-    // Stage 3 render sources (post-cleanup #2 / WI-9 progressive streaming):
-    //   - `streaming` carries the progressive state populated by the
-    //     `streamStage3` subscription's structured events. It is the
-    //     SOLE source of truth for the Stage-3 cards (analysis / shells
-    //     / improvements / educational). Populated from the first event
-    //     and preserved past the terminal `complete` event.
-    //   - `stage3Data` is the materialised success snapshot, populated
-    //     by `synthesizeStage3Data` on `complete`. The CARDS no longer
-    //     read it (the old fallback was for the now-deleted buffered
-    //     `getQueryInsightsStage3` path); only two consumers remain:
-    //       (a) the `GetPerformanceInsightsCard` collapse condition
-    //           uses `!stage3Data` as a "has succeeded at least once"
-    //           sentinel so the card only collapses on terminal complete;
-    //       (b) the byline / model-disclosure footer reads
-    //           `stage3Data.modelDisplayName`.
-    //     If you ever want to delete `stage3Data` entirely, replace (a)
-    //     with a derived `hasCompletedAtLeastOnce` flag and move
-    //     `modelDisplayName` onto the `complete` event slot.
+    // Stage 3 render source — single source of truth:
+    //   `stage3Streaming` carries the progressive state populated by the
+    //   `streamStage3` subscription's structured events AND (after the
+    //   terminal `complete` event) the `completed` flag + model metadata.
+    //   It drives:
+    //     - the analysis card, recommendation shells/filled cards, and
+    //       educational card while streaming,
+    //     - the "no recommendations needed" empty-state card on
+    //       `completed && recommendations.length === 0`,
+    //     - the post-response "Powered by ..." byline on
+    //       `completed && modelDisplayName`.
+    //   It is reset to `null` on cancel, on a fresh Stage 3 request, and
+    //   on every transition back to phase 1 or 2 loading.
+    //
+    // Historical note (PR #711): there was a parallel `stage3Data`
+    // field that mirrored a fully-formed `QueryInsightsStage3Response`
+    // snapshot — a leftover from the pre-streaming buffered procedure.
+    // It was collapsed into `stage3Streaming` (with `completed` + model
+    // metadata slots) to keep one source of truth per stream. Do not
+    // reintroduce a parallel snapshot.
     const streaming = queryInsightsState.stage3Streaming;
 
     // EXPERIMENTAL: true while the Stage 3 AI request is streaming. Used by the
@@ -1030,8 +986,12 @@ export const QueryInsightsMain = (): JSX.Element => {
     //      card stays in place — only the icon, title and body swap.
     if (currentStage.phase === 3 && (currentStage.status === 'loading' || streaming)) {
         const hasStartedRecs = (streaming?.recommendations.length ?? 0) > 0;
-        const completedWithNoRecs =
-            queryInsightsState.stage3Data !== null && queryInsightsState.stage3Data.improvementCards.length === 0;
+        // "Stream completed with zero recommendations" — the AI returned
+        // a successful response containing no improvements. We detect
+        // this via `completed: true` on the streaming state (set on the
+        // terminal `complete` event) combined with an empty
+        // recommendations array.
+        const completedWithNoRecs = !!streaming?.completed && streaming.recommendations.length === 0;
 
         if (hasStartedRecs) {
             // Mode 2: progressive shells / filled cards (per D11: shell uses
@@ -1212,16 +1172,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 AnimatedCardList below grow in over the same window — a
                                 clean handoff.
 
-                            Visibility is gated on `status` (NOT on `stage3Data`) so it
-                            flips reliably in the SAME commit the success transition is
-                            applied:
+                            Visibility is gated on `status` (NOT on the streaming
+                            snapshot) so it flips reliably in the SAME commit the
+                            success transition is applied:
                                 phase >= 2 && status !== 'success'
                             • phase 2 idle / phase 3 cancelled / phase 3 error → request
                             • phase 3 loading                                  → analyzing
                             • phase 3 success                                  → collapses + unmounts
-                            An earlier version gated on `!stage3Data`; if the synthesized
-                            snapshot was ever falsy the card never hid. Keying off the
-                            status enum removes that failure mode.
+                            An earlier version gated on `!stage3Data` (a parallel
+                            snapshot that has since been collapsed into
+                            `stage3Streaming.completed`); if that snapshot was ever
+                            falsy the card never hid. Keying off the status enum
+                            removes that failure mode.
 
                             Content keeps showing the analyzing row while
                             `isStage3Loading || status === 'success'`, so the request
@@ -1310,7 +1272,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                 // Guaranteed non-null by `shouldShowByline`
                                                 // (see useEffect above); non-null assertion
                                                 // keeps l10n.t's string-only overload happy.
-                                                queryInsightsState.stage3Data!.modelDisplayName!,
+                                                queryInsightsState.stage3Streaming!.modelDisplayName!,
                                             )}
                                         </Text>
                                     </div>
