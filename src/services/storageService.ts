@@ -188,8 +188,18 @@ class StorageImpl implements Storage {
      * Implementation of Storage.getItems that retrieves all items along with their secrets.
      *
      * Results are coalesced and briefly cached per workspace — see {@link getItemsCache} for the
-     * rationale. Callers always receive a defensive copy of the cached snapshot so they cannot
-     * mutate state shared with other concurrent consumers.
+     * rationale.
+     *
+     * **Defensive-copy contract (read carefully before mutating a result):** Each returned item
+     * object and its `secrets` array are freshly allocated, so callers can safely reassign or
+     * mutate those. Nested objects — in particular `item.properties` and anything reachable from
+     * it — are **shared with the cached snapshot** and with every other concurrent caller. Do
+     * NOT mutate `properties` (or its descendants) on a returned item: doing so silently corrupts
+     * the cache and every later reader within the TTL window. If you need to change `properties`,
+     * spread it into a new object first, or call `push` immediately afterwards so the cache is
+     * invalidated before any other reader can observe the mutation. This is intentional: a full
+     * `structuredClone` on every read would cost CPU on the activation critical path that this
+     * cache exists to optimize, and audit shows no current consumer requires it.
      */
     public async getItems<T extends Record<string, unknown>>(workspace: string): Promise<StorageItem<T>[]> {
         const items = await this.getOrLoadItems<T>(workspace);
@@ -214,6 +224,18 @@ class StorageImpl implements Storage {
         }
 
         const promise = this.loadItemsFromStorage<T>(workspace);
+        // We timestamp the entry at creation, not at resolution. Reviewers correctly noted that a
+        // slow `loadItemsFromStorage` therefore shrinks the post-resolution reuse window (in the
+        // pathological case the entry can expire before its own promise resolves, allowing a
+        // second load to start). We accept this trade because:
+        //   1. Concurrent in-flight callers are already coalesced via the shared promise above, so
+        //      the duplicate-load risk only matters AFTER first resolution — and by then any new
+        //      caller would also be happy with a fresh read.
+        //   2. If telemetry ever shows the cache window collapsing under slow SecretStorage, the
+        //      cheap escape hatch is bumping `GET_ITEMS_CACHE_TTL_MS` rather than rewriting the
+        //      timestamp logic to track start vs. resolution times.
+        // If you change this to resolution-time stamping, also re-evaluate the eviction-on-failure
+        // branch below so failed reads still don't sit in the cache.
         const entry = {
             promise: promise as unknown as Promise<StorageItem<Record<string, unknown>>[]>,
             timestamp: Date.now(),
