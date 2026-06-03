@@ -3,7 +3,6 @@
 **Branch:** `dev/tnaum/storeage-optimization`
 **Base:** `main`
 **PR URL:** https://github.com/microsoft/vscode-documentdb/pull/726
-**Commits:** 7 on top of `main` (6 code/perf + 1 l10n)
 
 ---
 
