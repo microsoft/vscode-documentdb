@@ -438,9 +438,13 @@ export class ConnectionStorageService {
 
             // Load each zone's items exactly once and thread the same array through every cleaner.
             // Previously each cleaner re-read every zone from storage, multiplying the (WSL2-expensive)
-            // SecretStorage round-trips. The cleaners do not overlap on the items they mutate
-            // (folders vs. connections vs. invalid/unparseable connections), so a single read per zone
-            // is safe and substantially cheaper.
+            // SecretStorage round-trips.
+            //
+            // Invariant for future maintainers: cleaners must NOT depend on mutations made by
+            // previous cleaners in the same pass. The `items` array is the pre-cleanup snapshot —
+            // saves/deletes performed by an earlier cleaner are persisted, but the in-memory items
+            // here still reflect the pre-cleanup state. The current cleaners are safe because they
+            // operate on disjoint categories (folders vs. connections vs. invalid/unparseable).
             for (const zone of [StorageZone.Clusters, StorageZone.Emulators]) {
                 const items = await storageService.getItems<StoredItemProperties>(zone);
 
