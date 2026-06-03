@@ -1174,16 +1174,23 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                             Visibility is gated on `status` (NOT on the streaming
                             snapshot) so it flips reliably in the SAME commit the
-                            success transition is applied:
-                                phase >= 2 && status !== 'success'
-                            • phase 2 idle / phase 3 cancelled / phase 3 error → request
-                            • phase 3 loading                                  → analyzing
-                            • phase 3 success                                  → collapses + unmounts
-                            An earlier version gated on `!stage3Data` (a parallel
-                            snapshot that has since been collapsed into
-                            `stage3Streaming.completed`); if that snapshot was ever
-                            falsy the card never hid. Keying off the status enum
-                            removes that failure mode.
+                            success transition is applied. Both conditions are
+                            scoped to phase 3 — Stage 2 ALSO reaches 'success' as
+                            its idle state, so a bare `status !== 'success'`
+                            would (a) hide the wrapper at {2,'success'} and
+                            (b) swap the content to the analyzing card during
+                            that hide animation. The phase-3 scoping keeps the
+                            request card visible while the user is in the
+                            Stage 2 idle window waiting to click "Get AI":
+                                visible: phase >= 2 && !(phase===3 && status==='success')
+                            • phase 2 success / phase 3 cancelled / phase 3 error → request
+                            • phase 3 loading                                      → analyzing
+                            • phase 3 success                                      → collapses + unmounts
+                            An even earlier version gated on `!stage3Data` (a
+                            parallel snapshot that has since been collapsed into
+                            `stage3Streaming.completed`); if that snapshot was
+                            ever falsy the card never hid. Keying off the status
+                            enum removes that failure mode.
 
                             Content keeps showing the analyzing row while
                             `isStage3Loading || status === 'success'`, so the request
@@ -1192,10 +1199,22 @@ export const QueryInsightsMain = (): JSX.Element => {
                             `unmountOnExit` removes the card after the 400 ms collapse so
                             a regenerate re-mounts and plays a clean enter. */}
                         <CollapseRelaxed
-                            visible={currentStage.phase >= 2 && currentStage.status !== 'success'}
+                            visible={
+                                currentStage.phase >= 2 &&
+                                !(currentStage.phase === 3 && currentStage.status === 'success')
+                            }
                             unmountOnExit
                         >
-                            {isStage3Loading || currentStage.status === 'success' ? (
+                            {/* Show the analyzing card while a Stage 3 request
+                                is in flight, AND keep it mounted through the
+                                Stage 3 success exit animation so the wrapper
+                                doesn't visibly flip back to the request card on
+                                its way to collapsing out. Both checks are
+                                phase-3-scoped — without that, Stage 2's idle
+                                `success` state would falsely match here and
+                                swap the request card to analyzing the moment
+                                Stage 2 completes. */}
+                            {isStage3Loading || (currentStage.phase === 3 && currentStage.status === 'success') ? (
                                 <Stage3AnalyzingCard onCancel={handleCancelAI} />
                             ) : (
                                 <GetPerformanceInsightsCard
