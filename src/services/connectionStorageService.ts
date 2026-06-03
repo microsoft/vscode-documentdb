@@ -240,18 +240,20 @@ export class ConnectionStorageService {
     private static readonly STORAGE_CLEANUP_COMPLETED_VERSION_KEY = 'ConnectionStorageService.cleanupCompletedVersion';
 
     /**
-     * The current startup cleanup-schema version. Once `resolvePostMigrationErrors` completes, this
+     * The current startup cleanup-schema counter. Once `resolvePostMigrationErrors` completes, this
      * value is written to globalState. On subsequent loads, if the stored value matches, the whole
      * cleanup pass is skipped — the most common case for an established install.
      *
-     * This is deliberately set to the extension version that first ships this gating ('0.8.1'). Any
-     * install carrying this marker is known to have run every one-time format upgrade and corruption
-     * cleanup that existed up to and including 0.8.1.
+     * This is a plain integer counter, intentionally decoupled from the extension's `package.json`
+     * version: it tracks the cleanup-schema contract, not the release stream. Reviewers asked for
+     * this so the constant can't drift with semver bumps that don't affect storage.
      *
-     * Bump this constant ONLY when a new one-time cleanup/upgrade step is added that existing installs
-     * must run exactly once; existing users will then re-run the cleanup pass a single time.
+     * Bump this constant ONLY when a new one-time cleanup/upgrade step is added that existing
+     * installs must run exactly once; existing users will then re-run the cleanup pass a single
+     * time. Installs that previously carried the older string marker ('0.8.1') will not match and
+     * will re-run cleanup once — harmless because every cleaner is idempotent.
      */
-    private static readonly STORAGE_CLEANUP_VERSION = '0.8.1';
+    private static readonly STORAGE_CLEANUP_VERSION = 1;
 
     // Lazily-initialized underlying storage instance. We must not call StorageService.get
     // at module-load time because `ext.context` may not be available until the extension
@@ -424,13 +426,19 @@ export class ConnectionStorageService {
             // fix, no duplicate params, no invalid connections, no orphans — yet we used to re-scan every
             // zone on every load. The marker is only written after a successful run, so an interrupted
             // run simply retries next time.
-            const completedVersion = ext.context.globalState.get<string>(this.STORAGE_CLEANUP_COMPLETED_VERSION_KEY);
+            const completedVersion = ext.context.globalState.get<number | string>(
+                this.STORAGE_CLEANUP_COMPLETED_VERSION_KEY,
+            );
             if (completedVersion === this.STORAGE_CLEANUP_VERSION) {
                 context.telemetry.properties.cleanupSkipped = 'true';
-                context.telemetry.properties.cleanupVersion = completedVersion;
+                context.telemetry.properties.cleanupVersion = String(completedVersion);
                 return;
             }
             context.telemetry.properties.cleanupSkipped = 'false';
+            // Surface the previous marker (if any) so we can see how many installs are being
+            // migrated from the legacy '0.8.1' string marker to the new integer counter.
+            context.telemetry.properties.previousCleanupVersion =
+                completedVersion === undefined ? 'none' : String(completedVersion);
 
             let foldersFixed = 0;
             let duplicateParamsFixed = 0;
@@ -497,7 +505,7 @@ export class ConnectionStorageService {
                 this.STORAGE_CLEANUP_COMPLETED_VERSION_KEY,
                 this.STORAGE_CLEANUP_VERSION,
             );
-            context.telemetry.properties.cleanupVersion = this.STORAGE_CLEANUP_VERSION;
+            context.telemetry.properties.cleanupVersion = String(this.STORAGE_CLEANUP_VERSION);
         });
     }
 
