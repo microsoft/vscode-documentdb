@@ -696,6 +696,16 @@ export class ConnectionStorageService {
             let totalFolders = 0;
             let maxDepth = 0;
 
+            // Format counters \u2014 used to decide when the legacy v1/v2 read-time wrapping code can
+            // be removed. We emit per-version counts (and a derived `hasLegacyItems` flag) on every
+            // activation so we can watch the legacy population shrink to zero across releases.
+            // `v_unknown` covers anything that doesn't match a known version, including future
+            // formats that would be skipped by `loadAllItemsFromService`.
+            let v1Items = 0;
+            let v2Items = 0;
+            let v3Items = 0;
+            let unknownVersionItems = 0;
+
             // Calculate depth of an item by traversing up the parent chain
             const calculateDepth = async (
                 item: ConnectionItem,
@@ -726,7 +736,36 @@ export class ConnectionStorageService {
             };
 
             for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-                // Same bootstrap-safety reason as cleanupOrphanedItems: use the provided service.
+                // Read raw items first so we can record the on-disk storage version of each item.
+                // The wrapped result from `loadAllItemsFromService` no longer carries `version`, so
+                // we have to inspect the raw `StorageItem`s before wrapping for the format census.
+                const rawItems = await storageService.getItems<StoredItemProperties>(connectionType);
+                let zoneV1 = 0;
+                let zoneV2 = 0;
+                let zoneV3 = 0;
+                let zoneUnknown = 0;
+                for (const raw of rawItems) {
+                    switch (raw.version) {
+                        case '3.0':
+                            zoneV3++;
+                            break;
+                        case '2.0':
+                            zoneV2++;
+                            break;
+                        case undefined:
+                            // No version field == v1 (legacy unversioned items).
+                            zoneV1++;
+                            break;
+                        default:
+                            zoneUnknown++;
+                            break;
+                    }
+                }
+                v1Items += zoneV1;
+                v2Items += zoneV2;
+                v3Items += zoneV3;
+                unknownVersionItems += zoneUnknown;
+
                 const allItems = await this.loadAllItemsFromService(storageService, connectionType);
 
                 // Create a map for efficient parent lookup
@@ -765,6 +804,10 @@ export class ConnectionStorageService {
                 context.telemetry.measurements[`${zonePrefix}_RootConnections`] = rootConnectionsInZone;
                 context.telemetry.measurements[`${zonePrefix}_RootFolders`] = rootFoldersInZone;
                 context.telemetry.measurements[`${zonePrefix}_MaxDepth`] = maxDepthInZone;
+                context.telemetry.measurements[`${zonePrefix}_v1Items`] = zoneV1;
+                context.telemetry.measurements[`${zonePrefix}_v2Items`] = zoneV2;
+                context.telemetry.measurements[`${zonePrefix}_v3Items`] = zoneV3;
+                context.telemetry.measurements[`${zonePrefix}_unknownVersionItems`] = zoneUnknown;
                 totalConnections += connectionsInZone;
                 totalFolders += foldersInZone;
                 maxDepth = Math.max(maxDepth, maxDepthInZone);
@@ -774,8 +817,16 @@ export class ConnectionStorageService {
             context.telemetry.measurements.totalConnections = totalConnections;
             context.telemetry.measurements.totalFolders = totalFolders;
             context.telemetry.measurements.maxFolderDepth = maxDepth;
+            context.telemetry.measurements.v1Items = v1Items;
+            context.telemetry.measurements.v2Items = v2Items;
+            context.telemetry.measurements.v3Items = v3Items;
+            context.telemetry.measurements.unknownVersionItems = unknownVersionItems;
             context.telemetry.properties.hasFolders = totalFolders > 0 ? 'true' : 'false';
             context.telemetry.properties.hasConnections = totalConnections > 0 ? 'true' : 'false';
+            // Single flag we can pivot on to decide when read-time v1/v2 wrapping can be removed.
+            // When this drops to ~0% across an entire release window, the legacy code paths in
+            // `fromStorageItem` (wrapV1AsV2 / wrapV2AsCurrent) become safe to delete.
+            context.telemetry.properties.hasLegacyItems = v1Items + v2Items > 0 ? 'true' : 'false';
         });
     }
 
