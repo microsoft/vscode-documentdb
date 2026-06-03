@@ -461,11 +461,14 @@ export class ConnectionStorageService {
                 );
             }
 
-            // 4. Clean up orphaned items after folder and connection string fixes (fire-and-forget)
-            void this.cleanupOrphanedItems();
+            // 4. Clean up orphaned items after folder and connection string fixes.
+            // Awaited so that the cleanup-completed marker is only written when the orphan pass has
+            // actually finished. If this throws (telemetry helper swallows it) or the user closes
+            // the window mid-run, the marker is not written and the next activation retries.
+            await this.cleanupOrphanedItems();
 
             // Record that the cleanup pass has completed for this schema version so future loads can
-            // skip it entirely. Orphan cleanup is best-effort and self-healing, so we don't wait for it.
+            // skip it entirely.
             await ext.context.globalState.update(
                 this.STORAGE_CLEANUP_COMPLETED_VERSION_KEY,
                 this.STORAGE_CLEANUP_VERSION,
