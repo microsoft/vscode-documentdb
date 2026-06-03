@@ -3,30 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { apiUtils, callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
-import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type EntraIdAuthConfig, type NativeAuthConfig } from '../documentdb/auth/AuthConfig';
 import { AuthMethodId } from '../documentdb/auth/AuthMethod';
 import { redactCredentialsFromConnectionString } from '../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../DocumentDBExperiences';
-import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { StorageNames, StorageService, type Storage, type StorageItem } from './storageService';
-
-/**
- * API for migrating MongoDB cluster connections from Azure Databases extension
- */
-interface MongoConnectionMigrationApi {
-    apiVersion: string;
-    exportMongoClusterConnections(context: vscode.ExtensionContext): Promise<unknown[] | undefined>;
-    renameMongoClusterConnectionStorageId(
-        context: vscode.ExtensionContext,
-        oldId: string,
-        newId: string,
-    ): Promise<boolean>;
-}
 
 /**
  * Storage zones represent the top-level groupings in the connections view.
@@ -250,46 +234,59 @@ const enum SecretIndex {
  * underlying storage and migration complexity.
  */
 export class ConnectionStorageService {
-    private static readonly MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY =
-        'ConnectionStorageService.migrationAttemptsFromAzureDatabases';
+    /**
+     * globalState key recording the cleanup-schema version that has already completed for this install.
+     */
+    private static readonly STORAGE_CLEANUP_COMPLETED_VERSION_KEY = 'ConnectionStorageService.cleanupCompletedVersion';
+
+    /**
+     * The current startup cleanup-schema counter. Once `resolvePostMigrationErrors` completes, this
+     * value is written to globalState. On subsequent loads, if the stored value matches, the whole
+     * cleanup pass is skipped — the most common case for an established install.
+     *
+     * This is a plain integer counter, intentionally decoupled from the extension's `package.json`
+     * version: it tracks the cleanup-schema contract, not the release stream. Reviewers asked for
+     * this so the constant can't drift with semver bumps that don't affect storage.
+     *
+     * Bump this constant ONLY when a new one-time cleanup/upgrade step is added that existing
+     * installs must run exactly once; existing users will then re-run the cleanup pass a single
+     * time. Installs that previously carried the older string marker ('0.8.1') will not match and
+     * will re-run cleanup once — harmless because every cleaner is idempotent.
+     */
+    private static readonly STORAGE_CLEANUP_VERSION = 1;
 
     // Lazily-initialized underlying storage instance. We must not call StorageService.get
     // at module-load time because `ext.context` may not be available until the extension
     // is activated. Create the Storage on first access instead.
+    //
+    // `_storageService` is only published AFTER bootstrap (cleanup + stats) finishes. Concurrent
+    // callers race-share the `_bootstrap` promise instead. This guarantees no external consumer
+    // ever observes the service before cleanup completes — the previous code assigned the field
+    // before awaiting cleanup, so a second concurrent caller would see it truthy and read dirty
+    // data while cleanup was still running.
     private static _storageService: Storage | undefined;
+    private static _bootstrap: Promise<Storage> | undefined;
 
     private static async getStorageService(): Promise<Storage> {
-        if (!this._storageService) {
-            this._storageService = StorageService.get(StorageNames.Connections);
-
-            if (await isVCoreAndRURolloutEnabled()) {
-                try {
-                    // Trigger migration on first access, but only if we haven't reached the attempt limit
-                    const migrationAttempts = ext.context.globalState.get<number>(
-                        this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
-                        0,
-                    );
-
-                    if (migrationAttempts < 20) {
-                        // this is a good number as any, just keep trying for a while to account for failures
-                        await this.migrateFromAzureDatabases();
-                    }
-                } catch (error) {
-                    // Migration is optional - output error for debugging but don't break storage service initialization
-                    console.debug(
-                        'Optional migration check failed:',
-                        error instanceof Error ? error.message : String(error),
-                    );
-                }
-            }
-
-            // Resolve critical post-migration errors before proceeding
-            await this.resolvePostMigrationErrors();
-
-            // Collect storage stats after cleanup completes
-            await this.collectStorageStats();
+        if (this._storageService) {
+            return this._storageService;
         }
-        return this._storageService;
+        if (!this._bootstrap) {
+            this._bootstrap = (async () => {
+                const service = StorageService.get(StorageNames.Connections);
+
+                // Cleanup and stats receive the service explicitly so they never re-enter
+                // getStorageService during bootstrap. Only after both succeed do we publish the
+                // field, so any caller arriving via `if (this._storageService)` above sees a
+                // fully-bootstrapped service.
+                await this.resolvePostMigrationErrors(service);
+                await this.collectStorageStats(service);
+
+                this._storageService = service;
+                return service;
+            })();
+        }
+        return this._bootstrap;
     }
 
     /**
@@ -300,53 +297,48 @@ export class ConnectionStorageService {
      * This function is intended for beta testers who created folders before this fix was added.
      * It runs once during cleanup and updates folders that have an empty connection string.
      *
-     * @param context - The action context for telemetry
-     * @param storageService - The storage service to use (avoids circular getStorageService call)
+     * @param zone - The storage zone whose items are being processed
+     * @param items - Pre-loaded items for the zone (loaded once by the caller to avoid re-reading storage)
+     * @returns The number of folders that were fixed
      */
-    private static async fixFolderConnectionStrings(context: IActionContext, storageService: Storage): Promise<void> {
+    private static async fixFolderConnectionStrings(
+        storageService: Storage,
+        zone: StorageZone,
+        items: StorageItem<StoredItemProperties>[],
+    ): Promise<number> {
         let foldersFixed = 0;
 
-        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+        // Find folders without the placeholder connection string
+        // (items created before this fix will have empty string or undefined)
+        const foldersToFix = items.filter(
+            (item) =>
+                KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                item.properties?.type === ItemType.Folder &&
+                (!item.secrets?.[SecretIndex.ConnectionString] || item.secrets[SecretIndex.ConnectionString] === ''),
+        );
 
-            // Find folders without the placeholder connection string
-            // (items created before this fix will have empty string or undefined)
-            const foldersToFix = items.filter(
-                (item) =>
-                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
-                    item.properties?.type === ItemType.Folder &&
-                    (!item.secrets?.[SecretIndex.ConnectionString] ||
-                        item.secrets[SecretIndex.ConnectionString] === ''),
-            );
+        for (const folder of foldersToFix) {
+            try {
+                // Convert to ConnectionItem (wraps into current shape if needed)
+                const connectionItem = this.fromStorageItem(folder);
 
-            for (const folder of foldersToFix) {
-                try {
-                    // Convert to ConnectionItem (triggers migration if needed)
-                    const connectionItem = this.fromStorageItem(folder);
+                // Re-save through the provided service to avoid re-entering getStorageService
+                // during bootstrap. toStorageItem adds FOLDER_PLACEHOLDER_CONNECTION_STRING for folders.
+                await storageService.push(zone, this.toStorageItem(connectionItem), true);
+                foldersFixed++;
 
-                    // Re-save to apply the placeholder connection string
-                    // toStorageItem will automatically add FOLDER_PLACEHOLDER_CONNECTION_STRING for folders
-                    await this.save(connectionType, connectionItem, true);
-                    foldersFixed++;
-
-                    ext.outputChannel.appendLog(
-                        `Fixed folder "${folder.name}" (id: ${folder.id}) - added placeholder connection string for backward compatibility.`,
-                    );
-                } catch (error) {
-                    console.debug(
-                        `Failed to fix folder ${folder.id}:`,
-                        error instanceof Error ? error.message : String(error),
-                    );
-                }
+                ext.outputChannel.appendLog(
+                    `Fixed folder "${folder.name}" (id: ${folder.id}) - added placeholder connection string for backward compatibility.`,
+                );
+            } catch (error) {
+                console.debug(
+                    `Failed to fix folder ${folder.id}:`,
+                    error instanceof Error ? error.message : String(error),
+                );
             }
         }
 
-        context.telemetry.measurements.foldersFixed = foldersFixed;
-        if (foldersFixed > 0) {
-            ext.outputChannel.appendLog(
-                `Fixed ${foldersFixed} folder(s) with placeholder connection string for backward compatibility.`,
-            );
-        }
+        return foldersFixed;
     }
 
     /**
@@ -354,71 +346,66 @@ export class ConnectionStorageService {
      * This can happen due to bugs in previous versions where parameters were doubled
      * during migration or editing.
      *
-     * @param context - The action context for telemetry
-     * @param storageService - The storage service to use (avoids circular getStorageService call)
+     * @param zone - The storage zone whose items are being processed
+     * @param items - Pre-loaded items for the zone (loaded once by the caller to avoid re-reading storage)
+     * @returns The number of connections that were fixed
      */
     private static async cleanupDuplicateConnectionStringParameters(
-        context: IActionContext,
         storageService: Storage,
-    ): Promise<void> {
+        zone: StorageZone,
+        items: StorageItem<StoredItemProperties>[],
+    ): Promise<number> {
         let connectionsFixed = 0;
 
-        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+        // Find connections (not folders) that might have duplicate parameters
+        const connectionsToCheck = items.filter(
+            (item) =>
+                KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                item.properties?.type === ItemType.Connection &&
+                item.secrets?.[SecretIndex.ConnectionString],
+        );
 
-            // Find connections (not folders) that might have duplicate parameters
-            const connectionsToCheck = items.filter(
-                (item) =>
-                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
-                    item.properties?.type === ItemType.Connection &&
-                    item.secrets?.[SecretIndex.ConnectionString],
-            );
+        for (const item of connectionsToCheck) {
+            try {
+                const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
 
-            for (const item of connectionsToCheck) {
-                try {
-                    const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
+                // Skip placeholder or empty connection strings
+                if (!connectionString || connectionString === FOLDER_PLACEHOLDER_CONNECTION_STRING) {
+                    continue;
+                }
 
-                    // Skip placeholder or empty connection strings
-                    if (!connectionString || connectionString === FOLDER_PLACEHOLDER_CONNECTION_STRING) {
-                        continue;
-                    }
+                // Check if the connection string has duplicate parameters
+                const parsed = new DocumentDBConnectionString(connectionString);
+                if (!parsed.hasDuplicateParameters()) {
+                    continue;
+                }
 
-                    // Check if the connection string has duplicate parameters
-                    const parsed = new DocumentDBConnectionString(connectionString);
-                    if (!parsed.hasDuplicateParameters()) {
-                        continue;
-                    }
+                // Normalize the connection string to remove duplicates
+                const normalizedConnectionString = parsed.deduplicateQueryParameters();
 
-                    // Normalize the connection string to remove duplicates
-                    const normalizedConnectionString = parsed.deduplicateQueryParameters();
+                // Only update if something changed
+                if (normalizedConnectionString !== connectionString) {
+                    // Convert to ConnectionItem and update the connection string
+                    const connectionItem = this.fromStorageItem(item);
+                    connectionItem.secrets.connectionString = normalizedConnectionString;
 
-                    // Only update if something changed
-                    if (normalizedConnectionString !== connectionString) {
-                        // Convert to ConnectionItem and update the connection string
-                        const connectionItem = this.fromStorageItem(item);
-                        connectionItem.secrets.connectionString = normalizedConnectionString;
+                    // Re-save through the provided service (see bootstrap note in fixFolderConnectionStrings).
+                    await storageService.push(zone, this.toStorageItem(connectionItem), true);
+                    connectionsFixed++;
 
-                        // Re-save with the cleaned connection string
-                        await this.save(connectionType, connectionItem, true);
-                        connectionsFixed++;
-
-                        ext.outputChannel.appendLog(
-                            `Fixed connection "${item.name}" (id: ${item.id}) - removed duplicate query parameters.`,
-                        );
-                    }
-                } catch (error) {
-                    console.debug(
-                        `Failed to check/fix connection ${item.id} for duplicate parameters:`,
-                        error instanceof Error ? error.message : String(error),
+                    ext.outputChannel.appendLog(
+                        `Fixed connection "${item.name}" (id: ${item.id}) - removed duplicate query parameters.`,
                     );
                 }
+            } catch (error) {
+                console.debug(
+                    `Failed to check/fix connection ${item.id} for duplicate parameters:`,
+                    error instanceof Error ? error.message : String(error),
+                );
             }
         }
 
-        context.telemetry.measurements.duplicateParamsFixed = connectionsFixed;
-        if (connectionsFixed > 0) {
-            ext.outputChannel.appendLog(`Fixed ${connectionsFixed} connection(s) with duplicate query parameters.`);
-        }
+        return connectionsFixed;
     }
 
     /**
@@ -430,27 +417,95 @@ export class ConnectionStorageService {
      * 3. Remove connections with invalid/empty connection strings
      * 4. Clean up orphaned items
      */
-    private static async resolvePostMigrationErrors(): Promise<void> {
+    private static async resolvePostMigrationErrors(storageService: Storage): Promise<void> {
         await callWithTelemetryAndErrorHandling('resolvePostMigrationErrors', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
 
-            // Get storage service once to pass to cleanup methods
-            const storageService = await this.getStorageService();
+            // Skip the entire cleanup pass if this install has already completed it for the current
+            // cleanup-schema version. This is the common path for an established install: no folders to
+            // fix, no duplicate params, no invalid connections, no orphans — yet we used to re-scan every
+            // zone on every load. The marker is only written after a successful run, so an interrupted
+            // run simply retries next time.
+            const completedVersion = ext.context.globalState.get<number | string>(
+                this.STORAGE_CLEANUP_COMPLETED_VERSION_KEY,
+            );
+            if (completedVersion === this.STORAGE_CLEANUP_VERSION) {
+                context.telemetry.properties.cleanupSkipped = 'true';
+                context.telemetry.properties.cleanupVersion = String(completedVersion);
+                return;
+            }
+            context.telemetry.properties.cleanupSkipped = 'false';
+            // Surface the previous marker (if any) so we can see how many installs are being
+            // migrated from the legacy '0.8.1' string marker to the new integer counter.
+            context.telemetry.properties.previousCleanupVersion =
+                completedVersion === undefined ? 'none' : String(completedVersion);
 
-            // 1. Fix any existing folders that don't have the placeholder connection string
-            // This ensures backward compatibility for beta testers who created folders before this fix
-            await this.fixFolderConnectionStrings(context, storageService);
+            let foldersFixed = 0;
+            let duplicateParamsFixed = 0;
+            let invalidConnectionsRemoved = 0;
 
-            // 2. Clean up any connection strings with duplicate query parameters
-            // This fixes corruption from previous bugs in migration or editing
-            await this.cleanupDuplicateConnectionStringParameters(context, storageService);
+            // Load each zone's items exactly once and thread the same array through every cleaner.
+            // Previously each cleaner re-read every zone from storage, multiplying the (WSL2-expensive)
+            // SecretStorage round-trips.
+            //
+            // Invariant for future maintainers: cleaners must NOT depend on mutations made by
+            // previous cleaners in the same pass. The `items` array is the pre-cleanup snapshot —
+            // saves/deletes performed by an earlier cleaner are persisted, but the in-memory items
+            // here still reflect the pre-cleanup state. The current cleaners are safe because they
+            // operate on disjoint categories (folders vs. connections vs. invalid/unparseable).
+            for (const zone of [StorageZone.Clusters, StorageZone.Emulators]) {
+                const items = await storageService.getItems<StoredItemProperties>(zone);
 
-            // 3. Remove connections with invalid/empty connection strings that cannot be parsed
-            // This prevents corrupt stored items from blocking operations like duplicate checking
-            await this.cleanupInvalidConnectionStrings(context, storageService);
+                // 1. Fix any existing folders that don't have the placeholder connection string
+                // This ensures backward compatibility for beta testers who created folders before this fix
+                foldersFixed += await this.fixFolderConnectionStrings(storageService, zone, items);
 
-            // 4. Clean up orphaned items after folder and connection string fixes (fire-and-forget)
-            void this.cleanupOrphanedItems();
+                // 2. Clean up any connection strings with duplicate query parameters
+                // This fixes corruption from previous bugs in editing
+                duplicateParamsFixed += await this.cleanupDuplicateConnectionStringParameters(
+                    storageService,
+                    zone,
+                    items,
+                );
+
+                // 3. Remove connections with invalid/empty connection strings that cannot be parsed
+                // This prevents corrupt stored items from blocking operations like duplicate checking
+                invalidConnectionsRemoved += await this.cleanupInvalidConnectionStrings(storageService, zone, items);
+            }
+
+            context.telemetry.measurements.foldersFixed = foldersFixed;
+            context.telemetry.measurements.duplicateParamsFixed = duplicateParamsFixed;
+            context.telemetry.measurements.invalidConnectionsRemoved = invalidConnectionsRemoved;
+
+            if (foldersFixed > 0) {
+                ext.outputChannel.appendLog(
+                    `Fixed ${foldersFixed} folder(s) with placeholder connection string for backward compatibility.`,
+                );
+            }
+            if (duplicateParamsFixed > 0) {
+                ext.outputChannel.appendLog(
+                    `Fixed ${duplicateParamsFixed} connection(s) with duplicate query parameters.`,
+                );
+            }
+            if (invalidConnectionsRemoved > 0) {
+                ext.outputChannel.appendLog(
+                    `Cleaned up ${invalidConnectionsRemoved} connection(s) with invalid or empty connection strings.`,
+                );
+            }
+
+            // 4. Clean up orphaned items after folder and connection string fixes.
+            // Awaited so that the cleanup-completed marker is only written when the orphan pass has
+            // actually finished. If this throws (telemetry helper swallows it) or the user closes
+            // the window mid-run, the marker is not written and the next activation retries.
+            await this.cleanupOrphanedItems(storageService);
+
+            // Record that the cleanup pass has completed for this schema version so future loads can
+            // skip it entirely.
+            await ext.context.globalState.update(
+                this.STORAGE_CLEANUP_COMPLETED_VERSION_KEY,
+                this.STORAGE_CLEANUP_VERSION,
+            );
+            context.telemetry.properties.cleanupVersion = String(this.STORAGE_CLEANUP_VERSION);
         });
     }
 
@@ -470,65 +525,59 @@ export class ConnectionStorageService {
      *   3. All removals are logged at warn level and reported via telemetry
      *      (`invalidConnectionsRemoved`) so they remain auditable.
      *
-     * @param context - The action context for telemetry
-     * @param storageService - The storage service to use (avoids circular getStorageService call)
+     * @param storageService - The storage service to use for deletions
+     * @param zone - The storage zone whose items are being processed
+     * @param items - Pre-loaded items for the zone (loaded once by the caller to avoid re-reading storage)
+     * @returns The number of invalid connections that were removed
      */
     private static async cleanupInvalidConnectionStrings(
-        context: IActionContext,
         storageService: Storage,
-    ): Promise<void> {
+        zone: StorageZone,
+        items: StorageItem<StoredItemProperties>[],
+    ): Promise<number> {
         let invalidRemoved = 0;
 
-        for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-            const items = await storageService.getItems<StoredItemProperties>(connectionType);
+        // Only check connection items with known versions (skip folders and unknown versions)
+        const connectionsToCheck = items.filter(
+            (item) =>
+                KNOWN_STORAGE_VERSIONS.has(item.version) &&
+                item.properties?.type === ItemType.Connection &&
+                item.secrets?.[SecretIndex.ConnectionString] !== FOLDER_PLACEHOLDER_CONNECTION_STRING,
+        );
 
-            // Only check connection items with known versions (skip folders and unknown versions)
-            const connectionsToCheck = items.filter(
-                (item) =>
-                    KNOWN_STORAGE_VERSIONS.has(item.version) &&
-                    item.properties?.type === ItemType.Connection &&
-                    item.secrets?.[SecretIndex.ConnectionString] !== FOLDER_PLACEHOLDER_CONNECTION_STRING,
-            );
+        for (const item of connectionsToCheck) {
+            const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
 
-            for (const item of connectionsToCheck) {
-                const connectionString = item.secrets?.[SecretIndex.ConnectionString] ?? '';
-
-                // Skip connections with a non-empty, parseable connection string
-                if (connectionString) {
-                    try {
-                        new DocumentDBConnectionString(connectionString);
-                        continue; // Valid — nothing to do
-                    } catch {
-                        // Falls through to removal below
-                    }
-                }
-
-                // Connection string is empty or unparseable — remove the item
+            // Skip connections with a non-empty, parseable connection string
+            if (connectionString) {
                 try {
-                    await storageService.delete(connectionType, item.id);
-                    invalidRemoved++;
-
-                    ext.outputChannel.warn(
-                        `[Storage] Removed invalid connection "${item.name}" (id: ${item.id}, zone: ${connectionType}) — ` +
-                            `connection string was ${connectionString ? 'unparseable' : 'empty'}.`,
-                    );
-                    ext.outputChannel.trace(
-                        `[Storage]   └ version: ${item.version ?? 'none'}, secrets[0] length: ${connectionString.length}`,
-                    );
-                } catch (error) {
-                    ext.outputChannel.trace(
-                        `[Storage] Failed to remove invalid connection ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
-                    );
+                    new DocumentDBConnectionString(connectionString);
+                    continue; // Valid — nothing to do
+                } catch {
+                    // Falls through to removal below
                 }
+            }
+
+            // Connection string is empty or unparseable — remove the item
+            try {
+                await storageService.delete(zone, item.id);
+                invalidRemoved++;
+
+                ext.outputChannel.warn(
+                    `[Storage] Removed invalid connection "${item.name}" (id: ${item.id}, zone: ${zone}) — ` +
+                        `connection string was ${connectionString ? 'unparseable' : 'empty'}.`,
+                );
+                ext.outputChannel.trace(
+                    `[Storage]   └ version: ${item.version ?? 'none'}, secrets[0] length: ${connectionString.length}`,
+                );
+            } catch (error) {
+                ext.outputChannel.trace(
+                    `[Storage] Failed to remove invalid connection ${item.id}: ${error instanceof Error ? error.message : String(error)}`,
+                );
             }
         }
 
-        context.telemetry.measurements.invalidConnectionsRemoved = invalidRemoved;
-        if (invalidRemoved > 0) {
-            ext.outputChannel.appendLog(
-                `Cleaned up ${invalidRemoved} connection(s) with invalid or empty connection strings.`,
-            );
-        }
+        return invalidRemoved;
     }
 
     /**
@@ -536,7 +585,7 @@ export class ConnectionStorageService {
      * This can happen if a folder deletion fails to cascade to children.
      * Runs iteratively until no orphans remain (deleting a parent may orphan its children).
      */
-    private static async cleanupOrphanedItems(): Promise<void> {
+    private static async cleanupOrphanedItems(storageService: Storage): Promise<void> {
         await callWithTelemetryAndErrorHandling('cleanupOrphanedItems', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
             let totalOrphansRemoved = 0;
@@ -553,7 +602,9 @@ export class ConnectionStorageService {
                 let orphansRemovedThisIteration = 0;
 
                 for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-                    const allItems = await this.getAllItems(connectionType);
+                    // Use the provided service directly instead of going through getAllItems,
+                    // because we're inside bootstrap and must not re-enter getStorageService.
+                    const allItems = await this.loadAllItemsFromService(storageService, connectionType);
                     const allIds = new Set(allItems.map((item) => item.id));
 
                     // Build set of valid parent IDs (only folders can be parents)
@@ -572,7 +623,7 @@ export class ConnectionStorageService {
 
                     for (const orphan of orphanedItems) {
                         try {
-                            await this.delete(connectionType, orphan.id);
+                            await storageService.delete(connectionType, orphan.id);
                             orphansRemovedThisIteration++;
                             ext.outputChannel.appendLog(
                                 `Cleaned up orphaned ${orphan.properties.type}: "${orphan.name}" (id: ${orphan.id})`,
@@ -637,13 +688,23 @@ export class ConnectionStorageService {
      * - Maximum folder nesting depth
      * - Distribution between Clusters and Emulators zones
      */
-    private static async collectStorageStats(): Promise<void> {
+    private static async collectStorageStats(storageService: Storage): Promise<void> {
         await callWithTelemetryAndErrorHandling('connectionStorage.stats', async (context: IActionContext) => {
             context.telemetry.properties.isActivationEvent = 'true';
 
             let totalConnections = 0;
             let totalFolders = 0;
             let maxDepth = 0;
+
+            // Format counters \u2014 used to decide when the legacy v1/v2 read-time wrapping code can
+            // be removed. We emit per-version counts (and a derived `hasLegacyItems` flag) on every
+            // activation so we can watch the legacy population shrink to zero across releases.
+            // `v_unknown` covers anything that doesn't match a known version, including future
+            // formats that would be skipped by `loadAllItemsFromService`.
+            let v1Items = 0;
+            let v2Items = 0;
+            let v3Items = 0;
+            let unknownVersionItems = 0;
 
             // Calculate depth of an item by traversing up the parent chain
             const calculateDepth = async (
@@ -675,7 +736,37 @@ export class ConnectionStorageService {
             };
 
             for (const connectionType of [ConnectionType.Clusters, ConnectionType.Emulators]) {
-                const allItems = await this.getAllItems(connectionType);
+                // Read raw items first so we can record the on-disk storage version of each item.
+                // The wrapped result from `loadAllItemsFromService` no longer carries `version`, so
+                // we have to inspect the raw `StorageItem`s before wrapping for the format census.
+                const rawItems = await storageService.getItems<StoredItemProperties>(connectionType);
+                let zoneV1 = 0;
+                let zoneV2 = 0;
+                let zoneV3 = 0;
+                let zoneUnknown = 0;
+                for (const raw of rawItems) {
+                    switch (raw.version) {
+                        case '3.0':
+                            zoneV3++;
+                            break;
+                        case '2.0':
+                            zoneV2++;
+                            break;
+                        case undefined:
+                            // No version field == v1 (legacy unversioned items).
+                            zoneV1++;
+                            break;
+                        default:
+                            zoneUnknown++;
+                            break;
+                    }
+                }
+                v1Items += zoneV1;
+                v2Items += zoneV2;
+                v3Items += zoneV3;
+                unknownVersionItems += zoneUnknown;
+
+                const allItems = await this.loadAllItemsFromService(storageService, connectionType);
 
                 // Create a map for efficient parent lookup
                 const itemMap = new Map(allItems.map((item) => [item.id, item]));
@@ -713,6 +804,10 @@ export class ConnectionStorageService {
                 context.telemetry.measurements[`${zonePrefix}_RootConnections`] = rootConnectionsInZone;
                 context.telemetry.measurements[`${zonePrefix}_RootFolders`] = rootFoldersInZone;
                 context.telemetry.measurements[`${zonePrefix}_MaxDepth`] = maxDepthInZone;
+                context.telemetry.measurements[`${zonePrefix}_v1Items`] = zoneV1;
+                context.telemetry.measurements[`${zonePrefix}_v2Items`] = zoneV2;
+                context.telemetry.measurements[`${zonePrefix}_v3Items`] = zoneV3;
+                context.telemetry.measurements[`${zonePrefix}_unknownVersionItems`] = zoneUnknown;
                 totalConnections += connectionsInZone;
                 totalFolders += foldersInZone;
                 maxDepth = Math.max(maxDepth, maxDepthInZone);
@@ -722,8 +817,16 @@ export class ConnectionStorageService {
             context.telemetry.measurements.totalConnections = totalConnections;
             context.telemetry.measurements.totalFolders = totalFolders;
             context.telemetry.measurements.maxFolderDepth = maxDepth;
+            context.telemetry.measurements.v1Items = v1Items;
+            context.telemetry.measurements.v2Items = v2Items;
+            context.telemetry.measurements.v3Items = v3Items;
+            context.telemetry.measurements.unknownVersionItems = unknownVersionItems;
             context.telemetry.properties.hasFolders = totalFolders > 0 ? 'true' : 'false';
             context.telemetry.properties.hasConnections = totalConnections > 0 ? 'true' : 'false';
+            // Single flag we can pivot on to decide when read-time v1/v2 wrapping can be removed.
+            // When this drops to ~0% across an entire release window, the legacy code paths in
+            // `fromStorageItem` (wrapV1AsV2 / wrapV2AsCurrent) become safe to delete.
+            context.telemetry.properties.hasLegacyItems = v1Items + v2Items > 0 ? 'true' : 'false';
         });
     }
 
@@ -743,6 +846,18 @@ export class ConnectionStorageService {
      */
     public static async getAllItems(connectionType: ConnectionType): Promise<StoredItem[]> {
         const storageService = await this.getStorageService();
+        return this.loadAllItemsFromService(storageService, connectionType);
+    }
+
+    /**
+     * Internal: load + wrap all items from the given storage service. Shared by `getAllItems` and
+     * bootstrap-time cleanup helpers that already hold the service (and must not re-enter
+     * getStorageService).
+     */
+    private static async loadAllItemsFromService(
+        storageService: Storage,
+        connectionType: ConnectionType,
+    ): Promise<StoredItem[]> {
         const items = await storageService.getItems<StoredItemProperties>(connectionType);
 
         ext.outputChannel.trace(
@@ -982,22 +1097,26 @@ export class ConnectionStorageService {
     }
 
     private static fromStorageItem(item: StorageItem<StoredItemProperties>): StoredItem {
+        // NOTE: Any "upgrade" performed below is a pure in-memory transformation used to wrap the
+        // raw stored item into the current `StoredItem` shape. It is NOT a persisted migration —
+        // nothing is written back to storage here. The wrapped result is recomputed on every read,
+        // which is intentional and cheap (string parsing + object reshaping, no I/O).
         ext.outputChannel.trace(
-            `[Storage] fromStorageItem: id=${item.id}, name="${item.name}", version=${item.version ?? 'none'}, type=${item.properties?.type ?? 'undefined'}`,
+            `[Storage] fromStorageItem (in-memory wrap): id=${item.id}, name="${item.name}", version=${item.version ?? 'none'}, type=${item.properties?.type ?? 'undefined'}`,
         );
 
         switch (item.version) {
             case '3.0':
-                // v3.0 - reconstruct directly from storage
+                // v3.0 - already current shape, reconstruct directly from storage
                 return this.reconstructStoredItemFromSecrets(item);
 
             case '2.0':
-                // v2.0 - convert v2.0 format to intermediate ConnectionItem, then migrate to v3
-                return this.migrateToV3(this.convertV2ToConnectionItem(item));
+                // v2.0 - wrap v2.0 format into the current shape (in-memory only, not persisted)
+                return this.wrapV2AsCurrent(this.convertV2ToConnectionItem(item));
 
             default:
-                // v1.0 (no version field) - migrate to v2 then v3
-                return this.migrateToV3(this.migrateToV2(item));
+                // v1.0 (no version field) - wrap v1.0 → v2 shape → current shape (in-memory only)
+                return this.wrapV2AsCurrent(this.wrapV1AsV2(item));
         }
     }
 
@@ -1059,31 +1178,30 @@ export class ConnectionStorageService {
     }
 
     /**
-     * Migrates an unversioned `StorageItem` (v1) to the `StoredItem` (v2) format.
+     * Wraps an unversioned `StorageItem` (v1) into the v2 `StoredItem` shape, in memory.
      *
-     * This function handles the transformation of the old data structure to the new,
-     * more structured format. It ensures backward compatibility by converting legacy
-     * connection data on the fly.
+     * This is a pure read-time transformation: it reshapes the legacy data structure into the
+     * newer, more structured format so consumers always see a consistent type. Nothing is written
+     * back to storage — the result is recomputed on every read. It is therefore cheap (string
+     * parsing + object reshaping only) and intentionally not persisted.
      *
-     * The migration logic is simple because we currently only support one legacy version.
+     * The logic is simple because we currently only support one legacy version.
      *
-     * @param item The legacy `StorageItem` to migrate.
-     * @returns A `StoredItem` in the v2 format.
+     * @param item The legacy `StorageItem` to wrap.
+     * @returns A `StoredItem` in the v2 shape.
      */
-    private static migrateToV2(item: StorageItem): StoredItem {
+    private static wrapV1AsV2(item: StorageItem): StoredItem {
         // in V2, the connection string shouldn't contain the username/password combo
         const rawSecret = item?.secrets?.[0] ?? '';
 
         ext.outputChannel.trace(
-            `[Storage] migrateToV2: id=${item.id}, name="${item.name}", secret length=${rawSecret.length}`,
+            `[Storage] wrapV1AsV2 (in-memory): id=${item.id}, name="${item.name}", secret length=${rawSecret.length}`,
         );
 
         // Guard: If the stored connection string is empty or clearly invalid, we cannot
         // parse it. Throw a descriptive error so the caller (getAllItems) can skip it.
         if (!rawSecret || rawSecret.trim().length === 0) {
-            throw new Error(
-                `Cannot migrate v1 item "${item.name}" (id: ${item.id}): stored connection string is empty`,
-            );
+            throw new Error(`Cannot wrap v1 item "${item.name}" (id: ${item.id}): stored connection string is empty`);
         }
 
         const parsedCS = new DocumentDBConnectionString(rawSecret);
@@ -1132,9 +1250,10 @@ export class ConnectionStorageService {
     }
 
     /**
-     * Migrates v2 items to v3 by adding type and parentId fields
+     * Wraps a v2 item into the current (v3) shape by ensuring the `type` and `parentId` fields
+     * exist. In-memory only — not persisted back to storage.
      */
-    private static migrateToV3(item: StoredItem): StoredItem {
+    private static wrapV2AsCurrent(item: StoredItem): StoredItem {
         // Ensure type and parentId exist (defaults for v3)
         if (!item.properties.type) {
             (item.properties as StoredItemProperties).type = ItemType.Connection;
@@ -1227,182 +1346,5 @@ export class ConnectionStorageService {
 
         const parentPath = await this.getPath(item.properties.parentId, connectionType);
         return `${parentPath}/${item.name}`;
-    }
-
-    /**
-     * Gets the MongoDB Migration API from the Azure Databases extension
-     */
-    private static async getMongoMigrationApi(): Promise<MongoConnectionMigrationApi | undefined> {
-        try {
-            const cosmosDbExtension = vscode.extensions.getExtension('ms-azuretools.vscode-cosmosdb');
-            if (!cosmosDbExtension) {
-                console.debug('getMongoMigrationApi: ms-azuretools.vscode-cosmosdb is not installed.');
-                return undefined;
-            }
-
-            const api = await apiUtils.getAzureExtensionApi<MongoConnectionMigrationApi>(
-                ext.context,
-                'ms-azuretools.vscode-cosmosdb',
-                '2.0.0',
-            );
-
-            if (
-                !api ||
-                typeof api.exportMongoClusterConnections !== 'function' ||
-                typeof api.renameMongoClusterConnectionStorageId !== 'function'
-            ) {
-                console.debug('getMongoMigrationApi: Requested API version is not available.');
-                return undefined;
-            }
-
-            return api;
-        } catch (error) {
-            console.debug(
-                `getMongoMigrationApi: Error accessing MongoDB Migration API: ${error instanceof Error ? error.message : String(error)}`,
-            );
-            return undefined;
-        }
-    }
-
-    /**
-     * Migrates connections from Azure Databases extension storage to DocumentDB extension storage.
-     * This function is called automatically on first storage access to ensure one-time migration.
-     *
-     * @returns Promise resolving to migration statistics
-     */
-    private static async migrateFromAzureDatabases(): Promise<{ migrated: number; skipped: number }> {
-        const result = await callWithTelemetryAndErrorHandling(
-            'migrateFromAzureDatabases',
-            async (context: IActionContext) => {
-                // Increment migration attempt counter at the start of each attempt
-                const currentAttempts = ext.context.globalState.get<number>(
-                    this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
-                    0,
-                );
-                await ext.context.globalState.update(
-                    this.MIGRATION_FROM_AZUREDATABASES_ATTEMPTS_KEY,
-                    currentAttempts + 1,
-                );
-                context.telemetry.measurements.migrationAttemptNumber = currentAttempts + 1;
-
-                const MIGRATION_PREFIX = 'migrated-to-vscode-documentdb-';
-                let migratedCount = 0;
-                let skippedCount = 0;
-                const startTime = Date.now();
-
-                try {
-                    const mongoMigrationApi = await this.getMongoMigrationApi();
-
-                    if (!mongoMigrationApi) {
-                        context.telemetry.properties.migrationAttempted = 'false';
-                        context.telemetry.properties.reason = 'api_not_available';
-                        return { migrated: 0, skipped: 0 };
-                    }
-
-                    // Use the API to get MongoDB connections - cast to local StorageItem[]
-                    const allLegacyItems = (await mongoMigrationApi.exportMongoClusterConnections(ext.context)) as
-                        | StorageItem[]
-                        | undefined;
-
-                    if (!allLegacyItems || allLegacyItems.length === 0) {
-                        context.telemetry.properties.migrationAttempted = 'true';
-                        context.telemetry.properties.hasOldStorage = 'false';
-                        return { migrated: 0, skipped: 0 };
-                    }
-
-                    context.telemetry.properties.migrationAttempted = 'true';
-                    context.telemetry.properties.hasOldStorage = 'true';
-                    context.telemetry.measurements.itemsReadFromLegacyStorage = allLegacyItems.length;
-
-                    const currentDate = new Date().toLocaleDateString('en-US', {
-                        year: 'numeric',
-                        month: 'long',
-                        day: 'numeric',
-                    });
-
-                    for (const legacyItem of allLegacyItems) {
-                        if (legacyItem.id.startsWith(MIGRATION_PREFIX)) {
-                            skippedCount++;
-                            continue;
-                        }
-
-                        try {
-                            // Migrate the item using existing migrateToV2 logic
-                            const migratedItem = this.migrateToV2(legacyItem);
-
-                            migratedItem.name = l10n.t('Imported: {name} (imported on {date})', {
-                                name: migratedItem.name,
-                                date: currentDate,
-                            });
-
-                            // Determine connection type based on emulator flag
-                            const connectionType = legacyItem.properties?.isEmulator
-                                ? ConnectionType.Emulators
-                                : ConnectionType.Clusters;
-
-                            // Save to new storage
-                            await this.save(connectionType, migratedItem, true);
-
-                            // Use the API to rename the connection ID in the legacy storage
-                            const newId = `${MIGRATION_PREFIX}${legacyItem.id}`;
-                            const renameSuccess = await mongoMigrationApi.renameMongoClusterConnectionStorageId(
-                                ext.context,
-                                legacyItem.id,
-                                newId,
-                            );
-
-                            if (renameSuccess) {
-                                migratedCount++;
-                            } else {
-                                ext.outputChannel.appendLog(
-                                    `Failed to rename connection in Azure Databases extension: ${legacyItem.id}`,
-                                );
-                                skippedCount++;
-                            }
-                        } catch (error) {
-                            // Log individual item migration errors but continue with others
-                            ext.outputChannel.appendLog(
-                                `Failed to migrate from Azure Databases VS Code Extension: connection item ${legacyItem.id}: ${error instanceof Error ? error.message : String(error)}`,
-                            );
-                            skippedCount++;
-                        }
-                    }
-
-                    // Set success telemetry
-                    context.telemetry.properties.migrationSuccessful = 'true';
-                    context.telemetry.measurements.migrationDurationMs = Date.now() - startTime;
-                    context.telemetry.measurements.itemsMigrated = migratedCount;
-                    context.telemetry.measurements.itemsSkipped = skippedCount;
-
-                    if (migratedCount > 0) {
-                        ext.outputChannel.appendLog(
-                            l10n.t(
-                                'Migration of connections from the Azure Databases VS Code Extension to the DocumentDB for VS Code Extension completed: {migratedCount} connections migrated.',
-                                { migratedCount },
-                            ),
-                        );
-                    }
-                } catch (error) {
-                    // Set failure telemetry
-                    context.telemetry.properties.migrationSuccessful = 'false';
-                    context.telemetry.properties.errorType =
-                        error instanceof Error ? error.constructor.name : 'UnknownError';
-                    context.telemetry.measurements.migrationDurationMs = Date.now() - startTime;
-                    context.telemetry.measurements.itemsMigrated = migratedCount;
-                    context.telemetry.measurements.itemsSkipped = skippedCount;
-
-                    // Log errors but don't throw
-                    ext.outputChannel.appendLog(
-                        l10n.t('Failed to access Azure Databases VS Code Extension storage for migration: {error}', {
-                            error: error instanceof Error ? error.message : String(error),
-                        }),
-                    );
-                }
-
-                return { migrated: migratedCount, skipped: skippedCount };
-            },
-        );
-
-        return result ?? { migrated: 0, skipped: 0 };
     }
 }

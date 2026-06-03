@@ -129,41 +129,177 @@ export interface Storage {
 class StorageImpl implements Storage {
     private readonly storageName: string;
 
+    /**
+     * Short-lived, per-workspace cache for `getItems` results.
+     *
+     * During extension activation several independent consumers (tree providers, post-migration
+     * cleanup, the URI handler, …) each call `getItems` for the same workspace within a short
+     * window. Every call fans out one secret-storage round trip per item, which under Remote-WSL
+     * crosses the WSL2 <-> Windows boundary and is latency-dominated. Without coalescing, the same
+     * zone is re-read several times back-to-back, stretching the launch read-path over seconds.
+     *
+     * Each entry holds the in-flight (or already-resolved) read promise plus the time it was
+     * created. While an entry is in flight, concurrent callers share it (request coalescing); once
+     * resolved, callers within {@link GET_ITEMS_CACHE_TTL_MS} reuse the snapshot instead of issuing
+     * a fresh read. Writes (`push`/`delete`) invalidate the affected workspace immediately, so the
+     * cache never serves data that is stale with respect to a local mutation. The TTL is only a
+     * safety backstop that bounds how long any untracked external change could go unseen.
+     */
+    private readonly getItemsCache = new Map<
+        string,
+        { promise: Promise<StorageItem<Record<string, unknown>>[]>; timestamp: number }
+    >();
+
+    /**
+     * How long a resolved `getItems` snapshot remains reusable. Chosen to comfortably cover the
+     * activation read-storm while remaining short enough that a manual refresh shortly afterwards
+     * re-reads storage. Local writes invalidate the cache regardless of this value.
+     */
+    private static readonly GET_ITEMS_CACHE_TTL_MS = 10_000;
+
     constructor(storageName: string) {
         this.storageName = storageName;
+
+        // Cross-window/cross-extension SecretStorage mutations bypass our local push/delete cache
+        // invalidation. Subscribe to onDidChange so a second VS Code window editing the same
+        // profile (or anything else writing through SecretStorage) does not leave this window
+        // serving a stale snapshot for up to TTL. We only invalidate when the changed key
+        // belongs to this storage namespace; unrelated secret churn is ignored.
+        ext.context.subscriptions.push(
+            ext.secretStorage.onDidChange((event) => {
+                const prefix = `${this.storageName}/`;
+                if (!event.key.startsWith(prefix)) {
+                    return;
+                }
+                // Key shape: `${storageName}/${workspace}/${id}/secrets`.
+                // Extract the workspace segment and invalidate only that entry.
+                const rest = event.key.substring(prefix.length);
+                const slashIdx = rest.indexOf('/');
+                if (slashIdx === -1) {
+                    return;
+                }
+                const workspace = rest.substring(0, slashIdx);
+                this.getItemsCache.delete(workspace);
+            }),
+        );
     }
 
     /**
      * Implementation of Storage.getItems that retrieves all items along with their secrets.
+     *
+     * Results are coalesced and briefly cached per workspace — see {@link getItemsCache} for the
+     * rationale.
+     *
+     * **Defensive-copy contract (read carefully before mutating a result):** Each returned item
+     * object and its `secrets` array are freshly allocated, so callers can safely reassign or
+     * mutate those. Nested objects — in particular `item.properties` and anything reachable from
+     * it — are **shared with the cached snapshot** and with every other concurrent caller. Do
+     * NOT mutate `properties` (or its descendants) on a returned item: doing so silently corrupts
+     * the cache and every later reader within the TTL window. If you need to change `properties`,
+     * spread it into a new object first, or call `push` immediately afterwards so the cache is
+     * invalidated before any other reader can observe the mutation. This is intentional: a full
+     * `structuredClone` on every read would cost CPU on the activation critical path that this
+     * cache exists to optimize, and audit shows no current consumer requires it.
      */
     public async getItems<T extends Record<string, unknown>>(workspace: string): Promise<StorageItem<T>[]> {
+        const items = await this.getOrLoadItems<T>(workspace);
+
+        // Hand back a shallow copy (including a copied secrets array) so that callers sharing the
+        // cached snapshot cannot affect one another by mutating the returned items.
+        return items.map((item) => ({
+            ...item,
+            secrets: item.secrets ? [...item.secrets] : item.secrets,
+        }));
+    }
+
+    /**
+     * Returns the cached `getItems` promise for the workspace when it is still fresh, otherwise
+     * starts a new read and caches it. A rejected read is evicted so the next call retries instead
+     * of replaying the failure.
+     */
+    private getOrLoadItems<T extends Record<string, unknown>>(workspace: string): Promise<StorageItem<T>[]> {
+        const cached = this.getItemsCache.get(workspace);
+        if (cached && Date.now() - cached.timestamp < StorageImpl.GET_ITEMS_CACHE_TTL_MS) {
+            return cached.promise as unknown as Promise<StorageItem<T>[]>;
+        }
+
+        const promise = this.loadItemsFromStorage<T>(workspace);
+        // We timestamp the entry at creation, not at resolution. Reviewers correctly noted that a
+        // slow `loadItemsFromStorage` therefore shrinks the post-resolution reuse window (in the
+        // pathological case the entry can expire before its own promise resolves, allowing a
+        // second load to start). We accept this trade because:
+        //   1. Concurrent in-flight callers are already coalesced via the shared promise above, so
+        //      the duplicate-load risk only matters AFTER first resolution — and by then any new
+        //      caller would also be happy with a fresh read.
+        //   2. If telemetry ever shows the cache window collapsing under slow SecretStorage, the
+        //      cheap escape hatch is bumping `GET_ITEMS_CACHE_TTL_MS` rather than rewriting the
+        //      timestamp logic to track start vs. resolution times.
+        // If you change this to resolution-time stamping, also re-evaluate the eviction-on-failure
+        // branch below so failed reads still don't sit in the cache.
+        const entry = {
+            promise: promise as unknown as Promise<StorageItem<Record<string, unknown>>[]>,
+            timestamp: Date.now(),
+        };
+        this.getItemsCache.set(workspace, entry);
+
+        // Evict failed reads so we don't keep serving (or awaiting) a rejected promise.
+        void promise.catch(() => {
+            if (this.getItemsCache.get(workspace) === entry) {
+                this.getItemsCache.delete(workspace);
+            }
+        });
+
+        return promise;
+    }
+
+    /**
+     * Reads all items and their secrets directly from storage, bypassing the cache.
+     *
+     * Secret reads are issued concurrently via `Promise.all`. Each `ext.secretStorage.get` is a
+     * round trip to the main process (and, under Remote-WSL, across the WSL2 <-> Windows boundary),
+     * so the per-item cost is dominated by latency rather than CPU. Awaiting them one-by-one in a
+     * loop paid that latency N times sequentially; dispatching them together pipelines the round
+     * trips so the total wait is roughly one round trip instead of N. VS Code serializes secret
+     * access per-key (not globally) and caches the decrypted store in memory after the first read,
+     * so distinct item keys do not block each other.
+     */
+    private async loadItemsFromStorage<T extends Record<string, unknown>>(
+        workspace: string,
+    ): Promise<StorageItem<T>[]> {
         const storageKeyPrefix = `${this.storageName}/${workspace}/`;
         const keys = ext.context.globalState.keys().filter((key) => key.startsWith(storageKeyPrefix));
+
+        // Read each item's metadata from globalState (synchronous, in-memory) and keep only those
+        // that exist, so secret reads line up 1:1 with the resolved items below.
+        const itemsWithKeys = keys
+            .map((key) => ({ key, item: ext.context.globalState.get<StorageItem<T>>(key) }))
+            .filter((entry): entry is { key: string; item: StorageItem<T> } => entry.item !== undefined);
+
+        // Issue all secret reads concurrently — see the method doc comment for why this matters.
+        const secretsJsonList = await Promise.all(
+            itemsWithKeys.map(({ key }) => ext.secretStorage.get(`${key}/secrets`)),
+        );
+
         const items: StorageItem<T>[] = [];
+        for (let i = 0; i < itemsWithKeys.length; i++) {
+            const { key, item } = itemsWithKeys[i];
 
-        for (const key of keys) {
-            const item = ext.context.globalState.get<StorageItem<T>>(key);
-            if (item) {
-                // ensure that the real id is used, same as the one used in the storage
-                item.id = key.substring(storageKeyPrefix.length);
+            // ensure that the real id is used, same as the one used in the storage
+            item.id = key.substring(storageKeyPrefix.length);
 
-                // Read secrets associated with the item
-                const secretKey = `${key}/secrets`;
-                const secretsJson = await ext.secretStorage.get(secretKey);
-
-                let secrets: string[] = [];
-                if (secretsJson) {
-                    try {
-                        secrets = JSON.parse(secretsJson) as string[];
-                    } catch (error) {
-                        console.error(l10n.t('Failed to parse secrets for key {0}:', key), error);
-                        secrets = [];
-                    }
+            let secrets: string[] = [];
+            const secretsJson = secretsJsonList[i];
+            if (secretsJson) {
+                try {
+                    secrets = JSON.parse(secretsJson) as string[];
+                } catch (error) {
+                    console.error(l10n.t('Failed to parse secrets for key {0}:', key), error);
+                    secrets = [];
                 }
-
-                item.secrets = secrets;
-                items.push(item);
             }
+
+            item.secrets = secrets;
+            items.push(item);
         }
 
         return items;
@@ -235,6 +371,9 @@ class StorageImpl implements Storage {
 
         // Save the item in globalState
         await ext.context.globalState.update(storageKey, itemToStore);
+
+        // A mutation occurred: drop the cached snapshot so subsequent reads reflect this write.
+        this.getItemsCache.delete(workspace);
     }
 
     /**
@@ -258,6 +397,11 @@ class StorageImpl implements Storage {
         try {
             // First delete the item from globalState
             await ext.context.globalState.update(storageKey, undefined);
+
+            // The stored set changed: invalidate the cached snapshot so reads re-resolve from truth.
+            // (If secret deletion below fails and we restore the item, the next read still sees the
+            // correct state because the cache has already been dropped.)
+            this.getItemsCache.delete(workspace);
 
             try {
                 // Then delete its secrets
