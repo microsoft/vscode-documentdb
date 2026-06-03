@@ -207,14 +207,14 @@ export function setLastPromptSource(source: PromptSource): void {
     lastPromptSource = source;
 }
 
-const INDEX_ADVISOR_ROLE = 'Query Performance Analyst';
+const QUERY_PERFORMANCE_ANALYST_ROLE = 'Query Performance Analyst';
 const QUERY_GENERATOR_ROLE = 'MongoDB Query Generator assistant';
 
-const INDEX_ADVISOR_TASK_FIND =
+const QUERY_PERFORMANCE_TASK_FIND =
     'analyze MongoDB API query performance based on the data provided';
-const INDEX_ADVISOR_TASK_AGGREGATE =
+const QUERY_PERFORMANCE_TASK_AGGREGATE =
     'analyze MongoDB API aggregation pipeline performance based on the data provided';
-const INDEX_ADVISOR_TASK_COUNT =
+const QUERY_PERFORMANCE_TASK_COUNT =
     'analyze MongoDB API count query performance based on the data provided';
 const QUERY_GENERATOR_TASK =
     "generate MongoDB queries based on the user's natural language description and the provided schema information";
@@ -245,9 +245,9 @@ const SINGLE_COLLECTION_QUERY_MESSAGES = [
 ];
 
 export const FIND_QUERY_PROMPT_TEMPLATE = `
-${createPriorityDeclaration(INDEX_ADVISOR_ROLE)}
+${createPriorityDeclaration(QUERY_PERFORMANCE_ANALYST_ROLE)}
 
-${createSecurityInstructions(FIND_QUERY_MESSAGES, INDEX_ADVISOR_TASK_FIND)}
+${createSecurityInstructions(FIND_QUERY_MESSAGES, QUERY_PERFORMANCE_TASK_FIND)}
 
 ## DATA PLACEHOLDERS
 The subsequent user messages will provide the following data that you should use to fill in your analysis:
@@ -396,9 +396,9 @@ ${CRITICAL_JSON_REMINDER}
 `;
 
 export const AGGREGATE_QUERY_PROMPT_TEMPLATE = `
-${createPriorityDeclaration(INDEX_ADVISOR_ROLE)}
+${createPriorityDeclaration(QUERY_PERFORMANCE_ANALYST_ROLE)}
 
-${createSecurityInstructions(AGGREGATE_QUERY_MESSAGES, INDEX_ADVISOR_TASK_AGGREGATE)}
+${createSecurityInstructions(AGGREGATE_QUERY_MESSAGES, QUERY_PERFORMANCE_TASK_AGGREGATE)}
 
 ## DATA PLACEHOLDERS
 The subsequent user messages will provide the following data that you should use to fill in your analysis:
@@ -555,9 +555,9 @@ ${CRITICAL_JSON_REMINDER}
 `;
 
 export const COUNT_QUERY_PROMPT_TEMPLATE = `
-${createPriorityDeclaration(INDEX_ADVISOR_ROLE)}
+${createPriorityDeclaration(QUERY_PERFORMANCE_ANALYST_ROLE)}
 
-${createSecurityInstructions(COUNT_QUERY_MESSAGES, INDEX_ADVISOR_TASK_COUNT)}
+${createSecurityInstructions(COUNT_QUERY_MESSAGES, QUERY_PERFORMANCE_TASK_COUNT)}
 
 ## DATA PLACEHOLDERS
 The subsequent user messages will provide the following data that you should use to fill in your analysis:

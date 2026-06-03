@@ -88,35 +88,42 @@ export class SchemaStore implements vscode.Disposable {
 
     // ── LRU tracking ──
 
-    /** Mark a key as recently accessed. */
+    /** Mark a key as recently accessed (moves to end of insertion order). */
     private _touchKey(key: string): void {
-        this._accessOrder.set(key, Date.now());
+        this._accessOrder.delete(key);
+        this._accessOrder.set(key, 0);
     }
 
-    /** Evict the least-recently-used entry if over the limit. */
+    /** Evict least-recently-used entries until the store is at or below capacity. */
     private _evictIfNeeded(): void {
-        if (this._analyzers.size <= this._maxEntries) {
+        while (this._analyzers.size > this._maxEntries) {
+            const oldestKey = this._accessOrder.keys().next().value as string | undefined;
+            if (oldestKey !== undefined) {
+                this._analyzers.delete(oldestKey);
+                this._accessOrder.delete(oldestKey);
+                this._evictionCount++;
+                const pending = this._pendingNotifications.get(oldestKey);
+                if (pending !== undefined) {
+                    clearTimeout(pending);
+                    this._pendingNotifications.delete(oldestKey);
+                }
+                // Fire a schema-change event so UI consumers know the schema was removed.
+                const [clusterId, db, coll] = oldestKey.split('::', 3);
+                if (clusterId && db && coll) {
+                    this._onDidChangeSchema.fire({ clusterId, databaseName: db, collectionName: coll });
+                }
+                continue;
+            }
+
+            // Fallback: _accessOrder may be out of sync with _analyzers.
+            // Pick any entry from _analyzers and register it for future LRU.
+            const fallbackKey = this._analyzers.keys().next().value as string | undefined;
+            if (fallbackKey !== undefined) {
+                this._touchKey(fallbackKey);
+                continue;
+            }
+
             return;
-        }
-
-        let oldestKey: string | undefined;
-        let oldestTime = Infinity;
-        for (const [key, time] of this._accessOrder) {
-            if (time < oldestTime) {
-                oldestTime = time;
-                oldestKey = key;
-            }
-        }
-
-        if (oldestKey !== undefined) {
-            this._analyzers.delete(oldestKey);
-            this._accessOrder.delete(oldestKey);
-            this._evictionCount++;
-            const pending = this._pendingNotifications.get(oldestKey);
-            if (pending !== undefined) {
-                clearTimeout(pending);
-                this._pendingNotifications.delete(oldestKey);
-            }
         }
     }
 
