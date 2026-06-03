@@ -63,8 +63,9 @@ export interface QueryInsightsState {
      */
     stage3Streaming: QueryInsightsStreamingState | null;
 
-    // Track which errors have been displayed to the user (to prevent duplicate toasts)
-    displayedErrors: string[]; // Array of error keys that have been shown
+    // NOTE: error-toast dedupe used to live here as `displayedErrors: string[]`.
+    // It never drove a re-render, so it was moved to a component-local
+    // `useRef<Set<string>>` in QueryInsightsTab. Don't reintroduce it here.
 }
 
 /**
@@ -187,8 +188,6 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         stage3ErrorCode: null,
         stage3RequestKey: null,
         stage3Streaming: null,
-
-        displayedErrors: [],
     },
 };
 

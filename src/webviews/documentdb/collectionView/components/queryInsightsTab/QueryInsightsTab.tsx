@@ -171,6 +171,16 @@ export const QueryInsightsMain = (): JSX.Element => {
     // error card pops in. Reset on cancel / unmount.
     const stage3TipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+    // Error-toast dedupe. VS Code's `window.showErrorMessage` (called via
+    // the `displayErrorMessage` tRPC procedure) pops a notification each
+    // time it is invoked, so without dedupe a single error state would
+    // produce one toast on first render and another on every re-render
+    // triggered by unrelated state changes. We track which error keys
+    // have already been surfaced; nothing here needs to drive a render,
+    // so a ref is sufficient (and avoids one round of context churn per
+    // error). Cleared when a stage transitions back to 'loading'.
+    const displayedErrorsRef = useRef<Set<string>>(new Set());
+
     // Feedback dialog state
     const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
     const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
@@ -241,30 +251,17 @@ export const QueryInsightsMain = (): JSX.Element => {
     }, []);
 
     /**
-     * Display error message to user for the given stage
-     * Only displays once per error state to avoid duplicate toasts
-     * Uses the setState updater function to read fresh state and update atomically
+     * Display error message to user for the given stage.
+     * Dedupes via `displayedErrorsRef` so the same error doesn't fire a
+     * fresh VS Code notification on every re-render.
      */
     const displayStageError = useCallback(
         (stage: 1 | 2 | 3, errorMessage: string): void => {
             const errorKey = `stage${stage}-${errorMessage}`;
-
-            // Use updater function to check and update state atomically with fresh data
-            let shouldDisplay = false;
-            setQueryInsightsStateHelper((prev) => {
-                if (prev.displayedErrors.includes(errorKey)) {
-                    return prev; // Already displayed this error
-                }
-                shouldDisplay = true;
-                return {
-                    ...prev,
-                    displayedErrors: [...prev.displayedErrors, errorKey],
-                };
-            });
-
-            if (!shouldDisplay) {
+            if (displayedErrorsRef.current.has(errorKey)) {
                 return;
             }
+            displayedErrorsRef.current.add(errorKey);
 
             const stageNames = {
                 1: l10n.t('query insights'),
@@ -278,7 +275,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 cause: errorMessage,
             });
         },
-        [trpcClient, setQueryInsightsStateHelper],
+        [trpcClient],
     );
 
     /**
@@ -295,12 +292,13 @@ export const QueryInsightsMain = (): JSX.Element => {
             console.log(`[Query Insights] Stage ${currentStage.phase}/${currentStage.status} → ${phase}/${status}`);
 
             setQueryInsightsStateHelper((prev) => {
-                // Clear displayed errors tracking when entering loading state
-                // This allows error toasts to be shown again if the same error occurs on retry
-                const shouldClearErrors = status === 'loading';
+                // Clear toast-dedupe set when entering loading so the same
+                // error can produce a fresh notification on retry.
+                if (status === 'loading') {
+                    displayedErrorsRef.current.clear();
+                }
                 const newState = {
                     ...prev,
-                    displayedErrors: shouldClearErrors ? [] : prev.displayedErrors,
                 };
 
                 // Update current stage
