@@ -91,7 +91,7 @@ function getOrCreateState(callbackId: string, options: AccumulatingTelemetryOpti
  *   **distribution metrics** (min / max / sum / count) across the batch.
  *   Use this for gauges like candidate counts, latencies, or sizes.
  *   On flush each key is emitted as four measurement fields:
- *   `{key}_min`, `{key}_max`, `{key}_sum`, `{key}_count`.
+         *   `dist_{key}_min`, `dist_{key}_max`, `dist_{key}_sum`, `dist_{key}_count`.
  * - String values on `context.telemetry.properties` are **last-wins**
  *   (overwritten on each call). Use this for stable metadata only
  *   (e.g., session id, version). Do NOT use properties to bucket data —
@@ -148,9 +148,11 @@ export async function callWithAccumulatingTelemetry<T>(
 
         const d: Record<string, number> = {};
         const dist = (ctx.telemetry as TelemetryWithDistributions).distributions;
-        for (const [k, v] of Object.entries(dist)) {
-            if (typeof v === 'number' && Number.isFinite(v)) {
-                d[k] = v;
+        if (dist && typeof dist === 'object') {
+            for (const [k, v] of Object.entries(dist)) {
+                if (typeof v === 'number' && Number.isFinite(v)) {
+                    d[k] = v;
+                }
             }
         }
         capturedDistributions = Object.keys(d).length ? d : undefined;
@@ -229,10 +231,10 @@ function flushState(callbackId: string, state: AccumulatorState, now: number): v
             ctx.telemetry.properties[k] = v;
         }
         for (const [k, v] of Object.entries(distributionsSnapshot)) {
-            ctx.telemetry.measurements[`${k}_min`] = v.min;
-            ctx.telemetry.measurements[`${k}_max`] = v.max;
-            ctx.telemetry.measurements[`${k}_sum`] = v.sum;
-            ctx.telemetry.measurements[`${k}_count`] = v.count;
+            ctx.telemetry.measurements[`dist_${k}_min`] = v.min;
+            ctx.telemetry.measurements[`dist_${k}_max`] = v.max;
+            ctx.telemetry.measurements[`dist_${k}_sum`] = v.sum;
+            ctx.telemetry.measurements[`dist_${k}_count`] = v.count;
         }
     });
 }
