@@ -207,15 +207,15 @@ export function setLastPromptSource(source: PromptSource): void {
     lastPromptSource = source;
 }
 
-const INDEX_ADVISOR_ROLE = 'MongoDB API Index Advisor assistant';
+const INDEX_ADVISOR_ROLE = 'Query Performance Analyst';
 const QUERY_GENERATOR_ROLE = 'MongoDB Query Generator assistant';
 
 const INDEX_ADVISOR_TASK_FIND =
-    'analyze MongoDB API queries and provide index optimization suggestions based on the data provided';
+    'analyze MongoDB API query performance based on the data provided';
 const INDEX_ADVISOR_TASK_AGGREGATE =
-    'analyze MongoDB API aggregation pipelines and provide index optimization suggestions based on the data provided';
+    'analyze MongoDB API aggregation pipeline performance based on the data provided';
 const INDEX_ADVISOR_TASK_COUNT =
-    'analyze MongoDB API count queries and provide index optimization suggestions based on the data provided';
+    'analyze MongoDB API count query performance based on the data provided';
 const QUERY_GENERATOR_TASK =
     "generate MongoDB queries based on the user's natural language description and the provided schema information";
 
