@@ -10,7 +10,7 @@
 
 ### Improvements
 
-- **Performance: Faster Connection Load and Startup**: Significant startup speedup, especially on Remote-WSL. Connection secrets are now fetched concurrently with `Promise.all`; a short-lived activation-time cache coalesces redundant `getItems` reads; startup cleanup is gated behind a one-time version marker so it runs once, not every launch; the cleanup pass itself reduced zone reads from ~6 to ~2. Also removes the legacy one-time Azure Databases extension connection import. **Note:** users who had un-imported connections in `ms-azuretools.vscode-cosmosdb` will need to re-add them manually. [#726](https://github.com/microsoft/vscode-documentdb/pull/726)
+- **Performance: Faster Connection Load and Startup**: Significant startup speedup, especially on Remote-WSL and large connection lists. Connections now load concurrently; a short-lived cache coalesces redundant reads; startup cleanup is gated to run once per version, not every launch. Also removes the legacy one-time Azure Databases extension connection import. **Note:** users who had un-imported connections in `ms-azuretools.vscode-cosmosdb` will need to re-add them manually. [#726](https://github.com/microsoft/vscode-documentdb/pull/726)
 - **Performance: Throttled Background Document-Count Fetches**: A per-cluster concurrency limiter now caps simultaneous background count requests at 5 with a 250 ms inter-task delay, preventing connection pool saturation when expanding databases with many collections. [#685](https://github.com/microsoft/vscode-documentdb/pull/685)
 - **Shard Key in Collection Tooltip**: Sharded collections now show their shard key in the hover tooltip. Extracted from the existing `listCollections()` response at no extra cost. [#670](https://github.com/microsoft/vscode-documentdb/pull/670), [#661](https://github.com/microsoft/vscode-documentdb/issues/661)
 - **Contextual Query Playground Filenames**: New playground files opened from the tree now use context-derived names (e.g., `cluster_collection.documentdb.js`) with invalid-character sanitization and numeric suffixes for duplicates. [#664](https://github.com/microsoft/vscode-documentdb/pull/664), [#660](https://github.com/microsoft/vscode-documentdb/issues/660)
@@ -21,7 +21,7 @@
 
 ### Fixes
 
-- **Node 24 Compatibility**: Updated `@microsoft/vscode-azext-utils` (~3.3.1 → ~4.1.0) and `@microsoft/vscode-azext-azureutils` (~3.4.5 → ~4.2.0) to fix a crash caused by the removal of `node:util.isNullOrUndefined` in Node 24. [#699](https://github.com/microsoft/vscode-documentdb/pull/699)
+- **Node 24 Compatibility**: VS Code 1.123 (released June 3, 2026) ships with Node 24, which broke extension loading. Updated `@microsoft/vscode-azext-utils` (~3.3.1 → ~4.1.0) and `@microsoft/vscode-azext-azureutils` (~3.4.5 → ~4.2.0) to restore compatibility. [#699](https://github.com/microsoft/vscode-documentdb/pull/699)
 
 ### Dependencies
 
