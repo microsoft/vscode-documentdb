@@ -159,6 +159,29 @@ class StorageImpl implements Storage {
 
     constructor(storageName: string) {
         this.storageName = storageName;
+
+        // Cross-window/cross-extension SecretStorage mutations bypass our local push/delete cache
+        // invalidation. Subscribe to onDidChange so a second VS Code window editing the same
+        // profile (or anything else writing through SecretStorage) does not leave this window
+        // serving a stale snapshot for up to TTL. We only invalidate when the changed key
+        // belongs to this storage namespace; unrelated secret churn is ignored.
+        ext.context.subscriptions.push(
+            ext.secretStorage.onDidChange((event) => {
+                const prefix = `${this.storageName}/`;
+                if (!event.key.startsWith(prefix)) {
+                    return;
+                }
+                // Key shape: `${storageName}/${workspace}/${id}/secrets`.
+                // Extract the workspace segment and invalidate only that entry.
+                const rest = event.key.substring(prefix.length);
+                const slashIdx = rest.indexOf('/');
+                if (slashIdx === -1) {
+                    return;
+                }
+                const workspace = rest.substring(0, slashIdx);
+                this.getItemsCache.delete(workspace);
+            }),
+        );
     }
 
     /**
