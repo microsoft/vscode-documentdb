@@ -32,6 +32,8 @@ jest.mock('../extensionVariables', () => ({
                 }),
             },
             extension: { id: 'test.extension' },
+            // StorageImpl registers an onDidChange subscription via ext.context.subscriptions.push.
+            subscriptions: [] as { dispose(): unknown }[],
         },
         secretStorage: {
             get: (key: string) => secretGet(key),
@@ -43,6 +45,8 @@ jest.mock('../extensionVariables', () => ({
                 secretStore.delete(key);
                 return Promise.resolve();
             }),
+            // No-op event registration; tests don't exercise cross-window invalidation.
+            onDidChange: jest.fn(() => ({ dispose: () => undefined })),
         },
     },
 }));
