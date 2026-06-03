@@ -22,6 +22,7 @@ import {
     useOverflowMenu,
 } from '@fluentui/react-components';
 import {
+    AddRegular,
     ArrowClockwiseRegular,
     ArrowExportRegular,
     ArrowImportRegular,
@@ -38,21 +39,31 @@ import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
+import { OPEN_CREATE_INDEX_EVENT } from '../../../indexView/constants';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
 import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
-export const ToolbarMainView = (): JSX.Element => {
+export interface ToolbarMainViewProps {
+    /**
+     * Which CollectionView tab is currently active. The primary toolbar
+     * swaps its leading action button to match (Find Query on Results /
+     * Query Insights, Create Index on Indexes).
+     */
+    selectedTab?: 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
+}
+
+export const ToolbarMainView = ({ selectedTab }: ToolbarMainViewProps): JSX.Element => {
     return (
         <>
-            <ToolbarQueryOperations />
+            <ToolbarQueryOperations selectedTab={selectedTab} />
             <ToolbarSecondaryActions />
         </>
     );
 };
 
-const ToolbarQueryOperations = (): JSX.Element => {
+const ToolbarQueryOperations = ({ selectedTab }: ToolbarMainViewProps): JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
@@ -160,15 +171,32 @@ const ToolbarQueryOperations = (): JSX.Element => {
 
     return (
         <Toolbar size="small" checkedValues={checkedValues} onCheckedValueChange={handleCheckedValueChange}>
-            <ToolbarButton
-                aria-label={l10n.t('Execute the find query')}
-                disabled={currentContext.isLoading}
-                icon={<PlayRegular />}
-                onClick={handleExecuteQuery}
-                appearance="primary"
-            >
-                {l10n.t('Find Query')}
-            </ToolbarButton>
+            {selectedTab === 'tab_indexes' ? (
+                // On the Indexes tab the primary action is creating a new
+                // index. We dispatch a window-level CustomEvent that the
+                // IndexesTab component listens for; this keeps the toolbar
+                // free of any direct coupling to the IndexesTab internals.
+                <ToolbarButton
+                    aria-label={l10n.t('Create a new index')}
+                    icon={<AddRegular />}
+                    appearance="primary"
+                    onClick={() => {
+                        window.dispatchEvent(new CustomEvent(OPEN_CREATE_INDEX_EVENT));
+                    }}
+                >
+                    {l10n.t('Create Index')}
+                </ToolbarButton>
+            ) : (
+                <ToolbarButton
+                    aria-label={l10n.t('Execute the find query')}
+                    disabled={currentContext.isLoading}
+                    icon={<PlayRegular />}
+                    onClick={handleExecuteQuery}
+                    appearance="primary"
+                >
+                    {l10n.t('Find Query')}
+                </ToolbarButton>
+            )}
 
             <ToolbarDividerTransparent />
 

@@ -32,6 +32,7 @@ import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
+import { indexViewRouter } from '../documentdb/indexView/indexViewRouter';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from './trpc';
 
@@ -188,6 +189,7 @@ export const appRouter = router({
     mongoClusters: {
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,
+        indexView: indexViewRouter,
     },
 });
 

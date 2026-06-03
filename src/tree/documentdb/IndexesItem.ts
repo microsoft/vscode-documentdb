@@ -137,8 +137,29 @@ export class IndexesItem implements TreeElement, TreeElementWithExperience, Tree
             contextValue: this.contextValue,
             label: l10n.t('Indexes'),
             description,
+            tooltip: l10n.t('Double-click to open the index management view'),
             iconPath: new vscode.ThemeIcon('combine'), // TODO: create our onw icon here, this one's shape can change
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            // Reuse the existing collection-view "open from tree" command so we
+            // pick up the double-click debounce + telemetry wrapping for free.
+            // Passing `initialTab: 'tab_indexes'` makes the Indexes tab the
+            // first thing the user sees.
+            command: {
+                title: l10n.t('Open Indexes'), // unused, but required by TreeItem
+                command: 'vscode-documentdb.command.internal.containerView.openFromTree',
+                arguments: [
+                    {
+                        id: this.id,
+                        viewTitle: `${this.collectionInfo.name}`,
+                        clusterId: this.cluster.clusterId,
+                        clusterDisplayName: this.cluster.name,
+                        viewId: this.cluster.viewId,
+                        databaseName: this.databaseInfo.name,
+                        collectionName: this.collectionInfo.name,
+                        initialTab: 'tab_indexes',
+                    },
+                ],
+            },
         };
     }
 }
