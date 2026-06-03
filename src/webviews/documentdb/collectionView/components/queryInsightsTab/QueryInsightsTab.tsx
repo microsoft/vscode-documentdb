@@ -206,11 +206,38 @@ export const QueryInsightsMain = (): JSX.Element => {
                 clearTimeout(stage3TipsTimerRef.current);
                 stage3TipsTimerRef.current = null;
             }
+            // QueryInsightsMain is conditionally mounted by CollectionView
+            // (`{selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}`),
+            // so leaving this tab unmounts the component. If a Stage 3
+            // subscription is in flight at that moment we MUST mirror
+            // `handleCancelAI` here: unsubscribe AND reset the Stage 3
+            // lifecycle state in context. Otherwise `currentStage` stays
+            // `{3, 'loading'}` after the subscription is killed, and the
+            // next mount renders the "AI is analyzing…" affordance forever
+            // because nothing will ever flip `status` away from 'loading'.
             if (stage3SubscriptionRef.current) {
                 stage3SubscriptionRef.current.unsubscribe();
                 stage3SubscriptionRef.current = null;
+                setQueryInsightsStateHelper((prev) => {
+                    // Only reset if we were still mid-stream; if `complete`
+                    // or `onError` already landed, `currentStage` has moved
+                    // on and we don't want to clobber it.
+                    if (prev.currentStage.phase !== 3 || prev.currentStage.status !== 'loading') {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        currentStage: { phase: 3, status: 'cancelled' },
+                        stage3RequestKey: null,
+                        stage3Streaming: null,
+                        stage3Data: null,
+                        stage3ErrorMessage: null,
+                        stage3ErrorCode: null,
+                    };
+                });
             }
         };
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount/unmount only; helper ref is stable
     }, []);
 
     /**
