@@ -317,6 +317,7 @@ export class ClustersExtension implements vscode.Disposable {
                 // We restart it once when the first query playground file is opened.
                 let tsRestarted = false;
                 let tsPluginUnavailable = false;
+                let tsPluginRetryRegistered = false;
 
                 const ensureTsRestart = async (): Promise<void> => {
                     if (tsRestarted || tsPluginUnavailable) {
@@ -401,20 +402,34 @@ export class ClustersExtension implements vscode.Disposable {
                             // understand the limitation instead of silently failing.
                             if (errorCode === 'EACCES' || errorCode === 'EROFS') {
                                 tsPluginUnavailable = true;
+                                const TS_PLUGIN_WARNING_PRIORITY = 100;
                                 const statusBarItem = vscode.window.createStatusBarItem(
                                     vscode.StatusBarAlignment.Right,
-                                    100,
+                                    TS_PLUGIN_WARNING_PRIORITY,
                                 );
                                 statusBarItem.text = '$(warning) DocumentDB TS Plugin';
                                 statusBarItem.tooltip =
-                                    'TypeScript-powered completions are unavailable on this read-only extension install.';
+                                    'TypeScript-powered completions are unavailable on this read-only extension install. Click to retry.';
                                 statusBarItem.command = {
-                                    title: 'Show details',
-                                    command: 'vscode-documentdb.command.playground.new',
-                                    arguments: [],
+                                    title: 'Retry TS Plugin Setup',
+                                    command: 'vscode-documentdb.command.retryTsPluginBootstrap',
                                 };
                                 statusBarItem.show();
                                 ext.context.subscriptions.push(statusBarItem);
+
+                                // Register a retry command so users can re-attempt after fixing permissions.
+                                if (!tsPluginRetryRegistered) {
+                                    tsPluginRetryRegistered = true;
+                                    vscode.commands.registerCommand(
+                                        'vscode-documentdb.command.retryTsPluginBootstrap',
+                                        () => {
+                                            statusBarItem.dispose();
+                                            tsPluginUnavailable = false;
+                                            tsRestarted = false;
+                                            void ensureTsRestart();
+                                        },
+                                    );
+                                }
 
                                 ext.outputChannel.debug(
                                     `[Playground] TS plugin stub unavailable (read-only install): ${message}`,
