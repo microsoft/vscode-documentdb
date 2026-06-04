@@ -37,8 +37,19 @@ import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useRef, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
-import { CollectionViewContext, type QueryInsightsStreamingState } from '../../collectionViewContext';
+import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
+import {
+    applyStage3Event,
+    cancelStage3,
+    failStage3,
+    stage1Failed,
+    stage1Succeeded,
+    stage2Failed,
+    stage2Succeeded,
+    startStage1Load,
+    startStage3Load,
+} from '../../queryInsightsReducer';
 import { createImprovementCardConfig } from '../../utils/createImprovementCard';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
 import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem } from './components';
@@ -59,11 +70,19 @@ import './queryInsights.scss';
 import './QueryInsightsTab.scss';
 
 export const QueryInsightsMain = (): JSX.Element => {
-    // Stage management:
-    // Stage 1: Initial View (cheap data + query plan from explain("queryPlanner"))
-    // Stage 2: Detailed Execution Analysis (from explain("executionStats"))
-    // Stage 3: AI-Powered Recommendations (opt-in)
-    // See: docs/design-documents/performance-advisor.md
+    // The query-insights pipeline (`pipeline` below) is a single
+    // discriminated union with these kinds:
+    //   idle → s1Loading → s1Error
+    //                  ↓
+    //                  s2Loading → s2Error
+    //                          ↓
+    //                          s3Idle → s3Loading → s3Success
+    //                                            ↓
+    //                                            s3Error / s3Cancelled
+    // See `collectionViewContext.ts` for the full type definition and the
+    // design rationale (one variable, one truth, cumulative carry-forward
+    // of earlier-stage data). All transitions go through pure helpers in
+    // `queryInsightsReducer.ts`.
 
     /**
      * Use the configuration object to access the data passed to the webview at its creation.
@@ -72,86 +91,119 @@ export const QueryInsightsMain = (): JSX.Element => {
 
     const { trpcClient } = useTrpcClient();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
-    const { queryInsights: queryInsightsState } = currentContext;
+    const pipeline = currentContext.queryInsights;
 
-    /**
-     * Helper to update queryInsights state within the CollectionViewContext.
-     * Mimics React's setState API with support for both direct values and updater functions.
-     *
-     * Instead of writing:
-     *   setCurrentContext(prev => ({ ...prev, queryInsights: { ...prev.queryInsights, stage1Data: data } }))
-     *
-     * You can write:
-     *   setQueryInsightsStateHelper(prev => ({ ...prev, stage1Data: data }))
-     */
-    const setQueryInsightsStateHelper = useCallback(
-        (
-            updater:
-                | typeof currentContext.queryInsights
-                | ((prev: typeof currentContext.queryInsights) => typeof currentContext.queryInsights),
-        ): void => {
-            setCurrentContext((prev) => ({
-                ...prev,
-                queryInsights: typeof updater === 'function' ? updater(prev.queryInsights) : updater,
-            }));
+    /** Apply a pipeline transition. Wraps the global setState helper. */
+    const dispatch = useCallback(
+        (transition: (prev: typeof pipeline) => typeof pipeline): void => {
+            setCurrentContext((prev) => ({ ...prev, queryInsights: transition(prev.queryInsights) }));
         },
         [setCurrentContext],
     );
 
-    /**
-     * Use the explicit stage from state instead of deriving it
-     */
-    const currentStage = queryInsightsState.currentStage;
+    // ---------- Derived values --------------------------------------------
+    //
+    // These narrow the union once at the top so the render tree below can
+    // read them without re-narrowing every time. None of them allocate.
+
+    /** Stage 1 result (if Stage 1 has succeeded — present from `s2Loading` onward). */
+    const stage1Data =
+        pipeline.kind === 'idle' || pipeline.kind === 's1Loading' || pipeline.kind === 's1Error'
+            ? null
+            : pipeline.stage1;
+
+    /** Stage 2 result (if Stage 2 has succeeded — present from `s3Idle` onward). */
+    const stage2Data =
+        pipeline.kind === 'idle' ||
+        pipeline.kind === 's1Loading' ||
+        pipeline.kind === 's1Error' ||
+        pipeline.kind === 's2Loading' ||
+        pipeline.kind === 's2Error'
+            ? null
+            : pipeline.stage2;
+
+    /** Stage 1 error code (RU-platform branch). Only present when Stage 1 failed. */
+    const stage1ErrorCode = pipeline.kind === 's1Error' ? pipeline.code : null;
+
+    /** True while the AI subscription is open. */
+    const isStage3Loading = pipeline.kind === 's3Loading';
+
+    /** True from terminal `complete` until a new request / reset. */
+    const isStage3Success = pipeline.kind === 's3Success';
+
+    /** Progressive Stage 3 stream snapshot (during loading AND after success). */
+    const streaming = pipeline.kind === 's3Loading' || pipeline.kind === 's3Success' ? pipeline.streaming : null;
+
+    /** `requestKey` for keying Stage 3 cards. Carried across `s3Loading → s3Success`. */
+    const stage3RequestKey =
+        pipeline.kind === 's3Loading' || pipeline.kind === 's3Success' ? pipeline.requestKey : null;
+
+    // ---------- Local-only UI state (NOT part of the pipeline) ------------
+    //
+    // These are presentation concerns that don't drive the lifecycle:
+    //   - showErrorCard: gated by a 1s timer after the user clicks "Get AI"
+    //     on top of a query that had an execution error (Stage 2's
+    //     `concerns` mention "Query Execution Failed").
+    //   - bylineVisible: rAF-deferred fade-in for the post-success
+    //     "Powered by …" footer (Fluent <Fade> first-mount workaround).
+    //   - feedbackDialogOpen / feedbackSentiment: feedback dialog.
+    //   - stage3SubscriptionRef: tRPC unsubscribe handle.
+    //   - stage3TipsTimerRef: the 1s timer above.
+    //   - displayedErrorsRef: error-toast dedupe (see displayStageError).
+    // None of these need to be in context.
 
     const [showErrorCard, setShowErrorCard] = useState(false);
 
-    // Subscription handle for the in-flight Stage 3 streaming subscription
-    // (collectionView.queryInsights.streamStage3). Calling `unsubscribe()`
-    // sends `subscription.stop` to the host, which both aborts the
-    // per-operation `AbortController` and calls `iterator.return()` on the
-    // procedure's async generator — so the underlying LLM call is cancelled
-    // in lock step. See packages/vscode-ext-react-webview README.
+    /**
+     * Subscription handle for the in-flight Stage 3 streaming subscription
+     * (`collectionView.queryInsights.streamStage3`). Calling `unsubscribe()`
+     * sends `subscription.stop` to the host, which both aborts the
+     * per-operation `AbortController` and calls `iterator.return()` on the
+     * procedure's async generator — so the underlying LLM call is cancelled
+     * in lock step. See packages/vscode-ext-react-webview README.
+     */
     const stage3SubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
 
-    // Timer ref for the delayed Stage 2 'Query Execution Failed' card
-    // shown when Stage 3 loading starts on top of a failed query. The
-    // 1s delay lets the user notice the AI request kicked off before the
-    // error card pops in. Reset on cancel / unmount.
+    /**
+     * Timer ref for the delayed 'Query Execution Failed' card surfaced when
+     * a Stage 3 request kicks off on top of a query that already failed at
+     * Stage 2. The 1s delay lets the user notice the AI request starting
+     * before the error card pops in. Reset on cancel / unmount.
+     */
     const stage3TipsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-    // Error-toast dedupe. VS Code's `window.showErrorMessage` (called via
-    // the `displayErrorMessage` tRPC procedure) pops a notification each
-    // time it is invoked, so without dedupe a single error state would
-    // produce one toast on first render and another on every re-render
-    // triggered by unrelated state changes. We track which error keys
-    // have already been surfaced; nothing here needs to drive a render,
-    // so a ref is sufficient (and avoids one round of context churn per
-    // error). Cleared when a stage transitions back to 'loading'.
+    /**
+     * Error-toast dedupe. VS Code's `window.showErrorMessage` (called via
+     * the `displayErrorMessage` tRPC procedure) pops a notification each
+     * time it is invoked, so without dedupe a single error state would
+     * produce one toast on first render and another on every re-render
+     * triggered by unrelated state changes. We track which error keys
+     * have already been surfaced; nothing here needs to drive a render,
+     * so a ref is sufficient. Cleared whenever a fresh load starts.
+     */
     const displayedErrorsRef = useRef<Set<string>>(new Set());
 
     // Feedback dialog state
     const [feedbackDialogOpen, setFeedbackDialogOpen] = useState(false);
     const [feedbackSentiment, setFeedbackSentiment] = useState<'positive' | 'negative'>('positive');
 
-    // Two-step visibility for the post-response "Powered by …" byline so it
-    // fades in instead of popping in. The byline is gated by Stage 3
-    // success + a populated `modelDisplayName`; without this two-step the
-    // byline would mount with `visible={true}` and Fluent's Fade (whose
-    // `appear` defaults to false) would skip the enter motion — the same
-    // first-mount quirk we work around in `AnimatedCardList`. Holding the
-    // Fade at `visible={false}` for one render and flipping it on the next
-    // `requestAnimationFrame` gives the presence component the real
-    // `false → true` transition it needs to animate.
-    const shouldShowByline =
-        queryInsightsState.currentStage.phase === 3 &&
-        queryInsightsState.currentStage.status === 'success' &&
-        !!queryInsightsState.stage3Streaming?.modelDisplayName;
+    /**
+     * Two-step visibility for the post-response "Powered by …" byline so it
+     * fades in instead of popping in. The byline is gated by Stage 3
+     * success + a populated `modelDisplayName`; without this two-step the
+     * byline would mount with `visible={true}` and Fluent's Fade (whose
+     * `appear` defaults to false) would skip the enter motion — the same
+     * first-mount quirk we work around in `AnimatedCardList`. Holding the
+     * Fade at `visible={false}` for one render and flipping it on the next
+     * `requestAnimationFrame` gives the presence component the real
+     * `false → true` transition it needs to animate.
+     */
+    const shouldShowByline = pipeline.kind === 's3Success' && !!pipeline.model.modelDisplayName;
     const [bylineVisible, setBylineVisible] = useState(false);
     useEffect(() => {
-        // Both setState calls are deferred into a `requestAnimationFrame`
-        // callback to satisfy `react-hooks/set-state-in-effect`, which
-        // (correctly) forbids synchronous setState in an effect body to
-        // avoid cascading renders. One frame's latency on the false flip
+        // Deferred into rAF to satisfy `react-hooks/set-state-in-effect`,
+        // which (correctly) forbids synchronous setState in an effect body
+        // to avoid cascading renders. One frame's latency on the false flip
         // is invisible — the Fade unmounts via the surrounding conditional
         // render anyway.
         const handle = requestAnimationFrame(() => setBylineVisible(shouldShowByline));
@@ -167,34 +219,19 @@ export const QueryInsightsMain = (): JSX.Element => {
             // QueryInsightsMain is conditionally mounted by CollectionView
             // (`{selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}`),
             // so leaving this tab unmounts the component. If a Stage 3
-            // subscription is in flight at that moment we MUST mirror
-            // `handleCancelAI` here: unsubscribe AND reset the Stage 3
-            // lifecycle state in context. Otherwise `currentStage` stays
-            // `{3, 'loading'}` after the subscription is killed, and the
-            // next mount renders the "AI is analyzing…" affordance forever
-            // because nothing will ever flip `status` away from 'loading'.
+            // subscription is in flight at that moment we MUST also move
+            // the pipeline out of `s3Loading`; otherwise on re-mount we'd
+            // render the "AI is analyzing…" affordance forever because
+            // nothing else could ever flip it.
             if (stage3SubscriptionRef.current) {
                 stage3SubscriptionRef.current.unsubscribe();
                 stage3SubscriptionRef.current = null;
-                setQueryInsightsStateHelper((prev) => {
-                    // Only reset if we were still mid-stream; if `complete`
-                    // or `onError` already landed, `currentStage` has moved
-                    // on and we don't want to clobber it.
-                    if (prev.currentStage.phase !== 3 || prev.currentStage.status !== 'loading') {
-                        return prev;
-                    }
-                    return {
-                        ...prev,
-                        currentStage: { phase: 3, status: 'cancelled' },
-                        stage3RequestKey: null,
-                        stage3Streaming: null,
-                        stage3ErrorMessage: null,
-                        stage3ErrorCode: null,
-                    };
-                });
+                // `cancelStage3` is a no-op outside `s3Loading`, so this
+                // is safe even if `complete` / `onError` landed first.
+                dispatch(cancelStage3);
             }
         };
-        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount/unmount only; helper ref is stable
+        // eslint-disable-next-line react-hooks/exhaustive-deps -- mount/unmount only; dispatch is stable
     }, []);
 
     /**
@@ -225,268 +262,118 @@ export const QueryInsightsMain = (): JSX.Element => {
         [trpcClient],
     );
 
-    /**
-     * Stage transition helper - handles moving between stages and cleaning up state
-     * Rules:
-     * - Can transition from 1 → 2 → 3
-     * - Can transition from any stage back to 1 (query re-run)
-     * - When transitioning to stage 1, clear all data from stages 2 and 3
-     * - When transitioning to stage 2, clear data from stage 3
-     * - Reset UI-specific flags when transitioning to new phases
-     */
-    const transitionToStage = useCallback(
-        (phase: 1 | 2 | 3, status: 'loading' | 'success' | 'error' | 'cancelled'): void => {
-            console.log(`[Query Insights] Stage ${currentStage.phase}/${currentStage.status} → ${phase}/${status}`);
-
-            setQueryInsightsStateHelper((prev) => {
-                // Clear toast-dedupe set when entering loading so the same
-                // error can produce a fresh notification on retry.
-                if (status === 'loading') {
-                    displayedErrorsRef.current.clear();
-                }
-                const newState = {
-                    ...prev,
-                };
-
-                // Update current stage
-                newState.currentStage = { phase, status };
-
-                // Reset dependent stages when going back to earlier phases
-                if (phase === 1) {
-                    // Reset everything when starting fresh
-                    newState.stage2Data = null;
-                    newState.stage2ErrorMessage = null;
-                    newState.stage2ErrorCode = null;
-                    newState.stage2InFlight = false;
-
-                    newState.stage3ErrorMessage = null;
-                    newState.stage3ErrorCode = null;
-                    newState.stage3RequestKey = null;
-                    newState.stage3Streaming = null;
-
-                    // Reset UI flags
-                    setShowErrorCard(false);
-                } else if (phase === 2 && status === 'loading') {
-                    // When entering stage 2 loading, clear stage 3 data only
-                    newState.stage3ErrorMessage = null;
-                    newState.stage3ErrorCode = null;
-                    newState.stage3RequestKey = null;
-                    newState.stage3Streaming = null;
-
-                    // Don't reset UI flags here - they should persist for the same query session
-                    // They will be reset by phase 1 or phase 3 loading transitions
-                } else if (phase === 3 && status === 'loading') {
-                    // Starting a new Stage-3 request: clear any leftover
-                    // streaming snapshot from a previous run so the
-                    // progressive render path (and the `completed` /
-                    // model-metadata slots on it) starts from a clean slate.
-                    newState.stage3Streaming = null;
-                    // Reset UI flags when starting new AI request
-                    setShowErrorCard(false);
-                }
-
-                return newState;
-            });
-        },
-        [currentStage.phase, currentStage.status, setQueryInsightsStateHelper],
-    );
-
-    // Stage 1: Load when needed (fallback for when prefetch didn't run or when tab is already active)
+    // ---------- Stage 1 fallback fetch ------------------------------------
     //
-    // This effect serves multiple purposes:
-    // 1. **Fallback for prefetch failures**: If the background prefetch in CollectionView.tsx fails,
-    //    this ensures data loads when user switches to Query Insights tab
-    // 2. **Query Insights tab already active**: If user is already on this tab when they run a query,
-    //    the prefetch won't help - we need to fetch here
-    // 3. **Cold start**: First time opening the tab with no prior query execution
+    // Multiple entry points kick off Stage 1:
+    //   1. Prefetch in CollectionView (background; runs right after a query
+    //      is executed, before the user even sees the Query Insights tab).
+    //   2. This effect (fallback; runs when the user is already on the tab
+    //      and the prefetch hasn't started yet, or the tab is opened cold).
+    // They dedupe by checking `pipeline.kind === 'idle'` — the FIRST one to
+    // call `startStage1Load` flips the union to `s1Loading`; the second
+    // observes `s1Loading` here and short-circuits.
     //
-    // Protection against redundant fetch:
-    // - Prefetch now sets currentStage.status to 'success' or 'error' when complete
-    // - This effect only runs when status === 'loading' (initial state after query execution)
-    // - If prefetch succeeded: stage1Data exists → this effect won't run
-    // - If prefetch failed: currentStage.status === 'error' → this effect won't run
-    // - Only runs when: status === 'loading' AND no data AND not already in-flight
-    //
-    // IMPORTANT: Wait for query execution to complete (isLoading=false) before fetching insights
+    // IMPORTANT: wait for query execution (isLoading=false) before fetching.
     useEffect(() => {
-        if (
-            !currentContext.isLoading &&
-            currentStage.phase === 1 &&
-            currentStage.status === 'loading' &&
-            !queryInsightsState.stage1Data &&
-            !queryInsightsState.stage1InFlight
-        ) {
-            // Mark in-flight FIRST so a re-render before the await resolves
-            // does not trigger a parallel fetch from this same effect.
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage1InFlight: true }));
-
-            // Query parameters are now retrieved from ClusterSession - no need to pass them
+        if (!currentContext.isLoading && pipeline.kind === 'idle') {
+            dispatch(startStage1Load);
             void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
                 .query()
                 .then((data) => {
-                    setQueryInsightsStateHelper((prev) => ({
-                        ...prev,
-                        stage1Data: data,
-                        stage1InFlight: false,
-                    }));
-                    transitionToStage(1, 'success');
-                    return data;
+                    dispatch((prev) => stage1Succeeded(prev, data));
                 })
                 .catch((error) => {
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     const errorCode = extractErrorCode(error);
-
-                    setQueryInsightsStateHelper((prev) => ({
-                        ...prev,
-                        stage1ErrorMessage: errorMessage,
-                        stage1ErrorCode: errorCode,
-                        stage1InFlight: false,
-                    }));
-                    transitionToStage(1, 'error');
-                    // Display error message since user is actively on this tab
+                    dispatch((prev) => stage1Failed(prev, errorMessage, errorCode));
+                    // Display error since user is actively on this tab.
                     displayStageError(1, errorMessage);
                 });
         }
-    }, [
-        currentContext.isLoading,
-        currentStage.phase,
-        currentStage.status,
-        queryInsightsState.stage1Data,
-        queryInsightsState.stage1InFlight,
-        trpcClient,
-        setQueryInsightsStateHelper,
-        transitionToStage,
-        displayStageError,
-    ]);
+    }, [currentContext.isLoading, pipeline.kind, trpcClient, dispatch, displayStageError]);
 
-    // Display errors when user switches to Query Insights tab or when error state changes
-    // This handles both mount (switching to tab with existing error) and updates (new errors)
+    // ---------- Surface errors as VS Code notifications -------------------
+    //
+    // Fires when the pipeline lands in any of the error variants. The
+    // RU-platform Stage 1 error is suppressed because we render a dedicated
+    // friendly card for it instead (see render section below).
     useEffect(() => {
-        if (currentStage.status === 'error') {
-            // Display error for the current stage
-            // Skip displaying error dialog for RU platform - we show a friendly card instead
-            if (currentStage.phase === 1 && queryInsightsState.stage1ErrorMessage) {
-                if (queryInsightsState.stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU') {
-                    displayStageError(1, queryInsightsState.stage1ErrorMessage);
-                }
-            } else if (currentStage.phase === 2 && queryInsightsState.stage2ErrorMessage) {
-                displayStageError(2, queryInsightsState.stage2ErrorMessage);
-            } else if (currentStage.phase === 3 && queryInsightsState.stage3ErrorMessage) {
-                displayStageError(3, queryInsightsState.stage3ErrorMessage);
+        if (pipeline.kind === 's1Error') {
+            if (pipeline.code !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU') {
+                displayStageError(1, pipeline.message);
             }
+        } else if (pipeline.kind === 's2Error') {
+            displayStageError(2, pipeline.message);
+        } else if (pipeline.kind === 's3Error') {
+            displayStageError(3, pipeline.message);
         }
-    }, [
-        currentStage.status,
-        currentStage.phase,
-        queryInsightsState.stage1ErrorMessage,
-        queryInsightsState.stage1ErrorCode,
-        queryInsightsState.stage2ErrorMessage,
-        queryInsightsState.stage2ErrorCode,
-        queryInsightsState.stage3ErrorMessage,
-        queryInsightsState.stage3ErrorCode,
-        displayStageError,
-    ]);
+    }, [pipeline, displayStageError]);
 
-    // Stage 2: Auto-start after Stage 1 completes successfully
+    // ---------- Stage 2 auto-start after Stage 1 success ------------------
+    //
+    // Triggered by the reducer chaining `s1Loading → s2Loading` on
+    // success. This effect fires the actual fetch as soon as we observe
+    // `s2Loading` and there's no active fetch already.
+    //
+    // Dedupe: we use a local in-flight ref because `s2Loading` is also
+    // the destination state — once `dispatch(stage2Succeeded)` runs, the
+    // pipeline leaves `s2Loading`, but we may have already re-rendered in
+    // `s2Loading` once before that. The ref prevents the effect from
+    // double-firing within that window.
+    const stage2InFlightRef = useRef(false);
     useEffect(() => {
-        if (
-            currentStage.phase === 1 &&
-            currentStage.status === 'success' &&
-            queryInsightsState.stage1Data &&
-            !queryInsightsState.stage2Data &&
-            !queryInsightsState.stage2InFlight
-        ) {
-            // Mark in-flight BEFORE the transition + fetch so a re-render
-            // before the await resolves cannot double-fire this effect.
-            setQueryInsightsStateHelper((prev) => ({ ...prev, stage2InFlight: true }));
-            // Transition to Stage 2 loading
-            transitionToStage(2, 'loading');
+        if (pipeline.kind === 's2Loading' && !stage2InFlightRef.current) {
+            stage2InFlightRef.current = true;
 
-            // Track start time to ensure minimum duration for better UX
+            // Track start time to ensure minimum duration for better UX.
             const startTime = performance.now();
+            const minimumDurationMs = 1500;
+            const ensureMinDuration = async (): Promise<void> => {
+                const elapsed = performance.now() - startTime;
+                if (elapsed < minimumDurationMs) {
+                    await new Promise((resolve) => setTimeout(resolve, minimumDurationMs - elapsed));
+                }
+            };
 
-            // Query parameters are now retrieved from ClusterSession - no need to pass them
             void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage2
                 .query()
                 .then(async (data) => {
-                    // Ensure minimum execution time for better UX (avoid jarring instant transitions)
-                    const elapsedTime = performance.now() - startTime;
-                    const minimumDuration = 1500; // 1.5 seconds
-                    if (elapsedTime < minimumDuration) {
-                        await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
-                    }
-
-                    setQueryInsightsStateHelper((prev) => ({
-                        ...prev,
-                        stage2Data: data,
-                        stage2InFlight: false,
-                    }));
-                    transitionToStage(2, 'success');
-                    return data;
+                    await ensureMinDuration();
+                    dispatch((prev) => stage2Succeeded(prev, data));
                 })
                 .catch(async (error) => {
-                    // Ensure minimum execution time for better UX (avoid jarring instant transitions)
-                    const elapsedTime = performance.now() - startTime;
-                    const minimumDuration = 1500; // 1.5 seconds
-                    if (elapsedTime < minimumDuration) {
-                        await new Promise((resolve) => setTimeout(resolve, minimumDuration - elapsedTime));
-                    }
-
+                    await ensureMinDuration();
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     const errorCode = extractErrorCode(error);
-
-                    setQueryInsightsStateHelper((prev) => ({
-                        ...prev,
-                        stage2ErrorMessage: errorMessage,
-                        stage2ErrorCode: errorCode,
-                        stage2InFlight: false,
-                    }));
-                    transitionToStage(2, 'error');
+                    dispatch((prev) => stage2Failed(prev, errorMessage, errorCode));
+                })
+                .finally(() => {
+                    stage2InFlightRef.current = false;
                 });
         }
-    }, [
-        currentStage.phase,
-        currentStage.status,
-        queryInsightsState.stage1Data,
-        queryInsightsState.stage2Data,
-        queryInsightsState.stage2InFlight,
-        trpcClient,
-        setQueryInsightsStateHelper,
-        transitionToStage,
-        displayStageError,
-    ]);
+    }, [pipeline.kind, trpcClient, dispatch]);
 
-    // Debug logging for state changes
+    // Debug logging for pipeline state changes
     useEffect(() => {
-        console.trace('currentStage changed to:', currentStage);
-    }, [currentStage]);
+        console.trace('[QueryInsights] pipeline:', pipeline.kind, pipeline);
+    }, [pipeline]);
 
-    useEffect(() => {
-        const s = queryInsightsState.stage3Streaming;
-        console.trace('stage3Streaming changed:', s);
-        if (s?.completed) {
-            const filled = s.recommendations.filter((r) => r !== null).length;
-            console.trace('  - recommendations (filled/total):', filled, '/', s.recommendations.length);
-        }
-    }, [queryInsightsState.stage3Streaming]);
-
-    // Derived metric values from Stage 2 data only
-    // Return undefined when loading, null when in error state or no data, or the actual value
-    // - undefined: Shows loading skeleton in metrics
-    // - null: Shows N/A in metrics (error state, no data, or unsupported platform)
-    // - number: Shows the formatted value
+    // ---------- Derived metric display state ------------------------------
     //
-    // Show skeleton only when Stage 1 or Stage 2 is loading (not Stage 3)
-    const showMetricsSkeleton = currentStage.status === 'loading' && currentStage.phase < 3;
-    // Show N/A only when Stage 1 or Stage 2 has an error (Stage 3 errors don't affect metrics)
-    const hasMetricsError = currentStage.status === 'error' && currentStage.phase < 3;
+    // Metrics row + efficiency grid:
+    //   - undefined: shows loading skeleton
+    //   - null     : shows N/A (error or unsupported platform)
+    //   - value    : the formatted value
+    //
+    // Skeleton while Stage 1 or Stage 2 is loading (NOT during Stage 3).
+    // N/A only on Stage 1 / Stage 2 errors (Stage 3 errors don't affect metrics).
+    const showMetricsSkeleton = pipeline.kind === 's1Loading' || pipeline.kind === 's2Loading';
+    const hasMetricsError = pipeline.kind === 's1Error' || pipeline.kind === 's2Error';
 
-    // Helper to compute metric value based on error/skeleton state
     const getMetricValue = <T,>(value: T | null | undefined): T | null | undefined => {
         return hasMetricsError ? null : showMetricsSkeleton ? undefined : (value ?? null);
     };
 
-    // Helper to compute cell value with custom unavailable value
     const getCellValue = <T,>(
         accessor: () => T | null | undefined,
         unavailableValue: T | null = null,
@@ -494,20 +381,21 @@ export const QueryInsightsMain = (): JSX.Element => {
         return hasMetricsError ? null : showMetricsSkeleton ? undefined : (accessor() ?? unavailableValue);
     };
 
-    const executionTime = getMetricValue(queryInsightsState.stage2Data?.executionTimeMs);
-    const docsReturned = getMetricValue(queryInsightsState.stage2Data?.documentsReturned);
-    const keysExamined = getMetricValue(queryInsightsState.stage2Data?.totalKeysExamined);
-    const docsExamined = getMetricValue(queryInsightsState.stage2Data?.totalDocsExamined);
+    const executionTime = getMetricValue(stage2Data?.executionTimeMs);
+    const docsReturned = getMetricValue(stage2Data?.documentsReturned);
+    const keysExamined = getMetricValue(stage2Data?.totalKeysExamined);
+    const docsExamined = getMetricValue(stage2Data?.totalDocsExamined);
 
     /**
      * Documentation URL for the AI Performance Insights feature itself
      * (overview, what it does, how to use it).
      *
-     * This is *distinct* from {@link utilityModelUrl}: this page describes the
+     * Distinct from {@link utilityModelUrl}: this page describes the
      * feature, while the utility-model URL is the cost-disclosure page wired
      * to the "Learn more about the utility model used." link in the
-     * cost-neutral disclosure row and to the post-response "Powered by" byline
-     * area. Keeping the two URLs separate lets us update each independently.
+     * cost-neutral disclosure row and to the post-response "Powered by"
+     * byline area. Keeping the two URLs separate lets us update each
+     * independently.
      */
     const aiInsightsDocsUrl = 'https://learn.microsoft.com/azure/documentdb/index-advisor';
     // aka.ms slug for the utility-model docs — register at https://aka.ms/admin before shipping
@@ -521,34 +409,30 @@ export const QueryInsightsMain = (): JSX.Element => {
         void trpcClient.common.openUrl.mutate({ url: utilityModelUrl });
     }, [trpcClient]);
 
-    const handleGetAISuggestions = () => {
-        // Transition to Stage 3 loading (this will reset UI flags)
-        transitionToStage(3, 'loading');
+    const handleGetAISuggestions = (): void => {
+        // Mint the staleness token and transition to `s3Loading` in one
+        // commit. The reducer is a no-op if the current state isn't
+        // `s3Idle` / `s3Error` / `s3Cancelled`, so this is safe even
+        // against a double-click while a previous request is still
+        // settling.
+        const requestKey = crypto.randomUUID();
+        dispatch((prev) => startStage3Load(prev, requestKey));
 
-        // Clear any pending error-card timer from a previous request
+        // Clear any pending error-card timer from a previous request.
         if (stage3TipsTimerRef.current) {
             clearTimeout(stage3TipsTimerRef.current);
             stage3TipsTimerRef.current = null;
         }
 
         // If Stage 2 detected a query execution error, surface a dedicated
-        // 'Query Execution Failed' card. The 1s delay lets the user notice
-        // the AI request kicked off first; the streaming summary /
-        // recommendation cards entertain in the meantime, so there is no
-        // longer a dedicated "Performance Tips" stalling card.
-        const hasExecutionError =
-            queryInsightsState.stage2Data?.concerns &&
-            queryInsightsState.stage2Data.concerns.some((concern) => concern.includes('Query Execution Failed'));
-
+        // 'Query Execution Failed' card after a 1s delay so the user
+        // notices the AI request kicked off first.
+        const hasExecutionError = !!stage2Data?.concerns?.some((concern) => concern.includes('Query Execution Failed'));
         if (hasExecutionError) {
-            stage3TipsTimerRef.current = setTimeout(() => {
-                setShowErrorCard(true);
-            }, 1000);
+            stage3TipsTimerRef.current = setTimeout(() => setShowErrorCard(true), 1000);
         }
 
-        // Generate a unique request key to track if this request is still valid when it returns.
-        //
-        // WHY THIS GUARD MATTERS — for future maintainers:
+        // WHY THE requestKey STALENESS GUARD MATTERS — for future maintainers:
         // tRPC subscriptions over the webview message channel are NOT
         // strictly synchronous to `unsubscribe()`. When the user clicks
         // Cancel and immediately clicks "Get AI Insights" again, the
@@ -556,213 +440,39 @@ export const QueryInsightsMain = (): JSX.Element => {
         //   1. handleCancelAI() → subscription.unsubscribe() (queues
         //      `subscription.stop` to the host).
         //   2. handleGetAISuggestions() → new subscription opens with a
-        //      NEW requestKey, which we capture into `stage3RequestKey`.
+        //      NEW requestKey, which `startStage3Load` mints above.
         //   3. The host processes `subscription.stop` for #1 → may flush
-        //      one or two trailing `onData` / `onComplete` / `onError`
+        //      one or two trailing `onData` / `onError` / `onComplete`
         //      callbacks from the *old* subscription that were already
         //      in flight.
-        // Without the requestKey check inside every state update below,
-        // those late callbacks would mutate `stage3Streaming` and corrupt
-        // the new request's state. The check
-        // `if (prev.stage3RequestKey !== requestKey) return prev;` is
-        // the single line keeping that race quiet — DO NOT REMOVE IT in
-        // a refactor "because the framework promises cleanup".
-        const requestKey = crypto.randomUUID();
-
-        // Set request key in queryInsights context
-        setQueryInsightsStateHelper((prev) => ({
-            ...prev,
-            stage3RequestKey: requestKey,
-        }));
+        // The reducer's requestKey check inside `applyStage3Event` and
+        // `failStage3` silently discards those late callbacks. DO NOT
+        // remove that guard "because the framework promises cleanup".
 
         // Stop any previous in-flight subscription before starting a new one.
         // `unsubscribe()` sends `subscription.stop` to the host, which both
         // aborts the per-operation AbortController and calls `iterator.return()`
-        // on the procedure's async generator — so the underlying LLM call is
-        // cancelled in lock step.
+        // on the procedure's async generator — so the LLM call is cancelled
+        // in lock step.
         stage3SubscriptionRef.current?.unsubscribe();
 
-        // Subscribe to the Stage 3 streaming subscription. Each
-        // structured event type populates a slot on `stage3Streaming`
-        // (the single source of truth the render path reads during
-        // phase=3); the terminal `complete` event flips
-        // `stage3Streaming.completed: true` and fills in model metadata
-        // (`modelDisplayName`, `modelId`, `modelFamily`, `usage`) used
-        // by the byline and the empty-state card. The requestKey
-        // staleness guard around every state update silently discards
-        // late callbacks from the framework's unsubscribe race (e.g. when
-        // the user kicks off a fresh request before the previous one has
-        // fully unwound).
         const subscription = trpcClient.mongoClusters.collectionView.queryInsights.streamStage3.subscribe(
             { requestKey },
             {
                 onData(event) {
-                    if (event.type === 'status') {
-                        // The pre-content client-side stepper inside
-                        // GetPerformanceInsightsCard already covers
-                        // perceived progress; WI-10 may surface server
-                        // elapsed/chars later if useful.
-                        return;
-                    }
-
-                    setQueryInsightsStateHelper((prev) => {
-                        if (prev.stage3RequestKey !== requestKey) {
-                            // Request was cancelled or superseded by a newer request
-                            return prev;
-                        }
-
-                        const prevStreaming: QueryInsightsStreamingState = prev.stage3Streaming ?? {
-                            summary: null,
-                            educational: null,
-                            recommendations: [],
-                            completed: false,
-                        };
-
-                        switch (event.type) {
-                            case 'summary':
-                                return {
-                                    ...prev,
-                                    stage3Streaming: {
-                                        ...prevStreaming,
-                                        summary: { markdown: event.markdown, complete: event.complete },
-                                    },
-                                };
-                            case 'educational':
-                                return {
-                                    ...prev,
-                                    stage3Streaming: {
-                                        ...prevStreaming,
-                                        educational: { markdown: event.markdown, complete: event.complete },
-                                    },
-                                };
-                            case 'recommendationStarted': {
-                                const recs = prevStreaming.recommendations.slice();
-                                while (recs.length <= event.index) {
-                                    recs.push(null);
-                                }
-                                return {
-                                    ...prev,
-                                    stage3Streaming: {
-                                        ...prevStreaming,
-                                        recommendations: recs,
-                                    },
-                                };
-                            }
-                            case 'recommendation': {
-                                const recs = prevStreaming.recommendations.slice();
-                                while (recs.length <= event.index) {
-                                    recs.push(null);
-                                }
-                                recs[event.index] = event.recommendation;
-                                return {
-                                    ...prev,
-                                    stage3Streaming: {
-                                        ...prevStreaming,
-                                        recommendations: recs,
-                                    },
-                                };
-                            }
-                            case 'complete': {
-                                // Intentionally DO NOT clear `stage3RequestKey` here.
-                                //
-                                // The render path derives `keyPrefix` from
-                                // `stage3RequestKey` and uses it on every card key
-                                // (analysis-card, rec-N, understanding-execution).
-                                // If we set `stage3RequestKey: null` on the same
-                                // commit that flips `completed: true`, every card
-                                // key changes from `${uuid}-…` to `…` in a single
-                                // React render. AnimatedCardList sees that as
-                                // "all old keys gone, all new keys arrived" and
-                                // animates a full exit + enter cascade — visible
-                                // as a flash / re-render at the exact moment the
-                                // GetPerformanceInsightsCard collapses. (See PR
-                                // #711 investigation; flagged by the user on
-                                // remote-desktop renders where the cascade is
-                                // most pronounced.)
-                                //
-                                // `stage3RequestKey` is cleared on the NEXT
-                                // lifecycle transition instead:
-                                //   - `transitionToStage(1, …)` / `(2, 'loading')` /
-                                //     `(3, 'loading')` (fresh request), and
-                                //   - `handleCancelAI`, and
-                                //   - the `onError` branch below.
-                                // The requestKey staleness guard inside this
-                                // reducer still works in the meantime: any racing
-                                // event arriving between `complete` and the next
-                                // lifecycle transition still matches `requestKey`
-                                // and is applied; but the subscription generator
-                                // returns immediately after yielding `complete`,
-                                // so no further events should arrive on this path.
-                                return {
-                                    ...prev,
-                                    stage3Streaming: {
-                                        ...prevStreaming,
-                                        completed: true,
-                                        modelDisplayName: event.modelDisplayName,
-                                        modelId: event.modelId,
-                                        modelFamily: event.modelFamily,
-                                        usage: event.usage,
-                                    },
-                                    // Drive the Stage-3 success transition in the
-                                    // SAME commit that flips `completed: true`.
-                                    // Previously this relied on a `wasAccepted`
-                                    // closure flag that was set inside this updater
-                                    // and read AFTER setQueryInsightsStateHelper()
-                                    // returned, to gate a separate
-                                    // transitionToStage(3,'success') call. But React
-                                    // batches/defers the updater, so the flag was
-                                    // frequently still `false` when read — the
-                                    // success transition was skipped and
-                                    // `currentStage.status` stayed `'loading'`. With
-                                    // status stuck at loading, `isStage3Loading`
-                                    // never cleared and the loading affordance (the
-                                    // “Get AI” request card / slim cancel bar) never
-                                    // collapsed even though the stream had finished.
-                                    // Setting `currentStage` here is race-free.
-                                    currentStage: { phase: 3, status: 'success' },
-                                };
-                            }
-                            default:
-                                return prev;
-                        }
-                    });
+                    dispatch((prev) => applyStage3Event(prev, requestKey, event));
                 },
                 onError(error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     const errorCode = extractErrorCode(error);
-
-                    // Only update state if this request is still the current one.
-                    // After `handleCancelAI` (or a superseding request) clears
-                    // `stage3RequestKey`, any late `onError` from the framework's
-                    // unsubscribe race is silently discarded by this guard.
-                    setQueryInsightsStateHelper((prev) => {
-                        if (prev.stage3RequestKey !== requestKey) {
-                            return prev;
-                        }
-                        return {
-                            ...prev,
-                            stage3ErrorMessage: errorMessage,
-                            stage3ErrorCode: errorCode,
-                            stage3RequestKey: null,
-                            stage3Streaming: null,
-                            // Drive the error transition in the same commit (see
-                            // the matching note in the `complete` handler): a
-                            // `wasAccepted` flag read after the batched updater was
-                            // unreliable and could leave `currentStage` stuck at
-                            // {3,'loading'}. Error display is handled by the
-                            // useEffect that watches Stage-3 error state.
-                            currentStage: { phase: 3, status: 'error' },
-                        };
-                    });
-
+                    dispatch((prev) => failStage3(prev, requestKey, errorMessage, errorCode));
                     if (stage3SubscriptionRef.current === subscription) {
                         stage3SubscriptionRef.current = null;
                     }
                 },
                 onComplete() {
-                    // Clear the ref only if it still points to this request's
-                    // subscription. UI state was driven by the terminal
-                    // `complete` event in onData; nothing else to do here.
+                    // UI state was driven by the terminal `complete` event
+                    // in onData; nothing else to do here.
                     if (stage3SubscriptionRef.current === subscription) {
                         stage3SubscriptionRef.current = null;
                     }
@@ -772,46 +482,18 @@ export const QueryInsightsMain = (): JSX.Element => {
         stage3SubscriptionRef.current = subscription;
     };
 
-    const handleCancelAI = () => {
-        // Clear any pending tips/error card timer to prevent stale UI after cancel
+    const handleCancelAI = (): void => {
         if (stage3TipsTimerRef.current) {
             clearTimeout(stage3TipsTimerRef.current);
             stage3TipsTimerRef.current = null;
         }
-
-        // Stop the in-flight subscription so the host stops the LLM call early.
-        // `unsubscribe()` triggers `subscription.stop` → server AbortController
-        // abort + `iterator.return()` on the generator.
         if (stage3SubscriptionRef.current) {
             stage3SubscriptionRef.current.unsubscribe();
             stage3SubscriptionRef.current = null;
         }
-
-        // Fully revert Stage 3 to a clean pre-request slate in a SINGLE commit
-        // so "Get AI Performance Insights" can be requested again immediately:
-        //   - currentStage → {3, 'cancelled'}: not 'loading', so `isStage3Loading`
-        //     and the card's `isLoading` both go false → the request card
-        //     re-shows and its button re-enables.
-        //   - stage3RequestKey → null: any late onData/onComplete/onError from
-        //     the unsubscribe race is discarded by the requestKey guard.
-        //   - stage3Streaming → null: drop partial stream output (including
-        //     `completed`/model metadata if a previous run had succeeded) so
-        //     no half-rendered cards linger.
-        //   - stage3Error* → null: clear any error surfaced from a prior run.
-        // Doing this in one updater (instead of a separate setState +
-        // transitionToStage call) avoids an intermediate render where some
-        // fields are reset but `currentStage` is not — the same batched-updater
-        // hazard that previously left the loading affordance stuck on complete.
-        setQueryInsightsStateHelper((prev) => ({
-            ...prev,
-            currentStage: { phase: 3, status: 'cancelled' },
-            stage3RequestKey: null,
-            stage3Streaming: null,
-            stage3ErrorMessage: null,
-            stage3ErrorCode: null,
-        }));
-
-        // Drop any error card that a previous run may have surfaced.
+        // `cancelStage3` is a no-op outside `s3Loading` (the reducer guards
+        // it), so this is safe even against double-cancel.
+        dispatch(cancelStage3);
         setShowErrorCard(false);
     };
 
@@ -836,16 +518,11 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     // Feedback handlers
-    const handleFeedbackClick = (sentiment: 'positive' | 'negative') => {
-        // Fire-and-forget event so we capture sentiment immediately when the user clicks
+    const handleFeedbackClick = (sentiment: 'positive' | 'negative'): void => {
         void trpcClient.common.reportEvent.mutate({
             eventName: 'queryInsightsThumb',
-            properties: {
-                sentiment,
-                source: 'feedbackThumb',
-            },
+            properties: { sentiment, source: 'feedbackThumb' },
         });
-
         setFeedbackSentiment(sentiment);
         setFeedbackDialogOpen(true);
     };
@@ -865,11 +542,7 @@ export const QueryInsightsMain = (): JSX.Element => {
 
             void trpcClient.common.reportEvent.mutate({
                 eventName: 'queryInsightsFeedback',
-                properties: {
-                    sentiment: feedback.sentiment,
-                    source: 'feedbackDialog',
-                    ...reasonProperties,
-                },
+                properties: { sentiment: feedback.sentiment, source: 'feedbackDialog', ...reasonProperties },
             });
         } catch (error) {
             console.error('Failed to send feedback:', error);
@@ -878,60 +551,29 @@ export const QueryInsightsMain = (): JSX.Element => {
         return Promise.resolve();
     };
 
-    // Build the cards array for animated presence
+    // ---------- Build the animated card list ------------------------------
     const insightCards: AnimatedCardItem[] = [];
 
-    // Include requestKey in card keys to force remount on regeneration
-    const keyPrefix = queryInsightsState.stage3RequestKey ? `${queryInsightsState.stage3RequestKey}-` : '';
+    // Include requestKey in card keys to force remount on regeneration.
+    const keyPrefix = stage3RequestKey ? `${stage3RequestKey}-` : '';
 
-    // Stage 3 render source — single source of truth:
-    //   `stage3Streaming` carries the progressive state populated by the
-    //   `streamStage3` subscription's structured events AND (after the
-    //   terminal `complete` event) the `completed` flag + model metadata.
-    //   It drives:
-    //     - the analysis card, recommendation shells/filled cards, and
-    //       educational card while streaming,
-    //     - the "no recommendations needed" empty-state card on
-    //       `completed && recommendations.length === 0`,
-    //     - the post-response "Powered by ..." byline on
-    //       `completed && modelDisplayName`.
-    //   It is reset to `null` on cancel, on a fresh Stage 3 request, and
-    //   on every transition back to phase 1 or 2 loading.
-    //
-    // Historical note (PR #711): there was a parallel `stage3Data`
-    // field that mirrored a fully-formed `QueryInsightsStage3Response`
-    // snapshot — a leftover from the pre-streaming buffered procedure.
-    // It was collapsed into `stage3Streaming` (with `completed` + model
-    // metadata slots) to keep one source of truth per stream. Do not
-    // reintroduce a parallel snapshot.
-    const streaming = queryInsightsState.stage3Streaming;
+    // Stage 3 cards (analysis, recommendations, educational) all key off
+    // the single fact "we are in a Stage 3 lifecycle that has any content
+    // to show". That's true while loading and through the success window.
+    const stage3CardsActive = isStage3Loading || isStage3Success;
 
-    // EXPERIMENTAL: true while the Stage 3 AI request is streaming. Used by the
-    // cancel-UX proposals to decide where to surface the Cancel affordance.
-    const isStage3Loading = currentStage.phase === 3 && currentStage.status === 'loading';
-
-    // Analysis Card
-    //
-    // Option A layout: as soon as Stage 3 loading STARTS (status='loading',
-    // before any structured event has arrived) the analysis slot is
-    // reserved at the canonical top position with a spinner placeholder.
-    // We then continue to render it while `streaming` is non-null and on
-    // success too. The slot only disappears on cancel/error (both clear
-    // `streaming` and move status away from 'loading'). The placeholder
-    // uses the same key as the filled card so the swap is in-place —
-    // the rest of the page never reflows because of the analysis card.
-    if (currentStage.phase === 3 && (currentStage.status === 'loading' || streaming)) {
+    // Analysis Card — pre-reserves its slot at canonical top position the
+    // moment Stage 3 loading starts (before any event arrives), then swaps
+    // the placeholder for the streaming content in place. Disappears on
+    // cancel/error (both leave `streaming === null`).
+    if (stage3CardsActive) {
         const summarySource = streaming?.summary;
         insightCards.push({
             key: `${keyPrefix}analysis-card`,
-            // Mark as in-flight while streaming so AnimatedCardList
-            // uses Fade (no `maxHeight`/`overflow:hidden` clipping)
-            // instead of CollapseRelaxed. CollapseRelaxed measures
-            // scrollHeight once at mount (when content is ~empty) and
-            // then clips with overflow:hidden for 400 ms, which hides
-            // most of the early streaming and makes the card appear to
-            // pop from "title only" to "fully filled" in two frames.
-            // Fade lets the markdown grow visibly as chunks arrive.
+            // Mark as in-flight while streaming so AnimatedCardList uses
+            // Fade (no `maxHeight`/`overflow:hidden` clipping) instead of
+            // CollapseRelaxed, which measures scrollHeight once at mount
+            // and clips early streaming.
             inFlight: !summarySource?.complete,
             component: (
                 <MarkdownCard
@@ -945,8 +587,9 @@ export const QueryInsightsMain = (): JSX.Element => {
         });
     }
 
-    // Error Card - shown when query execution failed
-    if (showErrorCard && queryInsightsState.stage2Data?.concerns) {
+    // Error Card — shown when query execution failed (gated by 1s timer
+    // after Stage 3 click; see `handleGetAISuggestions`).
+    if (showErrorCard && stage2Data?.concerns) {
         insightCards.push({
             key: `${keyPrefix}query-execution-error`,
             component: (
@@ -955,7 +598,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     icon={<WarningRegular />}
                     showAiDisclaimer={false}
                     content={
-                        queryInsightsState.stage2Data.concerns.join('\n\n') +
+                        stage2Data.concerns.join('\n\n') +
                         '\n\n---\n\n' +
                         '**Resolving this execution error should take precedence over performance optimization.** ' +
                         'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
@@ -965,41 +608,18 @@ export const QueryInsightsMain = (): JSX.Element => {
         });
     }
 
-    // Recommendation Cards (Option A layout, see Analysis Card above).
-    //
-    // Three rendering modes, mutually exclusive:
-    //   1. Pending placeholder. Stage 3 is loading and no
-    //      `recommendationStarted` event has arrived yet (covers both
-    //      pre-first-event time-to-first-token AND the case where the
-    //      LLM is still writing earlier sections). Reserves the
-    //      recommendations slot with one `ImprovementCardShell mode='loading'`
-    //      so the page layout is final from t=0.
-    //   2. Progressive shells / filled cards. After the first
-    //      `recommendationStarted` event we know how many items the LLM is
-    //      writing; render one card per index (`ImprovementCardShell` while
-    //      the item is `null`, `ImprovementCard` once it fills). Stable
-    //      keys per index so each shell→filled transition is in-place.
-    //   3. Empty-state "no recommendations needed". On the terminal
-    //      `complete` event with `improvementCards.length === 0` (the
-    //      "query is already optimal" path) we re-render the same key
-    //      `rec-0` with `<ImprovementCardShell mode='empty' />` so the
-    //      card stays in place — only the icon, title and body swap.
-    if (currentStage.phase === 3 && (currentStage.status === 'loading' || streaming)) {
+    // Recommendation Cards — three rendering modes (mutually exclusive):
+    //   1. Pending placeholder      — Stage 3 loading, no rec events yet.
+    //   2. Progressive shells/cards — `recommendationStarted` event(s) arrived.
+    //   3. Empty-state              — `complete` landed with zero recs.
+    if (stage3CardsActive) {
         const hasStartedRecs = (streaming?.recommendations.length ?? 0) > 0;
-        // "Stream completed with zero recommendations" — the AI returned
-        // a successful response containing no improvements. We detect
-        // this via `completed: true` on the streaming state (set on the
-        // terminal `complete` event) combined with an empty
-        // recommendations array.
-        const completedWithNoRecs = !!streaming?.completed && streaming.recommendations.length === 0;
+        // "Stream completed with zero recommendations" — terminal `complete`
+        // event landed (kind === 's3Success') with no items.
+        const completedWithNoRecs = isStage3Success && (streaming?.recommendations.length ?? 0) === 0;
 
         if (hasStartedRecs) {
-            // Mode 2: progressive shells / filled cards (per D11: shell uses
-            // the same icon and outer Card as the filled `ImprovementCard`
-            // via `ImprovementCardShell`, so the card's identity never
-            // changes when content arrives).
-            // `streaming` is guaranteed non-null here because `hasStartedRecs`
-            // is true (it required `streaming?.recommendations.length > 0`).
+            // Mode 2 — `streaming` is guaranteed non-null when `hasStartedRecs`.
             streaming!.recommendations.forEach((rec, index) => {
                 const key = `${keyPrefix}rec-${index}`;
                 if (rec === null) {
@@ -1023,27 +643,17 @@ export const QueryInsightsMain = (): JSX.Element => {
                 });
             });
         } else if (completedWithNoRecs) {
-            // Mode 3: empty-state, terminal complete with zero
-            // recommendations. Reuses the SAME React key as the Mode 1
-            // placeholder (`rec-0`) and the SAME component
-            // (ImprovementCardShell). The component renders differently
-            // based on the `mode` prop (icon swaps to CheckmarkCircle,
-            // title and body swap to the empty-state copy). React renders
-            // the change in place — the card frame stays put, no remount,
-            // no card disappearing and reappearing. See
-            // ImprovementCardShell's JSDoc for the per-mode table.
+            // Mode 3 — same React key (`rec-0`) and same component
+            // (ImprovementCardShell) as Mode 1, with `mode='empty'` so the
+            // swap is in place (icon, title, body change but the card frame
+            // stays put).
             insightCards.push({
                 key: `${keyPrefix}rec-0`,
                 component: <ImprovementCardShell mode="empty" />,
             });
         } else {
-            // Mode 1: pending placeholder. Uses the SAME key the first
-            // filled shell will use (`rec-0`) so the swap to Mode 2 on
-            // the first `recommendationStarted` event is in-place \u2014 no
-            // remount, no flicker. If `complete` instead arrives with
-            // zero recommendations the key differs from the empty-state
-            // (`no-recommendations`), and that swap is deliberate \u2014 the
-            // user notices the message change.
+            // Mode 1 — same key as the first filled shell so Mode 2 swaps
+            // in place when the first event arrives.
             insightCards.push({
                 key: `${keyPrefix}rec-0`,
                 component: <ImprovementCardShell />,
@@ -1051,20 +661,11 @@ export const QueryInsightsMain = (): JSX.Element => {
         }
     }
 
-    // Educational Markdown Card — Understanding Query Execution
-    //
-    // Option A layout: same pre-reserved slot pattern as the Analysis
-    // Card above — the educational slot is reserved from the moment
-    // Stage 3 loading starts, and the same key is used for the spinner
-    // placeholder and the filled card so the swap is in-place.
-    if (currentStage.phase === 3 && (currentStage.status === 'loading' || streaming)) {
+    // Educational Markdown Card — same pre-reserve pattern as Analysis Card.
+    if (stage3CardsActive) {
         const educationalSource = streaming?.educational;
         insightCards.push({
             key: `${keyPrefix}understanding-execution`,
-            // See `analysis-card` above: Fade while streaming so the
-            // markdown chunks are actually visible as they arrive,
-            // instead of being clipped by CollapseRelaxed's 400 ms
-            // maxHeight enter animation.
             inFlight: !educationalSource?.complete,
             component: (
                 <MarkdownCard
@@ -1077,7 +678,6 @@ export const QueryInsightsMain = (): JSX.Element => {
             ),
         });
     }
-
     return (
         <div className="container">
             {/* Content Area - Flexbox two-column layout */}
@@ -1120,7 +720,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         </Text>
 
                         {/* Platform-specific error card for RU clusters */}
-                        {queryInsightsState.stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
+                        {stage1ErrorCode === 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
                             <MarkdownCardEx
                                 title={l10n.t('Query Insights Not Available')}
                                 icon={<ChatMailRegular />}
@@ -1144,8 +744,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                             </MarkdownCardEx>
                         )}
 
-                        {/* Skeleton - shown only when Stage 1 is actively loading (not in error state) */}
-                        {currentStage.phase === 1 && currentStage.status === 'loading' && (
+                        {/* Skeleton — shown only while Stage 1 is loading. */}
+                        {pipeline.kind === 's1Loading' && (
                             <Skeleton className="cardSpacing">
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
@@ -1166,62 +766,57 @@ export const QueryInsightsMain = (): JSX.Element => {
                                 two heights — Fluent has no resize-in-place motion, so
                                 this jump is accepted by design).
 
-                              • Smooth exit. On success the wrapper collapses to
-                                nothing, so the analyzing row animates away instead of
-                                vanishing with a layout shift. The result cards in the
-                                AnimatedCardList below grow in over the same window — a
-                                clean handoff.
+                              • Smooth exit. On Stage 3 success the wrapper collapses
+                                to nothing, so the analyzing row animates away
+                                instead of vanishing with a layout shift. The result
+                                cards in the AnimatedCardList below grow in over the
+                                same window — a clean handoff.
 
-                            Visibility is gated on `status` (NOT on the streaming
-                            snapshot) so it flips reliably in the SAME commit the
-                            success transition is applied. Both conditions are
-                            scoped to phase 3 — Stage 2 ALSO reaches 'success' as
-                            its idle state, so a bare `status !== 'success'`
-                            would (a) hide the wrapper at {2,'success'} and
-                            (b) swap the content to the analyzing card during
-                            that hide animation. The phase-3 scoping keeps the
-                            request card visible while the user is in the
-                            Stage 2 idle window waiting to click "Get AI":
-                                visible: phase >= 2 && !(phase===3 && status==='success')
-                            • phase 2 success / phase 3 cancelled / phase 3 error → request
-                            • phase 3 loading                                      → analyzing
-                            • phase 3 success                                      → collapses + unmounts
-                            An even earlier version gated on `!stage3Data` (a
-                            parallel snapshot that has since been collapsed into
-                            `stage3Streaming.completed`); if that snapshot was
-                            ever falsy the card never hid. Keying off the status
-                            enum removes that failure mode.
+                            Gated directly on `pipeline.kind`, which is the SINGLE
+                            source of truth for the lifecycle. Each branch matches
+                            exactly the variants it cares about, so there is no
+                            possibility of one stage's value matching another's:
+                                visible: pipeline.kind ∈ { s3Idle, s3Loading,
+                                                           s3Success, s3Error,
+                                                           s3Cancelled }
+                                          but hides when s3Success → collapses out
+                                          (kept rendered as analyzing during the
+                                          collapse window so the request card
+                                          doesn't flash back)
+                            • s3Idle / s3Error / s3Cancelled → request card
+                            • s3Loading                      → analyzing card
+                            • s3Success                      → analyzing card (during collapse) then unmount
 
-                            Content keeps showing the analyzing row while
-                            `isStage3Loading || status === 'success'`, so the request
-                            card never flashes back during the success collapse.
+                            `unmountOnExit` removes the card after the 400 ms
+                            collapse so a regenerate re-mounts and plays a clean
+                            enter.
 
-                            `unmountOnExit` removes the card after the 400 ms collapse so
-                            a regenerate re-mounts and plays a clean enter. */}
+                            HISTORICAL NOTE: an earlier flat shape used a single
+                            `status === 'success'` check here that silently matched
+                            Stage 2's idle success too, briefly flashing the
+                            analyzing card the moment Stage 2 finished (fixed in
+                            commit f9af8979). With one discriminated union that
+                            class of bug is structurally impossible — Stage 2's
+                            success has a different `kind` (`s3Idle`) so it cannot
+                            match `s3Loading` / `s3Success`. */}
                         <CollapseRelaxed
                             visible={
-                                currentStage.phase >= 2 &&
-                                !(currentStage.phase === 3 && currentStage.status === 'success')
+                                pipeline.kind === 's2Loading' ||
+                                pipeline.kind === 's2Error' ||
+                                pipeline.kind === 's3Idle' ||
+                                pipeline.kind === 's3Loading' ||
+                                pipeline.kind === 's3Error' ||
+                                pipeline.kind === 's3Cancelled'
                             }
                             unmountOnExit
                         >
-                            {/* Show the analyzing card while a Stage 3 request
-                                is in flight, AND keep it mounted through the
-                                Stage 3 success exit animation so the wrapper
-                                doesn't visibly flip back to the request card on
-                                its way to collapsing out. Both checks are
-                                phase-3-scoped — without that, Stage 2's idle
-                                `success` state would falsely match here and
-                                swap the request card to analyzing the moment
-                                Stage 2 completes. */}
-                            {isStage3Loading || (currentStage.phase === 3 && currentStage.status === 'success') ? (
+                            {stage3CardsActive ? (
                                 <Stage3AnalyzingCard onCancel={handleCancelAI} />
                             ) : (
                                 <GetPerformanceInsightsCard
                                     className="cardSpacing"
                                     bodyText={
-                                        queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score ===
-                                        'excellent'
+                                        stage2Data?.efficiencyAnalysis.performanceRating.score === 'excellent'
                                             ? l10n.t(
                                                   'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
                                               )
@@ -1229,9 +824,18 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                   'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
                                               )
                                     }
-                                    isLoading={currentStage.phase === 3 && currentStage.status === 'loading'}
-                                    enabled={currentStage.phase >= 2 && currentStage.status !== 'loading'}
-                                    errorMessage={queryInsightsState.stage3ErrorMessage ?? undefined}
+                                    // Stage 2 is fetching — keep the button rendered
+                                    // but disabled. (`enabled` below.) `isLoading`
+                                    // is for the post-click in-card spinner only;
+                                    // when this branch renders we are NOT in
+                                    // s3Loading, so it is always false here.
+                                    isLoading={false}
+                                    enabled={
+                                        pipeline.kind === 's3Idle' ||
+                                        pipeline.kind === 's3Error' ||
+                                        pipeline.kind === 's3Cancelled'
+                                    }
+                                    errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
                                     onGetInsights={handleGetAISuggestions}
                                     onLearnMore={handleLearnMore}
                                     onCancel={handleCancelAI}
@@ -1291,7 +895,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                                                 // Guaranteed non-null by `shouldShowByline`
                                                 // (see useEffect above); non-null assertion
                                                 // keeps l10n.t's string-only overload happy.
-                                                queryInsightsState.stage3Streaming!.modelDisplayName!,
+                                                pipeline.kind === 's3Success' ? pipeline.model.modelDisplayName! : '',
                                             )}
                                         </Text>
                                     </div>
@@ -1307,11 +911,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Selectivity')}
-                            value={getCellValue(() => queryInsightsState.stage2Data?.efficiencyAnalysis.selectivity)}
+                            value={getCellValue(() => stage2Data?.efficiencyAnalysis.selectivity)}
                             nullValuePlaceholder="—"
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
-                                const selectivity = queryInsightsState.stage2Data?.efficiencyAnalysis.selectivity;
+                                const selectivity = stage2Data?.efficiencyAnalysis.selectivity;
                                 if (!selectivity) {
                                     return l10n.t(
                                         'The percentage of your collection this query returns. Could not be determined for this query.',
@@ -1339,12 +943,12 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <GenericCell
                             label={l10n.t('Index Used')}
                             value={getCellValue(
-                                () => queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed,
+                                () => stage2Data?.efficiencyAnalysis.indexUsed,
                                 l10n.t('None (collection scan)'),
                             )}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
-                                const indexUsed = queryInsightsState.stage2Data?.efficiencyAnalysis.indexUsed;
+                                const indexUsed = stage2Data?.efficiencyAnalysis.indexUsed;
                                 if (indexUsed) {
                                     return l10n.t(
                                         'The name of the index used to look up matching documents.\n\nThe database used this index to locate matching documents directly, without scanning the entire collection.',
@@ -1357,12 +961,10 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('Fetch Overhead')}
-                            value={getCellValue(() => queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverhead)}
+                            value={getCellValue(() => stage2Data?.efficiencyAnalysis.fetchOverhead)}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
-                                const kind =
-                                    queryInsightsState.stage2Data?.efficiencyAnalysis.fetchOverheadKind ??
-                                    'directFetch';
+                                const kind = stage2Data?.efficiencyAnalysis.fetchOverheadKind ?? 'directFetch';
                                 if (kind === 'covered') {
                                     return l10n.t(
                                         'The database retrieved your documents using a covered query.\n\nAll the data your query needs was already stored in the index. The database did not need to load the actual documents, making this the most efficient retrieval method.',
@@ -1389,14 +991,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
                             value={getCellValue(() =>
-                                queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort
-                                    ? l10n.t('Yes')
-                                    : l10n.t('No'),
+                                stage2Data?.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
                             )}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
-                                const hasSort =
-                                    queryInsightsState.stage2Data?.efficiencyAnalysis.hasInMemorySort ?? false;
+                                const hasSort = stage2Data?.efficiencyAnalysis.hasInMemorySort ?? false;
                                 if (hasSort) {
                                     return l10n.t(
                                         'The database sorted results in memory.\n\nThis uses RAM and can fail for very large result sets. Consider adding a compound index that includes your sort fields to let the database skip this step.',
@@ -1414,29 +1013,29 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     ? null
                                     : showMetricsSkeleton
                                       ? undefined
-                                      : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.score
+                                      : stage2Data?.efficiencyAnalysis.performanceRating.score
                             }
                             diagnostics={
                                 hasMetricsError || showMetricsSkeleton
                                     ? undefined
-                                    : queryInsightsState.stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
+                                    : stage2Data?.efficiencyAnalysis.performanceRating.diagnostics
                             }
-                            visible={!hasMetricsError && !showMetricsSkeleton && !!queryInsightsState.stage2Data}
+                            visible={!hasMetricsError && !showMetricsSkeleton && !!stage2Data}
                         />
                     </SummaryCard>
 
                     {/* Query Plan Summary */}
                     <QueryPlanSummary
-                        stage1Data={queryInsightsState.stage1Data}
-                        stage2Data={queryInsightsState.stage2Data}
-                        stage1Loading={currentStage.phase === 1 && !queryInsightsState.stage1Data}
-                        stage2Loading={currentStage.phase >= 2 && !queryInsightsState.stage2Data}
+                        stage1Data={stage1Data}
+                        stage2Data={stage2Data}
+                        stage1Loading={pipeline.kind === 's1Loading'}
+                        stage2Loading={pipeline.kind === 's2Loading'}
                         hasError={hasMetricsError}
                     />
 
                     {/* Feedback Card - hidden for RU accounts where Query Insights is not available */}
                     {configuration.feedbackSignalsEnabled &&
-                        queryInsightsState.stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
+                        stage1ErrorCode !== 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU' && (
                             <FeedbackCard onFeedback={handleFeedbackClick} />
                         )}
                 </div>

@@ -14,84 +14,119 @@ export enum Views {
     JSON = 'JSON View',
 }
 
+// ============================================================================
+// Query Insights pipeline state
+// ============================================================================
+//
+// The query-insights feature runs a three-stage progressive pipeline against
+// the result of a user query:
+//
+//   Stage 1 — queryPlanner explain (cheap, no execution). Auto-runs after a
+//             query; may be background-prefetched by CollectionView.
+//   Stage 2 — executionStats explain (runs the query). Auto-runs after Stage 1
+//             success. Produces metrics + performance rating.
+//   Stage 3 — AI-powered recommendations via a tRPC subscription (streaming).
+//             OPT-IN: only fires when the user clicks "Get AI Performance
+//             Insights". Cancellable. Can be re-run after success/error/cancel.
+//
+// This pipeline is modelled as ONE discriminated union (`QueryInsightsState`)
+// rather than three independent per-stage fields. The discriminant is `kind`.
+//
+// ----------------------------------------------------------------------------
+// Why ONE union, not three fields per stage
+// ----------------------------------------------------------------------------
+//
+// Earlier versions of this file used a flat record with a shared
+// `currentStage: { phase, status }` tuple plus parallel `stageNData` /
+// `stageNError*` / `stageNInFlight` fields. That shape produced two recurring
+// bug classes:
+//
+//   1. `status === 'success'` meant THREE different things depending on
+//      `phase` (Stage 1 cached / Stage 2 idle-waiting-for-AI-click / Stage 3
+//      AI stream done). A bare `status === 'success'` check at a render site
+//      would silently match the wrong stage. That's exactly how the
+//      "AI is analyzing…" affordance briefly flashed the instant Stage 2
+//      finished (fixed in commit f9af8979 by scoping every check to
+//      `phase === 3`).
+//   2. The sequencing invariant (Stage 3 cannot start before Stage 2
+//      succeeded) lived only inside the reducer functions as convention.
+//      Nothing in the type system prevented `{currentStage: {3,'loading'},
+//      stage1Data: null, stage2Data: null}` from being constructed.
+//
+// With a single discriminated union, both classes are STRUCTURALLY
+// impossible:
+//
+//   - Each variant has its own `kind` value. A check on `kind === 's3Idle'`
+//     cannot accidentally match a Stage 2 variant.
+//   - Later-stage variants carry the earlier stages' result data on them
+//     directly. You cannot construct `{ kind: 's3Loading' }` without
+//     `stage1: S1` and `stage2: S2` — the compiler refuses. Sequencing is
+//     enforced at every call site, not just inside one reducer.
+//
+// The downside is that earlier-stage data is duplicated across later-stage
+// variants in the TYPE definition. We mitigate this with the `WithStage1`
+// and `WithStage12` intersection helpers below so each variant stays one
+// short line. At runtime each pipeline state is one object — the data is
+// carried forward by reference on each transition, not copied.
+//
+// ----------------------------------------------------------------------------
+// How to work with `QueryInsightsState`
+// ----------------------------------------------------------------------------
+//
+// READING from a render site or effect:
+//
+//   const s = currentContext.queryInsights;
+//   if (s.kind === 's3Loading' || s.kind === 's3Success') { … }   // narrows
+//   if (s.kind === 's2Loading' || s.kind === 's2Error') {
+//     // here `s.stage1` is guaranteed present (carried by the variant).
+//     console.log(s.stage1.queryPlan);
+//   }
+//
+// Use the small derived helpers near the bottom of this file
+// (`hasStage1Data`, `hasStage2Data`, `isStage3Active`) when a render site
+// just wants "do we have stage N data?" without listing every variant.
+//
+// WRITING (transitions) — do NOT mutate, do NOT spread into the wrong
+// variant. Instead, call one of the pure helpers in
+// `./queryInsightsReducer.ts`:
+//
+//   setQueryInsightsStateHelper((prev) => stage1Succeeded(prev, data));
+//   setQueryInsightsStateHelper((prev) => startStage3Load(prev, requestKey));
+//
+// The reducer functions encode the transition rules (which previous
+// variants are valid sources for which target) and the data-carry-forward
+// (Stage 1's data flows into the `s2Loading` variant, both flow into
+// `s3Loading`, etc.). They also log transitions when DEBUG_QUERY_INSIGHTS
+// is enabled in the reducer module — flip that constant locally to trace
+// every transition in the webview DevTools console.
+//
+// EXTENDING — when you need to add a new state or carry a new piece of
+// data, change the union here first. TypeScript will then point you at
+// every consumer that needs updating, which is the whole point of this
+// shape.
+//
+// DO NOT reintroduce flat parallel fields like `stage1Data` / `stage3Loading`
+// at the top of the union. Earlier-stage data already lives on the
+// later-stage variants; an additional flat field would just reintroduce
+// the drift bug class this refactor was designed to eliminate.
+
+/** Error payload shared by every `*Error` variant. `code` drives UI pattern matching (e.g. `'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU'`). */
+type ErrorInfo = { message: string; code: string | null };
+
+/** Carries Stage 1's result onto later variants. */
+type WithStage1 = { stage1: QueryInsightsStage1Response };
+
+/** Carries Stage 1's and Stage 2's results onto Stage-3 variants. */
+type WithStage12 = WithStage1 & { stage2: QueryInsightsStage2Response };
+
 /**
- * Query Insights State - Tracks the three-stage progressive loading of query insights
- * - Stage 1: Query planner data (lightweight, from explain("queryPlanner"))
- * - Stage 2: Execution statistics (from explain("executionStats"))
- * - Stage 3: AI-powered recommendations (opt-in, requires external AI service call)
- *
- * Promise tracking prevents duplicate requests during rapid tab switching.
+ * Per-stream progressive state for Stage 3. Carries only the structured
+ * slots populated by the `streamStage3` subscription's events. The
+ * "has terminal-complete landed?" fact is NOT stored here — it is the
+ * `kind === 's3Success'` discriminant on the pipeline state. Model
+ * metadata likewise lives on the `s3Success` variant, not here.
  */
-
-export type QueryInsightsStageStatus = 'loading' | 'success' | 'error' | 'cancelled';
-
-export interface QueryInsightsCurrentStage {
-    phase: 1 | 2 | 3;
-    status: QueryInsightsStageStatus;
-}
-
-export interface QueryInsightsState {
-    // Explicit stage tracking for clear state transitions
-    currentStage: QueryInsightsCurrentStage;
-
-    stage1Data: QueryInsightsStage1Response | null;
-    stage1ErrorMessage: string | null;
-    stage1ErrorCode: string | null; // Error code for UI pattern matching (e.g., 'QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU')
-    /**
-     * True while a Stage 1 fetch is in flight. Used to dedupe between the
-     * background prefetch (kicked off by `runQuery` in CollectionView) and
-     * the fallback fetch in QueryInsightsTab when the user is already on
-     * the tab. Previously this field stored the Promise itself, but only
-     * its null/non-null check was ever read — storing Promises in React
-     * state is also a known anti-pattern (StrictMode double-invoke etc.).
-     */
-    stage1InFlight: boolean;
-
-    stage2Data: QueryInsightsStage2Response | null;
-    stage2ErrorMessage: string | null;
-    stage2ErrorCode: string | null; // Error code for UI pattern matching
-    /** See {@link stage1InFlight}. */
-    stage2InFlight: boolean;
-
-    stage3ErrorMessage: string | null;
-    stage3ErrorCode: string | null; // Error code for UI pattern matching
-    stage3RequestKey: string | null; // Unique key to track if the response is still valid
-
-    /**
-     * Progressive state populated by the `collectionView.queryInsights.streamStage3`
-     * subscription. Sole source of truth for Stage 3:
-     *  - During streaming: `summary`/`educational`/`recommendations` slots
-     *    drive the in-flight render path (analysis card, shells, etc.).
-     *  - On the terminal `complete` event: `completed` is flipped to true
-     *    and model metadata is filled in. Render code uses `completed` as
-     *    the "has succeeded at least once" sentinel (e.g. gating the
-     *    post-response "Powered by ..." byline and the empty-state card)
-     *    instead of a separate `stage3Data` snapshot.
-     *
-     * `null` whenever no Stage 3 stream is in flight (initial, post-cancel).
-     */
-    stage3Streaming: QueryInsightsStreamingState | null;
-
-    // NOTE: error-toast dedupe used to live here as `displayedErrors: string[]`.
-    // It never drove a re-render, so it was moved to a component-local
-    // `useRef<Set<string>>` in QueryInsightsTab. Don't reintroduce it here.
-
-    // NOTE: `stage3Data: QueryInsightsStage3Response | null` used to live
-    // here as a parallel success snapshot synthesised from the stream on
-    // `complete`. It was only consumed for (a) a `!stage3Data` "completed"
-    // sentinel and (b) the `modelDisplayName` byline. Both moved onto
-    // `stage3Streaming.completed` / `.modelDisplayName` in this commit.
-    // Don't reintroduce it; one source of truth per stream is the point.
-}
-
-/**
- * Per-stream progressive state. Carries the structured slots populated
- * during streaming (`summary`, `educational`, `recommendations`) plus the
- * terminal-event slots populated on `complete` (`completed`,
- * `modelDisplayName`, etc.). Resets to `null` whenever a new Stage 3
- * request starts so nothing from a previous run leaks across.
- */
-export interface QueryInsightsStreamingState {
+export interface QueryInsightsStage3Streaming {
     /** Cumulative markdown from `summary` events (the AI `analysis` JSON key). */
     summary: { markdown: string; complete: boolean } | null;
     /** Cumulative markdown from `educational` events (the AI `educationalContent` key). */
@@ -103,20 +138,109 @@ export interface QueryInsightsStreamingState {
      * filled card). Indexed by `event.index` (0-based, monotonic per stream).
      */
     recommendations: Array<AIIndexRecommendation | null>;
-    /**
-     * Flipped to `true` when the terminal `complete` event lands. Used as
-     * the "Stage 3 has finished at least once" sentinel by render code:
-     *  - gates the post-response "Powered by ..." byline,
-     *  - gates the "no recommendations needed" empty-state card.
-     * Remains `true` until a new Stage 3 request resets `stage3Streaming`.
-     */
-    completed: boolean;
-    /** Model metadata populated by the `complete` event (success only). */
+}
+
+/** Model metadata populated by the terminal `complete` event of a Stage 3 stream. */
+export interface QueryInsightsStage3Model {
     modelDisplayName?: string;
     modelId?: string;
     modelFamily?: string;
     usage?: QueryInsightsStreamUsage;
 }
+
+/**
+ * The single discriminated union describing the entire query-insights
+ * pipeline at any point in time. See the long-form notes above for the
+ * design rationale and the usage rules.
+ *
+ * Discriminants:
+ *   - `idle`         — no query has been run yet (pre-fetch resting state).
+ *   - `s1Loading`    — Stage 1 fetch in flight (dedupe signal for prefetch
+ *                       vs. tab-fallback fetch).
+ *   - `s1Error`      — Stage 1 fetch failed.
+ *   - `s2Loading`    — Stage 2 fetch in flight. Carries Stage 1's result.
+ *   - `s2Error`      — Stage 2 fetch failed.
+ *   - `s3Idle`       — Stage 2 succeeded; user is looking at the
+ *                       "Get AI Performance Insights" button. The system is
+ *                       *not* doing anything in the background.
+ *   - `s3Loading`    — Stage 3 AI subscription open. `requestKey` is the
+ *                       staleness token that gates late callbacks from a
+ *                       superseded subscription (see the unsubscribe-race
+ *                       note in QueryInsightsTab.tsx).
+ *   - `s3Success`    — Stage 3 stream completed (`complete` event landed).
+ *                       Carries the final `streaming` slots plus `model`
+ *                       metadata.
+ *   - `s3Error`      — Stream failed.
+ *   - `s3Cancelled`  — User cancelled, or the tab unmounted mid-stream.
+ *
+ * `requestKey` is INTENTIONALLY carried across the `s3Loading → s3Success`
+ * transition. The render path derives a `keyPrefix` from `requestKey` and
+ * uses it on every Stage 3 card key. If it changed (or went `null`) on the
+ * same commit that flips to `s3Success`, every card key would change in a
+ * single React render and AnimatedCardList would play a full exit+enter
+ * cascade — visible as a flash when the "Get AI" card collapses (PR #711).
+ */
+export type QueryInsightsState =
+    | { kind: 'idle' }
+    | { kind: 's1Loading' }
+    | ({ kind: 's1Error' } & ErrorInfo)
+    | ({ kind: 's2Loading' } & WithStage1)
+    | ({ kind: 's2Error' } & WithStage1 & ErrorInfo)
+    | ({ kind: 's3Idle' } & WithStage12)
+    | ({ kind: 's3Loading' } & WithStage12 & { requestKey: string; streaming: QueryInsightsStage3Streaming })
+    | ({ kind: 's3Success' } & WithStage12 & {
+              requestKey: string;
+              streaming: QueryInsightsStage3Streaming;
+              model: QueryInsightsStage3Model;
+          })
+    | ({ kind: 's3Error' } & WithStage12 & ErrorInfo)
+    | ({ kind: 's3Cancelled' } & WithStage12);
+
+// --- Derived helpers ---------------------------------------------------------
+//
+// Small, reference-equality-safe predicates the render code can use when it
+// only cares about "do we have stage N data?" without listing every variant.
+// They are derived from the discriminant only, so they remain correct
+// regardless of how the union evolves later.
+
+/** Variant kinds that DO NOT carry Stage 1 data. */
+export type QueryInsightsKindWithoutStage1 = 'idle' | 's1Loading' | 's1Error';
+
+/** Variant kinds that DO carry Stage 1 data (`stage1` field present). */
+export type QueryInsightsKindWithStage1 = Exclude<QueryInsightsState['kind'], QueryInsightsKindWithoutStage1>;
+
+/** Variant kinds that DO carry Stage 2 data (`stage1` AND `stage2` fields present). */
+export type QueryInsightsKindWithStage12 = Extract<
+    QueryInsightsState['kind'],
+    's3Idle' | 's3Loading' | 's3Success' | 's3Error' | 's3Cancelled'
+>;
+
+export function hasStage1Data(
+    s: QueryInsightsState,
+): s is Extract<QueryInsightsState, { stage1: QueryInsightsStage1Response }> {
+    return s.kind !== 'idle' && s.kind !== 's1Loading' && s.kind !== 's1Error';
+}
+
+export function hasStage2Data(
+    s: QueryInsightsState,
+): s is Extract<QueryInsightsState, { stage2: QueryInsightsStage2Response }> {
+    return (
+        s.kind === 's3Idle' ||
+        s.kind === 's3Loading' ||
+        s.kind === 's3Success' ||
+        s.kind === 's3Error' ||
+        s.kind === 's3Cancelled'
+    );
+}
+
+/** True while a Stage 3 AI request is open (i.e. the LLM call is in flight). */
+export function isStage3Loading(s: QueryInsightsState): s is Extract<QueryInsightsState, { kind: 's3Loading' }> {
+    return s.kind === 's3Loading';
+}
+
+// ============================================================================
+// Other context state (unchanged by the pipeline refactor)
+// ============================================================================
 
 export type TableViewState = {
     currentPath: string[];
@@ -172,7 +296,8 @@ export type CollectionViewContextType = {
         limit?: number;
     };
     isAiRowVisible: boolean; // Controls visibility of the AI prompt row in QueryEditor
-    queryInsights: QueryInsightsState; // Query insights state for progressive loading
+    /** See {@link QueryInsightsState} for the pipeline shape and usage rules. */
+    queryInsights: QueryInsightsState;
 };
 
 export const DefaultCollectionViewContext: CollectionViewContextType = {
@@ -200,24 +325,11 @@ export const DefaultCollectionViewContext: CollectionViewContextType = {
         selectedDocumentIndexes: [],
     },
     isAiRowVisible: false,
-    queryInsights: {
-        currentStage: { phase: 1, status: 'loading' },
-
-        stage1Data: null,
-        stage1ErrorMessage: null,
-        stage1ErrorCode: null,
-        stage1InFlight: false,
-
-        stage2Data: null,
-        stage2ErrorMessage: null,
-        stage2ErrorCode: null,
-        stage2InFlight: false,
-
-        stage3ErrorMessage: null,
-        stage3ErrorCode: null,
-        stage3RequestKey: null,
-        stage3Streaming: null,
-    },
+    // `idle` is the pre-first-query resting state. The prefetch in
+    // CollectionView flips it to `s1Loading` as soon as the user runs a
+    // query; flipping `s1Loading` again from elsewhere is the dedupe
+    // signal the QueryInsightsTab fallback fetch uses to short-circuit.
+    queryInsights: { kind: 'idle' },
 };
 
 export const CollectionViewContext = createContext<

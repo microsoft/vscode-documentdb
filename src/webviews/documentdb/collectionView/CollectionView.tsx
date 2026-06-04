@@ -31,6 +31,7 @@ import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
+import { stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 
 interface QueryResults {
@@ -157,61 +158,46 @@ export const CollectionView = (): JSX.Element => {
     /**
      * Non-blocking Stage 1 prefetch after query execution.
      * Populates ClusterSession cache so data is ready when user switches
-     * to the Query Insights tab. The in-flight marker (`stage1InFlight`)
-     * is set BEFORE the request fires so the fallback fetch in
-     * QueryInsightsTab.tsx will not race a duplicate request if the user
-     * switches to the tab mid-prefetch.
+     * to the Query Insights tab.
+     *
+     * Dedupe contract (shared with the fallback fetch in
+     * QueryInsightsTab.tsx): the pipeline is flipped to `s1Loading` BEFORE
+     * the request fires, so whichever of the two paths gets there first
+     * "claims" the load and the other observes `kind === 's1Loading'` and
+     * bails. See `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
-        // Bail out if already cached or already running (the prefetch may
-        // be invoked again before the previous run settled, e.g. during
-        // rapid query re-runs).
-        if (currentContext.queryInsights.stage1Data || currentContext.queryInsights.stage1InFlight) {
-            return; // Already handled
+        // Bail out if a load has already been claimed (or completed) for
+        // this query — Stage 1 data is carried forward onto every
+        // post-Stage-1 variant, so any `kind` past `s1Loading` means
+        // there's nothing left to do.
+        const qi = currentContext.queryInsights;
+        if (qi.kind !== 'idle') {
+            return;
         }
 
-        // Mark in-flight immediately so the fallback fetch in
-        // QueryInsightsTab will short-circuit on the same dedupe check.
-        setCurrentContext((prev) => ({
-            ...prev,
-            queryInsights: {
-                ...prev.queryInsights,
-                stage1InFlight: true,
-            },
-        }));
+        // Claim the load before firing the request.
+        setCurrentContext((prev) => ({ ...prev, queryInsights: startStage1Load(prev.queryInsights) }));
 
         // Query parameters are now retrieved from ClusterSession - no need to pass them
         void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
             .query()
             .then((stage1Data) => {
-                // Update state with data and mark stage as successful
-                // This prevents redundant fetch when user switches to Query Insights tab
+                // The reducer auto-chains `s1Loading → s2Loading` so the
+                // Stage 2 fetch effect in QueryInsightsTab picks up
+                // immediately when the user lands on the tab.
                 setCurrentContext((prev) => ({
                     ...prev,
-                    queryInsights: {
-                        ...prev.queryInsights,
-                        currentStage: { phase: 1, status: 'success' },
-                        stage1Data: stage1Data,
-                        stage1InFlight: false,
-                    },
+                    queryInsights: stage1Succeeded(prev.queryInsights, stage1Data),
                 }));
                 console.debug('Stage 1 data prefetched:', stage1Data);
             })
             .catch((error) => {
-                // Extract error code by traversing the cause chain using the helper function
                 const errorCode = extractErrorCode(error);
-
-                // Mark stage as failed to prevent redundant fetch on tab switch
-                // Store both error message and code for UI pattern matching
+                const message = error instanceof Error ? error.message : String(error);
                 setCurrentContext((prev) => ({
                     ...prev,
-                    queryInsights: {
-                        ...prev.queryInsights,
-                        currentStage: { phase: 1, status: 'error' },
-                        stage1ErrorMessage: error instanceof Error ? error.message : String(error),
-                        stage1ErrorCode: errorCode,
-                        stage1InFlight: false,
-                    },
+                    queryInsights: stage1Failed(prev.queryInsights, message, errorCode),
                 }));
                 console.warn('Stage 1 prefetch failed:', error);
             });
