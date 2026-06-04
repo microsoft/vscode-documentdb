@@ -8,7 +8,6 @@ import importPlugin from 'eslint-plugin-import';
 import jest from 'eslint-plugin-jest';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
 import licenseHeader from 'eslint-plugin-license-header';
-import mocha from 'eslint-plugin-mocha';
 import react from 'eslint-plugin-react';
 import reactHooks from 'eslint-plugin-react-hooks';
 import globals from 'globals';
@@ -20,7 +19,6 @@ export default ts.config(
             '.azure-pipelines',
             '.config',
             '.github',
-            '.vscode-test',
             'coverage',
             '**/dist',
             '**/out',
@@ -219,59 +217,6 @@ export default ts.config(
             'no-empty': 'off',
             'jest/expect-expect': 'off',
             'jest/no-conditional-expect': 'off',
-        },
-    },
-    // Mocha integration tests in test/
-    {
-        files: ['test/**/*.ts', 'test/**/*.test.ts'],
-
-        extends: [ts.configs.recommendedTypeChecked],
-
-        plugins: {
-            '@typescript-eslint': ts.plugin,
-            mocha,
-        },
-
-        languageOptions: {
-            globals: {
-                ...globals.node,
-                ...globals.mocha,
-            },
-
-            parser: ts.parser,
-            ecmaVersion: 2023,
-            sourceType: 'module',
-
-            parserOptions: {
-                projectService: true,
-                tsconfigRootDir: import.meta.dirname,
-            },
-        },
-
-        rules: {
-            ...mocha.configs.recommended.rules,
-            '@typescript-eslint/no-empty-function': 'off',
-            '@typescript-eslint/no-explicit-any': 'off',
-            '@typescript-eslint/no-floating-promises': 'off',
-            '@typescript-eslint/no-misused-promises': 'off',
-            '@typescript-eslint/no-non-null-assertion': 'off',
-            '@typescript-eslint/no-unsafe-assignment': 'off',
-            '@typescript-eslint/no-unsafe-member-access': 'off',
-            '@typescript-eslint/no-unsafe-return': 'off',
-            '@typescript-eslint/no-unsafe-call': 'off',
-            '@typescript-eslint/no-unsafe-argument': 'off',
-            '@typescript-eslint/require-await': 'off',
-            'no-dupe-else-if': 'off',
-            'no-empty': 'off',
-            'no-restricted-imports': 'off',
-            'mocha/no-mocha-arrows': 'off',
-            'mocha/consistent-spacing-between-blocks': 'off',
-            'mocha/max-top-level-suites': 'off',
-            'mocha/handle-done-callback': 'off',
-            'mocha/no-setup-in-describe': 'off',
-            'mocha/no-identical-title': 'off',
-            'mocha/no-exports': 'off',
-            'mocha/no-async-suite': 'off',
         },
     },
 );
