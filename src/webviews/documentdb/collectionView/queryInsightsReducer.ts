@@ -81,7 +81,6 @@ const DEBUG_QUERY_INSIGHTS = false;
  */
 function trace(label: string, prev: QueryInsightsState, next: QueryInsightsState): QueryInsightsState {
     if (DEBUG_QUERY_INSIGHTS && prev !== next) {
-        // eslint-disable-next-line no-console -- intentional dev-only tracing
         console.debug(`[QueryInsights] ${label}: ${prev.kind} → ${next.kind}`, { prev, next });
     }
     return next;
@@ -281,12 +280,26 @@ export function applyStage3Event(
             // two setState calls (the documented `wasAccepted` batched-
             // updater footgun that previously left the lifecycle stuck at
             // `loading`).
+            //
+            // Defensively flip `summary.complete` and `educational.complete`
+            // to `true` here. The streaming parser is supposed to emit a
+            // final per-field event with `complete: true` when each JSON
+            // value's closing quote is observed, but if it ever doesn't
+            // (truncated output, parser miss, etc.) the corresponding
+            // MarkdownCard would stay forever in its in-flight state and
+            // keep showing "Analyzing…" / "Explaining…" labels with no
+            // streaming actually happening. Terminal `complete` means the
+            // stream is over for every slot, so this is always safe.
             return trace('applyStage3Event[complete]', prev, {
                 kind: 's3Success',
                 stage1: prev.stage1,
                 stage2: prev.stage2,
                 requestKey: prev.requestKey,
-                streaming,
+                streaming: {
+                    summary: streaming.summary ? { ...streaming.summary, complete: true } : null,
+                    educational: streaming.educational ? { ...streaming.educational, complete: true } : null,
+                    recommendations: streaming.recommendations,
+                },
                 model: {
                     modelDisplayName: event.modelDisplayName,
                     modelId: event.modelId,

@@ -754,94 +754,71 @@ export const QueryInsightsMain = (): JSX.Element => {
                             </Skeleton>
                         )}
 
-                        {/* Stage 3 affordance — ONE CollapseRelaxed whose content
-                            swaps in place between the full request card and the slim
-                            "AI is analyzing…" row. A single wrapper (rather than two
-                            separate cards) is what makes both transitions clean:
+                        {/* Stage 3 affordance — TWO independent CollapseRelaxed
+                            wrappers, one per card, each rendered for the
+                            variants where its card belongs. Splitting them this
+                            way (instead of a single wrapper whose child swaps
+                            in place between request and analyzer) is what makes
+                            the exit reliable: each wrapper sees only its own
+                            visible→false transition, so the collapse + unmount
+                            path is unambiguous. An earlier single-wrapper
+                            version with a swapped child failed to collapse the
+                            analyzer on `s3Loading → s3Success` — the wrapper
+                            stayed mounted with the analyzer still visible. We
+                            also fixed an even earlier bug where the analyzer
+                            flashed in on `{2,'success'}` because a shared
+                            `status === 'success'` matched Stage 2 too (commit
+                            f9af8979); with one discriminated union that class
+                            of bug is structurally impossible — Stage 2's
+                            success has its own `kind` (`s3Idle`).
 
-                              • No entry overlap. There is exactly one element, so the
-                                request card never visibly collapses *while* a second
-                                analyzing card animates in. On "Get AI" the content
-                                swaps in place (an instant height change between the
-                                two heights — Fluent has no resize-in-place motion, so
-                                this jump is accepted by design).
-
-                              • Smooth exit. On Stage 3 success the wrapper collapses
-                                to nothing, so the analyzing row animates away
-                                instead of vanishing with a layout shift. The result
-                                cards in the AnimatedCardList below grow in over the
-                                same window — a clean handoff.
-
-                            Gated directly on `pipeline.kind`, which is the SINGLE
-                            source of truth for the lifecycle. Each branch matches
-                            exactly the variants it cares about, so there is no
-                            possibility of one stage's value matching another's:
-                                visible: pipeline.kind ∈ { s3Idle, s3Loading,
-                                                           s3Success, s3Error,
-                                                           s3Cancelled }
-                                          but hides when s3Success → collapses out
-                                          (kept rendered as analyzing during the
-                                          collapse window so the request card
-                                          doesn't flash back)
-                            • s3Idle / s3Error / s3Cancelled → request card
-                            • s3Loading                      → analyzing card
-                            • s3Success                      → analyzing card (during collapse) then unmount
-
-                            `unmountOnExit` removes the card after the 400 ms
-                            collapse so a regenerate re-mounts and plays a clean
-                            enter.
-
-                            HISTORICAL NOTE: an earlier flat shape used a single
-                            `status === 'success'` check here that silently matched
-                            Stage 2's idle success too, briefly flashing the
-                            analyzing card the moment Stage 2 finished (fixed in
-                            commit f9af8979). With one discriminated union that
-                            class of bug is structurally impossible — Stage 2's
-                            success has a different `kind` (`s3Idle`) so it cannot
-                            match `s3Loading` / `s3Success`. */}
+                            Trade-off: when the user clicks "Get AI Insights",
+                            the request card and the analyzer card animate at
+                            the same time for ~400 ms (one collapsing, the
+                            other expanding). Acceptable; the alternative was
+                            a stuck analyzer card on completion. */}
                         <CollapseRelaxed
                             visible={
                                 pipeline.kind === 's2Loading' ||
                                 pipeline.kind === 's2Error' ||
                                 pipeline.kind === 's3Idle' ||
-                                pipeline.kind === 's3Loading' ||
                                 pipeline.kind === 's3Error' ||
                                 pipeline.kind === 's3Cancelled'
                             }
                             unmountOnExit
                         >
-                            {stage3CardsActive ? (
-                                <Stage3AnalyzingCard onCancel={handleCancelAI} />
-                            ) : (
-                                <GetPerformanceInsightsCard
-                                    className="cardSpacing"
-                                    bodyText={
-                                        stage2Data?.efficiencyAnalysis.performanceRating.score === 'excellent'
-                                            ? l10n.t(
-                                                  'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
-                                              )
-                                            : l10n.t(
-                                                  'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
-                                              )
-                                    }
-                                    // Stage 2 is fetching — keep the button rendered
-                                    // but disabled. (`enabled` below.) `isLoading`
-                                    // is for the post-click in-card spinner only;
-                                    // when this branch renders we are NOT in
-                                    // s3Loading, so it is always false here.
-                                    isLoading={false}
-                                    enabled={
-                                        pipeline.kind === 's3Idle' ||
-                                        pipeline.kind === 's3Error' ||
-                                        pipeline.kind === 's3Cancelled'
-                                    }
-                                    errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
-                                    onGetInsights={handleGetAISuggestions}
-                                    onLearnMore={handleLearnMore}
-                                    onCancel={handleCancelAI}
-                                    onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
-                                />
-                            )}
+                            <GetPerformanceInsightsCard
+                                className="cardSpacing"
+                                bodyText={
+                                    stage2Data?.efficiencyAnalysis.performanceRating.score === 'excellent'
+                                        ? l10n.t(
+                                              'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
+                                          )
+                                        : l10n.t(
+                                              'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
+                                          )
+                                }
+                                // Stage 2 is fetching — keep the button rendered
+                                // but disabled (see `enabled` below). `isLoading`
+                                // is for the post-click in-card spinner only;
+                                // since this wrapper hides during `s3Loading`,
+                                // it is always false here.
+                                isLoading={false}
+                                enabled={
+                                    pipeline.kind === 's3Idle' ||
+                                    pipeline.kind === 's3Error' ||
+                                    pipeline.kind === 's3Cancelled'
+                                }
+                                errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
+                                onGetInsights={handleGetAISuggestions}
+                                onLearnMore={handleLearnMore}
+                                onCancel={handleCancelAI}
+                                onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
+                            />
+                        </CollapseRelaxed>
+
+                        <CollapseRelaxed visible={isStage3Loading} unmountOnExit>
+                            <Stage3AnalyzingCard onCancel={handleCancelAI} />
                         </CollapseRelaxed>
 
                         {/* AnimatedCardList for AI suggestions and tips */}
