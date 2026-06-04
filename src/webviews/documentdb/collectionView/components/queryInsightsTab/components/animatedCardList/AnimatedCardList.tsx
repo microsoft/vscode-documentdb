@@ -104,6 +104,9 @@ interface ItemState {
 export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardListProps) => {
     const [displayItems, setDisplayItems] = useState<ItemState[]>([]);
     const exitTimersRef = useRef<Map<string, NodeJS.Timeout>>(new Map());
+    // Outstanding `requestAnimationFrame` ids for the pending-enter flip (see
+    // the double-rAF note below). Tracked so they can be cancelled on unmount.
+    const enterRafRef = useRef<Set<number>>(new Set());
 
     useEffect(() => {
         // Use functional update to get current state without dependency
@@ -180,28 +183,51 @@ export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardList
             }
 
             // If any items still carry `pendingEnter`, schedule a follow-up
-            // tick to clear the flag so they transition to `visible=true`
-            // and the presence component animates them in. A `requestAnimationFrame`
-            // is enough — we just need React to commit the `visible=false`
-            // render before flipping to `true`. `setTimeout(…, 0)` also
-            // works but rAF aligns better with the browser's paint cycle.
+            // to clear the flag so they transition to `visible=true` and the
+            // presence component animates them in.
+            //
+            // A DOUBLE `requestAnimationFrame` is required, not a single one.
+            // The enter animation only plays if the presence wrapper's first
+            // *painted* frame is `visible=false` (opacity 0 / height 0) and a
+            // later frame flips it to `visible=true` — see `applyInitialStyles`
+            // in `@fluentui/react-motion`'s `createPresenceComponent`. A single
+            // rAF callback runs BEFORE the next paint, so the `setDisplayItems`
+            // flip to `visible=true` lands in the same paint as the initial
+            // `visible=false` commit: the browser never paints the hidden
+            // frame. `CollapseRelaxed` masks this because its enter also
+            // animates `maxHeight` 0→scrollHeight (a large layout delta the
+            // WAAPI animation drives regardless of paint timing), but the
+            // opacity-only `Fade` has nothing to mask it — the card simply
+            // appears at full opacity ("pops in one frame"). The second rAF
+            // defers the flip to the NEXT frame, guaranteeing the hidden frame
+            // paints first so the fade-in is visible.
             if (updated.some((item) => item.pendingEnter)) {
-                requestAnimationFrame(() => {
-                    setDisplayItems((current) =>
-                        current.map((item) => (item.pendingEnter ? { ...item, pendingEnter: false } : item)),
-                    );
+                const outerId = requestAnimationFrame(() => {
+                    enterRafRef.current.delete(outerId);
+                    const innerId = requestAnimationFrame(() => {
+                        enterRafRef.current.delete(innerId);
+                        setDisplayItems((current) =>
+                            current.map((item) => (item.pendingEnter ? { ...item, pendingEnter: false } : item)),
+                        );
+                    });
+                    enterRafRef.current.add(innerId);
                 });
+                enterRafRef.current.add(outerId);
             }
 
             return updated;
         });
     }, [items, exitDuration]);
 
-    // Cleanup timers on unmount
+    // Cleanup timers and pending enter-flip rAFs on unmount.
     useEffect(() => {
+        const timers = exitTimersRef.current;
+        const rafs = enterRafRef.current;
         return () => {
-            exitTimersRef.current.forEach((timer) => clearTimeout(timer));
-            exitTimersRef.current.clear();
+            timers.forEach((timer) => clearTimeout(timer));
+            timers.clear();
+            rafs.forEach((id) => cancelAnimationFrame(id));
+            rafs.clear();
         };
     }, []);
 

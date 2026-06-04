@@ -52,7 +52,7 @@ import {
 } from '../../queryInsightsReducer';
 import { createImprovementCardConfig } from '../../utils/createImprovementCard';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
-import { AnimatedCardList, FeedbackCard, FeedbackDialog, type AnimatedCardItem } from './components';
+import { CardStack, FeedbackCard, FeedbackDialog, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
 import { TimeMetric } from './components/metricsRow/TimeMetric';
@@ -552,7 +552,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     // ---------- Build the animated card list ------------------------------
-    const insightCards: AnimatedCardItem[] = [];
+    const insightCards: CardStackItem[] = [];
 
     // Include requestKey in card keys to force remount on regeneration.
     const keyPrefix = stage3RequestKey ? `${stage3RequestKey}-` : '';
@@ -906,8 +906,19 @@ export const QueryInsightsMain = (): JSX.Element => {
                             </div>
                         </CollapseRelaxed>
 
-                        {/* AnimatedCardList for AI suggestions and tips */}
-                        <AnimatedCardList items={insightCards} exitDuration={300} />
+                        {/* CardStack for AI suggestions and tips. Every insight card is
+                            pushed with `motion: 'fade'` because these cards stream and grow
+                            after mount (MarkdownCard, ImprovementCardShell); CardStack's
+                            default Collapse measures `scrollHeight` once at enter and would
+                            clip late-arriving content. See per-item `motion` opt-out on
+                            CardStackItem.
+
+                            `visible` is driven by "is there anything to show" so the outer
+                            wrapper performs a group fade-out when Stage 3 clears
+                            (cancel / reset / error). Without this the cards would simply
+                            unmount on the React commit that removes them from `items`,
+                            which reads as an abrupt disappearance. */}
+                        <CardStack items={insightCards} visible={insightCards.length > 0} />
 
                         {/* Post-response "Powered by" byline.
                             Mirrors the (i) + cost-neutral disclosure shown in the pre-invocation

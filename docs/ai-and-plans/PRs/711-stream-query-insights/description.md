@@ -259,6 +259,61 @@ in the **same commit** that materialises (or clears) `stage3Data`, so
 `isStage3Loading` and the card visibility flip atomically — no batched-flag
 staleness, no intermediate frame where both cards or neither card shows.
 
+### Adopting `CardStack` for the Stage 3 card group (supersedes `AnimatedCardList` at the call site)
+
+After Cancel-UX shipped, two small motion POCs were built in
+`components/cardStack/` to explore a lighter-weight container for the
+Stage 3 card group than `AnimatedCardList`. The list there only ever
+**adds** cards and disappears as a unit — it never removes individual
+items mid-stream — so the per-item enter/exit bookkeeping
+`AnimatedCardList` performs (manual `pendingEnter` rAF flip, per-item
+`inFlight` motion picker, exit-duration unmount window) was more
+machinery than the scenario needed.
+
+- **POC 1 — `CardStack`** (kept and promoted): each item is wrapped in
+  `<Collapse appear visible>` so both the initial cards AND any card
+  inserted mid-life expand in without the `pendingEnter` rAF dance
+  (`appear` makes the Fluent presence component animate on first
+  mount). The whole list is wrapped in a single `<Fade>` keyed off
+  `visible` so the group fades out together. A captured `initialKeys`
+  set gives the first-mount cards a per-index cascade while later
+  insertions get `delay: 0` so they don't sit and wait behind a stale
+  cascade offset.
+- **POC 2 — `Stagger`** (rejected, deleted): Fluent's `Stagger` does
+  not propagate `appear` to children cloned mid-life, so cards
+  inserted into an already-mounted list popped in without animation.
+  POC 1 animates mid-list inserts correctly, which is the exact case
+  that matters for streaming.
+
+The wire-up details that matter:
+
+- **`CardStackItem.motion: 'fade' | 'collapse'`** — POC 1 only
+  exercised static `DemoCard`s, but the real insight cards
+  (`MarkdownCard`, `ImprovementCardShell`) **grow as content streams
+  in**. `Collapse` measures `scrollHeight` once at enter and would
+  clip later growth during the enter window, which is exactly why
+  every card in `QueryInsightsTab` previously chose `motion: 'fade'`
+  in `AnimatedCardList`. `CardStack` now accepts a per-item `motion`
+  opt-out; the Stage 3 wire-up sets `'fade'` on every card so the
+  enter is opacity-only and never clips. The `'collapse'` default is
+  preserved for the static-card use case the POC validated.
+- **Group fade-out requires retaining the last items.** The reducer
+  clears `insightCards` on the same render that flips the wrapper's
+  `visible` to false (cancel / error / reset). Without a snapshot the
+  inner map would yield nothing during the fade-out and there would
+  be no DOM left to animate. `CardStack` keeps a
+  `lastNonEmptyRef.current` and renders from it while `visible` is
+  false so the outer `<Fade>` actually has content to fade out
+  before `unmountOnExit` tears the tree down.
+- **`AnimatedCardList` is left in the tree, unused at this call site,**
+  for the scenario it was built for (per-item enter/exit choreography
+  where items leave individually). The `components/animatedCardList/`
+  folder and its `index.ts` export are untouched; only the
+  `QueryInsightsTab` import + render were swapped. The two POC
+  harnesses (`CardStackPoc.tsx`, `StaggerPoc.tsx`, `pocShared.tsx`)
+  and the `TODO(POC)` mount block in `QueryInsightsTab` were removed
+  along with their re-exports from `components/cardStack/index.ts`.
+
 ---
 
 ## Key decisions and rationale
@@ -473,12 +528,6 @@ deleted entirely.
   case for it and a small "contacting the model…" affordance.
 - **Animated min-visible time** for shells (if rapid-fire fast models
   ever cause the sub-frame flash).
-- **Consider Stagger for the initial slot-reveal**: Fluent's
-  `@fluentui/react-motion-components-preview/Stagger` could choreograph
-  the three slots appearing on click instead of all-at-once. Out of
-  scope for this PR; the Motion Sandbox webview (added then reverted in
-  this branch, see commits `d4979c5c` and `6862999f`) was used to
-  evaluate it.
 
 ---
 
@@ -500,8 +549,9 @@ deleted entirely.
 | `src/webviews/documentdb/collectionView/types/queryInsightsStream.ts`                     | Discriminated union for the wire-format streaming events                                                               |
 | `src/webviews/documentdb/collectionView/utils/createImprovementCard.ts`                   | Webview-side per-recommendation transform (sole source of truth post-cleanup)                                          |
 | `src/webviews/documentdb/collectionView/collectionViewContext.ts`                         | `QueryInsightsStreamingState` + `stage3Streaming` slot; `stage3Promise` removed                                        |
-| `src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx` | Subscription wiring, reducer for structured events, render rewrite for pre-reserved slots, byline fade                 |
-| `.../components/animatedCardList/AnimatedCardList.tsx`                                    | `pendingEnter` two-step + per-item `inFlight` motion picker (Fade vs CollapseRelaxed)                                  |
+| `src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx` | Subscription wiring, reducer for structured events, render rewrite for pre-reserved slots, byline fade, swap `AnimatedCardList` → `CardStack` for the Stage 3 card group |
+| `.../components/animatedCardList/AnimatedCardList.tsx`                                    | `pendingEnter` two-step + per-item `inFlight` motion picker (Fade vs CollapseRelaxed). Left in the tree for the per-item enter/exit scenario; no longer used by `QueryInsightsTab` after the `CardStack` adoption |
+| `.../components/cardStack/CardStack.tsx`                                                  | New lightweight container for "cards only ever added, group disappears at once": per-item `<Collapse appear visible>` (or `<Fade>` via `motion: 'fade'` opt-out) for enter, outer `<Fade>` for group exit; retains last items during fade-out so callers can clear `items` on the same commit as `visible={false}` |
 | `.../components/optimizationCards/MarkdownCard.tsx`                                       | `inFlight` + `inFlightLabel` props; shimmer dropped                                                                    |
 | `.../components/optimizationCards/ImprovementCardShell.tsx`                               | `mode: 'loading' \| 'empty'` shared shell                                                                              |
 | `.../components/optimizationCards/TipsCard.tsx + .scss`                                   | Removed (no longer needed)                                                                                             |
