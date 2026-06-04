@@ -6,6 +6,32 @@
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 
 /**
+ * Bag attached to `ctx.telemetry.distributions` during an accumulating
+ * telemetry callback. Each key records a numeric value that will be reduced
+ * to min / max / sum / count across the batch.
+ *
+ * ```ts
+ * callWithAccumulatingTelemetry('myEvent', (ctx) => {
+ *     const t = ctx.telemetry as TelemetryWithDistributions;
+ *     t.distributions.candidateCount = candidates.length;
+ * });
+ * ```
+ */
+export type TelemetryWithDistributions = IActionContext['telemetry'] & {
+    distributions: Record<string, number>;
+};
+
+/**
+ * Accumulated stats for a single distribution key across a batch.
+ */
+interface DistributionAccumulator {
+    min: number;
+    max: number;
+    sum: number;
+    count: number;
+}
+
+/**
  * Options controlling how `callWithAccumulatingTelemetry` batches events.
  */
 export interface AccumulatingTelemetryOptions {
@@ -32,6 +58,7 @@ interface AccumulatorState {
     lastFlushTime: number;
     measurements: Record<string, number>;
     properties: Record<string, string>;
+    distributions: Record<string, DistributionAccumulator>;
 }
 
 const accumulators = new Map<string, AccumulatorState>();
@@ -46,6 +73,7 @@ function getOrCreateState(callbackId: string, options: AccumulatingTelemetryOpti
             lastFlushTime: 0,
             measurements: {},
             properties: {},
+            distributions: {},
         };
         accumulators.set(callbackId, state);
     }
@@ -59,6 +87,11 @@ function getOrCreateState(callbackId: string, options: AccumulatingTelemetryOpti
  * Mental model: each call contributes to a running total.
  * - Numeric values on `context.telemetry.measurements` are **summed** across
  *   calls. Use this for counters (`measurements.myCounter = 1`).
+ * - Numeric values on `context.telemetry.distributions` are tracked as
+ *   **distribution metrics** (min / max / sum / count) across the batch.
+ *   Use this for gauges like candidate counts, latencies, or sizes.
+ *   On flush each key is emitted as four measurement fields:
+         *   `dist_{key}_min`, `dist_{key}_max`, `dist_{key}_sum`, `dist_{key}_count`.
  * - String values on `context.telemetry.properties` are **last-wins**
  *   (overwritten on each call). Use this for stable metadata only
  *   (e.g., session id, version). Do NOT use properties to bucket data —
@@ -73,9 +106,6 @@ function getOrCreateState(callbackId: string, options: AccumulatingTelemetryOpti
  *   the standard `callWithTelemetryAndErrorHandling` pipeline and the
  *   accumulator state is untouched.
  * - The callback's return value passes through.
- *
- * Restriction: measurements are summed, so this API is for counters only.
- * For durations, timings, or gauges, use `callWithTelemetryAndErrorHandling`.
  */
 export async function callWithAccumulatingTelemetry<T>(
     callbackId: string,
@@ -86,9 +116,14 @@ export async function callWithAccumulatingTelemetry<T>(
 
     let capturedMeasurements: Record<string, number> | undefined;
     let capturedProperties: Record<string, string> | undefined;
+    let capturedDistributions: Record<string, number> | undefined;
 
     const result = await callWithTelemetryAndErrorHandling(callbackId, async (ctx) => {
         ctx.errorHandling.suppressDisplay = true;
+
+        // Attach the distributions bag to ctx.telemetry so callers can write
+        // gauges that will be reduced across the batch.
+        (ctx.telemetry as TelemetryWithDistributions).distributions = {};
 
         // Run the user callback first. If it throws, suppressAll stays false
         // and the error flows through the standard pipeline (errors never batch).
@@ -111,12 +146,23 @@ export async function callWithAccumulatingTelemetry<T>(
         }
         capturedProperties = p;
 
+        const d: Record<string, number> = {};
+        const dist = (ctx.telemetry as TelemetryWithDistributions).distributions;
+        if (dist && typeof dist === 'object') {
+            for (const [k, v] of Object.entries(dist)) {
+                if (typeof v === 'number' && Number.isFinite(v)) {
+                    d[k] = v;
+                }
+            }
+        }
+        capturedDistributions = Object.keys(d).length ? d : undefined;
+
         ctx.telemetry.suppressAll = true;
         return value;
     });
 
-    if (capturedMeasurements || capturedProperties) {
-        accumulate(callbackId, state, capturedMeasurements ?? {}, capturedProperties ?? {});
+    if (capturedMeasurements || capturedProperties || capturedDistributions) {
+        accumulate(callbackId, state, capturedMeasurements ?? {}, capturedProperties ?? {}, capturedDistributions);
     }
 
     return result;
@@ -127,12 +173,26 @@ function accumulate(
     state: AccumulatorState,
     measurements: Record<string, number>,
     properties: Record<string, string>,
+    distributions?: Record<string, number>,
 ): void {
     for (const [k, v] of Object.entries(measurements)) {
         state.measurements[k] = (state.measurements[k] ?? 0) + v;
     }
     for (const [k, v] of Object.entries(properties)) {
         state.properties[k] = v; // last-wins
+    }
+    if (distributions) {
+        for (const [k, v] of Object.entries(distributions)) {
+            const acc = state.distributions[k];
+            if (acc) {
+                acc.min = Math.min(acc.min, v);
+                acc.max = Math.max(acc.max, v);
+                acc.sum += v;
+                acc.count++;
+            } else {
+                state.distributions[k] = { min: v, max: v, sum: v, count: 1 };
+            }
+        }
     }
     state.sinceLastFlush++;
 
@@ -148,14 +208,17 @@ function accumulate(
 function flushState(callbackId: string, state: AccumulatorState, now: number): void {
     const measurementKeys = Object.keys(state.measurements);
     const propertyKeys = Object.keys(state.properties);
-    if (measurementKeys.length === 0 && propertyKeys.length === 0) {
+    const distributionKeys = Object.keys(state.distributions);
+    if (measurementKeys.length === 0 && propertyKeys.length === 0 && distributionKeys.length === 0) {
         return;
     }
 
     const measurementsSnapshot = state.measurements;
     const propertiesSnapshot = state.properties;
+    const distributionsSnapshot = state.distributions;
     state.measurements = {};
     state.properties = {};
+    state.distributions = {};
     state.sinceLastFlush = 0;
     state.lastFlushTime = now;
 
@@ -166,6 +229,12 @@ function flushState(callbackId: string, state: AccumulatorState, now: number): v
         }
         for (const [k, v] of Object.entries(propertiesSnapshot)) {
             ctx.telemetry.properties[k] = v;
+        }
+        for (const [k, v] of Object.entries(distributionsSnapshot)) {
+            ctx.telemetry.measurements[`dist_${k}_min`] = v.min;
+            ctx.telemetry.measurements[`dist_${k}_max`] = v.max;
+            ctx.telemetry.measurements[`dist_${k}_sum`] = v.sum;
+            ctx.telemetry.measurements[`dist_${k}_count`] = v.count;
         }
     });
 }
