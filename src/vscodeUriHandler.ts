@@ -63,15 +63,26 @@ interface UriParams {
  */
 export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
     return callWithTelemetryAndErrorHandling('globalUriHandler', async (context: IActionContext) => {
+        // Record non-sensitive URI diagnostics to help investigate failures.
+        context.telemetry.properties.uriScheme = uri.scheme;
+        context.telemetry.properties.uriAuthority = uri.authority;
+        context.telemetry.properties.uriPathLength = String(uri.path.length);
+        context.telemetry.properties.uriQueryLength = String((uri.query ?? '').length);
+
         try {
             // Extract and validate parameters
             // Note: uri.query is already decoded once by VS Code when creating the vscode.Uri object
+            context.telemetry.properties.failureStage = 'extractParams';
             const params = extractAndValidateParams(context, uri.query);
 
             // Process the URI with user confirmation
+            context.telemetry.properties.failureStage = 'handleRequest';
             await handleConnectionStringRequest(context, params);
         } catch (error) {
             const errMsg = error instanceof Error ? error.message : String(error);
+            if (!context.telemetry.properties.failureStage) {
+                context.telemetry.properties.failureStage = 'unknown';
+            }
             throw new Error(l10n.t('Failed to process URI: {0}', errMsg));
         }
     });
@@ -395,7 +406,8 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
     maskParamsInTelemetry(context, params);
 
     if (!params.connectionString) {
-        throw new Error(l10n.t('The connection string is required.'));
+        // Throw a descriptive error — the telemetry wrapper will surface it to the user.
+        throw new Error(l10n.t('A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.'));
     }
 
     context.telemetry.properties.hasParamConnectionString = params.connectionString ? 'true' : undefined;
