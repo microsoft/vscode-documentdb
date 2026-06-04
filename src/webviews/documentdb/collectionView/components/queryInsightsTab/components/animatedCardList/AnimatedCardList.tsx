@@ -11,6 +11,29 @@ export interface AnimatedCardItem {
     key: string;
     component: ReactNode;
     /**
+     * Explicit enter/leave motion for this card. When set, it takes
+     * precedence over the {@link inFlight} heuristic below.
+     *
+     * - `'fade'` — opacity-only enter/leave (no height clipping). Preferred
+     *   for cards whose height GROWS after mount: AI content cards (the
+     *   analysis / educational markdown cards and the recommendation cards)
+     *   stream or expand their content over time, and a height-collapse
+     *   animation measures `scrollHeight` once at mount and clips anything
+     *   that arrives later.
+     * - `'collapse'` — height + opacity collapse/expand. Kept as a
+     *   first-class option for cards with a stable height where the
+     *   accordion-style motion reads better. Not currently used by the
+     *   Query Insights card list, but intentionally retained for future use.
+     *
+     * Frozen at first mount (like {@link inFlight}); changing it later does
+     * not swap the wrapper mid-life (that would remount the inner card).
+     */
+    motion?: CardMotion;
+    /**
+     * @deprecated Prefer the explicit {@link motion} prop. Retained for
+     * backward compatibility: when `motion` is not set, `inFlight: true`
+     * selects `'fade'` and `inFlight`/unset selects `'collapse'`.
+     *
      * When `true`, the card uses a `Fade` enter animation instead of the
      * default `CollapseRelaxed`. Use this for cards whose content streams
      * progressively (e.g. the Stage 3 summary / educational markdown cards).
@@ -65,7 +88,8 @@ interface ItemState {
      */
     pendingEnter: boolean;
     /**
-     * Captured on first mount from `AnimatedCardItem.inFlight`. Determines
+     * Captured on first mount from `AnimatedCardItem.motion` (or, when that
+     * is unset, derived from the deprecated `inFlight` flag). Determines
      * which presence wrapper (`CollapseRelaxed` vs. `Fade`) renders this
      * item. Frozen for the item's lifetime so the wrapper doesn't swap out
      * mid-stream (which would remount the inner card and lose its state).
@@ -127,7 +151,10 @@ export const AnimatedCardList = ({ items, exitDuration = 300 }: AnimatedCardList
                         component: sourceItem.component,
                         isExiting: false,
                         pendingEnter: true,
-                        motion: sourceItem.inFlight ? 'fade' : 'collapse',
+                        // Explicit `motion` wins; otherwise fall back to the
+                        // legacy `inFlight` heuristic (true → fade). Frozen
+                        // here for the item's lifetime.
+                        motion: sourceItem.motion ?? (sourceItem.inFlight ? 'fade' : 'collapse'),
                     });
                 }
             }

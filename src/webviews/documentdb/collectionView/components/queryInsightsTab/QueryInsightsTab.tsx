@@ -570,11 +570,11 @@ export const QueryInsightsMain = (): JSX.Element => {
         const summarySource = streaming?.summary;
         insightCards.push({
             key: `${keyPrefix}analysis-card`,
-            // Mark as in-flight while streaming so AnimatedCardList uses
-            // Fade (no `maxHeight`/`overflow:hidden` clipping) instead of
-            // CollapseRelaxed, which measures scrollHeight once at mount
-            // and clips early streaming.
-            inFlight: !summarySource?.complete,
+            // AI content cards use Fade for enter AND leave. These cards grow
+            // (stream/expand) after mount, so a height-collapse animation —
+            // which measures `scrollHeight` once at mount — would clip the
+            // later content. `motion: 'fade'` is opacity-only and never clips.
+            motion: 'fade',
             component: (
                 <MarkdownCard
                     icon={<SparkleRegular />}
@@ -592,6 +592,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     if (showErrorCard && stage2Data?.concerns) {
         insightCards.push({
             key: `${keyPrefix}query-execution-error`,
+            motion: 'fade',
             component: (
                 <MarkdownCard
                     title={l10n.t('Query Execution Failed')}
@@ -623,7 +624,7 @@ export const QueryInsightsMain = (): JSX.Element => {
             streaming!.recommendations.forEach((rec, index) => {
                 const key = `${keyPrefix}rec-${index}`;
                 if (rec === null) {
-                    insightCards.push({ key, component: <ImprovementCardShell /> });
+                    insightCards.push({ key, motion: 'fade', component: <ImprovementCardShell /> });
                     return;
                 }
                 const config = createImprovementCardConfig(rec, index, {
@@ -633,6 +634,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                 });
                 insightCards.push({
                     key,
+                    motion: 'fade',
                     component: (
                         <ImprovementCard
                             config={config}
@@ -649,6 +651,7 @@ export const QueryInsightsMain = (): JSX.Element => {
             // stays put).
             insightCards.push({
                 key: `${keyPrefix}rec-0`,
+                motion: 'fade',
                 component: <ImprovementCardShell mode="empty" />,
             });
         } else {
@@ -656,6 +659,7 @@ export const QueryInsightsMain = (): JSX.Element => {
             // in place when the first event arrives.
             insightCards.push({
                 key: `${keyPrefix}rec-0`,
+                motion: 'fade',
                 component: <ImprovementCardShell />,
             });
         }
@@ -666,7 +670,8 @@ export const QueryInsightsMain = (): JSX.Element => {
         const educationalSource = streaming?.educational;
         insightCards.push({
             key: `${keyPrefix}understanding-execution`,
-            inFlight: !educationalSource?.complete,
+            // AI content card — Fade enter/leave (grows while streaming).
+            motion: 'fade',
             component: (
                 <MarkdownCard
                     icon={<SparkleRegular />}
@@ -754,71 +759,151 @@ export const QueryInsightsMain = (): JSX.Element => {
                             </Skeleton>
                         )}
 
-                        {/* Stage 3 affordance — TWO independent CollapseRelaxed
-                            wrappers, one per card, each rendered for the
-                            variants where its card belongs. Splitting them this
-                            way (instead of a single wrapper whose child swaps
-                            in place between request and analyzer) is what makes
-                            the exit reliable: each wrapper sees only its own
-                            visible→false transition, so the collapse + unmount
-                            path is unambiguous. An earlier single-wrapper
-                            version with a swapped child failed to collapse the
-                            analyzer on `s3Loading → s3Success` — the wrapper
-                            stayed mounted with the analyzer still visible. We
-                            also fixed an even earlier bug where the analyzer
-                            flashed in on `{2,'success'}` because a shared
-                            `status === 'success'` matched Stage 2 too (commit
-                            f9af8979); with one discriminated union that class
-                            of bug is structurally impossible — Stage 2's
-                            success has its own `kind` (`s3Idle`).
+                        {/* Stage 3 affordance — ONE persistent CollapseRelaxed
+                            wrapper whose inner content swaps between the
+                            request card and the slim analyzer card based on
+                            `isStage3Loading`. This is deliberately a single
+                            wrapper, NOT one-per-card.
 
-                            Trade-off: when the user clicks "Get AI Insights",
-                            the request card and the analyzer card animate at
-                            the same time for ~400 ms (one collapsing, the
-                            other expanding). Acceptable; the alternative was
-                            a stuck analyzer card on completion. */}
+                            Why a single persistent wrapper is the reliable
+                            shape: a presence node plays its exit reliably only
+                            when it has been stably "entered" first. The wrapper
+                            below enters ONCE when the affordance area first
+                            appears (`s2Loading`/`s3Idle`), stays continuously
+                            visible while the inner card swaps request→analyzer
+                            (no presence transition happens during the swap — so
+                            nothing can race), and exits ONCE at `s3Success`. At
+                            that point `sizeExitAtom` measures the element's
+                            CURRENT `scrollHeight` (the slim analyzer height), so
+                            the collapse is smooth.
+
+                            The earlier two-wrapper version made the analyzer its
+                            own `unmountOnExit` wrapper that mounted directly into
+                            the visible state at `s3Loading` and had to exit one
+                            render later at `s3Success`. A presence node that
+                            mounts-already-visible (default `appear=false`) and
+                            must immediately exit has no clean entered reference
+                            and frequently drops its exit — leaving the analyzer
+                            stuck on screen. It also overlapped the request card
+                            for ~400 ms on click. Both symptoms are gone with the
+                            single wrapper.
+
+                            The flash-on-`{2,'success'}` bug noted historically
+                            is also structurally impossible here: Stage 2 success
+                            has its own discriminated `kind` (`s3Idle`), distinct
+                            from `s3Success`.
+
+                            Trade-off: the request→analyzer swap is an instant
+                            height change (tall → slim) rather than an animated
+                            one, because CollapseRelaxed only animates on a
+                            `visible` toggle, not on inner content change. This
+                            is the intentionally-deprioritized "middle"
+                            transition; the enter and exit (which matter most)
+                            are both animated. */}
                         <CollapseRelaxed
                             visible={
                                 pipeline.kind === 's2Loading' ||
                                 pipeline.kind === 's2Error' ||
                                 pipeline.kind === 's3Idle' ||
+                                pipeline.kind === 's3Loading' ||
                                 pipeline.kind === 's3Error' ||
                                 pipeline.kind === 's3Cancelled'
                             }
                             unmountOnExit
                         >
-                            <GetPerformanceInsightsCard
-                                className="cardSpacing"
-                                bodyText={
-                                    stage2Data?.efficiencyAnalysis.performanceRating.score === 'excellent'
-                                        ? l10n.t(
-                                              'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
-                                          )
-                                        : l10n.t(
-                                              'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
-                                          )
-                                }
-                                // Stage 2 is fetching — keep the button rendered
-                                // but disabled (see `enabled` below). `isLoading`
-                                // is for the post-click in-card spinner only;
-                                // since this wrapper hides during `s3Loading`,
-                                // it is always false here.
-                                isLoading={false}
-                                enabled={
-                                    pipeline.kind === 's3Idle' ||
-                                    pipeline.kind === 's3Error' ||
-                                    pipeline.kind === 's3Cancelled'
-                                }
-                                errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
-                                onGetInsights={handleGetAISuggestions}
-                                onLearnMore={handleLearnMore}
-                                onCancel={handleCancelAI}
-                                onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
-                            />
-                        </CollapseRelaxed>
+                            {/* Stable single child so the presence wrapper keeps
+                                one continuous element identity (and a clean
+                                entered reference) across the inner swap.
 
-                        <CollapseRelaxed visible={isStage3Loading} unmountOnExit>
-                            <Stage3AnalyzingCard onCancel={handleCancelAI} />
+                                FUTURE RESEARCH — animating the request→analyzer
+                                swap (the "middle" transition). Today the swap is
+                                an instant height jump because the OUTER
+                                CollapseRelaxed only animates on a `visible`
+                                toggle, and we deliberately keep it visible across
+                                the swap so the enter/exit stay reliable. To make
+                                the swap itself animate, the height change has to
+                                be driven from INSIDE this stable child, without
+                                toggling the outer wrapper. Options, roughly in
+                                increasing effort:
+                                  1. Crossfade only (cheap): wrap each branch in
+                                     <Fade> with absolute positioning so they
+                                     overlap during the swap. Smooths opacity but
+                                     NOT height — the container still jumps. Low
+                                     value on its own given the large height delta
+                                     (tall request card → slim analyzer).
+                                  2. Animate this child's own height: give this
+                                     <div> a measured `maxHeight`/`height`
+                                     transition (e.g. a ResizeObserver or
+                                     react-motion size atom scoped to the child)
+                                     so request→analyzer eases between the two
+                                     measured heights while the outer wrapper
+                                     stays put. This is the real fix for the jump;
+                                     watch for clipping of the analyzer's spinner
+                                     row mid-transition (overflow:hidden during
+                                     the height tween).
+                                  3. A dedicated swap presence component: a small
+                                     createPresenceComponent that takes the
+                                     OUTGOING and INCOMING nodes and animates
+                                     height+opacity between them in one motion
+                                     (similar in spirit to AnimatedCardList's
+                                     manual enter/exit bookkeeping, but for an
+                                     in-place 1↔1 replace rather than a list).
+                                     Most polished, most code; only pursue if the
+                                     instant jump tests poorly with users.
+                                Keep the constraint in mind: whatever is chosen
+                                must NOT toggle the outer wrapper's `visible`,
+                                or the stuck-exit race this fix removed comes
+                                back. Prototype against `prefers-reduced-motion`
+                                too — the jump is acceptable (arguably preferable)
+                                in that mode. */}
+                            <div>
+                                {/* Show the analyzer during BOTH `s3Loading` and
+                                    `s3Success`. At `s3Success` the wrapper's
+                                    `visible` has flipped to false, so it is
+                                    collapsing out — and we want the content that
+                                    collapses away to be the analyzer, not the
+                                    request card. Gating this branch on
+                                    `isStage3Loading` alone made the request card
+                                    render for the duration of the exit collapse,
+                                    which read as a brief flash of "Get AI
+                                    analysis" content right before it animated
+                                    away. Including `isStage3Success` keeps the
+                                    analyzer on screen through the exit and also
+                                    makes the "measures the slim analyzer height"
+                                    claim above actually hold. */}
+                                {isStage3Loading || isStage3Success ? (
+                                    <Stage3AnalyzingCard onCancel={handleCancelAI} />
+                                ) : (
+                                    <GetPerformanceInsightsCard
+                                        className="cardSpacing"
+                                        bodyText={
+                                            stage2Data?.efficiencyAnalysis.performanceRating.score === 'excellent'
+                                                ? l10n.t(
+                                                      'Your query is performing well. You can still use the AI-powered analysis to get a detailed explanation of the query execution, review the indexing, and explore if further optimizations are possible.',
+                                                  )
+                                                : l10n.t(
+                                                      'Get personalized recommendations to optimize your query performance. AI will analyze your cluster configuration, index usage, execution plan, and more to suggest specific improvements.',
+                                                  )
+                                        }
+                                        // `isLoading` drives the in-card spinner
+                                        // only. The analyzer card owns the
+                                        // loading visuals now, so this branch
+                                        // (rendered only when NOT loading) keeps
+                                        // it false.
+                                        isLoading={false}
+                                        enabled={
+                                            pipeline.kind === 's3Idle' ||
+                                            pipeline.kind === 's3Error' ||
+                                            pipeline.kind === 's3Cancelled'
+                                        }
+                                        errorMessage={pipeline.kind === 's3Error' ? pipeline.message : undefined}
+                                        onGetInsights={handleGetAISuggestions}
+                                        onLearnMore={handleLearnMore}
+                                        onCancel={handleCancelAI}
+                                        onLearnMoreUtilityModel={handleLearnMoreUtilityModel}
+                                    />
+                                )}
+                            </div>
                         </CollapseRelaxed>
 
                         {/* AnimatedCardList for AI suggestions and tips */}
