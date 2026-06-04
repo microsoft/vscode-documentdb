@@ -10,6 +10,7 @@ import { ClustersClient, type CollectionItemModel, type DatabaseItemModel } from
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { createConcurrencyLimiter, type LimitedRunner } from '../../utils/concurrencyLimiter';
+import { getCountPrefix } from '../../utils/countPrefix';
 import { formatDocumentCount } from '../../utils/formatDocumentCount';
 import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -147,17 +148,22 @@ export class CollectionItem implements TreeElement, TreeElementWithExperience, T
     }
 
     async getChildren(): Promise<TreeElement[]> {
-        return [
-            new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this),
-            new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo),
-        ];
+        const indexesItem = new IndexesItem(this.cluster, this.databaseInfo, this.collectionInfo);
+        indexesItem.loadIndexCount();
+
+        return [new DocumentsItem(this.cluster, this.databaseInfo, this.collectionInfo, this), indexesItem];
     }
 
     getTreeItem(): vscode.TreeItem {
         // Build description based on document count state
         let description: string | undefined;
         if (typeof this.documentCount === 'number') {
-            description = formatDocumentCount(this.documentCount);
+            const prefix = getCountPrefix();
+            if (prefix) {
+                description = `${prefix}${formatDocumentCount(this.documentCount)}`;
+            } else {
+                description = formatDocumentCount(this.documentCount);
+            }
         }
 
         return {

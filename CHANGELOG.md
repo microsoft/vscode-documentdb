@@ -1,5 +1,32 @@
 # Change Log
 
+## 0.8.1
+
+### New Features
+
+- **Item Counts on Tree Nodes**: Database nodes now display a live collection count, and the Indexes folder shows an index count. Counts load asynchronously without blocking tree expansion. A new `documentDB.accessibility.hideCountPrefix` setting hides the `··` visual separator for accessibility or aesthetic preference. [#714](https://github.com/microsoft/vscode-documentdb/pull/714), [#658](https://github.com/microsoft/vscode-documentdb/issues/658), [#659](https://github.com/microsoft/vscode-documentdb/issues/659)
+- **AI Model Transparency in Query Insights**: Query Insights now discloses which model processed the request and confirms upfront that the utility model does not count against the GitHub Copilot premium request quota. A model attribution byline ("Powered by {model} via GitHub Copilot") appears after each successful analysis. [#690](https://github.com/microsoft/vscode-documentdb/pull/690)
+- **Batch Connection Deletion**: Multi-select connections in the Connections View and delete them all in one command. The confirmation message adapts to the count, deletion continues on individual failures, and a summary is reported on completion. [#667](https://github.com/microsoft/vscode-documentdb/pull/667)
+
+### Improvements
+
+- **Performance: Faster Connection Load and Startup**: Significant startup speedup, especially on Remote-WSL and large connection lists. Connections now load concurrently; a short-lived cache coalesces redundant reads; startup cleanup is gated to run once per version, not every launch. Also removes the legacy one-time Azure Databases extension connection import. **Note:** users who had un-imported connections in `ms-azuretools.vscode-cosmosdb` will need to re-add them manually. [#726](https://github.com/microsoft/vscode-documentdb/pull/726)
+- **Performance: Throttled Background Document-Count Fetches**: A per-cluster concurrency limiter now caps simultaneous background count requests at 5 with a 250 ms inter-task delay, preventing connection pool saturation when expanding databases with many collections. [#685](https://github.com/microsoft/vscode-documentdb/pull/685)
+- **Shard Key in Collection Tooltip**: Sharded collections now show their shard key in the hover tooltip. Extracted from the existing `listCollections()` response at no extra cost. [#670](https://github.com/microsoft/vscode-documentdb/pull/670), [#661](https://github.com/microsoft/vscode-documentdb/issues/661)
+- **Contextual Query Playground Filenames**: New playground files opened from the tree now use context-derived names (e.g., `cluster_collection.documentdb.js`) with invalid-character sanitization and numeric suffixes for duplicates. [#664](https://github.com/microsoft/vscode-documentdb/pull/664), [#660](https://github.com/microsoft/vscode-documentdb/issues/660)
+- **`_id_` Index Sorted First**: The `_id_` index now always appears at the top of the Indexes list regardless of other index names and locale sort order. [#662](https://github.com/microsoft/vscode-documentdb/pull/662), [#657](https://github.com/microsoft/vscode-documentdb/issues/657)
+- **`credentialId` → `clusterId` Parameter Rename**: Renamed the `credentialId` parameter to `clusterId` in `ClustersClient` and `ClusterSession` for naming consistency. Community contribution by [@CalvinMagezi](https://github.com/CalvinMagezi), [@Jah-yee](https://github.com/Jah-yee), and [@Enocko](https://github.com/Enocko). [#652](https://github.com/microsoft/vscode-documentdb/pull/652), [#567](https://github.com/microsoft/vscode-documentdb/issues/567)
+- **Hidden Index Tree Item**: Hidden indexes now show a `hidden` description label and only the appropriate context menu action (Hide or Unhide, not both). The `_id_` index shows neither action. [#674](https://github.com/microsoft/vscode-documentdb/pull/674), [#656](https://github.com/microsoft/vscode-documentdb/issues/656)
+- **Removed Obsolete Notification Migration Code**: Cleaned up pre-0.7.0 transitional release-notes logic and leftover `0.8.0-bugbash` migration paths. [#622](https://github.com/microsoft/vscode-documentdb/pull/622), [#611](https://github.com/microsoft/vscode-documentdb/issues/611)
+
+### Fixes
+
+- **Node 24 Compatibility**: VS Code 1.123 (released June 3, 2026) ships with Node 24, which broke extension loading. Updated `@microsoft/vscode-azext-utils` (~3.3.1 → ~4.1.0) and `@microsoft/vscode-azext-azureutils` (~3.4.5 → ~4.2.0) to restore compatibility. [#699](https://github.com/microsoft/vscode-documentdb/pull/699)
+
+### Dependencies
+
+- **Dependency Updates**: Updated `webpack-dev-server` (5.2.3 → 5.2.4, CORP security header fix), `@nevware21/ts-utils` (0.13.0 → 0.14.0 in root and `/api`), and `qs`/`express` to their latest versions. [#654](https://github.com/microsoft/vscode-documentdb/pull/654), [#672](https://github.com/microsoft/vscode-documentdb/pull/672), [#673](https://github.com/microsoft/vscode-documentdb/pull/673), [#678](https://github.com/microsoft/vscode-documentdb/pull/678)
+
 ## 0.8.0
 
 ### New Features
