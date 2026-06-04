@@ -793,6 +793,13 @@ export const QueryInsightsMain = (): JSX.Element => {
                             has its own discriminated `kind` (`s3Idle`), distinct
                             from `s3Success`.
 
+                            Why collapse and not Fade: this wrapper now holds the
+                            slim analyzer card on the way out, and Fade would
+                            keep that height through the opacity transition,
+                            jumping the layout when `unmountOnExit` finally tears
+                            the element down. The height collapse keeps the
+                            cards below gliding up smoothly.
+
                             Trade-off: the request→analyzer swap is an instant
                             height change (tall → slim) rather than an animated
                             one, because CollapseRelaxed only animates on a

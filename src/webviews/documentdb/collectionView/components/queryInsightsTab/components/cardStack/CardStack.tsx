@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Collapse, Fade } from '@fluentui/react-motion-components-preview';
-import { type JSX, type ReactNode, useRef, useState } from 'react';
+import { Collapse, Fade, FadeRelaxed } from '@fluentui/react-motion-components-preview';
+import { type JSX, type ReactNode, useState } from 'react';
 
 export interface CardStackItem {
     key: string;
@@ -51,8 +51,9 @@ export interface CardStackProps {
  *   in. No `requestAnimationFrame` dance is needed.
  * - **Cascade** — the initial batch gets a per-index `delay`; later additions
  *   get `delay: 0`.
- * - **Exit** — the entire list is wrapped in a single `<Fade>` keyed off
- *   `visible`, so the group fades out together. Because no card is removed
+ * - **Exit** — the entire list is wrapped in a single `<FadeRelaxed>` keyed
+ *   off `visible`, so the group fades out together at a slightly slower,
+ *   calmer rate than the per-card enter Fade. Because no card is removed
  *   individually, there is no per-item exit bookkeeping at all.
  *
  * {@link AnimatedCardList} is intentionally left in place for scenarios that
@@ -76,11 +77,17 @@ export const CardStack = ({
     // false (e.g. Stage 3 cancel removes all cards AND the wrapper hides).
     // Without this snapshot the inner map would yield nothing during the
     // fade-out, so there would be nothing on screen to actually fade.
-    const lastNonEmptyRef = useRef<CardStackItem[]>(items);
-    if (items.length > 0) {
-        lastNonEmptyRef.current = items;
+    //
+    // Stored in state (updated via the in-render setter, the React
+    // "store-derived-state" pattern) rather than a ref so the lint rule
+    // that forbids ref reads/writes during render stays satisfied. The
+    // setter is only called when `items` is non-empty AND differs from the
+    // current snapshot, which avoids the infinite-render-loop trap.
+    const [lastNonEmpty, setLastNonEmpty] = useState<CardStackItem[]>(items);
+    if (items.length > 0 && items !== lastNonEmpty) {
+        setLastNonEmpty(items);
     }
-    const renderedItems = visible ? items : lastNonEmptyRef.current;
+    const renderedItems = visible ? items : lastNonEmpty;
 
     // Compute a stable enter delay per card for THIS render.
     const delays: Record<string, number> = {};
@@ -90,7 +97,7 @@ export const CardStack = ({
     });
 
     return (
-        <Fade visible={visible} unmountOnExit={unmountOnExit}>
+        <FadeRelaxed visible={visible} unmountOnExit={unmountOnExit}>
             <div style={{ display: 'flex', flexDirection: 'column' }}>
                 {renderedItems.map((item) => {
                     const delay = delays[item.key];
@@ -108,6 +115,6 @@ export const CardStack = ({
                     );
                 })}
             </div>
-        </Fade>
+        </FadeRelaxed>
     );
 };
