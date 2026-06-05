@@ -290,6 +290,14 @@ export function applyStage3Event(
             // keep showing "Analyzing…" / "Explaining…" labels with no
             // streaming actually happening. Terminal `complete` means the
             // stream is over for every slot, so this is always safe.
+            //
+            // Likewise, drop any `null` recommendation slots. A `null` slot
+            // means a `recommendationStarted` event arrived but the matching
+            // `recommendation` value never did (truncated output / parser
+            // miss). After the terminal `complete` those shells can never
+            // fill, so keeping them would render a permanent spinner in the
+            // success state. Filtering them here is the webview-side safety
+            // net for H1 (no second parser, no host/telemetry change).
             return trace('applyStage3Event[complete]', prev, {
                 kind: 's3Success',
                 stage1: prev.stage1,
@@ -298,7 +306,7 @@ export function applyStage3Event(
                 streaming: {
                     summary: streaming.summary ? { ...streaming.summary, complete: true } : null,
                     educational: streaming.educational ? { ...streaming.educational, complete: true } : null,
-                    recommendations: streaming.recommendations,
+                    recommendations: streaming.recommendations.filter((rec) => rec !== null),
                 },
                 model: {
                     modelDisplayName: event.modelDisplayName,

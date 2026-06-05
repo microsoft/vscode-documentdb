@@ -91,11 +91,22 @@ them complete:
   progressive reveal and reconciliation avoids any partial-string risk
   (Deviation #1 in the plan; 90% confidence, no user consult needed).
 
-`finalize()` always runs the canonical `JSON.parse` over the full buffer; if
-the streamed events disagree with the reconciled parse, the reconciled
-result wins. The buffered path is therefore impossible to regress
-structurally: in the worst case (malformed mid-stream), the final view is
-byte-identical to what the old buffered procedure produced.
+`finalize()` always runs the canonical `JSON.parse` over the full buffer and
+emits the terminal `complete` event. **Important — the shipped display path:**
+the rendered cards are driven *entirely* by the streamed events folded into the
+Stage 3 reducer. The terminal `complete` event carries only model metadata, and
+the reconciled `finalize().parsed` result is consumed host-side for
+telemetry/logging — it does **not** re-hydrate the webview cards. This is a
+deliberate single-parser design; the webview does not run a second parser.
+
+To keep that design robust against a truncated or partial stream, the reducer
+applies a safety net on the terminal `complete` event (review item **H1-B**): it
+defensively marks `summary`/`educational` as `complete` and drops any `null`
+recommendation slots (a `recommendationStarted` with no matching `recommendation`
+value), and the `QueryInsightsTab` render hides empty `analysis`/`educational`
+cards once the stream has **succeeded** (**H2**). Together these prevent a
+stalled stream from stranding a permanent spinner in the success state. Both
+changes are webview-only — **no host-side telemetry data points were removed**.
 
 The parser ships with 25 unit tests covering: byte-at-a-time feeding,
 escape boundaries split across fragments, multiple improvements,

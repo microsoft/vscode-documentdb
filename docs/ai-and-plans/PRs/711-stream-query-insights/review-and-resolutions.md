@@ -167,6 +167,21 @@ notice because everything else looks finished.
 > Recommendation: **A** (it is what the description already promises and resolves both
 > High issues), with **B** as the minimal fallback if payload size is a concern.
 
+> ✅ **RESOLVED (H1) — operator chose option B (reducer-only, no second parser).**
+> Decision: keep the single tolerant parser; do **not** re-hydrate the webview from
+> `finalize().parsed`. Instead the Stage 3 reducer's terminal `complete` case applies a
+> safety net (H1-B): it defensively marks `summary`/`educational` `complete: true` and now
+> also **drops any `null` recommendation slots** (`recommendations.filter((rec) => rec !==
+> null)`) — a `recommendationStarted` with no matching value can no longer leave a
+> permanent shell. The misleading "reconciled result wins on `finalize()`" wording in
+> `description.md` was corrected to describe the real display path (streamed events →
+> reducer) and the H1-B/H2 safety net.
+>
+> **Telemetry preserved.** H1-B is entirely webview-side (the reducer); the host-side
+> `streamStage3` subscription and its `documentDB.queryInsights.stage3.completed` event in
+> `queryInsightsEventsRouter.ts` are untouched, so **no telemetry data points were
+> removed**. Posted directly on the PR (not a Copilot thread).
+
 ---
 
 ### H2 — Omitted optional `educationalContent` → permanent "Explaining…" spinner (orig. #2)
@@ -213,6 +228,15 @@ skipped. Actual: stuck spinner.
 
 > Recommendation: **A**, sharing the H1 reconciliation. **B** is the safe minimal patch
 > if H1 is deferred.
+
+> ✅ **RESOLVED (H2) — option A (render-side content gate).** In `QueryInsightsTab` the
+> `analysis` and `educational` cards are still pre-reserved **while loading**, but once the
+> stream has **succeeded** they are only pushed if they carry content
+> (`isStage3Loading || (markdown.length ?? 0) > 0`). A success with a missing
+> `educationalContent` (or `analysis`) field therefore hides the card instead of stranding
+> an empty "Explaining…" / "Analyzing…" spinner. Combined with the H1-B reducer net above,
+> a stalled or partial stream can no longer leave a hung spinner in the success state.
+> Shipped together with H1 in the same commit; posted directly on the PR.
 
 ---
 

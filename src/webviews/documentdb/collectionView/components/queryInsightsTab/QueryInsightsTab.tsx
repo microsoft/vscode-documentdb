@@ -571,25 +571,34 @@ export const QueryInsightsMain = (): JSX.Element => {
         // moment Stage 3 loading starts (before any event arrives), then swaps
         // the placeholder for the streaming content in place. Disappears on
         // cancel/error (both leave `streaming === null`).
+        //
+        // While LOADING we always pre-reserve the slot (placeholder). Once the
+        // stream has SUCCEEDED we only keep the card if it actually carries
+        // content — otherwise a stream that never emitted an `analysis` field
+        // would leave an empty card stuck on its in-flight "Analyzing…" label
+        // (review item H2).
         if (stage3CardsActive) {
             const summarySource = streaming?.summary;
-            cards.push({
-                key: `${keyPrefix}analysis-card`,
-                // AI content cards use Fade for enter AND leave. These cards grow
-                // (stream/expand) after mount, so a height-collapse animation —
-                // which measures `scrollHeight` once at mount — would clip the
-                // later content. `motion: 'fade'` is opacity-only and never clips.
-                motion: 'fade',
-                component: (
-                    <MarkdownCard
-                        icon={<SparkleRegular />}
-                        title={l10n.t('Query Performance Analysis')}
-                        content={summarySource?.markdown ?? ''}
-                        inFlight={!summarySource?.complete}
-                        inFlightLabel={l10n.t('Analyzing…')}
-                    />
-                ),
-            });
+            const hasSummaryContent = (summarySource?.markdown.length ?? 0) > 0;
+            if (isStage3Loading || hasSummaryContent) {
+                cards.push({
+                    key: `${keyPrefix}analysis-card`,
+                    // AI content cards use Fade for enter AND leave. These cards grow
+                    // (stream/expand) after mount, so a height-collapse animation —
+                    // which measures `scrollHeight` once at mount — would clip the
+                    // later content. `motion: 'fade'` is opacity-only and never clips.
+                    motion: 'fade',
+                    component: (
+                        <MarkdownCard
+                            icon={<SparkleRegular />}
+                            title={l10n.t('Query Performance Analysis')}
+                            content={summarySource?.markdown ?? ''}
+                            inFlight={!summarySource?.complete}
+                            inFlightLabel={l10n.t('Analyzing…')}
+                        />
+                    ),
+                });
+            }
         }
 
         // Error Card — shown when query execution failed (gated by 1s timer
@@ -670,23 +679,30 @@ export const QueryInsightsMain = (): JSX.Element => {
             }
         }
 
-        // Educational Markdown Card — same pre-reserve pattern as Analysis Card.
+        // Educational Markdown Card — same pre-reserve pattern as Analysis Card,
+        // including the H2 success-window content guard: pre-reserve while
+        // loading, but once succeeded only keep the card if it has content so a
+        // missing `educationalContent` field can't strand an empty card on its
+        // "Explaining…" label.
         if (stage3CardsActive) {
             const educationalSource = streaming?.educational;
-            cards.push({
-                key: `${keyPrefix}understanding-execution`,
-                // AI content card — Fade enter/leave (grows while streaming).
-                motion: 'fade',
-                component: (
-                    <MarkdownCard
-                        icon={<SparkleRegular />}
-                        title={l10n.t('Understanding Your Query Execution Plan')}
-                        content={educationalSource?.markdown ?? ''}
-                        inFlight={!educationalSource?.complete}
-                        inFlightLabel={l10n.t('Explaining…')}
-                    />
-                ),
-            });
+            const hasEducationalContent = (educationalSource?.markdown.length ?? 0) > 0;
+            if (isStage3Loading || hasEducationalContent) {
+                cards.push({
+                    key: `${keyPrefix}understanding-execution`,
+                    // AI content card — Fade enter/leave (grows while streaming).
+                    motion: 'fade',
+                    component: (
+                        <MarkdownCard
+                            icon={<SparkleRegular />}
+                            title={l10n.t('Understanding Your Query Execution Plan')}
+                            content={educationalSource?.markdown ?? ''}
+                            inFlight={!educationalSource?.complete}
+                            inFlightLabel={l10n.t('Explaining…')}
+                        />
+                    ),
+                });
+            }
         }
 
         return cards;
