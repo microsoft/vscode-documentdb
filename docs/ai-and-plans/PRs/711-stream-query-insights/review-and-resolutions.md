@@ -722,6 +722,14 @@ visible but clicking it does nothing (harmless, brief).
 
 > Recommendation: **A** (cheap polish that fits the PR's intent).
 
+> ✅ **RESOLVED (L4) — option A, via disable (not hide).** Threaded a `canCancel?: boolean`
+> prop into `Stage3AnalyzingCard` and set the Cancel button's `disabled={!canCancel}`. The
+> parent passes `canCancel={isStage3Loading}`, so during the `s3Success` exit-collapse the
+> button is disabled rather than visible-but-inert. Chose disable over hide deliberately:
+> the card is mid-collapse, and removing the button would shift the slim row's layout
+> during the animation, whereas a disabled button keeps the row stable and clearly signals
+> non-interactivity. Posted directly on the PR.
+
 ---
 
 ### L5 — `StreamingPlaceholder` is dead code (orig. C4)
