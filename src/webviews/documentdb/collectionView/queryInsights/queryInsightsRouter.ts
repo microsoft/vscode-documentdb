@@ -53,7 +53,8 @@ import { queryInsightsEventsRoutes } from './queryInsightsEventsRouter';
  * Looks for files in resources/debug/ directory
  * Returns the raw MongoDB explain response if file exists and is valid, otherwise null
  *
- * To activate: Remove the "_comment" field from the JSON file
+ * To activate: set `"_debug_active": true` in the JSON file. The override is
+ * ignored unless `_debug_active` is truthy (a missing or falsy flag disables it).
  */
 function readQueryInsightsDebugFile(filename: string): Document | null {
     try {

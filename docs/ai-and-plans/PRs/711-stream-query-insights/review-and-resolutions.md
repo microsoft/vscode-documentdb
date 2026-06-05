@@ -663,6 +663,11 @@ revived.
 
 > Recommendation: **A**.
 
+> ✅ **RESOLVED (L6 / C5).** Corrected the `readQueryInsightsDebugFile` doc comment
+> to describe the real activation guard: set `"_debug_active": true` in the JSON file
+> (the override is ignored unless `_debug_active` is truthy). Removed the stale
+> "remove the `_comment` field" instruction. Replied in Copilot thread `r3362126762`.
+
 ---
 
 ## Recommended sequencing (for discussion — no code yet)
