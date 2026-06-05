@@ -276,6 +276,14 @@ messages. The user gets silence exactly when they're actively retrying.
 > Recommendation: **A**, with **B** for Stage 3 specifically if you want it
 > caller-proof.
 
+> ✅ **RESOLVED (M1) — option A (clear at the fresh-cycle boundary).** Added an effect that
+> clears `displayedErrorsRef` whenever the pipeline returns to `idle` — the single boundary
+> every fresh query cycle passes through (Refresh resets `queryInsights` to its default,
+> which is `idle`). This covers Stage 1/2/3 uniformly without needing a per-stage
+> `requestKey`, so an identical error from a later run surfaces its toast again instead of
+> being permanently swallowed. The ref's JSDoc (which already claimed it was cleared) was
+> made precise. Posted directly on the PR.
+
 ---
 
 ### M2 — Query reset doesn't unsubscribe an in-flight Stage 3 stream (orig. #11)

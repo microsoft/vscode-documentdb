@@ -179,7 +179,8 @@ export const QueryInsightsMain = (): JSX.Element => {
      * produce one toast on first render and another on every re-render
      * triggered by unrelated state changes. We track which error keys
      * have already been surfaced; nothing here needs to drive a render,
-     * so a ref is sufficient. Cleared whenever a fresh load starts.
+     * so a ref is sufficient. Cleared whenever the pipeline returns to
+     * `idle` (a fresh query cycle) — see the reset effect below.
      */
     const displayedErrorsRef = useRef<Set<string>>(new Set());
 
@@ -261,6 +262,20 @@ export const QueryInsightsMain = (): JSX.Element => {
         },
         [trpcClient],
     );
+
+    // ---------- Reset the error-dedupe set on a fresh query cycle ---------
+    //
+    // `displayedErrorsRef` suppresses duplicate notifications for the SAME
+    // (stage, message) within one run. Without clearing it, an identical
+    // error from a later query (e.g. after Refresh, which resets the
+    // pipeline to `idle`) would be permanently swallowed. Clear it whenever
+    // the pipeline returns to `idle` so each new run starts with a clean
+    // dedupe set (review item M1).
+    useEffect(() => {
+        if (pipeline.kind === 'idle') {
+            displayedErrorsRef.current.clear();
+        }
+    }, [pipeline.kind]);
 
     // ---------- Stage 1 fallback fetch ------------------------------------
     //
