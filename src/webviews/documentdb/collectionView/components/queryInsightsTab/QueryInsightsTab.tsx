@@ -971,7 +971,11 @@ export const QueryInsightsMain = (): JSX.Element => {
                                     makes the "measures the slim analyzer height"
                                     claim above actually hold. */}
                                 {isStage3Loading || isStage3Success ? (
-                                    <Stage3AnalyzingCard onCancel={handleCancelAI} canCancel={isStage3Loading} />
+                                    <Stage3AnalyzingCard
+                                        onCancel={handleCancelAI}
+                                        phase={streaming?.phase}
+                                        canCancel={isStage3Loading}
+                                    />
                                 ) : (
                                     <GetPerformanceInsightsCard
                                         className="cardSpacing"

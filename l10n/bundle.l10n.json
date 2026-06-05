@@ -307,6 +307,7 @@
   "Connecting to \"{cluster}\"…": "Connecting to \"{cluster}\"…",
   "Connecting to the cluster as \"{username}\"…": "Connecting to the cluster as \"{username}\"…",
   "Connecting to the cluster using Entra ID…": "Connecting to the cluster using Entra ID…",
+  "Connecting…": "Connecting…",
   "connection \"{0}\"": "connection \"{0}\"",
   "Connection String": "Connection String",
   "Connection string cannot be empty.": "Connection string cannot be empty.",

@@ -120,6 +120,22 @@ type WithStage1 = { stage1: QueryInsightsStage1Response };
 type WithStage12 = WithStage1 & { stage2: QueryInsightsStage2Response };
 
 /**
+ * Coarse, monotonic phase of an in-flight Stage 3 stream, used purely to
+ * label the slim "analyzing" affordance ({@link Stage3AnalyzingCard}) as the
+ * request progresses. It only ever advances (`connecting → analyzing`), never
+ * regresses.
+ *
+ *   - `connecting`  — request submitted; host is building context and
+ *                     waiting on the model's first byte (time-to-first-token,
+ *                     typically the longest wait). No output yet.
+ *   - `analyzing`   — the model has started producing output. Set on the
+ *                     first character received (a `receiving` status with
+ *                     `charsReceived > 0`, or the first structured content
+ *                     event — whichever lands first).
+ */
+export type QueryInsightsStage3Phase = 'connecting' | 'analyzing';
+
+/**
  * Per-stream progressive state for Stage 3. Carries only the structured
  * slots populated by the `streamStage3` subscription's events. The
  * "has terminal-complete landed?" fact is NOT stored here — it is the
@@ -127,6 +143,11 @@ type WithStage12 = WithStage1 & { stage2: QueryInsightsStage2Response };
  * metadata likewise lives on the `s3Success` variant, not here.
  */
 export interface QueryInsightsStage3Streaming {
+    /**
+     * Monotonic progress phase driving the in-flight label only (review item
+     * L1). Advanced by `applyStage3Event`; see {@link QueryInsightsStage3Phase}.
+     */
+    phase: QueryInsightsStage3Phase;
     /** Cumulative markdown from `summary` events (the AI `analysis` JSON key). */
     summary: { markdown: string; complete: boolean } | null;
     /** Cumulative markdown from `educational` events (the AI `educationalContent` key). */

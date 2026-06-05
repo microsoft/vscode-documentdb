@@ -644,6 +644,32 @@ which is no longer rendered during loading.)
 > Recommendation: lean **A** (it's the cheapest "more responsive" win available), with a
 > debounced, aria-safe presentation. **B** only if product doesn't want the meta text.
 
+> ✅ **RESOLVED (L1) — option A (surface progress), simplified to a two-phase label.**
+> The `status` events are no longer dead: a `QueryInsightsStage3Phase`
+> (`connecting | analyzing`) now lives on `QueryInsightsStage3Streaming`, is advanced
+> monotonically by `applyStage3Event`, and drives the slim `Stage3AnalyzingCard` label
+> ("Connecting…" → "Analyzing…"). The phase flips to `analyzing` on the **first character
+> received** — either a `receiving` status with `charsReceived > 0` or the first
+> structured content event (`summary` / `educational` / `recommendation*`), whichever
+> lands first — and `maxPhase` keeps it from ever regressing as throttled `status` and
+> structured events interleave.
+>
+> **Design evolution (operator-driven, during interactive build):** an intermediate
+> three-phase design (`connecting → analyzing → generating`, flipping to `generating` on
+> the first structured content) was prototyped but **dropped after UI testing**. Because
+> the prompt schema streams `educationalContent` first and `improvements[]` last (and
+> `improvements` is frequently empty per prompt rule 21), the `analyzing → generating`
+> hand-off was either invisibly brief or never reached — it read as "Connecting →
+> Analyzing → nothing." The operator chose to **collapse to two phases** for an honest,
+> legible signal. The `generating` rank, the "Generating recommendations…" label + its
+> l10n key, and the per-transition debug `useEffect` in the card were all removed.
+>
+> **Tests:** new `queryInsightsReducer.stage3Phase.test.ts` (13 cases) pins the two-phase
+> contract: the `connecting` start, the first-character advance (status vs. structured),
+> the non-advancing cases (`charsReceived: 0`, `connecting`/`parsing` phases, stale
+> `requestKey`), monotonicity, and phase carry-across on the terminal `complete`. No
+> telemetry change (webview-side only). Committed on `dev/tnaum/stream-query-insights`.
+
 ---
 
 ### L2 — Single-line markdown values get no progressive reveal (orig. #7)
