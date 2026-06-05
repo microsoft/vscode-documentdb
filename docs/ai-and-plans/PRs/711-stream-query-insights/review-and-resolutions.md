@@ -671,6 +671,13 @@ at once — defeating "progressive reveal" for short values.
 > Recommendation: **A** (keeps the parser pure; cheap insurance for the PR's core
 > promise).
 
+> ✅ **RESOLVED (L2) — option C (accept), per operator.** Keeping the parser pure (no
+> char-count threshold, no timer) for this PR. In practice the `analysis` / `educational`
+> values are multi-line, so they already reveal progressively; a newline-free value is the
+> rare case and degrades gracefully to the pre-streaming behaviour (spinner → full content
+> on close), never to anything worse. Logged option A as the follow-up if short-value
+> reveal is later observed to matter. No code change. Posted directly on the PR.
+
 ---
 
 ### L3 — Doc drift: `\n` vs `\n\n` emission granularity (orig. #8)
