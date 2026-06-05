@@ -277,6 +277,34 @@ export const QueryInsightsMain = (): JSX.Element => {
         }
     }, [pipeline.kind]);
 
+    // ---------- Tear down Stage 3 ephemeral state on a fresh query cycle --
+    //
+    // `CollectionView` resets `queryInsights` to its default (pipeline →
+    // `idle`) when a new/refreshed query runs, but THIS tab stays mounted, so
+    // the reset only touches the reducer context — never the refs / local
+    // state that live here. Mirror the reset by tearing those down when the
+    // pipeline returns to `idle` (review items M2 + M3, fixed in one effect
+    // because they share the same trigger and teardown):
+    //   - M2: unsubscribe the in-flight `streamStage3`, so the old LLM stream
+    //     is actually cancelled instead of running invisibly after the user
+    //     has lost the Cancel affordance.
+    //   - M3: clear the delayed error-card timer and hide the local
+    //     'Query Execution Failed' card.
+    useEffect(() => {
+        if (pipeline.kind !== 'idle') {
+            return;
+        }
+        if (stage3SubscriptionRef.current) {
+            stage3SubscriptionRef.current.unsubscribe();
+            stage3SubscriptionRef.current = null;
+        }
+        if (stage3TipsTimerRef.current) {
+            clearTimeout(stage3TipsTimerRef.current);
+            stage3TipsTimerRef.current = null;
+        }
+        setShowErrorCard(false);
+    }, [pipeline.kind]);
+
     // ---------- Stage 1 fallback fetch ------------------------------------
     //
     // Multiple entry points kick off Stage 1:

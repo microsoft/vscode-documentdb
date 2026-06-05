@@ -325,6 +325,18 @@ affordance** and the extension keeps spending model time on stale work.
 > Recommendation: **A** — pair it with M3 (same effect can clear the timer and local
 > error-card state).
 
+> ✅ **RESOLVED (M2, bundled with M3) — option A.** Added an effect in `QueryInsightsTab`
+> keyed on `pipeline.kind` that, when the pipeline returns to `idle`, calls
+> `stage3SubscriptionRef.current.unsubscribe()` and nulls the handle. **Deviation from the
+> literal wording (documented, ~95% confidence):** instead of "unsubscribe whenever the
+> pipeline leaves `s3Loading` for a reason other than `complete`," the effect triggers on
+> the pipeline reaching `idle`. The reset target is provably `{ kind: 'idle' }`
+> (`DefaultCollectionViewContext.queryInsights`, applied at `CollectionView.tsx`'s reset),
+> so this is exactly the reset boundary and inherently **never** fires on the normal
+> `s3Loading → s3Success` path (success is not `idle`), which neatly satisfies the "must
+> exclude the just-completed stream" caveat without extra bookkeeping. Posted directly on
+> the PR.
+
 ---
 
 ### M3 — `showErrorCard` / tips timer leak across a query reset (orig. #12)
@@ -360,6 +372,14 @@ state.
 
 > Recommendation: **A** now (bundled with M2); consider **B** if more local Stage 3 UI
 > flags accumulate.
+
+> ✅ **RESOLVED (M3, bundled with M2) — option A.** The same `pipeline.kind === 'idle'`
+> teardown effect also `clearTimeout`s `stage3TipsTimerRef` and calls
+> `setShowErrorCard(false)`, so a stale 'Query Execution Failed' card and a pending 1 s
+> timer can no longer leak across a query reset. **Bundling note:** M2 and M3 share the
+> exact same trigger (reset → `idle`) and teardown site, so they were intentionally fixed
+> in a single effect and a single commit rather than split — the per-fix-commit rule is
+> deviated here on purpose, documented for traceability. Posted directly on the PR.
 
 ---
 
