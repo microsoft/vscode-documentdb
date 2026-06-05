@@ -652,6 +652,12 @@ revived.
 > Recommendation: **A** (delete). If L1-A (surface status) is pursued, build that on
 > `StreamingInlineProgress`, not this.
 
+> ✅ **RESOLVED (L5 / C4) — option A.** Deleted `StreamingPlaceholder.tsx` and
+> `StreamingPlaceholder.scss`, and removed the barrel re-export from the
+> `streamingPlaceholder/index.ts`. Confirmed via grep the symbol was only self-referenced;
+> live cards import the sibling `StreamingInlineProgress`, which is retained. Recoverable
+> from git history if a future stepper needs it. Replied in Copilot thread `r3362126891`.
+
 ---
 
 ### L6 — Debug-override activation comment doesn't match the guard (orig. C5)

@@ -4,4 +4,3 @@
  *--------------------------------------------------------------------------------------------*/
 
 export * from './StreamingInlineProgress';
-export * from './StreamingPlaceholder';
