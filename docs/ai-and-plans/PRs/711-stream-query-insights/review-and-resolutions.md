@@ -693,6 +693,13 @@ comments are stale and will mislead the next maintainer.
 
 > Recommendation: **A**.
 
+> ✅ **RESOLVED (L3) — option A.** Updated both stale JSDoc blocks to say *"Emitted at
+> line boundaries (`\n`)"*: the `summary` event doc in `queryInsightsStream.ts` and the
+> module header in `streamingResponseParser.ts`. The implementation comment in
+> `maybeEmitProgressive` already documented the per-`\n` trigger (and the rationale for
+> moving off the old `\n\n` granularity), so the docs now agree end-to-end. No behaviour
+> change. Posted directly on the PR.
+
 ---
 
 ### L4 — Cancel is visible-but-inert during the success-collapse window (orig. #10)

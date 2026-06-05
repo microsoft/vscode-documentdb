@@ -21,7 +21,7 @@
  *    vs. the buffered path).
  *  - Field-level string values for the two markdown keys (`analysis`,
  *    `educationalContent`) are decoded incrementally and emitted as
- *    cumulative markdown at paragraph boundaries (`\n\n`), with
+ *    cumulative markdown at line boundaries (`\n`), with
  *    `complete: false` until the value's closing `"` is observed (then
  *    one final `complete: true` event).
  *  - The `improvements[]` array is scanned by tracking brace depth with

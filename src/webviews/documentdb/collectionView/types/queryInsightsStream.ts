@@ -65,7 +65,7 @@ export type QueryInsightsStreamEvent =
     | {
           /**
            * Cumulative markdown for the `analysis` JSON key. Emitted at
-           * paragraph boundaries (`\n\n`) while the value is growing
+           * line boundaries (`\n`) while the value is growing
            * (`complete: false`) and once more when the value's closing
            * `"` is observed (`complete: true`).
            */
