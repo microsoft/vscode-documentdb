@@ -569,6 +569,17 @@ stream whose every event is dropped by the staleness guard (silent stuck stream)
 > Recommendation: **A** if cheap; otherwise **B** is defensible given it's not currently
 > reachable. Low urgency.
 
+> ✅ **RESOLVED (M8) — option B (operator: "feels like a non-issue, do the simplest
+> thing").** Documented the precondition as a code-level invariant at the top of
+> `handleGetAISuggestions`: the only trigger is the "Get AI Performance Insights" button,
+> which renders solely in `s3Idle` (plus the `s3Error` / `s3Cancelled` retry affordances)
+> — exactly the states from which `startStage3Load` is a legal transition, so the
+> unconditional subscribe never opens against a no-op'd transition. The comment also notes
+> the existing fallback: even if a future caller invoked this mid-stream, the `requestKey`
+> staleness guard in `applyStage3Event` / `failStage3` drops every orphaned callback, so
+> the worst case is a wasted request, never corrupt state. No behaviour change. Posted
+> directly on the PR.
+
 ---
 
 ### M9 — No way to re-run Stage 3 after success (orig. #5)
@@ -598,6 +609,12 @@ choice, not a side effect of state-gating.
 
 > Recommendation: **confirm with the product owner.** If "responsive, iterative AI" is
 > the theme, **A** aligns; if cost-control dominates, **B** is fine but should be stated.
+
+> ✅ **RESOLVED (M9) — option B (keep current behaviour, intentionally).** Operator
+> confirmed no "Regenerate" control for now: a fresh AI analysis comes from re-running the
+> query, which deterministically resets Stage 1/2/3. This is recorded as a conscious
+> product decision (cost-control over iterative regenerate), not an accidental side effect
+> of the `s3Success` state-gating. No code change. Posted directly on the PR.
 
 ---
 

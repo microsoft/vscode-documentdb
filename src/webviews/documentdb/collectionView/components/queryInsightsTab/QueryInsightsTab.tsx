@@ -453,6 +453,20 @@ export const QueryInsightsMain = (): JSX.Element => {
     }, [trpcClient]);
 
     const handleGetAISuggestions = (): void => {
+        // PRECONDITION (review item M8): this handler only ever runs from the
+        // "Get AI Performance Insights" button, which is rendered solely in the
+        // `s3Idle` state (and the retry affordances in `s3Error` / `s3Cancelled`)
+        // — exactly the states from which `startStage3Load` is a legal
+        // transition. So in practice the dispatch below always advances to
+        // `s3Loading` and the subscription that follows is never opened against a
+        // no-op'd transition. The unconditional subscribe is therefore safe; and
+        // even in the theoretical case where the reducer no-ops (e.g. a future
+        // caller invokes this mid-stream), the `requestKey` staleness guard in
+        // `applyStage3Event` / `failStage3` discards every callback from the
+        // orphaned subscription, so the worst case is a wasted request — not a
+        // corrupt state. Kept as a documented invariant rather than adding a
+        // redundant runtime guard.
+        //
         // Mint the staleness token and transition to `s3Loading` in one
         // commit. The reducer is a no-op if the current state isn't
         // `s3Idle` / `s3Error` / `s3Cancelled`, so this is safe even
