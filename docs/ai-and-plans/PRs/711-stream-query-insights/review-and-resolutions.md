@@ -422,6 +422,15 @@ exists.
 > Recommendation: **A** or **B**. (Upgraded to Medium because it is an a11y *regression*
 > of a previously shipped, tracked fix.)
 
+> ✅ **RESOLVED (M4) — option A, realized with the proven `Announcer`.** Rendered the
+> repo's `Announcer` (`role="status"` + `aria-live="polite"`, the #380 component) **inside**
+> `Stage3AnalyzingCard` with `when={true}` and the same `'AI is analyzing…'` key. Because
+> that card is the affordance actually mounted during `s3Loading`, the announcement now
+> fires reliably on mount — fixing the placement drift that made the original
+> `GetPerformanceInsightsCard` announcer dead during streaming. The visible Spinner/Text are
+> deliberately **not** a live region (Spinner stays `aria-hidden`), so there's a single
+> announcement and no rapid-updating text inside the region. Posted directly on the PR.
+
 ---
 
 ### M5 — `CardStack` updates state during render → extra render churn (orig. C1)

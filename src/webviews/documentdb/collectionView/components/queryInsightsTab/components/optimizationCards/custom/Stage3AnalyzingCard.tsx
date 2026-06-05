@@ -6,6 +6,7 @@
 import { Button, Card, Spinner, Text, tokens } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
+import { Announcer } from '../../../../../../../components/accessibility';
 
 interface Stage3AnalyzingCardProps {
     /** Invoked when the user cancels the in-flight AI analysis. */
@@ -39,6 +40,14 @@ export function Stage3AnalyzingCard({ onCancel }: Stage3AnalyzingCardProps): JSX
                     {l10n.t('Cancel')}
                 </Button>
             </div>
+            {/*
+             * Polite live region so screen-reader users learn the AI request
+             * started (and that Cancel exists). The visible Spinner/Text are
+             * not themselves a live region, so the announcement happens exactly
+             * once on mount via the Announcer (review item M4). This card only
+             * mounts while Stage 3 is loading, so `when` is constant `true`.
+             */}
+            <Announcer when={true} message={l10n.t('AI is analyzing…')} />
         </Card>
     );
 }
