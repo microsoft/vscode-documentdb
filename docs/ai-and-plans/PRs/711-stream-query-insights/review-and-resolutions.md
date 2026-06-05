@@ -407,6 +407,17 @@ frequently while streaming, which is the animation-sensitive moment.
 > Recommendation: **A** (cheapest, fixes it at the source). Keep the existing guard.
 > Downgrade mental model: this is render efficiency, not a crash.
 
+> ✅ **RESOLVED (M5 / C1) — option A.** Wrapped the `insightCards` construction in
+> `useMemo` (deps: `stage3RequestKey`, `isStage3Loading`, `isStage3Success`, `streaming`,
+> `showErrorCard`, `stage2Data`, `configuration`, and the two action handlers). To keep
+> the memo effective, `handlePrimaryAction`/`handleSecondaryAction` were promoted to
+> `useCallback` (they only close over the stable `trpcClient`). `insightCards` now keeps a
+> stable identity across renders that don't change the cards, so `CardStack`'s
+> `lastNonEmpty` snapshot no longer re-sets on every parent render. The `CardStack` guard
+> is intentionally left as-is — confirmed in the thread that the "infinite loop" reading
+> is a false alarm (the guarded in-render setter converges). Replied in Copilot thread
+> `r3362126847`.
+
 ---
 
 ### M6 — Unsafe `(error as Error).message` in the debug-file catch (orig. C2)

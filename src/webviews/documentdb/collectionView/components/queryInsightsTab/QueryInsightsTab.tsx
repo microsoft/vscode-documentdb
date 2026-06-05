@@ -497,25 +497,25 @@ export const QueryInsightsMain = (): JSX.Element => {
         setShowErrorCard(false);
     };
 
-    const handlePrimaryAction = async (
-        actionId: string,
-        payload: unknown,
-    ): Promise<{ success: boolean; message?: string }> => {
-        return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
-            actionId,
-            payload,
-        });
-    };
+    const handlePrimaryAction = useCallback(
+        async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
+            return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
+                actionId,
+                payload,
+            });
+        },
+        [],
+    );
 
-    const handleSecondaryAction = async (
-        actionId: string,
-        payload: unknown,
-    ): Promise<{ success: boolean; message?: string }> => {
-        return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
-            actionId,
-            payload,
-        });
-    };
+    const handleSecondaryAction = useCallback(
+        async (actionId: string, payload: unknown): Promise<{ success: boolean; message?: string }> => {
+            return await trpcClient.mongoClusters.collectionView.queryInsights.executeQueryInsightsAction.mutate({
+                actionId,
+                payload,
+            });
+        },
+        [],
+    );
 
     // Feedback handlers
     const handleFeedbackClick = (sentiment: 'positive' | 'negative'): void => {
@@ -552,137 +552,156 @@ export const QueryInsightsMain = (): JSX.Element => {
     };
 
     // ---------- Build the animated card list ------------------------------
-    const insightCards: CardStackItem[] = [];
+    // Memoized so the array keeps a stable reference across renders when none
+    // of its inputs change. Without this, a fresh array on every render forces
+    // CardStack's `lastNonEmpty` snapshot to re-set each render — harmless but
+    // wasteful churn (review item M5/C1).
+    const insightCards: CardStackItem[] = useMemo<CardStackItem[]>(() => {
+        const cards: CardStackItem[] = [];
 
-    // Include requestKey in card keys to force remount on regeneration.
-    const keyPrefix = stage3RequestKey ? `${stage3RequestKey}-` : '';
+        // Include requestKey in card keys to force remount on regeneration.
+        const keyPrefix = stage3RequestKey ? `${stage3RequestKey}-` : '';
 
-    // Stage 3 cards (analysis, recommendations, educational) all key off
-    // the single fact "we are in a Stage 3 lifecycle that has any content
-    // to show". That's true while loading and through the success window.
-    const stage3CardsActive = isStage3Loading || isStage3Success;
+        // Stage 3 cards (analysis, recommendations, educational) all key off
+        // the single fact "we are in a Stage 3 lifecycle that has any content
+        // to show". That's true while loading and through the success window.
+        const stage3CardsActive = isStage3Loading || isStage3Success;
 
-    // Analysis Card — pre-reserves its slot at canonical top position the
-    // moment Stage 3 loading starts (before any event arrives), then swaps
-    // the placeholder for the streaming content in place. Disappears on
-    // cancel/error (both leave `streaming === null`).
-    if (stage3CardsActive) {
-        const summarySource = streaming?.summary;
-        insightCards.push({
-            key: `${keyPrefix}analysis-card`,
-            // AI content cards use Fade for enter AND leave. These cards grow
-            // (stream/expand) after mount, so a height-collapse animation —
-            // which measures `scrollHeight` once at mount — would clip the
-            // later content. `motion: 'fade'` is opacity-only and never clips.
-            motion: 'fade',
-            component: (
-                <MarkdownCard
-                    icon={<SparkleRegular />}
-                    title={l10n.t('Query Performance Analysis')}
-                    content={summarySource?.markdown ?? ''}
-                    inFlight={!summarySource?.complete}
-                    inFlightLabel={l10n.t('Analyzing…')}
-                />
-            ),
-        });
-    }
-
-    // Error Card — shown when query execution failed (gated by 1s timer
-    // after Stage 3 click; see `handleGetAISuggestions`).
-    if (showErrorCard && stage2Data?.concerns) {
-        insightCards.push({
-            key: `${keyPrefix}query-execution-error`,
-            motion: 'fade',
-            component: (
-                <MarkdownCard
-                    title={l10n.t('Query Execution Failed')}
-                    icon={<WarningRegular />}
-                    showAiDisclaimer={false}
-                    content={
-                        stage2Data.concerns.join('\n\n') +
-                        '\n\n---\n\n' +
-                        '**Resolving this execution error should take precedence over performance optimization.** ' +
-                        'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
-                    }
-                />
-            ),
-        });
-    }
-
-    // Recommendation Cards — three rendering modes (mutually exclusive):
-    //   1. Pending placeholder      — Stage 3 loading, no rec events yet.
-    //   2. Progressive shells/cards — `recommendationStarted` event(s) arrived.
-    //   3. Empty-state              — `complete` landed with zero recs.
-    if (stage3CardsActive) {
-        const hasStartedRecs = (streaming?.recommendations.length ?? 0) > 0;
-        // "Stream completed with zero recommendations" — terminal `complete`
-        // event landed (kind === 's3Success') with no items.
-        const completedWithNoRecs = isStage3Success && (streaming?.recommendations.length ?? 0) === 0;
-
-        if (hasStartedRecs) {
-            // Mode 2 — `streaming` is guaranteed non-null when `hasStartedRecs`.
-            streaming!.recommendations.forEach((rec, index) => {
-                const key = `${keyPrefix}rec-${index}`;
-                if (rec === null) {
-                    insightCards.push({ key, motion: 'fade', component: <ImprovementCardShell /> });
-                    return;
-                }
-                const config = createImprovementCardConfig(rec, index, {
-                    clusterId: configuration.clusterId,
-                    databaseName: configuration.databaseName,
-                    collectionName: configuration.collectionName,
-                });
-                insightCards.push({
-                    key,
-                    motion: 'fade',
-                    component: (
-                        <ImprovementCard
-                            config={config}
-                            onPrimaryAction={handlePrimaryAction}
-                            onSecondaryAction={handleSecondaryAction}
-                        />
-                    ),
-                });
-            });
-        } else if (completedWithNoRecs) {
-            // Mode 3 — same React key (`rec-0`) and same component
-            // (ImprovementCardShell) as Mode 1, with `mode='empty'` so the
-            // swap is in place (icon, title, body change but the card frame
-            // stays put).
-            insightCards.push({
-                key: `${keyPrefix}rec-0`,
+        // Analysis Card — pre-reserves its slot at canonical top position the
+        // moment Stage 3 loading starts (before any event arrives), then swaps
+        // the placeholder for the streaming content in place. Disappears on
+        // cancel/error (both leave `streaming === null`).
+        if (stage3CardsActive) {
+            const summarySource = streaming?.summary;
+            cards.push({
+                key: `${keyPrefix}analysis-card`,
+                // AI content cards use Fade for enter AND leave. These cards grow
+                // (stream/expand) after mount, so a height-collapse animation —
+                // which measures `scrollHeight` once at mount — would clip the
+                // later content. `motion: 'fade'` is opacity-only and never clips.
                 motion: 'fade',
-                component: <ImprovementCardShell mode="empty" />,
-            });
-        } else {
-            // Mode 1 — same key as the first filled shell so Mode 2 swaps
-            // in place when the first event arrives.
-            insightCards.push({
-                key: `${keyPrefix}rec-0`,
-                motion: 'fade',
-                component: <ImprovementCardShell />,
+                component: (
+                    <MarkdownCard
+                        icon={<SparkleRegular />}
+                        title={l10n.t('Query Performance Analysis')}
+                        content={summarySource?.markdown ?? ''}
+                        inFlight={!summarySource?.complete}
+                        inFlightLabel={l10n.t('Analyzing…')}
+                    />
+                ),
             });
         }
-    }
 
-    // Educational Markdown Card — same pre-reserve pattern as Analysis Card.
-    if (stage3CardsActive) {
-        const educationalSource = streaming?.educational;
-        insightCards.push({
-            key: `${keyPrefix}understanding-execution`,
-            // AI content card — Fade enter/leave (grows while streaming).
-            motion: 'fade',
-            component: (
-                <MarkdownCard
-                    icon={<SparkleRegular />}
-                    title={l10n.t('Understanding Your Query Execution Plan')}
-                    content={educationalSource?.markdown ?? ''}
-                    inFlight={!educationalSource?.complete}
-                    inFlightLabel={l10n.t('Explaining…')}
-                />
-            ),
-        });
-    }
+        // Error Card — shown when query execution failed (gated by 1s timer
+        // after Stage 3 click; see `handleGetAISuggestions`).
+        if (showErrorCard && stage2Data?.concerns) {
+            cards.push({
+                key: `${keyPrefix}query-execution-error`,
+                motion: 'fade',
+                component: (
+                    <MarkdownCard
+                        title={l10n.t('Query Execution Failed')}
+                        icon={<WarningRegular />}
+                        showAiDisclaimer={false}
+                        content={
+                            stage2Data.concerns.join('\n\n') +
+                            '\n\n---\n\n' +
+                            '**Resolving this execution error should take precedence over performance optimization.** ' +
+                            'AI analysis will still run to provide additional insights, but focus on fixing the error first.'
+                        }
+                    />
+                ),
+            });
+        }
+
+        // Recommendation Cards — three rendering modes (mutually exclusive):
+        //   1. Pending placeholder      — Stage 3 loading, no rec events yet.
+        //   2. Progressive shells/cards — `recommendationStarted` event(s) arrived.
+        //   3. Empty-state              — `complete` landed with zero recs.
+        if (stage3CardsActive) {
+            const hasStartedRecs = (streaming?.recommendations.length ?? 0) > 0;
+            // "Stream completed with zero recommendations" — terminal `complete`
+            // event landed (kind === 's3Success') with no items.
+            const completedWithNoRecs = isStage3Success && (streaming?.recommendations.length ?? 0) === 0;
+
+            if (hasStartedRecs) {
+                // Mode 2 — `streaming` is guaranteed non-null when `hasStartedRecs`.
+                streaming!.recommendations.forEach((rec, index) => {
+                    const key = `${keyPrefix}rec-${index}`;
+                    if (rec === null) {
+                        cards.push({ key, motion: 'fade', component: <ImprovementCardShell /> });
+                        return;
+                    }
+                    const config = createImprovementCardConfig(rec, index, {
+                        clusterId: configuration.clusterId,
+                        databaseName: configuration.databaseName,
+                        collectionName: configuration.collectionName,
+                    });
+                    cards.push({
+                        key,
+                        motion: 'fade',
+                        component: (
+                            <ImprovementCard
+                                config={config}
+                                onPrimaryAction={handlePrimaryAction}
+                                onSecondaryAction={handleSecondaryAction}
+                            />
+                        ),
+                    });
+                });
+            } else if (completedWithNoRecs) {
+                // Mode 3 — same React key (`rec-0`) and same component
+                // (ImprovementCardShell) as Mode 1, with `mode='empty'` so the
+                // swap is in place (icon, title, body change but the card frame
+                // stays put).
+                cards.push({
+                    key: `${keyPrefix}rec-0`,
+                    motion: 'fade',
+                    component: <ImprovementCardShell mode="empty" />,
+                });
+            } else {
+                // Mode 1 — same key as the first filled shell so Mode 2 swaps
+                // in place when the first event arrives.
+                cards.push({
+                    key: `${keyPrefix}rec-0`,
+                    motion: 'fade',
+                    component: <ImprovementCardShell />,
+                });
+            }
+        }
+
+        // Educational Markdown Card — same pre-reserve pattern as Analysis Card.
+        if (stage3CardsActive) {
+            const educationalSource = streaming?.educational;
+            cards.push({
+                key: `${keyPrefix}understanding-execution`,
+                // AI content card — Fade enter/leave (grows while streaming).
+                motion: 'fade',
+                component: (
+                    <MarkdownCard
+                        icon={<SparkleRegular />}
+                        title={l10n.t('Understanding Your Query Execution Plan')}
+                        content={educationalSource?.markdown ?? ''}
+                        inFlight={!educationalSource?.complete}
+                        inFlightLabel={l10n.t('Explaining…')}
+                    />
+                ),
+            });
+        }
+
+        return cards;
+    }, [
+        stage3RequestKey,
+        isStage3Loading,
+        isStage3Success,
+        streaming,
+        showErrorCard,
+        stage2Data,
+        configuration,
+        handlePrimaryAction,
+        handleSecondaryAction,
+    ]);
+
     return (
         <div className="container">
             {/* Content Area - Flexbox two-column layout */}
