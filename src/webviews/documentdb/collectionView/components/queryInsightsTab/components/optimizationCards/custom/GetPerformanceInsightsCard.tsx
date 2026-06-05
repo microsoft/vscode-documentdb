@@ -153,7 +153,7 @@ export function GetPerformanceInsightsCard({
                             </MessageBarBody>
                         </MessageBar>
                     )}
-                    <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing...')} />
+                    <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing…')} />
                     {isLoading ? (
                         // During Stage 3 loading we no longer render an
                         // in-card spinner + "AI is analyzing…" row. The

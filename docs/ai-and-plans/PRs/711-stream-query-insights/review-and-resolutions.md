@@ -459,6 +459,13 @@ get two entries for one message; locales can render inconsistently.
 
 > Recommendation: **A**. (Also resolves the M4 announcer string at the same site.)
 
+> ✅ **RESOLVED (M7 / C3) — option A.** Standardized on the Unicode `…`:
+> `GetPerformanceInsightsCard.tsx`'s `Announcer` now uses `l10n.t('AI is analyzing…')`
+> (matching `Stage3AnalyzingCard.tsx`), and the `Announcer.tsx` JSDoc example was aligned
+> for consistency. Ran `npm run l10n`; `l10n/bundle.l10n.json` now carries a single
+> `"AI is analyzing…"` key (the stale ASCII entry is gone). Replied in Copilot thread
+> `r3362126871`.
+
 ---
 
 ### M8 — Subscription opens even when the reducer no-ops the transition (orig. #4)
