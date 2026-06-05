@@ -80,9 +80,8 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
 
         return parsed;
     } catch (error) {
-        ext.outputChannel.appendLine(
-            `⚠️ Query Insights Debug: Failed to read ${filename}: ${(error as Error).message}`,
-        );
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.appendLine(`⚠️ Query Insights Debug: Failed to read ${filename}: ${errorMessage}`);
         return null;
     }
 }

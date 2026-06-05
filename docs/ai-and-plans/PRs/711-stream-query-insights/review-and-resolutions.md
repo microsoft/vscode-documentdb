@@ -428,6 +428,11 @@ string) yields `undefined` in the log.
 > Recommendation: **A**. Trivial. (Note: it's in a dev-only debug helper, so user impact
 > is nil — but it's a clean lint/guideline fix.)
 
+> ✅ **RESOLVED (M6 / C2).** Replaced `(error as Error).message` with the standard
+> `error instanceof Error ? error.message : String(error)` guard in
+> `readQueryInsightsDebugFile`'s catch. No behavioural change; satisfies the repo
+> error-handling guideline. Replied in the Copilot thread `r3362126807`.
+
 ---
 
 ### M7 — ASCII `...` vs Unicode `…` → duplicate l10n keys (orig. C3)
