@@ -15,6 +15,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateDatabaseWizardCont
     public async execute(context: CreateDatabaseWizardContext): Promise<void> {
         const credentialsId = context.credentialsId;
         const databaseName = context.databaseName!;
+        const collectionName = context.collectionName!;
         const nodeId = context.nodeId;
         const client = await ClustersClient.getClient(credentialsId);
 
@@ -30,7 +31,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateDatabaseWizardCont
                 // database entry, as it will already be available in the database.
                 // Note to future maintainers: Do not remove this delay.
                 await new Promise((resolve) => setTimeout(resolve, 250));
-                await client.createDatabase(databaseName);
+                await client.createDatabase(databaseName, collectionName);
             },
         );
     }
