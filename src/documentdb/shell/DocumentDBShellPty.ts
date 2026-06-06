@@ -187,9 +187,10 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
         this._inputHandler.setEnabled(false);
 
         // Display welcome banner
+        const label = this._connectionInfo.shellLabel ?? 'DocumentDB';
         this.writeLine(
             this._outputFormatter.formatSystemMessage(
-                l10n.t('DocumentDB Shell: {0}', this._connectionInfo.clusterDisplayName),
+                l10n.t('{0} Shell: {1}', label, this._connectionInfo.clusterDisplayName),
             ),
         );
 
@@ -769,10 +770,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Update the terminal tab title to reflect the current database.
      */
     private updateTerminalTitle(): void {
+        const label = this._connectionInfo.shellLabel ?? 'DocumentDB';
         if (this._username) {
             this._nameEmitter.fire(
                 l10n.t(
-                    'DocumentDB: {0}@{1}/{2}',
+                    '{0}: {1}@{2}/{3}',
+                    label,
                     this._username,
                     this._connectionInfo.clusterDisplayName,
                     this._currentDatabase,
@@ -780,7 +783,7 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             );
         } else {
             this._nameEmitter.fire(
-                l10n.t('DocumentDB: {0}/{1}', this._connectionInfo.clusterDisplayName, this._currentDatabase),
+                l10n.t('{0}: {1}/{2}', label, this._connectionInfo.clusterDisplayName, this._currentDatabase),
             );
         }
     }

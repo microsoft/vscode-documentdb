@@ -1066,12 +1066,17 @@ export class ClustersClient {
         return result;
     }
 
-    async createDatabase(databaseName: string): Promise<void> {
+    async createDatabase(databaseName: string, collectionName?: string): Promise<void> {
         // TODO: add logging of failures to the telemetry somewhere in the call chain
-        const newCollection = await this._mongoClient
+        // In MongoDB, databases are created implicitly when their first collection is created.
+        if (collectionName) {
+            await this._mongoClient.db(databaseName).createCollection(collectionName);
+        } else {
+            const newCollection = await this._mongoClient
             .db(databaseName)
             .createCollection('_dummy_collection_creation_forces_db_creation');
         await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
+        }
         this._databasesCache = null;
     }
 

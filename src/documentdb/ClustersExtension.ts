@@ -78,6 +78,7 @@ import { updateCredentials } from '../commands/updateCredentials/updateCredentia
 import { doubleClickDebounceDelay } from '../constants';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
+import { AtlasDiscoveryProvider } from '../plugins/service-atlas-mongodb/AtlasDiscoveryProvider';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
@@ -129,6 +130,7 @@ export class ClustersExtension implements vscode.Disposable {
         DiscoveryService.registerProvider(new AzureDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
+        DiscoveryService.registerProvider(new AtlasDiscoveryProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
