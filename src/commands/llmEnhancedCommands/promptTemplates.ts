@@ -9,47 +9,6 @@ import { l10n } from 'vscode';
 import { ext } from '../../extensionVariables';
 
 /**
- * Preferred and fallback **language-model families**, per feature.
- *
- * We deliberately key our preference chain on `LanguageModelChat.family`
- * (the documented well-known name returned by the VS Code Language Model
- * API — `gpt-4.1`, `gpt-4o`, …) rather than `LanguageModelChat.id`
- * (which is opaque and may change between Copilot extension versions, or
- * include date-stamped suffixes like `copilot-gpt-4o-mini-2024-07-18`).
- * Family names are the stable surface we expect to outlive id churn, so
- * matching by family avoids silent "preferred model missed" fallbacks
- * every time the Copilot team rev's an internal id.
- *
- * Each AI-backed feature picks its own family chain so the choices can
- * diverge as we tune them (e.g., one feature may prefer a faster/cheaper
- * model if depth of reasoning is less important). When sharing the same
- * value, keep them as separate constants so a change in one feature does
- * not silently affect the other.
- *
- * `copilot-utility` is the internal Copilot alias that resolves to whichever
- * chat model the CAPI marks as `is_chat_fallback`. The Copilot extension
- * publishes alias entries with the alias string used as **both** `id` and
- * `family` (see the alias-registration loop in
- * `vscode-copilot-chat/.../languageModelAccess.ts`), so it matches our
- * family-based selector without special-casing. Adding it as the final
- * fallback keeps each AI flow on a model that is intended to be
- * cost-neutral for Copilot subscribers, even if `gpt-4.1` / `gpt-4o`
- * become unavailable in the future.
- */
-
-/** Preferred model family for the Query Insights / index recommender feature. */
-export const INDEX_OPTIMIZATION_PREFERRED_FAMILY = 'gpt-4.1';
-
-/** Fallback family chain for the Query Insights / index recommender feature. */
-export const INDEX_OPTIMIZATION_FALLBACK_FAMILIES = ['gpt-4o', 'copilot-utility'];
-
-/** Preferred model family for the AI Query Generation feature. */
-export const QUERY_GENERATION_PREFERRED_FAMILY = 'gpt-4.1';
-
-/** Fallback family chain for the AI Query Generation feature. */
-export const QUERY_GENERATION_FALLBACK_FAMILIES = ['gpt-4o', 'copilot-utility'];
-
-/**
  * Prompt factory utility functions
  */
 export function createPriorityDeclaration(role: string): string {

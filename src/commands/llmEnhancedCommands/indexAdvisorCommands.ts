@@ -14,12 +14,7 @@ import { type ClusterMetadata } from '../../documentdb/utils/getClusterMetadata'
 import { ext } from '../../extensionVariables';
 import { CopilotService, type CopilotTokenUsage } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
-import {
-    INDEX_OPTIMIZATION_FALLBACK_FAMILIES,
-    INDEX_OPTIMIZATION_PREFERRED_FAMILY,
-    getLastPromptSource,
-    type FilledPromptResult,
-} from './promptTemplates';
+import { getLastPromptSource, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of MongoDB command to optimize
@@ -73,11 +68,6 @@ export interface QueryOptimizationContext {
     indexStats?: IndexStats[];
     // Static analysis summary from Stage 2 (what the user has already been shown)
     staticAnalysisSummary?: string;
-    // Preferred LLM model family for optimization (e.g., 'gpt-4.1').
-    // Matched against `LanguageModelChat.family`.
-    preferredFamily?: string;
-    // Fallback LLM model families, tried in order.
-    fallbackFamilies?: string[];
     // AbortSignal for cancellation support
     signal?: AbortSignal;
 }
@@ -96,6 +86,11 @@ export interface OptimizationResult {
     modelFamily: string;
     // Human-readable display name (LanguageModelChat.name). Render in UI.
     modelDisplayName: string;
+    // Underlying model version (LanguageModelChat.version). For opaque aliases
+    // such as `copilot-utility`, this is the only field that identifies the
+    // model the alias resolved to at request time (id/family read back as the
+    // alias itself).
+    modelVersion: string;
     // Best-effort token usage measurements from the underlying CopilotService
     // request. Optional fields (see CopilotTokenUsage) — may be undefined when
     // the model rejects countTokens or the request is cancelled.
@@ -123,8 +118,6 @@ export interface OptimizationStreamHandle {
  */
 interface PreparedOptimizationRequest {
     messages: vscode.LanguageModelChatMessage[];
-    preferredFamily: string;
-    fallbackFamilies: string[];
     /**
      * Combined length of the prompt template, user's original query and
      * system-retrieved context data. Recorded as the `promptSize` measurement
@@ -397,8 +390,6 @@ export async function optimizeQuery(
     }
 
     const response = await CopilotService.sendMessage(prepared.messages, {
-        preferredFamily: prepared.preferredFamily,
-        fallbackFamilies: prepared.fallbackFamilies,
         signal: queryContext.signal,
         featureSource: 'queryInsights',
     });
@@ -438,8 +429,6 @@ export async function optimizeQueryStreaming(
     }
 
     const streamHandle = CopilotService.streamMessage(prepared.messages, {
-        preferredFamily: prepared.preferredFamily,
-        fallbackFamilies: prepared.fallbackFamilies,
         signal: queryContext.signal,
         featureSource: 'queryInsights',
     });
@@ -735,16 +724,7 @@ async function prepareOptimizationRequest(
     context.telemetry.properties.promptSource = getLastPromptSource();
     context.telemetry.properties.hasStaticAnalysisSummary = queryContext.staticAnalysisSummary ? 'true' : 'false';
 
-    // Send to Copilot with configured model families. Selection is keyed on
-    // LanguageModelChat.family (the stable well-known name), not id.
-    const preferredFamilyToUse = queryContext.preferredFamily || INDEX_OPTIMIZATION_PREFERRED_FAMILY;
-    const fallbackFamiliesToUse = queryContext.fallbackFamilies || INDEX_OPTIMIZATION_FALLBACK_FAMILIES;
-
-    ext.outputChannel.trace(
-        l10n.t('[Query Insights AI] Calling Copilot (family: {family})...', {
-            family: preferredFamilyToUse,
-        }),
-    );
+    ext.outputChannel.trace(l10n.t('[Query Insights AI] Calling Copilot...'));
 
     const messages = [
         // First message: User message with crafted prompt (instructions)
@@ -757,8 +737,6 @@ async function prepareOptimizationRequest(
 
     return {
         messages,
-        preferredFamily: preferredFamilyToUse,
-        fallbackFamilies: fallbackFamiliesToUse,
         promptTotalLength: craftedPrompt.length + userQuery.length + contextData.length,
     };
 }
@@ -784,6 +762,7 @@ function finalizeOptimizationResponse(
         modelId: string;
         modelFamily: string;
         modelDisplayName: string;
+        modelVersion: string;
         durationMs: number;
         usage?: CopilotTokenUsage;
     },
@@ -794,6 +773,11 @@ function finalizeOptimizationResponse(
     context.telemetry.measurements.responseSize = response.text.length;
     context.telemetry.properties.modelId = response.modelId;
     context.telemetry.properties.modelFamily = response.modelFamily;
+    // Capture model display name and underlying version explicitly: for opaque
+    // aliases (`copilot-utility`) id and family are the alias string, so the
+    // backing model is only visible through name/version.
+    context.telemetry.properties.modelName = response.modelDisplayName;
+    context.telemetry.properties.modelVersion = response.modelVersion;
 
     // Track token usage measurements when available. The fields are best-effort
     // (see CopilotTokenUsage) so each is only recorded when populated.
@@ -823,34 +807,12 @@ function finalizeOptimizationResponse(
         }),
     );
 
-    // Check if the preferred model family was used. Match strictly on family
-    // (LanguageModelChat.family) — the stable well-known name. Ids are opaque
-    // and version-suffixed, families are the contract we expect to remain
-    // stable across Copilot extension updates.
-    const preferredMatched = !prepared.preferredFamily || response.modelFamily === prepared.preferredFamily;
-    if (!preferredMatched) {
-        // Surface as a trace-channel warning rather than a notification toast:
-        // the fallback is automatic and there is nothing the user can act on,
-        // so a popup would only add confusion. The information stays
-        // available for diagnostics via the output channel and telemetry
-        // (`modelSelectionOutcome` on the shared sendMessage event).
-        ext.outputChannel.warn(
-            l10n.t(
-                '[Query Insights AI] Preferred model family "{preferredFamily}" was not available; used "{actualModel}" (family: {actualFamily}) instead. Recommendations may be less optimal.',
-                {
-                    preferredFamily: prepared.preferredFamily,
-                    actualModel: response.modelDisplayName,
-                    actualFamily: response.modelFamily,
-                },
-            ),
-        );
-    }
-
     return {
         recommendations: response.text,
         modelId: response.modelId,
         modelFamily: response.modelFamily,
         modelDisplayName: response.modelDisplayName,
+        modelVersion: response.modelVersion,
         usage: response.usage,
     };
 }

@@ -24,22 +24,6 @@ export type CopilotFeatureSource = 'queryInsights' | 'queryGeneration';
  * Options for sending a message to the language model
  */
 export interface CopilotMessageOptions {
-    /**
-     * Preferred model **family** (`LanguageModelChat.family`, e.g.
-     * `'gpt-4.1'`). We key the preference chain on family rather than id
-     * because `LanguageModelChat.id` is documented as opaque and can change
-     * between Copilot extension versions (or include date-stamped suffixes
-     * like `copilot-gpt-4o-mini-2024-07-18`), whereas `family` is the
-     * well-known stable name that survives id churn.
-     *
-     * If the requested family is not available, the service falls back to
-     * {@link fallbackFamilies} in order.
-     */
-    preferredFamily?: string;
-
-    /** Ordered list of fallback model families. See {@link preferredFamily}. */
-    fallbackFamilies?: string[];
-
     /* AbortSignal for cancellation support */
     signal?: AbortSignal;
 
@@ -53,6 +37,31 @@ export interface CopilotMessageOptions {
      */
     featureSource?: CopilotFeatureSource;
 }
+
+/**
+ * Family name used when asking VS Code's Language Model API for a model.
+ *
+ * We deliberately target the internal `copilot-utility` alias — published
+ * by the Copilot extension as both `id` and `family` — because it routes
+ * the request through Copilot's chat-fallback path, which:
+ *
+ * - does NOT consume premium request units / usage-based billing tokens,
+ *   matching the behaviour documented for utility models on
+ *   <https://docs.github.com/copilot/concepts/models/utility-models>; and
+ * - resolves at runtime to whichever model the Copilot service currently
+ *   designates for lightweight background work, so we don't need to chase
+ *   model deprecations (e.g. GPT-4.1 retirement on 2026-06-01) in this
+ *   extension's source.
+ *
+ * The list of underlying utility models (currently GPT-4o mini, GPT-4o,
+ * GPT-4.1, GPT-5.4 nano) is not stable and is not part of any public API,
+ * so we do NOT attempt to target those families directly — calling them by
+ * name from a third-party extension would fall outside the chat-fallback
+ * path and bill the user. The alias is the only target that preserves the
+ * "free for the user" guarantee, and is therefore intentionally the only
+ * model this service requests.
+ */
+const UTILITY_MODEL_FAMILY = 'copilot-utility';
 
 /**
  * Token-usage metrics for a Copilot request.
@@ -103,6 +112,15 @@ export interface CopilotResponse {
      * Falls back to {@link modelId} when `name` is empty.
      */
     modelDisplayName: string;
+    /**
+     * Underlying model version exposed by the provider
+     * (`LanguageModelChat.version`, e.g., `gpt-5.3-codex`). This is the only
+     * surface that distinguishes the current backing of an opaque alias such
+     * as `copilot-utility`: id and family both read `copilot-utility`, while
+     * `version` reveals which model the alias resolved to today. Record this
+     * in telemetry so the actual backing model is attributable per request.
+     */
+    modelVersion: string;
     /* Duration of the actual LLM request in milliseconds (excludes model selection overhead) */
     durationMs: number;
     /**
@@ -182,32 +200,10 @@ export class CopilotService {
                 // review rather than at runtime).
                 context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
 
-                // Get all available models from VS Code
-                const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-
-                const preferredFamilies = this.getPreferredFamilies(options);
-                const selectedModel = this.selectBestModel(availableModels, preferredFamilies);
-
-                // Capture the selection chain to telemetry for offline analysis
-                // (e.g., monitoring how often each fallback level is hit in production).
-                context.telemetry.properties.modelPreferenceChain = preferredFamilies.join(',') || '(none)';
-                // Use families (well-known names) rather than opaque ids, dedupe,
-                // and cap to keep the property within downstream size limits — long
-                // id strings like `copilot-gpt-4o-mini-2024-07-18` repeated across
-                // 10+ models can blow past telemetry property caps and get
-                // truncated, hiding the very data the field is meant to expose.
-                const MAX_MODELS_REPORTED = 8;
-                const availableFamilies = Array.from(new Set(availableModels.map((m) => m.family))).sort();
-                const reportedFamilies = availableFamilies.slice(0, MAX_MODELS_REPORTED);
-                const truncatedCount = availableFamilies.length - reportedFamilies.length;
-                context.telemetry.properties.modelsAvailable =
-                    truncatedCount > 0
-                        ? `${reportedFamilies.join(',')},+${truncatedCount}-more`
-                        : reportedFamilies.join(',');
-                context.telemetry.measurements.modelsAvailableCount = availableModels.length;
+                const selectedModel = await this.selectUtilityModel();
 
                 if (!selectedModel) {
-                    context.telemetry.properties.modelSelectionOutcome = 'no-models-available';
+                    context.telemetry.properties.modelSelectionOutcome = 'no-utility-model-available';
                     throw new Error(
                         l10n.t(
                             'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
@@ -217,9 +213,12 @@ export class CopilotService {
 
                 context.telemetry.properties.modelId = selectedModel.id;
                 context.telemetry.properties.modelFamily = selectedModel.family;
-                context.telemetry.properties.modelSelectionOutcome = preferredFamilies.includes(selectedModel.family)
-                    ? 'preferred-match'
-                    : 'first-available-fallback';
+                context.telemetry.properties.modelName = selectedModel.name || '(unnamed)';
+                context.telemetry.properties.modelVersion = selectedModel.version || '(unknown)';
+                if (typeof selectedModel.maxInputTokens === 'number') {
+                    context.telemetry.measurements.modelMaxInputTokens = selectedModel.maxInputTokens;
+                }
+                context.telemetry.properties.modelSelectionOutcome = 'utility-model';
 
                 try {
                     const response = await this.sendToModel(selectedModel, messages, options);
@@ -252,6 +251,7 @@ export class CopilotService {
                         modelId: selectedModel.id,
                         modelFamily: selectedModel.family,
                         modelDisplayName: selectedModel.name || selectedModel.id,
+                        modelVersion: selectedModel.version || '(unknown)',
                         durationMs: response.durationMs,
                         usage: response.usage,
                     };
@@ -343,23 +343,10 @@ export class CopilotService {
                     // calling feature so analytics can split telemetry by source.
                     context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
 
-                    const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-                    const preferredFamilies = this.getPreferredFamilies(options);
-                    const selectedModel = this.selectBestModel(availableModels, preferredFamilies);
-
-                    context.telemetry.properties.modelPreferenceChain = preferredFamilies.join(',') || '(none)';
-                    const MAX_MODELS_REPORTED = 8;
-                    const availableFamilies = Array.from(new Set(availableModels.map((m) => m.family))).sort();
-                    const reportedFamilies = availableFamilies.slice(0, MAX_MODELS_REPORTED);
-                    const truncatedCount = availableFamilies.length - reportedFamilies.length;
-                    context.telemetry.properties.modelsAvailable =
-                        truncatedCount > 0
-                            ? `${reportedFamilies.join(',')},+${truncatedCount}-more`
-                            : reportedFamilies.join(',');
-                    context.telemetry.measurements.modelsAvailableCount = availableModels.length;
+                    const selectedModel = await this.selectUtilityModel();
 
                     if (!selectedModel) {
-                        context.telemetry.properties.modelSelectionOutcome = 'no-models-available';
+                        context.telemetry.properties.modelSelectionOutcome = 'no-utility-model-available';
                         throw new Error(
                             l10n.t(
                                 'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
@@ -369,11 +356,12 @@ export class CopilotService {
 
                     context.telemetry.properties.modelId = selectedModel.id;
                     context.telemetry.properties.modelFamily = selectedModel.family;
-                    context.telemetry.properties.modelSelectionOutcome = preferredFamilies.includes(
-                        selectedModel.family,
-                    )
-                        ? 'preferred-match'
-                        : 'first-available-fallback';
+                    context.telemetry.properties.modelName = selectedModel.name || '(unnamed)';
+                    context.telemetry.properties.modelVersion = selectedModel.version || '(unknown)';
+                    if (typeof selectedModel.maxInputTokens === 'number') {
+                        context.telemetry.measurements.modelMaxInputTokens = selectedModel.maxInputTokens;
+                    }
+                    context.telemetry.properties.modelSelectionOutcome = 'utility-model';
 
                     try {
                         const response = await this.streamToModel(selectedModel, messages, options, (fragment) =>
@@ -405,6 +393,7 @@ export class CopilotService {
                             modelId: selectedModel.id,
                             modelFamily: selectedModel.family,
                             modelDisplayName: selectedModel.name || selectedModel.id,
+                            modelVersion: selectedModel.version || '(unknown)',
                             durationMs: response.durationMs,
                             usage: response.usage,
                         };
@@ -434,125 +423,55 @@ export class CopilotService {
     }
 
     /**
-     * Builds the ordered list of preferred model families.
-     */
-    private static getPreferredFamilies(options?: CopilotMessageOptions): string[] {
-        const families: string[] = [];
-
-        if (options?.preferredFamily) {
-            families.push(options.preferredFamily);
-        }
-
-        if (options?.fallbackFamilies && options.fallbackFamilies.length > 0) {
-            families.push(...options.fallbackFamilies);
-        }
-
-        return families;
-    }
-
-    /**
-     * Selects the best available model based on preference order.
-     *
-     * **Matching is performed by `LanguageModelChat.family`** — the
-     * documented stable well-known name (`gpt-4.1`, `gpt-4o`, …) —
-     * not by `LanguageModelChat.id`. The id is documented as opaque and
-     * may change between Copilot extension versions (or carry
-     * date-stamped suffixes like `copilot-gpt-4o-mini-2024-07-18`); the
-     * family is the surface we expect to outlive id churn. Internal
-     * aliases like `copilot-utility` are published by the Copilot
-     * extension with the alias string used as **both** id and family,
-     * so they also match the family-based selector without needing a
-     * special id-fallback path.
-     *
-     * Emits a structured trace of the selection chain to the output channel so
-     * users (and support) can see, per request, which families were requested,
-     * which were accepted, and which were rejected because they were not
-     * available from the Copilot vendor.
-     *
-     * @param availableModels - All available models from VS Code
-     * @param preferredFamilies - Ordered list of preferred model families
-     * @returns The best matching model, or the first available model if no matches
-     */
-    /**
      * Builds a compact, human-readable one-line summary of a model's stable
      * identity fields for the trace stream. Unlike {@link dumpModelMetadata}
      * (which is memoised and only fires once per model id), this is emitted on
      * every selection so each request's trace shows exactly which model — by
-     * display name, family and id — handled it, including utility/alias models
-     * such as `copilot-utility`.
+     * display name, family and id — handled it.
      */
     private static formatModelDetails(model: vscode.LanguageModelChat): string {
         return l10n.t(
-            'name="{0}", family={1}, id={2}, version={3}, maxInputTokens={4}',
+            'name="{0}", family={1}, id={2}, version={3}',
             model.name || '(unnamed)',
             model.family,
             model.id,
             model.version,
-            typeof model.maxInputTokens === 'number' ? model.maxInputTokens.toString() : '?',
         );
     }
 
-    private static selectBestModel(
-        availableModels: vscode.LanguageModelChat[],
-        preferredFamilies: string[],
-    ): vscode.LanguageModelChat | undefined {
-        const availableSummary = availableModels.map((m) => `${m.family} (${m.id})`);
-        ext.outputChannel.trace(
-            l10n.t('[Copilot] Available models from VS Code: {0}', JSON.stringify(availableSummary)),
-        );
-        ext.outputChannel.trace(
-            l10n.t('[Copilot] Model family preference chain: {0}', JSON.stringify(preferredFamilies)),
-        );
+    /**
+     * Resolves the Copilot **utility** model.
+     *
+     * We always ask for {@link UTILITY_MODEL_FAMILY} (`copilot-utility`) — the
+     * Copilot extension's documented alias for the chat-fallback path — and
+     * never fall back to billed picker models. If the alias is unavailable
+     * (e.g. the Copilot extension is not installed, the user is signed out,
+     * or the consent prompt has not been accepted) the caller is responsible
+     * for surfacing the failure; we never silently degrade onto a model that
+     * would consume the user's premium request budget.
+     *
+     * Returns `undefined` when no model is available so the caller can map
+     * that to its own user-facing error.
+     */
+    private static async selectUtilityModel(): Promise<vscode.LanguageModelChat | undefined> {
+        const matches = await vscode.lm.selectChatModels({
+            vendor: 'copilot',
+            family: UTILITY_MODEL_FAMILY,
+        });
 
-        if (availableModels.length === 0) {
-            // Nothing the caller could possibly use — flag this clearly in the
-            // trace so users debugging "AI insights unavailable" see the root cause.
+        if (matches.length === 0) {
             ext.outputChannel.warn(
-                l10n.t('[Copilot] No language models available from vendor "copilot". Aborting selection.'),
+                l10n.t(
+                    '[Copilot] Utility model "{0}" is not available from vendor "copilot". Aborting request to avoid charging the user for a billed picker model.',
+                    UTILITY_MODEL_FAMILY,
+                ),
             );
             return undefined;
         }
 
-        // Walk the preference chain in order, matching on `family`; log
-        // accepted/rejected per entry so the full decision path is visible in
-        // the trace stream.
-        for (const preferredFamily of preferredFamilies) {
-            const matchingModel = availableModels.find((m) => m.family === preferredFamily);
-            if (matchingModel) {
-                ext.outputChannel.trace(
-                    l10n.t(
-                        '[Copilot] Requested family "{0}" → accepted (matched id: {1})',
-                        preferredFamily,
-                        matchingModel.id,
-                    ),
-                );
-                ext.outputChannel.trace(
-                    l10n.t('[Copilot] Selected model: {0}', this.formatModelDetails(matchingModel)),
-                );
-                return matchingModel;
-            }
-            ext.outputChannel.trace(
-                l10n.t(
-                    '[Copilot] Requested family "{0}" → rejected (no available model in this family)',
-                    preferredFamily,
-                ),
-            );
-        }
-
-        // No preference matched but models are available — fall back to the
-        // first one Copilot returned so the feature degrades gracefully.
-        const fallback = availableModels[0];
-        if (preferredFamilies.length === 0) {
-            ext.outputChannel.trace(
-                l10n.t('[Copilot] No family preferences supplied; using first available: {0}', fallback.id),
-            );
-        } else {
-            ext.outputChannel.trace(
-                l10n.t('[Copilot] No preferred family matched; falling back to first available: {0}', fallback.id),
-            );
-        }
-        ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', this.formatModelDetails(fallback)));
-        return fallback;
+        const selected = matches[0];
+        ext.outputChannel.trace(l10n.t('[Copilot] Selected utility model: {0}', this.formatModelDetails(selected)));
+        return selected;
     }
 
     /**
@@ -744,12 +663,19 @@ export class CopilotService {
     }
 
     /**
-     * Checks if LLMs are available
+     * Checks whether the Copilot utility model this service exclusively
+     * targets is currently available.
      *
-     * @returns true if at least one model is available
+     * Mirrors the selector used by {@link selectUtilityModel} so an
+     * `isAvailable() === true` result is a strong predictor of the next
+     * `sendMessage` / `streamMessage` call succeeding (rather than reporting
+     * availability of any Copilot model and then failing in selection).
      */
     static async isAvailable(): Promise<boolean> {
-        const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+        const models = await vscode.lm.selectChatModels({
+            vendor: 'copilot',
+            family: UTILITY_MODEL_FAMILY,
+        });
         return models.length > 0;
     }
 
