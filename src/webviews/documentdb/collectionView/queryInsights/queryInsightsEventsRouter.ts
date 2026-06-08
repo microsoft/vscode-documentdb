@@ -133,6 +133,22 @@ export const queryInsightsEventsRoutes = {
             // call. The framework calls `iterator.return()` on stop/dispose
             // which propagates through this `async function*`; we abort the
             // controller in the matching `finally`.
+            // Track *why* we exited the generator so completion telemetry can
+            // distinguish a clean finish from a user-cancel / shutdown.
+            // Set BEFORE the `finally` runs `abortController.abort()` (see
+            // PR #711, finding F1): the old code sampled the controller
+            // flag inside `finally` after cleanup had already aborted it,
+            // so every successful stream was logged as `aborted='true'`.
+            //  - 'success' — the terminal `complete` event was yielded.
+            //  - 'cancel'  — `ctx.signal` aborted (user cancel / dispose /
+            //                regenerate) or the generator returned because
+            //                of an observed abort.
+            //  - 'error'   — an exception escaped the try-block (see F7).
+            // Default to 'cancel' so a generator that exits early without
+            // reaching the final yield is recorded as a cancel rather than
+            // a (misleading) success.
+            let outcome: 'success' | 'cancel' | 'error' = 'cancel';
+
             const abortController = new AbortController();
             const onCtxAbort = (): void => abortController.abort();
             if (myCtx.signal?.aborted) {
@@ -146,8 +162,8 @@ export const queryInsightsEventsRoutes = {
             // duration and no measurements because `trpcToTelemetry` wraps
             // `opts.next()` which resolves at generator-creation time; we
             // flush this accumulator from the `finally` below so it
-            // captures success, aborts, and the (rare) error path with
-            // their final values + `aborted` flag + wall-clock `durationMs`.
+            // captures success, cancels, and the (rare) error path with
+            // their final values + `outcome` + wall-clock `durationMs`.
             const completionTelemetry = newCompletionTelemetry();
             let completionFlushed = false;
 
@@ -155,7 +171,13 @@ export const queryInsightsEventsRoutes = {
                 if (completionFlushed) return;
                 completionFlushed = true;
                 completionTelemetry.measurements.durationMs = elapsed();
-                completionTelemetry.properties.aborted = abortController.signal.aborted ? 'true' : 'false';
+                completionTelemetry.properties.outcome = outcome;
+                // Back-compat with dashboards that filter on the original
+                // boolean: keep `aborted` populated, but compute it from
+                // the real outcome instead of the post-cleanup controller
+                // flag. `error` counts as not-aborted here so cancel-vs-
+                // error stays distinguishable via `outcome`.
+                completionTelemetry.properties.aborted = outcome === 'cancel' ? 'true' : 'false';
                 // Fire-and-forget: the streaming subscription is a push
                 // path and we don't have a useful Promise to await on here
                 // — errors flushing telemetry are swallowed by
@@ -561,12 +583,17 @@ export const queryInsightsEventsRoutes = {
                     }
                     yield completeEvent;
                 }
+                // Reaching this point means the terminal `complete` event
+                // was yielded without an abort intervening. Promote the
+                // outcome from the default 'cancel' to 'success' BEFORE
+                // the `finally` runs cleanup.
+                outcome = 'success';
             } finally {
                 myCtx.signal?.removeEventListener('abort', onCtxAbort);
                 abortController.abort();
                 // Always emit the dedicated completion event — success,
-                // abort, or the (rare) thrown-error path. The `aborted`
-                // flag + `durationMs` measurement disambiguate outcomes.
+                // cancel, or the (rare) thrown-error path. The `outcome`
+                // property + `durationMs` measurement disambiguate them.
                 flushCompletionEvent();
             }
         }),
