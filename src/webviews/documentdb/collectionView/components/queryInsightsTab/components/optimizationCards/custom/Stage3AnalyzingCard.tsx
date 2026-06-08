@@ -151,20 +151,20 @@ export function Stage3AnalyzingCard({
                 </Button>
             </div>
             {/*
-             * Polite live region so screen-reader users learn the AI request
-             * started (and that Cancel exists). The visible Spinner/Text are
-             * not themselves a live region, so the announcement happens exactly
-             * once on mount via the Announcer (review item M4). The card mounts
-             * when Stage 3 starts loading and stays mounted through the success
-             * exit-collapse, so this announces a single time per request.
-             *
-             * The per-phase label changes are deliberately NOT announced
-             * (decision #5): the message is fixed to the generic "AI is
-             * analyzing…" so non-sighted users hear one stable "working"
-             * signal rather than a stream of label updates. This is flagged
-             * for a11y review.
+             * F9: phase-aware polite announcements. The earlier fixed
+             * "AI is analyzing…" was the only stable signal for screen-reader
+             * users, but after F3 (StreamingInlineProgress no longer self-
+             * announces) it was their *only* signal — and it never narrated
+             * progress. Stack one Announcer per phase, each gated on its phase
+             * matching: each fires exactly once when its phase becomes active
+             * (Announcer re-announces on `when` false→true), so the user hears
+             * a short three-step narrative as the request moves forward, with
+             * natural spacing driven by real model progress (no extra
+             * throttling needed). Mount stays continuous through s3Success.
              */}
-            <Announcer when={true} message={l10n.t('AI is analyzing…')} />
+            <Announcer when={phase === 'connecting'} message={l10n.t('AI is analyzing…')} />
+            <Announcer when={phase === 'submitted'} message={l10n.t('Request sent. Awaiting response.')} />
+            <Announcer when={phase === 'receiving'} message={l10n.t('Receiving response.')} />
         </Card>
     );
 }
