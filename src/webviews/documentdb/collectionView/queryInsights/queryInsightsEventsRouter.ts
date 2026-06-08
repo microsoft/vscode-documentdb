@@ -597,10 +597,8 @@ export const queryInsightsEventsRoutes = {
                 // exited via `finally` only, leaving the outcome at the
                 // default 'cancel' and losing all error metadata.
                 outcome = 'error';
-                completionTelemetry.properties.errorKind =
-                    err instanceof Error ? err.constructor.name : 'unknown';
-                completionTelemetry.properties.errorMessage =
-                    err instanceof Error ? err.message : String(err);
+                completionTelemetry.properties.errorKind = err instanceof Error ? err.constructor.name : 'unknown';
+                completionTelemetry.properties.errorMessage = err instanceof Error ? err.message : String(err);
                 // Rethrow so the framework still surfaces `onError` to
                 // the webview reducer. The `finally` below runs in either
                 // case and flushes the completion event with the recorded
