@@ -94,7 +94,6 @@ export function Stage3AnalyzingCard({
             return;
         }
         const startedAt = Date.now();
-        setElapsedSec(0);
         const intervalId = window.setInterval(() => {
             setElapsedSec(Math.floor((Date.now() - startedAt) / 1000));
         }, 1000);
