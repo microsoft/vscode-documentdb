@@ -146,7 +146,7 @@ export const CollectionView = (): JSX.Element => {
         // Only reset on actual query changes, not pagination
         if (intent === 'initial' || intent === 'refresh') {
             console.trace('[CollectionView] Query changed (intent: {0}), resetting Query Insights', intent);
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting derived state on query intent change
+
             setCurrentContext((prev) => ({
                 ...prev,
                 queryInsights: DefaultCollectionViewContext.queryInsights,
@@ -345,7 +345,6 @@ export const CollectionView = (): JSX.Element => {
     }
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- Setting loading state before async query execution
         setCurrentContext((prev) => ({ ...prev, isLoading: true }));
 
         // 1. Run the query, this operation only acknowledges the request.
