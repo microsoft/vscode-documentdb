@@ -86,6 +86,8 @@ export const queryInsightsEventsRoutes = {
      * only Stage 3 entry point). Yields a sequence of
      * {@link QueryInsightsStreamEvent}s:
      *  - `status` with `phase: 'connecting'` once setup begins,
+     *  - `status` with `phase: 'submitted'` once the LLM request has been
+     *    dispatched and we begin awaiting the first token,
      *  - structured domain events fed by
      *    {@link StreamingResponseParser} as fragments arrive (`summary` /
      *    `educational` with cumulative markdown at paragraph boundaries,
@@ -275,6 +277,26 @@ export const queryInsightsEventsRoutes = {
                     abortController.signal,
                     staticAnalysisSummary,
                 );
+
+                // The request has now been dispatched to the model. Surface a
+                // `submitted` status so the slim analyzer card can switch off
+                // "Connecting…" and start its live elapsed-time counter while
+                // we await the model's first token — the longest, output-less
+                // part of the wait ("the model is thinking"). Without this the
+                // card would sit on "Connecting…" for the entire
+                // time-to-first-token gap and read as frozen.
+                {
+                    const submittedEvent: QueryInsightsStreamEvent = {
+                        type: 'status',
+                        phase: 'submitted',
+                        elapsedMs: elapsed(),
+                        charsReceived: 0,
+                    };
+                    if (abortController.signal.aborted) {
+                        return;
+                    }
+                    yield submittedEvent;
+                }
 
                 let charsReceived = 0;
                 let lastStatusYieldAt = 0;

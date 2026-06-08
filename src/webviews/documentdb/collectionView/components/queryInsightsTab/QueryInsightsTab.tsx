@@ -1088,7 +1088,6 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <GenericCell
                             label={l10n.t('Selectivity')}
                             value={getCellValue(() => stage2Data?.efficiencyAnalysis.selectivity)}
-                            nullValuePlaceholder="—"
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 const selectivity = stage2Data?.efficiencyAnalysis.selectivity;

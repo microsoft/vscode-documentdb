@@ -105,7 +105,8 @@ const EMPTY_STREAMING: QueryInsightsStage3Streaming = {
  */
 const PHASE_RANK: Record<QueryInsightsStage3Phase, number> = {
     connecting: 0,
-    analyzing: 1,
+    submitted: 1,
+    receiving: 2,
 };
 
 /** Returns whichever phase is further along (never regresses). */
@@ -249,17 +250,25 @@ export function applyStage3Event(
 
     switch (event.type) {
         case 'status': {
-            // Coarse progress. The only piece we surface is the
-            // `connecting → analyzing` advance: the first `receiving` status
-            // with `charsReceived > 0` means the model has produced its first
-            // character (time-to-first-token is over), which is the signal
-            // the slim analyzer card uses to switch its label off
-            // "Connecting…" (review item L1). Everything else about `status`
-            // is unused.
-            if (event.phase === 'receiving' && (event.charsReceived ?? 0) > 0) {
-                const phase = maxPhase(streaming.phase, 'analyzing');
+            // Coarse progress drives the slim analyzer card's label through
+            // two advances:
+            //   connecting → submitted : the request has been dispatched to
+            //     the model and we are awaiting the first token. Surfaced by a
+            //     `submitted` status (no characters yet).
+            //   submitted → receiving  : the first `receiving` status with
+            //     `charsReceived > 0` means the model has produced its first
+            //     character (time-to-first-token is over).
+            // `maxPhase` keeps the label monotonic regardless of ordering.
+            let target: QueryInsightsStage3Phase | undefined;
+            if (event.phase === 'submitted') {
+                target = 'submitted';
+            } else if (event.phase === 'receiving' && (event.charsReceived ?? 0) > 0) {
+                target = 'receiving';
+            }
+            if (target) {
+                const phase = maxPhase(streaming.phase, target);
                 if (phase !== streaming.phase) {
-                    return trace('applyStage3Event[status:analyzing]', prev, {
+                    return trace(`applyStage3Event[status:${target}]`, prev, {
                         ...prev,
                         streaming: { ...streaming, phase },
                     });
@@ -271,13 +280,13 @@ export function applyStage3Event(
         case 'summary':
             // Structured content can arrive before the first `receiving`
             // status (the router yields structured events ahead of the coarse
-            // status for the same fragment), so advance to `analyzing` here
+            // status for the same fragment), so advance to `receiving` here
             // too — `maxPhase` keeps it monotonic either way.
             return trace('applyStage3Event[summary]', prev, {
                 ...prev,
                 streaming: {
                     ...streaming,
-                    phase: maxPhase(streaming.phase, 'analyzing'),
+                    phase: maxPhase(streaming.phase, 'receiving'),
                     summary: { markdown: event.markdown, complete: event.complete },
                 },
             });
@@ -287,7 +296,7 @@ export function applyStage3Event(
                 ...prev,
                 streaming: {
                     ...streaming,
-                    phase: maxPhase(streaming.phase, 'analyzing'),
+                    phase: maxPhase(streaming.phase, 'receiving'),
                     educational: { markdown: event.markdown, complete: event.complete },
                 },
             });
@@ -299,7 +308,7 @@ export function applyStage3Event(
             }
             return trace('applyStage3Event[recStarted]', prev, {
                 ...prev,
-                streaming: { ...streaming, phase: maxPhase(streaming.phase, 'analyzing'), recommendations },
+                streaming: { ...streaming, phase: maxPhase(streaming.phase, 'receiving'), recommendations },
             });
         }
 
@@ -311,7 +320,7 @@ export function applyStage3Event(
             recommendations[event.index] = event.recommendation;
             return trace('applyStage3Event[rec]', prev, {
                 ...prev,
-                streaming: { ...streaming, phase: maxPhase(streaming.phase, 'analyzing'), recommendations },
+                streaming: { ...streaming, phase: maxPhase(streaming.phase, 'receiving'), recommendations },
             });
         }
 

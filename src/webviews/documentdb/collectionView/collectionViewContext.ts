@@ -122,18 +122,23 @@ type WithStage12 = WithStage1 & { stage2: QueryInsightsStage2Response };
 /**
  * Coarse, monotonic phase of an in-flight Stage 3 stream, used purely to
  * label the slim "analyzing" affordance ({@link Stage3AnalyzingCard}) as the
- * request progresses. It only ever advances (`connecting → analyzing`), never
- * regresses.
+ * request progresses. It only ever advances
+ * (`connecting → submitted → receiving`), never regresses.
  *
- *   - `connecting`  — request submitted; host is building context and
- *                     waiting on the model's first byte (time-to-first-token,
- *                     typically the longest wait). No output yet.
- *   - `analyzing`   — the model has started producing output. Set on the
- *                     first character received (a `receiving` status with
- *                     `charsReceived > 0`, or the first structured content
- *                     event — whichever lands first).
+ *   - `connecting` — the host is building the request context (query params,
+ *                    static-analysis summary, cluster metadata) before the
+ *                    LLM call is dispatched. Usually brief.
+ *   - `submitted`  — the request has been sent to the model and we are
+ *                    awaiting its first token (time-to-first-token, typically
+ *                    the longest wait — the model is "thinking" and producing
+ *                    no output yet). The card shows a live elapsed-time
+ *                    counter during this phase so the wait never looks frozen.
+ *   - `receiving`  — the model has started producing output. Set on the first
+ *                    character received (a `receiving` status with
+ *                    `charsReceived > 0`, or the first structured content
+ *                    event — whichever lands first).
  */
-export type QueryInsightsStage3Phase = 'connecting' | 'analyzing';
+export type QueryInsightsStage3Phase = 'connecting' | 'submitted' | 'receiving';
 
 /**
  * Per-stream progressive state for Stage 3. Carries only the structured

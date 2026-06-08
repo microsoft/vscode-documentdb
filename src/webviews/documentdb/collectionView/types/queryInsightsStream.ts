@@ -52,11 +52,13 @@ export type QueryInsightsStreamEvent =
           type: 'status';
           /**
            * Coarse lifecycle phase. The subscription emits `connecting`
-           * before the LLM call returns its first fragment, `receiving`
-           * while fragments are arriving, and `parsing` once the stream
-           * has finished and the final JSON is being processed.
+           * while it builds the request context, `submitted` the moment the
+           * LLM request has been dispatched and we begin awaiting the first
+           * token (the "model is thinking" gap), `receiving` while fragments
+           * are arriving, and `parsing` once the stream has finished and the
+           * final JSON is being processed.
            */
-          phase: 'connecting' | 'receiving' | 'parsing';
+          phase: 'connecting' | 'submitted' | 'receiving' | 'parsing';
           /** Wall-clock time since the subscription started, in milliseconds. */
           elapsedMs: number;
           /** Cumulative number of characters received from the LLM so far. */

@@ -473,6 +473,25 @@ export class CopilotService {
      * @param preferredFamilies - Ordered list of preferred model families
      * @returns The best matching model, or the first available model if no matches
      */
+    /**
+     * Builds a compact, human-readable one-line summary of a model's stable
+     * identity fields for the trace stream. Unlike {@link dumpModelMetadata}
+     * (which is memoised and only fires once per model id), this is emitted on
+     * every selection so each request's trace shows exactly which model — by
+     * display name, family and id — handled it, including utility/alias models
+     * such as `copilot-utility`.
+     */
+    private static formatModelDetails(model: vscode.LanguageModelChat): string {
+        return l10n.t(
+            'name="{0}", family={1}, id={2}, version={3}, maxInputTokens={4}',
+            model.name || '(unnamed)',
+            model.family,
+            model.id,
+            model.version,
+            typeof model.maxInputTokens === 'number' ? model.maxInputTokens.toString() : '?',
+        );
+    }
+
     private static selectBestModel(
         availableModels: vscode.LanguageModelChat[],
         preferredFamilies: string[],
@@ -507,7 +526,9 @@ export class CopilotService {
                         matchingModel.id,
                     ),
                 );
-                ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', matchingModel.id));
+                ext.outputChannel.trace(
+                    l10n.t('[Copilot] Selected model: {0}', this.formatModelDetails(matchingModel)),
+                );
                 return matchingModel;
             }
             ext.outputChannel.trace(
@@ -530,7 +551,7 @@ export class CopilotService {
                 l10n.t('[Copilot] No preferred family matched; falling back to first available: {0}', fallback.id),
             );
         }
-        ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', fallback.id));
+        ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', this.formatModelDetails(fallback)));
         return fallback;
     }
 
@@ -595,11 +616,40 @@ export class CopilotService {
             const requestStart = Date.now();
             const chatResponse = await model.sendRequest(messages, requestOptions, cts.token);
 
+            // `sendRequest` resolves once the request has been accepted and
+            // dispatched to the model (after any auth/consent handshake) but
+            // BEFORE the first token streams back. The VS Code Language Model
+            // API exposes no finer-grained progress than this — there is no
+            // "upload complete" / "model thinking" callback — so this is the
+            // earliest milestone we can surface. Trace it so the often-long
+            // "model is thinking" gap between request acceptance and first
+            // token is visible separately from the model-selection overhead.
+            const requestAcceptedMs = Date.now() - requestStart;
+            ext.outputChannel.trace(
+                l10n.t('[Copilot] Request accepted by model after {0}ms; awaiting first token…', requestAcceptedMs),
+            );
+
             // Collect the streaming response, checking for cancellation between chunks
             let fullResponse = '';
+            let firstTokenTraced = false;
             for await (const fragment of chatResponse.text) {
                 if (signal?.aborted) {
                     break;
+                }
+                if (!firstTokenTraced) {
+                    firstTokenTraced = true;
+                    // Time-to-first-token: the headline latency users feel as
+                    // "why is nothing happening yet". Report both the absolute
+                    // elapsed-since-send and the delta after request acceptance
+                    // so the thinking gap is isolated from dispatch overhead.
+                    const firstTokenMs = Date.now() - requestStart;
+                    ext.outputChannel.trace(
+                        l10n.t(
+                            '[Copilot] First token received {0}ms after send ({1}ms after request accepted)',
+                            firstTokenMs,
+                            firstTokenMs - requestAcceptedMs,
+                        ),
+                    );
                 }
                 fullResponse += fragment;
                 // Surface the fragment to the streaming consumer. We do this
