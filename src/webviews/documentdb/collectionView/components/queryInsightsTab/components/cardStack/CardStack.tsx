@@ -83,6 +83,14 @@ export const CardStack = ({
     // that forbids ref reads/writes during render stays satisfied. The
     // setter is only called when `items` is non-empty AND differs from the
     // current snapshot, which avoids the infinite-render-loop trap.
+    //
+    // LOAD-BEARING (F10): the `items !== lastNonEmpty` reference check
+    // relies on the parent passing a memoized `items` array — see
+    // QueryInsightsTab.tsx, where `insightCards` is wrapped in `useMemo`.
+    // If a caller passes a freshly-built array each render, this guard
+    // converges immediately (no infinite loop) but costs one extra commit
+    // per parent render. Keep the parent's `useMemo` and this snapshot in
+    // sync: if you change one, audit the other.
     const [lastNonEmpty, setLastNonEmpty] = useState<CardStackItem[]>(items);
     if (items.length > 0 && items !== lastNonEmpty) {
         setLastNonEmpty(items);

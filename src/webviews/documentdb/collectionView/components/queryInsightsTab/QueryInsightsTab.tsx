@@ -636,6 +636,14 @@ export const QueryInsightsMain = (): JSX.Element => {
     // of its inputs change. Without this, a fresh array on every render forces
     // CardStack's `lastNonEmpty` snapshot to re-set each render — harmless but
     // wasteful churn (review item M5/C1).
+    //
+    // LOAD-BEARING (F10): CardStack uses the store-derived-state pattern
+    // (in-render setState guarded by `items !== lastNonEmpty`) for its exit-
+    // animation snapshot. That guard relies on `insightCards` being
+    // reference-stable across no-op renders. Removing this `useMemo` (or
+    // weakening its dependency list) would reintroduce one extra commit per
+    // unrelated render — see CardStack.tsx for the other half of the
+    // contract. Keep them in sync.
     const insightCards: CardStackItem[] = useMemo<CardStackItem[]>(() => {
         const cards: CardStackItem[] = [];
 
