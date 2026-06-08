@@ -167,43 +167,47 @@ export const CollectionView = (): JSX.Element => {
      * bails. See `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
-        // F2: the dedupe check + claim runs inside a functional setState
-        // updater so it observes the LATEST committed state — not the
-        // closure's `currentContext`. The previous version sampled
-        // `currentContext.queryInsights` directly, which in the common
-        // "user re-runs a query" flow was the pre-reset (e.g. `s3Success`)
-        // value because the reset effect's setState hadn't committed yet
-        // by the time this callback ran from inside `.then(runFindQuery)`.
-        // That caused every 2nd/3rd/etc. query to skip the background
-        // prefetch entirely.
+        // F2 (revised): read the gate from `currentContextRef.current`, not
+        // from the render's `currentContext` closure.
         //
-        // A captured `claimed` boolean carries the "did we win the dedupe?"
-        // signal back out of the updater so the network call only fires
-        // when we actually flipped state to `s1Loading`.
+        // History of this code:
+        //  - Original: read `currentContext.queryInsights` from the closure
+        //    and bailed if it wasn't `idle`. When the user ran a 2nd/3rd/etc.
+        //    query, the reset effect's setState (queryInsights → idle) had
+        //    not committed by the time the `runFindQuery.then` callback ran
+        //    this function, so the closure still saw the previous run's
+        //    terminal state (e.g. `s3Success`) and the early return skipped
+        //    every prefetch except the first. (PR #711 finding F2.)
+        //  - Attempted fix (639935df...4d398dd1 — REVERTED): moved the gate
+        //    into a functional `setCurrentContext` updater with a captured
+        //    `claimed` boolean. That doesn't work: `setState((prev) => ...)`
+        //    queues the updater; React runs it on the next render, not
+        //    inside the call. The `if (!claimed) return;` line therefore
+        //    always saw `false` and the network call never fired. The
+        //    updater itself still committed though, leaving state stuck on
+        //    `s1Loading` so the Query Insights tab's fallback fetch saw
+        //    "someone is already loading" and waited forever.
+        //  - Current: use the ref. By the time `runFindQuery.then` resolves
+        //    (network call, tens to hundreds of ms), React has long since
+        //    committed the reset effect's state update and the
+        //    `currentContextRef`-updating effect has copied it into the ref.
+        //    Reading the ref here gives us the post-reset state without the
+        //    `setState`-queueing pitfall.
         //
-        // Updater purity caveat (StrictMode / concurrent re-invocation):
-        // React may invoke this updater more than once with the same
-        // `prev`. That's fine here — the second invocation observes the
-        // same `idle` and computes the same `s1Loading` result, the
-        // updater itself returns a value derived only from `prev`, and
-        // `claimed = true` is idempotent. The network call fires exactly
-        // once because it's outside the updater, after `setCurrentContext`
-        // returns.
-        let claimed = false;
-        setCurrentContext((prev) => {
-            // Bail if a load has already been claimed (or completed) for
-            // this query — Stage 1 data is carried forward onto every
-            // post-Stage-1 variant, so any `kind` past `s1Loading` means
-            // there's nothing left to do.
-            if (prev.queryInsights.kind !== 'idle') {
-                return prev;
-            }
-            claimed = true;
-            return { ...prev, queryInsights: startStage1Load(prev.queryInsights) };
-        });
-        if (!claimed) {
+        // Residual con (still Low, vs. completely-broken before): the ref
+        // is updated by a `useEffect`, so it lags real state by one commit.
+        // For prefetch we're called from a promise `.then`, which means many
+        // commits have already happened — the lag is not observable in
+        // practice. If a future caller invokes this synchronously from
+        // inside the same render that queues the reset, the lag could bite;
+        // in that case prefer a request-key on Stage 1 (analogous to Stage 3).
+        const qi = currentContextRef.current.queryInsights;
+        if (qi.kind !== 'idle') {
             return;
         }
+
+        // Claim the load before firing the request.
+        setCurrentContext((prev) => ({ ...prev, queryInsights: startStage1Load(prev.queryInsights) }));
 
         // Query parameters are now retrieved from ClusterSession - no need to pass them
         void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
