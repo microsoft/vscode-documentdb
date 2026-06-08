@@ -7,7 +7,8 @@ import { Badge, Skeleton, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/
 import { InfoRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import { useMemo, type React } from 'react';
+import type * as React from 'react';
+import { useMemo, useState } from 'react';
 import '../../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
@@ -77,11 +78,15 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     visible = true,
     nullValuePlaceholder = 'N/A',
 }) => {
+    // DEV-ONLY toggle — remove before shipping
+    const [devShowSkeleton, setDevShowSkeleton] = useState(false);
+    const effectiveRating = devShowSkeleton ? undefined : rating;
+
     // Stable random widths for badge skeletons — re-randomised each time the skeleton mounts
     const badgeWidths = useMemo(
-        () => [[randW(80, 140), randW(60, 110), randW(90, 150)], [randW(70, 120)]] as const,
+        () => [[randW(80, 140), randW(60, 110), randW(90, 150), randW(70, 120), randW(70, 120)]] as const,
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [rating === undefined],
+        [effectiveRating === undefined],
     );
     const getRatingColor = (rating: PerformanceRating): string => {
         switch (rating) {
@@ -124,31 +129,32 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         (a, b) => (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1),
     );
 
-    if (rating === null) {
+    if (effectiveRating === null) {
         // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
         customContent = null;
-    } else if (rating === undefined) {
+    } else if (effectiveRating === undefined) {
         // Undefined: data loading — render a structured skeleton that mirrors the real layout
         customContent = (
             <Skeleton aria-label={l10n.t('Loading performance rating')}>
                 <div
                     className="efficiencyIndicator"
-                    style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
+                    style={{
+                        display: 'grid',
+                        gridTemplateColumns: 'auto 1fr',
+                        columnGap: '8px',
+                        rowGap: '6px',
+                        paddingTop: '14px',
+                    }}
                 >
                     {/* Row 1: dot skeleton + rating-text skeleton */}
                     <SkeletonItem shape="circle" size={12} style={{ alignSelf: 'center' }} />
-                    <SkeletonItem size={16} style={{ width: '72px' }} />
+                    <SkeletonItem size={16} style={{ width: '144px' }} />
                     {/* Row 2: indent spacer + two rows of badge-pill skeletons */}
                     <div />
                     <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', gap: '6px' }}>
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', paddingTop: '4px' }}>
                             {badgeWidths[0].map((w, i) => (
-                                <SkeletonItem key={i} size={16} style={{ width: `${w}px`, borderRadius: '2px' }} />
-                            ))}
-                        </div>
-                        <div style={{ display: 'flex', gap: '6px' }}>
-                            {badgeWidths[1].map((w, i) => (
-                                <SkeletonItem key={i} size={16} style={{ width: `${w}px`, borderRadius: '2px' }} />
+                                <SkeletonItem key={i} size={16} style={{ width: `${w}px` }} />
                             ))}
                         </div>
                     </div>
@@ -158,7 +164,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     } else {
         // Has rating: display with animation
         customContent = (
-            <CollapseRelaxed visible={visible}>
+            <CollapseRelaxed visible={visible && !devShowSkeleton}>
                 <div
                     role="group"
                     aria-label={label}
@@ -168,12 +174,12 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
                     {/* First row, first column: dot */}
                     <div
                         className="efficiencyDot"
-                        style={{ backgroundColor: getRatingColor(rating), alignSelf: 'center' }}
+                        style={{ backgroundColor: getRatingColor(effectiveRating), alignSelf: 'center' }}
                         aria-hidden="true"
                     />
                     {/* First row, second column: rating text */}
                     <Text weight="semibold" style={{ alignSelf: 'center' }}>
-                        {getRatingText(rating)}
+                        {getRatingText(effectiveRating)}
                     </Text>
                     {/* Second row, first column: empty */}
                     {visibleDiagnostics.length > 0 && <div />}
@@ -230,5 +236,29 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         );
     }
 
-    return <CellBase label={label} value={customContent} nullValuePlaceholder={nullValuePlaceholder} span="full" />;
+    const devToggle =
+        rating !== undefined && rating !== null ? (
+            <button
+                onClick={() => setDevShowSkeleton((v) => !v)}
+                style={{
+                    position: 'absolute',
+                    top: 0,
+                    right: 0,
+                    fontSize: '10px',
+                    padding: '2px 6px',
+                    cursor: 'pointer',
+                    opacity: 0.6,
+                    zIndex: 9,
+                }}
+            >
+                {devShowSkeleton ? '▶ data' : '◀ skel'}
+            </button>
+        ) : null;
+
+    return (
+        <div style={{ position: 'relative', gridColumn: '1 / -1' }}>
+            {devToggle}
+            <CellBase label={label} value={customContent} nullValuePlaceholder={nullValuePlaceholder} span="full" />
+        </div>
+    );
 };
