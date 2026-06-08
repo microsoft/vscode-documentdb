@@ -8,7 +8,7 @@ import { InfoRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import '../../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
@@ -78,15 +78,11 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     visible = true,
     nullValuePlaceholder = 'N/A',
 }) => {
-    // DEV-ONLY toggle — remove before shipping
-    const [devShowSkeleton, setDevShowSkeleton] = useState(false);
-    const effectiveRating = devShowSkeleton ? undefined : rating;
-
     // Stable random widths for badge skeletons — re-randomised each time the skeleton mounts
     const badgeWidths = useMemo(
         () => [randW(80, 140), randW(60, 110), randW(90, 150), randW(70, 120), randW(70, 120)],
         // eslint-disable-next-line react-hooks/exhaustive-deps
-        [effectiveRating === undefined],
+        [rating === undefined],
     );
     const getRatingColor = (rating: PerformanceRating): string => {
         switch (rating) {
@@ -129,10 +125,10 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         (a, b) => (TYPE_ORDER[a.type] ?? 1) - (TYPE_ORDER[b.type] ?? 1),
     );
 
-    if (effectiveRating === null) {
+    if (rating === null) {
         // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
         customContent = null;
-    } else if (effectiveRating === undefined) {
+    } else if (rating === undefined) {
         // Undefined: data loading — render a structured skeleton that mirrors the real layout
         customContent = (
             <Skeleton aria-label={l10n.t('Loading performance rating')}>
@@ -153,17 +149,17 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     } else {
         // Has rating: display with animation
         customContent = (
-            <CollapseRelaxed visible={visible && !devShowSkeleton}>
+            <CollapseRelaxed visible={visible}>
                 <div role="group" aria-label={label} className="efficiencyIndicator">
                     {/* First row, first column: dot */}
                     <div
                         className="efficiencyDot"
-                        style={{ backgroundColor: getRatingColor(effectiveRating) }}
+                        style={{ backgroundColor: getRatingColor(rating) }}
                         aria-hidden="true"
                     />
                     {/* First row, second column: rating text */}
                     <Text weight="semibold" className="efficiencyRatingText">
-                        {getRatingText(effectiveRating)}
+                        {getRatingText(rating)}
                     </Text>
                     {/* Second row, first column: empty */}
                     {visibleDiagnostics.length > 0 && <div />}
@@ -220,29 +216,5 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         );
     }
 
-    const devToggle =
-        rating !== undefined && rating !== null ? (
-            <button
-                onClick={() => setDevShowSkeleton((v) => !v)}
-                style={{
-                    position: 'absolute',
-                    top: 0,
-                    right: 0,
-                    fontSize: '10px',
-                    padding: '2px 6px',
-                    cursor: 'pointer',
-                    opacity: 0.6,
-                    zIndex: 9,
-                }}
-            >
-                {devShowSkeleton ? '▶ data' : '◀ skel'}
-            </button>
-        ) : null;
-
-    return (
-        <div style={{ position: 'relative', gridColumn: '1 / -1' }}>
-            {devToggle}
-            <CellBase label={label} value={customContent} nullValuePlaceholder={nullValuePlaceholder} span="full" />
-        </div>
-    );
+    return <CellBase label={label} value={customContent} nullValuePlaceholder={nullValuePlaceholder} span="full" />;
 };
