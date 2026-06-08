@@ -7,7 +7,8 @@
  * Webview-side per-recommendation UI transform.
  *
  * The Stage 3 streaming subscription emits raw {@link AIIndexRecommendation}
- * domain objects (one per `recommendations[]` item), and the webview owns
+ * domain objects (one per `improvements[]` item in the canonical Stage 3
+ * JSON schema / {@link AIOptimizationResponse}), and the webview owns
  * the construction of the {@link ImprovementCardConfig} that
  * {@link ImprovementCard} renders.
  *
