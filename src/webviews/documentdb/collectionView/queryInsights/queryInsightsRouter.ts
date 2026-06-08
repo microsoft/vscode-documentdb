@@ -77,11 +77,15 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
             return null;
         }
 
+        // dev-only debug logging; not localized — output-channel l10n for this
+        // file is tracked as a follow-up alongside other Query Insights l10n work.
         ext.outputChannel.appendLine(`🐛 Query Insights Debug: Using override data from ${filename}`);
 
         return parsed;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
+        // dev-only debug logging; not localized — output-channel l10n for this
+        // file is tracked as a follow-up alongside other Query Insights l10n work.
         ext.outputChannel.appendLine(`⚠️ Query Insights Debug: Failed to read ${filename}: ${errorMessage}`);
         return null;
     }
