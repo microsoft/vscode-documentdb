@@ -20,10 +20,14 @@
  *  - The Stage-3 pre-reserved slots (analysis / recommendations /
  *    educational) before any structured event has arrived.
  *
- * Accessibility: rendered with `role="status"` + `aria-live="polite"` so
- * screen readers announce the change without interrupting the user. The
- * spinner itself is decorative (`aria-hidden`) — the label carries the
- * meaning.
+ * Accessibility: the row is **decorative by default** — three Stage 3
+ * placeholder slots can mount simultaneously, so making each one a live
+ * region would queue three+ polite announcements per click on top of the
+ * `Stage3AnalyzingCard`'s `Announcer`. Pass `announce` only at the single
+ * point where a global "AI is working" signal is wanted (today none —
+ * `Stage3AnalyzingCard` already covers it). When `announce` is set, the
+ * row becomes `role="status" aria-live="polite"`; the spinner itself stays
+ * decorative (`aria-hidden`) and the label carries the meaning.
  */
 
 import { makeStyles, Spinner, Text, tokens } from '@fluentui/react-components';
@@ -54,17 +58,29 @@ export interface StreamingInlineProgressProps {
      * card body).
      */
     className?: string;
+
+    /**
+     * Opt-in: render the row as a polite live region (`role="status"`,
+     * `aria-live="polite"`) so screen readers announce the label.
+     * Defaults to `false` — see the component JSDoc for why.
+     */
+    announce?: boolean;
 }
 
-export function StreamingInlineProgress({ label, className }: StreamingInlineProgressProps): JSX.Element {
+export function StreamingInlineProgress({
+    label,
+    className,
+    announce = false,
+}: StreamingInlineProgressProps): JSX.Element {
     const styles = useStyles();
     const rootClass = className ? `${styles.root} ${className}` : styles.root;
+    const liveProps = announce ? ({ role: 'status', 'aria-live': 'polite' } as const) : {};
     return (
-        <div role="status" aria-live="polite" className={rootClass}>
+        <div {...liveProps} className={rootClass}>
             {/* The Spinner is decorative — the label below carries the
-                semantic meaning for screen readers. Size `extra-tiny` is
-                the smallest Fluent variant that still animates clearly at
-                the body-text height we use here. */}
+                semantic meaning for screen readers (when `announce` is set).
+                Size `extra-tiny` is the smallest Fluent variant that still
+                animates clearly at the body-text height we use here. */}
             <Spinner size="extra-tiny" appearance="primary" aria-hidden />
             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                 {label}
