@@ -19,9 +19,9 @@
  *
  * Procedure bodies are intentionally unchanged from their previous
  * location — this is a pure relocation. The only observable change is the
- * tRPC rpc event path, which now includes the `queryInsights` segment
- * (e.g. `documentDB.rpc.query.collectionView.queryInsights.getQueryInsightsStage3`).
- * Telemetry queries that hard-coded the old path must be updated.
+ * tRPC rpc event path, which now includes the `queryInsights` segment.
+ * Telemetry queries that hard-coded the old (pre-extraction) path must be
+ * updated.
  */
 
 import * as fs from 'fs';
