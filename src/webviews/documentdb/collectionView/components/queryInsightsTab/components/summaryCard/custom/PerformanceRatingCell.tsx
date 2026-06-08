@@ -3,11 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Text, tokens, Tooltip } from '@fluentui/react-components';
+import { Badge, Skeleton, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/react-components';
 import { InfoRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import type * as React from 'react';
+import { useMemo, type React } from 'react';
 import '../../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
@@ -67,6 +67,9 @@ export interface PerformanceRatingCellProps {
  * />
  * ```
  */
+/** Returns a random integer in [min, max] */
+const randW = (min: number, max: number): number => Math.floor(Math.random() * (max - min + 1)) + min;
+
 export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     label,
     rating,
@@ -74,6 +77,12 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     visible = true,
     nullValuePlaceholder = 'N/A',
 }) => {
+    // Stable random widths for badge skeletons — re-randomised each time the skeleton mounts
+    const badgeWidths = useMemo(
+        () => [[randW(80, 140), randW(60, 110), randW(90, 150)], [randW(70, 120)]] as const,
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [rating === undefined],
+    );
     const getRatingColor = (rating: PerformanceRating): string => {
         switch (rating) {
             case 'poor':
@@ -119,8 +128,33 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
         customContent = null;
     } else if (rating === undefined) {
-        // Undefined: data loading (will show skeleton)
-        customContent = undefined;
+        // Undefined: data loading — render a structured skeleton that mirrors the real layout
+        customContent = (
+            <Skeleton aria-label={l10n.t('Loading performance rating')}>
+                <div
+                    className="efficiencyIndicator"
+                    style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
+                >
+                    {/* Row 1: dot skeleton + rating-text skeleton */}
+                    <SkeletonItem shape="circle" size={12} style={{ alignSelf: 'center' }} />
+                    <SkeletonItem size={16} style={{ width: '72px' }} />
+                    {/* Row 2: indent spacer + two rows of badge-pill skeletons */}
+                    <div />
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            {badgeWidths[0].map((w, i) => (
+                                <SkeletonItem key={i} size={16} style={{ width: `${w}px`, borderRadius: '2px' }} />
+                            ))}
+                        </div>
+                        <div style={{ display: 'flex', gap: '6px' }}>
+                            {badgeWidths[1].map((w, i) => (
+                                <SkeletonItem key={i} size={16} style={{ width: `${w}px`, borderRadius: '2px' }} />
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </Skeleton>
+        );
     } else {
         // Has rating: display with animation
         customContent = (

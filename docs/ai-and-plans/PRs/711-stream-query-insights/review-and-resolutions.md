@@ -2,7 +2,7 @@
 
 **PR:** [WIP] feat(query-insights): streaming UX for Stage 3 AI recommendations
 **Branch:** `dev/tnaum/stream-query-insights` → `main`
-**PR goal (the lens for every recommendation below):** improve *perceived*
+**PR goal (the lens for every recommendation below):** improve _perceived_
 responsiveness — keep the UI alive and informative while the user waits for AI
 recommendations, instead of a ~15 s blank spinner. Issues are weighed by how much
 they hurt or help that goal.
@@ -11,7 +11,7 @@ they hurt or help that goal.
 earlier manual review (findings 1–12) and the Copilot reviewer pass (C1–C5), now
 serving as the **living resolutions tracker** for the fixes. Every item below was
 re-checked against the current source on this branch. Where the original review was
-wrong, overstated, or stale, that is called out explicitly under *Verification*. As
+wrong, overstated, or stale, that is called out explicitly under _Verification_. As
 each item is fixed, a **`> ✅ RESOLVED`** (or `> ⏸️ POSTPONED` / `> ✋ NO CODE
 CHANGE`) note is added inline under that item recording what was done, the decision
 taken, and the commit.
@@ -26,25 +26,25 @@ taken, and the commit.
 These are the choices made by the operator for each finding; the inline `RESOLVED`
 notes below implement them.
 
-| Item | Decision |
-| ---- | -------- |
-| H1 | **Option B** — reducer-only safety net (drop `null` rec slots / hide empty fields on `complete`). Explicitly NOT a second parser. "Paint over the issue, save maintenance." Telemetry must be preserved; removing any data point requires sign-off. Update PR description + log decision. |
-| H2 | Same mechanism as H1. Keep pre-reserving slots during loading; hide a card only if its content never arrives. |
-| M1 | A — clear the error-dedupe set on a fresh load. |
-| M2 | A — effect-based unsubscribe when leaving `s3Loading` for a non-terminal reason (reset). |
-| M3 | A — clear the tips timer + `showErrorCard` on reset (same effect as M2). |
-| M4 | A — make `Stage3AnalyzingCard` a polite live region. |
-| M5 | A — memoize `insightCards` (`useMemo`). |
-| M6 | A — `instanceof Error` guard in the debug-file catch. |
-| M7 | A — standardize on the Unicode `…`; refresh l10n. |
-| M8 | Non-issue → simplest thing (document the precondition; no behavioural change). |
-| M9 | Keep current behaviour (re-run the query to unlock a fresh Stage 3). No code change. |
-| L1 | **LAST, interactive.** Phase the analyzer card label (Initializing → Analyzing → Generating) driven by `status` events; build with the operator, may need extra logging. |
-| L2 | Accept — lines are short in our scenario. No code change. |
-| L3 | A — fix the `\n` vs `\n\n` doc drift. |
-| L4 | A — hide Cancel once `s3Success`. |
-| L5 | A — delete the dead `StreamingPlaceholder`. |
-| L6 | A — correct the debug-activation comment. |
+| Item | Decision                                                                                                                                                                                                                                                                                  |
+| ---- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| H1   | **Option B** — reducer-only safety net (drop `null` rec slots / hide empty fields on `complete`). Explicitly NOT a second parser. "Paint over the issue, save maintenance." Telemetry must be preserved; removing any data point requires sign-off. Update PR description + log decision. |
+| H2   | Same mechanism as H1. Keep pre-reserving slots during loading; hide a card only if its content never arrives.                                                                                                                                                                             |
+| M1   | A — clear the error-dedupe set on a fresh load.                                                                                                                                                                                                                                           |
+| M2   | A — effect-based unsubscribe when leaving `s3Loading` for a non-terminal reason (reset).                                                                                                                                                                                                  |
+| M3   | A — clear the tips timer + `showErrorCard` on reset (same effect as M2).                                                                                                                                                                                                                  |
+| M4   | A — make `Stage3AnalyzingCard` a polite live region.                                                                                                                                                                                                                                      |
+| M5   | A — memoize `insightCards` (`useMemo`).                                                                                                                                                                                                                                                   |
+| M6   | A — `instanceof Error` guard in the debug-file catch.                                                                                                                                                                                                                                     |
+| M7   | A — standardize on the Unicode `…`; refresh l10n.                                                                                                                                                                                                                                         |
+| M8   | Non-issue → simplest thing (document the precondition; no behavioural change).                                                                                                                                                                                                            |
+| M9   | Keep current behaviour (re-run the query to unlock a fresh Stage 3). No code change.                                                                                                                                                                                                      |
+| L1   | **LAST, interactive.** Phase the analyzer card label (Initializing → Analyzing → Generating) driven by `status` events; build with the operator, may need extra logging.                                                                                                                  |
+| L2   | Accept — lines are short in our scenario. No code change.                                                                                                                                                                                                                                 |
+| L3   | A — fix the `\n` vs `\n\n` doc drift.                                                                                                                                                                                                                                                     |
+| L4   | A — hide Cancel once `s3Success`.                                                                                                                                                                                                                                                         |
+| L5   | A — delete the dead `StreamingPlaceholder`.                                                                                                                                                                                                                                               |
+| L6   | A — correct the debug-activation comment.                                                                                                                                                                                                                                                 |
 
 ---
 
@@ -58,7 +58,7 @@ Each finding was traced to the actual code paths that produce the behaviour:
 - Parser — [streamingResponseParser.ts](../../src/documentdb/queryInsights/streamingResponseParser.ts)
 - Reset path — [CollectionView.tsx](../../src/webviews/documentdb/collectionView/CollectionView.tsx)
 
-**Important:** the PR *description* claims a `synthesizeStage3Data()` helper and a
+**Important:** the PR _description_ claims a `synthesizeStage3Data()` helper and a
 "reconciled result wins on `finalize()`" contract on the render path. **That contract
 is not present in the shipped reducer/router.** The description is stale on this point,
 and that staleness is the root of the two High-severity issues. (The user flagged the
@@ -68,37 +68,37 @@ description may be out of date — confirmed here.)
 
 ## Verdict table (severity-sorted)
 
-| # | Orig. ID | Finding | Verified? | Severity |
-| - | -------- | ------- | --------- | -------- |
-| H1 | #1 | Canonical reconciled parse never reaches the webview → slots can hang in a terminal "loading" state forever | ✅ Confirmed | **High** |
-| H2 | #2 | Omitted optional `educationalContent` → permanent "Explaining…" spinner | ✅ Confirmed | **High** |
-| M1 | #3 | `displayedErrorsRef` never cleared → retry of an identical error shows no toast | ✅ Confirmed | **Medium** |
-| M2 | #11 | Query reset doesn't unsubscribe an in-flight Stage 3 stream → hidden LLM call + lost Cancel | ✅ Confirmed | **Medium** |
-| M3 | #12 | `showErrorCard` / tips timer leak across a query reset → stale "Query Execution Failed" card | ✅ Confirmed | **Medium** |
-| M4 | #9 | Screen-reader "AI is analyzing" announcement is effectively dead during streaming (regression of #380) | ✅ Confirmed (stronger than original) | **Medium** |
-| M5 | C1 | `CardStack` `setState` during render → extra render churn during streaming | ⚠️ Confirmed, but Copilot's "infinite loop" framing is a **false alarm** | **Medium** |
-| M6 | C2 | Unsafe `(error as Error).message` in the debug-file catch | ✅ Confirmed | **Medium** |
-| M7 | C3 | ASCII `...` vs Unicode `…` → duplicate l10n keys for the same message | ✅ Confirmed | **Medium** |
-| M8 | #4 | `streamStage3` subscription opens even when the reducer no-ops the transition | ⚠️ Confirmed but **latent** (not reachable via current UI) | **Low–Medium** |
-| M9 | #5 | No way to re-run Stage 3 after success without re-running the query | ✅ Confirmed (product decision) | **Medium** |
-| L1 | #6 | `status` events produced + throttled + sent, consumed by nothing | ✅ Confirmed | **Low** |
-| L2 | #7 | Single-line `analysis`/`educational` values get no progressive reveal | ✅ Confirmed | **Low** |
-| L3 | #8 | Doc drift: code emits per `\n`, type/JSDoc still say `\n\n` | ✅ Confirmed | **Low** |
-| L4 | #10 | Cancel button is visible-but-inert during the success-collapse window | ✅ Confirmed | **Low** |
-| L5 | C4 | `StreamingPlaceholder` is dead code (a11y bug only if revived) | ✅ Confirmed unused | **Low / cleanup** |
-| L6 | C5 | Debug-override activation comment doesn't match the `_debug_active` guard | ✅ Confirmed | **Low** |
+| #   | Orig. ID | Finding                                                                                                     | Verified?                                                                | Severity          |
+| --- | -------- | ----------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ | ----------------- |
+| H1  | #1       | Canonical reconciled parse never reaches the webview → slots can hang in a terminal "loading" state forever | ✅ Confirmed                                                             | **High**          |
+| H2  | #2       | Omitted optional `educationalContent` → permanent "Explaining…" spinner                                     | ✅ Confirmed                                                             | **High**          |
+| M1  | #3       | `displayedErrorsRef` never cleared → retry of an identical error shows no toast                             | ✅ Confirmed                                                             | **Medium**        |
+| M2  | #11      | Query reset doesn't unsubscribe an in-flight Stage 3 stream → hidden LLM call + lost Cancel                 | ✅ Confirmed                                                             | **Medium**        |
+| M3  | #12      | `showErrorCard` / tips timer leak across a query reset → stale "Query Execution Failed" card                | ✅ Confirmed                                                             | **Medium**        |
+| M4  | #9       | Screen-reader "AI is analyzing" announcement is effectively dead during streaming (regression of #380)      | ✅ Confirmed (stronger than original)                                    | **Medium**        |
+| M5  | C1       | `CardStack` `setState` during render → extra render churn during streaming                                  | ⚠️ Confirmed, but Copilot's "infinite loop" framing is a **false alarm** | **Medium**        |
+| M6  | C2       | Unsafe `(error as Error).message` in the debug-file catch                                                   | ✅ Confirmed                                                             | **Medium**        |
+| M7  | C3       | ASCII `...` vs Unicode `…` → duplicate l10n keys for the same message                                       | ✅ Confirmed                                                             | **Medium**        |
+| M8  | #4       | `streamStage3` subscription opens even when the reducer no-ops the transition                               | ⚠️ Confirmed but **latent** (not reachable via current UI)               | **Low–Medium**    |
+| M9  | #5       | No way to re-run Stage 3 after success without re-running the query                                         | ✅ Confirmed (product decision)                                          | **Medium**        |
+| L1  | #6       | `status` events produced + throttled + sent, consumed by nothing                                            | ✅ Confirmed                                                             | **Low**           |
+| L2  | #7       | Single-line `analysis`/`educational` values get no progressive reveal                                       | ✅ Confirmed                                                             | **Low**           |
+| L3  | #8       | Doc drift: code emits per `\n`, type/JSDoc still say `\n\n`                                                 | ✅ Confirmed                                                             | **Low**           |
+| L4  | #10      | Cancel button is visible-but-inert during the success-collapse window                                       | ✅ Confirmed                                                             | **Low**           |
+| L5  | C4       | `StreamingPlaceholder` is dead code (a11y bug only if revived)                                              | ✅ Confirmed unused                                                      | **Low / cleanup** |
+| L6  | C5       | Debug-override activation comment doesn't match the `_debug_active` guard                                   | ✅ Confirmed                                                             | **Low**           |
 
 ### Corrections / false alarms vs. the original review
 
-- **M5 / C1** — Copilot called this a *"Too many re-renders" infinite loop*. **That is
+- **M5 / C1** — Copilot called this a _"Too many re-renders" infinite loop_. **That is
   overstated.** The `setLastNonEmpty(items)` call is guarded (`items.length > 0 && items
-  !== lastNonEmpty`) and converges: the setState re-renders `CardStack` with the **same**
+!== lastNonEmpty`) and converges: the setState re-renders `CardStack` with the **same**
   `items` prop reference, so the guard is false on the immediate re-render and the loop
   terminates. The real cost is **one extra `CardStack` render per parent render** — which
   still matters on a streaming surface that re-renders often, but it is not a crash.
 - **M8 / #4** — real as an invariant gap, but **not currently triggerable**: the only
   caller (`handleGetAISuggestions`) is reachable solely from the states where
-  `startStage3Load` *does* transition (button is hidden otherwise). Treat as hardening,
+  `startStage3Load` _does_ transition (button is hidden otherwise). Treat as hardening,
   not a live bug.
 - **H1/H2 root cause** — the PR description's "reconciled result wins" guarantee is **not
   wired on the render path**; only the best-effort streamed events drive the cards. This
@@ -124,7 +124,7 @@ description may be out of date — confirmed here.)
 - `streamHandle.completion` (`aiResponse`) and `parser.finalize().parsed` are computed,
   but used **only for telemetry**. `finalize().parsed` (the canonical reconciled object)
   is discarded.
-- `parser.finalize()` only emits *trailing* events for a string value **still open** at
+- `parser.finalize()` only emits _trailing_ events for a string value **still open** at
   end-of-stream. It does **not** emit events for a recommendation slot whose per-item
   `JSON.parse` failed, nor for a field that never streamed.
 - The reducer's `complete` case folds **only `streaming`** (the best-effort buffer) onto
@@ -138,8 +138,8 @@ filled. At success, `hasStartedRecs` is true, so the render loop emits
 `<ImprovementCardShell />` ("Generating recommendation…") for that `null` — **in the
 terminal success state, indefinitely.**
 
-**Why it matters for the PR goal:** a hung spinner in the *success* state is the exact
-"the UX feels broken" perception this PR set out to kill — and it is now *harder* to
+**Why it matters for the PR goal:** a hung spinner in the _success_ state is the exact
+"the UX feels broken" perception this PR set out to kill — and it is now _harder_ to
 notice because everything else looks finished.
 
 **Solutions:**
@@ -148,17 +148,17 @@ notice because everything else looks finished.
   unfilled slots from `finalize().parsed` / `aiResponse`, and **drop** slots the
   canonical result proves empty).
   - Pros: makes the documented "reconciled result wins" invariant actually true; fixes
-    H1 *and* H2 with one mechanism; no card can outlive the stream.
+    H1 _and_ H2 with one mechanism; no card can outlive the stream.
   - Cons: enlarges the `complete` event payload (re-sends data already streamed);
     reducer must diff/merge streamed vs. reconciled; small risk of a late visual "pop"
     if reconciled content differs from streamed.
 - **B. Reducer-only safety net (no payload change):** on `complete`, drop any `null`
   recommendation slots and hide (not spin) any `null` summary/educational.
   - Pros: smallest change; no protocol/payload churn; kills the infinite spinner.
-  - Cons: silently *loses* content the model actually produced but the streamer missed
+  - Cons: silently _loses_ content the model actually produced but the streamer missed
     (recommendation shown nowhere) — papers over H1 instead of honoring the reconciled
     result; weaker than the stated design contract.
-- **C. Send only the *missing* pieces on `complete`** (a sparse "fill-ins" map computed
+- **C. Send only the _missing_ pieces on `complete`** (a sparse "fill-ins" map computed
   host-side by diffing streamed vs. reconciled).
   - Pros: minimal payload; honors reconciled-wins; avoids re-sending everything.
   - Cons: most complex host logic; the host must track exactly what it streamed to
@@ -172,7 +172,7 @@ notice because everything else looks finished.
 > `finalize().parsed`. Instead the Stage 3 reducer's terminal `complete` case applies a
 > safety net (H1-B): it defensively marks `summary`/`educational` `complete: true` and now
 > also **drops any `null` recommendation slots** (`recommendations.filter((rec) => rec !==
-> null)`) — a `recommendationStarted` with no matching value can no longer leave a
+null)`) — a `recommendationStarted` with no matching value can no longer leave a
 > permanent shell. The misleading "reconciled result wins on `finalize()`" wording in
 > `description.md` was corrected to describe the real display path (streamed events →
 > reducer) and the H1-B/H2 safety net.
@@ -246,8 +246,8 @@ skipped. Actual: stuck spinner.
 
 **Where:** [QueryInsightsTab.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx)
 — `displayedErrorsRef` is only ever read (`.has()`) and written (`.add()`); there is no
-`.clear()` / `.delete()` anywhere. Its JSDoc claims *"Cleared whenever a fresh load
-starts."*
+`.clear()` / `.delete()` anywhere. Its JSDoc claims _"Cleared whenever a fresh load
+starts."_
 
 **Verification — Confirmed** (grep: only `.has` + `.add`, never cleared).
 
@@ -419,7 +419,7 @@ exists.
   - Cons: announcer placement vs. the actual rendered card must be kept in sync — the
     very drift that caused this regression.
 
-> Recommendation: **A** or **B**. (Upgraded to Medium because it is an a11y *regression*
+> Recommendation: **A** or **B**. (Upgraded to Medium because it is an a11y _regression_
 > of a previously shipped, tracked fix.)
 
 > ✅ **RESOLVED (M4) — option A, realized with the proven `Announcer`.** Rendered the
@@ -443,7 +443,7 @@ is rebuilt as a **new array** every parent render.
 
 **Verification — Confirmed as render churn; Copilot's "infinite loop" claim is a FALSE
 ALARM.** The guarded "store-derived-state" pattern converges: `setLastNonEmpty(items)`
-re-renders `CardStack` with the *same* `items` reference, so `items !== lastNonEmpty` is
+re-renders `CardStack` with the _same_ `items` reference, so `items !== lastNonEmpty` is
 false on that immediate re-render and it stops. There is **no** "Too many re-renders"
 loop. The real cost: because the parent hands a fresh `items` array on every render,
 `CardStack` does **one extra render per parent render** — and the parent re-renders
@@ -493,7 +493,7 @@ string) yields `undefined` in the log.
 **Solutions:**
 
 - **A. Apply the standard guard** `const msg = error instanceof Error ? error.message :
-  String(error);`.
+String(error);`.
   - Pros: one-liner; matches repo policy; passes lint.
   - Cons: none.
 
@@ -639,7 +639,7 @@ which is no longer rendered during loading.)
   - Cons: rapid updates need a11y care (debounce; keep out of live region — see L5).
 - **B. Stop emitting them** — remove the `status` production + throttling.
   - Pros: less channel traffic; deletes unused code.
-  - Cons: throws away a cheap, *real* progress signal that fits the PR's theme.
+  - Cons: throws away a cheap, _real_ progress signal that fits the PR's theme.
 
 > Recommendation: lean **A** (it's the cheapest "more responsive" win available), with a
 > debounced, aria-safe presentation. **B** only if product doesn't want the meta text.
@@ -710,7 +710,7 @@ at once — defeating "progressive reveal" for short values.
 
 **Where:** JSDoc in
 [queryInsightsStream.ts](../../src/webviews/documentdb/collectionView/types/queryInsightsStream.ts)
-(`summary` and `educational` say *"Emitted at paragraph boundaries (`\n\n`)"*) and the
+(`summary` and `educational` say _"Emitted at paragraph boundaries (`\n\n`)"_) and the
 header of [streamingResponseParser.ts](../../src/documentdb/queryInsights/streamingResponseParser.ts).
 The implementation emits per single `\n`.
 
@@ -726,8 +726,8 @@ comments are stale and will mislead the next maintainer.
 
 > Recommendation: **A**.
 
-> ✅ **RESOLVED (L3) — option A.** Updated both stale JSDoc blocks to say *"Emitted at
-> line boundaries (`\n`)"*: the `summary` event doc in `queryInsightsStream.ts` and the
+> ✅ **RESOLVED (L3) — option A.** Updated both stale JSDoc blocks to say _"Emitted at
+> line boundaries (`\n`)"_: the `summary` event doc in `queryInsightsStream.ts` and the
 > module header in `streamingResponseParser.ts`. The implementation comment in
 > `maybeEmitProgressive` already documented the per-`\n` trigger (and the rationale for
 > moving off the old `\n\n` granularity), so the docs now agree end-to-end. No behaviour
@@ -768,10 +768,11 @@ visible but clicking it does nothing (harmless, brief).
 ### L5 — `StreamingPlaceholder` is dead code (orig. C4)
 
 **Where:** [StreamingPlaceholder.tsx](../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/streamingPlaceholder/StreamingPlaceholder.tsx)
-+ its SCSS + barrel export.
+
+- its SCSS + barrel export.
 
 **Verification — Confirmed unused.** Grep shows the component is referenced only by its
-own file; the live cards import the *sibling* `StreamingInlineProgress`, not
+own file; the live cards import the _sibling_ `StreamingInlineProgress`, not
 `StreamingPlaceholder`. The Copilot a11y concern (a `role="status"` live region with
 rapidly-updating `{elapsed}s · {chars} chars`) is **only** a problem if the component is
 revived.
@@ -800,8 +801,8 @@ revived.
 ### L6 — Debug-override activation comment doesn't match the guard (orig. C5)
 
 **Where:** [queryInsightsRouter.ts](../../src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts)
-— the `readQueryInsightsDebugFile` doc comment says *"To activate: Remove the
-'_comment' field…"* but the code activates only when `parsed._debug_active` is truthy.
+— the `readQueryInsightsDebugFile` doc comment says _"To activate: Remove the
+'\_comment' field…"_ but the code activates only when `parsed._debug_active` is truthy.
 
 **Verification — Confirmed.** Misleads anyone trying to use the debug files.
 
@@ -824,7 +825,7 @@ revived.
 
 1. **Fix the two High issues together (H1 + H2)** via reconciliation on `complete`
    (H1-A). This is the core of the PR's promise and the only class of bug that can leave
-   a *success*-state spinner hung — the worst outcome for a "responsive UX" PR.
+   a _success_-state spinner hung — the worst outcome for a "responsive UX" PR.
 2. **Lifecycle cleanup bundle (M2 + M3)** in one `QueryInsightsTab` effect keyed on the
    reset/`pipeline.kind`, plus **M1** (clear the error-ref on fresh load).
 3. **Accessibility (M4)** — restore the streaming announcement on the card that's
