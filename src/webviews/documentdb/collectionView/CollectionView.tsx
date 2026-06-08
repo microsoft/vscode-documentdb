@@ -186,19 +186,45 @@ export const CollectionView = (): JSX.Element => {
                 // The reducer auto-chains `s1Loading → s2Loading` so the
                 // Stage 2 fetch effect in QueryInsightsTab picks up
                 // immediately when the user lands on the tab.
-                setCurrentContext((prev) => ({
-                    ...prev,
-                    queryInsights: stage1Succeeded(prev.queryInsights, stage1Data),
-                }));
+                setCurrentContext((prev) => {
+                    // F8 guard (mirror of the .catch guard below): if the
+                    // pipeline has moved past `s1Loading` (typically because
+                    // the user kicked off a newer query / reset), the
+                    // resolved payload is stale — drop it rather than
+                    // clobber the live state.
+                    if (prev.queryInsights.kind !== 's1Loading') {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        queryInsights: stage1Succeeded(prev.queryInsights, stage1Data),
+                    };
+                });
                 console.debug('Stage 1 data prefetched:', stage1Data);
             })
             .catch((error) => {
                 const errorCode = extractErrorCode(error);
                 const message = error instanceof Error ? error.message : String(error);
-                setCurrentContext((prev) => ({
-                    ...prev,
-                    queryInsights: stage1Failed(prev.queryInsights, message, errorCode),
-                }));
+                setCurrentContext((prev) => {
+                    // F8: only fold the failure into the state machine if
+                    // the current pipeline is still the one we kicked off.
+                    // Stage 1 is short-lived and the only way to leave
+                    // `s1Loading` is for our `.then`/`.catch` to fire or
+                    // for a query reset/new run to start a fresh pipeline —
+                    // in the latter case the stale failure must not
+                    // overwrite the new state. Note: doesn't fully cover a
+                    // second `s1Loading` racing the first (would need a
+                    // requestKey, like Stage 3); accepted as Low risk
+                    // because Stage 1 typically completes in well under
+                    // the time it takes a user to retrigger.
+                    if (prev.queryInsights.kind !== 's1Loading') {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        queryInsights: stage1Failed(prev.queryInsights, message, errorCode),
+                    };
+                });
                 console.warn('Stage 1 prefetch failed:', error);
             });
     };
