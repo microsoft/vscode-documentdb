@@ -167,17 +167,43 @@ export const CollectionView = (): JSX.Element => {
      * bails. See `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
-        // Bail out if a load has already been claimed (or completed) for
-        // this query — Stage 1 data is carried forward onto every
-        // post-Stage-1 variant, so any `kind` past `s1Loading` means
-        // there's nothing left to do.
-        const qi = currentContext.queryInsights;
-        if (qi.kind !== 'idle') {
+        // F2: the dedupe check + claim runs inside a functional setState
+        // updater so it observes the LATEST committed state — not the
+        // closure's `currentContext`. The previous version sampled
+        // `currentContext.queryInsights` directly, which in the common
+        // "user re-runs a query" flow was the pre-reset (e.g. `s3Success`)
+        // value because the reset effect's setState hadn't committed yet
+        // by the time this callback ran from inside `.then(runFindQuery)`.
+        // That caused every 2nd/3rd/etc. query to skip the background
+        // prefetch entirely.
+        //
+        // A captured `claimed` boolean carries the "did we win the dedupe?"
+        // signal back out of the updater so the network call only fires
+        // when we actually flipped state to `s1Loading`.
+        //
+        // Updater purity caveat (StrictMode / concurrent re-invocation):
+        // React may invoke this updater more than once with the same
+        // `prev`. That's fine here — the second invocation observes the
+        // same `idle` and computes the same `s1Loading` result, the
+        // updater itself returns a value derived only from `prev`, and
+        // `claimed = true` is idempotent. The network call fires exactly
+        // once because it's outside the updater, after `setCurrentContext`
+        // returns.
+        let claimed = false;
+        setCurrentContext((prev) => {
+            // Bail if a load has already been claimed (or completed) for
+            // this query — Stage 1 data is carried forward onto every
+            // post-Stage-1 variant, so any `kind` past `s1Loading` means
+            // there's nothing left to do.
+            if (prev.queryInsights.kind !== 'idle') {
+                return prev;
+            }
+            claimed = true;
+            return { ...prev, queryInsights: startStage1Load(prev.queryInsights) };
+        });
+        if (!claimed) {
             return;
         }
-
-        // Claim the load before firing the request.
-        setCurrentContext((prev) => ({ ...prev, queryInsights: startStage1Load(prev.queryInsights) }));
 
         // Query parameters are now retrieved from ClusterSession - no need to pass them
         void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
