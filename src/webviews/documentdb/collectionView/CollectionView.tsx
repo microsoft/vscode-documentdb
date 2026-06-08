@@ -156,59 +156,38 @@ export const CollectionView = (): JSX.Element => {
     }, [currentContext.activeQuery]);
 
     /**
-     * Non-blocking Stage 1 prefetch after query execution.
-     * Populates ClusterSession cache so data is ready when user switches
-     * to the Query Insights tab.
+     * Non-blocking Stage 1 prefetch after query execution. Populates the
+     * ClusterSession cache so data is ready when the user switches to the
+     * Query Insights tab. Called only for a fresh query (`initial`/`refresh`)
+     * — see the intent gate at the call site.
      *
      * Dedupe contract (shared with the fallback fetch in
-     * QueryInsightsTab.tsx): the pipeline is flipped to `s1Loading` BEFORE
-     * the request fires, so whichever of the two paths gets there first
-     * "claims" the load and the other observes `kind === 's1Loading'` and
-     * bails. See `startStage1Load` in `queryInsightsReducer.ts`.
+     * QueryInsightsTab.tsx): the claim below flips the pipeline to
+     * `s1Loading`, so whichever of the two paths gets there first "claims"
+     * the load and the other observes `kind === 's1Loading'` and bails. See
+     * `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
-        // F2 (revised): read the gate from `currentContextRef.current`, not
-        // from the render's `currentContext` closure.
-        //
-        // History of this code:
-        //  - Original: read `currentContext.queryInsights` from the closure
-        //    and bailed if it wasn't `idle`. When the user ran a 2nd/3rd/etc.
-        //    query, the reset effect's setState (queryInsights → idle) had
-        //    not committed by the time the `runFindQuery.then` callback ran
-        //    this function, so the closure still saw the previous run's
-        //    terminal state (e.g. `s3Success`) and the early return skipped
-        //    every prefetch except the first. (PR #711 finding F2.)
-        //  - Attempted fix (639935df...4d398dd1 — REVERTED): moved the gate
-        //    into a functional `setCurrentContext` updater with a captured
-        //    `claimed` boolean. That doesn't work: `setState((prev) => ...)`
-        //    queues the updater; React runs it on the next render, not
-        //    inside the call. The `if (!claimed) return;` line therefore
-        //    always saw `false` and the network call never fired. The
-        //    updater itself still committed though, leaving state stuck on
-        //    `s1Loading` so the Query Insights tab's fallback fetch saw
-        //    "someone is already loading" and waited forever.
-        //  - Current: use the ref. By the time `runFindQuery.then` resolves
-        //    (network call, tens to hundreds of ms), React has long since
-        //    committed the reset effect's state update and the
-        //    `currentContextRef`-updating effect has copied it into the ref.
-        //    Reading the ref here gives us the post-reset state without the
-        //    `setState`-queueing pitfall.
-        //
-        // Residual con (still Low, vs. completely-broken before): the ref
-        // is updated by a `useEffect`, so it lags real state by one commit.
-        // For prefetch we're called from a promise `.then`, which means many
-        // commits have already happened — the lag is not observable in
-        // practice. If a future caller invokes this synchronously from
-        // inside the same render that queues the reset, the lag could bite;
-        // in that case prefer a request-key on Stage 1 (analogous to Stage 3).
-        const qi = currentContextRef.current.queryInsights;
-        if (qi.kind !== 'idle') {
-            return;
-        }
+        // Claim the Stage 1 load from inside the functional updater so the
+        // gate reads React's latest queued state via `prev`, never the render
+        // closure or a ref. The reset effect's `queryInsights → idle` is
+        // queued synchronously in the same effect phase, strictly before this
+        // promise microtask, so it is already composed into `prev`: on a fresh
+        // query `prev.queryInsights` is `idle` here. This is what makes the
+        // stale pre-reset read (F2) structurally impossible rather than merely
+        // unlikely — a closure read saw the previous run's terminal state and
+        // a ref lags by one commit. If the tab fallback already claimed the
+        // load, `prev` is `s1Loading`/later and we leave it untouched.
+        setCurrentContext((prev) => {
+            if (prev.queryInsights.kind !== 'idle') {
+                return prev;
+            }
+            return { ...prev, queryInsights: startStage1Load(prev.queryInsights) };
+        });
 
-        // Claim the load before firing the request.
-        setCurrentContext((prev) => ({ ...prev, queryInsights: startStage1Load(prev.queryInsights) }));
-
+        // Fire the warm-up request. In the rare both-paths race the fallback
+        // fetches too; the F8 guards below drop whichever result lands second,
+        // and `getQueryInsightsStage1` is an idempotent cache read.
         // Query parameters are now retrieved from ClusterSession - no need to pass them
         void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
             .query()
@@ -395,9 +374,16 @@ export const CollectionView = (): JSX.Element => {
                 // 3. Load the data for the current view
                 getDataForView(currentContext.currentView);
 
-                // 4. Non-blocking Stage 1 prefetch to populate cache
-                //    This runs in background and doesn't block results display
-                prefetchQueryInsights();
+                // 4. Non-blocking Stage 1 prefetch to populate cache. Only on a
+                //    fresh query (initial/refresh): pagination keeps the same
+                //    query, so the existing Query Insights pipeline (and any
+                //    Stage 1+ data) stays valid and must not be reset. This
+                //    mirrors the reset effect's own intent gate, so the prefetch
+                //    fires exactly when the pipeline is being reset to `idle`.
+                const prefetchIntent = currentContext.activeQuery.executionIntent;
+                if (prefetchIntent === 'initial' || prefetchIntent === 'refresh') {
+                    prefetchQueryInsights();
+                }
 
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })
