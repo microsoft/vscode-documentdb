@@ -93,7 +93,7 @@ them complete:
 
 `finalize()` always runs the canonical `JSON.parse` over the full buffer and
 emits the terminal `complete` event. **Important — the shipped display path:**
-the rendered cards are driven *entirely* by the streamed events folded into the
+the rendered cards are driven _entirely_ by the streamed events folded into the
 Stage 3 reducer. The terminal `complete` event carries only model metadata, and
 the reconciled `finalize().parsed` result is consumed host-side for
 telemetry/logging — it does **not** re-hydrate the webview cards. This is a
@@ -325,6 +325,82 @@ The wire-up details that matter:
   and the `TODO(POC)` mount block in `QueryInsightsTab` were removed
   along with their re-exports from `components/cardStack/index.ts`.
 
+### Hard-target the `copilot-utility` alias (drop the family preference chain)
+
+PR #690 introduced a per-feature preferred-model chain
+(`INDEX_OPTIMIZATION_PREFERRED_FAMILY = 'gpt-4.1'`,
+`QUERY_GENERATION_PREFERRED_FAMILY = 'gpt-4.1'`, both with a
+`['gpt-4o', 'copilot-utility']` fallback list) that `CopilotService` walked
+via a `selectBestModel` helper. Two things changed since: GitHub announced
+GPT-4.1 retires on 2026-06-01, and GitHub's published
+[utility-models guidance](https://docs.github.com/en/copilot/concepts/models/utility-models)
+made explicit that **only requests routed through the `copilot-utility`
+alias are billed via Copilot's chat-fallback path** (i.e. no premium request
+units consumed). Any picker model targeted directly by family name from a
+third-party extension — including the `gpt-4.1` / `gpt-4o` entries we had at
+the top of the chain — would charge the user's premium budget per call.
+
+The chain therefore had no usable shape:
+
+- keep `gpt-4.1` / `gpt-4o` at the top → every Stage 3 / query-generation
+  call bills the user;
+- drop them and leave only `copilot-utility` → the chain is a one-element
+  list and the surrounding `selectBestModel` / `getPreferredFamilies` /
+  per-feature constants are dead weight;
+- do nothing → on 2026-06-01 the `gpt-4.1` entry stops resolving for everyone
+  and the code silently falls through to `gpt-4o` (still billed) before
+  reaching `copilot-utility`.
+
+The simplification chooses option 2 and removes the chain entirely. Concrete
+changes:
+
+- `CopilotMessageOptions.preferredFamily` and `.fallbackFamilies` are
+  removed; the only knobs callers still pass are `signal`, `modelOptions`,
+  and `featureSource`.
+- `getPreferredFamilies` and `selectBestModel` are replaced by a single
+  `selectUtilityModel()` that calls
+  `vscode.lm.selectChatModels({ vendor: 'copilot', family: 'copilot-utility' })`
+  and returns `undefined` if the alias is unavailable. There is intentionally
+  no fallback to "the first available model": silently degrading onto a
+  picker model would mean silently charging the user, which the previous
+  chain was specifically introduced to _avoid_ and now does the opposite.
+- `CopilotService.isAvailable()` uses the same `family: 'copilot-utility'`
+  filter so an `isAvailable() === true` result is a strong predictor of the
+  next request succeeding (rather than reporting on any Copilot model, then
+  failing inside selection).
+- The four per-feature family constants in `promptTemplates.ts`
+  (`INDEX_OPTIMIZATION_*`, `QUERY_GENERATION_*`) and their long
+  family-vs-id docblock are deleted. The "preferred family was not used"
+  warnings in `indexAdvisorCommands.ts` and `queryGenerationCommands.ts` are
+  deleted too: with a single-target selector the check is tautological, and
+  with no fallback there is nothing for the user to be warned about.
+- The shared `copilot.sendMessage` / `copilot.streamMessage` telemetry
+  properties `modelPreferenceChain`, `modelsAvailable`, and
+  `modelsAvailableCount` are dropped (a one-element chain over a single
+  vendor adds no analytical value). `modelSelectionOutcome` is kept but
+  collapses to two values: `'utility-model'` on success,
+  `'no-utility-model-available'` when the alias is missing.
+
+What the trace and telemetry now capture about the **backing** model:
+because `copilot-utility` is an alias, `LanguageModelChat.id` and
+`LanguageModelChat.family` both read back as `"copilot-utility"` — the
+underlying GPT-4o mini / GPT-4o / GPT-4.1 / GPT-5.4 nano / etc. is only
+visible through `LanguageModelChat.name` and `LanguageModelChat.version`.
+`CopilotService` now records both `modelName` and `modelVersion` on every
+shared telemetry event, and forwards them through `CopilotResponse` →
+`OptimizationResult` / `QueryGenerationResult` so per-feature events
+(`vscode-documentdb.queryInsights.*`,
+`vscode-documentdb.queryGeneration.*`) attribute the actual model backing
+each request. The unconditional `formatModelDetails` trace at the end of
+`selectUtilityModel` is preserved so the output channel shows the same
+metadata for live debugging.
+
+User-visible failure surface is unchanged: if `copilot-utility` is not
+available (Copilot not installed / not signed in / consent not granted) the
+caller throws the same "No suitable language model is available…" error
+the chain version threw when nothing matched. There is no silent degradation
+onto a billed model.
+
 ---
 
 ## Key decisions and rationale
@@ -544,32 +620,32 @@ deleted entirely.
 
 ## Files changed (significant)
 
-| File                                                                                      | Change                                                                                                                 |
-| ----------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `src/services/copilotService.ts`                                                          | `streamMessage` async-iterable API; private `streamToModel` primitive shared with buffered path; `CopilotStreamHandle` |
-| `src/services/copilotService.test.ts`                                                     | New unit tests for streaming + abort + no-model paths                                                                  |
-| `src/services/ai/QueryInsightsAIService.ts`                                               | `getOptimizationRecommendationsStreaming` + handle type                                                                |
-| `src/services/ai/QueryInsightsAIService.streaming.test.ts`                                | End-to-end streaming integration test                                                                                  |
-| `src/commands/llmEnhancedCommands/indexAdvisorCommands.ts`                                | `optimizeQueryStreaming` + shared `prepareOptimizationRequest` / `finalizeOptimizationResponse` helpers                |
-| `src/documentdb/queryInsights/streamingResponseParser.ts`                                 | New tolerant incremental parser (state machine; string-aware brace counting; reconciliation on `finalize()`)           |
-| `src/documentdb/queryInsights/streamingResponseParser.test.ts`                            | 25 unit tests covering happy path, fragment boundaries, escapes, malformed input, truncation, etc.                     |
-| `src/documentdb/queryInsights/transformations.ts`                                         | Dead `transformAIResponseForUI` + helpers removed (cleanup)                                                            |
-| `src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts`             | New sub-router (Stage 1/2/3 + action handler relocated from `collectionViewRouter.ts`)                                 |
-| `src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts`       | New push-style router carrying `streamStage3` subscription + completion telemetry                                      |
-| `src/webviews/documentdb/collectionView/collectionViewRouter.ts`                          | Stage 3 procedures relocated; sub-router mounted                                                                       |
-| `src/webviews/documentdb/collectionView/types/queryInsightsStream.ts`                     | Discriminated union for the wire-format streaming events                                                               |
-| `src/webviews/documentdb/collectionView/utils/createImprovementCard.ts`                   | Webview-side per-recommendation transform (sole source of truth post-cleanup)                                          |
-| `src/webviews/documentdb/collectionView/collectionViewContext.ts`                         | `QueryInsightsStreamingState` + `stage3Streaming` slot; `stage3Promise` removed                                        |
-| `src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx` | Subscription wiring, reducer for structured events, render rewrite for pre-reserved slots, byline fade, swap `AnimatedCardList` → `CardStack` for the Stage 3 card group |
-| `.../components/animatedCardList/AnimatedCardList.tsx`                                    | `pendingEnter` two-step + per-item `inFlight` motion picker (Fade vs CollapseRelaxed). Left in the tree for the per-item enter/exit scenario; no longer used by `QueryInsightsTab` after the `CardStack` adoption |
+| File                                                                                      | Change                                                                                                                                                                                                                                                                                                             |
+| ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `src/services/copilotService.ts`                                                          | `streamMessage` async-iterable API; private `streamToModel` primitive shared with buffered path; `CopilotStreamHandle`                                                                                                                                                                                             |
+| `src/services/copilotService.test.ts`                                                     | New unit tests for streaming + abort + no-model paths                                                                                                                                                                                                                                                              |
+| `src/services/ai/QueryInsightsAIService.ts`                                               | `getOptimizationRecommendationsStreaming` + handle type                                                                                                                                                                                                                                                            |
+| `src/services/ai/QueryInsightsAIService.streaming.test.ts`                                | End-to-end streaming integration test                                                                                                                                                                                                                                                                              |
+| `src/commands/llmEnhancedCommands/indexAdvisorCommands.ts`                                | `optimizeQueryStreaming` + shared `prepareOptimizationRequest` / `finalizeOptimizationResponse` helpers                                                                                                                                                                                                            |
+| `src/documentdb/queryInsights/streamingResponseParser.ts`                                 | New tolerant incremental parser (state machine; string-aware brace counting; reconciliation on `finalize()`)                                                                                                                                                                                                       |
+| `src/documentdb/queryInsights/streamingResponseParser.test.ts`                            | 25 unit tests covering happy path, fragment boundaries, escapes, malformed input, truncation, etc.                                                                                                                                                                                                                 |
+| `src/documentdb/queryInsights/transformations.ts`                                         | Dead `transformAIResponseForUI` + helpers removed (cleanup)                                                                                                                                                                                                                                                        |
+| `src/webviews/documentdb/collectionView/queryInsights/queryInsightsRouter.ts`             | New sub-router (Stage 1/2/3 + action handler relocated from `collectionViewRouter.ts`)                                                                                                                                                                                                                             |
+| `src/webviews/documentdb/collectionView/queryInsights/queryInsightsEventsRouter.ts`       | New push-style router carrying `streamStage3` subscription + completion telemetry                                                                                                                                                                                                                                  |
+| `src/webviews/documentdb/collectionView/collectionViewRouter.ts`                          | Stage 3 procedures relocated; sub-router mounted                                                                                                                                                                                                                                                                   |
+| `src/webviews/documentdb/collectionView/types/queryInsightsStream.ts`                     | Discriminated union for the wire-format streaming events                                                                                                                                                                                                                                                           |
+| `src/webviews/documentdb/collectionView/utils/createImprovementCard.ts`                   | Webview-side per-recommendation transform (sole source of truth post-cleanup)                                                                                                                                                                                                                                      |
+| `src/webviews/documentdb/collectionView/collectionViewContext.ts`                         | `QueryInsightsStreamingState` + `stage3Streaming` slot; `stage3Promise` removed                                                                                                                                                                                                                                    |
+| `src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx` | Subscription wiring, reducer for structured events, render rewrite for pre-reserved slots, byline fade, swap `AnimatedCardList` → `CardStack` for the Stage 3 card group                                                                                                                                           |
+| `.../components/animatedCardList/AnimatedCardList.tsx`                                    | `pendingEnter` two-step + per-item `inFlight` motion picker (Fade vs CollapseRelaxed). Left in the tree for the per-item enter/exit scenario; no longer used by `QueryInsightsTab` after the `CardStack` adoption                                                                                                  |
 | `.../components/cardStack/CardStack.tsx`                                                  | New lightweight container for "cards only ever added, group disappears at once": per-item `<Collapse appear visible>` (or `<Fade>` via `motion: 'fade'` opt-out) for enter, outer `<Fade>` for group exit; retains last items during fade-out so callers can clear `items` on the same commit as `visible={false}` |
-| `.../components/optimizationCards/MarkdownCard.tsx`                                       | `inFlight` + `inFlightLabel` props; shimmer dropped                                                                    |
-| `.../components/optimizationCards/ImprovementCardShell.tsx`                               | `mode: 'loading' \| 'empty'` shared shell                                                                              |
-| `.../components/optimizationCards/TipsCard.tsx + .scss`                                   | Removed (no longer needed)                                                                                             |
-| `.../components/streamingPlaceholder/StreamingInlineProgress.tsx`                         | New Spinner + label primitive                                                                                          |
-| `.../components/optimizationCards/custom/GetPerformanceInsightsCard.tsx`                  | Drop inner spinner during loading; collapses out entirely while loading                                                |
-| `.../components/optimizationCards/custom/Stage3AnalyzingCard.tsx`                         | New slim loading affordance (Spinner + "AI is analyzing…" + Cancel) shown during Stage 3 streaming                     |
-| `l10n/bundle.l10n.json`                                                                   | Regenerated                                                                                                            |
+| `.../components/optimizationCards/MarkdownCard.tsx`                                       | `inFlight` + `inFlightLabel` props; shimmer dropped                                                                                                                                                                                                                                                                |
+| `.../components/optimizationCards/ImprovementCardShell.tsx`                               | `mode: 'loading' \| 'empty'` shared shell                                                                                                                                                                                                                                                                          |
+| `.../components/optimizationCards/TipsCard.tsx + .scss`                                   | Removed (no longer needed)                                                                                                                                                                                                                                                                                         |
+| `.../components/streamingPlaceholder/StreamingInlineProgress.tsx`                         | New Spinner + label primitive                                                                                                                                                                                                                                                                                      |
+| `.../components/optimizationCards/custom/GetPerformanceInsightsCard.tsx`                  | Drop inner spinner during loading; collapses out entirely while loading                                                                                                                                                                                                                                            |
+| `.../components/optimizationCards/custom/Stage3AnalyzingCard.tsx`                         | New slim loading affordance (Spinner + "AI is analyzing…" + Cancel) shown during Stage 3 streaming                                                                                                                                                                                                                 |
+| `l10n/bundle.l10n.json`                                                                   | Regenerated                                                                                                                                                                                                                                                                                                        |
 
 ---
 
