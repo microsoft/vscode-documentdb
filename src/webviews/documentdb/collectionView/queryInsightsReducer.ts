@@ -368,6 +368,7 @@ export function applyStage3Event(
                     modelId: event.modelId,
                     modelFamily: event.modelFamily,
                     usage: event.usage,
+                    durationMs: event.durationMs,
                 },
             });
 

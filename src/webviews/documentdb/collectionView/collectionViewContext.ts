@@ -172,6 +172,11 @@ export interface QueryInsightsStage3Model {
     modelId?: string;
     modelFamily?: string;
     usage?: QueryInsightsStreamUsage;
+    /**
+     * Total wall-clock duration of the Stage 3 stream, in milliseconds.
+     * Surfaced (in seconds) in the post-response "Powered by …" byline.
+     */
+    durationMs?: number;
 }
 
 /**

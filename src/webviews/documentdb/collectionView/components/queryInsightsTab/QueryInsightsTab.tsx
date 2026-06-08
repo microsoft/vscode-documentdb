@@ -1066,13 +1066,28 @@ export const QueryInsightsMain = (): JSX.Element => {
                                             </Link>
                                         </Text>
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
-                                            {l10n.t(
-                                                'Powered by {0} via GitHub Copilot',
-                                                // Guaranteed non-null by `shouldShowByline`
-                                                // (see useEffect above); non-null assertion
+                                            {(() => {
+                                                // Guaranteed `s3Success` by `shouldShowByline`
+                                                // (see useEffect above); the non-null assertion
                                                 // keeps l10n.t's string-only overload happy.
-                                                pipeline.kind === 's3Success' ? pipeline.model.modelDisplayName! : '',
-                                            )}
+                                                const modelName =
+                                                    pipeline.kind === 's3Success'
+                                                        ? pipeline.model.modelDisplayName!
+                                                        : '';
+                                                const durationMs =
+                                                    pipeline.kind === 's3Success'
+                                                        ? pipeline.model.durationMs
+                                                        : undefined;
+                                                if (durationMs !== undefined) {
+                                                    const seconds = (durationMs / 1000).toFixed(1);
+                                                    return l10n.t(
+                                                        'Powered by {0} via GitHub Copilot · {1}s',
+                                                        modelName,
+                                                        seconds,
+                                                    );
+                                                }
+                                                return l10n.t('Powered by {0} via GitHub Copilot', modelName);
+                                            })()}
                                         </Text>
                                     </div>
                                 </div>

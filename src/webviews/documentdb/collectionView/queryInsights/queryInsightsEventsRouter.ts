@@ -463,6 +463,13 @@ export const queryInsightsEventsRoutes = {
                 completionTelemetry.measurements.dropRecommendationCount = dropRecommendationCount;
                 completionTelemetry.measurements.modifyRecommendationCount = modifyRecommendationCount;
 
+                // Total characters received from the LLM stream. Tracked
+                // throughout the fragment loop (and surfaced in `status`
+                // events / trace), but previously never recorded onto the
+                // completion event — record it here so stream volume can be
+                // correlated with duration and token usage.
+                completionTelemetry.measurements.charsReceived = charsReceived;
+
                 // Section-level timing measurements so we can see where
                 // wall-clock time is spent during the stream.
                 if (summaryStartedAt !== undefined) {
@@ -547,6 +554,7 @@ export const queryInsightsEventsRoutes = {
                         modelId: aiResponse.modelId,
                         modelFamily: aiResponse.modelFamily,
                         usage: aiResponse.usage,
+                        durationMs: elapsed(),
                     };
                     if (abortController.signal.aborted) {
                         return;

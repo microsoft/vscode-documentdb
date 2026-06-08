@@ -116,4 +116,12 @@ export type QueryInsightsStreamEvent =
           modelId?: string;
           modelFamily?: string;
           usage?: QueryInsightsStreamUsage;
+          /**
+           * Total wall-clock time of the Stage 3 stream, in milliseconds,
+           * measured from subscription start to this terminal event. The
+           * webview surfaces this (in seconds) in the post-response
+           * "Powered by …" byline so users see how long the AI analysis
+           * took. Optional for forward compatibility.
+           */
+          durationMs?: number;
       };

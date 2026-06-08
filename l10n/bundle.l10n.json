@@ -890,6 +890,7 @@
   "Port number must be a number": "Port number must be a number",
   "Port number must be between 1 and 65535": "Port number must be between 1 and 65535",
   "Powered by {0} via GitHub Copilot": "Powered by {0} via GitHub Copilot",
+  "Powered by {0} via GitHub Copilot · {1}s": "Powered by {0} via GitHub Copilot · {1}s",
   "Press Escape to exit editor": "Press Escape to exit editor",
   "Privacy Statement": "Privacy Statement",
   "Process exited: \"{command}\"": "Process exited: \"{command}\"",
