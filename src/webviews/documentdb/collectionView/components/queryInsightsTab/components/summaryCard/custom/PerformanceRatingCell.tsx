@@ -84,7 +84,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
 
     // Stable random widths for badge skeletons — re-randomised each time the skeleton mounts
     const badgeWidths = useMemo(
-        () => [[randW(80, 140), randW(60, 110), randW(90, 150), randW(70, 120), randW(70, 120)]] as const,
+        () => [randW(80, 140), randW(60, 110), randW(90, 150), randW(70, 120), randW(70, 120)],
         // eslint-disable-next-line react-hooks/exhaustive-deps
         [effectiveRating === undefined],
     );
@@ -136,27 +136,16 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         // Undefined: data loading — render a structured skeleton that mirrors the real layout
         customContent = (
             <Skeleton aria-label={l10n.t('Loading performance rating')}>
-                <div
-                    className="efficiencyIndicator"
-                    style={{
-                        display: 'grid',
-                        gridTemplateColumns: 'auto 1fr',
-                        columnGap: '8px',
-                        rowGap: '6px',
-                        paddingTop: '14px',
-                    }}
-                >
+                <div className="efficiencyIndicator efficiencyIndicator--skeleton">
                     {/* Row 1: dot skeleton + rating-text skeleton */}
-                    <SkeletonItem shape="circle" size={12} style={{ alignSelf: 'center' }} />
+                    <SkeletonItem shape="circle" size={12} className="efficiencyDotSkeleton" />
                     <SkeletonItem size={16} style={{ width: '144px' }} />
-                    {/* Row 2: indent spacer + two rows of badge-pill skeletons */}
+                    {/* Row 2: indent spacer + badge-pill skeletons */}
                     <div />
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px', paddingTop: '4px' }}>
-                            {badgeWidths[0].map((w, i) => (
-                                <SkeletonItem key={i} size={16} style={{ width: `${w}px` }} />
-                            ))}
-                        </div>
+                    <div className="efficiencyBadges efficiencyBadges--skeleton">
+                        {badgeWidths.map((w, i) => (
+                            <SkeletonItem key={i} size={16} style={{ width: `${w}px` }} />
+                        ))}
                     </div>
                 </div>
             </Skeleton>
@@ -165,27 +154,22 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         // Has rating: display with animation
         customContent = (
             <CollapseRelaxed visible={visible && !devShowSkeleton}>
-                <div
-                    role="group"
-                    aria-label={label}
-                    className="efficiencyIndicator"
-                    style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
-                >
+                <div role="group" aria-label={label} className="efficiencyIndicator">
                     {/* First row, first column: dot */}
                     <div
                         className="efficiencyDot"
-                        style={{ backgroundColor: getRatingColor(effectiveRating), alignSelf: 'center' }}
+                        style={{ backgroundColor: getRatingColor(effectiveRating) }}
                         aria-hidden="true"
                     />
                     {/* First row, second column: rating text */}
-                    <Text weight="semibold" style={{ alignSelf: 'center' }}>
+                    <Text weight="semibold" className="efficiencyRatingText">
                         {getRatingText(effectiveRating)}
                     </Text>
                     {/* Second row, first column: empty */}
                     {visibleDiagnostics.length > 0 && <div />}
                     {/* Second row, second column: diagnostic badges with tooltips */}
                     {visibleDiagnostics.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        <div className="efficiencyBadges">
                             {visibleDiagnostics.map((diagnostic, index) => (
                                 <Tooltip
                                     key={index}
