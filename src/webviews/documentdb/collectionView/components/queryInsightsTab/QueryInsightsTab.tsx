@@ -413,15 +413,38 @@ export const QueryInsightsMain = (): JSX.Element => {
     const showMetricsSkeleton = pipeline.kind === 's1Loading' || pipeline.kind === 's2Loading';
     const hasMetricsError = pipeline.kind === 's1Error' || pipeline.kind === 's2Error';
 
+    // Value resolution for metric/summary cells. The result drives the cell's
+    // placeholder logic (see MetricBase): `null` → "N/A" (unavailable), `undefined`
+    // → loading skeleton, any other value → displayed as-is.
+    //
+    //   - hasMetricsError      → null      (Stage 1/2 failed; data is unavailable)
+    //   - skeleton OR no Stage 2 yet → undefined (still computing; show skeleton)
+    //   - Stage 2 complete     → the value (or `unavailableValue`/null when absent)
+    //
+    // Gating on `stage2Data` is what prevents cells from rendering a misleading
+    // default (e.g. "None (collection scan)" or "No") before Stage 2 has produced
+    // real values.
     const getMetricValue = <T,>(value: T | null | undefined): T | null | undefined => {
-        return hasMetricsError ? null : showMetricsSkeleton ? undefined : (value ?? null);
+        if (hasMetricsError) {
+            return null;
+        }
+        if (showMetricsSkeleton || !stage2Data) {
+            return undefined;
+        }
+        return value ?? null;
     };
 
     const getCellValue = <T,>(
-        accessor: () => T | null | undefined,
+        accessor: (stage2: NonNullable<typeof stage2Data>) => T | null | undefined,
         unavailableValue: T | null = null,
     ): T | null | undefined => {
-        return hasMetricsError ? null : showMetricsSkeleton ? undefined : (accessor() ?? unavailableValue);
+        if (hasMetricsError) {
+            return null;
+        }
+        if (showMetricsSkeleton || !stage2Data) {
+            return undefined;
+        }
+        return accessor(stage2Data) ?? unavailableValue;
     };
 
     const executionTime = getMetricValue(stage2Data?.executionTimeMs);
@@ -1102,7 +1125,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Selectivity')}
-                            value={getCellValue(() => stage2Data?.efficiencyAnalysis.selectivity)}
+                            value={getCellValue((stage2) => stage2.efficiencyAnalysis.selectivity)}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 const selectivity = stage2Data?.efficiencyAnalysis.selectivity;
@@ -1133,7 +1156,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         <GenericCell
                             label={l10n.t('Index Used')}
                             value={getCellValue(
-                                () => stage2Data?.efficiencyAnalysis.indexUsed,
+                                (stage2) => stage2.efficiencyAnalysis.indexUsed,
                                 l10n.t('None (collection scan)'),
                             )}
                             loadingPlaceholder="skeleton"
@@ -1151,7 +1174,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('Fetch Overhead')}
-                            value={getCellValue(() => stage2Data?.efficiencyAnalysis.fetchOverhead)}
+                            value={getCellValue((stage2) => stage2.efficiencyAnalysis.fetchOverhead)}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 const kind = stage2Data?.efficiencyAnalysis.fetchOverheadKind ?? 'directFetch';
@@ -1180,8 +1203,8 @@ export const QueryInsightsMain = (): JSX.Element => {
                         />
                         <GenericCell
                             label={l10n.t('In-Memory Sort')}
-                            value={getCellValue(() =>
-                                stage2Data?.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
+                            value={getCellValue((stage2) =>
+                                stage2.efficiencyAnalysis.hasInMemorySort ? l10n.t('Yes') : l10n.t('No'),
                             )}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
