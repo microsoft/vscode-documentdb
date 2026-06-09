@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
-import { resetDiscoveryProviderVisibilityMigrationForTests } from '../../services/discoveryProviderVisibility';
+import { resetDiscoveryProviderVisibilityCacheForTests } from '../../services/discoveryProviderVisibility';
 import { ExecuteStep } from './ExecuteStep';
 
 const mockGlobalStateGet = jest.fn();
@@ -54,7 +54,7 @@ function getHiddenProviderUpdateCalls(): unknown[][] {
 describe('addDiscoveryRegistry ExecuteStep', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        resetDiscoveryProviderVisibilityMigrationForTests();
+        resetDiscoveryProviderVisibilityCacheForTests();
         mockGlobalStateUpdate.mockResolvedValue(undefined);
         mockListProviders.mockReturnValue([
             { id: 'azure-mongo-vcore-discovery', label: 'Azure DocumentDB' },

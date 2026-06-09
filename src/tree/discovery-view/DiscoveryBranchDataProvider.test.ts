@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { resetDiscoveryProviderVisibilityMigrationForTests } from '../../services/discoveryProviderVisibility';
+import { resetDiscoveryProviderVisibilityCacheForTests } from '../../services/discoveryProviderVisibility';
 import { DiscoveryService } from '../../services/discoveryServices';
 import { DiscoveryBranchDataProvider } from './DiscoveryBranchDataProvider';
 
@@ -117,7 +117,7 @@ describe('DiscoveryBranchDataProvider - provider visibility', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        resetDiscoveryProviderVisibilityMigrationForTests();
+        resetDiscoveryProviderVisibilityCacheForTests();
         telemetryContextMock.telemetry = { properties: {}, measurements: {} };
         mockGlobalStateUpdate.mockResolvedValue(undefined);
         listProvidersMock.mockReturnValue([
@@ -135,7 +135,6 @@ describe('DiscoveryBranchDataProvider - provider visibility', () => {
 
         expect(result).toHaveLength(2);
         expect(result?.map((node) => node.id)).toEqual(['discoveryView/provider-a', 'discoveryView/provider-b']);
-        expect(mockGlobalStateUpdate).toHaveBeenCalledWith('hiddenDiscoveryProviderIds', []);
         expect(telemetryContextMock.telemetry.measurements).toMatchObject({
             activeDiscoveryProviders: 2,
             hiddenDiscoveryProviders: 0,
@@ -156,33 +155,6 @@ describe('DiscoveryBranchDataProvider - provider visibility', () => {
             activeDiscoveryProviders: 1,
             hiddenDiscoveryProviders: 1,
         });
-    });
-
-    it('migrates legacy active providers to hidden providers and normalizes renamed provider IDs', async () => {
-        listProvidersMock.mockReturnValue([
-            { id: 'azure-mongo-vcore-discovery', label: 'Azure DocumentDB' },
-            { id: 'kubernetes-discovery', label: 'Kubernetes' },
-        ]);
-        setGlobalState({
-            activeDiscoveryProviderIds: ['azure-discovery'],
-        });
-
-        const result = await dataProvider.getChildren(undefined as never);
-
-        expect(result).toHaveLength(1);
-        expect(result?.[0]?.id).toBe('discoveryView/azure-mongo-vcore-discovery');
-        expect(mockGlobalStateUpdate).toHaveBeenCalledWith('hiddenDiscoveryProviderIds', ['kubernetes-discovery']);
-    });
-
-    it('preserves a legacy explicit hide-all state', async () => {
-        setGlobalState({
-            activeDiscoveryProviderIds: [],
-        });
-
-        const result = await dataProvider.getChildren(undefined as never);
-
-        expect(result).toBeNull();
-        expect(mockGlobalStateUpdate).toHaveBeenCalledWith('hiddenDiscoveryProviderIds', ['provider-a', 'provider-b']);
     });
 });
 

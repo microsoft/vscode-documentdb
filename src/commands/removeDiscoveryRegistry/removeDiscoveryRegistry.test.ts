@@ -6,7 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
-import { resetDiscoveryProviderVisibilityMigrationForTests } from '../../services/discoveryProviderVisibility';
+import { resetDiscoveryProviderVisibilityCacheForTests } from '../../services/discoveryProviderVisibility';
 import { DiscoveryService, type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { removeDiscoveryRegistry } from './removeDiscoveryRegistry';
@@ -64,7 +64,7 @@ function createActionContext(): IActionContext {
 describe('removeDiscoveryRegistry', () => {
     beforeEach(() => {
         jest.clearAllMocks();
-        resetDiscoveryProviderVisibilityMigrationForTests();
+        resetDiscoveryProviderVisibilityCacheForTests();
         mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) =>
             key === 'hiddenDiscoveryProviderIds' ? [] : defaultValue,
         );
