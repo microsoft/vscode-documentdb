@@ -95,9 +95,9 @@ describe('KubernetesRootItem (v2 multi-source)', () => {
         expect(labels).toEqual(['Add kubeconfig source\u2026']);
     });
 
-    it('exposes a tree item with the Kubernetes label, layers icon, and collapsed state', () => {
+    it('exposes a tree item with the Kubernetes Clusters label, layers icon, and collapsed state', () => {
         const treeItem = new KubernetesRootItem('discoveryView').getTreeItem();
-        expect(treeItem.label).toBe('Kubernetes');
+        expect(treeItem.label).toBe('Kubernetes Clusters');
         expect((treeItem.iconPath as { id: string }).id).toBe('layers');
         expect(treeItem.collapsibleState).toBe(1);
     });

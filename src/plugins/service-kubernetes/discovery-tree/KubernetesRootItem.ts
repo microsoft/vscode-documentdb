@@ -47,7 +47,7 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: vscode.l10n.t('Kubernetes'),
+            label: vscode.l10n.t('Kubernetes Clusters'),
             iconPath: new vscode.ThemeIcon('layers'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };

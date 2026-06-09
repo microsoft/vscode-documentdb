@@ -21,7 +21,7 @@ export const RESOURCE_TYPE = 'kubernetes';
 
 /** Display label for the discovery provider (lazy-evaluated) */
 export function getLabel(): string {
-    return l10n.t('Kubernetes');
+    return l10n.t('Kubernetes Clusters');
 }
 
 /** Description shown in the discovery provider list (lazy-evaluated) */
