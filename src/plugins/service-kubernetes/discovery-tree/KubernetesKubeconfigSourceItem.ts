@@ -115,14 +115,6 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
         const children: ExtTreeElementBase[] = [
             createGenericElementWithContext({
                 contextValue: 'error',
-                id: `${this.id}/remove-source`,
-                label: vscode.l10n.t('Remove this kubeconfig source'),
-                iconPath: new vscode.ThemeIcon('trash'),
-                commandId: 'vscode-documentdb.command.discoveryView.kubernetes.removeSource',
-                commandArgs: [this],
-            }),
-            createGenericElementWithContext({
-                contextValue: 'error',
                 id: `${this.id}/open-docs`,
                 label: vscode.l10n.t('Open Kubernetes discovery docs'),
                 iconPath: new vscode.ThemeIcon('book'),
