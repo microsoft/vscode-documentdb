@@ -8,4 +8,7 @@
 .cellValue {
     @extend .baseDataValue;
     font-size: 14px;
+    // Override the 32px line-height inherited from .baseDataValue (sized for 28px text).
+    // Matches .cellValueSlot min-height so text aligns cleanly inside the reserved slot.
+    line-height: 20px;
 }
