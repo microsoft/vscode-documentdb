@@ -200,17 +200,17 @@ describe('KubernetesNamespaceItem', () => {
 
             expect(children).toBeDefined();
             expect(children).toHaveLength(2);
-            // First child: classified error summary
+            // First child: retry action
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const errorInfoNode = children![0] as any;
+            const retryNode = children![0] as any;
+            expect(retryNode.contextValue).toBe('error');
+            expect(retryNode.id).toContain('retry');
+            // Second child: classified error summary
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const errorInfoNode = children![1] as any;
             expect(errorInfoNode.contextValue).toBe('error');
             expect(errorInfoNode.id).toContain('error-info');
             expect(errorInfoNode.label).toContain('403');
-            // Second child: retry action
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const retryNode = children![1] as any;
-            expect(retryNode.contextValue).toBe('error');
-            expect(retryNode.id).toContain('retry');
             expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalledWith(
                 expect.stringContaining('Failed to list services in "my-context/my-ns"'),
@@ -229,7 +229,7 @@ describe('KubernetesNamespaceItem', () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             expect((children![0] as any).contextValue).toBe('error');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![1] as any).id).toContain('retry');
+            expect((children![0] as any).id).toContain('retry');
             expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalled();
         });

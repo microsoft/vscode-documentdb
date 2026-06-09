@@ -115,18 +115,18 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
         const children: ExtTreeElementBase[] = [
             createGenericElementWithContext({
                 contextValue: 'error',
-                id: `${this.id}/open-docs`,
-                label: vscode.l10n.t('Open Kubernetes discovery docs'),
-                iconPath: new vscode.ThemeIcon('book'),
-                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
+                id: `${this.id}/retry`,
+                label: vscode.l10n.t('Click here to retry'),
+                iconPath: new vscode.ThemeIcon('refresh'),
+                commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
                 commandArgs: [this],
             }),
             createGenericElementWithContext({
                 contextValue: 'error',
-                id: `${this.id}/retry`,
-                label: vscode.l10n.t('Reload'),
-                iconPath: new vscode.ThemeIcon('refresh'),
-                commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
+                id: `${this.id}/open-docs`,
+                label: vscode.l10n.t('Open Kubernetes discovery docs'),
+                iconPath: new vscode.ThemeIcon('book'),
+                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
                 commandArgs: [this],
             }),
         ];

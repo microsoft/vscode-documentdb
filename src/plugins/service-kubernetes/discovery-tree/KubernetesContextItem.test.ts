@@ -260,16 +260,16 @@ describe('KubernetesContextItem', () => {
 
             expect(children).toBeDefined();
             expect(children).toHaveLength(2);
-            // First child: classified error summary
+            // First child: retry action
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const errorInfoNode = children![0] as any;
-            expect(errorInfoNode.contextValue).toBe('error');
-            expect(errorInfoNode.id).toContain('error-info');
-            // Second child: retry action
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const retryNode = children![1] as any;
+            const retryNode = children![0] as any;
             expect(retryNode.contextValue).toBe('error');
             expect(retryNode.id).toContain('retry');
+            // Second child: classified error summary
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const errorInfoNode = children![1] as any;
+            expect(errorInfoNode.contextValue).toBe('error');
+            expect(errorInfoNode.id).toContain('error-info');
             expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalled();
         });
@@ -360,9 +360,9 @@ describe('KubernetesContextItem', () => {
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             expect((children![0] as any).contextValue).toBe('error');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![0] as any).id).toContain('error-info');
+            expect((children![0] as any).id).toContain('retry');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![1] as any).id).toContain('retry');
+            expect((children![1] as any).id).toContain('error-info');
             expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalled();
         });

@@ -322,19 +322,19 @@ function createConnectionErrorChildren(
     return [
         createGenericElementWithContext({
             contextValue: 'error',
+            id: `${parentId}/retry`,
+            label: vscode.l10n.t('Click here to retry'),
+            iconPath: new vscode.ThemeIcon('refresh'),
+            commandId: 'vscode-documentdb.command.internal.retry',
+            commandArgs: [retryTarget],
+        }),
+        createGenericElementWithContext({
+            contextValue: 'error',
             id: `${parentId}/error-info`,
             label: summary,
             description: hint,
             iconPath: new vscode.ThemeIcon('warning'),
             tooltip: `${summary}\n\n${hint}\n\nFull error: ${errorMessage}`,
-        }),
-        createGenericElementWithContext({
-            contextValue: 'error',
-            id: `${parentId}/retry`,
-            label: vscode.l10n.t('Retry'),
-            iconPath: new vscode.ThemeIcon('refresh'),
-            commandId: 'vscode-documentdb.command.internal.retry',
-            commandArgs: [retryTarget],
         }),
     ];
 }
