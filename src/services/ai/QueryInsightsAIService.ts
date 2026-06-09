@@ -21,7 +21,7 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { type IndexSpecification } from '../../documentdb/LlmEnhancedFeatureApis';
 import { ext } from '../../extensionVariables';
 import { getConfirmationAsInSettings, getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
-import { type AIOptimizationResponse } from './types';
+import { type AIIndexRecommendation, type AIOptimizationResponse } from './types';
 
 /**
  * Payload for create index action
@@ -275,6 +275,68 @@ export class QueryInsightsAIService {
     }
 
     /**
+     * The default `_id_` index is always present and can neither be dropped
+     * nor hidden, so any AI recommendation targeting it is invalid.
+     */
+    private static readonly PROTECTED_INDEX_NAME = '_id_';
+
+    /**
+     * Determines whether an index recommendation targets the protected `_id_`
+     * index, either by its explicit name or by the index name referenced
+     * inside the shell command.
+     */
+    private static targetsProtectedIndex(recommendation: AIIndexRecommendation): boolean {
+        if ((recommendation.indexName ?? '').trim() === QueryInsightsAIService.PROTECTED_INDEX_NAME) {
+            return true;
+        }
+
+        const shellMatch = recommendation.shellCommand?.match(
+            /\.(?:hideIndex|unhideIndex|dropIndex)\(\s*['"]([^'"]+)['"]/,
+        );
+        return shellMatch?.[1].trim() === QueryInsightsAIService.PROTECTED_INDEX_NAME;
+    }
+
+    /**
+     * Splits index recommendations into those that may be shown to the user
+     * (`kept`) and those discarded because they target the protected `_id_`
+     * index. Only actionable recommendations (`create`/`drop`/`modify`) are
+     * filtered; informational `none` entries are always kept.
+     */
+    private static filterProtectedIndexRecommendations(recommendations: AIIndexRecommendation[]): {
+        kept: AIIndexRecommendation[];
+        removed: AIIndexRecommendation[];
+    } {
+        const kept: AIIndexRecommendation[] = [];
+        const removed: AIIndexRecommendation[] = [];
+        for (const recommendation of recommendations) {
+            if (recommendation.action !== 'none' && QueryInsightsAIService.targetsProtectedIndex(recommendation)) {
+                removed.push(recommendation);
+            } else {
+                kept.push(recommendation);
+            }
+        }
+        return { kept, removed };
+    }
+
+    /**
+     * Reports a dedicated telemetry event when one or more index
+     * recommendations were filtered out because they targeted a protected
+     * index. Fire-and-forget; failures are swallowed.
+     */
+    private static reportProtectedIndexRecommendationsFiltered(removed: AIIndexRecommendation[]): void {
+        void callWithTelemetryAndErrorHandling(
+            'vscode-documentdb.queryInsights.protectedIndexRecommendationFiltered',
+            (context: IActionContext) => {
+                context.errorHandling.suppressDisplay = true;
+                context.telemetry.measurements.filteredRecommendationCount = removed.length;
+                context.telemetry.properties.filteredActions = removed
+                    .map((recommendation) => recommendation.action)
+                    .join(',');
+            },
+        );
+    }
+
+    /**
      * Parses the generated recommendations text into structured format
      *
      * @param recommendationsText - The raw text from the AI model
@@ -297,9 +359,19 @@ export class QueryInsightsAIService {
                 educationalContent?: string;
             };
 
+            // Discard any recommendation that targets a protected index (e.g.,
+            // the mandatory `_id_` index, which can neither be hidden nor
+            // dropped). Such recommendations must never reach the user.
+            const { kept, removed } = QueryInsightsAIService.filterProtectedIndexRecommendations(
+                parsedJson.improvements ?? [],
+            );
+            if (removed.length > 0) {
+                QueryInsightsAIService.reportProtectedIndexRecommendationsFiltered(removed);
+            }
+
             return {
                 analysis: parsedJson.analysis || 'No analysis provided.',
-                improvements: parsedJson.improvements || [],
+                improvements: kept,
                 educationalContent: parsedJson.educationalContent,
             };
         } catch (error) {
@@ -521,6 +593,22 @@ export class QueryInsightsAIService {
                 };
             }
 
+            // Defense-in-depth: never drop the protected `_id_` index. The
+            // database forbids it, so refuse even if a recommendation slipped through.
+            if (payload.indexName.trim() === QueryInsightsAIService.PROTECTED_INDEX_NAME) {
+                context.telemetry.properties.actionError = 'protectedIndex';
+                context.telemetry.properties.protectedIndexName = payload.indexName.trim();
+                ext.outputChannel.warn(
+                    l10n.t('[Query Insights Action] Refusing to drop protected index "{indexName}"', {
+                        indexName: payload.indexName,
+                    }),
+                );
+                return {
+                    success: false,
+                    message: l10n.t('The "{indexName}" index cannot be dropped.', { indexName: payload.indexName }),
+                };
+            }
+
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
             if (!actualSessionId) {
@@ -646,6 +734,23 @@ export class QueryInsightsAIService {
 
             const operation = match[2];
             const indexName = match[3].replace(/['"]/g, '').trim();
+
+            // Defense-in-depth: never hide/unhide the protected `_id_` index. The
+            // database forbids hiding it, so refuse even if a recommendation slipped through.
+            if (indexName === QueryInsightsAIService.PROTECTED_INDEX_NAME) {
+                context.telemetry.properties.actionError = 'protectedIndex';
+                context.telemetry.properties.protectedIndexName = indexName;
+                ext.outputChannel.warn(
+                    l10n.t('[Query Insights Action] Refusing to {operation} protected index "{indexName}"', {
+                        operation,
+                        indexName,
+                    }),
+                );
+                return {
+                    success: false,
+                    message: l10n.t('The "{indexName}" index cannot be modified.', { indexName }),
+                };
+            }
 
             // Get session and client
             const actualSessionId = sessionId ?? payload.sessionId;
