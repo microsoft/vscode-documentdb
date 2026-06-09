@@ -108,8 +108,13 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
     }
 
     private createKubeconfigRecoveryChildren(message: string): ExtTreeElementBase[] {
+        // Modal on purpose: a failed source is only (re)loaded on an explicit user
+        // action (expand or "Click here to retry"). The retry-node cache prevents
+        // getChildren() from re-running on passive tree refreshes, so this modal
+        // cannot spam — it fires once per real load attempt.
         void vscode.window.showWarningMessage(
             vscode.l10n.t('Kubeconfig source "{0}": {1}', this.source.label, message),
+            { modal: true },
         );
 
         const children: ExtTreeElementBase[] = [
