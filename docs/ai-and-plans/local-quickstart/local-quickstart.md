@@ -1,4 +1,11 @@
-# Local Quick Start — UX Design Reference
+# Local Quick Start — UX Design Reference (Iteration 1)
+
+> **⚠️ This is Iteration 1.** This document was the initial comprehensive UX
+> exploration. It has been superseded by
+> **[Iteration 2 — Revised Design](./local-quickstart-v2.md)**, which
+> incorporates PR review feedback, simplifies the tree architecture, and
+> removes the dedicated local connection subtree. Keep this document as
+> reference for the original rationale and edge-case analysis.
 
 > **What this is:** A user-facing design specification for the proposed
 > _Local Quick Start_ feature — "install and try DocumentDB locally from
