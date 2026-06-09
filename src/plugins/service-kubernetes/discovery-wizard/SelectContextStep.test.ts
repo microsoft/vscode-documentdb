@@ -150,7 +150,7 @@ describe('SelectContextStep', () => {
 
         const picks: CapturedPick[] = ui.showQuickPick.mock.calls[0][0] as CapturedPick[];
         expect(picks[0].data).toBe('addSource');
-        expect(picks[0].label).toBe('Add a kubeconfig source\u2026');
+        expect(picks[0].label).toBe('Add Kubeconfigs\u2026');
         expect(picks[0].alwaysShow).toBe(true);
     });
 
@@ -195,7 +195,7 @@ describe('SelectContextStep', () => {
         // Only the action item and separator should be present (no context items)
         expect(picks).toHaveLength(2);
         expect(picks[0].data).toBe('addSource');
-        expect(picks[0].label).toBe('Add a kubeconfig source\u2026');
+        expect(picks[0].label).toBe('Add Kubeconfigs\u2026');
     });
 
     it('selecting "Add source" runs addKubeconfigSource', async () => {

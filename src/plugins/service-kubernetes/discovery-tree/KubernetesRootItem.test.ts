@@ -92,7 +92,7 @@ describe('KubernetesRootItem (v2 multi-source)', () => {
 
         expect(children).toHaveLength(1);
         const labels = children.map((c) => (c as unknown as { label?: string }).label);
-        expect(labels).toEqual(['Add kubeconfig source\u2026']);
+        expect(labels).toEqual(['Add Kubeconfigs\u2026']);
     });
 
     it('exposes a tree item with the Kubernetes Clusters label, layers icon, and collapsed state', () => {

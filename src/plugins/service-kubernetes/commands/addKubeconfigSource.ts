@@ -107,7 +107,7 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
 
     try {
         const selected = await context.ui.showQuickPick(picks, {
-            placeHolder: vscode.l10n.t('Add a kubeconfig source'),
+            placeHolder: vscode.l10n.t('Add Kubeconfigs'),
             suppressPersistence: true,
         });
         context.telemetry.properties.kubeconfigSourceKind = selected.data;

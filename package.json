@@ -499,7 +499,7 @@
         "//": "[DiscoveryView] Add Kubernetes kubeconfig source",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
-        "title": "Add Kubeconfig Source…",
+        "title": "Add Kubeconfigs…",
         "icon": "$(add)"
       },
       {
