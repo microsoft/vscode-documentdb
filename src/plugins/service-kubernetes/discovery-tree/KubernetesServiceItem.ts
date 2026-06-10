@@ -11,6 +11,7 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { type ClustersClient } from '../../../documentdb/ClustersClient';
@@ -22,6 +23,7 @@ import { DocumentDBExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { type BaseClusterModel, type TreeCluster } from '../../../tree/models/BaseClusterModel';
+import { getResourcesPath } from '../../../utils/icons';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import {
     buildPortForwardConnectionString,
@@ -156,10 +158,15 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
             'discovery.kubernetesService',
             `experience_${this.experience.api}`,
         ]);
-        // Keep the standard DocumentDB cluster icon (matches the saved-connection
-        // representation in the Connections view). Reachability is conveyed via the
-        // node description and the tooltip, not by overriding the node icon.
-        this.iconPath = new vscode.ThemeIcon('server-environment');
+        // Use the DocumentDB brand mark (the same icon as the "DocumentDB Local" node in the
+        // Connections view) so a discovered cluster reads as a first-class DocumentDB cluster.
+        // Dedicated cluster-named copies decouple this from the Local node's own asset.
+        this.iconPath = {
+            light: vscode.Uri.file(
+                path.join(getResourcesPath(), 'icons', 'vscode-documentdb-cluster-light-themes.svg'),
+            ),
+            dark: vscode.Uri.file(path.join(getResourcesPath(), 'icons', 'vscode-documentdb-cluster-dark-themes.svg')),
+        };
         this.descriptionOverride = this.buildDescription();
         this.tooltipOverride = this.buildTooltip();
     }
@@ -518,7 +525,18 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
     private buildTooltip(): vscode.MarkdownString {
         const reachability = this.getReachabilityInfo();
 
-        // Group 1 — key info (identity, provenance, type, port). The provenance and service type
+        // Group 1 — reachability (how VS Code actually reaches this target). Promoted to the top
+        // of the tooltip because it is the signal the user cares about most. A single theme icon
+        // prefixes the label to anchor the connectivity model visually (the only glyph we render
+        // in the tooltip — see ReachabilityInfo.tooltipIcon). The line echoes the exact `word`
+        // used in the node's grey description and then explains it, so the tooltip teaches what
+        // the terse one-word shortcut means.
+        const reachabilitySection: string[] = [
+            `$(${reachability.tooltipIcon}) **Reachability (\`${reachability.word}\`):** ${reachability.tooltipLabel}`,
+            reachability.tooltipDetail,
+        ];
+
+        // Group 2 — key info (identity, provenance, type, port). The provenance and service type
         // that used to sit in the node description now live here so the always-visible line stays
         // to a single connectivity word.
         const keyInfo: string[] = [`**Target:** ${this.serviceInfo.displayName}`];
@@ -538,17 +556,6 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
             keyInfo.push(`**External Address:** ${this.serviceInfo.externalAddress}`);
         }
 
-        // Group 2 — reachability (how VS Code actually reaches this target). This is
-        // the nuance that used to be carried by the node icon; it now lives here. A single
-        // theme icon prefixes the label to anchor the connectivity model visually (the only
-        // glyph we render in the tooltip — see ReachabilityInfo.tooltipIcon). The line echoes
-        // the exact `word` used in the node's grey description and then explains it, so the
-        // tooltip teaches what the terse one-word shortcut means.
-        const reachabilitySection: string[] = [
-            `$(${reachability.tooltipIcon}) **Reachability — \`${reachability.word}\`:** ${reachability.tooltipLabel}`,
-            reachability.tooltipDetail,
-        ];
-
         // Group 3 — placement (where the target lives).
         const placement: string[] = [];
         if (this.contextInfo.provider) {
@@ -560,9 +567,9 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         placement.push(`**Namespace:** ${this.serviceInfo.namespace}`, `**Context:** ${this.contextInfo.name}`);
 
         // Join the three groups with markdown horizontal rules. MarkdownString renders
-        // `\n\n---\n\n` as a horizontal line, giving a clean key-info / reachability /
+        // `\n\n---\n\n` as a horizontal line, giving a clean reachability / key-info /
         // placement separation in the rich tooltip.
-        const sections = [keyInfo.join('\n\n'), reachabilitySection.join('\n\n'), placement.join('\n\n')];
+        const sections = [reachabilitySection.join('\n\n'), keyInfo.join('\n\n'), placement.join('\n\n')];
         const tooltip = new vscode.MarkdownString(sections.join('\n\n---\n\n'));
         // Required so the single `$(...)` glyph on the reachability line renders as an icon.
         tooltip.supportThemeIcons = true;

@@ -23,6 +23,9 @@ jest.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
+    Uri: {
+        file: (p: string) => ({ scheme: 'file', path: p, fsPath: p, toString: () => p }),
+    },
     MarkdownString: class MarkdownString {
         public isTrusted = false;
         private readonly chunks: string[] = [];
@@ -155,8 +158,18 @@ jest.mock('../sources/sourceStore', () => ({
     getSource: (...args: unknown[]) => mockGetSource(...(args as [string])),
 }));
 
+// Mock the icons util so the cluster icon path resolves without an extension context.
+jest.mock('../../../utils/icons', () => ({
+    getResourcesPath: () => '/resources',
+}));
+
 function tooltipText(tooltip: unknown): string {
     return (tooltip as { toString(): string }).toString();
+}
+
+/** Extracts the dark-theme icon path string from a themed IconPath. */
+function iconDarkPath(iconPath: unknown): string {
+    return (iconPath as { dark: { toString(): string } }).dark.toString();
 }
 
 describe('KubernetesServiceItem', () => {
@@ -234,7 +247,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('port-forward');
-            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
+            expect(iconDarkPath(treeItem.iconPath)).toContain('vscode-documentdb-cluster-dark-themes.svg');
             expect(tooltipText(treeItem.tooltip)).toContain('Local port-forward required');
             expect(tooltipText(treeItem.tooltip)).toContain('127.0.0.1');
             expect(tooltipText(treeItem.tooltip)).toContain('DocumentDB Kubernetes Operator (DKO)');
@@ -263,7 +276,7 @@ describe('KubernetesServiceItem', () => {
             const treeItem = item.getTreeItem();
             // The healthy "direct" case shows no grey description (resolves to `false`).
             expect(treeItem.description).toBe(false);
-            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
+            expect(iconDarkPath(treeItem.iconPath)).toContain('vscode-documentdb-cluster-dark-themes.svg');
             expect(tooltipText(treeItem.tooltip)).toContain('Direct external address');
             expect(tooltipText(treeItem.tooltip)).toContain('Generic Kubernetes service');
             // Even though the node shows no description word, the tooltip still teaches the term.
@@ -290,7 +303,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('node-routed');
-            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
+            expect(iconDarkPath(treeItem.iconPath)).toContain('vscode-documentdb-cluster-dark-themes.svg');
             expect(tooltipText(treeItem.tooltip)).toContain('Cluster-routed via node port');
         });
 
@@ -313,7 +326,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('pending');
-            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
+            expect(iconDarkPath(treeItem.iconPath)).toContain('vscode-documentdb-cluster-dark-themes.svg');
             expect(tooltipText(treeItem.tooltip)).toContain('LoadBalancer pending');
         });
 
@@ -337,7 +350,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('node-routed');
-            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
+            expect(iconDarkPath(treeItem.iconPath)).toContain('vscode-documentdb-cluster-dark-themes.svg');
             expect(tooltipText(treeItem.tooltip)).toContain('Cluster-routed via node port');
         });
 
@@ -360,7 +373,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('unsupported');
-            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
+            expect(iconDarkPath(treeItem.iconPath)).toContain('vscode-documentdb-cluster-dark-themes.svg');
             expect(tooltipText(treeItem.tooltip)).toContain('Not directly reachable');
         });
     });
