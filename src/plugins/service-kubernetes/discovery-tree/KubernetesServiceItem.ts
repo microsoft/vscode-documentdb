@@ -71,6 +71,13 @@ interface ReachabilityInfo {
     readonly tooltipLabel: string;
     readonly tooltipDetail: string;
     readonly displayPort: number;
+    /**
+     * ThemeIcon id rendered as a `$(id)` prefix on the tooltip "Reachability" line.
+     * This is the single glyph we allow in the tooltip: it encodes the connection-string
+     * portability spectrum (globe = portable, server = cluster-routed, plug = machine-local
+     * tunnel, warning = not reachable as-is) so the node can be classified at a glance.
+     */
+    readonly tooltipIcon: string;
 }
 
 /**
@@ -509,9 +516,11 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         }
 
         // Group 2 — reachability (how VS Code actually reaches this target). This is
-        // the nuance that used to be carried by the node icon; it now lives here.
+        // the nuance that used to be carried by the node icon; it now lives here. A single
+        // theme icon prefixes the label to anchor the connectivity model visually (the only
+        // glyph we render in the tooltip — see ReachabilityInfo.tooltipIcon).
         const reachabilitySection: string[] = [
-            `**Reachability:** ${reachability.tooltipLabel}`,
+            `$(${reachability.tooltipIcon}) **Reachability:** ${reachability.tooltipLabel}`,
             reachability.tooltipDetail,
         ];
 
@@ -529,7 +538,10 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         // `\n\n---\n\n` as a horizontal line, giving a clean key-info / reachability /
         // placement separation in the rich tooltip.
         const sections = [keyInfo.join('\n\n'), reachabilitySection.join('\n\n'), placement.join('\n\n')];
-        return new vscode.MarkdownString(sections.join('\n\n---\n\n'));
+        const tooltip = new vscode.MarkdownString(sections.join('\n\n---\n\n'));
+        // Required so the single `$(...)` glyph on the reachability line renders as an icon.
+        tooltip.supportThemeIcons = true;
+        return tooltip;
     }
 
     private getReachabilityInfo(): ReachabilityInfo {
@@ -543,6 +555,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                             'Connects to the LoadBalancer external address. The connection string is portable if that address is reachable from the client machine.',
                         ),
                         displayPort: this.serviceInfo.port,
+                        // Portable: reachable from anywhere the external address resolves.
+                        tooltipIcon: 'globe',
                     };
                 }
                 if (this.serviceInfo.nodePort) {
@@ -553,6 +567,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                             'The LoadBalancer external address is not assigned, so VS Code falls back to a node port. This only works if the selected node address is reachable from this machine.',
                         ),
                         displayPort: this.serviceInfo.nodePort,
+                        // Cluster-routed: depends on a node address being reachable.
+                        tooltipIcon: 'server',
                     };
                 }
                 return {
@@ -562,6 +578,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                         'The LoadBalancer external address is not assigned yet and no node-port fallback is available.',
                     ),
                     displayPort: this.serviceInfo.port,
+                    // Not reachable as-is until the external address is assigned.
+                    tooltipIcon: 'warning',
                 };
             case 'NodePort':
                 return {
@@ -571,6 +589,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                         'Connects through a Kubernetes node port. This only works if a cluster node address is reachable from this machine.',
                     ),
                     displayPort: this.serviceInfo.nodePort ?? this.serviceInfo.port,
+                    // Cluster-routed: depends on a node address being reachable.
+                    tooltipIcon: 'server',
                 };
             case 'ClusterIP':
                 return {
@@ -580,6 +600,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                         'VS Code connects through the Kubernetes PortForward API. Connection strings using 127.0.0.1 only work on this machine while the tunnel is active.',
                     ),
                     displayPort: this.serviceInfo.port,
+                    // Machine-local tunnel only (127.0.0.1 while the tunnel is active).
+                    tooltipIcon: 'plug',
                 };
             default:
                 return {
@@ -591,6 +613,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                         'This Kubernetes service type is not resolved automatically. Use a reachable service endpoint or connect manually.',
                     ),
                     displayPort: this.serviceInfo.port,
+                    // Not resolved automatically.
+                    tooltipIcon: 'warning',
                 };
         }
     }
