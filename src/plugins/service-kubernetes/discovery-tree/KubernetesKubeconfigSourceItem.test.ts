@@ -142,4 +142,36 @@ describe('KubernetesKubeconfigSourceItem', () => {
             ).toBe(true);
         });
     });
+
+    describe('contextValue', () => {
+        it('adds the file marker only for file sources', () => {
+            const fileItem = new KubernetesKubeconfigSourceItem('parent', makeSource('file'));
+            expect(fileItem.contextValue).toContain('discovery.kubernetesSourceFile');
+
+            const defaultItem = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
+            expect(defaultItem.contextValue).not.toContain('discovery.kubernetesSourceFile');
+
+            const inlineItem = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
+            expect(inlineItem.contextValue).not.toContain('discovery.kubernetesSourceFile');
+        });
+    });
+
+    describe('recovery children', () => {
+        async function recoveryChildIds(source: KubeconfigSourceRecord): Promise<string[]> {
+            const item = new KubernetesKubeconfigSourceItem('parent', source);
+            const children = (await item.getChildren()) as Array<{ id: string }>;
+            return children.map((child) => child.id);
+        }
+
+        it('offers "Open in Editor" only for file sources', async () => {
+            const fileIds = await recoveryChildIds(makeSource('file'));
+            expect(fileIds).toContain('parent/file-id/open-in-editor');
+
+            const defaultIds = await recoveryChildIds(makeSource('default'));
+            expect(defaultIds).not.toContain('parent/default-id/open-in-editor');
+
+            const inlineIds = await recoveryChildIds(makeSource('inline'));
+            expect(inlineIds).not.toContain('parent/inline-id/open-in-editor');
+        });
+    });
 });
