@@ -137,15 +137,12 @@ describe('copyConnectionString', () => {
     it('T-03 K8s discovery + native + password, picks WITH password -> includes password', async () => {
         mockShowQuickPick.mockResolvedValue({ includePassword: true });
         const ctx = makeContext();
-        const node = makeNode(
-            'treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_documentdb',
-            {
-                connectionString: baseConnString,
-                availableAuthMethods: [AuthMethodId.NativeAuth],
-                selectedAuthMethod: AuthMethodId.NativeAuth,
-                nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 's3cr3t' },
-            },
-        );
+        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+            connectionString: baseConnString,
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+            nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 's3cr3t' },
+        });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await copyConnectionString(ctx as any, node as any);
@@ -161,15 +158,12 @@ describe('copyConnectionString', () => {
     it('T-04 K8s discovery + native + password, picks WITHOUT password -> omits password', async () => {
         mockShowQuickPick.mockResolvedValue({ includePassword: false });
         const ctx = makeContext();
-        const node = makeNode(
-            'treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_documentdb',
-            {
-                connectionString: baseConnString,
-                availableAuthMethods: [AuthMethodId.NativeAuth],
-                selectedAuthMethod: AuthMethodId.NativeAuth,
-                nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 's3cr3t' },
-            },
-        );
+        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+            connectionString: baseConnString,
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+            nativeAuthConfig: { connectionUser: 'alice', connectionPassword: 's3cr3t' },
+        });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await copyConnectionString(ctx as any, node as any);
@@ -182,15 +176,12 @@ describe('copyConnectionString', () => {
 
     it('T-05 K8s discovery + native + NO password -> no prompt, copies username only', async () => {
         const ctx = makeContext();
-        const node = makeNode(
-            'treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_documentdb',
-            {
-                connectionString: baseConnString,
-                availableAuthMethods: [AuthMethodId.NativeAuth],
-                selectedAuthMethod: AuthMethodId.NativeAuth,
-                nativeAuthConfig: { connectionUser: 'alice', connectionPassword: '' },
-            },
-        );
+        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+            connectionString: baseConnString,
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+            nativeAuthConfig: { connectionUser: 'alice', connectionPassword: '' },
+        });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await copyConnectionString(ctx as any, node as any);
@@ -204,15 +195,12 @@ describe('copyConnectionString', () => {
 
     it('T-06 K8s discovery + EntraID -> no password prompt, sets MONGODB-OIDC authMechanism', async () => {
         const ctx = makeContext();
-        const node = makeNode(
-            'treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_documentdb',
-            {
-                connectionString: baseConnString,
-                availableAuthMethods: [AuthMethodId.MicrosoftEntraID],
-                selectedAuthMethod: AuthMethodId.MicrosoftEntraID,
-                entraIdAuthConfig: { connectionUser: 'alice@contoso' },
-            },
-        );
+        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+            connectionString: baseConnString,
+            availableAuthMethods: [AuthMethodId.MicrosoftEntraID],
+            selectedAuthMethod: AuthMethodId.MicrosoftEntraID,
+            entraIdAuthConfig: { connectionUser: 'alice@contoso' },
+        });
 
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await copyConnectionString(ctx as any, node as any);
@@ -274,14 +262,11 @@ describe('copyConnectionString', () => {
 
     it('T-09 K8s discovery copy uses read-only credentials provider', async () => {
         const ctx = makeContext();
-        const node = makeNode(
-            'treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_documentdb',
-            {
-                connectionString: 'mongodb://should-not-be-used:10260/',
-                availableAuthMethods: [AuthMethodId.NativeAuth],
-                selectedAuthMethod: AuthMethodId.NativeAuth,
-            },
-        );
+        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+            connectionString: 'mongodb://should-not-be-used:10260/',
+            availableAuthMethods: [AuthMethodId.NativeAuth],
+            selectedAuthMethod: AuthMethodId.NativeAuth,
+        });
         node.getCredentialsForCopy = jest.fn().mockResolvedValue({
             connectionString: 'mongodb://127.0.0.1:10260/?directConnection=true',
             availableAuthMethods: [AuthMethodId.NativeAuth],
