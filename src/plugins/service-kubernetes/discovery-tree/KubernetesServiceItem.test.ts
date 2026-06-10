@@ -233,10 +233,13 @@ describe('KubernetesServiceItem', () => {
             );
 
             const treeItem = item.getTreeItem();
-            expect(treeItem.description).toBe('[DKO] ClusterIP · port-forward required :10260');
+            expect(treeItem.description).toBe('port-forward');
             expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Local port-forward required');
             expect(tooltipText(treeItem.tooltip)).toContain('127.0.0.1');
+            expect(tooltipText(treeItem.tooltip)).toContain('DocumentDB Kubernetes Operator (DKO)');
+            // Tooltip echoes the exact description word so it doubles as a legend.
+            expect(tooltipText(treeItem.tooltip)).toContain('`port-forward`');
         });
 
         it('marks LoadBalancer services with external addresses as direct', () => {
@@ -258,9 +261,13 @@ describe('KubernetesServiceItem', () => {
             );
 
             const treeItem = item.getTreeItem();
-            expect(treeItem.description).toBe('[Generic] LoadBalancer · direct :10260');
+            // The healthy "direct" case shows no grey description (resolves to `false`).
+            expect(treeItem.description).toBe(false);
             expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Direct external address');
+            expect(tooltipText(treeItem.tooltip)).toContain('Generic Kubernetes service');
+            // Even though the node shows no description word, the tooltip still teaches the term.
+            expect(tooltipText(treeItem.tooltip)).toContain('`direct`');
         });
 
         it('marks LoadBalancer services without external addresses but with node ports as node-routed', () => {
@@ -282,7 +289,7 @@ describe('KubernetesServiceItem', () => {
             );
 
             const treeItem = item.getTreeItem();
-            expect(treeItem.description).toBe('[Generic] LoadBalancer · node-routed :32000');
+            expect(treeItem.description).toBe('node-routed');
             expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Cluster-routed via node port');
         });
@@ -305,7 +312,7 @@ describe('KubernetesServiceItem', () => {
             );
 
             const treeItem = item.getTreeItem();
-            expect(treeItem.description).toBe('[Generic] LoadBalancer · pending :10260');
+            expect(treeItem.description).toBe('pending');
             expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('LoadBalancer pending');
         });
@@ -329,7 +336,7 @@ describe('KubernetesServiceItem', () => {
             );
 
             const treeItem = item.getTreeItem();
-            expect(treeItem.description).toBe('[Generic] NodePort · node-routed :32000');
+            expect(treeItem.description).toBe('node-routed');
             expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Cluster-routed via node port');
         });
@@ -352,7 +359,7 @@ describe('KubernetesServiceItem', () => {
             );
 
             const treeItem = item.getTreeItem();
-            expect(treeItem.description).toBe('[Generic] ExternalName · not directly supported :10260');
+            expect(treeItem.description).toBe('unsupported');
             expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Not directly reachable');
         });

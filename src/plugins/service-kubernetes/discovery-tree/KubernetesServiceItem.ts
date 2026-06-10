@@ -67,7 +67,18 @@ interface ResolveConnectionOptions {
 }
 
 interface ReachabilityInfo {
+    /**
+     * The connectivity shortcut shown as the node's grey description. Empty for the healthy
+     * "direct" case so that node shows just its name (a non-empty value signals a caveat).
+     */
     readonly description: string;
+    /**
+     * Always-present short word for the connectivity model (e.g. `direct`, `port-forward`,
+     * `node-routed`, `pending`, `unsupported`). The tooltip echoes this exact word before the
+     * longer explanation, so the tooltip doubles as a legend that teaches what the terse node
+     * description means. Unlike {@link description}, this is populated even for the `direct` case.
+     */
+    readonly word: string;
     readonly tooltipLabel: string;
     readonly tooltipDetail: string;
     readonly displayPort: number;
@@ -497,20 +508,32 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
     }
 
     private buildDescription(): string {
-        const reachability = this.getReachabilityInfo();
-        const sourcePrefix = this.serviceInfo.sourceKind === 'dko' ? 'DKO' : 'Generic';
-        return `[${sourcePrefix}] ${reachability.description} :${String(reachability.displayPort)}`;
+        // Keep the always-visible grey text to a single connectivity caveat word. The healthy
+        // "direct" case returns an empty string so the node shows just its name; a non-empty
+        // description therefore signals "there is a connectivity caveat here" at a glance. The
+        // provenance ([DKO]/[Generic]), service type, and port live in the tooltip instead.
+        return this.getReachabilityInfo().description;
     }
 
     private buildTooltip(): vscode.MarkdownString {
         const reachability = this.getReachabilityInfo();
 
-        // Group 1 — key info (identity, status, port).
+        // Group 1 — key info (identity, provenance, type, port). The provenance and service type
+        // that used to sit in the node description now live here so the always-visible line stays
+        // to a single connectivity word.
         const keyInfo: string[] = [`**Target:** ${this.serviceInfo.displayName}`];
+        keyInfo.push(
+            `**Source:** ${
+                this.serviceInfo.sourceKind === 'dko'
+                    ? l10n.t('DocumentDB Kubernetes Operator (DKO)')
+                    : l10n.t('Generic Kubernetes service')
+            }`,
+        );
+        keyInfo.push(`**Service type:** ${this.serviceInfo.type}`);
         if (this.serviceInfo.status) {
             keyInfo.push(`**Status:** ${this.serviceInfo.status}`);
         }
-        keyInfo.push(`**Port:** ${String(this.serviceInfo.port)}`);
+        keyInfo.push(`**Port:** ${String(reachability.displayPort)}`);
         if (this.serviceInfo.externalAddress) {
             keyInfo.push(`**External Address:** ${this.serviceInfo.externalAddress}`);
         }
@@ -518,9 +541,11 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         // Group 2 — reachability (how VS Code actually reaches this target). This is
         // the nuance that used to be carried by the node icon; it now lives here. A single
         // theme icon prefixes the label to anchor the connectivity model visually (the only
-        // glyph we render in the tooltip — see ReachabilityInfo.tooltipIcon).
+        // glyph we render in the tooltip — see ReachabilityInfo.tooltipIcon). The line echoes
+        // the exact `word` used in the node's grey description and then explains it, so the
+        // tooltip teaches what the terse one-word shortcut means.
         const reachabilitySection: string[] = [
-            `$(${reachability.tooltipIcon}) **Reachability:** ${reachability.tooltipLabel}`,
+            `$(${reachability.tooltipIcon}) **Reachability — \`${reachability.word}\`:** ${reachability.tooltipLabel}`,
             reachability.tooltipDetail,
         ];
 
@@ -549,7 +574,9 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
             case 'LoadBalancer':
                 if (this.serviceInfo.externalAddress) {
                     return {
-                        description: l10n.t('LoadBalancer · direct'),
+                        // Healthy/portable case: no caveat word, node shows just its name.
+                        description: '',
+                        word: l10n.t('direct'),
                         tooltipLabel: l10n.t('Direct external address'),
                         tooltipDetail: l10n.t(
                             'Connects to the LoadBalancer external address. The connection string is portable if that address is reachable from the client machine.',
@@ -561,7 +588,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 }
                 if (this.serviceInfo.nodePort) {
                     return {
-                        description: l10n.t('LoadBalancer · node-routed'),
+                        description: l10n.t('node-routed'),
+                        word: l10n.t('node-routed'),
                         tooltipLabel: l10n.t('Cluster-routed via node port'),
                         tooltipDetail: l10n.t(
                             'The LoadBalancer external address is not assigned, so VS Code falls back to a node port. This only works if the selected node address is reachable from this machine.',
@@ -572,7 +600,9 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                     };
                 }
                 return {
-                    description: l10n.t('LoadBalancer · pending'),
+                    // "pending" mirrors kubectl's `EXTERNAL-IP: <pending>` for an unprovisioned LB.
+                    description: l10n.t('pending'),
+                    word: l10n.t('pending'),
                     tooltipLabel: l10n.t('LoadBalancer pending'),
                     tooltipDetail: l10n.t(
                         'The LoadBalancer external address is not assigned yet and no node-port fallback is available.',
@@ -583,7 +613,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 };
             case 'NodePort':
                 return {
-                    description: l10n.t('NodePort · node-routed'),
+                    description: l10n.t('node-routed'),
+                    word: l10n.t('node-routed'),
                     tooltipLabel: l10n.t('Cluster-routed via node port'),
                     tooltipDetail: l10n.t(
                         'Connects through a Kubernetes node port. This only works if a cluster node address is reachable from this machine.',
@@ -594,7 +625,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 };
             case 'ClusterIP':
                 return {
-                    description: l10n.t('ClusterIP · port-forward required'),
+                    description: l10n.t('port-forward'),
+                    word: l10n.t('port-forward'),
                     tooltipLabel: l10n.t('Local port-forward required'),
                     tooltipDetail: l10n.t(
                         'VS Code connects through the Kubernetes PortForward API. Connection strings using 127.0.0.1 only work on this machine while the tunnel is active.',
@@ -605,9 +637,8 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 };
             default:
                 return {
-                    description: l10n.t('{serviceType} · not directly supported', {
-                        serviceType: this.serviceInfo.type,
-                    }),
+                    description: l10n.t('unsupported'),
+                    word: l10n.t('unsupported'),
                     tooltipLabel: l10n.t('Not directly reachable'),
                     tooltipDetail: l10n.t(
                         'This Kubernetes service type is not resolved automatically. Use a reachable service endpoint or connect manually.',
