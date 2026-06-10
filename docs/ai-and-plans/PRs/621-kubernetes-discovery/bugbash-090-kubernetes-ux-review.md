@@ -821,7 +821,8 @@ deferred:
   stays a hardcoded non-setting; `showEmptyNamespaces` dropped; `additionalPorts` + CRD escape hatch are
   demand-driven follow-ups.
 - **Source-node icon (#8/#11).** ✅ **Changed to `group-by-ref-type`** (replacing `plug`); the in-wizard
-  "Add Kubeconfig…" entry was aligned to the same icon in iteration 3 (§8.4).
+  "Add Kubeconfig…" entry was corrected to the **`add`** (plus) icon in iteration 3, since it's an action
+  rather than a source (§8.4).
 - **Deferred to iteration 3:** the ClusterIP "copy connection details" experience (§8.1). Double-click-to-expand
   (former §4.4) and query-table contrast (#27) are **not** owner-requested and are closed/parked (§8.2).
 
@@ -859,32 +860,66 @@ have an established pattern for this in the product:
 > the user manual and wire the **Learn more** option to it. Tracked as a follow-up; the quick pick can
 > ship with the link pointing at the section once it exists.
 
+**Where is this active? (scoping)** Two distinct surfaces, and we should be explicit about which one:
+
+| Surface              | Node                                                                      | Today                                                                                                              | Proposal                                                                                                                              |
+| -------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Discovery view**   | the discovered Kubernetes target (`KubernetesServiceItem`, before saving) | Copy is currently **excluded** for K8s (see the finding below); only **Save To DocumentDB Connections** is offered | Add the new **"Copy…"** quick pick here, gated on `discovery.kubernetesService`                                                       |
+| **Connections view** | a **saved** connection that originated from a K8s target                  | Inherits the standard cluster menu (incl. the existing **Copy Connection String…** with/without-password flow)     | The same port-forward-aware **"Copy…"** quick pick should apply here too, since a saved ClusterIP connection is _still_ machine-local |
+
+> **Answer to "where would this be active — on a saved connection in the Connections view?":** **both.**
+> The primary gap is on the **Discovery-view** node (where copy is currently suppressed for K8s), but a
+> **saved** K8s connection in the Connections view has the _same_ machine-local port-forward caveat, so
+> the unified "Copy…" quick pick (with the `kubectl port-forward` command + Learn more) is just as
+> relevant there. The connection is only reachable via a local tunnel regardless of which view you copy
+> from — so the experience should be consistent across both. Implementation note: that means wiring the
+> quick pick for **both** `view == discoveryView && …discovery.kubernetesService` and the saved-connection
+> equivalent in `view == connectionsView`, ideally sharing one command that detects the port-forward
+> metadata on the node.
+
 **Why this is the right shape.** It reuses a UX the user already understands (the copy-reference quick
 pick), keeps the default copy honest (no silent tunnel side effects — already true after #21), folds the
 teammate-share concern (#21) into the same surface instead of a separate command, and the **Learn more**
 entry gives the machine-local nuance a permanent home instead of a transient warning toast.
 
-**Prerequisite finding — why the K8s node's menu looks "thin" (answer to the owner's question).** The
-discovered DocumentDB target **does** extend the shared cluster base:
-[`KubernetesServiceItem extends ClusterItemBase<KubernetesServiceModel>`](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts).
-It is a real cluster node (expanding it authenticates, lists databases/collections, etc.). The reason
-many context-menu actions you see in the **Connections view** don't appear here is **not** the class —
-it's the **menu scoping by view**:
+**Prerequisite finding — why the K8s node's menu differs from the vCore discovery node (corrected
+answer to the owner's question).** The discovered DocumentDB target **does** extend the shared cluster
+base, exactly like the Azure vCore discovery node:
 
-- Tree context-menu contributions in `package.json` are gated by `view == …` _and_ a `viewItem`
-  context-value regex.
-- The discovered node lives in the **Discovery view** and carries the context value
-  `treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_*`.
-- In the Discovery view we **intentionally** expose only discovery-relevant actions — primarily
-  **"Add to Connections View"** (`view == discoveryView && viewItem =~ /…documentdbTargetLeaf…/`). The
-  rich cluster menu (rename, delete, copy connection string, etc.) is contributed under
-  `view == connectionsView`, so it appears **after** the user adds the cluster to the Connections view.
+- Kubernetes: [`KubernetesServiceItem extends ClusterItemBase<KubernetesServiceModel>`](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L93).
+- vCore discovery: [`DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel>`](src/plugins/service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem.ts#L33).
 
-This is **consistent with every discovery provider** (the Azure discovery cluster nodes show the same
-minimal menu); the Kubernetes target is not a special-cased or lesser node. It does mean the new
-**"Copy…" quick pick** above needs to be added as a **Discovery-view command** (gated on
-`discovery.kubernetesService` / `documentdbTargetLeaf`) rather than assuming the Connections-view copy
-commands are present.
+Both are real cluster nodes (expanding authenticates and lists databases/collections). The menu and icon
+differences are **not** because the K8s node is a different/lesser class — they come from two concrete
+things the K8s subclass does in its constructor, plus a deliberate menu exclusion:
+
+1. **Context value (drives which menu items match).** `ClusterItemBase` defaults `contextValue` to
+   `treeItem_documentdbcluster;experience_<api>`. The vCore discovery item **keeps that default**, so it
+   matches all the `treeItem_documentdbcluster` menus. The Kubernetes item **overrides** it
+   ([KubernetesServiceItem.ts#L132-L137](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L132-L137))
+   to add `documentdbTargetLeaf;discovery.kubernetesService`.
+2. **The rich cluster commands explicitly exclude `discovery.kubernetesService`.** In
+   [package.json](package.json#L858-L935), **Create Database**, **Copy Connection String**, **Open
+   Interactive Shell**, and **Data Migration** are all gated with
+   `… && !(viewItem =~ /\bdiscovery\.kubernetesService\b/i)`. So the vCore discovery node (which lacks
+   that marker) shows the full menu in the screenshot, while the K8s node is **deliberately filtered
+   out** of those four commands. What remains for K8s is **Save To DocumentDB Connections** (the
+   discovery `addConnectionToConnectionsView` entry) plus **Create Database** for the
+   already-connected/expanded state, etc.
+3. **Icon.** The base `getTreeItem()` just renders `this.iconPath`. vCore sets
+   `iconPath = AzureDocumentDb.svg`; Kubernetes overrides it to a **reachability** icon
+   ([KubernetesServiceItem.ts#L138](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L138):
+   `this.iconPath = this.getReachabilityInfo().icon` — `globe`/`server`/`plug`/`warning`). That's why the
+   glyph differs. No method in the base class forces the icon; each subclass sets `this.iconPath`.
+
+**So the right question for iteration 3 is intent:** the `!(… discovery.kubernetesService …)` exclusions
+were added because **Copy Connection String / Open Interactive Shell / Data Migration assume a directly
+reachable cluster**, which a ClusterIP target is not (it needs a machine-local port-forward). Rather than
+let those commands silently start a tunnel or hand back an opaque `127.0.0.1` string, they were hidden on
+the K8s node. The **"Copy…" quick pick** in §8.1 is the replacement surface that re-introduces copy in a
+port-forward-aware way; it needs to be added as a **Discovery-view command gated on
+`discovery.kubernetesService` / `documentdbTargetLeaf`**. Worth confirming whether **Open Interactive
+Shell** should likewise get a K8s-aware variant (it would need the tunnel up first) or stay hidden.
 
 ### 8.2 Not owner-requested — closed/parked
 
@@ -899,20 +934,22 @@ participants and are not on the roadmap:
 
 ### 8.4 Cross-surface icon parity for "add kubeconfig" — ✅ resolved
 
-There were **three** places a kubeconfig surfaced, each with its own icon. Iteration 3 aligned the two
-"add" surfaces that read as the same concept:
+There were **three** places a kubeconfig surfaced. The in-wizard entry is an **action** ("add a
+kubeconfig"), not a representation of an existing source, so it should read as an action — corrected to
+the **`add`** (plus) icon, not the source identity icon:
 
 | Surface                                                                                                                          | Icon                                                                   |
 | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
-| Tree source nodes                                                                                                                | `group-by-ref-type`                                                    |
-| In-wizard "Add Kubeconfig…" entry ([SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts)) | `group-by-ref-type` ✅ (was `plug`)                                    |
+| Tree source nodes (an existing source)                                                                                           | `group-by-ref-type`                                                    |
+| In-wizard "Add Kubeconfig…" entry ([SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts)) | `add` ✅ (was `plug`; an action, not a source)                         |
 | Add-Source picker per-type items ([addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts))      | `home` / `folder-opened` / `clippy` (kept — per-type aids recognition) |
 
-> ✅ **Decision / Implemented.** The in-wizard entry no longer uses `plug`; it uses the same
-> `group-by-ref-type` as the tree source nodes so "kubeconfig sources" reads consistently. The dedicated
-> Add-Source picker keeps its per-type icons (`home` / `folder-opened` / `clippy`) — they help the user
-> distinguish default vs file vs paste at the moment of choosing, which is the one place differentiation
-> is useful.
+> ✅ **Decision / Implemented (corrected).** The in-wizard "Add Kubeconfig…" entry uses **`$(add)`** —
+> it's an _action_ that opens the add flow, so the plus icon is the correct semantics (the earlier
+> `group-by-ref-type` choice conflated the action with the source-node identity). The tree source nodes
+> keep `group-by-ref-type` (they _are_ sources). The dedicated Add-Source picker keeps its per-type icons
+> (`home` / `folder-opened` / `clippy`) — they help the user distinguish default vs file vs paste at the
+> moment of choosing, which is the one place differentiation is useful.
 
 ### 8.5 Live-verification checklist still outstanding
 

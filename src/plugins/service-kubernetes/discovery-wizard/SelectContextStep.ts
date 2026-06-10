@@ -41,7 +41,7 @@ export class SelectContextStep extends AzureWizardPromptStep<NewConnectionWizard
             {
                 label: vscode.l10n.t('Add Kubeconfig…'),
                 detail: vscode.l10n.t('Add or manage sources to see more contexts.'),
-                iconPath: new ThemeIcon('group-by-ref-type'),
+                iconPath: new ThemeIcon('add'),
                 alwaysShow: true,
                 data: 'addSource',
             },
