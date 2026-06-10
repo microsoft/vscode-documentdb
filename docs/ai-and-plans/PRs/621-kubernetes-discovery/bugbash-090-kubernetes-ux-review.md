@@ -964,6 +964,167 @@ be confirmed by hand before sign-off (these are not new work, just confirmation)
 
 ---
 
+## 9. Iteration 3 — planned refactor: cluster-node parity (design, not yet implemented)
+
+This chapter is a **plan** to be reviewed before any code is written. It addresses three coupled issues
+on the discovered Kubernetes target node (`KubernetesServiceItem`): the context-value override, the
+command exclusions it forced, and the icon override. It also fixes a wording bug surfaced during review.
+
+### 9.0 Process note — missing decision log for the original override
+
+The reasoning behind `KubernetesServiceItem` overriding `contextValue` (and the matching
+`!(discovery.kubernetesService)` exclusions in `package.json`) is **not recorded** anywhere in the
+`docs/ai-and-plans/PRs/…` folder. That made this review materially harder: from the code alone it's
+ambiguous whether the override was a deliberate "ClusterIP commands assume direct reachability, so hide
+them" decision or an accident. We're proceeding on the **assumption it was an intentional guard** (hide
+copy/shell/etc. because a ClusterIP needs a tunnel), but that guess should be confirmed by the author.
+
+> 📌 **Process work item:** going forward, keep a short **decision log / reasoning doc per PR** in
+> `docs/ai-and-plans/PRs/<pr>/` (as we do for other PRs). It helps human reviewers and code-review agents
+> understand _why_ a non-obvious deviation (like overriding a shared base's context value) was made.
+
+### 9.1 Problem statement
+
+`ClusterItemBase` defaults `contextValue` to `treeItem_documentdbcluster;experience_<api>`, which is what
+makes the full cluster menu (Create Database, Copy Connection String, Open Interactive Shell, Data
+Migration) appear. The Azure vCore discovery node keeps that default and shows the full menu.
+
+`KubernetesServiceItem` instead:
+
+1. **Overrides `contextValue`** to add `documentdbTargetLeaf;discovery.kubernetesService`
+   ([KubernetesServiceItem.ts#L132-L137](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L132-L137)).
+2. Forces **four `package.json` commands to exclude** it via
+   `… && !(viewItem =~ /\bdiscovery\.kubernetesService\b/i)` ([package.json](package.json#L858-L935)).
+3. **Overrides the icon** to a reachability glyph
+   ([KubernetesServiceItem.ts#L138](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L138)).
+
+The net effect is a node that looks and behaves like a lesser cluster, and a `package.json` riddled with
+K8s-specific negative lookaheads (command duplication / special-casing).
+
+### 9.2 Why the guard is unnecessary (the safety analysis)
+
+The exclusions were almost certainly added to stop commands from running against a not-yet-reachable
+ClusterIP. But the shared commands **already** guard themselves correctly:
+
+- **Every cluster command checks sign-in and bails with "expand to sign in".** Example —
+  [createDatabase.ts#L31-L38](src/commands/createDatabase/createDatabase.ts#L31-L38) throws _"You are not
+  signed in… Please sign in (by expanding the node …) and try again."_ if
+  `CredentialCache.hasCredentials(clusterId)` is false. The same pattern holds for the other cluster
+  commands. So a command invoked before the node is expanded **does not** misfire — it asks the user to
+  expand first.
+- **Expanding the node is what establishes the tunnel.** `KubernetesServiceItem.authenticateAndConnect()`
+  and `getCredentials()` call `resolveClusterCredentials(context, { startPortForward: true })`, so once
+  the node is expanded/connected the port-forward is up and the cached client is valid — exactly the
+  state the cluster commands require.
+- **The only command that reads connection info without connecting is "Copy Connection String".** That is
+  precisely the one the base delegates to an overridable hook — `KubernetesServiceItem` already implements
+  `getCredentialsForCopy()` with `startPortForward: false` and port-forward-aware annotation. So copy can
+  stay correct **without** excluding the command; it's handled in the subclass.
+
+**Conclusion:** the negative-lookahead exclusions are redundant with the sign-in guard. We can drop them
+and let the K8s node use the standard cluster menu.
+
+### 9.3 Does anything break? Saved connections that need a tunnel
+
+**Question:** if a user saves a ClusterIP connection (which only works through a local tunnel), is the
+tunnel information preserved, and will the Connections-view commands work?
+
+**Answer: yes — already handled.** When the discovery node produces credentials for "Save To DocumentDB
+Connections", it attaches **`KUBERNETES_PORT_FORWARD_METADATA_PROPERTY`** to the connection
+([KubernetesServiceItem.ts#L465-L475](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L465-L475),
+schema in [portForwardMetadata.ts](src/plugins/service-kubernetes/portForwardMetadata.ts)). On the
+Connections-view side, [`DocumentDBClusterItem`](src/tree/connections-view/DocumentDBClusterItem.ts#L384-L392)
+calls `ensureKubernetesPortForwardIfNeeded()` before connecting/copying, which reads that metadata and
+**re-establishes the tunnel transparently**. So a saved ClusterIP connection already brings its tunnel up
+on demand — the metadata survives the save and the Connections-view cluster menu works against it.
+
+> This is the strongest evidence the guard is unnecessary: the _saved_ form of the exact same node
+> already runs the full cluster menu **with** a tunnel, with no special-casing. The discovery-view node
+> can do the same.
+
+### 9.4 Proposed change
+
+1. **Stop overriding `contextValue`.** Let the K8s service node carry the base
+   `treeItem_documentdbcluster;experience_<api>`, plus the **`documentdbTargetLeaf`** marker it needs for
+   "Save To DocumentDB Connections". Drop the `discovery.kubernetesService` marker **as a command gate**
+   (keep it only if some K8s-specific command genuinely needs to target this node — audit during impl).
+2. **Remove the command duplication.** Delete the four `!(viewItem =~ /\bdiscovery\.kubernetesService\b/i)`
+   negative lookaheads from [package.json](package.json#L858-L935) so Create Database / Copy Connection
+   String / Open Interactive Shell / Data Migration apply uniformly.
+3. **Keep copy correct via the subclass, not the menu.** Rely on the existing `getCredentialsForCopy()`
+   override (no tunnel side effect) instead of hiding the command. (The richer "Copy…" quick pick from
+   §8.1 layers on top of this later.)
+4. **Verify Open Interactive Shell.** The shell needs a live client; after expand/connect the tunnel is
+   up, so it should work — but this is the one to **test deliberately** for a ClusterIP target.
+
+> ⚠️ **Risk to validate during impl:** any command that resolves connection info **without** first
+> requiring sign-in (i.e. doesn't go through `CredentialCache.hasCredentials`). Audit each of the four
+> commands for that pattern; "Copy Connection String" is the known one and is already handled.
+
+### 9.5 Wording bug — "MongoDB Cluster" should say "DocumentDB"
+
+While auditing the commands, the not-signed-in error in
+[createDatabase.ts#L33-L36](src/commands/createDatabase/createDatabase.ts#L33-L36) reads:
+
+> _"You are not signed in to the **MongoDB Cluster**. Please sign in…"_
+
+Per the repo terminology rule (never use "MongoDB" alone as the product name), this should say
+**"DocumentDB cluster"**. **Plan:** fix this string and **audit sibling commands** for the same wording —
+candidates already spotted: [DatabaseNameStep.ts#L79](src/commands/createDatabase/DatabaseNameStep.ts#L79)
+(_"…already exists in the MongoDB Cluster…"_) and
+[PromptConnectionStringStep.ts#L17](src/commands/newConnection/PromptConnectionStringStep.ts#L17)
+(_"connection string of your MongoDB cluster"_). User-facing strings only; code comments/JSDoc are out of
+scope for this fix.
+
+### 9.6 Icon — keep the DocumentDB icon; relocate the reachability signal
+
+**Decision:** do **not** override the node icon. Users must see the **DocumentDB cluster icon**, the same
+identity the node has everywhere else (the Connections-view item uses `$(server-environment)`;
+[DocumentDBClusterItem.ts#L449-L451](src/tree/connections-view/DocumentDBClusterItem.ts#L449-L451)). The
+reachability state then needs another home.
+
+**Reachability icons currently in use** (from `getReachabilityInfo()`,
+[KubernetesServiceItem.ts#L519-L585](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L519-L585)):
+
+| Service state                          | Icon today   | Description text (already shown)    |
+| -------------------------------------- | ------------ | ----------------------------------- |
+| LoadBalancer, external address present | `$(globe)`   | `LoadBalancer · direct`             |
+| LoadBalancer, node-port fallback       | `$(server)`  | `LoadBalancer · node-routed`        |
+| LoadBalancer, nothing assigned yet     | `$(warning)` | `LoadBalancer · pending`            |
+| NodePort                               | `$(server)`  | `NodePort · node-routed`            |
+| ClusterIP                              | `$(plug)`    | `ClusterIP · port-forward required` |
+| Unsupported / unknown type             | `$(warning)` | `<type> · not directly supported`   |
+
+> _(In limited test data you'll typically only see `globe`; the others appear with NodePort/ClusterIP
+> services and partially-provisioned LoadBalancers.)_
+
+Note the reachability is **already conveyed in the node description** (e.g. `[DKO] ClusterIP ·
+port-forward required :10260`) **and** in the tooltip's Reachability section — so the icon is redundant
+signal, not the only signal. Options for where the reachability _visual_ goes:
+
+| Option                                              | How                                                                                                                                      | Pros                                                                                                                                            | Cons                                                                                |
+| --------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **A. Drop the icon entirely; keep text**            | Node shows the DocumentDB icon; reachability stays in the description + tooltip (already there)                                          | Simplest; product icon preserved; zero new surface                                                                                              | Loses the at-a-glance color/glyph; user must read the row                           |
+| **B. `FileDecorationProvider` badge** (recommended) | Set `resourceUri` on the node and register a `FileDecorationProvider` that returns a 1–2 char badge + theme color keyed off reachability | Native VS Code "status badge" pattern (same as git/problems); keeps the DocumentDB icon; adds a small colored letter/dot in the row's top-right | A bit more plumbing; badges are 1–2 chars only; needs a stable `resourceUri` scheme |
+| **C. Color the DocumentDB icon**                    | Use `ThemeIcon('database', new ThemeColor(...))` — same glyph, reachability-driven color                                                 | Keeps a database glyph; conveys state via color                                                                                                 | Not the brand SVG icon (theme icon only); color alone is weak for color-blind users |
+| **D. Label/description suffix only**                | Encode state as a trailing tag in the description (already done)                                                                         | Already implemented; nothing to build                                                                                                           | Pure text; no visual pop                                                            |
+| **E. Inline action / child "info" node**            | Surface reachability via the tooltip + an optional info child                                                                            | Detailed                                                                                                                                        | Heavier; clutters the tree                                                          |
+
+> **Recommendation:** **B (FileDecorationProvider badge)** if we want to keep an at-a-glance visual while
+> preserving the DocumentDB icon — it's the idiomatic VS Code mechanism for exactly this ("node has a
+> status"). If we want the smallest change, **A** is fully acceptable because the description + tooltip
+> already carry the reachability text. Either way, **the node's main icon becomes the DocumentDB icon**.
+
+### 9.7 Suggested sequencing
+
+1. Fix the wording bug (§9.5) — tiny, independent, safe.
+2. Remove the icon override; set the DocumentDB icon (§9.6 option A first; B as a follow-up).
+3. Drop the `contextValue` override + the four `package.json` exclusions (§9.4); keep `getCredentialsForCopy`.
+4. Manually verify: Create Database, Copy Connection String, Open Interactive Shell, Data Migration on a
+   **ClusterIP** target (expand → command), plus the same on a **saved** ClusterIP connection.
+
+---
+
 _Generated for the bug‑bash‑090 UX review. Code references were verified against the
 `dev/guanzhousong/kubernetes-service-discovery` branch state present in this workspace. Behavioral items
 marked "verify live" depend on runtime timing and should be confirmed by hand._
