@@ -227,7 +227,7 @@ describe('KubernetesContextItem', () => {
             mockCreateCoreApi.mockResolvedValue(mockCoreApi);
         });
 
-        it('should show namespaces with DocumentDB targets directly and group empty namespaces under Others', async () => {
+        it('should show namespaces with DocumentDB targets directly and group empty namespaces under Other namespaces', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'production']);
             mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) =>
                 namespace === 'production'
@@ -242,8 +242,8 @@ describe('KubernetesContextItem', () => {
             expect(children).toHaveLength(2);
             expect(getNamespaceName(children![0])).toBe('production');
             expect(getCollapsibleState(children![0])).toBe(1);
-            expect(getTreeItemLabel(children![1])).toBe('Others');
-            expect(getTreeItemDescription(children![1])).toBe('DocumentDB not detected');
+            expect(getTreeItemLabel(children![1])).toBe('Other namespaces');
+            expect(getTreeItemDescription(children![1])).toBe('No DocumentDB targets found');
 
             const otherChildren = await children![1].getChildren!();
             expect(otherChildren).toHaveLength(1);
@@ -299,7 +299,7 @@ describe('KubernetesContextItem', () => {
             expect(namespaceNames).toContain('production');
         });
 
-        it('should show Others when all namespaces are empty', async () => {
+        it('should show Other namespaces when all namespaces are empty', async () => {
             mockListNamespaces.mockResolvedValue(['default', 'staging']);
             mockListDocumentDBServices.mockResolvedValue([]);
 
@@ -308,8 +308,8 @@ describe('KubernetesContextItem', () => {
 
             expect(children).toBeDefined();
             expect(children).toHaveLength(1);
-            expect(getTreeItemLabel(children![0])).toBe('Others');
-            expect(getTreeItemDescription(children![0])).toBe('DocumentDB not detected');
+            expect(getTreeItemLabel(children![0])).toBe('Other namespaces');
+            expect(getTreeItemDescription(children![0])).toBe('No DocumentDB targets found');
 
             const otherChildren = await children![0].getChildren!();
             expect(otherChildren).toHaveLength(2);
@@ -382,12 +382,12 @@ describe('KubernetesContextItem', () => {
 
             expect(children).toBeDefined();
             // broken-ns (pre-scan failed, kept visible) + working-ns (has targets)
-            // default is grouped under Others (confirmed empty)
+            // default is grouped under Other namespaces (confirmed empty)
             expect(children).toHaveLength(3);
             const brokenNamespace = children!.find((child) => getNamespaceName(child) === 'broken-ns');
             expect(brokenNamespace).toBeDefined();
             expect(getCollapsibleState(brokenNamespace)).toBe(1);
-            const others = children!.find((child) => getTreeItemLabel(child) === 'Others');
+            const others = children!.find((child) => getTreeItemLabel(child) === 'Other namespaces');
             expect(others).toBeDefined();
             const otherChildren = await others!.getChildren!();
             expect(otherChildren!.map((child) => getChildLabel(child))).toEqual(['default']);

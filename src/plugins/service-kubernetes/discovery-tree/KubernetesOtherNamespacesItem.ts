@@ -34,8 +34,8 @@ export class KubernetesOtherNamespacesItem implements TreeElement, TreeElementWi
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: vscode.l10n.t('Others'),
-            description: vscode.l10n.t('DocumentDB not detected'),
+            label: vscode.l10n.t('Other namespaces'),
+            description: vscode.l10n.t('No DocumentDB targets found'),
             // Use 'symbol-folder' instead of 'folder': VS Code's tree Aligner treats
             // ThemeIcon('folder')/('file') specially and hides them under file-icon
             // themes that lack folder icons, which also breaks sibling alignment.
