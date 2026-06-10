@@ -485,21 +485,21 @@
         "//": "[DiscoveryView] Rename Kubernetes kubeconfig source",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
-        "title": "Rename Kubeconfig Source…",
+        "title": "Rename…",
         "icon": "$(edit)"
       },
       {
         "//": "[DiscoveryView] Remove Kubernetes kubeconfig source",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
-        "title": "Remove Kubeconfig Source",
+        "title": "Remove…",
         "icon": "$(trash)"
       },
       {
         "//": "[DiscoveryView] Add Kubernetes kubeconfig source",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
-        "title": "Add Kubeconfigs…",
+        "title": "Add Kubeconfig…",
         "icon": "$(add)"
       },
       {
@@ -812,11 +812,6 @@
           "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
           "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
           "group": "1@1"
-        },
-        {
-          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
-          "group": "inline@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
