@@ -60,11 +60,21 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                         `[KubernetesDiscovery] Failed to list services in "${this.contextInfo.name}/${this.namespace}": ${errorMessage}`,
                     );
                     context.telemetry.properties.serviceFetchError = 'true';
+                    context.telemetry.properties.serviceFetchErrorType =
+                        error instanceof Error ? error.name : 'UnknownError';
                     return createServiceErrorChildren(this.id, errorMessage, this);
                 }
 
                 context.telemetry.measurements.discoveryResourcesCount = services.length;
                 context.telemetry.measurements.discoveryLoadTimeMs = Date.now() - startTime;
+                // Split the discovered targets by provenance so adoption of the DocumentDB
+                // Kubernetes Operator can be tracked separately from the generic-service fallback.
+                context.telemetry.measurements.dkoResourcesCount = services.filter(
+                    (svc) => svc.sourceKind === 'dko',
+                ).length;
+                context.telemetry.measurements.genericServicesCount = services.filter(
+                    (svc) => svc.sourceKind === 'generic',
+                ).length;
 
                 if (services.length === 0) {
                     return [

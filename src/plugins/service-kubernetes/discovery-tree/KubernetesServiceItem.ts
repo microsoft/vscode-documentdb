@@ -453,7 +453,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 return { connectionString: endpoint.connectionString };
             case 'needsPortForward': {
                 const localPort = options.startPortForward
-                    ? await promptForLocalPort(this.serviceInfo)
+                    ? await promptForLocalPort(this.serviceInfo, context)
                     : endpoint.suggestedLocalPort;
                 if (localPort === undefined) {
                     context.telemetry.properties.connectionResult = 'cancelled';
@@ -461,6 +461,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 }
 
                 if (options.startPortForward) {
+                    const tunnelStart = Date.now();
                     const result = await PortForwardTunnelManager.getInstance().startTunnel({
                         sourceId: this.sourceId,
                         kubeConfig,
@@ -474,6 +475,10 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                     });
 
                     context.telemetry.properties.portForwardOutcome = result.outcome;
+                    context.telemetry.measurements.portForwardLocalPort = localPort;
+                    if (result.outcome === 'started') {
+                        context.telemetry.measurements.portForwardDurationMs = Date.now() - tunnelStart;
+                    }
 
                     if (result.outcome === 'started') {
                         void vscode.window.showInformationMessage(

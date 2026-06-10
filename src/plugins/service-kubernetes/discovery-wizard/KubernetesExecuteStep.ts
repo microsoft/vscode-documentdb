@@ -52,11 +52,12 @@ export class KubernetesExecuteStep extends AzureWizardExecuteStep<NewConnectionW
                 context.connectionProperties = undefined;
                 break;
             case 'needsPortForward': {
-                const localPort = await promptForLocalPort(selectedService);
+                const localPort = await promptForLocalPort(selectedService, context);
                 if (localPort === undefined) {
                     throw new UserCancelledError();
                 }
 
+                const tunnelStart = Date.now();
                 const result = await PortForwardTunnelManager.getInstance().startTunnel({
                     sourceId,
                     kubeConfig,
@@ -70,8 +71,9 @@ export class KubernetesExecuteStep extends AzureWizardExecuteStep<NewConnectionW
                 });
 
                 context.telemetry.properties.portForwardOutcome = result.outcome;
-
+                context.telemetry.measurements.portForwardLocalPort = localPort;
                 if (result.outcome === 'started') {
+                    context.telemetry.measurements.portForwardDurationMs = Date.now() - tunnelStart;
                     void vscode.window.showInformationMessage(
                         vscode.l10n.t(
                             'Port-forward tunnel started on 127.0.0.1:{0} for "{1}".',

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as net from 'net';
 import * as vscode from 'vscode';
 import { type KubeServiceInfo } from './kubernetesClient';
@@ -18,9 +19,19 @@ const LOCAL_PORT_SCAN_LIMIT = 100;
 /**
  * Prompts the user to confirm or change the local port for port-forwarding a ClusterIP service.
  * Returns undefined when the user cancels so callers can abort cleanly.
+ *
+ * When an {@link IActionContext} is supplied, records the configured port strategy and whether
+ * the user changed the suggested port. Port numbers are not sensitive, so this is safe telemetry.
  */
-export async function promptForLocalPort(service: KubeServiceInfo): Promise<number | undefined> {
-    const suggestedLocalPort = await resolveSuggestedLocalPort(service.port);
+export async function promptForLocalPort(
+    service: KubeServiceInfo,
+    context?: IActionContext,
+): Promise<number | undefined> {
+    const strategy = getLocalPortStrategy();
+    const suggestedLocalPort = await resolveSuggestedLocalPort(service.port, strategy);
+    if (context) {
+        context.telemetry.properties.portForwardStrategy = strategy;
+    }
     const input = await vscode.window.showInputBox({
         title: vscode.l10n.t('Port Forward: {0}', service.displayName),
         prompt: vscode.l10n.t(
@@ -40,14 +51,20 @@ export async function promptForLocalPort(service: KubeServiceInfo): Promise<numb
     });
 
     if (input === undefined) {
+        if (context) {
+            context.telemetry.properties.portSelectionResult = 'cancelled';
+        }
         return undefined;
     }
 
-    return parseInt(input, 10);
+    const chosenPort = parseInt(input, 10);
+    if (context) {
+        context.telemetry.properties.portForwardPortChanged = chosenPort === suggestedLocalPort ? 'false' : 'true';
+    }
+    return chosenPort;
 }
 
-async function resolveSuggestedLocalPort(remotePort: number): Promise<number> {
-    const strategy = getLocalPortStrategy();
+async function resolveSuggestedLocalPort(remotePort: number, strategy: LocalPortStrategy): Promise<number> {
     if (strategy === 'matchRemote') {
         return remotePort;
     }

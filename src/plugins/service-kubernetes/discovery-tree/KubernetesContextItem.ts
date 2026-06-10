@@ -71,6 +71,8 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                         `[KubernetesDiscovery] Failed to list namespaces for context "${this.contextInfo.name}": ${errorMessage}`,
                     );
                     context.telemetry.properties.namespaceFetchError = 'true';
+                    context.telemetry.properties.namespaceFetchErrorType =
+                        error instanceof Error ? error.name : 'UnknownError';
 
                     return createConnectionErrorChildren(this.id, errorMessage, this);
                 }
@@ -101,6 +103,8 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                                 `[KubernetesDiscovery] Failed to check services in "${this.contextInfo.name}/${namespace}": ${errorMessage}`,
                             );
                             context.telemetry.properties.namespaceServiceFetchError = 'true';
+                            context.telemetry.properties.namespaceServiceFetchErrorType =
+                                error instanceof Error ? error.name : 'UnknownError';
 
                             // Leave this namespace expandable so the user can retry and see the detailed error.
                             return { namespace };
