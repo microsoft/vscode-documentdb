@@ -1274,35 +1274,42 @@ placeholder. The remaining documentation work is:
 ### 11.3 Discovery-node `description` grammar & tooltip glyph (reference)
 
 **Where:** [KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts)
-`buildDescription()`. The grey text after the node name follows a fixed grammar:
+`buildDescription()` / `buildTooltip()` / `getReachabilityInfo()`.
+
+**Design decision (this iteration):** the always-visible grey **description** was trimmed from the original
+four-token line (`[<source>] <serviceType> · <reachability> :<port>`) down to **a single connectivity
+caveat word**. Provenance (`DKO`/`Generic`), service type, and port are interesting at most once, so they
+moved into the tooltip; the description now carries only the one signal a user re-reads: _"is there a
+connectivity catch here?"_ A **non-empty** description therefore means "there's a caveat"; the healthy
+`direct` case shows **no description at all** (resolves to `false`, i.e. just the node name).
+
+| Service type | Condition                          | Node description (grey) | Tooltip glyph | Connect port |
+| ------------ | ---------------------------------- | ----------------------- | ------------- | ------------ |
+| LoadBalancer | external address assigned          | _(none)_                | `$(globe)`    | service port |
+| LoadBalancer | no external addr, node port exists | `node-routed`           | `$(server)`   | node port    |
+| LoadBalancer | neither yet                        | `pending`               | `$(warning)`  | service port |
+| NodePort     | —                                  | `node-routed`           | `$(server)`   | node port    |
+| ClusterIP    | —                                  | `port-forward`          | `$(plug)`     | service port |
+| (other)      | —                                  | `unsupported`           | `$(warning)`  | service port |
+
+- **`pending`** is intentional — it mirrors `kubectl`'s `EXTERNAL-IP: <pending>` for an unprovisioned
+  LoadBalancer. **`unsupported`** replaces the old "not directly supported" phrase for `ExternalName` /
+  unknown types (nothing is being provisioned, so "pending" would be wrong).
+
+**Tooltip as a legend.** The tooltip has three `---`-separated groups: **key info** (Target, **Source:
+DKO/Generic**, Service type, Status, Port, External Address), **reachability**, and **placement** (Provider,
+Region, Namespace, Context). The reachability line **echoes the exact description word** and then explains
+it, so hovering teaches what the terse node shortcut means:
 
 ```
-[<source>] <serviceType> · <reachability> :<port>
+$(plug) Reachability — `port-forward`: Local port-forward required
+VS Code connects through the Kubernetes PortForward API. Connection strings using 127.0.0.1 only work on this machine while the tunnel is active.
 ```
 
-- **`<source>`** — `DKO` when the target was discovered from a **DocumentDB Kubernetes Operator**-managed
-  `DocumentDB` custom resource (`sourceKind === 'dko'`); `Generic` when it came from the constrained
-  fallback that looks for a DocumentDB gateway `Service` directly. DKO targets carry extra signal (status,
-  cert/secret) the generic path can't see.
-- **`<serviceType> · <reachability>` and `:<port>`** — derived from the Kubernetes `Service.type` and which
-  endpoint VS Code will actually use. Full matrix (`getReachabilityInfo()`):
-
-  | Service type | Condition                          | Description                         | Port shown                  | Tooltip glyph |
-  | ------------ | ---------------------------------- | ----------------------------------- | --------------------------- | ------------- |
-  | LoadBalancer | external address assigned          | `LoadBalancer · direct`             | service port                | `$(globe)`    |
-  | LoadBalancer | no external addr, node port exists | `LoadBalancer · node-routed`        | node port                   | `$(server)`   |
-  | LoadBalancer | neither yet                        | `LoadBalancer · pending`            | service port                | `$(warning)`  |
-  | NodePort     | —                                  | `NodePort · node-routed`            | node port (or service port) | `$(server)`   |
-  | ClusterIP    | —                                  | `ClusterIP · port-forward required` | service port                | `$(plug)`     |
-  | (other)      | —                                  | `<type> · not directly supported`   | service port                | `$(warning)`  |
-
-  So the example `sample-documentdb [DKO] LoadBalancer · direct :10260` reads: a DKO-managed DocumentDB,
-  exposed via a LoadBalancer with an assigned external address, reachable directly on port 10260.
-
-**Tooltip glyph decision (this iteration):** we render **exactly one** theme icon in the tooltip — a leading
-`$(...)` on the **Reachability** line — because that line is the single axis that answers _"is the copied
-connection string portable?"_ (`globe` portable → `server` cluster-routed → `plug` machine-local tunnel →
-`warning` not reachable as-is). The node icon stays the standard DocumentDB cluster icon (`server-environment`);
+**Tooltip glyph decision:** we render **exactly one** theme icon in the tooltip — a leading `$(...)` on the
+**Reachability** line — because that line is the single axis that answers _"is the copied connection string
+portable?"_ (`globe` portable → `server` cluster-routed → `plug` machine-local tunnel → `warning` not
+reachable as-is). The node icon stays the standard DocumentDB cluster icon (`server-environment`);
 icons are deliberately **not** sprinkled across the other tooltip fields. Requires
 `MarkdownString.supportThemeIcons = true`.
 
