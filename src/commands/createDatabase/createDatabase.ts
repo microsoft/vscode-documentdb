@@ -31,7 +31,7 @@ async function createMongoDatabase(context: IActionContext, node: ClusterItemBas
     if (!CredentialCache.hasCredentials(node.cluster.clusterId)) {
         throw new Error(
             l10n.t(
-                'You are not signed in to the MongoDB Cluster. Please sign in (by expanding the node "{0}") and try again.',
+                'You are not signed in to the DocumentDB cluster. Please sign in (by expanding the node "{0}") and try again.',
                 node.cluster.name,
             ),
         );

@@ -14,7 +14,7 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
     public hideStepCount: boolean = true;
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const prompt: string = l10n.t('Enter the connection string of your MongoDB cluster.');
+        const prompt: string = l10n.t('Enter the connection string of your DocumentDB cluster.');
         const newConnectionString = await context.ui.showInputBox({
             prompt: prompt,
             ignoreFocusOut: true,
