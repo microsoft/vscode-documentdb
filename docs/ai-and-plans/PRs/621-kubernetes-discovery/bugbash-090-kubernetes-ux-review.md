@@ -1271,6 +1271,41 @@ placeholder. The remaining documentation work is:
   (0.10.0): experiment with a `FileDecorationProvider` to show connected vs. not-connected clusters across
   the Connections tree in general. Supersedes the Kubernetes-only reachability-badge idea from §9.6 option B.
 
+### 11.3 Discovery-node `description` grammar & tooltip glyph (reference)
+
+**Where:** [KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts)
+`buildDescription()`. The grey text after the node name follows a fixed grammar:
+
+```
+[<source>] <serviceType> · <reachability> :<port>
+```
+
+- **`<source>`** — `DKO` when the target was discovered from a **DocumentDB Kubernetes Operator**-managed
+  `DocumentDB` custom resource (`sourceKind === 'dko'`); `Generic` when it came from the constrained
+  fallback that looks for a DocumentDB gateway `Service` directly. DKO targets carry extra signal (status,
+  cert/secret) the generic path can't see.
+- **`<serviceType> · <reachability>` and `:<port>`** — derived from the Kubernetes `Service.type` and which
+  endpoint VS Code will actually use. Full matrix (`getReachabilityInfo()`):
+
+  | Service type | Condition                          | Description                         | Port shown                  | Tooltip glyph |
+  | ------------ | ---------------------------------- | ----------------------------------- | --------------------------- | ------------- |
+  | LoadBalancer | external address assigned          | `LoadBalancer · direct`             | service port                | `$(globe)`    |
+  | LoadBalancer | no external addr, node port exists | `LoadBalancer · node-routed`        | node port                   | `$(server)`   |
+  | LoadBalancer | neither yet                        | `LoadBalancer · pending`            | service port                | `$(warning)`  |
+  | NodePort     | —                                  | `NodePort · node-routed`            | node port (or service port) | `$(server)`   |
+  | ClusterIP    | —                                  | `ClusterIP · port-forward required` | service port                | `$(plug)`     |
+  | (other)      | —                                  | `<type> · not directly supported`   | service port                | `$(warning)`  |
+
+  So the example `sample-documentdb [DKO] LoadBalancer · direct :10260` reads: a DKO-managed DocumentDB,
+  exposed via a LoadBalancer with an assigned external address, reachable directly on port 10260.
+
+**Tooltip glyph decision (this iteration):** we render **exactly one** theme icon in the tooltip — a leading
+`$(...)` on the **Reachability** line — because that line is the single axis that answers _"is the copied
+connection string portable?"_ (`globe` portable → `server` cluster-routed → `plug` machine-local tunnel →
+`warning` not reachable as-is). The node icon stays the standard DocumentDB cluster icon (`server-environment`);
+icons are deliberately **not** sprinkled across the other tooltip fields. Requires
+`MarkdownString.supportThemeIcons = true`.
+
 ---
 
 _Generated for the bug‑bash‑090 UX review. Code references were verified against the
