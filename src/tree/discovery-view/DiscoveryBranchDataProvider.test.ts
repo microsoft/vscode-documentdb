@@ -163,7 +163,7 @@ describe('DiscoveryBranchDataProvider - Cluster ID Validation', () => {
 
     beforeEach(() => {
         jest.clearAllMocks();
-        resetDiscoveryProviderVisibilityMigrationForTests();
+        resetDiscoveryProviderVisibilityCacheForTests();
         dataProvider = new DiscoveryBranchDataProvider();
     });
 
