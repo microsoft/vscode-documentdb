@@ -113,6 +113,14 @@ function getTreeItemDescription(child: unknown): unknown {
     return (child as { getTreeItem(): { description?: unknown } }).getTreeItem().description;
 }
 
+function getTreeItemTooltipText(child: unknown): string {
+    const tooltip = (child as { getTreeItem(): { tooltip?: unknown } }).getTreeItem().tooltip;
+    if (typeof tooltip === 'string') {
+        return tooltip;
+    }
+    return (tooltip as { value?: string })?.value ?? '';
+}
+
 function getChildLabel(child: unknown): unknown {
     return (child as { label?: unknown }).label;
 }
@@ -243,7 +251,8 @@ describe('KubernetesContextItem', () => {
             expect(getNamespaceName(children![0])).toBe('production');
             expect(getCollapsibleState(children![0])).toBe(1);
             expect(getTreeItemLabel(children![1])).toBe('Other namespaces');
-            expect(getTreeItemDescription(children![1])).toBe('No DocumentDB targets found');
+            expect(getTreeItemDescription(children![1])).toBeUndefined();
+            expect(getTreeItemTooltipText(children![1])).toContain('no DocumentDB target was found');
 
             const otherChildren = await children![1].getChildren!();
             expect(otherChildren).toHaveLength(1);
@@ -309,7 +318,8 @@ describe('KubernetesContextItem', () => {
             expect(children).toBeDefined();
             expect(children).toHaveLength(1);
             expect(getTreeItemLabel(children![0])).toBe('Other namespaces');
-            expect(getTreeItemDescription(children![0])).toBe('No DocumentDB targets found');
+            expect(getTreeItemDescription(children![0])).toBeUndefined();
+            expect(getTreeItemTooltipText(children![0])).toContain('no DocumentDB target was found');
 
             const otherChildren = await children![0].getChildren!();
             expect(otherChildren).toHaveLength(2);

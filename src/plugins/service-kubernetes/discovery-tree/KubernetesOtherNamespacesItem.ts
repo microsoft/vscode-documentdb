@@ -31,11 +31,19 @@ export class KubernetesOtherNamespacesItem implements TreeElement, TreeElementWi
     }
 
     public getTreeItem(): vscode.TreeItem {
+        // The label alone carries the meaning; the explanation lives in the tooltip so the
+        // always-visible row stays short. No em dashes in generated user-facing strings.
+        const tooltip = new vscode.MarkdownString(
+            vscode.l10n.t(
+                'Namespaces that were scanned but where no DocumentDB target was found. These are grouped here to keep the list of connectable namespaces uncluttered. Expand to see which namespaces were checked.',
+            ),
+        );
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: vscode.l10n.t('Other namespaces'),
-            description: vscode.l10n.t('No DocumentDB targets found'),
+            tooltip,
             // Use 'symbol-folder' instead of 'folder': VS Code's tree Aligner treats
             // ThemeIcon('folder')/('file') specially and hides them under file-icon
             // themes that lack folder icons, which also breaks sibling alignment.
