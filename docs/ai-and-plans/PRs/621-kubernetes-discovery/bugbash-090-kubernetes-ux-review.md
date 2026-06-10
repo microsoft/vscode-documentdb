@@ -1042,46 +1042,79 @@ on demand — the metadata survives the save and the Connections-view cluster me
 > already runs the full cluster menu **with** a tunnel, with no special-casing. The discovery-view node
 > can do the same.
 
-### 9.4 Proposed change
+### 9.4 Proposed change — ✅ implemented (except shell verification)
 
-1. **Stop overriding `contextValue`.** Let the K8s service node carry the base
-   `treeItem_documentdbcluster;experience_<api>`, plus the **`documentdbTargetLeaf`** marker it needs for
-   "Save To DocumentDB Connections". Drop the `discovery.kubernetesService` marker **as a command gate**
-   (keep it only if some K8s-specific command genuinely needs to target this node — audit during impl).
-2. **Remove the command duplication.** Delete the four `!(viewItem =~ /\bdiscovery\.kubernetesService\b/i)`
-   negative lookaheads from [package.json](package.json#L858-L935) so Create Database / Copy Connection
-   String / Open Interactive Shell / Data Migration apply uniformly.
-3. **Keep copy correct via the subclass, not the menu.** Rely on the existing `getCredentialsForCopy()`
-   override (no tunnel side effect) instead of hiding the command. (The richer "Copy…" quick pick from
-   §8.1 layers on top of this later.)
-4. **Verify Open Interactive Shell.** The shell needs a live client; after expand/connect the tunnel is
-   up, so it should work — but this is the one to **test deliberately** for a ClusterIP target.
+**Audit correction (important).** During implementation the marker roles turned out to be the **opposite**
+of the first guess:
 
-> ⚠️ **Risk to validate during impl:** any command that resolves connection info **without** first
-> requiring sign-in (i.e. doesn't go through `CredentialCache.hasCredentials`). Audit each of the four
-> commands for that pattern; "Copy Connection String" is the known one and is already handled.
+- **`documentdbTargetLeaf`** is **K8s-only and redundant.** It was used only in the two
+  `addConnectionToConnectionsView` menu entries as an alternation `(treeitem_documentdbcluster|documentdbTargetLeaf)`.
+  Because the node keeps the base `treeItem_documentdbcluster`, those menus already match without it →
+  **removed** from the code and the `package.json` alternations.
+- **`discovery.kubernetesService`** must be **kept.** It is **not** only a command gate — the copy command
+  reads it ([copyConnectionString.ts#L57](src/commands/copyConnectionString/copyConnectionString.ts#L57),
+  `containsDelimited(node.contextValue, 'kubernetesService')`) to route to the read-only, no-tunnel
+  `getCredentialsForCopy()` path and to decide the with/without-password prompt. Removing it would break
+  safe copy. It stays as a **positive** marker (it no longer **excludes** any command).
 
-### 9.5 Wording bug — "MongoDB Cluster" should say "DocumentDB"
+**What shipped:**
 
-While auditing the commands, the not-signed-in error in
-[createDatabase.ts#L33-L36](src/commands/createDatabase/createDatabase.ts#L33-L36) reads:
+1. ✅ **Context value simplified** to `treeItem_documentdbcluster;discovery.kubernetesService;experience_<api>`
+   (dropped `documentdbTargetLeaf`). See
+   [KubernetesServiceItem.ts#L130-L142](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L130-L142).
+2. ✅ **Command duplication removed.** The four `!(viewItem =~ /\bdiscovery\.kubernetesService\b/i)`
+   negative lookaheads were deleted from [package.json](package.json) so **Create Database / Copy
+   Connection String / Open Interactive Shell / Data Migration** now apply to the K8s node uniformly; the
+   two `addConnectionToConnectionsView` alternations were simplified to plain `treeitem_documentdbcluster`.
+3. ✅ **Copy stays correct via the subclass.** `getCredentialsForCopy()` (no tunnel side effect) is still
+   selected through the retained `discovery.kubernetesService` marker — not by hiding the command.
+4. ⏳ **Open Interactive Shell — pending manual verification.** The shell needs a live client; after
+   expand/connect the tunnel is up, so it should work, but **test deliberately** against a ClusterIP
+   target before sign-off.
 
-> _"You are not signed in to the **MongoDB Cluster**. Please sign in…"_
+> ⚠️ **Residual risk to validate:** any cluster command that resolves connection info **without** first
+> checking `CredentialCache.hasCredentials` would now run against the K8s node. Audited candidates
+> (Create Database, Data Migration) all guard on sign-in; "Copy Connection String" is handled via the
+> read-only path. Open Interactive Shell is the one to confirm live (#9.4.4).
 
-Per the repo terminology rule (never use "MongoDB" alone as the product name), this should say
-**"DocumentDB cluster"**. **Plan:** fix this string and **audit sibling commands** for the same wording —
-candidates already spotted: [DatabaseNameStep.ts#L79](src/commands/createDatabase/DatabaseNameStep.ts#L79)
-(_"…already exists in the MongoDB Cluster…"_) and
-[PromptConnectionStringStep.ts#L17](src/commands/newConnection/PromptConnectionStringStep.ts#L17)
-(_"connection string of your MongoDB cluster"_). User-facing strings only; code comments/JSDoc are out of
-scope for this fix.
+### 9.5 Wording bug — "MongoDB Cluster" → "DocumentDB cluster" — ✅ fixed
 
-### 9.6 Icon — keep the DocumentDB icon; relocate the reachability signal
+Per the repo terminology rule (never "MongoDB" alone as the product name), three user-facing strings were
+corrected:
 
-**Decision:** do **not** override the node icon. Users must see the **DocumentDB cluster icon**, the same
-identity the node has everywhere else (the Connections-view item uses `$(server-environment)`;
-[DocumentDBClusterItem.ts#L449-L451](src/tree/connections-view/DocumentDBClusterItem.ts#L449-L451)). The
-reachability state then needs another home.
+- [createDatabase.ts#L33](src/commands/createDatabase/createDatabase.ts#L33) — _"not signed in to the
+  **DocumentDB cluster**…"_
+- [DatabaseNameStep.ts#L79](src/commands/createDatabase/DatabaseNameStep.ts#L79) — _"…already exists in
+  the **DocumentDB cluster**…"_
+- [PromptConnectionStringStep.ts#L17](src/commands/newConnection/PromptConnectionStringStep.ts#L17) —
+  _"connection string of your **DocumentDB cluster**."_
+
+These were the only three matches across the command set; code comments/JSDoc were intentionally left out
+of scope (terminology rule targets user-facing strings).
+
+### 9.6 Icon + tooltip — ✅ implemented
+
+**Icon.** The reachability-glyph override was **removed**; the node now renders the standard DocumentDB
+cluster icon **`$(server-environment)`** — the same icon the saved connection uses in the Connections
+view ([DocumentDBClusterItem.ts#L449-L451](src/tree/connections-view/DocumentDBClusterItem.ts#L449-L451))
+and the Azure VM discovery node uses
+([AzureVMResourceItem.ts#L41](src/plugins/service-azure-vm/discovery-tree/vm/AzureVMResourceItem.ts#L41)).
+The `icon` field was dropped from `ReachabilityInfo` entirely.
+
+**Tooltip.** Reachability now lives in a **richer, grouped markdown tooltip** with horizontal rules
+(`\n\n---\n\n`), in three sections:
+
+1. **Key info** — Target, Status, Port, External Address.
+2. **Reachability** — the label + the machine-local/port-forward explanation (the nuance the icon used to
+   hint at).
+3. **Placement** — Provider, Region, Namespace, Context.
+
+See `buildTooltip()` in
+[KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts). The
+reachability text **also** remains in the node description (e.g. `[DKO] ClusterIP · port-forward required
+:10260`), so the signal is preserved at-a-glance without an icon override.
+
+#### Original plan (retained for reference)
 
 **Reachability icons currently in use** (from `getReachabilityInfo()`,
 [KubernetesServiceItem.ts#L519-L585](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L519-L585)):
@@ -1115,13 +1148,77 @@ signal, not the only signal. Options for where the reachability _visual_ goes:
 > status"). If we want the smallest change, **A** is fully acceptable because the description + tooltip
 > already carry the reachability text. Either way, **the node's main icon becomes the DocumentDB icon**.
 
-### 9.7 Suggested sequencing
+### 9.7 Suggested sequencing (original plan — completed except shell verification)
 
-1. Fix the wording bug (§9.5) — tiny, independent, safe.
-2. Remove the icon override; set the DocumentDB icon (§9.6 option A first; B as a follow-up).
-3. Drop the `contextValue` override + the four `package.json` exclusions (§9.4); keep `getCredentialsForCopy`.
-4. Manually verify: Create Database, Copy Connection String, Open Interactive Shell, Data Migration on a
-   **ClusterIP** target (expand → command), plus the same on a **saved** ClusterIP connection.
+1. ✅ Fix the wording bug (§9.5) — tiny, independent, safe.
+2. ✅ Remove the icon override; set the DocumentDB icon (§9.6; option A shipped — reachability moved into
+   the grouped tooltip; **B** `FileDecorationProvider` badge remains an optional follow-up).
+3. ✅ Drop the redundant `documentdbTargetLeaf` marker + the four `package.json` exclusions (§9.4); keep
+   `discovery.kubernetesService` (needed by copy) and `getCredentialsForCopy`.
+4. ⏳ Manually verify: Create Database, Copy Connection String, Open Interactive Shell, Data Migration on
+   a **ClusterIP** target (expand → command), plus the same on a **saved** ClusterIP connection.
+
+---
+
+## 10. Iteration 4 — next up & still pending
+
+With §9 landed, the cluster node now exposes the **standard DocumentDB cluster menu** (Create Database,
+Copy Connection String, Open Interactive Shell, Data Migration) and shows the **DocumentDB icon**. That
+unblocks the copy work from §8.1.
+
+### 10.1 Ship the unified "Copy…" quick pick (was §8.1) — now unblocked
+
+Now that **Copy Connection String** is enabled on the K8s node (and routes through the read-only
+`getCredentialsForCopy()` path), build the consolidated picker the owner asked for:
+
+- A **single "Copy…" quick pick** on the ClusterIP service node (Discovery view) **and** on the saved
+  connection (Connections view), surfacing all options so the user chooses what they need:
+  - **Connection string (with password)** — working local string while the tunnel is active.
+  - **Connection string (without password)** — safe to share/paste.
+  - **`kubectl port-forward` command** — `kubectl --context <ctx> -n <ns> port-forward svc/<svc> <local>:<remote>`,
+    reproduces the machine-local tunnel for a teammate (reuses the already-stored port-forward metadata).
+  - **Learn more** — opens the dedicated manual section (see work item below).
+- Reuse the existing read-only copy path (no tunnel side effect on copy) established in iteration 1 (#21).
+- Gate it for **both** `view == discoveryView && …discovery.kubernetesService` and the saved-connection
+  equivalent in `view == connectionsView`; ideally one shared command that detects the port-forward
+  metadata on the node.
+
+> 📌 **Docs work item (carried):** author the **"Connecting to ClusterIP / port-forwarded targets"**
+> section in the user manual and wire the **Learn more** entry to it.
+
+### 10.2 Still pending (carried forward)
+
+- ⏳ **Open Interactive Shell on a ClusterIP target** (§9.4.4) — verify live that, after expand/connect
+  (tunnel up), the shell opens correctly; decide whether it needs a K8s-aware guard or works as-is.
+- 🟡 **Reachability badge (optional)** — §9.6 option **B** (`FileDecorationProvider`) if we later want an
+  at-a-glance colored status badge while keeping the DocumentDB icon. Not required; tooltip + description
+  already carry the signal.
+- 📌 **Per-PR decision log** (§9.0) — keep reasoning/decision docs in `docs/ai-and-plans/PRs/<pr>/` so
+  non-obvious deviations (like the original context-value override) are reviewable by humans and agents.
+- ⏳ **Live-verification checklist** (§8.5) — reveal-on-add, drag-and-drop, Windows path display,
+  reload-with-active-tunnel, single-modal-on-error.
+
+### 10.3 Quick reference — what changed in §9 (for compaction)
+
+| Area                                        | Before                                                                                     | After                                                                                                  |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------ | ---------------------------- |
+| Node `contextValue`                         | `treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_*` | `treeItem_documentdbcluster;discovery.kubernetesService;experience_*`                                  |
+| Node icon                                   | reachability glyph (`globe`/`server`/`plug`/`warning`) overriding the cluster icon         | `$(server-environment)` (standard DocumentDB cluster icon)                                             |
+| Reachability signal                         | node icon + description + tooltip                                                          | description + **grouped** tooltip (key info `---` reachability `---` placement)                        |
+| `package.json` cluster commands             | excluded K8s via `!(… discovery.kubernetesService …)` ×4                                   | apply uniformly (no exclusions)                                                                        |
+| `addConnectionToConnectionsView` menu match | `(treeitem_documentdbcluster                                                               | documentdbTargetLeaf)`                                                                                 | `treeitem_documentdbcluster` |
+| Copy routing                                | hidden command; copy unavailable on K8s node                                               | standard Copy command, routed to read-only `getCredentialsForCopy()` via `discovery.kubernetesService` |
+| Wording                                     | "MongoDB Cluster" in 3 strings                                                             | "DocumentDB cluster"                                                                                   |
+
+**Key files touched in §9:**
+[KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts) (contextValue, icon, tooltip, reachability),
+[package.json](package.json) (menu gating),
+[createDatabase.ts](src/commands/createDatabase/createDatabase.ts) /
+[DatabaseNameStep.ts](src/commands/createDatabase/DatabaseNameStep.ts) /
+[PromptConnectionStringStep.ts](src/commands/newConnection/PromptConnectionStringStep.ts) (wording).
+Copy routing logic lives in
+[copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts) and keys off the
+retained `discovery.kubernetesService` marker.
 
 ---
 
