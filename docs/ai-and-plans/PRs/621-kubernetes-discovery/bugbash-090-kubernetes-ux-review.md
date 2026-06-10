@@ -1166,33 +1166,55 @@ With §9 landed, the cluster node now exposes the **standard DocumentDB cluster 
 Copy Connection String, Open Interactive Shell, Data Migration) and shows the **DocumentDB icon**. That
 unblocks the copy work from §8.1.
 
-### 10.1 Ship the unified "Copy…" quick pick (was §8.1) — now unblocked
+### 10.1 Unified "Copy connection string…" quick pick (was §8.1) — ✅ implemented
 
-Now that **Copy Connection String** is enabled on the K8s node (and routes through the read-only
-`getCredentialsForCopy()` path), build the consolidated picker the owner asked for:
+The owner asked to keep the clear **"Copy connection string…"** entry point but enrich it with **groups**
+for Kubernetes port-forwarded targets, while leaving every other node untouched.
 
-- A **single "Copy…" quick pick** on the ClusterIP service node (Discovery view) **and** on the saved
-  connection (Connections view), surfacing all options so the user chooses what they need:
-  - **Connection string (with password)** — working local string while the tunnel is active.
-  - **Connection string (without password)** — safe to share/paste.
-  - **`kubectl port-forward` command** — `kubectl --context <ctx> -n <ns> port-forward svc/<svc> <local>:<remote>`,
-    reproduces the machine-local tunnel for a teammate (reuses the already-stored port-forward metadata).
-  - **Learn more** — opens the dedicated manual section (see work item below).
-- Reuse the existing read-only copy path (no tunnel side effect on copy) established in iteration 1 (#21).
-- Gate it for **both** `view == discoveryView && …discovery.kubernetesService` and the saved-connection
-  equivalent in `view == connectionsView`; ideally one shared command that detects the port-forward
-  metadata on the node.
+**What shipped** (in [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)):
 
-> 📌 **Docs work item (carried):** author the **"Connecting to ClusterIP / port-forwarded targets"**
-> section in the user manual and wire the **Learn more** entry to it.
+- **No regression for existing nodes.** Non-Kubernetes targets — and Kubernetes targets that are _not_
+  reached through a port-forward tunnel — keep the exact prior behavior: the with/without-password prompt
+  fires only for saved connections and Kubernetes-discovered targets that use native auth with a real
+  password; otherwise the string is copied silently. (Verified by tests T-01…T-07.)
+- **Richer grouped picker for port-forwarded targets.** When the resolved credentials carry
+  `kubernetesPortForward` metadata, the command shows a single grouped quick pick
+  (`enableGrouping: true`, the same azext pattern used by the migration picker):
+  - **Connection string** group:
+    - **Copy connection string without password** — safe to share.
+    - **Copy connection string with password** — only when native auth + a password is present; works
+      locally while the tunnel is up. (Password is registered via `valuesToMask`.)
+  - **Kubernetes** group (only present when port-forwarding is in use):
+    - **Copy kubectl port-forward command** — copies
+      `kubectl --context <ctx> --namespace <ns> port-forward svc/<svc> <local>:<remote>` built from the
+      stored metadata, so a teammate can reproduce the machine-local tunnel.
+    - **Learn more…** — opens the docs entry (currently the DocumentDB Kubernetes operator preview docs;
+      to be repointed at the dedicated manual section — see **§11**).
+- Copying a connection string from this picker still shows the **"…uses port-forwarding and only works on
+  this machine while the tunnel is active"** warning; copying the `kubectl` command shows a neutral
+  information message; **Learn more** copies nothing.
+- Routing still keys off the retained `discovery.kubernetesService` marker and the read-only
+  `getCredentialsForCopy()` path established in iteration 1 (#21), so copy never opens a tunnel as a side
+  effect. Works for **both** the Discovery-view ClusterIP node and the saved Connections-view entry,
+  because the branch is driven purely by the presence of port-forward metadata on the credentials.
+- Telemetry: adds `copyAction` (`withoutPassword` | `withPassword` | `portForwardCommand` | `learnMore`)
+  alongside the existing `copyOrigin`, `kubernetesPortForwardCopy`, and `passwordIncluded`.
+
+Tests in [copyConnectionString.test.ts](src/commands/copyConnectionString/copyConnectionString.test.ts)
+were extended to T-12 (grouped picker variants: without/with password, kubectl command, learn more).
+
+> 📌 **Docs work item (carried to §11):** author the **"Connecting to ClusterIP / port-forwarded
+> targets"** manual section and repoint the **Learn more** entry at it.
 
 ### 10.2 Still pending (carried forward)
 
 - ⏳ **Open Interactive Shell on a ClusterIP target** (§9.4.4) — verify live that, after expand/connect
   (tunnel up), the shell opens correctly; decide whether it needs a K8s-aware guard or works as-is.
-- 🟡 **Reachability badge (optional)** — §9.6 option **B** (`FileDecorationProvider`) if we later want an
-  at-a-glance colored status badge while keeping the DocumentDB icon. Not required; tooltip + description
-  already carry the signal.
+- 🔭 **Connection-state decorations (generalized, was §9.6 option B)** — moved out of this PR into a
+  **0.10.0** experiment: [microsoft/vscode-documentdb#734](https://github.com/microsoft/vscode-documentdb/issues/734)
+  proposes a `FileDecorationProvider` that shows which clusters are connected vs. not across the
+  Connections tree in general (more broadly useful than a Kubernetes-only reachability badge). The
+  tooltip + description already carry the per-node reachability signal in the meantime.
 - 📌 **Per-PR decision log** (§9.0) — keep reasoning/decision docs in `docs/ai-and-plans/PRs/<pr>/` so
   non-obvious deviations (like the original context-value override) are reviewable by humans and agents.
 - ⏳ **Live-verification checklist** (§8.5) — reveal-on-add, drag-and-drop, Windows path display,
@@ -1219,6 +1241,35 @@ Now that **Copy Connection String** is enabled on the K8s node (and routes throu
 Copy routing logic lives in
 [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts) and keys off the
 retained `discovery.kubernetesService` marker.
+
+---
+
+## 11. Iteration 11 — documentation follow-up
+
+### 11.1 "Connecting to ClusterIP / port-forwarded targets" manual section (carried)
+
+The §10.1 copy picker exposes a **Learn more…** entry, which currently opens the DocumentDB Kubernetes
+operator preview docs (`https://documentdb.io/documentdb-kubernetes-operator/latest/preview/`) as a
+placeholder. The remaining documentation work is:
+
+- **Author a dedicated user-manual section** under `docs/user-manual/` covering:
+  - What a ClusterIP / port-forwarded target is and why its connection string is **machine-local** (only
+    valid while the tunnel is active).
+  - How the extension establishes and re-establishes the tunnel (port-forward metadata persisted on save;
+    re-opened on expand/connect).
+  - The **`kubectl port-forward` command** that the copy picker generates and how a teammate would use it
+    to reproduce the tunnel on their own machine.
+  - Auth/password guidance: when "Copy connection string with password" is safe vs. when to share the
+    without-password variant.
+- **Repoint the Learn more entry** (`KUBERNETES_PORT_FORWARD_LEARN_MORE_URL` in
+  [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)) at the new section
+  once it exists. Until then the operator-preview docs are the closest existing reference.
+
+### 11.2 Related follow-ups (tracked outside this PR)
+
+- 🔭 **Connection-state decorations** — [microsoft/vscode-documentdb#734](https://github.com/microsoft/vscode-documentdb/issues/734)
+  (0.10.0): experiment with a `FileDecorationProvider` to show connected vs. not-connected clusters across
+  the Connections tree in general. Supersedes the Kubernetes-only reachability-badge idea from §9.6 option B.
 
 ---
 
