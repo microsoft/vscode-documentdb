@@ -199,7 +199,7 @@ function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
 }
 
 function buildIcon(_source: KubeconfigSourceRecord): vscode.ThemeIcon {
-    return new vscode.ThemeIcon('plug');
+    return new vscode.ThemeIcon('group-by-ref-type');
 }
 
 function shortenPath(absolutePath: string): string {

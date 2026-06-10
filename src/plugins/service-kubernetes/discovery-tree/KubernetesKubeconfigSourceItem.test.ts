@@ -82,12 +82,15 @@ function tooltipText(tooltip: unknown): string {
 
 describe('KubernetesKubeconfigSourceItem', () => {
     describe('getTreeItem icon', () => {
-        it.each(['default', 'file', 'inline'] as const)('renders the unified plug icon for %s sources', (kind) => {
-            const source = makeSource(kind);
-            const item = new KubernetesKubeconfigSourceItem('discoveryView/kubernetes-discovery', source);
-            const icon = item.getTreeItem().iconPath as vscode.ThemeIcon;
-            expect(icon.id).toBe('plug');
-        });
+        it.each(['default', 'file', 'inline'] as const)(
+            'renders the unified group-by-ref-type icon for %s sources',
+            (kind) => {
+                const source = makeSource(kind);
+                const item = new KubernetesKubeconfigSourceItem('discoveryView/kubernetes-discovery', source);
+                const icon = item.getTreeItem().iconPath as vscode.ThemeIcon;
+                expect(icon.id).toBe('group-by-ref-type');
+            },
+        );
     });
 
     describe('getTreeItem description', () => {
