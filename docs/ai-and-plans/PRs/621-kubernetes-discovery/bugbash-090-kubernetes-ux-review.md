@@ -1334,7 +1334,9 @@ next iteration. Each has enough context to be picked up cold.
 
 ### 12.1 Pending — verification & polish
 
-- **T1 · Verify Open Interactive Shell on a ClusterIP target (§9.4.4).**
+- **T1 · Verify Open Interactive Shell on a ClusterIP target (§9.4.4).** — 📌 **Filed:**
+  [microsoft/vscode-documentdb#735](https://github.com/microsoft/vscode-documentdb/issues/735) (milestone
+  **0.9.1**, assigned to @guanzhousongmicrosoft).
   After expand/connect (port-forward tunnel up), confirm **Open Interactive Shell** launches against
   `127.0.0.1:<localPort>` and works. Decide whether it needs a Kubernetes-aware guard or works as-is via
   the standard cluster command. _Acceptance:_ shell connects on a live kind/AKS ClusterIP target; note any
@@ -1381,6 +1383,10 @@ next iteration. Each has enough context to be picked up cold.
 - ✅ Single reachability glyph; reachability group moved to the **top** of the tooltip.
 - ✅ No em dashes in generated strings.
 - ✅ Discovery cluster node uses the **DocumentDB brand icon** (new `vscode-documentdb-cluster-*.svg`).
+- ✅ Empty-namespace bucket reworded **`Others` / `DocumentDB not detected`** → **`Other namespaces` /
+  `No DocumentDB targets found`** (noun in the label; neutral, vocabulary-consistent reason). Files:
+  [KubernetesOtherNamespacesItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesOtherNamespacesItem.ts),
+  tests, and the user manual.
 
 ---
 
