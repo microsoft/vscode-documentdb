@@ -63,6 +63,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 
 - [Data Migrations (Experimental)](./user-manual/data-migrations)
 - [Copy and Paste Collections](./user-manual/copy-and-paste.md)
+- [Copy Connection String](./user-manual/copy-connection-string)
 
 ### Querying
 

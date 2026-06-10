@@ -15,23 +15,21 @@ For a step-by-step lab that creates a local or AKS DocumentDB cluster and tests 
 
 ## Multiple kubeconfig sources
 
-The Kubernetes node lists one or more **kubeconfig sources** as siblings:
+The **Kubernetes Clusters** node lists one or more **kubeconfig sources** as siblings:
 
-- **Default kubeconfig** — uses the Kubernetes client's default loading (`KUBECONFIG` environment variable, or the Kubernetes default kubeconfig path in your user profile). It is created by default, but if you remove it explicitly, it stays removed until you add it again.
-- **Custom kubeconfig file…** — a kubeconfig YAML file you select on disk.
-- **Pasted kubeconfig YAML** — kubeconfig YAML pasted from the clipboard, kept in VS Code Secret Storage.
+- **Default kubeconfig**: uses the Kubernetes client's default loading (`KUBECONFIG` environment variable, or the Kubernetes default kubeconfig path in your user profile). It is created by default, but if you remove it explicitly, it stays removed until you add it again.
+- **Custom kubeconfig file…**: a kubeconfig YAML file you select on disk.
+- **Pasted kubeconfig YAML**: kubeconfig YAML pasted from the clipboard, kept in VS Code Secret Storage.
 
 Each source expands independently to its own contexts -> namespaces -> services subtree. Failures in one source do not affect the others.
 
 ## Add a kubeconfig source
 
-The Kubernetes node exposes two inline icons:
+The **Kubernetes Clusters** node has an inline **`+` (Add Kubeconfig…)** action that opens a quick pick:
 
-- **`+` (Add kubeconfig source...)** — opens a quick pick:
-  - **Default kubeconfig** — uses the `KUBECONFIG` environment variable or Kubernetes default kubeconfig path.
-  - **Add custom kubeconfig file...** — pick a file from disk.
-  - **Paste kubeconfig YAML from clipboard** — kept in VS Code Secret Storage.
-- **`key` (Manage kubeconfig sources)** — opens a manage dialog (described below).
+- **Default kubeconfig**: uses the `KUBECONFIG` environment variable or Kubernetes default kubeconfig path.
+- **Add custom kubeconfig file...**: pick a file from disk.
+- **Paste kubeconfig YAML from clipboard**: kept in VS Code Secret Storage.
 
 Custom file and pasted-YAML sources are validated before they are saved. If the file or pasted YAML cannot be loaded or contains zero contexts, the source is not added and an error is shown. The Default source also validates the current default kubeconfig before it is added; if it is missing, invalid, or empty, fix the underlying `KUBECONFIG` value or default kubeconfig file and try again. Adding the same path twice or pasting identical YAML reuses the existing entry.
 
@@ -39,28 +37,23 @@ The Kubernetes default kubeconfig path is `~/.kube/config` on macOS/Linux and `%
 
 ## Manage existing sources
 
-Click the **key** icon on the **Kubernetes** node to manage existing sources:
+Manage each source from its **right-click context menu** in the discovery tree:
 
-- Each source appears with a checkbox. Uncheck a source to **deselect** it — the record is preserved but it disappears from the discovery tree until you check it again.
-- Click the **trash** button on any non-default entry to remove it permanently. Active port-forward tunnels for the source are stopped on removal.
-- The Default source can be deselected in this dialog. The dialog does not show a trash button for the Default source, but you can remove it from the source node's right-click menu and add it again later with **Add kubeconfig source...**.
-
-Per-source right-click actions on the source nodes themselves remain available:
-
-- **Refresh** — reloads the source and re-expands its contexts.
-- **Rename...** — changes the source's display label, including the Default source.
-- **Remove** — deletes the source, including the Default source. Removing a source stops active port-forward tunnels for that source, and saved connections that depend on it need to be reconfigured or the source needs to be added again.
+- **Refresh**: reloads the source and re-expands its contexts.
+- **Rename…**: changes the source's display label, including the Default source. This only changes the label shown in the tree; the kubeconfig file is never modified.
+- **Open in Editor**: opens the kubeconfig YAML file in the editor (file-based sources only), which is handy when fixing a source that failed to load.
+- **Remove…**: deletes the source, including the Default source. Removing a source stops active port-forward tunnels for that source, and saved connections that depend on it need to be reconfigured or the source needs to be added again. If you remove the Default source it stays removed until you add it again with **Add Kubeconfig…**.
 
 ## Browse the discovery tree
 
 ```
 v Discovery
-  v Kubernetes
+  v Kubernetes Clusters
     v Default kubeconfig
       v aks-prod (AKS / eastus)
         v app
-          > db-primary
-        > Other namespaces  No DocumentDB targets found
+          > sample-documentdb   port-forward
+        > Other namespaces
     v team.yaml
       v eks-staging
         ...
@@ -69,9 +62,25 @@ v Discovery
 1. Each source lists its contexts after a lightweight kubeconfig load.
 2. Expanding a context checks its namespaces for DocumentDB targets.
 3. Namespaces with DocumentDB targets are shown directly under the context.
-4. Namespaces where DocumentDB targets were not detected are grouped under **Other namespaces** with the description "No DocumentDB targets found".
+4. Namespaces where DocumentDB targets were not detected are grouped under **Other namespaces**. That bucket has no inline description to keep the row short; hover it for a tooltip that explains the namespaces were scanned but had no DocumentDB target. Expand it to see which namespaces were checked.
 5. Namespaces whose pre-scan failed remain visible directly under the context so the error and **Retry** action are easy to find.
 6. Expanding a DocumentDB namespace lists the discovered targets.
+
+## Reading a discovered target
+
+Each discovered DocumentDB target appears as a cluster node using the **DocumentDB** icon, so it reads as a first-class cluster you can expand and connect to, just like a saved connection.
+
+The grey text after the target name is a single **connectivity word** that tells you how the extension reaches the service, in other words how portable the resulting connection string is. The healthy, directly reachable case shows no word at all; a word is only shown when there is something to be aware of:
+
+| Word           | Service type / state                  | What it means                                                                                                              |
+| -------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| _(none)_       | LoadBalancer with an external address | Reachable directly; the connection string is portable if that address is reachable from you.                               |
+| `node-routed`  | NodePort, or LoadBalancer via a node  | Reached through a cluster node address; only works if that node is reachable from your machine.                            |
+| `pending`      | LoadBalancer awaiting an external IP  | No external address assigned yet (mirrors `kubectl`'s `EXTERNAL-IP: <pending>`).                                           |
+| `port-forward` | ClusterIP                             | Reached through a local port-forward tunnel; the `127.0.0.1` string only works on this machine while the tunnel is active. |
+| `unsupported`  | ExternalName or unknown types         | Not resolved automatically; connect manually using a reachable endpoint.                                                   |
+
+Hover the target for a richer tooltip that leads with the reachability explanation and then lists the target identity, its **source** (a DocumentDB Kubernetes Operator resource or a generic service), the service type, port, and where it lives (provider, region, namespace, context).
 
 ## Rename a context (display alias)
 
@@ -85,7 +94,7 @@ The alias is stored locally inside the extension. It changes only:
 - the tree label (the original context name remains visible in parentheses next to the alias),
 - the wizard quick-pick label (the original name appears in brackets in the description so you can still grep by it).
 
-The kubeconfig file, the underlying Kubernetes context name, saved-connection metadata, and output-channel logs are **never** modified. Aliases are scoped per source — the same context name in two different kubeconfig sources can have different aliases. If you delete a context from the kubeconfig (or remove the source), its aliases are cleaned up automatically.
+The kubeconfig file, the underlying Kubernetes context name, saved-connection metadata, and output-channel logs are **never** modified. Aliases are scoped per source, so the same context name in two different kubeconfig sources can have different aliases. If you delete a context from the kubeconfig (or remove the source), its aliases are cleaned up automatically.
 
 ## New Connection wizard
 
@@ -191,14 +200,18 @@ Missing, invalid, or unreadable credential Secrets do not block discovery. The e
 | **ClusterIP**           | Starts a local port-forward tunnel to a ready backing pod and connects through `127.0.0.1:<localPort>`.                                                             |
 | **ExternalName**        | Not resolved automatically. Use the external DNS name to connect manually.                                                                                          |
 
-For ClusterIP targets the extension prompts for a local port when needed. By default, the suggested local port matches the remote service port. You can change this in VS Code settings with **DocumentDB > Service Discovery > Kubernetes > Port Forward: Local Port Strategy**:
+For ClusterIP targets the extension prompts for a local port when needed. By default, the suggested local port matches the remote service port. You can change this under **DocumentDB** > **Service Discovery** > **Kubernetes** > **Port Forward** in VS Code settings:
 
-- **matchRemote** — suggest the same local port as the remote service port.
-- **autoSelect** — suggest the first available local port starting from **Local Port Base**.
+- **Local Port Strategy** (`documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy`):
+  - **matchRemote**: use the same port number as the remote Kubernetes service port.
+  - **autoSelect**: automatically find a free local port starting from **Local Port Base**.
+- **Local Port Base** (`documentDB.serviceDiscovery.kubernetes.portForward.localPortBase`, default `27100`): the starting port for the **autoSelect** strategy.
 
 If the final port is already in use, the extension can use an existing process on that port (such as a manually started `kubectl port-forward`) if you confirm.
 
 Active tunnels are tracked and reused for the same source, context, namespace, Service, and local port. Tunnels stop automatically when the extension is disposed or when the underlying source is removed.
+
+A connection string for a ClusterIP target points at `127.0.0.1:<localPort>` and therefore only works **on this machine while the tunnel is active**. For sharing such a connection with a teammate, see [Copy Connection String](./copy-connection-string).
 
 ## Minimum RBAC permissions
 
@@ -267,7 +280,7 @@ If RBAC denies an operation, discovery surfaces the failure as a warning, retry 
 | Symptom                                | What to check                                                                                                                                                        |
 | -------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | A source shows a kubeconfig error      | Verify the file exists or the YAML is still valid; use **Refresh** or remove the source and add it again.                                                            |
-| No contexts under a source             | Verify the kubeconfig contents — the source must declare at least one context.                                                                                       |
+| No contexts under a source             | Verify the kubeconfig contents; the source must declare at least one context.                                                                                        |
 | Namespace shows no DocumentDB services | Verify a DKO `dbs` resource exists, add the explicit discovery annotation/label, or expose a TCP known-port service.                                                 |
 | RBAC errors or retry nodes             | Grant the relevant RBAC from the table above. Namespace and service list failures appear as retry/error nodes.                                                       |
 | LoadBalancer target is pending         | Wait for load balancer ingress, or ensure NodePort fallback is available and reachable.                                                                              |
