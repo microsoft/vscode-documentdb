@@ -14,5 +14,13 @@ export interface CreateDatabaseWizardContext extends IActionContext {
     clusterName: string;
     nodeId: string;
 
+    /**
+     * When true, the wizard prompts for an initial collection name.
+     * Required for standard MongoDB (Atlas) where dropping the last collection deletes the database.
+     * Azure DocumentDB vCore does not need this.
+     */
+    requiresInitialCollection?: boolean;
+
     databaseName?: string;
+    collectionName?: string;
 }
