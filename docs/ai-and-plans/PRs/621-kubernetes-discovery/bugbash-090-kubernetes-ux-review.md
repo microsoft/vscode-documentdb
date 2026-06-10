@@ -1297,21 +1297,90 @@ connectivity catch here?"_ A **non-empty** description therefore means "there's 
   unknown types (nothing is being provisioned, so "pending" would be wrong).
 
 **Tooltip as a legend.** The tooltip has three `---`-separated groups: **key info** (Target, **Source:
-DKO/Generic**, Service type, Status, Port, External Address), **reachability**, and **placement** (Provider,
-Region, Namespace, Context). The reachability line **echoes the exact description word** and then explains
+DKO/Generic**, Service type, Status, Port, External Address), and **placement** (Provider, Region,
+Namespace, Context) — in that order, with the **reachability group promoted to the top** because it is the
+signal users care about most. The reachability line **echoes the exact description word** and then explains
 it, so hovering teaches what the terse node shortcut means:
 
 ```
-$(plug) Reachability — `port-forward`: Local port-forward required
+$(plug) Reachability (`port-forward`): Local port-forward required
 VS Code connects through the Kubernetes PortForward API. Connection strings using 127.0.0.1 only work on this machine while the tunnel is active.
 ```
 
+> No em dashes are used in any generated (user-facing) string; the reachability label uses
+> `Reachability (`word`):` rather than an em-dash separator.
+
 **Tooltip glyph decision:** we render **exactly one** theme icon in the tooltip — a leading `$(...)` on the
 **Reachability** line — because that line is the single axis that answers _"is the copied connection string
-portable?"_ (`globe` portable → `server` cluster-routed → `plug` machine-local tunnel → `warning` not
-reachable as-is). The node icon stays the standard DocumentDB cluster icon (`server-environment`);
-icons are deliberately **not** sprinkled across the other tooltip fields. Requires
+portable?"_ (`globe` portable, `server` cluster-routed, `plug` machine-local tunnel, `warning` not
+reachable as-is). Icons are deliberately **not** sprinkled across the other tooltip fields. Requires
 `MarkdownString.supportThemeIcons = true`.
+
+**Node icon:** the discovery cluster node uses the **DocumentDB brand mark** — the same icon as the
+**"DocumentDB Local"** node in the Connections view — so a discovered target reads as a first-class
+DocumentDB cluster. To avoid coupling to that node's own asset, dedicated copies
+[`vscode-documentdb-cluster-light-themes.svg`](resources/icons/vscode-documentdb-cluster-light-themes.svg) /
+[`vscode-documentdb-cluster-dark-themes.svg`](resources/icons/vscode-documentdb-cluster-dark-themes.svg)
+were added (copies of `vscode-documentdb-icon-{light,dark}-themes.svg`). This replaced the earlier
+`server-environment` `ThemeIcon`.
+
+---
+
+## 12. Iteration 12 — closeout: pending work & next-iteration backlog
+
+This iteration (description trim, tooltip-as-legend, reachability glyph, brand icon, top-of-tooltip
+reachability, em-dash removal) is **closed**. The items below are **not yet done** and are queued for the
+next iteration. Each has enough context to be picked up cold.
+
+### 12.1 Pending — verification & polish
+
+- **T1 · Verify Open Interactive Shell on a ClusterIP target (§9.4.4).**
+  After expand/connect (port-forward tunnel up), confirm **Open Interactive Shell** launches against
+  `127.0.0.1:<localPort>` and works. Decide whether it needs a Kubernetes-aware guard or works as-is via
+  the standard cluster command. _Acceptance:_ shell connects on a live kind/AKS ClusterIP target; note any
+  guard added. Files: command lives in the shared shell command path; node is
+  [KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts).
+
+- **T2 · Live-verification checklist (§8.5).**
+  Manually confirm: reveal-on-add, drag-and-drop into folders, Windows path display for file sources,
+  reload with an active tunnel, and single-modal-on-error. _Acceptance:_ each item checked on Windows +
+  one Unix OS; file bugs for any failures.
+
+- **T3 · Visual check of the brand icon at tree size.**
+  Confirm the new `vscode-documentdb-cluster-*.svg` renders crisply at 16px in light/dark/high-contrast
+  themes next to sibling nodes. _Acceptance:_ screenshots in all three themes; no clipping or muddiness.
+  If the brand mark is too detailed at 16px, consider a simplified glyph variant.
+
+### 12.2 Pending — documentation
+
+- **T4 · Author the "Connecting to ClusterIP / port-forwarded targets" user-manual section (§11.1).**
+  Cover: machine-local connection strings, how the tunnel is established/re-established, the generated
+  `kubectl port-forward` command, and password-sharing guidance. Then **repoint** the copy quick pick's
+  **Learn more** (`KUBERNETES_PORT_FORWARD_LEARN_MORE_URL` in
+  [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)) at it. _Acceptance:_
+  section merged under `docs/user-manual/`; Learn more opens it.
+
+- **T5 · Document the node description/tooltip model in the user manual.**
+  The single-word description grammar + tooltip legend currently lives only in this review's §11.3. Add a
+  short "Reading a discovered target" subsection to
+  [service-discovery-kubernetes.md](docs/user-manual/service-discovery-kubernetes.md) (table of words:
+  `direct`/`node-routed`/`pending`/`port-forward`/`unsupported`). _Acceptance:_ user manual explains what
+  the grey word and tooltip mean.
+
+### 12.3 Pending — tracked outside this PR
+
+- **T6 · Connection-state decorations** — [microsoft/vscode-documentdb#734](https://github.com/microsoft/vscode-documentdb/issues/734)
+  (0.10.0): `FileDecorationProvider` showing connected vs. not-connected clusters across the Connections
+  tree. Supersedes the Kubernetes-only reachability-badge idea (§9.6 option B).
+
+### 12.4 Done in this iteration (for reference)
+
+- ✅ Description trimmed to one connectivity word; `direct` shows none (§11.3).
+- ✅ `pending` / `unsupported` wording (kubectl-grounded).
+- ✅ Tooltip key-info gained `Source:` (DKO/Generic) and `Service type:`; reachability echoes the word.
+- ✅ Single reachability glyph; reachability group moved to the **top** of the tooltip.
+- ✅ No em dashes in generated strings.
+- ✅ Discovery cluster node uses the **DocumentDB brand icon** (new `vscode-documentdb-cluster-*.svg`).
 
 ---
 
