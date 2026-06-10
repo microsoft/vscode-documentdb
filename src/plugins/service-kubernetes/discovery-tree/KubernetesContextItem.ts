@@ -174,22 +174,17 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
         if (this.contextInfo.region) {
             tooltipParts.push(`**Region:** ${this.contextInfo.region}`);
         }
-        // Build description: prefer provider/region, fall back to server host.
+        // Build description: show the inferred provider only, falling back to the server host.
+        // Region is intentionally kept out of the always-visible row (it can be a raw hostname
+        // token rather than a real region for some providers); it still appears in the tooltip.
         // When an alias is in effect, the original context name is shown so users can still
         // identify the underlying context at a glance.
         const descriptionParts: string[] = [];
         if (this.alias) {
             descriptionParts.push(`(${this.contextInfo.name})`);
         }
-        const detailParts: string[] = [];
         if (this.contextInfo.provider) {
-            detailParts.push(this.contextInfo.provider);
-        }
-        if (this.contextInfo.region) {
-            detailParts.push(this.contextInfo.region);
-        }
-        if (detailParts.length > 0) {
-            descriptionParts.push(`(${detailParts.join(' / ')})`);
+            descriptionParts.push(`(${this.contextInfo.provider})`);
         } else if (serverUrl) {
             try {
                 descriptionParts.push(`(${new URL(serverUrl).host})`);
