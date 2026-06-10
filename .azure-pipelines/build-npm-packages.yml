@@ -1,62 +1,189 @@
-# Dummy build pipeline for configuration validation
-# Replace with build-npm-packages.yml once ADO pipeline is configured
+# Build pipeline for npm packages in the packages/ folder
+# Produces .tgz archives that can be published via the npm release pipeline.
+#
+# Scope: only packages in $publishablePackages (below) are packed and shipped
+# as release artifacts. Today this is just packages/vscode-ext-react-webview
+# (which publishes to the @microsoft scope on npm). The other workspace
+# packages are still built and tested by 'npm run build/test --workspaces'
+# so the monorepo stays healthy, but they are NOT packed - they are local-
+# only deps and not released through this pipeline.
 
-trigger: none
+trigger:
+    - next
+    - main
+
+# Disable PR trigger
 pr: none
 
 parameters:
-  - name: "debug"
-    displayName: "Enable debug output"
-    type: boolean
-    default: false
+    - name: 'debug'
+      displayName: 'Enable debug output'
+      type: boolean
+      default: false
+    - name: isOfficialBuild
+      displayName: 'Official Build'
+      type: boolean
+      default: true
 
 variables:
-  CDP_DEFINITION_BUILD_COUNT: $[counter('', 0)]
-  system.debug: ${{ parameters.debug }}
-  WindowsContainerImage: "onebranch.azurecr.io/windows/ltsc2022/vse2022:latest"
+    CDP_DEFINITION_BUILD_COUNT: $[counter('', 0)] # needed for onebranch.pipeline.version task https://aka.ms/obpipelines/versioning
+    system.debug: ${{ parameters.debug }}
+
+    WindowsContainerImage: 'onebranch.azurecr.io/windows/ltsc2022/vse2022:latest' # Docker image which is used to build the project https://aka.ms/obpipelines/containers
 
 resources:
-  repositories:
-    - repository: templates
-      type: git
-      name: OneBranch.Pipelines/GovernedTemplates
-      ref: refs/heads/main
+    repositories:
+        - repository: templates
+          type: git
+          name: OneBranch.Pipelines/GovernedTemplates
+          ref: refs/heads/main
 
 extends:
-  template: v2/OneBranch.Official.CrossPlat.yml@templates
-  parameters:
-    cloudvault:
-      enabled: false
-    globalSdl:
-      asyncSdl:
-        enabled: false
-      tsa:
-        enabled: false
-      credscan:
-        suppressionsFile: $(Build.SourcesDirectory)/.azure-pipelines/compliance/CredScanSuppressions.json
-      policheck:
-        break: true
-      suppression:
-        suppressionFile: $(Build.SourcesDirectory)/.config/guardian/.gdnsuppress
-      codeql:
-        compiled:
-          enabled: false
-        tsaEnabled: false
-      componentgovernance:
-        ignoreDirectories: $(Build.SourcesDirectory)/.vscode-test
-    featureFlags:
-      linuxEsrpSigning: true
-      WindowsHostVersion:
-        Version: 2022
+    ${{ if eq(parameters.isOfficialBuild, true) }}:
+        template: v2/OneBranch.Official.CrossPlat.yml@templates # https://aka.ms/obpipelines/templates
+    ${{ else }}:
+        template: v2/OneBranch.NonOfficial.CrossPlat.yml@templates # https://aka.ms/obpipelines/templates
+    parameters:
+        cloudvault: # https://aka.ms/obpipelines/cloudvault
+            enabled: false
+        globalSdl: # https://aka.ms/obpipelines/sdl
+            asyncSdl:
+                enabled: false
+            tsa:
+                enabled: false
+            credscan:
+                suppressionsFile: $(Build.SourcesDirectory)/.azure-pipelines/compliance/CredScanSuppressions.json
+            policheck:
+                break: true
+            suppression:
+                suppressionFile: $(Build.SourcesDirectory)/.config/guardian/.gdnsuppress
+            codeql:
+                compiled:
+                    enabled: false
+                tsaEnabled: false
+            componentgovernance:
+                ignoreDirectories: $(Build.SourcesDirectory)/.vscode-test
+        featureFlags:
+            linuxEsrpSigning: true
+            WindowsHostVersion:
+                Version: 2022
 
-    stages:
-      - stage: BuildStage
-        jobs:
-          - job: Main
-            pool:
-              type: windows
-            variables:
-              ob_outputDirectory: '$(Build.ArtifactStagingDirectory)\build'
-            steps:
-              - pwsh: Write-Output "Dummy build pipeline - configuration validated successfully"
-                displayName: "\U00002705 Dummy step"
+        stages:
+            - stage: BuildStage
+              jobs:
+                  - job: Main
+                    pool:
+                        type: windows
+                    variables:
+                        ob_outputDirectory: '$(Build.ArtifactStagingDirectory)\build' # this directory is uploaded to pipeline artifacts. More info at https://aka.ms/obpipelines/artifacts
+                        ob_sdl_codeSignValidation_excludes: '-|**\*.json;-|**\*.js;-|**\node_modules\**;'
+                    steps:
+                        - task: ComponentGovernanceComponentDetection@0
+                          displayName: 'Component Governance - Component Detection'
+
+                        - task: NodeTool@0
+                          displayName: "Use Node.js"
+                          inputs:
+                              versionSource: fromFile
+                              versionFilePath: .nvmrc
+
+                        - task: npmAuthenticate@0
+                          displayName: "Authenticate to npm registry"
+                          inputs:
+                              workingFile: '$(Build.SourcesDirectory)/.azure-pipelines/.npmrc'
+
+                        - task: Npm@1
+                          displayName: "Install Dependencies"
+                          condition: succeeded()
+                          inputs:
+                              command: custom
+                              customCommand: ci --userconfig $(Build.SourcesDirectory)/.azure-pipelines/.npmrc
+                              workingDir: $(Build.SourcesDirectory)
+
+                        - task: Npm@1
+                          displayName: "Build Workspace Packages"
+                          condition: succeeded()
+                          inputs:
+                              command: custom
+                              customCommand: run build --workspaces --if-present
+                              workingDir: $(Build.SourcesDirectory)
+
+                        - task: Npm@1
+                          displayName: "Test Workspace Packages"
+                          condition: succeeded()
+                          inputs:
+                              command: custom
+                              customCommand: run test --workspaces --if-present
+                              workingDir: $(Build.SourcesDirectory)
+
+                        - task: PowerShell@2
+                          displayName: "Pack npm packages"
+                          condition: succeeded()
+                          inputs:
+                              targetType: 'inline'
+                              script: |
+                                  $outputDir = "$(ob_outputDirectory)\npm-packages"
+                                  New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
+
+                                  # Only pack the packages that we actually release via ESRP.
+                                  # See release-npm-packages.yml for the matching picklist.
+                                  $publishablePackages = @(
+                                      'vscode-ext-react-webview'
+                                  )
+
+                                  Write-Output "Packing release-bound workspace packages..."
+                                  Write-Output ""
+
+                                  foreach ($pkgDirName in $publishablePackages) {
+                                      $packageDir = Join-Path "$(Build.SourcesDirectory)\packages" $pkgDirName
+                                      $packageJsonPath = Join-Path $packageDir "package.json"
+
+                                      if (-not (Test-Path $packageJsonPath)) {
+                                          Write-Error "[Error] Configured publishable package '$pkgDirName' not found at $packageJsonPath"
+                                          exit 1
+                                      }
+
+                                      $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
+                                      $pkgName = $packageJson.name
+                                      $pkgVersion = $packageJson.version
+
+                                      if ($packageJson.private -eq $true) {
+                                          Write-Error "[Error] Configured publishable package '$pkgName' is marked private in package.json"
+                                          exit 1
+                                      }
+
+                                      Write-Output "Packing $pkgName@$pkgVersion from $pkgDirName..."
+                                      npm pack --pack-destination $outputDir --workspace "packages/$pkgDirName"
+
+                                      if ($LASTEXITCODE -ne 0) {
+                                          Write-Error "[Error] Failed to pack $pkgName"
+                                          exit 1
+                                      }
+
+                                      Write-Output "[OK] Packed $pkgName@$pkgVersion"
+                                      Write-Output ""
+                                  }
+
+                                  Write-Output "=== Generated .tgz files ==="
+                                  Get-ChildItem -Path $outputDir -Filter "*.tgz" | ForEach-Object {
+                                      $sizeKB = [math]::Round($_.Length / 1KB, 2)
+                                      Write-Output "  $($_.Name) (${sizeKB} KB)"
+                                  }
+
+                                  $tgzCount = (Get-ChildItem -Path $outputDir -Filter "*.tgz").Count
+                                  Write-Output ""
+                                  Write-Output "Total packages: $tgzCount"
+
+                                  if ($tgzCount -ne $publishablePackages.Count) {
+                                      Write-Error "[Error] Expected $($publishablePackages.Count) .tgz file(s), found $tgzCount"
+                                      exit 1
+                                  }
+
+                        - task: CopyFiles@2
+                          displayName: "Copy package metadata to staging"
+                          condition: succeeded()
+                          inputs:
+                              Contents: |
+                                  packages/vscode-ext-react-webview/package.json
+                                  !**/node_modules/**
+                              TargetFolder: $(ob_outputDirectory)
