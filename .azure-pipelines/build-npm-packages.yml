@@ -1,5 +1,12 @@
 # Build pipeline for npm packages in the packages/ folder
-# Produces .tgz archives that can be published via the npm release pipeline
+# Produces .tgz archives that can be published via the npm release pipeline.
+#
+# Scope: only packages in $publishablePackages (below) are packed and shipped
+# as release artifacts. Today this is just packages/vscode-ext-react-webview
+# (which publishes to the @microsoft scope on npm). The other workspace
+# packages are still built and tested by 'npm run build/test --workspaces'
+# so the monorepo stays healthy, but they are NOT packed - they are local-
+# only deps and not released through this pipeline.
 
 trigger:
     - next
@@ -75,18 +82,18 @@ extends:
                           displayName: 'Component Governance - Component Detection'
 
                         - task: NodeTool@0
-                          displayName: "\U0001F449 Use Node.js"
+                          displayName: "Use Node.js"
                           inputs:
                               versionSource: fromFile
                               versionFilePath: .nvmrc
 
                         - task: npmAuthenticate@0
-                          displayName: "\U0001F449 Authenticate to npm registry"
+                          displayName: "Authenticate to npm registry"
                           inputs:
                               workingFile: '$(Build.SourcesDirectory)/.azure-pipelines/.npmrc'
 
                         - task: Npm@1
-                          displayName: "\U0001F449 Install Dependencies"
+                          displayName: "Install Dependencies"
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -94,7 +101,7 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: Npm@1
-                          displayName: "\U0001F449 Build Workspace Packages"
+                          displayName: "Build Workspace Packages"
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -102,7 +109,7 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: Npm@1
-                          displayName: "\U0001F449 Test Workspace Packages"
+                          displayName: "Test Workspace Packages"
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -110,7 +117,7 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: PowerShell@2
-                          displayName: "\U0001F4E6 Pack npm packages"
+                          displayName: "Pack npm packages"
                           condition: succeeded()
                           inputs:
                               targetType: 'inline'
@@ -118,34 +125,43 @@ extends:
                                   $outputDir = "$(ob_outputDirectory)\npm-packages"
                                   New-Item -ItemType Directory -Force -Path $outputDir | Out-Null
 
-                                  Write-Output "Packing npm workspace packages..."
+                                  # Only pack the packages that we actually release via ESRP.
+                                  # See release-npm-packages.yml for the matching picklist.
+                                  $publishablePackages = @(
+                                      'vscode-ext-react-webview'
+                                  )
+
+                                  Write-Output "Packing release-bound workspace packages..."
                                   Write-Output ""
 
-                                  $packageDirs = Get-ChildItem -Path "$(Build.SourcesDirectory)\packages" -Directory
+                                  foreach ($pkgDirName in $publishablePackages) {
+                                      $packageDir = Join-Path "$(Build.SourcesDirectory)\packages" $pkgDirName
+                                      $packageJsonPath = Join-Path $packageDir "package.json"
 
-                                  foreach ($dir in $packageDirs) {
-                                      $packageJsonPath = Join-Path $dir.FullName "package.json"
-                                      if (Test-Path $packageJsonPath) {
-                                          $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
-                                          $pkgName = $packageJson.name
-                                          $pkgVersion = $packageJson.version
-
-                                          if ($packageJson.private -eq $true) {
-                                              Write-Warning "Skipping private package: $pkgName"
-                                              continue
-                                          }
-
-                                          Write-Output "Packing $pkgName@$pkgVersion from $($dir.Name)..."
-                                          npm pack --pack-destination $outputDir --workspace "packages/$($dir.Name)"
-
-                                          if ($LASTEXITCODE -ne 0) {
-                                              Write-Error "[Error] Failed to pack $pkgName"
-                                              exit 1
-                                          }
-
-                                          Write-Output "✓ Packed $pkgName@$pkgVersion"
-                                          Write-Output ""
+                                      if (-not (Test-Path $packageJsonPath)) {
+                                          Write-Error "[Error] Configured publishable package '$pkgDirName' not found at $packageJsonPath"
+                                          exit 1
                                       }
+
+                                      $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
+                                      $pkgName = $packageJson.name
+                                      $pkgVersion = $packageJson.version
+
+                                      if ($packageJson.private -eq $true) {
+                                          Write-Error "[Error] Configured publishable package '$pkgName' is marked private in package.json"
+                                          exit 1
+                                      }
+
+                                      Write-Output "Packing $pkgName@$pkgVersion from $pkgDirName..."
+                                      npm pack --pack-destination $outputDir --workspace "packages/$pkgDirName"
+
+                                      if ($LASTEXITCODE -ne 0) {
+                                          Write-Error "[Error] Failed to pack $pkgName"
+                                          exit 1
+                                      }
+
+                                      Write-Output "[OK] Packed $pkgName@$pkgVersion"
+                                      Write-Output ""
                                   }
 
                                   Write-Output "=== Generated .tgz files ==="
@@ -158,16 +174,16 @@ extends:
                                   Write-Output ""
                                   Write-Output "Total packages: $tgzCount"
 
-                                  if ($tgzCount -eq 0) {
-                                      Write-Error "[Error] No .tgz files were generated"
+                                  if ($tgzCount -ne $publishablePackages.Count) {
+                                      Write-Error "[Error] Expected $($publishablePackages.Count) .tgz file(s), found $tgzCount"
                                       exit 1
                                   }
 
                         - task: CopyFiles@2
-                          displayName: "\U0001F449 Copy package metadata to staging"
+                          displayName: "Copy package metadata to staging"
                           condition: succeeded()
                           inputs:
                               Contents: |
-                                  packages/*/package.json
+                                  packages/vscode-ext-react-webview/package.json
                                   !**/node_modules/**
                               TargetFolder: $(ob_outputDirectory)
