@@ -118,6 +118,12 @@ variables:
     # ESRP-approved publisher app: DocumentDB-VSC-Extension-ESRP-Release (AME).
     EsrpClientId: '8ba27e59-eace-4759-a6dd-36962b0e55d0'
 
+    # ESRP release notification / approval contacts. Defaults to the current
+    # release owner, but prefer a TEAM security group or distribution list so
+    # releases are not tied to a single person. Override in ADO -> Variables.
+    EsrpReleaseOwners: 'guanzhousong@microsoft.com'
+    EsrpReleaseApprovers: 'guanzhousong@microsoft.com'
+
 extends:
     template: v2/OneBranch.Official.CrossPlat.yml@templates
 
@@ -187,7 +193,7 @@ extends:
                                   Write-Output "  Run name           : $(resources.pipeline.npmBuild.runName)"
                                   Write-Output "  Source branch      : $(resources.pipeline.npmBuild.sourceBranch)"
                                   Write-Output "  Source commit      : $(resources.pipeline.npmBuild.sourceCommit)"
-                                  Write-Output "  Source repository  : $(resources.pipeline.npmBuild.sourceProvider)"
+                                  Write-Output "  Source provider    : $(resources.pipeline.npmBuild.sourceProvider)"
 
                         # Set a descriptive build number
                         - task: PowerShell@2
@@ -429,10 +435,11 @@ extends:
                             # Docs: https://eng.ms/docs/microsoft-security/identity/trust-and-security-services/tss-release-distribute/tss-release-esrp-parent/release-onboarding
                             #
                             # Authentication: the Azure RM service connection 'DOCDBEXT_ESRP_RELEASE'
-                            # uses Workload Identity Federation. Its managed identity is granted
-                            # 'Key Vault Certificate User' on the Key Vault that holds the ESRP
-                            # auth + sign certs. The task reads those certs from the vault and
-                            # uses them to sign the release request to ESRP.
+                            # uses Workload Identity Federation, which handles auth to Azure / Key
+                            # Vault (so no separate auth cert is needed). Its managed identity is
+                            # granted 'Key Vault Certificate User' on the Key Vault that holds the
+                            # ESRP signing cert. The task reads that signing cert from the vault and
+                            # uses it to sign the release request to ESRP.
                             #
                             # See the file header for the pipeline variables required.
                             #
@@ -455,8 +462,8 @@ extends:
                                   contentsource: 'Folder'
                                   folderlocation: '$(Build.ArtifactStagingDirectory)/npm-publish'
                                   waitforreleasecompletion: true
-                                  owners: 'guanzhousong@microsoft.com'
-                                  approvers: 'guanzhousong@microsoft.com'
+                                  owners: '$(EsrpReleaseOwners)'
+                                  approvers: '$(EsrpReleaseApprovers)'
                                   serviceendpointurl: 'https://api.esrp.microsoft.com'
                                   mainpublisher: 'ESRPRELPACMAN'
                                   # domaintenantid for the ESRPRELPACMAN OSS publisher.
