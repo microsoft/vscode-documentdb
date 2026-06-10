@@ -61,7 +61,7 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
         return createGenericElementWithContext({
             contextValue: 'error',
             id: `${this.id}/add-source`,
-            label: vscode.l10n.t('Add Kubeconfigs…'),
+            label: vscode.l10n.t('Add Kubeconfig…'),
             iconPath: new vscode.ThemeIcon('add'),
             commandId: 'vscode-documentdb.command.discoveryView.kubernetes.addSource',
             commandArgs: [this],
