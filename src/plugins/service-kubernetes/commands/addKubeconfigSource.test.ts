@@ -302,8 +302,9 @@ describe('addKubeconfigSource default branch validation', () => {
         expect(mockShowInformationMessage).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
-        expect(mockShowWarningMessage).toHaveBeenCalledWith(
+        expect(mockShowErrorMessage).toHaveBeenCalledWith(
             'Default kubeconfig could not be loaded: ENOENT: no such file or directory. Fix the kubeconfig and try again.',
+            { modal: true },
         );
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('invalidDefault');
     });
@@ -319,8 +320,9 @@ describe('addKubeconfigSource default branch validation', () => {
         expect(mockShowInformationMessage).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
-        expect(mockShowWarningMessage).toHaveBeenCalledWith(
+        expect(mockShowErrorMessage).toHaveBeenCalledWith(
             'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG environment variable or Kubernetes default kubeconfig path). Fix the kubeconfig and try again.',
+            { modal: true },
         );
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('noContexts');
     });

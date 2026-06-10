@@ -52,10 +52,11 @@ async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSour
         const kubeConfig = await loadKubeConfig();
         if (getContexts(kubeConfig).length === 0) {
             context.telemetry.properties.kubeconfigSourceResult = 'noContexts';
-            void vscode.window.showWarningMessage(
+            void vscode.window.showErrorMessage(
                 vscode.l10n.t(
                     'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG environment variable or Kubernetes default kubeconfig path). Fix the kubeconfig and try again.',
                 ),
+                { modal: true },
             );
             throw new UserCancelledError();
         }
@@ -68,8 +69,9 @@ async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSour
         const stack = error instanceof Error && error.stack ? error.stack : message;
         ext.outputChannel.error(`[KubernetesDiscovery] Default kubeconfig load/validate failed: ${stack}`);
         context.telemetry.properties.kubeconfigSourceResult = 'invalidDefault';
-        void vscode.window.showWarningMessage(
+        void vscode.window.showErrorMessage(
             vscode.l10n.t('Default kubeconfig could not be loaded: {0}. Fix the kubeconfig and try again.', message),
+            { modal: true },
         );
         throw new UserCancelledError();
     }
@@ -107,7 +109,7 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
 
     try {
         const selected = await context.ui.showQuickPick(picks, {
-            placeHolder: vscode.l10n.t('Add Kubeconfigs'),
+            placeHolder: vscode.l10n.t('Add Kubeconfig'),
             suppressPersistence: true,
         });
         context.telemetry.properties.kubeconfigSourceKind = selected.data;
@@ -146,6 +148,7 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
             context.telemetry.properties.kubeconfigSourceResult = 'noContexts';
             void vscode.window.showErrorMessage(
                 vscode.l10n.t('No Kubernetes contexts were found in "{0}".', absolutePath),
+                { modal: true },
             );
             throw new UserCancelledError();
         }
@@ -157,7 +160,7 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
         const stack = error instanceof Error && error.stack ? error.stack : message;
         ext.outputChannel.error(`[KubernetesDiscovery] File kubeconfig load/validate failed: ${stack}`);
         context.telemetry.properties.kubeconfigSourceResult = 'invalidFile';
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to load kubeconfig: {0}', message));
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to load kubeconfig: {0}', message), { modal: true });
         throw new UserCancelledError();
     }
 
@@ -211,8 +214,9 @@ async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourc
     const clipboardText = (await vscode.env.clipboard.readText()).trim();
     if (clipboardText.length === 0) {
         context.telemetry.properties.kubeconfigSourceResult = 'emptyClipboard';
-        void vscode.window.showWarningMessage(
+        void vscode.window.showErrorMessage(
             vscode.l10n.t('Clipboard does not contain kubeconfig YAML. Copy it first and try again.'),
+            { modal: true },
         );
         throw new UserCancelledError();
     }
@@ -222,7 +226,10 @@ async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourc
         const kubeConfig = await loadKubeConfig(undefined, clipboardText);
         if (getContexts(kubeConfig).length === 0) {
             context.telemetry.properties.kubeconfigSourceResult = 'noContexts';
-            void vscode.window.showErrorMessage(vscode.l10n.t('No Kubernetes contexts were found in the pasted YAML.'));
+            void vscode.window.showErrorMessage(
+                vscode.l10n.t('No Kubernetes contexts were found in the pasted YAML.'),
+                { modal: true },
+            );
             throw new UserCancelledError();
         }
     } catch (error) {
@@ -233,7 +240,9 @@ async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourc
         const stack = error instanceof Error && error.stack ? error.stack : message;
         ext.outputChannel.error(`[KubernetesDiscovery] Inline kubeconfig load/validate failed: ${stack}`);
         context.telemetry.properties.kubeconfigSourceResult = 'invalidYaml';
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to parse pasted kubeconfig YAML: {0}', message));
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to parse pasted kubeconfig YAML: {0}', message), {
+            modal: true,
+        });
         throw new UserCancelledError();
     }
 
