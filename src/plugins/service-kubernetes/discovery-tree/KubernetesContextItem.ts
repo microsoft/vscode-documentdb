@@ -28,6 +28,10 @@ interface NamespaceDiscoveryResult {
     readonly services?: readonly KubeServiceInfo[];
 }
 
+// Bounded concurrency for the per-namespace DocumentDB pre-scan. Intentionally a
+// hardcoded constant rather than a user setting (bug-bash #20 decision): it's a
+// performance knob most users can't reason about, and `5` is a safe default.
+// Revisit only if telemetry shows large-cluster prescan latency.
 const NAMESPACE_PRESCAN_CONCURRENCY = 5;
 
 export class KubernetesContextItem implements TreeElement, TreeElementWithContextValue {
