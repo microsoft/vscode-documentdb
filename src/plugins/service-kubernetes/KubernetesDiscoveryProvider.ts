@@ -40,7 +40,7 @@ export class KubernetesDiscoveryProvider implements DiscoveryProvider {
     }
 
     getLearnMoreUrl(): string | undefined {
-        return 'https://documentdb.io/documentdb-kubernetes-operator/latest/preview/';
+        return 'https://aka.ms/vscode-documentdb-discovery-providers-kubernetes';
     }
 
     async deactivate(_context: IActionContext): Promise<void> {

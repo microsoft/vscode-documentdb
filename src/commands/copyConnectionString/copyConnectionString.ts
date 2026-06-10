@@ -19,11 +19,11 @@ import { nonNullProp, nonNullValue } from '../../utils/nonNull';
 import { openUrl } from '../../utils/openUrl';
 
 /**
- * Documentation entry point surfaced from the Kubernetes copy quick pick. Points at the
- * DocumentDB Kubernetes operator preview docs until the dedicated "Connecting to ClusterIP /
- * port-forwarded targets" user-manual section ships (see review iteration 11).
+ * Documentation entry point surfaced from the Kubernetes copy quick pick. Forwards (via aka.ms)
+ * to the "Copy Connection String" user-manual page, whose "Kubernetes port-forwarded targets"
+ * section explains the machine-local tunnel and how to share access with a teammate.
  */
-const KUBERNETES_PORT_FORWARD_LEARN_MORE_URL = 'https://documentdb.io/documentdb-kubernetes-operator/latest/preview/';
+const KUBERNETES_PORT_FORWARD_LEARN_MORE_URL = 'https://aka.ms/vscode-documentdb-kubernetes-port-forward';
 
 /**
  * Helper function to check if a specific value exists in a delimited context string.
