@@ -126,6 +126,23 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
                 commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
                 commandArgs: [this],
             }),
+        ];
+
+        // File sources have an on-disk path, so offer a one-click way to open and fix it.
+        if (this.source.kind === 'file' && this.source.path) {
+            children.push(
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/open-in-editor`,
+                    label: vscode.l10n.t('Open in Editor'),
+                    iconPath: new vscode.ThemeIcon('go-to-file'),
+                    commandId: 'vscode-documentdb.command.discoveryView.kubernetes.openSourceInEditor',
+                    commandArgs: [this],
+                }),
+            );
+        }
+
+        children.push(
             createGenericElementWithContext({
                 contextValue: 'error',
                 id: `${this.id}/open-docs`,
@@ -134,21 +151,24 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
                 commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
                 commandArgs: [this],
             }),
-        ];
+        );
 
         return children;
     }
 }
 
-function buildContextValue(_source: KubeconfigSourceRecord): string {
+function buildContextValue(source: KubeconfigSourceRecord): string {
     // All sources, including the default, share the same context-value markers
     // so Rename / Remove are exposed uniformly. The Default source is
     // re-creatable through the "+" inline action via {@link addDefaultSource}.
-    return createContextValue([
-        'enableRefreshCommand',
-        'discovery.kubernetesSource',
-        'discovery.kubernetesSourceMutable',
-    ]);
+    const markers = ['enableRefreshCommand', 'discovery.kubernetesSource', 'discovery.kubernetesSourceMutable'];
+
+    // File sources have an on-disk path, so they additionally expose "Open in Editor".
+    if (source.kind === 'file') {
+        markers.push('discovery.kubernetesSourceFile');
+    }
+
+    return createContextValue(markers);
 }
 
 function buildDescription(source: KubeconfigSourceRecord): string | undefined {
@@ -171,7 +191,9 @@ function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
         lines.push('**Storage:** VS Code Secret Storage');
     } else if (source.kind === 'default') {
         lines.push(`**Path:** \`${describeDefaultKubeconfigPath()}\``);
-        lines.push('**Storage:** `KUBECONFIG` environment variable or Kubernetes default kubeconfig path');
+        lines.push(
+            '**Source:** Resolved from the `KUBECONFIG` environment variable, otherwise your default kubeconfig.',
+        );
     }
     return new vscode.MarkdownString(lines.join('\n\n'));
 }

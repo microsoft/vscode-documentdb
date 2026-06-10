@@ -182,7 +182,7 @@ describe('addKubeconfigSource pickBranch picker items', () => {
         expect(iconById['inline']).toBe('clippy');
     });
 
-    it('includes the default kubeconfig path in the default item label', async () => {
+    it('includes the default kubeconfig path in the default item detail', async () => {
         mockDescribeDefaultKubeconfigPath.mockReturnValue('/custom/.kube/config');
         const ui = createCapturingUi();
         const context = makeContext(ui);
@@ -190,7 +190,7 @@ describe('addKubeconfigSource pickBranch picker items', () => {
         await expect(addKubeconfigSource(context)).rejects.toThrow();
 
         const defaultItem = capturedPicks.find((p) => p.data === 'default');
-        expect(defaultItem?.label).toContain('/custom/.kube/config');
+        expect(defaultItem?.detail).toContain('/custom/.kube/config');
     });
 });
 
@@ -303,7 +303,7 @@ describe('addKubeconfigSource default branch validation', () => {
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
         expect(mockShowErrorMessage).toHaveBeenCalledWith(
-            'Default kubeconfig could not be loaded: ENOENT: no such file or directory. Fix the kubeconfig and try again.',
+            'Your default kubeconfig (~/.kube/config) could not be loaded: ENOENT: no such file or directory. Fix the kubeconfig and try again.',
             { modal: true },
         );
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('invalidDefault');
@@ -321,7 +321,7 @@ describe('addKubeconfigSource default branch validation', () => {
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
         expect(mockShowErrorMessage).toHaveBeenCalledWith(
-            'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG environment variable or Kubernetes default kubeconfig path). Fix the kubeconfig and try again.',
+            'No Kubernetes contexts were found in your default kubeconfig (~/.kube/config). Fix the kubeconfig and try again.',
             { modal: true },
         );
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('noContexts');

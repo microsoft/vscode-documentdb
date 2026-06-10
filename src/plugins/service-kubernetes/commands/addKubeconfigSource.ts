@@ -47,6 +47,8 @@ export async function addKubeconfigSource(context: IActionContext): Promise<Kube
 }
 
 async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSourceRecord | undefined> {
+    const defaultPath = describeDefaultKubeconfigPath();
+
     // Validate before persisting; loadKubeConfig() with no arg uses the platform default.
     try {
         const kubeConfig = await loadKubeConfig();
@@ -54,7 +56,8 @@ async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSour
             context.telemetry.properties.kubeconfigSourceResult = 'noContexts';
             void vscode.window.showErrorMessage(
                 vscode.l10n.t(
-                    'No Kubernetes contexts were found in the default kubeconfig (KUBECONFIG environment variable or Kubernetes default kubeconfig path). Fix the kubeconfig and try again.',
+                    'No Kubernetes contexts were found in your default kubeconfig ({0}). Fix the kubeconfig and try again.',
+                    defaultPath,
                 ),
                 { modal: true },
             );
@@ -70,7 +73,11 @@ async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSour
         ext.outputChannel.error(`[KubernetesDiscovery] Default kubeconfig load/validate failed: ${stack}`);
         context.telemetry.properties.kubeconfigSourceResult = 'invalidDefault';
         void vscode.window.showErrorMessage(
-            vscode.l10n.t('Default kubeconfig could not be loaded: {0}. Fix the kubeconfig and try again.', message),
+            vscode.l10n.t(
+                'Your default kubeconfig ({0}) could not be loaded: {1}. Fix the kubeconfig and try again.',
+                defaultPath,
+                message,
+            ),
             { modal: true },
         );
         throw new UserCancelledError();
@@ -88,8 +95,8 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
     const defaultPath = describeDefaultKubeconfigPath();
     const picks: IAzureQuickPickItem<AddBranch>[] = [
         {
-            label: vscode.l10n.t('Default kubeconfig ({0})', defaultPath),
-            detail: vscode.l10n.t('Uses the KUBECONFIG environment variable or Kubernetes default kubeconfig path'),
+            label: vscode.l10n.t('Use my default kubeconfig'),
+            detail: vscode.l10n.t('{0}, or the file named by the KUBECONFIG environment variable', defaultPath),
             iconPath: new vscode.ThemeIcon('home'),
             data: 'default',
         },
