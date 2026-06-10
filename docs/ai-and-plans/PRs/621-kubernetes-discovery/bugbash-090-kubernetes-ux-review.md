@@ -552,10 +552,11 @@ The owner asked for **modal**; iteration 1 shipped **modal**.
 > **Suggested:** Remove inline "Remove" per #25, and consider adding **"Open in Editor"** for file
 > sources (the #1 bonus) so the recovery node helps users _fix_ rather than _delete_.
 >
-> **Iteration 2 context:** "Open in Editor" is the only remaining piece of 4.2. It's file-source only
-> (pasted/inline sources live in Secret Storage and have no on-disk file), low-cost, and pairs naturally
-> with the modal error: a user who just dismissed "this kubeconfig is broken" wants to open and fix it.
-> Decision needed: ship it as a recovery child for file sources, a context-menu entry, or both.
+> ✅ **Resolved (iteration 2).** Shipped **both** surfaces for file sources: an **"Open in Editor"**
+> recovery child _and_ a context-menu entry, scoped via the `discovery.kubernetesSourceFile`
+> context-value marker. Pasted/inline and default sources don't show it (no editable on-disk file). The
+> recovery list is now Reload → Open in Editor (file only) → Learn more. See
+> [openKubeconfigInEditor.ts](src/plugins/service-kubernetes/commands/openKubeconfigInEditor.ts).
 
 ### 4.3 ClusterIP "share with a teammate" snippet (#21 deferred)
 
@@ -707,6 +708,16 @@ A follow-up round of owner feedback on the same iteration refined wording and er
 > dialog ("we weren't able to continue") is the honest signal. Making it modal guarantees the user sees
 > why the add aborted instead of a toast that may be missed.
 
+### 7.1c Iteration 2 — implemented decisions
+
+A third round acted on three of the open discussions below:
+
+| Ref              | Decision                                                                | Implementation                                                                                                                                                                                     |
+| ---------------- | ----------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| §7.3 / #23       | Reword the unclear "Kubernetes default kubeconfig path" (Option **C**). | Default picker entry → **"Use my default kubeconfig"** with the concrete path + `KUBECONFIG` note in `detail`; both default-branch error dialogs name the resolved path; tooltip drops the jargon. |
+| §7.4 / #20       | Freeze the settings surface; drop deferred settings from the backlog.   | Kept the two `portForward.*` keys; `namespaceScanConcurrency` stays a hardcoded `5` with a comment marking it a deliberate non-setting; `showEmptyNamespaces` dropped (Others bucket).             |
+| §4.2 / §7.5 / #1 | Add **"Open in Editor"** for file sources (recovery + context menu).    | New `openKubeconfigInEditor` command; `discovery.kubernetesSourceFile` context-value marker scopes the context-menu entry and recovery child to file sources only.                                 |
+
 ### 7.2 Discussion — #21 ClusterIP "share with a teammate" snippet (still deferred)
 
 **The gap.** A ClusterIP target is only reachable through a **machine-local** `port-forward` tunnel.
@@ -748,8 +759,16 @@ What the code actually resolves (unchanged, correct for `kubectl` interop): **`K
 > **Recommendation (iteration 2):** **C**. Lead with intent (**"Use my default kubeconfig"**), put the
 > concrete `~/.kube/config` / `%USERPROFILE%\.kube\config` path and the `KUBECONFIG` caveat in the
 > `detail`/tooltip. This keeps the (correct) resolution behavior from #23 while replacing the jargon with
-> language a user can act on. Not implemented in iteration 1 — flagged for review and wording sign-off
-> first, since it touches several strings (picker label/detail, both warning messages, tooltip).
+> language a user can act on.
+>
+> ✅ **Implemented (Option C).** The default picker entry now reads **"Use my default kubeconfig"** with
+> detail **"`<path>`, or the file named by the KUBECONFIG environment variable"**; the two default-branch
+> error dialogs now name the concrete resolved path (`Your default kubeconfig (<path>) could not be
+loaded…` / `No Kubernetes contexts were found in your default kubeconfig (<path>)…`); and the default
+> source tooltip drops the "Kubernetes default kubeconfig path" jargon in favor of "Resolved from the
+> `KUBECONFIG` environment variable, otherwise your default kubeconfig." See
+> [addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts) and
+> [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
 
 ### 7.4 Discussion — #20 settings: keep the "Others" bucket; which settings are still worth adding
 
@@ -770,12 +789,21 @@ settings against that decision:
 > `namespaceScanConcurrency` from the backlog unless telemetry justifies them; keep `additionalPorts` and
 > the CRD escape hatch as demand-driven follow-ups. Adding settings later is non-breaking; removing a
 > shipped setting is not — so the bias is to stay minimal.
+>
+> ✅ **Processed as recommended.** The settings surface is frozen at the two `portForward.*` keys.
+> `namespaceScanConcurrency` stays a hardcoded `5` with an explanatory comment marking it a deliberate
+> non-setting (see
+> [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts));
+> `showEmptyNamespaces` is dropped (superseded by the "Others" bucket); `additionalPorts` and the CRD
+> escape hatch remain demand-driven follow-ups.
 
 ### 7.5 Still-open questions carried to iteration 2
 
-- **"Open in Editor" for file sources (#1 / #2 / §4.2).** Additive recovery affordance so the recovery
-  list helps users _fix_ a broken kubeconfig, not just retry. File-source only. Decide surface
-  (recovery child vs context menu vs both).
+- **"Open in Editor" for file sources (#1 / #2 / §4.2).** ✅ **Implemented.** A file-source can now be
+  opened on disk to inspect/fix it, exposed in **both** the context menu and the error-recovery list
+  (file sources only — pasted/default sources have no editable on-disk path). Command
+  [openKubeconfigInEditor.ts](src/plugins/service-kubernetes/commands/openKubeconfigInEditor.ts),
+  context-value marker `discovery.kubernetesSourceFile`, recovery child `open-in-editor`.
 - **ClusterIP share snippet (#21 / §7.2).** Recommend shipping Option **B** next.
 - **Default-path wording (#23 / §7.3).** Recommend Option **C**; needs a wording sign-off before code.
 - **Double-click to expand (#28 / §4.4).** Re-confirm whether the API limit that blocks _hover_-expand
