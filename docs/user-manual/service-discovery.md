@@ -4,7 +4,7 @@
 
 # Service Discovery in DocumentDB for VS Code
 
-**DocumentDB for VS Code** is built with an open architecture. While the extension focuses on developer productivity-such as data exploration, running queries, and importing/exporting data-the core connectivity is centered around connection strings.
+**DocumentDB for VS Code** is built with an open architecture. While the extension focuses on developer productivity — such as data exploration, running queries, and importing/exporting data — the core connectivity is centered around connection strings.
 
 ![Service Discovery Providers Location](./images/service-discovery-introduction.png)
 
@@ -23,11 +23,15 @@ This approach allows you to connect to a variety of platforms without needing to
 
 Currently, the following service discovery plugins are available:
 
-- **[Azure CosmosDB for MongoDB (RU)](./service-discovery-azure-cosmosdb-for-mongodb-ru)**
+- **[Azure Cosmos DB for MongoDB API (RU)](./service-discovery-azure-cosmosdb-for-mongodb-ru)**
 - **[Azure DocumentDB](./service-discovery-azure-cosmosdb-for-mongodb-vcore)**
 - **[Azure VMs (DocumentDB)](./service-discovery-azure-vms)**
+- **[Kubernetes](./service-discovery-kubernetes)**
+  - [Kubernetes getting started and test lab](./service-discovery-kubernetes-getting-started)
 
-We are actively working to integrate more platforms and welcome contributions from the community.
+See each plugin guide for provider-specific setup, filtering, credential handling, and troubleshooting steps.
+
+All service discovery plugins are visible by default. If a provider is not relevant to your workflow, you can hide it from the Service Discovery tree and show it again later with **Show Hidden Provider...**.
 
 ## API and Extensibility
 

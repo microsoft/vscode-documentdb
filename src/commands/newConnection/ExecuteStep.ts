@@ -10,6 +10,10 @@ import { redactCredentialsFromConnectionString } from '../../documentdb/utils/co
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+import {
+    getKubernetesPortForwardIdentity,
+    getKubernetesPortForwardMetadata,
+} from '../../plugins/service-kubernetes/portForwardMetadata';
 
 import {
     type ConnectionItem,
@@ -48,6 +52,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
             const newParsedCS = new DocumentDBConnectionString(newConnectionString);
             const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
+            const newPortForwardMetadata = getKubernetesPortForwardMetadata(context.connectionProperties);
 
             //  Sanity Check 1/2: is there a connection with the same username + host in there?
             const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
@@ -66,6 +71,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     const existingHostsJoined = [...existingCS.hosts].sort().join(',');
                     // Use nativeAuthConfig for comparison
                     const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+                    const existingPortForwardMetadata = getKubernetesPortForwardMetadata(existingConnection.properties);
+
+                    if (newPortForwardMetadata || existingPortForwardMetadata) {
+                        return (
+                            existingUsername === newUsername &&
+                            !!newPortForwardMetadata &&
+                            !!existingPortForwardMetadata &&
+                            getKubernetesPortForwardIdentity(existingPortForwardMetadata) ===
+                                getKubernetesPortForwardIdentity(newPortForwardMetadata)
+                        );
+                    }
 
                     return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
                 } catch (error) {
@@ -148,6 +164,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 id: storageId,
                 name: newConnectionLabel,
                 properties: {
+                    ...context.connectionProperties,
                     type: ItemType.Connection,
                     api: api,
                     parentId: parentId ? parentId : undefined, // Set parent folder ID if in a subfolder

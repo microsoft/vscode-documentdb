@@ -818,9 +818,17 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * Write a line to the terminal (with \r\n).
+     *
+     * Normalizes any bare `\n` inside `text` to `\r\n` before appending the
+     * terminating newline. Multi-line payloads (e.g., error messages from
+     * underlying drivers, server-formatted MongoServerError strings) often
+     * contain `\n` only; the pseudoterminal needs `\r\n` so the cursor
+     * returns to column 0 on each line break instead of producing the
+     * "staircase" effect.
      */
     private writeLine(text: string): void {
-        this._writeEmitter.fire(text + '\r\n');
+        const normalized = text.replace(/\r?\n/g, '\r\n');
+        this._writeEmitter.fire(normalized + '\r\n');
     }
 
     /**
