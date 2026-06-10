@@ -740,6 +740,12 @@ remote port) is already threaded through the model — only the **surface** to s
 > teammate without `kubectl`/context access is no worse off than today). Keep **A** as the default
 > connection-string copy. Defer **C** unless a teammate-onboarding flow demands a single paste; avoid
 > **D** (it removes a working local convenience).
+>
+> 🔄 **Superseded by §8.1 (owner's decision).** Rather than a standalone "Copy kubectl port-forward
+> command" entry, the owner chose to fold all share/copy options into a **single "Copy…" quick pick** on
+> the ClusterIP node (connection string with/without password, the `kubectl port-forward` command, and a
+> **Learn more** link to a dedicated manual section). See §8.1 for the consolidated decision and the docs
+> work item.
 
 ### 7.3 Discussion — #23 "Kubernetes default kubeconfig path" wording (reconsider)
 
@@ -814,74 +820,99 @@ deferred:
 - **Settings surface (#20 / §7.4).** ✅ **Frozen** at the two `portForward.*` keys; `namespaceScanConcurrency`
   stays a hardcoded non-setting; `showEmptyNamespaces` dropped; `additionalPorts` + CRD escape hatch are
   demand-driven follow-ups.
-- **Source-node icon (#8/#11).** ✅ **Changed to `group-by-ref-type`** (replacing `plug`).
-- **Deferred to iteration 3:** the ClusterIP share snippet (§7.2), double-click-to-expand (§4.4), and the
-  cross-surface icon parity question (§8.4). These are carried forward in **Section 8** below.
+- **Source-node icon (#8/#11).** ✅ **Changed to `group-by-ref-type`** (replacing `plug`); the in-wizard
+  "Add Kubeconfig…" entry was aligned to the same icon in iteration 3 (§8.4).
+- **Deferred to iteration 3:** the ClusterIP "copy connection details" experience (§8.1). Double-click-to-expand
+  (former §4.4) and query-table contrast (#27) are **not** owner-requested and are closed/parked (§8.2).
 
 ---
 
 ## 8. Iteration 3 — open items & discussion
 
 Iterations 1–2 cleared every release-blocking wording/structure/error item raised in the bug bash. What
-remains is a set of **additive, non-blocking** enhancements and one **won't-fix to re-confirm**. None of
-these gate launch; they are sequenced here so iteration 3 has a ready agenda.
+remains is one **additive, non-blocking** enhancement (§8.1), an icon-parity fix that already landed
+(§8.4), two items that are **not owner-requested** and are closed/parked (§8.2), and a live-verification
+checklist (§8.5). None of these gate launch.
 
-### 8.1 ClusterIP "share with a teammate" snippet — ship Option B (#21 / §7.2)
+### 8.1 ClusterIP "Copy connection details" — a unified copy quick pick (owner's decision)
 
-**Status:** still the highest-value open item. The metadata (context, namespace, service, remote port)
-is already threaded through the model; only the surface is missing.
+**Owner's decision.** Don't bolt on a single new "Copy kubectl port-forward command" action. We already
+have an established pattern for this in the product:
 
-**Proposal:** add a context-menu entry **"Copy kubectl port-forward command"** on ClusterIP service
-nodes, alongside the existing "Copy connection string":
+- A **"Copy reference"**-style quick pick on cluster / database / collection nodes that lets the user
+  pick _what_ to copy.
+- A **connection-string** flow that offers **with-password / without-password** variants.
 
-```text
-kubectl --context <ctx> -n <ns> port-forward svc/<svc> <localPort>:<remotePort>
-```
+> **What to build:** a **single "Copy…" quick pick on the Kubernetes ClusterIP service node** that
+> surfaces **all** the relevant options together, so the user understands what's available and chooses
+> what they need — rather than copying an opaque `127.0.0.1` string by default. Candidate options to
+> include:
+>
+> - **Connection string (with password)** — the working local string while the tunnel is active.
+> - **Connection string (without password)** — safe to share/paste where the secret isn't wanted.
+> - **`kubectl port-forward` command** — `kubectl --context <ctx> -n <ns> port-forward svc/<svc> <local>:<remote>`,
+>   so a teammate can reproduce the machine-local tunnel.
+> - **Learn more** — an entry that opens a **dedicated section in the user manual** explaining why a
+>   ClusterIP target is machine-local, what port-forwarding does, and how to share access with a teammate.
+>
+> 📌 **Work item (docs):** author the **"Connecting to ClusterIP / port-forwarded targets"** section in
+> the user manual and wire the **Learn more** option to it. Tracked as a follow-up; the quick pick can
+> ship with the link pointing at the section once it exists.
 
-| Question for iteration 3             | Options                                                                       | Lean                                                                      |
-| ------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
-| Where does it live?                  | context menu only · context menu + an inline icon                             | **context menu only** (keep the row uncluttered)                          |
-| What local port goes in the command? | the actually-bound local port · the remote port · a placeholder `<localPort>` | **the bound local port** when a tunnel is active, else the remote port    |
-| Single command or composite block?   | just the `kubectl` line (Option B) · `kubectl` + connection string (Option C) | **B** first; revisit C only if a teammate-onboarding flow needs one paste |
-| Telemetry?                           | none · count copies + ClusterIP vs other                                      | **count** (validates whether the feature is used)                         |
+**Why this is the right shape.** It reuses a UX the user already understands (the copy-reference quick
+pick), keeps the default copy honest (no silent tunnel side effects — already true after #21), folds the
+teammate-share concern (#21) into the same surface instead of a separate command, and the **Learn more**
+entry gives the machine-local nuance a permanent home instead of a transient warning toast.
 
-> **Recommendation:** ship **B** as described. Small, additive, reuses existing metadata, and degrades
-> gracefully (a teammate without `kubectl`/context access is no worse off than today).
+**Prerequisite finding — why the K8s node's menu looks "thin" (answer to the owner's question).** The
+discovered DocumentDB target **does** extend the shared cluster base:
+[`KubernetesServiceItem extends ClusterItemBase<KubernetesServiceModel>`](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts).
+It is a real cluster node (expanding it authenticates, lists databases/collections, etc.). The reason
+many context-menu actions you see in the **Connections view** don't appear here is **not** the class —
+it's the **menu scoping by view**:
 
-### 8.2 Double-click to expand tree rows (#28, won't-fix → re-confirm) (§4.4)
+- Tree context-menu contributions in `package.json` are gated by `view == …` _and_ a `viewItem`
+  context-value regex.
+- The discovered node lives in the **Discovery view** and carries the context value
+  `treeItem_documentdbcluster;documentdbTargetLeaf;discovery.kubernetesService;experience_*`.
+- In the Discovery view we **intentionally** expose only discovery-relevant actions — primarily
+  **"Add to Connections View"** (`view == discoveryView && viewItem =~ /…documentdbTargetLeaf…/`). The
+  rich cluster menu (rename, delete, copy connection string, etc.) is contributed under
+  `view == connectionsView`, so it appears **after** the user adds the cluster to the Connections view.
 
-The original close cited a tree-view API limitation. That limitation is firmly true for **hover**-to-expand
-(#26, [vscode#286332](https://github.com/microsoft/vscode/issues/286332)), but **double-click**-to-expand
-is a _different_ interaction and is arguably standard tree behavior.
+This is **consistent with every discovery provider** (the Azure discovery cluster nodes show the same
+minimal menu); the Kubernetes target is not a special-cased or lesser node. It does mean the new
+**"Copy…" quick pick** above needs to be added as a **Discovery-view command** (gated on
+`discovery.kubernetesService` / `documentdbTargetLeaf`) rather than assuming the Connections-view copy
+commands are present.
 
-> **Action for iteration 3:** spike whether double-click-to-toggle is achievable for these node types
-> without triggering connect/auth side effects. If yes, it's a cheap discoverability win; if the API
-> genuinely blocks it, the won't-fix stands and we record the concrete reason.
+### 8.2 Not owner-requested — closed/parked
 
-### 8.3 Query-table contrast (#27, won't-fix → backlog)
+Two items previously parked here did **not** originate from the owner; they came from bug-bash
+participants and are not on the roadmap:
 
-Reporter flagged hard-to-read colors in the query table; no contrast fix was made on this branch (tied to
-a future table-component update).
+- **Double-click to expand tree rows (bug-bash #28).** Originated as a community bug-bash issue, not an
+  owner ask. The owner does **not** want this. Closed as **won't-fix** (twistie/Enter already expand;
+  adding double-click risks accidental connect/auth side effects). No further action.
+- **Query-table color contrast (bug-bash #27).** Unrelated to Kubernetes discovery; tracked elsewhere
+  with the table-component work. Removed from this review's agenda.
 
-> **Action for iteration 3:** confirm whether the table-component refresh is on the roadmap; if not,
-> consider a minimal contrast adjustment so the won't-fix doesn't linger indefinitely.
+### 8.4 Cross-surface icon parity for "add kubeconfig" — ✅ resolved
 
-### 8.4 Cross-surface icon parity for "add kubeconfig" (#8/#9)
+There were **three** places a kubeconfig surfaced, each with its own icon. Iteration 3 aligned the two
+"add" surfaces that read as the same concept:
 
-There are now **three** places a kubeconfig is represented, each with its own iconography:
+| Surface                                                                                                                          | Icon                                                                   |
+| -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| Tree source nodes                                                                                                                | `group-by-ref-type`                                                    |
+| In-wizard "Add Kubeconfig…" entry ([SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts)) | `group-by-ref-type` ✅ (was `plug`)                                    |
+| Add-Source picker per-type items ([addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts))      | `home` / `folder-opened` / `clippy` (kept — per-type aids recognition) |
 
-| Surface                                                                                                                          | Icon(s) today                              |
-| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
-| Tree source nodes                                                                                                                | `group-by-ref-type` (uniform, iteration 2) |
-| In-wizard "Add Kubeconfig…" entry ([SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts)) | `plug`                                     |
-| Add-Source picker per-type items ([addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts))      | `home` / `folder-opened` / `clippy`        |
-
-> **Discussion for iteration 3:** decide a deliberate icon vocabulary. Two coherent options:
-> (a) **the add action is always `$(add)`** everywhere (action = add, regardless of surface), and only
-> the _result_ (a source node) carries the `group-by-ref-type` identity; or (b) keep per-type icons in
-> the dedicated picker (they aid recognition) but align the in-wizard entry to `$(add)` so it reads as an
-> action, not a source. Low cost, purely cosmetic — but worth one decision so the three surfaces stop
-> diverging.
+> ✅ **Decision / Implemented.** The in-wizard entry no longer uses `plug`; it uses the same
+> `group-by-ref-type` as the tree source nodes so "kubeconfig sources" reads consistently. The dedicated
+> Add-Source picker keeps its per-type icons (`home` / `folder-opened` / `clippy`) — they help the user
+> distinguish default vs file vs paste at the moment of choosing, which is the one place differentiation
+> is useful.
 
 ### 8.5 Live-verification checklist still outstanding
 
