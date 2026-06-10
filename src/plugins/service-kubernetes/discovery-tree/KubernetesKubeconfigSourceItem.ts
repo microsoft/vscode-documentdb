@@ -3,14 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { createContextValue } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
+import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
-import { type KubeconfigSourceRecord } from '../config';
+import { DISCOVERY_PROVIDER_ID, type KubeconfigSourceRecord } from '../config';
 import {
     describeDefaultKubeconfigPath,
     getContexts,
@@ -40,55 +41,96 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
+        // A journey starts each time the user expands this source (matches the funnel
+        // semantics used by the Azure discovery roots). The id is threaded through all
+        // descendants so the source -> context -> namespace -> target chain shares one id.
         const journeyCorrelationId = randomUUID();
 
-        let contexts: KubeContextInfo[];
-        try {
-            const kubeConfig = await loadConfiguredKubeConfig(this.source.id);
-            contexts = getContexts(kubeConfig);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.error(
-                `[KubernetesDiscovery] Failed to load kubeconfig for source "${this.source.label}": ${errorMessage}`,
-            );
+        const children = await callWithTelemetryAndErrorHandling(
+            'kubernetes-discovery.loadKubeconfigSource',
+            async (context: IActionContext) => {
+                context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+                context.telemetry.properties.view = Views.DiscoveryView;
+                context.telemetry.properties.kubeconfigSourceKind = this.source.kind;
+                context.telemetry.properties.journeyCorrelationId = journeyCorrelationId;
 
-            return this.createKubeconfigRecoveryChildren(
-                vscode.l10n.t(
-                    'Failed to load this kubeconfig source: {0}',
-                    errorMessage || vscode.l10n.t('unknown error'),
-                ),
-            );
-        }
+                let contexts: KubeContextInfo[];
+                try {
+                    // Sub-step with rethrow: lets the telemetry library record the load
+                    // failure (result = Failed, error name + message) automatically, while
+                    // the outer event still renders the recovery UI below. suppressDisplay
+                    // is set because we surface our own modal warning in the recovery path.
+                    contexts =
+                        (await callWithTelemetryAndErrorHandling(
+                            'kubernetes-discovery.loadKubeconfigSource.load',
+                            async (loadContext: IActionContext) => {
+                                loadContext.errorHandling.rethrow = true;
+                                loadContext.errorHandling.suppressDisplay = true;
+                                const kubeConfig = await loadConfiguredKubeConfig(this.source.id);
+                                return getContexts(kubeConfig);
+                            },
+                        )) ?? [];
+                } catch (error) {
+                    const errorMessage = error instanceof Error ? error.message : String(error);
+                    context.telemetry.properties.kubeconfigLoadResult = 'failed';
+                    ext.outputChannel.error(
+                        `[KubernetesDiscovery] Failed to load kubeconfig for source "${this.source.label}": ${errorMessage}`,
+                    );
 
-        if (contexts.length === 0) {
-            return this.createKubeconfigRecoveryChildren(
-                vscode.l10n.t('No Kubernetes contexts were found in this kubeconfig source.'),
-            );
-        }
+                    return this.createKubeconfigRecoveryChildren(
+                        vscode.l10n.t(
+                            'Failed to load this kubeconfig source: {0}',
+                            errorMessage || vscode.l10n.t('unknown error'),
+                        ),
+                    );
+                }
 
-        const sortedContexts = [...contexts].sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+                context.telemetry.measurements.contextsInSource = contexts.length;
 
-        // Resolve display aliases once per source-load. Pass the per-context alias into
-        // the child item so its synchronous getTreeItem() can render label / description
-        // without needing its own async lookup.
-        const aliases = await aliasMapForSource(this.source.id);
+                if (contexts.length === 0) {
+                    context.telemetry.properties.kubeconfigLoadResult = 'noContexts';
+                    return this.createKubeconfigRecoveryChildren(
+                        vscode.l10n.t('No Kubernetes contexts were found in this kubeconfig source.'),
+                    );
+                }
 
-        // Best-effort: drop aliases for contexts that have disappeared from this source.
-        // Fire-and-forget so a slow / failing storage write never blocks the tree.
-        void pruneAliasesForSource(
-            this.source.id,
-            sortedContexts.map((ctx) => ctx.name),
-        ).catch((error) => {
-            const message = error instanceof Error ? error.message : String(error);
-            ext.outputChannel.warn(
-                `[KubernetesDiscovery] Failed to prune context aliases for source "${this.source.label}": ${message}`,
-            );
-        });
+                context.telemetry.properties.kubeconfigLoadResult = 'loaded';
 
-        return sortedContexts.map(
-            (ctx) =>
-                new KubernetesContextItem(this.id, this.source.id, ctx, journeyCorrelationId, aliases.get(ctx.name)),
+                const sortedContexts = [...contexts].sort((a, b) =>
+                    a.name.localeCompare(b.name, undefined, { numeric: true }),
+                );
+
+                // Resolve display aliases once per source-load. Pass the per-context alias into
+                // the child item so its synchronous getTreeItem() can render label / description
+                // without needing its own async lookup.
+                const aliases = await aliasMapForSource(this.source.id);
+
+                // Best-effort: drop aliases for contexts that have disappeared from this source.
+                // Fire-and-forget so a slow / failing storage write never blocks the tree.
+                void pruneAliasesForSource(
+                    this.source.id,
+                    sortedContexts.map((ctx) => ctx.name),
+                ).catch((pruneError) => {
+                    const message = pruneError instanceof Error ? pruneError.message : String(pruneError);
+                    ext.outputChannel.warn(
+                        `[KubernetesDiscovery] Failed to prune context aliases for source "${this.source.label}": ${message}`,
+                    );
+                });
+
+                return sortedContexts.map(
+                    (ctx) =>
+                        new KubernetesContextItem(
+                            this.id,
+                            this.source.id,
+                            ctx,
+                            journeyCorrelationId,
+                            aliases.get(ctx.name),
+                        ),
+                );
+            },
         );
+
+        return children ?? [];
     }
 
     public getTreeItem(): vscode.TreeItem {
