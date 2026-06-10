@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY } from '../portForwardMetadata';
-import { KubernetesServiceItem } from './KubernetesServiceItem';
+import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY } from '../../portForwardMetadata';
+import { KubernetesResourceItem } from './KubernetesResourceItem';
 
 const mockHasCredentials = jest.fn();
 const mockGetClient = jest.fn();
@@ -87,7 +87,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
 }));
 
-jest.mock('../../../extensionVariables', () => ({
+jest.mock('../../../../extensionVariables', () => ({
     ext: {
         outputChannel: {
             append: jest.fn(),
@@ -100,7 +100,7 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../../../documentdb/CredentialCache', () => ({
+jest.mock('../../../../documentdb/CredentialCache', () => ({
     CredentialCache: {
         hasCredentials: (...args: unknown[]) => mockHasCredentials(...args),
         deleteCredentials: jest.fn(),
@@ -108,14 +108,14 @@ jest.mock('../../../documentdb/CredentialCache', () => ({
     },
 }));
 
-jest.mock('../../../documentdb/ClustersClient', () => ({
+jest.mock('../../../../documentdb/ClustersClient', () => ({
     ClustersClient: {
         getClient: (...args: unknown[]) => mockGetClient(...args),
         deleteClient: jest.fn(),
     },
 }));
 
-jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
+jest.mock('../../../../tree/api/createGenericElementWithContext', () => ({
     createGenericElementWithContext: jest.fn((options: Record<string, unknown>) => options),
 }));
 
@@ -127,7 +127,7 @@ const mockResolveDocumentDBCredentials = jest.fn();
 const mockResolveGenericServiceCredentials = jest.fn();
 const mockBuildPortForwardConnectionString = jest.fn();
 
-jest.mock('../kubernetesClient', () => ({
+jest.mock('../../kubernetesClient', () => ({
     loadConfiguredKubeConfig: (...args: unknown[]) => mockLoadConfiguredKubeConfig(...args),
     createCoreApi: (...args: unknown[]) => mockCreateCoreApi(...args),
     resolveServiceEndpoint: (...args: unknown[]) => mockResolveServiceEndpoint(...args),
@@ -138,7 +138,7 @@ jest.mock('../kubernetesClient', () => ({
 
 // Mock PortForwardTunnelManager
 const mockStartTunnel = jest.fn();
-jest.mock('../portForwardTunnel', () => ({
+jest.mock('../../portForwardTunnel', () => ({
     PortForwardTunnelManager: {
         getInstance: () => ({
             startTunnel: mockStartTunnel,
@@ -148,18 +148,18 @@ jest.mock('../portForwardTunnel', () => ({
 
 // Mock promptForLocalPort
 const mockPromptForLocalPort = jest.fn();
-jest.mock('../promptForLocalPort', () => ({
+jest.mock('../../promptForLocalPort', () => ({
     promptForLocalPort: (...args: unknown[]) => mockPromptForLocalPort(...args),
 }));
 
 // Mock the source store so getSource() returns a known label without touching StorageService.
 const mockGetSource = jest.fn(async (id: string) => ({ id, label: `Label for ${id}`, kind: 'default' as const }));
-jest.mock('../sources/sourceStore', () => ({
+jest.mock('../../sources/sourceStore', () => ({
     getSource: (...args: unknown[]) => mockGetSource(...(args as [string])),
 }));
 
 // Mock the icons util so the cluster icon path resolves without an extension context.
-jest.mock('../../../utils/icons', () => ({
+jest.mock('../../../../utils/icons', () => ({
     getResourcesPath: () => '/resources',
 }));
 
@@ -172,7 +172,7 @@ function iconDarkPath(iconPath: unknown): string {
     return (iconPath as { dark: { toString(): string } }).dark.toString();
 }
 
-describe('KubernetesServiceItem', () => {
+describe('KubernetesResourceItem', () => {
     beforeEach(() => {
         jest.clearAllMocks();
         mockHasCredentials.mockReturnValue(true);
@@ -182,7 +182,7 @@ describe('KubernetesServiceItem', () => {
     });
 
     it('expands to database nodes instead of metadata detail rows', async () => {
-        const item = new KubernetesServiceItem(
+        const item = new KubernetesResourceItem(
             'corr-1',
             'default',
             {
@@ -229,7 +229,7 @@ describe('KubernetesServiceItem', () => {
         };
 
         it('marks ClusterIP services as requiring port-forwarding', () => {
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-reachability',
                 'default',
                 baseContext,
@@ -256,7 +256,7 @@ describe('KubernetesServiceItem', () => {
         });
 
         it('marks LoadBalancer services with external addresses as direct', () => {
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-reachability',
                 'default',
                 baseContext,
@@ -284,7 +284,7 @@ describe('KubernetesServiceItem', () => {
         });
 
         it('marks LoadBalancer services without external addresses but with node ports as node-routed', () => {
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-reachability',
                 'default',
                 baseContext,
@@ -308,7 +308,7 @@ describe('KubernetesServiceItem', () => {
         });
 
         it('marks pending LoadBalancer services without usable addresses as pending', () => {
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-reachability',
                 'default',
                 baseContext,
@@ -331,7 +331,7 @@ describe('KubernetesServiceItem', () => {
         });
 
         it('marks NodePort services as node-routed', () => {
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-reachability',
                 'default',
                 baseContext,
@@ -355,7 +355,7 @@ describe('KubernetesServiceItem', () => {
         });
 
         it('marks unsupported service types as not directly supported', () => {
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-reachability',
                 'default',
                 baseContext,
@@ -400,7 +400,7 @@ describe('KubernetesServiceItem', () => {
             mockPromptForLocalPort.mockResolvedValue(10260);
             mockBuildPortForwardConnectionString.mockReturnValue('mongodb://127.0.0.1:10260/');
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-pf',
                 'default',
                 {
@@ -459,7 +459,7 @@ describe('KubernetesServiceItem', () => {
             });
             mockBuildPortForwardConnectionString.mockReturnValue('mongodb://127.0.0.1:10260/');
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-copy',
                 'default',
                 {
@@ -508,7 +508,7 @@ describe('KubernetesServiceItem', () => {
             });
             mockPromptForLocalPort.mockResolvedValue(undefined); // user cancels
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-cancel',
                 'default',
                 {
@@ -541,7 +541,7 @@ describe('KubernetesServiceItem', () => {
                 connectionString: 'mongodb://1.2.3.4:10260/',
             });
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-lb',
                 'default',
                 {
@@ -575,7 +575,7 @@ describe('KubernetesServiceItem', () => {
                 reason: 'Not reachable',
             });
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-ur',
                 'default',
                 {
@@ -617,7 +617,7 @@ describe('KubernetesServiceItem', () => {
                 connectionParams: 'directConnection=true',
             });
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-dko',
                 'default',
                 {
@@ -679,7 +679,7 @@ describe('KubernetesServiceItem', () => {
                 password: 'genericpass',
             });
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-gen-cred',
                 'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
@@ -712,7 +712,7 @@ describe('KubernetesServiceItem', () => {
                 connectionParams: '',
             });
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-dko-wins',
                 'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
@@ -737,7 +737,7 @@ describe('KubernetesServiceItem', () => {
         it('should not call resolveGenericServiceCredentials when service has no credentialSecretName', async () => {
             mockResolveDocumentDBCredentials.mockResolvedValue(undefined);
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-no-cred',
                 'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
@@ -785,7 +785,7 @@ describe('KubernetesServiceItem', () => {
                 warning: warningText,
             });
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-warn',
                 'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
@@ -807,7 +807,7 @@ describe('KubernetesServiceItem', () => {
             expect(creds?.connectionString).toBe('mongodb://10.0.0.1:30017/');
 
             // eslint-disable-next-line @typescript-eslint/no-require-imports
-            const { ext } = require('../../../extensionVariables') as {
+            const { ext } = require('../../../../extensionVariables') as {
                 ext: { outputChannel: { appendLine: jest.Mock } };
             };
             expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(warningText);
@@ -835,7 +835,7 @@ describe('KubernetesServiceItem', () => {
                 warning: 'InternalIP fallback warning',
             });
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-warn-telem',
                 'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
@@ -876,7 +876,7 @@ describe('KubernetesServiceItem', () => {
                 // no warning
             });
 
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-no-warn',
                 'default',
                 { name: 'my-ctx', cluster: 'my-cluster', user: 'my-user', server: 'https://api.example.com:6443' },
@@ -900,7 +900,7 @@ describe('KubernetesServiceItem', () => {
 
     describe('tooltip contents', () => {
         it('should include only user-actionable fields and exclude internal details', () => {
-            const item = new KubernetesServiceItem(
+            const item = new KubernetesResourceItem(
                 'corr-1',
                 'src-1',
                 {

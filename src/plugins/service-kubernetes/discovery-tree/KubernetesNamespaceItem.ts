@@ -18,7 +18,7 @@ import {
     type KubeContextInfo,
     type KubeServiceInfo,
 } from '../kubernetesClient';
-import { KubernetesServiceItem } from './KubernetesServiceItem';
+import { KubernetesResourceItem } from './documentdb/KubernetesResourceItem';
 import { hasRetryActionNode } from './retryNodeDetection';
 
 export class KubernetesNamespaceItem implements TreeElement, TreeElementWithContextValue {
@@ -89,7 +89,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
 
                 return services.map(
                     (svc) =>
-                        new KubernetesServiceItem(
+                        new KubernetesResourceItem(
                             this.journeyCorrelationId,
                             this.sourceId,
                             this.contextInfo,

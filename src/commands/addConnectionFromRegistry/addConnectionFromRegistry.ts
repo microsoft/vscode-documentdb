@@ -69,7 +69,7 @@ export async function addConnectionFromRegistry(context: IActionContext, node: C
 
     return withConnectionsViewProgress(async () => {
         const credentials = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
-            // Use optional chaining — node may be duck-typed (e.g. KubernetesServiceItem)
+            // Use optional chaining — node may be duck-typed (e.g. KubernetesResourceItem)
             // and not a true ClusterItemBase subclass
             context.telemetry.properties.experience = node.experience?.api ?? 'unknown';
 

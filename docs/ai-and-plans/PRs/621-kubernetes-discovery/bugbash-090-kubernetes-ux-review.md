@@ -332,7 +332,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 - **Decision / Code today:** Tooltip trimmed to **Target, Status, External Address, Reachability, Port,
   Provider, Region, Namespace, Context**. **Secret removed** (internal, not actionable, potential
   confusion); diagnostic detail lives in the output channel. Verified `buildTooltip()` in
-  [KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L493-L517).
+  [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L493-L517).
   (Removed: Source, Service, Type, NodePort, ClusterIP, Server, DocumentDB.)
 
 **#24 — Kubeconfig tooltip path missing a backslash** ✅
@@ -376,7 +376,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     `LoadBalancer · direct` (`globe`), `LoadBalancer · node-routed` / `NodePort · node-routed` (`server`),
     `ClusterIP · port-forward required` (`plug`), pending/unsupported (`warning`). Verified
     `getReachabilityInfo()`/`buildDescription()`/`buildTooltip()` in
-    [KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L519-L560).
+    [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L519-L560).
   - Tooltip has a **Reachability** section explaining the mode, including the machine‑local nature of
     ClusterIP forwarding.
   - **Copy is now read‑only** — copying a discovery service no longer starts a tunnel
@@ -887,10 +887,10 @@ have an established pattern for this in the product:
 
 **Where is this active? (scoping)** Two distinct surfaces, and we should be explicit about which one:
 
-| Surface              | Node                                                                      | Today                                                                                                              | Proposal                                                                                                                              |
-| -------------------- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
-| **Discovery view**   | the discovered Kubernetes target (`KubernetesServiceItem`, before saving) | Copy is currently **excluded** for K8s (see the finding below); only **Save To DocumentDB Connections** is offered | Add the new **"Copy…"** quick pick here, gated on `discovery.kubernetesService`                                                       |
-| **Connections view** | a **saved** connection that originated from a K8s target                  | Inherits the standard cluster menu (incl. the existing **Copy Connection String…** with/without-password flow)     | The same port-forward-aware **"Copy…"** quick pick should apply here too, since a saved ClusterIP connection is _still_ machine-local |
+| Surface              | Node                                                                       | Today                                                                                                              | Proposal                                                                                                                              |
+| -------------------- | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------- |
+| **Discovery view**   | the discovered Kubernetes target (`KubernetesResourceItem`, before saving) | Copy is currently **excluded** for K8s (see the finding below); only **Save To DocumentDB Connections** is offered | Add the new **"Copy…"** quick pick here, gated on `discovery.kubernetesService`                                                       |
+| **Connections view** | a **saved** connection that originated from a K8s target                   | Inherits the standard cluster menu (incl. the existing **Copy Connection String…** with/without-password flow)     | The same port-forward-aware **"Copy…"** quick pick should apply here too, since a saved ClusterIP connection is _still_ machine-local |
 
 > **Answer to "where would this be active — on a saved connection in the Connections view?":** **both.**
 > The primary gap is on the **Discovery-view** node (where copy is currently suppressed for K8s), but a
@@ -911,7 +911,7 @@ entry gives the machine-local nuance a permanent home instead of a transient war
 answer to the reviewer's question).** The discovered DocumentDB target **does** extend the shared cluster
 base, exactly like the Azure vCore discovery node:
 
-- Kubernetes: [`KubernetesServiceItem extends ClusterItemBase<KubernetesServiceModel>`](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L93).
+- Kubernetes: [`KubernetesResourceItem extends ClusterItemBase<KubernetesClusterModel>`](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L93).
 - vCore discovery: [`DocumentDBResourceItem extends ClusterItemBase<AzureClusterModel>`](src/plugins/service-azure-mongo-vcore/discovery-tree/documentdb/DocumentDBResourceItem.ts#L33).
 
 Both are real cluster nodes (expanding authenticates and lists databases/collections). The menu and icon
@@ -921,7 +921,7 @@ things the K8s subclass does in its constructor, plus a deliberate menu exclusio
 1. **Context value (drives which menu items match).** `ClusterItemBase` defaults `contextValue` to
    `treeItem_documentdbcluster;experience_<api>`. The vCore discovery item **keeps that default**, so it
    matches all the `treeItem_documentdbcluster` menus. The Kubernetes item **overrides** it
-   ([KubernetesServiceItem.ts#L132-L137](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L132-L137))
+   ([KubernetesResourceItem.ts#L132-L137](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L132-L137))
    to add `documentdbTargetLeaf;discovery.kubernetesService`.
 2. **The rich cluster commands explicitly exclude `discovery.kubernetesService`.** In
    [package.json](package.json#L858-L935), **Create Database**, **Copy Connection String**, **Open
@@ -933,7 +933,7 @@ things the K8s subclass does in its constructor, plus a deliberate menu exclusio
    already-connected/expanded state, etc.
 3. **Icon.** The base `getTreeItem()` just renders `this.iconPath`. vCore sets
    `iconPath = AzureDocumentDb.svg`; Kubernetes overrides it to a **reachability** icon
-   ([KubernetesServiceItem.ts#L138](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L138):
+   ([KubernetesResourceItem.ts#L138](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L138):
    `this.iconPath = this.getReachabilityInfo().icon` — `globe`/`server`/`plug`/`warning`). That's why the
    glyph differs. No method in the base class forces the icon; each subclass sets `this.iconPath`.
 
@@ -992,12 +992,12 @@ be confirmed by hand before sign-off (these are not new work, just confirmation)
 ## 9. Iteration 3 — planned refactor: cluster-node parity (design, not yet implemented)
 
 This chapter is a **plan** to be reviewed before any code is written. It addresses three coupled issues
-on the discovered Kubernetes target node (`KubernetesServiceItem`): the context-value override, the
+on the discovered Kubernetes target node (`KubernetesResourceItem`): the context-value override, the
 command exclusions it forced, and the icon override. It also fixes a wording bug surfaced during review.
 
 ### 9.0 Process note — missing decision log for the original override
 
-The reasoning behind `KubernetesServiceItem` overriding `contextValue` (and the matching
+The reasoning behind `KubernetesResourceItem` overriding `contextValue` (and the matching
 `!(discovery.kubernetesService)` exclusions in `package.json`) is **not recorded** anywhere in the
 `docs/ai-and-plans/PRs/…` folder. That made this review materially harder: from the code alone it's
 ambiguous whether the override was a deliberate "ClusterIP commands assume direct reachability, so hide
@@ -1014,14 +1014,14 @@ copy/shell/etc. because a ClusterIP needs a tunnel), but that guess should be co
 makes the full cluster menu (Create Database, Copy Connection String, Open Interactive Shell, Data
 Migration) appear. The Azure vCore discovery node keeps that default and shows the full menu.
 
-`KubernetesServiceItem` instead:
+`KubernetesResourceItem` instead:
 
 1. **Overrides `contextValue`** to add `documentdbTargetLeaf;discovery.kubernetesService`
-   ([KubernetesServiceItem.ts#L132-L137](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L132-L137)).
+   ([KubernetesResourceItem.ts#L132-L137](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L132-L137)).
 2. Forces **four `package.json` commands to exclude** it via
    `… && !(viewItem =~ /\bdiscovery\.kubernetesService\b/i)` ([package.json](package.json#L858-L935)).
 3. **Overrides the icon** to a reachability glyph
-   ([KubernetesServiceItem.ts#L138](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L138)).
+   ([KubernetesResourceItem.ts#L138](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L138)).
 
 The net effect is a node that looks and behaves like a lesser cluster, and a `package.json` riddled with
 K8s-specific negative lookaheads (command duplication / special-casing).
@@ -1037,12 +1037,12 @@ ClusterIP. But the shared commands **already** guard themselves correctly:
   `CredentialCache.hasCredentials(clusterId)` is false. The same pattern holds for the other cluster
   commands. So a command invoked before the node is expanded **does not** misfire — it asks the user to
   expand first.
-- **Expanding the node is what establishes the tunnel.** `KubernetesServiceItem.authenticateAndConnect()`
+- **Expanding the node is what establishes the tunnel.** `KubernetesResourceItem.authenticateAndConnect()`
   and `getCredentials()` call `resolveClusterCredentials(context, { startPortForward: true })`, so once
   the node is expanded/connected the port-forward is up and the cached client is valid — exactly the
   state the cluster commands require.
 - **The only command that reads connection info without connecting is "Copy Connection String".** That is
-  precisely the one the base delegates to an overridable hook — `KubernetesServiceItem` already implements
+  precisely the one the base delegates to an overridable hook — `KubernetesResourceItem` already implements
   `getCredentialsForCopy()` with `startPortForward: false` and port-forward-aware annotation. So copy can
   stay correct **without** excluding the command; it's handled in the subclass.
 
@@ -1056,7 +1056,7 @@ tunnel information preserved, and will the Connections-view commands work?
 
 **Answer: yes — already handled.** When the discovery node produces credentials for "Save To DocumentDB
 Connections", it attaches **`KUBERNETES_PORT_FORWARD_METADATA_PROPERTY`** to the connection
-([KubernetesServiceItem.ts#L465-L475](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L465-L475),
+([KubernetesResourceItem.ts#L465-L475](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L465-L475),
 schema in [portForwardMetadata.ts](src/plugins/service-kubernetes/portForwardMetadata.ts)). On the
 Connections-view side, [`DocumentDBClusterItem`](src/tree/connections-view/DocumentDBClusterItem.ts#L384-L392)
 calls `ensureKubernetesPortForwardIfNeeded()` before connecting/copying, which reads that metadata and
@@ -1086,7 +1086,7 @@ of the first guess:
 
 1. ✅ **Context value simplified** to `treeItem_documentdbcluster;discovery.kubernetesService;experience_<api>`
    (dropped `documentdbTargetLeaf`). See
-   [KubernetesServiceItem.ts#L130-L142](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L130-L142).
+   [KubernetesResourceItem.ts#L130-L142](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L130-L142).
 2. ✅ **Command duplication removed.** The four `!(viewItem =~ /\bdiscovery\.kubernetesService\b/i)`
    negative lookaheads were deleted from [package.json](package.json) so **Create Database / Copy
    Connection String / Open Interactive Shell / Data Migration** now apply to the K8s node uniformly; the
@@ -1135,14 +1135,14 @@ The `icon` field was dropped from `ReachabilityInfo` entirely.
 3. **Placement** — Provider, Region, Namespace, Context.
 
 See `buildTooltip()` in
-[KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts). The
+[KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts). The
 reachability text **also** remains in the node description (e.g. `[DKO] ClusterIP · port-forward required
 :10260`), so the signal is preserved at-a-glance without an icon override.
 
 #### Original plan (retained for reference)
 
 **Reachability icons currently in use** (from `getReachabilityInfo()`,
-[KubernetesServiceItem.ts#L519-L585](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L519-L585)):
+[KubernetesResourceItem.ts#L519-L585](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts#L519-L585)):
 
 | Service state                          | Icon today   | Description text (already shown)    |
 | -------------------------------------- | ------------ | ----------------------------------- |
@@ -1258,7 +1258,7 @@ were extended to T-12 (grouped picker variants: without/with password, kubectl c
 | Wording                                     | "MongoDB Cluster" in 3 strings                                                             | "DocumentDB cluster"                                                                                   |
 
 **Key files touched in §9:**
-[KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts) (contextValue, icon, tooltip, reachability),
+[KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts) (contextValue, icon, tooltip, reachability),
 [package.json](package.json) (menu gating),
 [createDatabase.ts](src/commands/createDatabase/createDatabase.ts) /
 [DatabaseNameStep.ts](src/commands/createDatabase/DatabaseNameStep.ts) /
@@ -1298,7 +1298,7 @@ placeholder. The remaining documentation work is:
 
 ### 11.3 Discovery-node `description` grammar & tooltip glyph (reference)
 
-**Where:** [KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts)
+**Where:** [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
 `buildDescription()` / `buildTooltip()` / `getReachabilityInfo()`.
 
 **Design decision (this iteration):** the always-visible grey **description** was trimmed from the original
@@ -1366,7 +1366,7 @@ next iteration. Each has enough context to be picked up cold.
   `127.0.0.1:<localPort>` and works. Decide whether it needs a Kubernetes-aware guard or works as-is via
   the standard cluster command. _Acceptance:_ shell connects on a live kind/AKS ClusterIP target; note any
   guard added. Files: command lives in the shared shell command path; node is
-  [KubernetesServiceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts).
+  [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts).
 
 - **T2 · Live-verification checklist (§8.5).**
   Manually confirm: reveal-on-add, drag-and-drop into folders, Windows path display for file sources,

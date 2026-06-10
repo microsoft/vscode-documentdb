@@ -13,18 +13,18 @@ import {
 import * as l10n from '@vscode/l10n';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
-import { type ClustersClient } from '../../../documentdb/ClustersClient';
-import { CredentialCache } from '../../../documentdb/CredentialCache';
-import { DocumentDBConnectionString } from '../../../documentdb/utils/DocumentDBConnectionString';
-import { Views } from '../../../documentdb/Views';
-import { type AuthenticateWizardContext } from '../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
-import { DocumentDBExperience } from '../../../DocumentDBExperiences';
-import { ext } from '../../../extensionVariables';
-import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
-import { type BaseClusterModel, type TreeCluster } from '../../../tree/models/BaseClusterModel';
-import { getResourcesPath } from '../../../utils/icons';
-import { DISCOVERY_PROVIDER_ID } from '../config';
+import { AuthMethodId } from '../../../../documentdb/auth/AuthMethod';
+import { type ClustersClient } from '../../../../documentdb/ClustersClient';
+import { CredentialCache } from '../../../../documentdb/CredentialCache';
+import { DocumentDBConnectionString } from '../../../../documentdb/utils/DocumentDBConnectionString';
+import { Views } from '../../../../documentdb/Views';
+import { type AuthenticateWizardContext } from '../../../../documentdb/wizards/authenticate/AuthenticateWizardContext';
+import { DocumentDBExperience } from '../../../../DocumentDBExperiences';
+import { ext } from '../../../../extensionVariables';
+import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../../tree/documentdb/ClusterItemBase';
+import { type BaseClusterModel, type TreeCluster } from '../../../../tree/models/BaseClusterModel';
+import { getResourcesPath } from '../../../../utils/icons';
+import { DISCOVERY_PROVIDER_ID } from '../../config';
 import {
     buildPortForwardConnectionString,
     createCoreApi,
@@ -35,16 +35,19 @@ import {
     type KubeContextInfo,
     type KubeServiceEndpoint,
     type KubeServiceInfo,
-} from '../kubernetesClient';
-import { KUBERNETES_PORT_FORWARD_METADATA_PROPERTY, createKubernetesPortForwardMetadata } from '../portForwardMetadata';
-import { PortForwardTunnelManager } from '../portForwardTunnel';
-import { promptForLocalPort } from '../promptForLocalPort';
-import { getSource } from '../sources/sourceStore';
+} from '../../kubernetesClient';
+import {
+    KUBERNETES_PORT_FORWARD_METADATA_PROPERTY,
+    createKubernetesPortForwardMetadata,
+} from '../../portForwardMetadata';
+import { PortForwardTunnelManager } from '../../portForwardTunnel';
+import { promptForLocalPort } from '../../promptForLocalPort';
+import { getSource } from '../../sources/sourceStore';
 
 /**
  * Model for a Kubernetes-discovered service, extending BaseClusterModel.
  */
-export interface KubernetesServiceModel extends BaseClusterModel {
+export interface KubernetesClusterModel extends BaseClusterModel {
     /** Kubernetes context name */
     contextName: string;
     /** Namespace the service belongs to */
@@ -109,7 +112,7 @@ function sanitizeForId(value: string): string {
  * cluster nodes: expanding the item authenticates and lists databases, and
  * collections underneath open the collection view directly.
  */
-export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceModel> {
+export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterModel> {
     constructor(
         journeyCorrelationId: string,
         readonly sourceId: string,
@@ -124,7 +127,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
         const sanitizedClusterSuffix = `${sanitizedSource}_${sanitizedContext}__${sanitizedNs}__${sanitizedSvc}`;
         const prefixedClusterId = `${DISCOVERY_PROVIDER_ID}_${sanitizedClusterSuffix}`;
 
-        const cluster: TreeCluster<KubernetesServiceModel> = {
+        const cluster: TreeCluster<KubernetesClusterModel> = {
             name: serviceInfo.displayName,
             connectionString: undefined,
             dbExperience: DocumentDBExperience,
@@ -317,7 +320,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                     },
                 );
 
-                const { ClustersClient } = await import('../../../documentdb/ClustersClient');
+                const { ClustersClient } = await import('../../../../documentdb/ClustersClient');
                 await ClustersClient.deleteClient(this.cluster.clusterId);
                 CredentialCache.deleteCredentials(this.cluster.clusterId);
 
@@ -423,7 +426,7 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
             return;
         }
 
-        const { ensureKubernetesPortForward } = await import('../ensureKubernetesPortForward');
+        const { ensureKubernetesPortForward } = await import('../../ensureKubernetesPortForward');
         const sourceRecord = await getSource(this.sourceId);
         await ensureKubernetesPortForward(
             createKubernetesPortForwardMetadata(
@@ -664,9 +667,10 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
 
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const { AzureWizard } = await import('@microsoft/vscode-azext-utils');
-        const { ChooseAuthMethodStep } = await import('../../../documentdb/wizards/authenticate/ChooseAuthMethodStep');
-        const { ProvideUserNameStep } = await import('../../../documentdb/wizards/authenticate/ProvideUsernameStep');
-        const { ProvidePasswordStep } = await import('../../../documentdb/wizards/authenticate/ProvidePasswordStep');
+        const { ChooseAuthMethodStep } =
+            await import('../../../../documentdb/wizards/authenticate/ChooseAuthMethodStep');
+        const { ProvideUserNameStep } = await import('../../../../documentdb/wizards/authenticate/ProvideUsernameStep');
+        const { ProvidePasswordStep } = await import('../../../../documentdb/wizards/authenticate/ProvidePasswordStep');
 
         const wizard = new AzureWizard(wizardContext, {
             promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],

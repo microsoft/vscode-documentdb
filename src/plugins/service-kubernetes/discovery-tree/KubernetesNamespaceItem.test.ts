@@ -77,8 +77,8 @@ jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
     })),
 }));
 
-jest.mock('./KubernetesServiceItem', () => ({
-    KubernetesServiceItem: class KubernetesServiceItem {
+jest.mock('./documentdb/KubernetesResourceItem', () => ({
+    KubernetesResourceItem: class KubernetesResourceItem {
         constructor(
             public readonly journeyCorrelationId: string,
             public readonly sourceId: string,

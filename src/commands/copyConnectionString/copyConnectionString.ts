@@ -64,7 +64,7 @@ export async function copyAzureConnectionString(context: IActionContext, node: C
 export async function copyConnectionString(context: IActionContext, node: ClusterItemBase): Promise<void> {
     const resolved = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
         context.telemetry.properties.experience = node.experience.api;
-        // KubernetesServiceItem.contextValue contains "discovery.kubernetesService"; the
+        // KubernetesResourceItem.contextValue contains "discovery.kubernetesService"; the
         // \b boundary inside containsDelimited treats "." as a non-word boundary so this matches.
         const isKubernetesDiscoveryItem = containsDelimited(node.contextValue, 'kubernetesService');
 
