@@ -195,8 +195,8 @@ describe('KubernetesServiceItem', () => {
         const treeItem = item.getTreeItem();
         expect(treeItem.collapsibleState).toBe(1);
         expect(treeItem.contextValue).toContain('treeItem_documentdbcluster');
-        expect(treeItem.contextValue).toContain('documentdbTargetLeaf');
         expect(treeItem.contextValue).toContain('discovery.kubernetesService');
+        expect(treeItem.contextValue).not.toContain('documentdbTargetLeaf');
 
         const children = await item.getChildren();
         expect(children).toHaveLength(1);
@@ -234,7 +234,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('[DKO] ClusterIP · port-forward required :10260');
-            expect((treeItem.iconPath as { id: string }).id).toBe('plug');
+            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Local port-forward required');
             expect(tooltipText(treeItem.tooltip)).toContain('127.0.0.1');
         });
@@ -259,7 +259,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('[Generic] LoadBalancer · direct :10260');
-            expect((treeItem.iconPath as { id: string }).id).toBe('globe');
+            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Direct external address');
         });
 
@@ -283,7 +283,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('[Generic] LoadBalancer · node-routed :32000');
-            expect((treeItem.iconPath as { id: string }).id).toBe('server');
+            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Cluster-routed via node port');
         });
 
@@ -306,7 +306,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('[Generic] LoadBalancer · pending :10260');
-            expect((treeItem.iconPath as { id: string }).id).toBe('warning');
+            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('LoadBalancer pending');
         });
 
@@ -330,7 +330,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('[Generic] NodePort · node-routed :32000');
-            expect((treeItem.iconPath as { id: string }).id).toBe('server');
+            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Cluster-routed via node port');
         });
 
@@ -353,7 +353,7 @@ describe('KubernetesServiceItem', () => {
 
             const treeItem = item.getTreeItem();
             expect(treeItem.description).toBe('[Generic] ExternalName · not directly supported :10260');
-            expect((treeItem.iconPath as { id: string }).id).toBe('warning');
+            expect((treeItem.iconPath as { id: string }).id).toBe('server-environment');
             expect(tooltipText(treeItem.tooltip)).toContain('Not directly reachable');
         });
     });

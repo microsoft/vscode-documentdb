@@ -67,7 +67,6 @@ interface ResolveConnectionOptions {
 }
 
 interface ReachabilityInfo {
-    readonly icon: vscode.ThemeIcon;
     readonly description: string;
     readonly tooltipLabel: string;
     readonly tooltipDetail: string;
@@ -129,13 +128,20 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
 
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;
+        // Keep the base `treeItem_documentdbcluster` so the standard cluster commands
+        // apply uniformly (they self-guard on sign-in). `discovery.kubernetesService`
+        // is retained because the copy command uses it to pick the read-only, no-tunnel
+        // copy path (see copyConnectionString.ts). The old `documentdbTargetLeaf` marker
+        // was redundant — menus already match on `treeItem_documentdbcluster`.
         this.contextValue = createContextValue([
             'treeItem_documentdbcluster',
-            'documentdbTargetLeaf',
             'discovery.kubernetesService',
             `experience_${this.experience.api}`,
         ]);
-        this.iconPath = this.getReachabilityInfo().icon;
+        // Keep the standard DocumentDB cluster icon (matches the saved-connection
+        // representation in the Connections view). Reachability is conveyed via the
+        // node description and the tooltip, not by overriding the node icon.
+        this.iconPath = new vscode.ThemeIcon('server-environment');
         this.descriptionOverride = this.buildDescription();
         this.tooltipOverride = this.buildTooltip();
     }
@@ -491,29 +497,39 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
 
     private buildTooltip(): vscode.MarkdownString {
         const reachability = this.getReachabilityInfo();
-        const tooltipParts: string[] = [`**Target:** ${this.serviceInfo.displayName}`];
 
+        // Group 1 — key info (identity, status, port).
+        const keyInfo: string[] = [`**Target:** ${this.serviceInfo.displayName}`];
         if (this.serviceInfo.status) {
-            tooltipParts.push(`**Status:** ${this.serviceInfo.status}`);
+            keyInfo.push(`**Status:** ${this.serviceInfo.status}`);
         }
+        keyInfo.push(`**Port:** ${String(this.serviceInfo.port)}`);
         if (this.serviceInfo.externalAddress) {
-            tooltipParts.push(`**External Address:** ${this.serviceInfo.externalAddress}`);
+            keyInfo.push(`**External Address:** ${this.serviceInfo.externalAddress}`);
         }
 
-        tooltipParts.push(`**Reachability:** ${reachability.tooltipLabel}`, reachability.tooltipDetail);
+        // Group 2 — reachability (how VS Code actually reaches this target). This is
+        // the nuance that used to be carried by the node icon; it now lives here.
+        const reachabilitySection: string[] = [
+            `**Reachability:** ${reachability.tooltipLabel}`,
+            reachability.tooltipDetail,
+        ];
 
-        tooltipParts.push(`**Port:** ${String(this.serviceInfo.port)}`);
-
+        // Group 3 — placement (where the target lives).
+        const placement: string[] = [];
         if (this.contextInfo.provider) {
-            tooltipParts.push(`**Provider:** ${this.contextInfo.provider}`);
+            placement.push(`**Provider:** ${this.contextInfo.provider}`);
         }
         if (this.contextInfo.region) {
-            tooltipParts.push(`**Region:** ${this.contextInfo.region}`);
+            placement.push(`**Region:** ${this.contextInfo.region}`);
         }
+        placement.push(`**Namespace:** ${this.serviceInfo.namespace}`, `**Context:** ${this.contextInfo.name}`);
 
-        tooltipParts.push('', `**Namespace:** ${this.serviceInfo.namespace}`, `**Context:** ${this.contextInfo.name}`);
-
-        return new vscode.MarkdownString(tooltipParts.join('\n\n'));
+        // Join the three groups with markdown horizontal rules. MarkdownString renders
+        // `\n\n---\n\n` as a horizontal line, giving a clean key-info / reachability /
+        // placement separation in the rich tooltip.
+        const sections = [keyInfo.join('\n\n'), reachabilitySection.join('\n\n'), placement.join('\n\n')];
+        return new vscode.MarkdownString(sections.join('\n\n---\n\n'));
     }
 
     private getReachabilityInfo(): ReachabilityInfo {
@@ -521,7 +537,6 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
             case 'LoadBalancer':
                 if (this.serviceInfo.externalAddress) {
                     return {
-                        icon: new vscode.ThemeIcon('globe'),
                         description: l10n.t('LoadBalancer · direct'),
                         tooltipLabel: l10n.t('Direct external address'),
                         tooltipDetail: l10n.t(
@@ -532,7 +547,6 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 }
                 if (this.serviceInfo.nodePort) {
                     return {
-                        icon: new vscode.ThemeIcon('server'),
                         description: l10n.t('LoadBalancer · node-routed'),
                         tooltipLabel: l10n.t('Cluster-routed via node port'),
                         tooltipDetail: l10n.t(
@@ -542,7 +556,6 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                     };
                 }
                 return {
-                    icon: new vscode.ThemeIcon('warning'),
                     description: l10n.t('LoadBalancer · pending'),
                     tooltipLabel: l10n.t('LoadBalancer pending'),
                     tooltipDetail: l10n.t(
@@ -552,7 +565,6 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 };
             case 'NodePort':
                 return {
-                    icon: new vscode.ThemeIcon('server'),
                     description: l10n.t('NodePort · node-routed'),
                     tooltipLabel: l10n.t('Cluster-routed via node port'),
                     tooltipDetail: l10n.t(
@@ -562,7 +574,6 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 };
             case 'ClusterIP':
                 return {
-                    icon: new vscode.ThemeIcon('plug'),
                     description: l10n.t('ClusterIP · port-forward required'),
                     tooltipLabel: l10n.t('Local port-forward required'),
                     tooltipDetail: l10n.t(
@@ -572,7 +583,6 @@ export class KubernetesServiceItem extends ClusterItemBase<KubernetesServiceMode
                 };
             default:
                 return {
-                    icon: new vscode.ThemeIcon('warning'),
                     description: l10n.t('{serviceType} · not directly supported', {
                         serviceType: this.serviceInfo.type,
                     }),
