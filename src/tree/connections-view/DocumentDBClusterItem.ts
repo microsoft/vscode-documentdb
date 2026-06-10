@@ -31,13 +31,8 @@ import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/Provi
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
-import { getKubernetesPortForwardMetadata } from '../../plugins/service-kubernetes/portForwardMetadata';
-import {
-    ConnectionStorageService,
-    ConnectionType,
-    isConnection,
-    type ConnectionItem,
-} from '../../services/connectionStorageService';
+import { ConnectionReachabilityService } from '../../services/connectionReachabilityService';
+import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
@@ -73,7 +68,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             return undefined;
         }
 
-        await this.ensureKubernetesPortForwardIfNeeded(connectionCredentials);
+        await this.ensureConnectionReachable(connectionCredentials.properties);
 
         return {
             connectionString: connectionCredentials.secrets.connectionString,
@@ -119,7 +114,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 return null;
             }
 
-            await this.ensureKubernetesPortForwardIfNeeded(connectionCredentials);
+            await this.ensureConnectionReachable(connectionCredentials.properties);
 
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
@@ -377,19 +372,24 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
         if (connectionCredentials && isConnection(connectionCredentials)) {
-            await this.ensureKubernetesPortForwardIfNeeded(connectionCredentials);
+            await this.ensureConnectionReachable(connectionCredentials.properties);
         }
     }
 
-    private async ensureKubernetesPortForwardIfNeeded(connectionCredentials: ConnectionItem): Promise<void> {
-        const metadata = getKubernetesPortForwardMetadata(connectionCredentials.properties);
-        if (!metadata) {
-            return;
-        }
-
-        const { ensureKubernetesPortForward } =
-            await import('../../plugins/service-kubernetes/ensureKubernetesPortForward');
-        await ensureKubernetesPortForward(metadata);
+    /**
+     * Some saved connections are not directly reachable and need a source-specific preparation step
+     * before we connect (e.g. a Kubernetes ClusterIP target whose `127.0.0.1:<localPort>` string only
+     * works while a port-forward tunnel is active). Rather than hard-code any one source here, this
+     * generic cluster node delegates to {@link ConnectionReachabilityService}: each source registers a
+     * {@link import('../../services/connectionReachabilityService').ConnectionReachabilityProvider} at
+     * activation, and we simply ask it to make the connection reachable based on the stored properties.
+     * The call is cheap and a no-op when no provider applies (the common case). Failures propagate to
+     * the connect flow's telemetry/error handling.
+     *
+     * @see docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
+     */
+    private async ensureConnectionReachable(connectionProperties: Record<string, unknown> | undefined): Promise<void> {
+        await ConnectionReachabilityService.ensureReachable(connectionProperties);
     }
 
     /**

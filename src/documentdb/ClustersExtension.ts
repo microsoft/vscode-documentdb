@@ -82,6 +82,8 @@ import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/KubernetesDiscoveryProvider';
+import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
+import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
@@ -134,6 +136,12 @@ export class ClustersExtension implements vscode.Disposable {
         DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
         DiscoveryService.registerProvider(new KubernetesDiscoveryProvider());
+
+        // Connection-reachability providers: source-specific steps that make a saved connection
+        // reachable before connecting (e.g. re-establishing a Kubernetes port-forward tunnel).
+        // The generic Connections-view cluster node delegates to these via ConnectionReachabilityService.
+        // See docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
+        ConnectionReachabilityService.registerProvider(new KubernetesReachabilityProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
