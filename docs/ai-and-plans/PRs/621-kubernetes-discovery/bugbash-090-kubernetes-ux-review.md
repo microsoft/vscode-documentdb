@@ -41,7 +41,7 @@ The intended end‑state tree (from the #5 resolution) looks like this:
 
 ```text
 v Kubernetes                                  (icon: layers)
-  v Pasted YAML 1                             (icon: plug, no "(pasted YAML)" suffix)
+  v Pasted YAML 1                             (icon: group-by-ref-type, no "(pasted YAML)" suffix)
     v bugbash-090 (AKS / westus2)             (context)
       v documentdb-instance-ns                (namespace WITH targets, no count)
         > sample-documentdb   [DKO] ClusterIP · port-forward required :10260
@@ -213,16 +213,18 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 **#8 → #11 — One consistent icon for kubeconfig source nodes** ✅ (superseded)
 
 - **Verdict — As expected.** A single uniform source icon shipped. What was done differently across the
-  pair: #8 first unified on `key`, then #11 changed the final icon to `plug`.
+  pair: #8 first unified on `key`, then #11 changed it to `plug`, and **iteration 2 changed it again to
+  `group-by-ref-type`** (owner's pick — it reads as "a config that groups one or more clusters").
 - **Expected:** A single icon for _all_ source kinds in the **tree** (file/pasted/default), while the
   **wizard** keeps per‑type icons.
-- **Decision / Code today:** #8 unified to `key`, then **#11 changed it to `$(plug)`** ("a kubeconfig is
-  a connection plug"). Current code returns `plug` for every source kind. Verified `buildIcon()` in
-  [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L184-L186).
-- ⚠️ **Minor inconsistency to eyeball:** the in‑wizard "Add a kubeconfig source…" entry in
+- **Decision / Code today:** #8 unified to `key`, #11 changed it to `$(plug)`, and **iteration 2 settled
+  on `$(group-by-ref-type)`** for every source kind. Verified `buildIcon()` in
+  [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
+- ⚠️ **Minor inconsistency to eyeball (carried to iteration 3):** the in‑wizard "Add Kubeconfig…" entry in
   [SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts#L40-L46)
-  uses `plug`, whereas the dedicated Add‑Source picker (#9) uses `home`/`folder-opened`/`clippy`. Two
-  different pickers, slightly different iconography — confirm it reads consistently.
+  still uses `plug`, whereas the dedicated Add‑Source picker (#9) uses `home`/`folder-opened`/`clippy`,
+  and the tree source nodes now use `group-by-ref-type`. Three surfaces, three icon vocabularies —
+  see §8.4.
 
 **#5 — Noisy cluster tree: redundant labels + flat namespace list** ✅ (the centerpiece)
 
@@ -797,19 +799,100 @@ settings against that decision:
 > `showEmptyNamespaces` is dropped (superseded by the "Others" bucket); `additionalPorts` and the CRD
 > escape hatch remain demand-driven follow-ups.
 
-### 7.5 Still-open questions carried to iteration 2
+### 7.5 Iteration 2 — closed
 
-- **"Open in Editor" for file sources (#1 / #2 / §4.2).** ✅ **Implemented.** A file-source can now be
-  opened on disk to inspect/fix it, exposed in **both** the context menu and the error-recovery list
-  (file sources only — pasted/default sources have no editable on-disk path). Command
+Iteration 2 is **closed**. Summary of what landed across iterations 1–2 and what was deliberately
+deferred:
+
+- **"Open in Editor" for file sources (#1 / #2 / §4.2).** ✅ **Implemented.** Exposed in **both** the
+  context menu and the error-recovery list (file sources only — pasted/default sources have no editable
+  on-disk path). Command
   [openKubeconfigInEditor.ts](src/plugins/service-kubernetes/commands/openKubeconfigInEditor.ts),
   context-value marker `discovery.kubernetesSourceFile`, recovery child `open-in-editor`.
-- **ClusterIP share snippet (#21 / §7.2).** Recommend shipping Option **B** next.
-- **Default-path wording (#23 / §7.3).** Recommend Option **C**; needs a wording sign-off before code.
-- **Double-click to expand (#28 / §4.4).** Re-confirm whether the API limit that blocks _hover_-expand
-  also blocks _double-click_-expand; if not, it's a cheap discoverability win.
-- **In-wizard vs add-picker icon parity (#8/#9).** Two add entry points still use different icon sets
-  (`plug` vs `home`/`folder-opened`/`clippy`); eyeball for consistency.
+- **Default-path wording (#23 / §7.3).** ✅ **Implemented (Option C).** "Use my default kubeconfig" +
+  concrete path in `detail`; error dialogs and tooltip de-jargoned.
+- **Settings surface (#20 / §7.4).** ✅ **Frozen** at the two `portForward.*` keys; `namespaceScanConcurrency`
+  stays a hardcoded non-setting; `showEmptyNamespaces` dropped; `additionalPorts` + CRD escape hatch are
+  demand-driven follow-ups.
+- **Source-node icon (#8/#11).** ✅ **Changed to `group-by-ref-type`** (replacing `plug`).
+- **Deferred to iteration 3:** the ClusterIP share snippet (§7.2), double-click-to-expand (§4.4), and the
+  cross-surface icon parity question (§8.4). These are carried forward in **Section 8** below.
+
+---
+
+## 8. Iteration 3 — open items & discussion
+
+Iterations 1–2 cleared every release-blocking wording/structure/error item raised in the bug bash. What
+remains is a set of **additive, non-blocking** enhancements and one **won't-fix to re-confirm**. None of
+these gate launch; they are sequenced here so iteration 3 has a ready agenda.
+
+### 8.1 ClusterIP "share with a teammate" snippet — ship Option B (#21 / §7.2)
+
+**Status:** still the highest-value open item. The metadata (context, namespace, service, remote port)
+is already threaded through the model; only the surface is missing.
+
+**Proposal:** add a context-menu entry **"Copy kubectl port-forward command"** on ClusterIP service
+nodes, alongside the existing "Copy connection string":
+
+```text
+kubectl --context <ctx> -n <ns> port-forward svc/<svc> <localPort>:<remotePort>
+```
+
+| Question for iteration 3             | Options                                                                       | Lean                                                                      |
+| ------------------------------------ | ----------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| Where does it live?                  | context menu only · context menu + an inline icon                             | **context menu only** (keep the row uncluttered)                          |
+| What local port goes in the command? | the actually-bound local port · the remote port · a placeholder `<localPort>` | **the bound local port** when a tunnel is active, else the remote port    |
+| Single command or composite block?   | just the `kubectl` line (Option B) · `kubectl` + connection string (Option C) | **B** first; revisit C only if a teammate-onboarding flow needs one paste |
+| Telemetry?                           | none · count copies + ClusterIP vs other                                      | **count** (validates whether the feature is used)                         |
+
+> **Recommendation:** ship **B** as described. Small, additive, reuses existing metadata, and degrades
+> gracefully (a teammate without `kubectl`/context access is no worse off than today).
+
+### 8.2 Double-click to expand tree rows (#28, won't-fix → re-confirm) (§4.4)
+
+The original close cited a tree-view API limitation. That limitation is firmly true for **hover**-to-expand
+(#26, [vscode#286332](https://github.com/microsoft/vscode/issues/286332)), but **double-click**-to-expand
+is a _different_ interaction and is arguably standard tree behavior.
+
+> **Action for iteration 3:** spike whether double-click-to-toggle is achievable for these node types
+> without triggering connect/auth side effects. If yes, it's a cheap discoverability win; if the API
+> genuinely blocks it, the won't-fix stands and we record the concrete reason.
+
+### 8.3 Query-table contrast (#27, won't-fix → backlog)
+
+Reporter flagged hard-to-read colors in the query table; no contrast fix was made on this branch (tied to
+a future table-component update).
+
+> **Action for iteration 3:** confirm whether the table-component refresh is on the roadmap; if not,
+> consider a minimal contrast adjustment so the won't-fix doesn't linger indefinitely.
+
+### 8.4 Cross-surface icon parity for "add kubeconfig" (#8/#9)
+
+There are now **three** places a kubeconfig is represented, each with its own iconography:
+
+| Surface                                                                                                                          | Icon(s) today                              |
+| -------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------ |
+| Tree source nodes                                                                                                                | `group-by-ref-type` (uniform, iteration 2) |
+| In-wizard "Add Kubeconfig…" entry ([SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts)) | `plug`                                     |
+| Add-Source picker per-type items ([addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts))      | `home` / `folder-opened` / `clippy`        |
+
+> **Discussion for iteration 3:** decide a deliberate icon vocabulary. Two coherent options:
+> (a) **the add action is always `$(add)`** everywhere (action = add, regardless of surface), and only
+> the _result_ (a source node) carries the `group-by-ref-type` identity; or (b) keep per-type icons in
+> the dedicated picker (they aid recognition) but align the in-wizard entry to `$(add)` so it reads as an
+> action, not a source. Low cost, purely cosmetic — but worth one decision so the three surfaces stop
+> diverging.
+
+### 8.5 Live-verification checklist still outstanding
+
+Several iteration-1/2 behaviors are timing- or platform-sensitive and were verified by tests but should
+be confirmed by hand before sign-off (these are not new work, just confirmation):
+
+- Reveal-on-add expands and selects the new source from a cold cache (#22).
+- Drag-and-drop: valid file, non-kubeconfig, directory, duplicate, mixed batch (#26).
+- Windows display of `%USERPROFILE%\.kube\config` in the tree/tooltip/dialog (#23/#24).
+- Reload window while a ClusterIP tunnel is active, then reconnect (#30).
+- Modal error fires once (not on every passive refresh) for a broken source (#2/#25).
 
 ---
 
