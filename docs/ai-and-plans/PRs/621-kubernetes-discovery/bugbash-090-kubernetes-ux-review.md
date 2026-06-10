@@ -1,7 +1,8 @@
 # Bug Bash 0.9.0 — Kubernetes Service Discovery UX Review Pack
 
-> **Who this is for:** the operator about to do a hands‑on UX review (trying the extension,
-> exercising user flows) of the Kubernetes service‑discovery feature.
+> **Who this is for:** anyone about to do a hands‑on UX review (trying the extension,
+> exercising user flows) of the Kubernetes service‑discovery feature, or anyone reading back
+> how the review unfolded.
 > **What this is:** a single catch‑up document that reconstructs the UX discussion that happened
 > a while ago across 30 closed bug‑bash issues, states what was _decided_, shows what the code
 > _actually does today_ (verified against the current branch), and **flags** everything that is
@@ -12,6 +13,25 @@
 - **Issue tracker (closed):** [tnaum-ms/vscode-documentdb-bugbash-090 — closed issues](https://github.com/tnaum-ms/vscode-documentdb-bugbash-090/issues?q=is%3Aissue%20state%3Aclosed)
 - **Scope of this doc:** the UX‑facing issues (wording, tree structure, icons, tooltips, flows).
   Pure backend bugs are listed at the end for completeness but not analyzed in depth.
+
+## How this review was run
+
+This was an **iterative review**, carried out as a pairing between a person steering the review and an
+AI assistant doing the reading, code-checking, and editing. Rather than hold the entire feature in mind
+at once, the work was deliberately split into **phases** — first-run and empty states, adding sources,
+the tree presentation, connectivity and tooltips, and so on. Each phase was discussed, decided,
+implemented, and then **closed out before moving to the next**, so that:
+
+- the **assistant's working context stayed lean** — only the slice of code and discussion relevant to the
+  current phase was loaded at any time, which kept the analysis accurate instead of sprawling; and
+- the **reviewer's attention stayed focused** — one coherent area at a time, with decisions written down
+  here as they were made so nothing had to be re-derived later.
+
+The sections below are organized by user journey (not by issue number) and read as a running log: each
+iteration records the feedback that came in, the reasoning, the decision, and what was actually
+implemented. Later iterations (§7 onward) capture successive rounds of refinement on top of the original
+bug‑bash items. The intent is that a future reader — human or assistant — can pick up any single phase
+cold and understand both _what_ was decided and _why_.
 
 ## Legend
 
@@ -45,7 +65,7 @@ v Kubernetes                                  (icon: layers)
     v bugbash-090 (AKS / westus2)             (context)
       v documentdb-instance-ns                (namespace WITH targets, no count)
         > sample-documentdb   [DKO] ClusterIP · port-forward required :10260
-      > Others (DocumentDB not detected)      (collapsed bucket for empty namespaces)
+      > Other namespaces  No DocumentDB targets found   (collapsed bucket for empty namespaces)
 ```
 
 ---
@@ -76,14 +96,15 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   **"Add kubeconfig source…"** action node. Verified in
   [KubernetesRootItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesRootItem.ts#L28-L38) and
   [migrationV2.ts](src/plugins/service-kubernetes/sources/migrationV2.ts).
-- ➡️ **Iteration 1 (owner):** _“The command should not have the label ‘Add kubeconfig source’ — it’s
-  not UX-friendly. Use the field-standard naming (see Lens). Fallback: ‘Add Kubeconfig…’.”_
-  - **Research — Lens (k8slens.dev):** Lens groups everything under a root called **“Kubernetes
-    Clusters”** > **“Local Kubeconfigs”**, and its add actions read **“Add Kubeconfigs”** (the paste/add
-    button), **“Add from filesystem”** (browse a file), and **“Manually add a kubeconfig”** (paste YAML).
-    Source: [Add a local cluster — Lens docs](https://docs.k8slens.dev/k8slens/getting-started/add-clusters/add-local-cluster/).
-  - **Decision:** Adopt the Lens-standard verb. The consolidated add command (which opens a picker for
-    default / file / paste) is now **“Add Kubeconfigs…”** everywhere it surfaces.
+- ➡️ **Iteration 1 (review feedback):** the label "Add kubeconfig source" reads as internal/jargon and
+  isn't especially user‑friendly; the suggestion was to follow the naming common in established Kubernetes
+  tooling, with **"Add Kubeconfig…"** as a fallback.
+  - **Research — common Kubernetes tooling conventions:** established Kubernetes desktop tools typically
+    group everything under a root such as **"Kubernetes Clusters"** with a **"Local Kubeconfigs"** section,
+    and their add actions read along the lines of **"Add Kubeconfigs"** (the paste/add button), **"Add from
+    filesystem"** (browse a file), and **"Manually add a kubeconfig"** (paste YAML).
+  - **Decision:** adopt the field‑standard verb. The consolidated add command (which opens a picker for
+    default / file / paste) is now **"Add Kubeconfigs…"** everywhere it surfaces.
   - **Implemented:** `package.json` command title, [KubernetesRootItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesRootItem.ts)
     empty-state action, the in-wizard entry in [SelectContextStep.ts](src/plugins/service-kubernetes/discovery-wizard/SelectContextStep.ts),
     and the picker placeholder in [addKubeconfigSource.ts](src/plugins/service-kubernetes/commands/addKubeconfigSource.ts).
@@ -99,13 +120,13 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   Legacy `activeDiscoveryProviderIds` is migrated once. UI wording changed to **"Show Hidden Provider…"**
   and **"Hide Provider"** (away from enable/disable language); the empty Service Discovery welcome text
   explains that all providers are hidden and offers **Show Hidden Provider…**.
-- ⚠️ **Flag (revisit before launch):** the owner explicitly wanted to revisit this API ("maybe someone
-  wants to hide all"). Confirm the hidden‑provider migration behaves for: fresh install, an explicit
-  empty legacy list, and a non‑empty legacy list. Confirm `azure-discovery` is normalized to
-  `azure-mongo-vcore-discovery`.
-- ➡️ **Iteration 1 (owner) — resolved:** _“Redo it. All providers are always visible; they can be
-  removed; we save the ‘removed’ list and show everything else. No migration path — for everyone we just
-  show them all and they can still remove the ones they don’t want.”_
+- ⚠️ **Flag (revisit before launch):** the reviewer wanted to revisit this API later (the question of
+  whether someone might want to hide all providers). Confirm the hidden‑provider migration behaves for:
+  fresh install, an explicit empty legacy list, and a non‑empty legacy list. Confirm `azure-discovery` is
+  normalized to `azure-mongo-vcore-discovery`.
+- ➡️ **Iteration 1 (review feedback) — resolved:** the preference was to simplify the model — all providers
+  are always visible and can be removed; the extension stores only the "removed" list and shows everything
+  else, with no migration path (everyone simply sees all providers and can remove the ones they don't want).
   - **Decision:** Drop the legacy migration entirely. Visible = all registered providers −
     `hiddenDiscoveryProviderIds`; the stored list tracks only hidden ids; default is `[]` (all visible).
     Older state keys (`activeDiscoveryProviderIds`) are simply ignored, so existing users transparently
@@ -124,9 +145,10 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   add per‑type icons to the picker items.
 - **Decision / Code today:** Picker uses `detail` + `iconPath` (`home` / `folder-opened` / `clippy`).
   Per‑type icons are intentionally _kept_ in the wizard (opposite of the tree — see #8/#11).
-- ➡️ **Iteration 1 (owner):** the add action is singular **"Add Kubeconfig…"** (not plural
+- ➡️ **Iteration 1 (review feedback):** the add action is singular **"Add Kubeconfig…"** (not plural
   "Kubeconfigs"). Applied to the `package.json` command title, the empty-state action, the in-wizard
-  entry, and the picker placeholder. The owner reviewed Lens naming but chose the singular form for our UI.
+  entry, and the picker placeholder. Field-standard naming was considered, but the singular form was
+  chosen for our UI.
 
 **#16 — Unclear "default content" in the Select‑kubeconfig file dialog** ✅
 
@@ -153,11 +175,11 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   "source added" success at the same time.
 - **Decision / Code today:** Default‑kubeconfig add now **validates before persisting**. Success message
   shows only when it loads and has ≥1 context; otherwise only the warning shows and nothing is added.
-- ⚠️ **Flag (history):** the owner initially mused this "might be acceptable as‑is, let's discuss next bug
+- ⚠️ **Flag (history):** this was initially floated as possibly "acceptable as‑is, to discuss next bug
   bash." It was later fixed properly. No action — just be aware the discussion looked undecided for a while.
-- ➡️ **Iteration 1 (owner) — resolved:** _"When adding a kubeconfig fails (default, paste, or file), the
-  error should be **modal**, and it should always be an **error** — not a warning. Unify them: we weren't
-  able to continue, so it's an error."_
+- ➡️ **Iteration 1 (review feedback) — resolved:** when adding a kubeconfig fails (default, paste, or
+  file), the message should be **modal** and should always be framed as an **error**, not a warning —
+  the operation could not continue, so it is an error. The three paths were unified accordingly.
   - **Decision / Implemented:** All three add branches (default / file / paste) now surface
     validation/load failures through **`showErrorMessage(…, { modal: true })`**. Previously the default
     branch used a non-modal warning and the file/paste branches used non-modal errors, which was
@@ -214,7 +236,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 
 - **Verdict — As expected.** A single uniform source icon shipped. What was done differently across the
   pair: #8 first unified on `key`, then #11 changed it to `plug`, and **iteration 2 changed it again to
-  `group-by-ref-type`** (owner's pick — it reads as "a config that groups one or more clusters").
+  `group-by-ref-type`** (reviewer's preference — it reads as "a config that groups one or more clusters").
 - **Expected:** A single icon for _all_ source kinds in the **tree** (file/pasted/default), while the
   **wizard** keeps per‑type icons.
 - **Decision / Code today:** #8 unified to `key`, #11 changed it to `$(plug)`, and **iteration 2 settled
@@ -244,8 +266,9 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
      remain reachable.
 - 💡 This "Others" bucket is effectively a **third answer** to the `showEmptyNamespaces` question raised
   in #20 (see that item) — neither "always hide" nor "settings toggle," but "group and collapse."
-- ➡️ **Iteration 1 (owner):** _“The ‘Others’ node uses the wrong icon — there’s a documented ‘folder’
-  icon problem in the Connections view. Use a different icon with the same shape but a different name.”_
+- ➡️ **Iteration 1 (review feedback):** the "Others" node was using the wrong icon — there's a documented
+  `folder`-icon problem in the Connections view — and the suggestion was to use a different icon with the
+  same shape but a different name.
   - **Research:** The issue is documented in
     [FolderItem.ts](src/tree/connections-view/FolderItem.ts#L61): VS Code’s tree `Aligner.hasIcon()`
     treats `ThemeIcon('folder')` / `('file')` specially and returns `false` under file-icon themes that
@@ -280,8 +303,8 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   on the root (`inline@0`) and context (`2@0`). The "Open in Editor" idea was noted as **out of scope**.
 - ⚠️ **Open idea to consider:** "Open in Editor" for file‑based sources is still unbuilt and is genuinely
   useful when debugging connectivity. Low cost, additive. See Section 4.
-- ➡️ **Iteration 1 (owner) — resolved:** _"Remove the inline rename pencil — the context menu is enough.
-  Simplify the command labels."_
+- ➡️ **Iteration 1 (review feedback) — resolved:** the suggestion was to remove the inline rename pencil
+  (the context menu is enough) and simplify the command labels.
   - **Decision / Implemented:** The **inline rename pencil was removed** (`renameSource` is now
     context-menu only, `group 1@1`); the inline `+` add on the root stays. Command titles were
     simplified to avoid implying a wider rename/delete: **"Rename…"** and **"Remove…"** (previously
@@ -295,7 +318,7 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
 
 - **Verdict — Deviation.** What was done differently: the issue asked to **re‑wire** the source‑visibility
   filter onto a proper "filter" API (off the `configureCredentials` hook). Instead the team **removed the
-  hide/unhide filter feature entirely** — the owner judged that with explicit Add/Remove per source there's
+  hide/unhide filter feature entirely** — the reviewer judged that with explicit Add/Remove per source there's
   no need to filter yet (revisit via telemetry later). `manageKubeconfigSources` and the misused
   `configureCredentials` hook are gone; sources are managed only via Add / Remove / Rename.
 
@@ -402,10 +425,11 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   Verified `createKubeconfigRecoveryChildren()` in
   [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L107-L142).
 - ⚠️ **Contradiction with #25 (see below):** issue #2 deliberately kept "Remove this kubeconfig source"
-  as a recovery child, but in #25 the owner later asked to **remove** it (it's already in the context
+  as a recovery child, but in #25 the reviewer later asked to **remove** it (it's already in the context
   menu) and to make the error notification **modal**. Neither of those two follow‑ups shipped — the
   toast is still non‑modal and "Remove this kubeconfig source" is still a recovery child.
-- ➡️ **Iteration 1 (owner) — resolved:** _“Get rid of that ‘Remove this kubeconfig source’ node.”_
+- ➡️ **Iteration 1 (review feedback) — resolved:** the suggestion was to drop the "Remove this kubeconfig
+  source" node.
   - **Decision / Implemented:** The “Remove this kubeconfig source” recovery child was deleted from
     `createKubeconfigRecoveryChildren()`; Remove now lives **only** in the context menu. The recovery
     list is now a pure “fix-forward” toolkit (retry + docs). See
@@ -422,9 +446,9 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
   ([retryNodeDetection.ts](src/plugins/service-kubernetes/discovery-tree/retryNodeDetection.ts)); Refresh
   keeps cached error children, only Retry clears them. Covers failed source load, failed context/namespace
   listing, and failed service listing.
-- ➡️ **Iteration 1 (owner) — resolved:** _“The refresh/retry action should be worded the same as the
-  other retry error nodes in the Connections view, for consistency, and it should also be the first node
-  as it is in the Connections view.”_
+- ➡️ **Iteration 1 (review feedback) — resolved:** the refresh/retry action should be worded the same as
+  the other retry error nodes in the Connections view, for consistency, and should also be the first node,
+  as it is in the Connections view.
   - **Decision:** Match the Connections-view canonical retry node
     ([ClusterItemBase.ts](src/tree/documentdb/ClusterItemBase.ts#L203-L207)): label **“Click here to
     retry”** with the `refresh` icon, surfaced as the **first** child of every error state. This
@@ -438,34 +462,35 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     ([KubernetesNamespaceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesNamespaceItem.ts)).
     The classified error-summary node is retained but now sits **below** the retry action.
 
-**#25 — "What does Retry do here?"** ✅ rename / ⚠️ two owner asks NOT shipped
+**#25 — "What does Retry do here?"** ✅ rename / ⚠️ two review asks NOT shipped
 
 - **Verdict — Deviation.** What was done differently: only part of the ask shipped. The **Retry → Reload**
-  rename plus progress/success feedback landed on the source node, but the owner's two explicit follow‑ups
+  rename plus progress/success feedback landed on the source node, but the reviewer's two explicit follow-ups
   — make the error notification **modal**, and **remove** the in‑tree "Remove this kubeconfig source"
   action — were **not** implemented. This is the headline gap.
 - **Reporter:** the "Retry" action on a kubeconfig source seemed to be a no‑op; suggested "Reload" might
   be clearer.
-- **Owner added two asks in a comment:** (1) make the error notification **modal**; (2) **remove**
+- **Two further asks were added in a comment:** (1) make the error notification **modal**; (2) **remove**
   "Remove this kubeconfig source" from the recovery actions (it's in the context menu already).
 - **Decision / Code today:** Only the rename + feedback shipped — on the **source** node the action is now
   **"Reload"** with a status‑bar progress and a success toast ("Reloaded kubeconfig source 'NAME'. Found N
   context(s)."); "Retry" is intentionally kept on **context/namespace** nodes (genuinely transient errors
   like API‑server unreachable / RBAC). Verified the source recovery child labels **"Reload"** in
   [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts#L130-L138).
-- ⚠️ **The two owner asks are unaddressed** — verified in current code:
+- ⚠️ **The two review asks are unaddressed** — verified in current code:
   - The error is still a **non‑modal** `showWarningMessage()` (not modal). [line ~108]
   - **"Remove this kubeconfig source"** is still listed as a recovery child. [line ~117]
     These are the clearest "stated intent vs shipped code" gaps in the whole set — confirm with the team
     whether they were dropped on purpose or slipped.
-- ➡️ **Iteration 1 (owner) — resolved:** _“Make it modal on expand and on retry. There’s no risk of
-  modal spam because the error-node cache prevents multiple actions on tree refresh.”_
+- ➡️ **Iteration 1 (review feedback) — resolved:** the suggestion was to make it modal on expand and on
+  retry, noting there's no risk of modal spam because the error-node cache prevents multiple actions on
+  tree refresh.
   - **Decision / Implemented:** The kubeconfig-source error notification is now **modal**
     (`showWarningMessage(…, { modal: true })`). Because the retry-node cache (#19) stops `getChildren()`
     from re-running on passive refreshes, the modal fires only on a real load attempt (expand or
     “Click here to retry”) and cannot stack. See
     [KubernetesKubeconfigSourceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesKubeconfigSourceItem.ts).
-  - This **resolves the first #25 owner ask**. The second ask (remove the in-tree “Remove this kubeconfig
+  - This **resolves the first #25 review ask**. The second ask (remove the in-tree “Remove this kubeconfig
     source” node) is resolved separately under #2 below.
 
 ### G. Backend bugs that affect the UX experience (fixed)
@@ -499,7 +524,7 @@ These aren't "wording/tree structure" items, but the reviewer will feel them whi
 
 | #           | Flag                                                                                                                                  | Why it matters                                                                                            | Suggested check                                                                                                                               |
 | ----------- | ------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
-| #25 / #2    | ✅ **Resolved (iteration 1).** Error notification is now **modal**; the in‑tree **"Remove this kubeconfig source"** node was removed. | Both owner asks from #25 are now shipped (see §7.1).                                                      | Trigger a failing source (rename `~/.kube/config` away): confirm the warning is modal and "Remove" is gone from the in‑tree recovery actions. |
+| #25 / #2    | ✅ **Resolved (iteration 1).** Error notification is now **modal**; the in‑tree **"Remove this kubeconfig source"** node was removed. | Both review asks from #25 are now shipped (see §7.1).                                                     | Trigger a failing source (rename `~/.kube/config` away): confirm the warning is modal and "Remove" is gone from the in‑tree recovery actions. |
 | #2 vs #25   | ✅ **Resolved (iteration 1).** "Remove" no longer appears in the recovery children; it lives only in the context menu.                | The #25 reversal has now been applied.                                                                    | Confirm Remove is reachable from the context menu but absent from the error/recovery list.                                                    |
 | #2          | Modal fires inside `getChildren()` of a failing source.                                                                               | With the #19 retry‑cache, confirm the modal doesn't **re‑fire on every Refresh** (only on real (re)load). | Expand a broken source, hit Refresh repeatedly, watch for repeated modals.                                                                    |
 | #21         | **Share‑with‑teammate gap remains** — no `kubectl port-forward` / composite snippet for ClusterIP.                                    | The issue's core "portability" concern is only half‑solved (warned, not actionable).                      | See the detailed options in **§7.2** (recommendation: ship Option B).                                                                         |
@@ -518,37 +543,37 @@ react to, not decisions.
 
 ### 4.1 Error surfacing for a failed kubeconfig source — modal vs toast vs inline (#2 / #25)
 
-> ✅ **Resolved in iteration 1 (Option A — modal).** The owner confirmed the literal ask: the error is
+> ✅ **Resolved in iteration 1 (Option A — modal).** The reviewer confirmed the literal ask: the error is
 > now a **modal** `showWarningMessage(…, { modal: true })`. The modal-spam risk that made A unattractive
 > is neutralized by the #19 retry-node cache — a broken source is only (re)loaded on an explicit action
 > (expand or "Click here to retry"), never on passive refresh, so at most one modal fires per real
 > attempt. Option D (toast-on-user-action) is no longer needed; the table below is retained for the
 > record.
 
-The owner asked for **modal**; iteration 1 shipped **modal**.
+The reviewer asked for **modal**; iteration 1 shipped **modal**.
 
 | Option                                                                               | Pros                                                            | Cons                                                                                                                 |
 | ------------------------------------------------------------------------------------ | --------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| **A. Modal warning** (owner's ask)                                                   | Impossible to miss; forces acknowledgment                       | Interrupts flow; annoying if it fires on expand/refresh of a known‑broken source; modal spam if several sources fail |
+| **A. Modal warning** (review ask)                                                    | Impossible to miss; forces acknowledgment                       | Interrupts flow; annoying if it fires on expand/refresh of a known‑broken source; modal spam if several sources fail |
 | **B. Toast (current)**                                                               | Non‑blocking; consistent with VS Code norms                     | Easy to miss; transient; can repeat if `getChildren()` re‑runs                                                       |
 | **C. Quiet inline + output channel only**                                            | Zero noise; detail on demand                                    | Reverts the #2 improvement; users may not notice the error at all                                                    |
 | **D. Toast on _user‑initiated_ load only** (add / Reload), silent on passive refresh | Best signal‑to‑noise; loud when the user acted, quiet otherwise | Slightly more logic to distinguish trigger source                                                                    |
 
 > **Suggested:** **D**. It honors #2 (visible error), avoids modal fatigue, and naturally pairs with the
-> #25 "Reload" affordance. If the team insists on the owner's literal ask, make the modal fire **only**
+> #25 "Reload" affordance. If the team insists on the reviewer's literal ask, make the modal fire **only**
 > on explicit Reload, not on passive expand/refresh.
 
 ### 4.2 "Remove" in the recovery children (#2 / #25)
 
-> ✅ **Resolved in iteration 1 (Option "Remove it").** The owner confirmed: _"get rid of that 'remove this
-> config source' node."_ The recovery list is now Reload + Docs only; Remove stays in the context menu.
-> The **"Open in Editor" for file sources** idea (third row) remains an open, additive follow-up — see
-> the unresolved-ideas note below.
+> ✅ **Resolved in iteration 1 (Option "Remove it").** The reviewer confirmed the preference to drop the
+> in-tree "Remove this config source" node. The recovery list is now Reload + Docs only; Remove stays in
+> the context menu. The **"Open in Editor" for file sources** idea (third row) remains an open, additive
+> follow-up — see the unresolved-ideas note below.
 
 | Option                                                                         | Pros                                                                        | Cons                                                                                              |
 | ------------------------------------------------------------------------------ | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
 | **Keep it (current)**                                                          | One‑click recovery when a source is broken; discoverable                    | Duplicates the context menu; #25 explicitly wanted it gone; mildly destructive in a recovery list |
-| **Remove it (owner's ask)**                                                    | De‑duplicates; recovery list = pure "fix forward" (Reload, Docs)            | Slightly less convenient for "this source is junk, delete it"                                     |
+| **Remove it (review ask)**                                                     | De‑duplicates; recovery list = pure "fix forward" (Reload, Docs)            | Slightly less convenient for "this source is junk, delete it"                                     |
 | **Replace with "Open in Editor" (file sources) + keep Remove in context menu** | Turns the recovery list into a _fixing_ toolkit; folds in the #1 bonus idea | A bit more work; not applicable to pasted sources                                                 |
 
 > **Suggested:** Remove inline "Remove" per #25, and consider adding **"Open in Editor"** for file
@@ -668,35 +693,35 @@ A practical order to walk the feature and exercise everything above:
 
 ## 7. Feedback iteration 1 — decisions, implementation & open discussions
 
-This chapter captures the **first round of owner feedback** on the review pack above, what was decided,
+This chapter captures the **first round of review feedback** on the review pack above, what was decided,
 what shipped (one dedicated commit per change), and the deeper design discussions that were explicitly
 requested for the **second iteration**. Inline notes were also added to the relevant items in §2/§4.
 
 ### 7.1 What shipped in iteration 1 (changelog)
 
-| #    | Owner feedback                                                                                            | Decision                                                                     | Commit summary                                                 |
-| ---- | --------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| root | Discovery root should read **"Kubernetes Clusters"** (Lens-aligned), not just "Kubernetes".               | Rename root + provider label.                                                | `rename discovery root node to 'Kubernetes Clusters'`          |
-| #3   | "Add kubeconfig source" is not UX-friendly; use field-standard naming (Lens); fallback "Add Kubeconfig…". | Adopt the Lens verb; later singularized to **"Add Kubeconfig…"** (see 7.1b). | `use Lens-standard 'Add Kubeconfigs…' label`                   |
-| #13  | Redo visibility: all providers always visible, store only the **hidden** list, **no migration**.          | Remove the legacy migration entirely; default hidden = `[]`.                 | `drop provider-visibility migration; hidden list only`         |
-| #5   | "Others" node uses the buggy `folder` icon; use the same-shape, different-name icon.                      | Use `symbol-folder` (per the documented Connections-view fix).               | `use 'symbol-folder' icon on Others node`                      |
-| #2   | Get rid of the in-tree **"Remove this kubeconfig source"** node.                                          | Delete it; Remove stays in the context menu.                                 | `drop 'Remove this kubeconfig source' recovery node`           |
-| #19  | Refresh/retry wording should match the Connections view and be the **first** node.                        | Use **"Click here to retry"** + move it first across all K8s error states.   | `reword retry node to 'Click here to retry' and show it first` |
-| #25  | Error notification should be **modal** on expand and retry.                                               | Make `showWarningMessage` modal; the #19 cache prevents modal spam.          | `show kubeconfig source error as a modal on load/retry`        |
+| #    | Review feedback                                                                                    | Decision                                                                               | Commit summary                                                 |
+| ---- | -------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| root | Discovery root should read **"Kubernetes Clusters"** (field-standard), not just "Kubernetes".      | Rename root + provider label.                                                          | `rename discovery root node to 'Kubernetes Clusters'`          |
+| #3   | "Add kubeconfig source" is not UX-friendly; use field-standard naming; fallback "Add Kubeconfig…". | Adopt the field-standard verb; later singularized to **"Add Kubeconfig…"** (see 7.1b). | `use field-standard 'Add Kubeconfigs…' label`                  |
+| #13  | Redo visibility: all providers always visible, store only the **hidden** list, **no migration**.   | Remove the legacy migration entirely; default hidden = `[]`.                           | `drop provider-visibility migration; hidden list only`         |
+| #5   | "Others" node uses the buggy `folder` icon; use the same-shape, different-name icon.               | Use `symbol-folder` (per the documented Connections-view fix).                         | `use 'symbol-folder' icon on Others node`                      |
+| #2   | Get rid of the in-tree **"Remove this kubeconfig source"** node.                                   | Delete it; Remove stays in the context menu.                                           | `drop 'Remove this kubeconfig source' recovery node`           |
+| #19  | Refresh/retry wording should match the Connections view and be the **first** node.                 | Use **"Click here to retry"** + move it first across all K8s error states.             | `reword retry node to 'Click here to retry' and show it first` |
+| #25  | Error notification should be **modal** on expand and retry.                                        | Make `showWarningMessage` modal; the #19 cache prevents modal spam.                    | `show kubeconfig source error as a modal on load/retry`        |
 
-**Lens naming research (for #3 / root).** Lens (k8slens.dev) is the field reference. Its
-[Add a local cluster](https://docs.k8slens.dev/k8slens/getting-started/add-clusters/add-local-cluster/)
-docs use: a root node **"Kubernetes Clusters"**, a group **"Local Kubeconfigs"**, and add actions
-**"Add Kubeconfigs"** (the add/paste button), **"Add from filesystem"** (browse a file on disk), and
-**"Manually add a kubeconfig"** (paste raw YAML). We adopted **"Kubernetes Clusters"** for the root and
+**Naming research (for #3 / root).** Established Kubernetes desktop tooling is the field reference for
+kubeconfig management. Such tools commonly use: a root node **"Kubernetes Clusters"**, a group
+**"Local Kubeconfigs"**, and add actions along the lines of **"Add Kubeconfigs"** (the add/paste button),
+**"Add from filesystem"** (browse a file on disk), and **"Manually add a kubeconfig"** (paste raw YAML).
+We adopted **"Kubernetes Clusters"** for the root and
 **"Add Kubeconfigs…"** for the consolidated add action; the per-branch picker entries (default / file /
 paste) keep their own descriptive labels.
 
 ### 7.1b Second batch of iteration-1 fixes (wording & error consistency)
 
-A follow-up round of owner feedback on the same iteration refined wording and error handling:
+A follow-up round of review feedback on the same iteration refined wording and error handling:
 
-| Area               | Owner feedback                                                                                                                                                  | Decision / Implementation                                                                                                                                                                                                                                     |
+| Area               | Review feedback                                                                                                                                                 | Decision / Implementation                                                                                                                                                                                                                                     |
 | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Add label          | "Add Kubeconfigs…" — drop the plural "s".                                                                                                                       | Singularized to **"Add Kubeconfig…"** in the command title, empty-state action, in-wizard entry, and picker placeholder.                                                                                                                                      |
 | Rename command     | Don't say "Rename Kubeconfig Source"; users may fear it renames a file elsewhere.                                                                               | Simplified to **"Rename…"** (context menu only).                                                                                                                                                                                                              |
@@ -741,8 +766,8 @@ remote port) is already threaded through the model — only the **surface** to s
 > connection-string copy. Defer **C** unless a teammate-onboarding flow demands a single paste; avoid
 > **D** (it removes a working local convenience).
 >
-> 🔄 **Superseded by §8.1 (owner's decision).** Rather than a standalone "Copy kubectl port-forward
-> command" entry, the owner chose to fold all share/copy options into a **single "Copy…" quick pick** on
+> 🔄 **Superseded by §8.1 (review decision).** Rather than a standalone "Copy kubectl port-forward
+> command" entry, the reviewer chose to fold all share/copy options into a **single "Copy…" quick pick** on
 > the ClusterIP node (connection string with/without password, the `kubectl port-forward` command, and a
 > **Learn more** link to a dedicated manual section). See §8.1 for the consolidated decision and the docs
 > work item.
@@ -824,7 +849,7 @@ deferred:
   "Add Kubeconfig…" entry was corrected to the **`add`** (plus) icon in iteration 3, since it's an action
   rather than a source (§8.4).
 - **Deferred to iteration 3:** the ClusterIP "copy connection details" experience (§8.1). Double-click-to-expand
-  (former §4.4) and query-table contrast (#27) are **not** owner-requested and are closed/parked (§8.2).
+  (former §4.4) and query-table contrast (#27) are **not** reviewer-requested and are closed/parked (§8.2).
 
 ---
 
@@ -832,12 +857,12 @@ deferred:
 
 Iterations 1–2 cleared every release-blocking wording/structure/error item raised in the bug bash. What
 remains is one **additive, non-blocking** enhancement (§8.1), an icon-parity fix that already landed
-(§8.4), two items that are **not owner-requested** and are closed/parked (§8.2), and a live-verification
+(§8.4), two items that are **not reviewer-requested** and are closed/parked (§8.2), and a live-verification
 checklist (§8.5). None of these gate launch.
 
-### 8.1 ClusterIP "Copy connection details" — a unified copy quick pick (owner's decision)
+### 8.1 ClusterIP "Copy connection details" — a unified copy quick pick (review decision)
 
-**Owner's decision.** Don't bolt on a single new "Copy kubectl port-forward command" action. We already
+**Review decision.** Don't bolt on a single new "Copy kubectl port-forward command" action. We already
 have an established pattern for this in the product:
 
 - A **"Copy reference"**-style quick pick on cluster / database / collection nodes that lets the user
@@ -883,7 +908,7 @@ teammate-share concern (#21) into the same surface instead of a separate command
 entry gives the machine-local nuance a permanent home instead of a transient warning toast.
 
 **Prerequisite finding — why the K8s node's menu differs from the vCore discovery node (corrected
-answer to the owner's question).** The discovered DocumentDB target **does** extend the shared cluster
+answer to the reviewer's question).** The discovered DocumentDB target **does** extend the shared cluster
 base, exactly like the Azure vCore discovery node:
 
 - Kubernetes: [`KubernetesServiceItem extends ClusterItemBase<KubernetesServiceModel>`](src/plugins/service-kubernetes/discovery-tree/KubernetesServiceItem.ts#L93).
@@ -921,13 +946,13 @@ port-forward-aware way; it needs to be added as a **Discovery-view command gated
 `discovery.kubernetesService` / `documentdbTargetLeaf`**. Worth confirming whether **Open Interactive
 Shell** should likewise get a K8s-aware variant (it would need the tunnel up first) or stay hidden.
 
-### 8.2 Not owner-requested — closed/parked
+### 8.2 Not reviewer-requested — closed/parked
 
-Two items previously parked here did **not** originate from the owner; they came from bug-bash
+Two items previously parked here did **not** originate from the reviewer; they came from bug-bash
 participants and are not on the roadmap:
 
 - **Double-click to expand tree rows (bug-bash #28).** Originated as a community bug-bash issue, not an
-  owner ask. The owner does **not** want this. Closed as **won't-fix** (twistie/Enter already expand;
+  review ask. The reviewer does **not** want this. Closed as **won't-fix** (twistie/Enter already expand;
   adding double-click risks accidental connect/auth side effects). No further action.
 - **Query-table color contrast (bug-bash #27).** Unrelated to Kubernetes discovery; tracked elsewhere
   with the table-component work. Removed from this review's agenda.
@@ -1168,7 +1193,7 @@ unblocks the copy work from §8.1.
 
 ### 10.1 Unified "Copy connection string…" quick pick (was §8.1) — ✅ implemented
 
-The owner asked to keep the clear **"Copy connection string…"** entry point but enrich it with **groups**
+The reviewer asked to keep the clear **"Copy connection string…"** entry point but enrich it with **groups**
 for Kubernetes port-forwarded targets, while leaving every other node untouched.
 
 **What shipped** (in [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)):
