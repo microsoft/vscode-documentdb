@@ -78,6 +78,33 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                 });
         } catch (error) {
             if (error instanceof AtlasApiError && error.statusCode === 401) {
+                // Attempt token refresh for OAuth sessions before signing out
+                const refreshedSession = await this.sessionManager.tryRefreshIfOAuth();
+                if (refreshedSession) {
+                    try {
+                        const retryClient = new AtlasApiClient(refreshedSession);
+                        const retryClusters = await retryClient.listClusters(this.project.id);
+                        return retryClusters
+                            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
+                            .map((cluster) => {
+                                const model = createAtlasClusterModel(
+                                    this.project.id,
+                                    this.project.name,
+                                    cluster,
+                                    AtlasExperience,
+                                );
+                                const treeCluster = {
+                                    ...model,
+                                    treeId: `${this.id}/${cluster.name}`,
+                                    viewId: Views.DiscoveryView,
+                                };
+                                return new AtlasClusterItem('', treeCluster);
+                            });
+                    } catch {
+                        // Refresh succeeded but retry still failed — fall through to sign out
+                    }
+                }
+
                 await this.sessionManager.signOut();
                 return [
                     createGenericElementWithContext({

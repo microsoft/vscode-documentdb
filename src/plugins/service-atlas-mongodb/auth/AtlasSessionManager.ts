@@ -223,12 +223,8 @@ export class AtlasSessionManager {
         const accessToken = await this.secretStorage.get(OAUTH_ACCESS_TOKEN_KEY);
         const expiresAt = await this.secretStorage.get(OAUTH_EXPIRES_AT_KEY);
 
-        if (!accessToken) {
-            this.transitionTo(AtlasSessionState.None);
-            return undefined;
-        }
-
-        if (expiresAt && this.isExpired(expiresAt)) {
+        if (!accessToken || (expiresAt && this.isExpired(expiresAt))) {
+            // Access token missing or expired — attempt silent refresh using stored refresh token
             this._state = AtlasSessionState.Expired;
             return this.tryRefreshOAuth();
         }

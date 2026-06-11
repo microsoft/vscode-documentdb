@@ -103,6 +103,7 @@ export async function pollForDeviceToken(
             client_id: ATLAS_OAUTH_CLIENT_ID,
             device_code: deviceCode,
             grant_type: 'urn:ietf:params:oauth:grant-type:device_code',
+            scope: 'openid profile offline_access',
         });
 
         const response = await fetch(ATLAS_OAUTH_TOKEN_URL, {
@@ -154,6 +155,7 @@ export async function refreshOAuthToken(refreshToken: string): Promise<AtlasOAut
         client_id: ATLAS_OAUTH_CLIENT_ID,
         grant_type: 'refresh_token',
         refresh_token: refreshToken,
+        scope: 'openid profile offline_access',
     });
 
     const response = await fetch(ATLAS_OAUTH_TOKEN_URL, {
