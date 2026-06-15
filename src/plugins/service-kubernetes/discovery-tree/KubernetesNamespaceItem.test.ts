@@ -35,6 +35,11 @@ jest.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
     },
+    workspace: {
+        getConfiguration: jest.fn(() => ({
+            get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
+        })),
+    },
     l10n: {
         t: jest.fn((template: string, ...args: unknown[]) =>
             template.replace(/\{(\d+)\}/g, (_match: string, index: string) => String(args[Number(index)])),
@@ -125,14 +130,15 @@ describe('KubernetesNamespaceItem', () => {
             expect(treeItem.collapsibleState).toBe(0);
         });
 
-        it('should not include target count description on expandable namespace items', () => {
+        it('should include target count description on populated namespace items', () => {
             const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1', [
                 { name: 'svc-a', namespace: 'my-ns', type: 'LoadBalancer', port: 10260 } as KubeServiceInfo,
                 { name: 'svc-b', namespace: 'my-ns', type: 'ClusterIP', port: 10260 } as KubeServiceInfo,
             ]);
             const treeItem = item.getTreeItem();
 
-            expect(treeItem.description).toBeUndefined();
+            expect(treeItem.description).toBeDefined();
+            expect(treeItem.description).toContain('2');
             expect(treeItem.collapsibleState).toBe(1);
         });
     });

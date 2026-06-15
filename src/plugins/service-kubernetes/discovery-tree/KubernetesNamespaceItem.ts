@@ -10,6 +10,7 @@ import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
+import { getCountPrefix } from '../../../utils/countPrefix';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import {
     createCoreApi,
@@ -104,10 +105,20 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
     public getTreeItem(): vscode.TreeItem {
         const preloadedServiceCount = this.preloadedServices?.length;
 
+        // When the namespace was pre-scanned and contains DocumentDB targets,
+        // the count is already known. Surface it in the description, honoring
+        // the accessibility setting that controls the visual count prefix.
+        let description: string | undefined;
+        if (typeof preloadedServiceCount === 'number' && preloadedServiceCount > 0) {
+            const prefix = getCountPrefix();
+            description = prefix ? `${prefix}${preloadedServiceCount}` : `${preloadedServiceCount}`;
+        }
+
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.namespace,
+            description,
             iconPath: new vscode.ThemeIcon('symbol-namespace'),
             collapsibleState:
                 preloadedServiceCount === 0
