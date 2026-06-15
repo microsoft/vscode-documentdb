@@ -20,6 +20,7 @@ jest.mock('../../../extensionVariables', () => ({
     ext: {
         context: {
             extension: { id: 'test-extension' },
+            subscriptions: { push: (): void => {} },
             globalState: {
                 get: <T>(key: string, defaultValue?: T): T | undefined => {
                     const value = globalStateBacking.has(key) ? (globalStateBacking.get(key) as T) : undefined;
@@ -44,6 +45,7 @@ jest.mock('../../../extensionVariables', () => ({
             delete: async (key: string): Promise<void> => {
                 secretStorageBacking.delete(key);
             },
+            onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
         outputChannel: {
             warn: outputWarn,

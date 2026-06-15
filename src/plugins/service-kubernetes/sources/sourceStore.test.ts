@@ -21,6 +21,7 @@ jest.mock('../../../extensionVariables', () => ({
     ext: {
         context: {
             extension: { id: 'test-extension' },
+            subscriptions: { push: (): void => {} },
             globalState: {
                 get: <T>(key: string, defaultValue?: T): T | undefined => {
                     const value = globalStateBacking.has(key) ? (globalStateBacking.get(key) as T) : undefined;
@@ -45,11 +46,13 @@ jest.mock('../../../extensionVariables', () => ({
             delete: async (key: string): Promise<void> => {
                 secretStorageBacking.delete(key);
             },
+            onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
     },
 }));
 
 import * as path from 'path';
+import { StorageService } from '../../../services/storageService';
 import { DEFAULT_SOURCE_ID } from '../config';
 import {
     addDefaultSource,
@@ -73,6 +76,10 @@ const STORAGE_PREFIX = `test-extension.${KUBECONFIG_STORAGE_NAME}/${KUBECONFIG_S
 beforeEach(() => {
     globalStateBacking.clear();
     secretStorageBacking.clear();
+    // Drop cached StorageImpl instances so the per-instance `getItems` cache does not leak a
+    // previous test's snapshot into the next test (backing maps are cleared above, but that
+    // in-memory cache is not).
+    StorageService._resetForTests();
     resetSourceStoreCacheForMigration();
 });
 
