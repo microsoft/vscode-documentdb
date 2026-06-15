@@ -175,25 +175,27 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
         if (this.contextInfo.provider) {
             tooltipParts.push(`**Provider:** ${this.contextInfo.provider}`);
         }
-        if (this.contextInfo.region) {
-            tooltipParts.push(`**Region:** ${this.contextInfo.region}`);
-        }
+        // Region detection is best-effort (parsed from context/cluster naming conventions) and can
+        // fail for non-standard names, so always show the row with an explicit fallback rather than
+        // silently dropping it — a missing line reads as a bug, an "Unknown" value reads as honest.
+        tooltipParts.push(`**Region:** ${this.contextInfo.region ?? vscode.l10n.t('Unknown')}`);
         // Build description: show the inferred provider only, falling back to the server host.
         // Region is intentionally kept out of the always-visible row (it can be a raw hostname
         // token rather than a real region for some providers); it still appears in the tooltip.
-        // When an alias is in effect, the original context name is shown so users can still
-        // identify the underlying context at a glance.
+        // When an alias is in effect, the original context name is shown in parentheses so users
+        // can still identify the underlying context at a glance; the provider/host identity itself
+        // is shown without parentheses to keep the row clean.
         const descriptionParts: string[] = [];
         if (this.alias) {
             descriptionParts.push(`(${this.contextInfo.name})`);
         }
         if (this.contextInfo.provider) {
-            descriptionParts.push(`(${this.contextInfo.provider})`);
+            descriptionParts.push(this.contextInfo.provider);
         } else if (serverUrl) {
             try {
-                descriptionParts.push(`(${new URL(serverUrl).host})`);
+                descriptionParts.push(new URL(serverUrl).host);
             } catch {
-                descriptionParts.push(`(${serverUrl})`);
+                descriptionParts.push(serverUrl);
             }
         }
 

@@ -1373,26 +1373,30 @@ next iteration. Each has enough context to be picked up cold.
   reload with an active tunnel, and single-modal-on-error. _Acceptance:_ each item checked on Windows +
   one Unix OS; file bugs for any failures.
 
-- **T3 · Visual check of the brand icon at tree size.**
-  Confirm the new `vscode-documentdb-cluster-*.svg` renders crisply at 16px in light/dark/high-contrast
-  themes next to sibling nodes. _Acceptance:_ screenshots in all three themes; no clipping or muddiness.
-  If the brand mark is too detailed at 16px, consider a simplified glyph variant.
+- **T3 · Visual check of the brand icon at tree size.** — ✅ **Done.**
+  Verified after `87efc3ff` (which aligned the discovered-cluster leaf with the other discovery plugins
+  while keeping the brand mark): the discovered target still renders the DocumentDB brand icon via
+  [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
+  (`vscode-documentdb-cluster-light-themes.svg` / `vscode-documentdb-cluster-dark-themes.svg`). The mark
+  reads crisply at 16px next to sibling nodes in light/dark/high-contrast; no clipping or muddiness, so
+  no simplified glyph variant was needed.
 
-### 12.2 Pending — documentation
+### 12.2 Documentation — ✅ done
 
-- **T4 · Author the "Connecting to ClusterIP / port-forwarded targets" user-manual section (§11.1).**
-  Cover: machine-local connection strings, how the tunnel is established/re-established, the generated
-  `kubectl port-forward` command, and password-sharing guidance. Then **repoint** the copy quick pick's
-  **Learn more** (`KUBERNETES_PORT_FORWARD_LEARN_MORE_URL` in
-  [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)) at it. _Acceptance:_
-  section merged under `docs/user-manual/`; Learn more opens it.
+- **T4 · Author the "Connecting to ClusterIP / port-forwarded targets" user-manual section (§11.1).** —
+  ✅ **Done** (`04440da1`, `2e783a0a`). A dedicated
+  [copy-connection-string.md](docs/user-manual/copy-connection-string.md) page covers machine-local
+  connection strings, how the tunnel is established/reused, the generated `kubectl port-forward` command,
+  and teammate password/access-sharing guidance. The copy quick pick's **Learn more**
+  (`KUBERNETES_PORT_FORWARD_LEARN_MORE_URL` in
+  [copyConnectionString.ts](src/commands/copyConnectionString/copyConnectionString.ts)) was repointed to
+  the `aka.ms/vscode-documentdb-kubernetes-port-forward` slug that forwards to this section.
 
-- **T5 · Document the node description/tooltip model in the user manual.**
-  The single-word description grammar + tooltip legend currently lives only in this review's §11.3. Add a
-  short "Reading a discovered target" subsection to
-  [service-discovery-kubernetes.md](docs/user-manual/service-discovery-kubernetes.md) (table of words:
-  `direct`/`node-routed`/`pending`/`port-forward`/`unsupported`). _Acceptance:_ user manual explains what
-  the grey word and tooltip mean.
+- **T5 · Document the node description/tooltip model in the user manual.** — ✅ **Done** (`04440da1`).
+  [service-discovery-kubernetes.md](docs/user-manual/service-discovery-kubernetes.md) now has a **"Reading
+  a discovered target"** section with the full connectivity-word table
+  (_(none)_ / `node-routed` / `pending` / `port-forward` / `unsupported`) and an explanation of the
+  tooltip ordering (reachability first, then identity/source/type/placement).
 
 ### 12.3 Pending — tracked outside this PR
 
@@ -1412,6 +1416,60 @@ next iteration. Each has enough context to be picked up cold.
   `No DocumentDB targets found`** (noun in the label; neutral, vocabulary-consistent reason). Files:
   [KubernetesOtherNamespacesItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesOtherNamespacesItem.ts),
   tests, and the user manual.
+
+---
+
+## 13. Iteration 13 — description punctuation & honest placement fallbacks
+
+This iteration cleans up two small but visible presentation issues on the Kubernetes nodes: the grey
+description wrapped the inferred provider in parentheses, and the tooltips silently dropped the **Region**
+row when detection failed (so a flaky detection looked like a missing field). Each task below leads with a
+**Verdict**, then the reasoning and the verified change.
+
+### 13.1 Pending — carried over from iteration 12
+
+- **T1 · Verify Open Interactive Shell on a ClusterIP target.** Still open;
+  [microsoft/vscode-documentdb#735](https://github.com/microsoft/vscode-documentdb/issues/735) (0.9.1).
+- **T2 · Live-verification checklist (§8.5).** Still open; manual runtime pass on Windows + one Unix OS.
+- **T6 · Connection-state decorations.** Still tracked outside this PR in
+  [microsoft/vscode-documentdb#734](https://github.com/microsoft/vscode-documentdb/issues/734) (0.10.0).
+
+### 13.2 Context-node description — drop the parentheses around provider/host
+
+**Verdict:** ✅ **Done.** The context node's grey description now shows the inferred provider (or the
+server host, when the provider can't be inferred) as a **bare token**, not wrapped in `(…)`.
+
+**Why:** parentheses read as an aside/annotation, but the provider _is_ the primary identity hint for the
+row (e.g. `bugbash-090  AKS` rather than `bugbash-090  (AKS)`). The only thing that stays parenthetical is
+the **original context name** shown next to an alias, where the parentheses correctly signal "this is the
+underlying name behind the friendly label."
+
+**Code today:** [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts)
+— `descriptionParts` pushes `this.contextInfo.provider` (and the `new URL(serverUrl).host` / raw-URL
+fallback) without surrounding parentheses; the alias branch still pushes `(${this.contextInfo.name})`.
+Tests in [KubernetesContextItem.test.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.test.ts)
+updated to expect the un-bracketed host/provider.
+
+### 13.3 Region tooltip — explicit fallback when detection fails
+
+**Verdict:** ✅ **Done.** Both the **context node** and the **discovered cluster (target)** tooltips now
+always render a **Region** row; when region detection fails, the value is the localized `Unknown` rather
+than the row vanishing.
+
+**Why:** region is parsed best-effort from cloud-provider naming conventions (`clusterUser_…`,
+`gke_<project>_<region>_…`, AKS server hostnames, EKS ARNs) and legitimately fails for non-standard
+contexts. Silently omitting the row makes a flaky detection look like a rendering bug; an explicit
+`Unknown` is honest and keeps the tooltip layout stable. The always-visible grey **description** is
+unaffected — region stays out of it (it can be a raw hostname token), so this change is tooltip-only.
+
+**Code today:**
+
+- Context node: [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts)
+  — `**Region:** ${this.contextInfo.region ?? vscode.l10n.t('Unknown')}` is pushed unconditionally
+  (Provider remains conditional — it is mirrored into the description's host fallback).
+- Discovered target: [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
+  — the placement group pushes `**Region:** ${this.contextInfo.region ?? l10n.t('Unknown')}`
+  unconditionally.
 
 ---
 

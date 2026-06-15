@@ -569,9 +569,10 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         if (this.contextInfo.provider) {
             placement.push(`**Provider:** ${this.contextInfo.provider}`);
         }
-        if (this.contextInfo.region) {
-            placement.push(`**Region:** ${this.contextInfo.region}`);
-        }
+        // Region detection is best-effort (parsed from context/cluster naming conventions) and can
+        // fail for non-standard names, so always show the row with an explicit fallback rather than
+        // silently dropping it — a missing line reads as a bug, an "Unknown" value reads as honest.
+        placement.push(`**Region:** ${this.contextInfo.region ?? l10n.t('Unknown')}`);
         placement.push(`**Namespace:** ${this.serviceInfo.namespace}`, `**Context:** ${this.contextInfo.name}`);
 
         // Join the three groups with markdown horizontal rules. MarkdownString renders

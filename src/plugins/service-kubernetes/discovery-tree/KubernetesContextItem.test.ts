@@ -147,7 +147,7 @@ describe('KubernetesContextItem', () => {
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-context');
-            expect(treeItem.description).toBe('(k8s.example.com:6443)');
+            expect(treeItem.description).toBe('k8s.example.com:6443');
             expect(treeItem.id).toBe('parent/my-context');
             // Collapsed state value = 1
             expect(treeItem.collapsibleState).toBe(1);
@@ -209,7 +209,7 @@ describe('KubernetesContextItem', () => {
 
             expect(treeItem.label).toBe('Prod AKS');
             expect(treeItem.description).toContain('(my-context)');
-            expect(treeItem.description).toContain('(k8s.example.com:6443)');
+            expect(treeItem.description).toContain('k8s.example.com:6443');
             const tooltipValue = (treeItem.tooltip as { value: string } | undefined)?.value ?? '';
             expect(tooltipValue).toContain('Display name:** Prod AKS');
             expect(tooltipValue).toContain('Context:** my-context');
@@ -220,7 +220,7 @@ describe('KubernetesContextItem', () => {
             const treeItem = item.getTreeItem();
 
             expect(treeItem.label).toBe('my-context');
-            expect(treeItem.description).toBe('(k8s.example.com:6443)');
+            expect(treeItem.description).toBe('k8s.example.com:6443');
             const tooltipValue = (treeItem.tooltip as { value: string } | undefined)?.value ?? '';
             expect(tooltipValue).not.toContain('Display name:');
         });
