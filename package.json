@@ -524,6 +524,20 @@
         "icon": "$(edit)"
       },
       {
+        "//": "[DiscoveryView] Switch Kubernetes discovery to the flat list view. Shown while the TREE view is active, so following the Search-view convention the icon reflects the CURRENT (tree) mode and the title states the action.",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+        "title": "View as List",
+        "icon": "$(list-tree)"
+      },
+      {
+        "//": "[DiscoveryView] Switch Kubernetes discovery to the hierarchical tree view. Shown while the LIST view is active, so the icon reflects the CURRENT (list) mode and the title states the action.",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+        "title": "View as Tree",
+        "icon": "$(list-selection)"
+      },
+      {
         "//": "Create Database",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.createDatabase",
@@ -858,6 +872,27 @@
           "group": "1@1"
         },
         {
+          "//": "[DiscoveryView] View-mode toggle on the Kubernetes context node. The icon reflects the CURRENT mode and the action switches to the other (Search-view convention). Two commands gated by the current-mode marker; each contributed inline and in the menu group just above Refresh (zheLastGroup).",
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.tree\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.tree\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.list\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.list\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
           "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
           "group": "inline@3"
@@ -1124,6 +1159,14 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
           "when": "never"
         },
         {
