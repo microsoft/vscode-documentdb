@@ -52,6 +52,11 @@ jest.mock('vscode', () => ({
             return template.replace(/\{(\d+)\}/g, (_match, index) => String(args[Number(index) + 1]));
         }),
     },
+    workspace: {
+        getConfiguration: jest.fn(() => ({
+            get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
+        })),
+    },
 }));
 
 // --- Mock extensionVariables ---
@@ -96,6 +101,36 @@ jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
         contextValue: opts.contextValue,
     })),
 }));
+
+// --- Mock KubernetesResourceItem ---
+// The real item extends ClusterItemBase and constructs vscode.Uri icon paths, which this
+// file's lightweight vscode mock does not provide. The flat "list" view mode only needs to
+// observe which services were turned into cluster nodes and the options passed, so a stub
+// capturing the constructor arguments is sufficient.
+const mockResourceItemInstances: Array<{
+    journeyCorrelationId: string;
+    sourceId: string;
+    serviceInfo: { name: string; namespace: string };
+    parentId: string;
+    options?: { showNamespaceInDescription?: boolean };
+}> = [];
+jest.mock('./documentdb/KubernetesResourceItem', () => ({
+    KubernetesResourceItem: class {
+        constructor(
+            public readonly journeyCorrelationId: string,
+            public readonly sourceId: string,
+            public readonly contextInfo: unknown,
+            public readonly serviceInfo: { name: string; namespace: string },
+            public readonly parentId: string,
+            public readonly options?: { showNamespaceInDescription?: boolean },
+        ) {
+            mockResourceItemInstances.push({ journeyCorrelationId, sourceId, serviceInfo, parentId, options });
+        }
+    },
+}));
+
+/** GlobalState key persisting the discovery view mode (mirrors config.ts). */
+const VIEW_MODE_KEY = 'kubernetes-discovery.viewMode';
 
 function getNamespaceName(child: unknown): string {
     return (child as { namespace: string }).namespace;
@@ -233,6 +268,12 @@ describe('KubernetesContextItem', () => {
         beforeEach(() => {
             mockLoadConfiguredKubeConfig.mockResolvedValue(mockKubeConfig);
             mockCreateCoreApi.mockResolvedValue(mockCoreApi);
+            mockResourceItemInstances.length = 0;
+            // These tests assert the hierarchical "tree" view (context → namespaces → clusters),
+            // so pin the global view mode to 'tree'. List-mode behavior is covered separately.
+            mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) =>
+                key === VIEW_MODE_KEY ? 'tree' : defaultValue,
+            );
         });
 
         it('should show namespaces with DocumentDB targets directly and group empty namespaces under Other namespaces', async () => {
@@ -290,6 +331,9 @@ describe('KubernetesContextItem', () => {
             ]);
 
             mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) => {
+                if (key === VIEW_MODE_KEY) {
+                    return 'tree';
+                }
                 if (key === 'kubernetes-discovery.filteredNamespaces') {
                     return { 'my-context': ['kube-system'] };
                 }
@@ -413,6 +457,72 @@ describe('KubernetesContextItem', () => {
 
             expect(telemetryContextMock.telemetry.measurements).toHaveProperty('namespacesCount', 1);
             expect(telemetryContextMock.telemetry.measurements).toHaveProperty('documentDbNamespacesCount', 0);
+        });
+    });
+
+    describe('getChildren (list view mode)', () => {
+        beforeEach(() => {
+            mockLoadConfiguredKubeConfig.mockResolvedValue({});
+            mockCreateCoreApi.mockResolvedValue({});
+            mockResourceItemInstances.length = 0;
+            mockGlobalStateGet.mockImplementation((key: string, defaultValue?: unknown) =>
+                key === VIEW_MODE_KEY ? 'list' : defaultValue,
+            );
+        });
+
+        it('lists DocumentDB clusters directly and omits empty namespaces', async () => {
+            mockListNamespaces.mockResolvedValue(['default', 'production']);
+            mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) =>
+                namespace === 'production'
+                    ? [
+                          { name: 'svc-b', displayName: 'svc-b', namespace, type: 'ClusterIP', port: 10260 },
+                          { name: 'svc-a', displayName: 'svc-a', namespace, type: 'ClusterIP', port: 10260 },
+                      ]
+                    : [],
+            );
+
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
+            const children = await item.getChildren();
+
+            // Two clusters from "production"; the empty "default" namespace contributes nothing.
+            expect(children).toHaveLength(2);
+            expect(mockResourceItemInstances).toHaveLength(2);
+            // Sorted by display name, parented to the context node, namespace surfaced in description.
+            expect(mockResourceItemInstances.map((r) => r.serviceInfo.name)).toEqual(['svc-a', 'svc-b']);
+            expect(mockResourceItemInstances.every((r) => r.parentId === 'parent/my-context')).toBe(true);
+            expect(mockResourceItemInstances.every((r) => r.options?.showNamespaceInDescription === true)).toBe(true);
+            expect(telemetryContextMock.telemetry.properties).toHaveProperty('viewMode', 'list');
+        });
+
+        it('shows an informational node when no DocumentDB clusters exist in any namespace', async () => {
+            mockListNamespaces.mockResolvedValue(['default', 'staging']);
+            mockListDocumentDBServices.mockResolvedValue([]);
+
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
+            const children = await item.getChildren();
+
+            expect(children).toHaveLength(1);
+            expect(getChildLabel(children![0])).toBe('No DocumentDB services found in this context.');
+            expect(mockResourceItemInstances).toHaveLength(0);
+        });
+
+        it('keeps a namespace expandable when its service pre-scan fails', async () => {
+            mockListNamespaces.mockResolvedValue(['default', 'broken']);
+            mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) => {
+                if (namespace === 'broken') {
+                    throw new Error('boom');
+                }
+                return [{ name: 'svc-a', displayName: 'svc-a', namespace, type: 'ClusterIP', port: 10260 }];
+            });
+
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
+            const children = await item.getChildren();
+
+            // One cluster node (default) plus a retained namespace node for the failed pre-scan.
+            const namespaceNode = children!.find((child) => getNamespaceName(child) === 'broken');
+            expect(namespaceNode).toBeDefined();
+            expect(getCollapsibleState(namespaceNode)).toBe(1);
+            expect(mockResourceItemInstances.map((r) => r.serviceInfo.name)).toEqual(['svc-a']);
         });
     });
 });

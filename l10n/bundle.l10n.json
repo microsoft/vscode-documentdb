@@ -880,6 +880,7 @@
   "No credentials found for id {clusterId}": "No credentials found for id {clusterId}",
   "No credentials found for the selected cluster.": "No credentials found for the selected cluster.",
   "No database connected": "No database connected",
+  "No DocumentDB services found in this context.": "No DocumentDB services found in this context.",
   "No DocumentDB services found in this namespace.": "No DocumentDB services found in this namespace.",
   "No DocumentDB targets were found in context \"{0}\". DKO resources are preferred, and generic fallback currently looks for DocumentDB gateway services.": "No DocumentDB targets were found in context \"{0}\". DKO resources are preferred, and generic fallback currently looks for DocumentDB gateway services.",
   "No folder selected.": "No folder selected.",
