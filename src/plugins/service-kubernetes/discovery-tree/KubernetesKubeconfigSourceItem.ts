@@ -179,10 +179,25 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             children.push(
                 createGenericElementWithContext({
                     contextValue: 'error',
-                    id: `${this.id}/open-in-editor`,
-                    label: vscode.l10n.t('Open in Editor'),
+                    id: `${this.id}/edit`,
+                    label: vscode.l10n.t('Edit Kubeconfig'),
                     iconPath: new vscode.ThemeIcon('go-to-file'),
-                    commandId: 'vscode-documentdb.command.discoveryView.kubernetes.openSourceInEditor',
+                    commandId: 'vscode-documentdb.command.discoveryView.kubernetes.editSource',
+                    commandArgs: [this],
+                }),
+            );
+        }
+
+        // Inline (pasted) sources have no on-disk file, so offer a read-only view to
+        // help the user inspect the stored YAML (e.g. to copy, fix, and re-paste it).
+        if (this.source.kind === 'inline') {
+            children.push(
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/view`,
+                    label: vscode.l10n.t('View Kubeconfig'),
+                    iconPath: new vscode.ThemeIcon('eye'),
+                    commandId: 'vscode-documentdb.command.discoveryView.kubernetes.viewSource',
                     commandArgs: [this],
                 }),
             );
@@ -209,9 +224,14 @@ function buildContextValue(source: KubeconfigSourceRecord): string {
     // re-creatable through the "+" inline action via {@link addDefaultSource}.
     const markers = ['enableRefreshCommand', 'discovery.kubernetesSource', 'discovery.kubernetesSourceMutable'];
 
-    // File sources have an on-disk path, so they additionally expose "Open in Editor".
+    // File sources have an on-disk path, so they additionally expose "Edit Kubeconfig".
     if (source.kind === 'file') {
         markers.push('discovery.kubernetesSourceFile');
+    }
+
+    // Inline (pasted) sources have no on-disk file, so they expose a read-only "View Kubeconfig".
+    if (source.kind === 'inline') {
+        markers.push('discovery.kubernetesSourceInline');
     }
 
     return createContextValue(markers);

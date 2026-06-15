@@ -604,6 +604,12 @@ export class ClustersExtension implements vscode.Disposable {
                     }),
                 );
 
+                ext.context.subscriptions.push(
+                    (
+                        await import('../plugins/service-kubernetes/commands/viewKubeconfig')
+                    ).registerInlineKubeconfigContentProvider(),
+                );
+
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.kubernetes.renameSource',
                     withTreeNodeCommandCorrelation(async (context, node) => {
@@ -632,11 +638,20 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
-                    'vscode-documentdb.command.discoveryView.kubernetes.openSourceInEditor',
+                    'vscode-documentdb.command.discoveryView.kubernetes.editSource',
                     withTreeNodeCommandCorrelation(async (context, node) => {
-                        const { openKubeconfigInEditor } =
-                            await import('../plugins/service-kubernetes/commands/openKubeconfigInEditor');
-                        await openKubeconfigInEditor(context, node as never);
+                        const { editKubeconfig } =
+                            await import('../plugins/service-kubernetes/commands/editKubeconfig');
+                        await editKubeconfig(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.viewSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { viewKubeconfig } =
+                            await import('../plugins/service-kubernetes/commands/viewKubeconfig');
+                        await viewKubeconfig(context, node as never);
                     }),
                 );
 

@@ -165,6 +165,17 @@ describe('KubernetesKubeconfigSourceItem', () => {
             const inlineItem = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
             expect(inlineItem.contextValue).not.toContain('discovery.kubernetesSourceFile');
         });
+
+        it('adds the inline marker only for inline sources', () => {
+            const inlineItem = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
+            expect(inlineItem.contextValue).toContain('discovery.kubernetesSourceInline');
+
+            const fileItem = new KubernetesKubeconfigSourceItem('parent', makeSource('file'));
+            expect(fileItem.contextValue).not.toContain('discovery.kubernetesSourceInline');
+
+            const defaultItem = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
+            expect(defaultItem.contextValue).not.toContain('discovery.kubernetesSourceInline');
+        });
     });
 
     describe('recovery children', () => {
@@ -174,15 +185,26 @@ describe('KubernetesKubeconfigSourceItem', () => {
             return children.map((child) => child.id);
         }
 
-        it('offers "Open in Editor" only for file sources', async () => {
+        it('offers "Edit Kubeconfig" only for file sources', async () => {
             const fileIds = await recoveryChildIds(makeSource('file'));
-            expect(fileIds).toContain('parent/file-id/open-in-editor');
+            expect(fileIds).toContain('parent/file-id/edit');
 
             const defaultIds = await recoveryChildIds(makeSource('default'));
-            expect(defaultIds).not.toContain('parent/default-id/open-in-editor');
+            expect(defaultIds).not.toContain('parent/default-id/edit');
 
             const inlineIds = await recoveryChildIds(makeSource('inline'));
-            expect(inlineIds).not.toContain('parent/inline-id/open-in-editor');
+            expect(inlineIds).not.toContain('parent/inline-id/edit');
+        });
+
+        it('offers "View Kubeconfig" only for inline sources', async () => {
+            const inlineIds = await recoveryChildIds(makeSource('inline'));
+            expect(inlineIds).toContain('parent/inline-id/view');
+
+            const fileIds = await recoveryChildIds(makeSource('file'));
+            expect(fileIds).not.toContain('parent/file-id/view');
+
+            const defaultIds = await recoveryChildIds(makeSource('default'));
+            expect(defaultIds).not.toContain('parent/default-id/view');
         });
     });
 });

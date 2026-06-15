@@ -496,11 +496,18 @@
         "icon": "$(trash)"
       },
       {
-        "//": "[DiscoveryView] Open Kubernetes kubeconfig file source in the editor",
+        "//": "[DiscoveryView] Edit Kubernetes kubeconfig file source in the editor",
         "category": "DocumentDB",
-        "command": "vscode-documentdb.command.discoveryView.kubernetes.openSourceInEditor",
-        "title": "Open in Editor",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
+        "title": "Edit Kubeconfig",
         "icon": "$(go-to-file)"
+      },
+      {
+        "//": "[DiscoveryView] View Kubernetes inline (pasted) kubeconfig source read-only",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
+        "title": "View Kubeconfig",
+        "icon": "$(eye)"
       },
       {
         "//": "[DiscoveryView] Add Kubernetes kubeconfig source",
@@ -826,9 +833,14 @@
           "group": "1@2"
         },
         {
-          "command": "vscode-documentdb.command.discoveryView.kubernetes.openSourceInEditor",
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
           "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceFile\\b/i",
-          "group": "1@3"
+          "group": "2@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceInline\\b/i",
+          "group": "2@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
@@ -1099,7 +1111,11 @@
           "when": "never"
         },
         {
-          "command": "vscode-documentdb.command.discoveryView.kubernetes.openSourceInEditor",
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
           "when": "never"
         },
         {

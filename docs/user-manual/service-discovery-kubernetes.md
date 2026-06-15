@@ -41,7 +41,8 @@ Manage each source from its **right-click context menu** in the discovery tree:
 
 - **Refresh**: reloads the source and re-expands its contexts.
 - **Rename…**: changes the source's display label, including the Default source. This only changes the label shown in the tree; the kubeconfig file is never modified.
-- **Open in Editor**: opens the kubeconfig YAML file in the editor (file-based sources only), which is handy when fixing a source that failed to load.
+- **Edit Kubeconfig**: opens the kubeconfig YAML file in the editor (file-based sources only), which is handy when fixing a source that failed to load.
+- **View Kubeconfig**: opens a read-only view of the stored YAML (pasted/inline sources only). To change it, copy the content, edit it elsewhere, and re-add the source with **Add Kubeconfig…**.
 - **Remove…**: deletes the source, including the Default source. Removing a source stops active port-forward tunnels for that source, and saved connections that depend on it need to be reconfigured or the source needs to be added again. If you remove the Default source it stays removed until you add it again with **Add Kubeconfig…**.
 
 ## Browse the discovery tree

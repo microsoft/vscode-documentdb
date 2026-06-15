@@ -12,15 +12,12 @@ import { type KubernetesKubeconfigSourceItem } from '../discovery-tree/Kubernete
 
 /**
  * Opens a file-based kubeconfig source in the editor so the user can inspect or
- * fix it (useful when a source fails to load). Only file sources have an
+ * edit it (also useful when a source fails to load). Only file sources have an
  * on-disk path; pasted (inline) and default sources are not supported here.
  */
-export async function openKubeconfigInEditor(
-    context: IActionContext,
-    node: KubernetesKubeconfigSourceItem,
-): Promise<void> {
+export async function editKubeconfig(context: IActionContext, node: KubernetesKubeconfigSourceItem): Promise<void> {
     context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
-    context.telemetry.properties.kubeconfigSourceAction = 'openInEditor';
+    context.telemetry.properties.kubeconfigSourceAction = 'edit';
 
     if (!node?.source) {
         throw new Error(vscode.l10n.t('No kubeconfig source selected.'));
