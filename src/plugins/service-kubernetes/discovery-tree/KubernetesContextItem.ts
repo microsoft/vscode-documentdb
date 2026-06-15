@@ -207,7 +207,7 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
             label: this.alias ?? this.contextInfo.name,
             description,
             tooltip: new vscode.MarkdownString(tooltipParts.join('\n\n')),
-            iconPath: new vscode.ThemeIcon('server'),
+            iconPath: new vscode.ThemeIcon('cloud'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }

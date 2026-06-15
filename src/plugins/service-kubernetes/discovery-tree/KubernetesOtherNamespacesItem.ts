@@ -25,7 +25,7 @@ export class KubernetesOtherNamespacesItem implements TreeElement, TreeElementWi
                 contextValue: 'informational;discovery.kubernetesEmptyNamespace',
                 id: `${this.id}/${namespace}`,
                 label: namespace,
-                iconPath: new vscode.ThemeIcon('archive'),
+                iconPath: new vscode.ThemeIcon('symbol-namespace'),
             }),
         );
     }

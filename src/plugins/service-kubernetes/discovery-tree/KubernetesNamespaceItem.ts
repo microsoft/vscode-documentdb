@@ -108,7 +108,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
             id: this.id,
             contextValue: this.contextValue,
             label: this.namespace,
-            iconPath: new vscode.ThemeIcon('archive'),
+            iconPath: new vscode.ThemeIcon('symbol-namespace'),
             collapsibleState:
                 preloadedServiceCount === 0
                     ? vscode.TreeItemCollapsibleState.None
