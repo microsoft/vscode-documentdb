@@ -261,7 +261,7 @@
       },
       {
         "view": "discoveryView",
-        "contents": "All service discovery providers are currently hidden.\n[$(search) Show Hidden Provider…](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to make a provider visible again."
+        "contents": "All service discovery providers are currently hidden.\n[$(search) Explore Providers…](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to explore available discovery providers."
       }
     ],
     "languages": [

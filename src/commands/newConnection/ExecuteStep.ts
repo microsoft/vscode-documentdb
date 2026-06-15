@@ -10,6 +10,18 @@ import { redactCredentialsFromConnectionString } from '../../documentdb/utils/co
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+// FIXME (discovery plugin API coupling): this generic command imports directly from the
+// `service-kubernetes` plugin so that duplicate-connection detection can compare two
+// port-forwarded targets by their tunnel identity instead of host + username (two tunnels can
+// share localhost:<port> yet point at different services). This leaks plugin-specific knowledge
+// into core. The discovery plugin API is still experimental and has no source-agnostic way for a
+// provider to declare what makes two of its connections "the same".
+//
+// Potential workaround / target design: have the plugin write a generic `connectionIdentity`
+// string into the source-agnostic `context.connectionProperties` bag when it builds a connection.
+// The dedup logic below would compare `connectionIdentity` whenever both sides have one and fall
+// back to host + username otherwise, keeping this command plugin-agnostic. Tracked in the discovery
+// API issue: https://github.com/microsoft/vscode-documentdb/issues/739 (milestone 0.12.0).
 import {
     getKubernetesPortForwardIdentity,
     getKubernetesPortForwardMetadata,

@@ -10,6 +10,19 @@ import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
+// FIXME (discovery plugin API coupling): this generic command imports directly from the
+// `service-kubernetes` plugin to provide a port-forward-aware copy experience. This is a leak of
+// plugin-specific knowledge into core command code. The discovery plugin API is still experimental
+// and currently lacks an extension point for a provider to contribute extra "copy connection
+// string" quick-pick items (e.g. the `kubectl port-forward` command) or a custom completion
+// message. Until that exists, the dependency is contained to the small surface below.
+//
+// Potential workaround / target design: add an optional
+// `getConnectionStringCopyContribution?(node, credentials)` hook to the DiscoveryProvider API that
+// returns extra quick-pick items, a custom completion message, and a "read-only" flag. This command
+// would iterate registered providers instead of importing the plugin, moving all Kubernetes knowledge
+// (metadata parsing + `kubectl` string building) back into the plugin. Tracked in the discovery API
+// issue: https://github.com/microsoft/vscode-documentdb/issues/739 (milestone 0.12.0).
 import {
     getKubernetesPortForwardMetadata,
     type KubernetesPortForwardMetadata,
