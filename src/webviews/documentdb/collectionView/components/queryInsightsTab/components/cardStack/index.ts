@@ -3,9 +3,4 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-.tips-card {
-    &-actions-container {
-        display: flex;
-        gap: 4px;
-    }
-}
+export * from './CardStack';

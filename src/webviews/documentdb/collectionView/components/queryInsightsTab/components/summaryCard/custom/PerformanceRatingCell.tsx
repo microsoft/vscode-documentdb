@@ -3,11 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Text, tokens, Tooltip } from '@fluentui/react-components';
+import { Badge, Skeleton, SkeletonItem, Text, tokens, Tooltip } from '@fluentui/react-components';
 import { InfoRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
+import { useMemo } from 'react';
 import '../../../../../../../components/focusableBadge/focusableBadge.scss';
 import { type PerformanceDiagnostic } from '../../../../../../../documentdb/collectionView/types/queryInsights';
 import { CellBase } from '../CellBase';
@@ -67,6 +68,9 @@ export interface PerformanceRatingCellProps {
  * />
  * ```
  */
+/** Returns a random integer in [min, max] */
+const randW = (min: number, max: number): number => Math.floor(Math.random() * (max - min + 1)) + min;
+
 export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     label,
     rating,
@@ -74,6 +78,12 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     visible = true,
     nullValuePlaceholder = 'N/A',
 }) => {
+    // Stable random widths for badge skeletons — re-randomised each time the skeleton mounts
+    const badgeWidths = useMemo(
+        () => [randW(80, 140), randW(60, 110), randW(90, 150), randW(70, 120), randW(70, 120)],
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+        [rating === undefined],
+    );
     const getRatingColor = (rating: PerformanceRating): string => {
         switch (rating) {
             case 'poor':
@@ -119,33 +129,43 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
         // Explicit null: data unavailable (will use CellBase's nullValuePlaceholder)
         customContent = null;
     } else if (rating === undefined) {
-        // Undefined: data loading (will show skeleton)
-        customContent = undefined;
+        // Undefined: data loading — render a structured skeleton that mirrors the real layout
+        customContent = (
+            <Skeleton aria-label={l10n.t('Loading performance rating')}>
+                <div className="efficiencyIndicator efficiencyIndicator--skeleton">
+                    {/* Row 1: dot skeleton + rating-text skeleton */}
+                    <SkeletonItem shape="circle" size={12} className="efficiencyDotSkeleton" />
+                    <SkeletonItem size={16} style={{ width: '144px' }} />
+                    {/* Row 2: indent spacer + badge-pill skeletons */}
+                    <div />
+                    <div className="efficiencyBadges efficiencyBadges--skeleton">
+                        {badgeWidths.map((w, i) => (
+                            <SkeletonItem key={i} size={16} style={{ width: `${w}px` }} />
+                        ))}
+                    </div>
+                </div>
+            </Skeleton>
+        );
     } else {
         // Has rating: display with animation
         customContent = (
             <CollapseRelaxed visible={visible}>
-                <div
-                    role="group"
-                    aria-label={label}
-                    className="efficiencyIndicator"
-                    style={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: '8px', rowGap: '8px' }}
-                >
+                <div role="group" aria-label={label} className="efficiencyIndicator">
                     {/* First row, first column: dot */}
                     <div
                         className="efficiencyDot"
-                        style={{ backgroundColor: getRatingColor(rating), alignSelf: 'center' }}
+                        style={{ backgroundColor: getRatingColor(rating) }}
                         aria-hidden="true"
                     />
                     {/* First row, second column: rating text */}
-                    <Text weight="semibold" style={{ alignSelf: 'center' }}>
+                    <Text weight="semibold" className="efficiencyRatingText">
                         {getRatingText(rating)}
                     </Text>
                     {/* Second row, first column: empty */}
                     {visibleDiagnostics.length > 0 && <div />}
                     {/* Second row, second column: diagnostic badges with tooltips */}
                     {visibleDiagnostics.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        <div className="efficiencyBadges">
                             {visibleDiagnostics.map((diagnostic, index) => (
                                 <Tooltip
                                     key={index}

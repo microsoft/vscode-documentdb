@@ -12,12 +12,7 @@ import { ext } from '../../extensionVariables';
 import { CopilotService } from '../../services/copilotService';
 import { PromptTemplateService } from '../../services/promptTemplateService';
 import { generateSchemaDefinition, type SchemaDefinition } from '../../utils/schemaInference';
-import {
-    QUERY_GENERATION_FALLBACK_FAMILIES,
-    QUERY_GENERATION_PREFERRED_FAMILY,
-    getQueryTypeConfig,
-    type FilledPromptResult,
-} from './promptTemplates';
+import { getQueryTypeConfig, type FilledPromptResult } from './promptTemplates';
 
 /**
  * Type of query generation
@@ -71,6 +66,10 @@ export interface QueryGenerationResult {
     modelFamily: string;
     // Human-readable display name (LanguageModelChat.name).
     modelDisplayName: string;
+    // Underlying model version (LanguageModelChat.version). For opaque aliases
+    // such as `copilot-utility`, this is the only field that reveals which
+    // model the alias resolved to at request time.
+    modelVersion: string;
 }
 
 /**
@@ -264,13 +263,7 @@ export async function generateQuery(
         schemas,
     );
 
-    // Send to Copilot with configured model families. Selection is keyed on
-    // LanguageModelChat.family (the stable well-known name), not id.
-    ext.outputChannel.trace(
-        l10n.t('[Query Generation] Calling Copilot (family: {family})...', {
-            family: QUERY_GENERATION_PREFERRED_FAMILY || 'default',
-        }),
-    );
+    ext.outputChannel.trace(l10n.t('[Query Generation] Calling Copilot...'));
     const response = await CopilotService.sendMessage(
         [
             vscode.LanguageModelChatMessage.User(craftedPrompt),
@@ -278,8 +271,6 @@ export async function generateQuery(
             vscode.LanguageModelChatMessage.User(contextData),
         ],
         {
-            preferredFamily: QUERY_GENERATION_PREFERRED_FAMILY,
-            fallbackFamilies: QUERY_GENERATION_FALLBACK_FAMILIES,
             featureSource: 'queryGeneration',
         },
     );
@@ -291,33 +282,13 @@ export async function generateQuery(
         }),
     );
 
-    // Check if the preferred model family was used. Match strictly on family
-    // (LanguageModelChat.family) — the stable well-known name. Ids are opaque
-    // and version-suffixed, families are the contract we expect to remain
-    // stable across Copilot extension updates.
-    const preferredMatched =
-        !QUERY_GENERATION_PREFERRED_FAMILY || response.modelFamily === QUERY_GENERATION_PREFERRED_FAMILY;
-    if (!preferredMatched) {
-        // Surface as a trace-channel warning rather than a notification toast:
-        // the fallback is automatic and there is nothing the user can act on,
-        // so a popup would only add confusion. The information stays
-        // available for diagnostics via the output channel and telemetry
-        // (`modelSelectionOutcome` on the shared sendMessage event).
-        ext.outputChannel.warn(
-            l10n.t(
-                '[Query Generation] Preferred model family "{preferredFamily}" was not available; used "{actualModel}" (family: {actualFamily}) instead. Results may vary.',
-                {
-                    preferredFamily: QUERY_GENERATION_PREFERRED_FAMILY,
-                    actualModel: response.modelDisplayName,
-                    actualFamily: response.modelFamily,
-                },
-            ),
-        );
-    }
-
-    // Add telemetry for the model used
+    // Add telemetry for the model used. Capture name and underlying version
+    // explicitly: for opaque aliases (`copilot-utility`) id and family are the
+    // alias string, so the backing model is only visible through name/version.
     context.telemetry.properties.modelId = response.modelId;
     context.telemetry.properties.modelFamily = response.modelFamily;
+    context.telemetry.properties.modelName = response.modelDisplayName;
+    context.telemetry.properties.modelVersion = response.modelVersion;
     context.telemetry.properties.generationType = queryContext.targetQueryType || 'Find';
 
     // Parse the response
@@ -334,6 +305,7 @@ export async function generateQuery(
             modelId: response.modelId,
             modelFamily: response.modelFamily,
             modelDisplayName: response.modelDisplayName,
+            modelVersion: response.modelVersion,
         };
     } catch {
         throw new Error(
