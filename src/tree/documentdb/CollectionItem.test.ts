@@ -34,17 +34,15 @@ jest.mock('vscode', () => ({
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (parts: string[]) => parts.join(';'),
-    callWithTelemetryAndErrorHandling: jest.fn(
-        async (_callbackId: string, callback: (context: unknown) => unknown | Promise<unknown>) => {
-            const context = {
-                telemetry: { properties: {}, measurements: {} },
-                errorHandling: { suppressDisplay: false, rethrow: false },
-                ui: undefined,
-                valuesToMask: [],
-            };
-            return await callback(context);
-        },
-    ),
+    callWithTelemetryAndErrorHandling: jest.fn(async (_callbackId: string, callback: (context: unknown) => unknown) => {
+        const context = {
+            telemetry: { properties: {}, measurements: {} },
+            errorHandling: { suppressDisplay: false, rethrow: false },
+            ui: undefined,
+            valuesToMask: [],
+        };
+        return await callback(context);
+    }),
 }));
 
 jest.mock('../../extensionVariables', () => ({
