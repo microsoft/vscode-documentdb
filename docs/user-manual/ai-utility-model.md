@@ -21,7 +21,7 @@ The extension targets utility models specifically because they are **included in
 
 ### What GitHub documents about utility model pricing
 
-GitHub designates a set of models as **included models** with a request multiplier of **0x**. Requests to these models do not consume your monthly premium request allowance. As of mid-2026, GPT-4o, GPT-4.1, and GPT-5 mini are all listed as 0x multiplier models.
+GitHub designates a set of models as **included models** with a request multiplier of **0x**. Requests to these models do not consume your monthly premium request allowance. The exact set of included models changes over time as GitHub updates its lineup, but the `copilot-utility` alias always resolves to a current included model.
 
 > **Source**: [Requests in GitHub Copilot - Model multipliers](https://docs.github.com/en/copilot/concepts/billing/copilot-requests#model-multipliers)
 
@@ -43,25 +43,19 @@ The cost-neutral disclosure row that appears in AI results panels ("No additiona
 
 ### A note on billing changes
 
-GitHub's billing model is evolving. If GitHub changes the pricing tier for any of the models in the preference chain, we will update both the extension and this page. Follow the [Further reading](#further-reading) links below for the latest GitHub documentation.
+GitHub's billing model is evolving. If GitHub changes the pricing tier for the `copilot-utility` alias or the models it resolves to, we will update both the extension and this page. Follow the [Further reading](#further-reading) links below for the latest GitHub documentation.
 
 ---
 
 ## Which model does the extension use?
 
-The extension always targets **utility (included) models**: the tier of GitHub Copilot models that are covered by a standard subscription and do not consume your monthly premium request allowance. These models are fast, efficient, and well-suited to structured, bounded tasks like query analysis.
+The extension requests the **`copilot-utility` model alias** from the VS Code Language Model API. This alias is GitHub Copilot's stable, version-independent way of pointing third-party extensions at an included (0x multiplier) model. GitHub Copilot resolves the alias to whichever current model it considers best for structured, bounded tasks (query analysis, index recommendations, and similar workloads) and updates that mapping transparently as its lineup evolves.
 
-Rather than hard-coding a single model, the extension tries to pick the best utility model available in your environment. It works through a preference chain, stopping at the first match:
+This design is intentional: by targeting the alias rather than a specific model family, the extension always routes to a cost-neutral model without needing to be updated every time GitHub refreshes its model lineup. GitHub's own guidance for third-party extensions recommends this approach.
 
-| Priority | Model family      | Notes                                                                |
-| -------- | ----------------- | -------------------------------------------------------------------- |
-| 1        | `gpt-4.1`         | Preferred; strong reasoning, 0x multiplier on paid plans             |
-| 2        | `gpt-4o`          | Fallback; also a 0x multiplier model on paid plans                   |
-| 3        | `copilot-utility` | Last resort; the generic utility alias exposed by the VS Code LM API |
+> **See also**: [GitHub Copilot utility models](https://docs.github.com/en/copilot/concepts/models/utility-models)
 
-All AI-assisted features in the extension are optimized and tested against the preferred model (`gpt-4.1`). If a fallback is used, quality may vary slightly. If the preferred model family is not available, the extension automatically steps down to the next entry in the chain without showing a popup; if a fallback fires, it is recorded in the extension's output channel (under **DocumentDB** in the Output panel) for diagnostics.
-
-If none of these families is available in your environment (for example, GitHub Copilot is not signed in, or your organization has disabled LM API access for third-party extensions), the AI features will not activate.
+If the `copilot-utility` alias is not available in your environment (for example, GitHub Copilot is not signed in, or your organization has disabled LM API access for third-party extensions), the AI features will not activate.
 
 ---
 
@@ -74,7 +68,7 @@ After a successful AI analysis, a small **"Powered by"** byline appears at the b
 
 The name shown is the human-readable display name of the model that actually produced the response, not a pre-invocation guess. The stable internal identifier (e.g. `copilot-gpt-4o`) is captured in the extension's output channel and telemetry for diagnostics.
 
-If the byline reads `copilot-utility` or shows an unfamiliar name, the extension used the generic utility fallback rather than one of the preferred families. This typically means the preferred models were not available at the time of the request.
+The underlying model backing the `copilot-utility` alias is chosen by GitHub Copilot and may differ between environments or over time. The byline always reflects whichever model actually produced the response, so it is the authoritative record of what ran, regardless of what the alias resolved to.
 
 ---
 

@@ -24,22 +24,6 @@ export type CopilotFeatureSource = 'queryInsights' | 'queryGeneration';
  * Options for sending a message to the language model
  */
 export interface CopilotMessageOptions {
-    /**
-     * Preferred model **family** (`LanguageModelChat.family`, e.g.
-     * `'gpt-4.1'`). We key the preference chain on family rather than id
-     * because `LanguageModelChat.id` is documented as opaque and can change
-     * between Copilot extension versions (or include date-stamped suffixes
-     * like `copilot-gpt-4o-mini-2024-07-18`), whereas `family` is the
-     * well-known stable name that survives id churn.
-     *
-     * If the requested family is not available, the service falls back to
-     * {@link fallbackFamilies} in order.
-     */
-    preferredFamily?: string;
-
-    /** Ordered list of fallback model families. See {@link preferredFamily}. */
-    fallbackFamilies?: string[];
-
     /* AbortSignal for cancellation support */
     signal?: AbortSignal;
 
@@ -53,6 +37,31 @@ export interface CopilotMessageOptions {
      */
     featureSource?: CopilotFeatureSource;
 }
+
+/**
+ * Family name used when asking VS Code's Language Model API for a model.
+ *
+ * We deliberately target the internal `copilot-utility` alias — published
+ * by the Copilot extension as both `id` and `family` — because it routes
+ * the request through Copilot's chat-fallback path, which:
+ *
+ * - does NOT consume premium request units / usage-based billing tokens,
+ *   matching the behaviour documented for utility models on
+ *   <https://docs.github.com/copilot/concepts/models/utility-models>; and
+ * - resolves at runtime to whichever model the Copilot service currently
+ *   designates for lightweight background work, so we don't need to chase
+ *   model deprecations (e.g. GPT-4.1 retirement on 2026-06-01) in this
+ *   extension's source.
+ *
+ * The list of underlying utility models (currently GPT-4o mini, GPT-4o,
+ * GPT-4.1, GPT-5.4 nano) is not stable and is not part of any public API,
+ * so we do NOT attempt to target those families directly — calling them by
+ * name from a third-party extension would fall outside the chat-fallback
+ * path and bill the user. The alias is the only target that preserves the
+ * "free for the user" guarantee, and is therefore intentionally the only
+ * model this service requests.
+ */
+const UTILITY_MODEL_FAMILY = 'copilot-utility';
 
 /**
  * Token-usage metrics for a Copilot request.
@@ -103,6 +112,15 @@ export interface CopilotResponse {
      * Falls back to {@link modelId} when `name` is empty.
      */
     modelDisplayName: string;
+    /**
+     * Underlying model version exposed by the provider
+     * (`LanguageModelChat.version`, e.g., `gpt-5.3-codex`). This is the only
+     * surface that distinguishes the current backing of an opaque alias such
+     * as `copilot-utility`: id and family both read `copilot-utility`, while
+     * `version` reveals which model the alias resolved to today. Record this
+     * in telemetry so the actual backing model is attributable per request.
+     */
+    modelVersion: string;
     /* Duration of the actual LLM request in milliseconds (excludes model selection overhead) */
     durationMs: number;
     /**
@@ -110,6 +128,51 @@ export interface CopilotResponse {
      * missing if `countTokens` failed or the request was cancelled.
      */
     usage?: CopilotTokenUsage;
+}
+
+/**
+ * Pull-based streaming handle returned by {@link CopilotService.streamMessage}.
+ *
+ * Consumers iterate {@link fragments} with `for await` to receive partial
+ * text as the model produces it (matching what {@link CopilotService.sendMessage}
+ * would have accumulated internally), then `await` {@link completion} to obtain
+ * the same full response metadata (model id/family/display name, durationMs,
+ * usage) that the buffered API returns.
+ *
+ * The iteration drives the underlying `LanguageModelChat.sendRequest` call —
+ * a consumer that stops iterating early (e.g. by aborting the signal in
+ * {@link CopilotMessageOptions}) will cause the streaming loop to exit and the
+ * model call to be cancelled via the AbortSignal → CancellationToken bridge.
+ *
+ * @example
+ * ```ts
+ * const handle = CopilotService.streamMessage(messages, { signal, featureSource: 'queryInsights' });
+ * for await (const fragment of handle.fragments) {
+ *     // feed fragment into the incremental parser
+ * }
+ * const response = await handle.completion; // { text, modelId, durationMs, usage, … }
+ * ```
+ */
+export interface CopilotStreamHandle {
+    /**
+     * Async iterable of text fragments in the order produced by the model.
+     * Iteration of this iterable is what advances the underlying model call.
+     */
+    fragments: AsyncIterable<string>;
+    /**
+     * Resolves with the full response (including accumulated text, model
+     * identity, durationMs and best-effort token usage) once {@link fragments}
+     * iteration has completed. Rejects with the same kind of error
+     * {@link CopilotService.sendMessage} would have thrown (e.g.
+     * `UserCancelledError` on abort, or a generic error if no suitable model
+     * is available).
+     *
+     * The promise is already chained internally to swallow the global
+     * unhandled-rejection warning when consumers do not await it (e.g.,
+     * because they handled cancellation via the abort signal); always await
+     * it (or attach a `.catch()` of your own) to react to failures.
+     */
+    completion: Promise<CopilotResponse>;
 }
 
 /**
@@ -137,32 +200,10 @@ export class CopilotService {
                 // review rather than at runtime).
                 context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
 
-                // Get all available models from VS Code
-                const availableModels = await vscode.lm.selectChatModels({ vendor: 'copilot' });
-
-                const preferredFamilies = this.getPreferredFamilies(options);
-                const selectedModel = this.selectBestModel(availableModels, preferredFamilies);
-
-                // Capture the selection chain to telemetry for offline analysis
-                // (e.g., monitoring how often each fallback level is hit in production).
-                context.telemetry.properties.modelPreferenceChain = preferredFamilies.join(',') || '(none)';
-                // Use families (well-known names) rather than opaque ids, dedupe,
-                // and cap to keep the property within downstream size limits — long
-                // id strings like `copilot-gpt-4o-mini-2024-07-18` repeated across
-                // 10+ models can blow past telemetry property caps and get
-                // truncated, hiding the very data the field is meant to expose.
-                const MAX_MODELS_REPORTED = 8;
-                const availableFamilies = Array.from(new Set(availableModels.map((m) => m.family))).sort();
-                const reportedFamilies = availableFamilies.slice(0, MAX_MODELS_REPORTED);
-                const truncatedCount = availableFamilies.length - reportedFamilies.length;
-                context.telemetry.properties.modelsAvailable =
-                    truncatedCount > 0
-                        ? `${reportedFamilies.join(',')},+${truncatedCount}-more`
-                        : reportedFamilies.join(',');
-                context.telemetry.measurements.modelsAvailableCount = availableModels.length;
+                const selectedModel = await this.selectUtilityModel();
 
                 if (!selectedModel) {
-                    context.telemetry.properties.modelSelectionOutcome = 'no-models-available';
+                    context.telemetry.properties.modelSelectionOutcome = 'no-utility-model-available';
                     throw new Error(
                         l10n.t(
                             'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
@@ -172,9 +213,12 @@ export class CopilotService {
 
                 context.telemetry.properties.modelId = selectedModel.id;
                 context.telemetry.properties.modelFamily = selectedModel.family;
-                context.telemetry.properties.modelSelectionOutcome = preferredFamilies.includes(selectedModel.family)
-                    ? 'preferred-match'
-                    : 'first-available-fallback';
+                context.telemetry.properties.modelName = selectedModel.name || '(unnamed)';
+                context.telemetry.properties.modelVersion = selectedModel.version || '(unknown)';
+                if (typeof selectedModel.maxInputTokens === 'number') {
+                    context.telemetry.measurements.modelMaxInputTokens = selectedModel.maxInputTokens;
+                }
+                context.telemetry.properties.modelSelectionOutcome = 'utility-model';
 
                 try {
                     const response = await this.sendToModel(selectedModel, messages, options);
@@ -207,6 +251,7 @@ export class CopilotService {
                         modelId: selectedModel.id,
                         modelFamily: selectedModel.family,
                         modelDisplayName: selectedModel.name || selectedModel.id,
+                        modelVersion: selectedModel.version || '(unknown)',
                         durationMs: response.durationMs,
                         usage: response.usage,
                     };
@@ -232,104 +277,201 @@ export class CopilotService {
     }
 
     /**
-     * Builds the ordered list of preferred model families.
+     * Streaming variant of {@link sendMessage} that exposes the LLM response
+     * as a pull-based `AsyncIterable<string>` of fragments. See
+     * {@link CopilotStreamHandle} for the consumer contract and rationale.
+     *
+     * Identical telemetry to {@link sendMessage} is emitted on completion
+     * (model selection chain, model id/family, featureSource, token usage,
+     * etc.) under the `copilot.streamMessage` event. The buffering API and
+     * the streaming API share the same {@link streamToModel} primitive, so
+     * the two paths cannot drift apart.
+     *
+     * The producer runs in the background as soon as this method is called.
+     * Consumers must iterate {@link CopilotStreamHandle.fragments} promptly
+     * (or abort via {@link CopilotMessageOptions.signal}) — fragments are
+     * buffered until they are consumed.
      */
-    private static getPreferredFamilies(options?: CopilotMessageOptions): string[] {
-        const families: string[] = [];
+    static streamMessage(
+        messages: vscode.LanguageModelChatMessage[],
+        options?: CopilotMessageOptions,
+    ): CopilotStreamHandle {
+        const channel = new FragmentChannel();
 
-        if (options?.preferredFamily) {
-            families.push(options.preferredFamily);
-        }
+        let resolveCompletion!: (response: CopilotResponse) => void;
+        let rejectCompletion!: (error: unknown) => void;
+        const completion = new Promise<CopilotResponse>((resolve, reject) => {
+            resolveCompletion = resolve;
+            rejectCompletion = reject;
+        });
+        // Prevent a global unhandled-rejection warning when consumers only
+        // observe completion via the abort signal and never await this
+        // promise. Real consumers are expected to attach their own handler.
+        completion.catch(() => {
+            /* swallow: consumer chose not to observe */
+        });
 
-        if (options?.fallbackFamilies && options.fallbackFamilies.length > 0) {
-            families.push(...options.fallbackFamilies);
-        }
+        // Fire-and-forget producer; all error paths are captured by the
+        // telemetry wrapper or surfaced through `rejectCompletion` below.
+        void this.runStream(messages, options, channel, resolveCompletion, rejectCompletion);
 
-        return families;
+        return {
+            fragments: channel,
+            completion,
+        };
     }
 
     /**
-     * Selects the best available model based on preference order.
-     *
-     * **Matching is performed by `LanguageModelChat.family`** — the
-     * documented stable well-known name (`gpt-4.1`, `gpt-4o`, …) —
-     * not by `LanguageModelChat.id`. The id is documented as opaque and
-     * may change between Copilot extension versions (or carry
-     * date-stamped suffixes like `copilot-gpt-4o-mini-2024-07-18`); the
-     * family is the surface we expect to outlive id churn. Internal
-     * aliases like `copilot-utility` are published by the Copilot
-     * extension with the alias string used as **both** id and family,
-     * so they also match the family-based selector without needing a
-     * special id-fallback path.
-     *
-     * Emits a structured trace of the selection chain to the output channel so
-     * users (and support) can see, per request, which families were requested,
-     * which were accepted, and which were rejected because they were not
-     * available from the Copilot vendor.
-     *
-     * @param availableModels - All available models from VS Code
-     * @param preferredFamilies - Ordered list of preferred model families
-     * @returns The best matching model, or the first available model if no matches
+     * Background producer for {@link streamMessage}. Performs model
+     * selection inside a single `callWithTelemetryAndErrorHandling` wrapper
+     * (mirroring {@link sendMessage}), runs {@link streamToModel} pushing
+     * each fragment into {@link channel}, and resolves/rejects the caller's
+     * completion deferred when the operation ends.
      */
-    private static selectBestModel(
-        availableModels: vscode.LanguageModelChat[],
-        preferredFamilies: string[],
-    ): vscode.LanguageModelChat | undefined {
-        const availableSummary = availableModels.map((m) => `${m.family} (${m.id})`);
-        ext.outputChannel.trace(
-            l10n.t('[Copilot] Available models from VS Code: {0}', JSON.stringify(availableSummary)),
-        );
-        ext.outputChannel.trace(
-            l10n.t('[Copilot] Model family preference chain: {0}', JSON.stringify(preferredFamilies)),
-        );
+    private static async runStream(
+        messages: vscode.LanguageModelChatMessage[],
+        options: CopilotMessageOptions | undefined,
+        channel: FragmentChannel,
+        resolveCompletion: (response: CopilotResponse) => void,
+        rejectCompletion: (error: unknown) => void,
+    ): Promise<void> {
+        try {
+            const result = await callWithTelemetryAndErrorHandling(
+                'vscode-documentdb.copilot.streamMessage',
+                async (context: IActionContext) => {
+                    // Tag the shared `copilot.streamMessage` event with the
+                    // calling feature so analytics can split telemetry by source.
+                    context.telemetry.properties.featureSource = options?.featureSource ?? 'unknown';
 
-        if (availableModels.length === 0) {
-            // Nothing the caller could possibly use — flag this clearly in the
-            // trace so users debugging "AI insights unavailable" see the root cause.
+                    const selectedModel = await this.selectUtilityModel();
+
+                    if (!selectedModel) {
+                        context.telemetry.properties.modelSelectionOutcome = 'no-utility-model-available';
+                        throw new Error(
+                            l10n.t(
+                                'No suitable language model is available. Please ensure GitHub Copilot is installed and signed in with an active subscription, and that you accepted the language-model access consent prompt the first time this feature was used (you can re-trigger it by running the feature again).',
+                            ),
+                        );
+                    }
+
+                    context.telemetry.properties.modelId = selectedModel.id;
+                    context.telemetry.properties.modelFamily = selectedModel.family;
+                    context.telemetry.properties.modelName = selectedModel.name || '(unnamed)';
+                    context.telemetry.properties.modelVersion = selectedModel.version || '(unknown)';
+                    if (typeof selectedModel.maxInputTokens === 'number') {
+                        context.telemetry.measurements.modelMaxInputTokens = selectedModel.maxInputTokens;
+                    }
+                    context.telemetry.properties.modelSelectionOutcome = 'utility-model';
+
+                    try {
+                        const response = await this.streamToModel(selectedModel, messages, options, (fragment) =>
+                            channel.push(fragment),
+                        );
+
+                        if (response.usage) {
+                            const { promptTokens, responseTokens, totalTokens, maxInputTokens, promptUtilizationPct } =
+                                response.usage;
+                            if (promptTokens !== undefined) {
+                                context.telemetry.measurements.promptTokens = promptTokens;
+                            }
+                            if (responseTokens !== undefined) {
+                                context.telemetry.measurements.responseTokens = responseTokens;
+                            }
+                            if (totalTokens !== undefined) {
+                                context.telemetry.measurements.totalTokens = totalTokens;
+                            }
+                            if (maxInputTokens !== undefined) {
+                                context.telemetry.measurements.maxInputTokens = maxInputTokens;
+                            }
+                            if (promptUtilizationPct !== undefined) {
+                                context.telemetry.measurements.promptUtilizationPct = promptUtilizationPct;
+                            }
+                        }
+
+                        return {
+                            text: response.text,
+                            modelId: selectedModel.id,
+                            modelFamily: selectedModel.family,
+                            modelDisplayName: selectedModel.name || selectedModel.id,
+                            modelVersion: selectedModel.version || '(unknown)',
+                            durationMs: response.durationMs,
+                            usage: response.usage,
+                        };
+                    } catch (error) {
+                        if (error instanceof UserCancelledError) {
+                            throw error;
+                        }
+                        context.telemetry.properties.llmError = 'llmGenerateResponseCallFailed';
+                        throw error;
+                    }
+                },
+            );
+
+            if (!result) {
+                if (options?.signal?.aborted) {
+                    throw new UserCancelledError('AbortSignal');
+                }
+                throw new Error(l10n.t('Failed to get response from language model'));
+            }
+
+            channel.close();
+            resolveCompletion(result);
+        } catch (error) {
+            channel.close(error);
+            rejectCompletion(error);
+        }
+    }
+
+    /**
+     * Builds a compact, human-readable one-line summary of a model's stable
+     * identity fields for the trace stream. Unlike {@link dumpModelMetadata}
+     * (which is memoised and only fires once per model id), this is emitted on
+     * every selection so each request's trace shows exactly which model — by
+     * display name, family and id — handled it.
+     */
+    private static formatModelDetails(model: vscode.LanguageModelChat): string {
+        return l10n.t(
+            'name="{0}", family={1}, id={2}, version={3}',
+            model.name || '(unnamed)',
+            model.family,
+            model.id,
+            model.version,
+        );
+    }
+
+    /**
+     * Resolves the Copilot **utility** model.
+     *
+     * We always ask for {@link UTILITY_MODEL_FAMILY} (`copilot-utility`) — the
+     * Copilot extension's documented alias for the chat-fallback path — and
+     * never fall back to billed picker models. If the alias is unavailable
+     * (e.g. the Copilot extension is not installed, the user is signed out,
+     * or the consent prompt has not been accepted) the caller is responsible
+     * for surfacing the failure; we never silently degrade onto a model that
+     * would consume the user's premium request budget.
+     *
+     * Returns `undefined` when no model is available so the caller can map
+     * that to its own user-facing error.
+     */
+    private static async selectUtilityModel(): Promise<vscode.LanguageModelChat | undefined> {
+        const matches = await vscode.lm.selectChatModels({
+            vendor: 'copilot',
+            family: UTILITY_MODEL_FAMILY,
+        });
+
+        if (matches.length === 0) {
             ext.outputChannel.warn(
-                l10n.t('[Copilot] No language models available from vendor "copilot". Aborting selection.'),
+                l10n.t(
+                    '[Copilot] Utility model "{0}" is not available from vendor "copilot". Aborting request to avoid charging the user for a billed picker model.',
+                    UTILITY_MODEL_FAMILY,
+                ),
             );
             return undefined;
         }
 
-        // Walk the preference chain in order, matching on `family`; log
-        // accepted/rejected per entry so the full decision path is visible in
-        // the trace stream.
-        for (const preferredFamily of preferredFamilies) {
-            const matchingModel = availableModels.find((m) => m.family === preferredFamily);
-            if (matchingModel) {
-                ext.outputChannel.trace(
-                    l10n.t(
-                        '[Copilot] Requested family "{0}" → accepted (matched id: {1})',
-                        preferredFamily,
-                        matchingModel.id,
-                    ),
-                );
-                ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', matchingModel.id));
-                return matchingModel;
-            }
-            ext.outputChannel.trace(
-                l10n.t(
-                    '[Copilot] Requested family "{0}" → rejected (no available model in this family)',
-                    preferredFamily,
-                ),
-            );
-        }
-
-        // No preference matched but models are available — fall back to the
-        // first one Copilot returned so the feature degrades gracefully.
-        const fallback = availableModels[0];
-        if (preferredFamilies.length === 0) {
-            ext.outputChannel.trace(
-                l10n.t('[Copilot] No family preferences supplied; using first available: {0}', fallback.id),
-            );
-        } else {
-            ext.outputChannel.trace(
-                l10n.t('[Copilot] No preferred family matched; falling back to first available: {0}', fallback.id),
-            );
-        }
-        ext.outputChannel.trace(l10n.t('[Copilot] Selected model: {0}', fallback.id));
-        return fallback;
+        const selected = matches[0];
+        ext.outputChannel.trace(l10n.t('[Copilot] Selected utility model: {0}', this.formatModelDetails(selected)));
+        return selected;
     }
 
     /**
@@ -339,6 +481,32 @@ export class CopilotService {
         model: vscode.LanguageModelChat,
         messages: vscode.LanguageModelChatMessage[],
         options?: CopilotMessageOptions,
+    ): Promise<{ text: string; durationMs: number; usage?: CopilotTokenUsage }> {
+        // Delegate to the streaming primitive with a no-op fragment sink. This
+        // keeps a single implementation of the model-iteration + token-counting
+        // pipeline so the buffered and streamed paths cannot drift apart.
+        return this.streamToModel(model, messages, options, () => {
+            /* no-op: buffered API only needs the final text */
+        });
+    }
+
+    /**
+     * Iterates a `LanguageModelChat` response, delivering each text fragment
+     * to {@link onFragment} as it arrives while also accumulating the full
+     * text for the caller. This is the single source of truth for the
+     * AbortSignal → CancellationToken bridge, the per-fragment cancellation
+     * check, the duration measurement and the best-effort token-usage
+     * computation.
+     *
+     * Used directly by {@link streamMessage} (which pipes fragments into its
+     * pull-based channel) and indirectly by {@link sendToModel} (which passes
+     * a no-op sink and only consumes the buffered text).
+     */
+    private static async streamToModel(
+        model: vscode.LanguageModelChat,
+        messages: vscode.LanguageModelChatMessage[],
+        options: CopilotMessageOptions | undefined,
+        onFragment: (fragment: string) => void,
     ): Promise<{ text: string; durationMs: number; usage?: CopilotTokenUsage }> {
         const signal = options?.signal;
 
@@ -367,13 +535,47 @@ export class CopilotService {
             const requestStart = Date.now();
             const chatResponse = await model.sendRequest(messages, requestOptions, cts.token);
 
+            // `sendRequest` resolves once the request has been accepted and
+            // dispatched to the model (after any auth/consent handshake) but
+            // BEFORE the first token streams back. The VS Code Language Model
+            // API exposes no finer-grained progress than this — there is no
+            // "upload complete" / "model thinking" callback — so this is the
+            // earliest milestone we can surface. Trace it so the often-long
+            // "model is thinking" gap between request acceptance and first
+            // token is visible separately from the model-selection overhead.
+            const requestAcceptedMs = Date.now() - requestStart;
+            ext.outputChannel.trace(
+                l10n.t('[Copilot] Request accepted by model after {0}ms; awaiting first token…', requestAcceptedMs),
+            );
+
             // Collect the streaming response, checking for cancellation between chunks
             let fullResponse = '';
+            let firstTokenTraced = false;
             for await (const fragment of chatResponse.text) {
                 if (signal?.aborted) {
                     break;
                 }
+                if (!firstTokenTraced) {
+                    firstTokenTraced = true;
+                    // Time-to-first-token: the headline latency users feel as
+                    // "why is nothing happening yet". Report both the absolute
+                    // elapsed-since-send and the delta after request acceptance
+                    // so the thinking gap is isolated from dispatch overhead.
+                    const firstTokenMs = Date.now() - requestStart;
+                    ext.outputChannel.trace(
+                        l10n.t(
+                            '[Copilot] First token received {0}ms after send ({1}ms after request accepted)',
+                            firstTokenMs,
+                            firstTokenMs - requestAcceptedMs,
+                        ),
+                    );
+                }
                 fullResponse += fragment;
+                // Surface the fragment to the streaming consumer. We do this
+                // *after* accumulation so consumers see exactly what the buffered
+                // response contains; any throw here will propagate and abort
+                // iteration, which is the behaviour we want for backpressure.
+                onFragment(fragment);
             }
             const durationMs = Date.now() - requestStart;
 
@@ -461,12 +663,19 @@ export class CopilotService {
     }
 
     /**
-     * Checks if LLMs are available
+     * Checks whether the Copilot utility model this service exclusively
+     * targets is currently available.
      *
-     * @returns true if at least one model is available
+     * Mirrors the selector used by {@link selectUtilityModel} so an
+     * `isAvailable() === true` result is a strong predictor of the next
+     * `sendMessage` / `streamMessage` call succeeding (rather than reporting
+     * availability of any Copilot model and then failing in selection).
      */
     static async isAvailable(): Promise<boolean> {
-        const models = await vscode.lm.selectChatModels({ vendor: 'copilot' });
+        const models = await vscode.lm.selectChatModels({
+            vendor: 'copilot',
+            family: UTILITY_MODEL_FAMILY,
+        });
         return models.length > 0;
     }
 
@@ -525,5 +734,102 @@ export class CopilotService {
             const errorMessage = error instanceof Error ? error.message : String(error);
             ext.outputChannel.trace(l10n.t('[Copilot] Could not enumerate model own properties: {0}', errorMessage));
         }
+    }
+}
+
+/**
+ * Single-consumer async-iterable channel used by {@link CopilotService.streamMessage}
+ * to bridge the push-style per-fragment callback from {@link CopilotService.streamToModel}
+ * into the pull-style `AsyncIterable<string>` returned to webview consumers.
+ *
+ * Backpressure-aware in spirit: producers may call {@link push} as fast as
+ * they like (matching the pace of the underlying `for await ... chatResponse.text`
+ * loop, which itself respects the model's pacing). When the consumer is
+ * slower, fragments are buffered in memory; this is acceptable for the
+ * Query Insights Stage 3 use case where total responses fit comfortably
+ * under a few hundred KB.
+ *
+ * Not exported: the only intended use site is inside `CopilotService`.
+ */
+class FragmentChannel implements AsyncIterableIterator<string> {
+    private readonly buffer: string[] = [];
+    private deferred: {
+        resolve: (result: IteratorResult<string>) => void;
+        reject: (error: unknown) => void;
+    } | null = null;
+    private closed = false;
+    private closeError: unknown = undefined;
+
+    push(fragment: string): void {
+        if (this.closed) {
+            return;
+        }
+        if (this.deferred) {
+            const { resolve } = this.deferred;
+            this.deferred = null;
+            resolve({ value: fragment, done: false });
+            return;
+        }
+        this.buffer.push(fragment);
+    }
+
+    /**
+     * Mark the stream complete. Pending `next()` calls receive `{done: true}`
+     * (when `error` is undefined) or reject with `error` (when provided).
+     * Once closed, further calls are silently ignored.
+     */
+    close(error?: unknown): void {
+        if (this.closed) {
+            return;
+        }
+        this.closed = true;
+        this.closeError = error;
+
+        if (!this.deferred) {
+            return;
+        }
+        const { resolve, reject } = this.deferred;
+        this.deferred = null;
+        if (error !== undefined) {
+            reject(error);
+        } else {
+            resolve({ value: undefined as unknown as string, done: true });
+        }
+    }
+
+    next(): Promise<IteratorResult<string>> {
+        if (this.buffer.length > 0) {
+            return Promise.resolve({ value: this.buffer.shift() as string, done: false });
+        }
+        if (this.closed) {
+            if (this.closeError !== undefined) {
+                // `closeError` is typed `unknown` because it originates from a
+                // catch block; wrap non-Error values so we can satisfy
+                // `@typescript-eslint/prefer-promise-reject-errors` without
+                // dropping the original Error instance (e.g. `UserCancelledError`).
+                const reason = this.closeError instanceof Error ? this.closeError : new Error(String(this.closeError));
+                return Promise.reject(reason);
+            }
+            return Promise.resolve({ value: undefined as unknown as string, done: true });
+        }
+        return new Promise<IteratorResult<string>>((resolve, reject) => {
+            this.deferred = { resolve, reject };
+        });
+    }
+
+    /**
+     * Called by `for await` when the consumer breaks out of the loop early.
+     * Marks the channel done and drops any buffered fragments so memory is
+     * reclaimed. The upstream model call is cancelled separately via the
+     * `AbortSignal` plumbed through {@link CopilotMessageOptions}.
+     */
+    return(): Promise<IteratorResult<string>> {
+        this.close();
+        this.buffer.length = 0;
+        return Promise.resolve({ value: undefined as unknown as string, done: true });
+    }
+
+    [Symbol.asyncIterator](): AsyncIterableIterator<string> {
+        return this;
     }
 }
