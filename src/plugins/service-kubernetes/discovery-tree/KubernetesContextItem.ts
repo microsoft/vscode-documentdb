@@ -10,7 +10,12 @@ import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
-import { DISCOVERY_PROVIDER_ID } from '../config';
+import {
+    DEFAULT_VIEW_MODE,
+    DISCOVERY_PROVIDER_ID,
+    DISCOVERY_VIEW_MODE_STATE_KEY,
+    type KubernetesViewMode,
+} from '../config';
 import {
     createCoreApi,
     listDocumentDBServices,
@@ -21,6 +26,7 @@ import {
 } from '../kubernetesClient';
 import { KubernetesNamespaceItem } from './KubernetesNamespaceItem';
 import { KubernetesOtherNamespacesItem } from './KubernetesOtherNamespacesItem';
+import { KubernetesResourceItem } from './documentdb/KubernetesResourceItem';
 import { hasRetryActionNode } from './retryNodeDetection';
 
 interface NamespaceDiscoveryResult {
@@ -48,6 +54,15 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
         // Sanitize context name for tree ID (replace / with _)
         const sanitizedName = contextInfo.name.replace(/\//g, '_');
         this.id = `${parentId}/${sanitizedName}`;
+    }
+
+    /**
+     * Reads the global discovery view mode. Stored directly in globalState (see
+     * {@link DISCOVERY_VIEW_MODE_STATE_KEY}) so the synchronous getter is valid
+     * during both `getChildren` and `getTreeItem`.
+     */
+    private getViewMode(): KubernetesViewMode {
+        return ext.context.globalState.get<KubernetesViewMode>(DISCOVERY_VIEW_MODE_STATE_KEY, DEFAULT_VIEW_MODE);
     }
 
     async getChildren(): Promise<TreeElement[] | null | undefined> {
@@ -126,6 +141,59 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                     (result) => result.services !== undefined && result.services.length > 0,
                 ).length;
 
+                const viewMode = this.getViewMode();
+                context.telemetry.properties.viewMode = viewMode;
+
+                if (viewMode === 'list') {
+                    // Flat "list" view: list DocumentDB clusters directly under the context, with the
+                    // namespace shown in each cluster's description. Empty namespaces are omitted (the
+                    // primary reason this mode exists). Namespaces whose pre-scan failed are still
+                    // shown as expandable nodes so the user can retry and see the detailed error.
+                    const listChildren: TreeElement[] = [];
+                    for (const result of sortedNamespaceResults) {
+                        if (result.services === undefined) {
+                            listChildren.push(
+                                new KubernetesNamespaceItem(
+                                    this.id,
+                                    this.sourceId,
+                                    this.contextInfo,
+                                    result.namespace,
+                                    this.journeyCorrelationId,
+                                ),
+                            );
+                            continue;
+                        }
+                        const sortedServices = [...result.services].sort((a, b) =>
+                            a.displayName.localeCompare(b.displayName, undefined, { numeric: true }),
+                        );
+                        for (const svc of sortedServices) {
+                            listChildren.push(
+                                new KubernetesResourceItem(
+                                    this.journeyCorrelationId,
+                                    this.sourceId,
+                                    this.contextInfo,
+                                    svc,
+                                    this.id,
+                                    { showNamespaceInDescription: true },
+                                ),
+                            );
+                        }
+                    }
+
+                    if (listChildren.length === 0) {
+                        return [
+                            createGenericElementWithContext({
+                                contextValue: 'informational',
+                                id: `${this.id}/no-services`,
+                                label: vscode.l10n.t('No DocumentDB services found in this context.'),
+                                iconPath: new vscode.ThemeIcon('info'),
+                            }),
+                        ];
+                    }
+
+                    return listChildren;
+                }
+
                 const targetOrRetryResults = sortedNamespaceResults.filter(
                     (result) => result.services === undefined || result.services.length > 0,
                 );
@@ -201,9 +269,13 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
 
         const description = descriptionParts.length > 0 ? descriptionParts.join(' ') : undefined;
 
+        // Append the current view-mode marker so the context-menu / inline "View as …" toggle
+        // commands can target this node and show the icon matching the active mode.
+        const contextValue = `${this.contextValue};discovery.kubernetesViewMode.${this.getViewMode()}`;
+
         return {
             id: this.id,
-            contextValue: this.contextValue,
+            contextValue,
             label: this.alias ?? this.contextInfo.name,
             description,
             tooltip: new vscode.MarkdownString(tooltipParts.join('\n\n')),
