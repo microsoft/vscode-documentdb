@@ -70,16 +70,12 @@ describe('CollectionItem', () => {
     const databaseInfo = { name: 'db1' };
     const collectionInfo = { name: 'coll1', type: 'collection' };
 
-    it('opens the collection view directly from the collection node', () => {
+    it('does not attach a command to the collection node (expand-only)', () => {
         const item = new CollectionItem(cluster as never, databaseInfo as never, collectionInfo as never);
         const treeItem = item.getTreeItem();
 
         expect(treeItem.collapsibleState).toBe(1);
-        expect(treeItem.command).toEqual({
-            title: 'Open Collection',
-            command: 'vscode-documentdb.command.containerView.open',
-            arguments: [item],
-        });
+        expect(treeItem.command).toBeUndefined();
     });
 
     it('keeps Documents and Indexes child nodes available', async () => {

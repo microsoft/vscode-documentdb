@@ -13,27 +13,6 @@ import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
 import { CollectionViewController } from '../../webviews/documentdb/collectionView/collectionViewController';
 
-interface CollectionViewProps {
-    clusterId: string;
-    clusterDisplayName: string;
-    viewId: string;
-    databaseName: string;
-    collectionName: string;
-    initialQuery?: {
-        filter?: string;
-        project?: string;
-        sort?: string;
-        skip?: number;
-        limit?: number;
-    };
-}
-
-const activeCollectionViews = new Map<string, CollectionViewController>();
-
-function getCollectionViewKey(props: CollectionViewProps): string {
-    return `${props.viewId}::${props.clusterId}::${props.databaseName}::${props.collectionName}`;
-}
-
 export async function openCollectionView(context: IActionContext, node: CollectionItem) {
     // added manually here as this function can by called bypassing our general command registration
     trackJourneyCorrelationId(context, node);
@@ -57,20 +36,23 @@ export async function openCollectionView(context: IActionContext, node: Collecti
     });
 }
 
-export async function openCollectionViewInternal(_context: IActionContext, props: CollectionViewProps): Promise<void> {
-    const shouldReuseExistingView = props.initialQuery === undefined;
-    const collectionViewKey = getCollectionViewKey(props);
-
-    if (shouldReuseExistingView) {
-        const existingView = activeCollectionViews.get(collectionViewKey);
-        if (existingView && !existingView.isDisposed) {
-            existingView.revealToForeground(vscode.ViewColumn.Active);
-            return;
-        }
-
-        activeCollectionViews.delete(collectionViewKey);
-    }
-
+export async function openCollectionViewInternal(
+    _context: IActionContext,
+    props: {
+        clusterId: string;
+        clusterDisplayName: string;
+        viewId: string;
+        databaseName: string;
+        collectionName: string;
+        initialQuery?: {
+            filter?: string;
+            project?: string;
+            sort?: string;
+            skip?: number;
+            limit?: number;
+        };
+    },
+): Promise<void> {
     /**
      * We're starting a new "session" using the existing connection.
      * A session can cache data, handle paging, and convert data.
@@ -99,17 +81,10 @@ export async function openCollectionViewInternal(_context: IActionContext, props
         initialQuery: props.initialQuery,
     });
 
-    if (shouldReuseExistingView) {
-        activeCollectionViews.set(collectionViewKey, view);
-    }
-
     // Clean up the ClusterSession when the tab is closed
     view.onDisposed(() => {
-        if (shouldReuseExistingView && activeCollectionViews.get(collectionViewKey) === view) {
-            activeCollectionViews.delete(collectionViewKey);
-        }
         ClusterSession.closeSession(sessionId);
     });
 
-    view.revealToForeground(vscode.ViewColumn.Active);
+    view.revealToForeground();
 }

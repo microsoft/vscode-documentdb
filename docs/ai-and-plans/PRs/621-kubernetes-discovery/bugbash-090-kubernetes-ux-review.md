@@ -1471,6 +1471,35 @@ unaffected — region stays out of it (it can be a raw hostname token), so this 
   — the placement group pushes `**Region:** ${this.contextInfo.region ?? l10n.t('Unknown')}`
   unconditionally.
 
+### 13.4 Out-of-scope Collection View changes found in the feature commit — reverted
+
+**Verdict:** ✅ **Reverted** on this branch; **tracked separately** in
+[microsoft/vscode-documentdb#738](https://github.com/microsoft/vscode-documentdb/issues/738) (0.10.0).
+
+**What was found:** the big feature commit `e6dd3923` (_"feat(kubernetes): add multi-source service
+discovery"_, author **Guanzhou Song** / @guanzhousongmicrosoft, PR #621) also carried three **general**
+Collection View interaction changes that are unrelated to Kubernetes discovery and were not called out in
+the commit body:
+
+1. A `command` on the collection node ([CollectionItem.ts](src/tree/documentdb/CollectionItem.ts)) so a
+   **single click** opens the Collection View (previously only the `Documents` child opened it, via a
+   debounced double click).
+2. A module-level `activeCollectionViews` map in
+   [openCollectionView.ts](src/commands/openCollectionView/openCollectionView.ts) that **reuses an
+   existing tab** (keyed by `viewId::clusterId::databaseName::collectionName`, guarded by
+   `shouldReuseExistingView = initialQuery === undefined`) instead of opening a new one.
+3. `revealToForeground(vscode.ViewColumn.Active)` instead of the bare `revealToForeground()`.
+
+None of these existed on `origin/main`. Side effect of (1): the `Documents` double-click path still
+registers but is effectively dead, since the parent node opens the view on selection.
+
+**Action taken:** reverted all three to the `main` behavior (collection node is expand-only; every open
+creates a new tab in the default column). Removed the branch-new `openCollectionView.test.ts` (it only
+covered the reuse behavior) and updated `CollectionItem.test.ts` to assert the node carries no command.
+Filed [#738](https://github.com/microsoft/vscode-documentdb/issues/738) to propose and properly scope the
+feature (including an **"Open in New Collection View"** action so users can still open a second tab on
+purpose), and left a note on PR #621 asking that non-feature UX changes be split out in future.
+
 ---
 
 _Generated for the bug‑bash‑090 UX review. Code references were verified against the
