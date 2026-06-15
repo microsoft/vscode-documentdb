@@ -67,6 +67,15 @@ v Discovery
 5. Namespaces whose pre-scan failed remain visible directly under the context so the error and **Retry** action are easy to find.
 6. Expanding a DocumentDB namespace lists the discovered targets.
 
+## Switch between list and tree view
+
+A context node has a **view toggle** that controls how the levels beneath every context are shown across the whole Kubernetes discovery (it is a global choice, surfaced on the context node so it is easy to find). The current choice is remembered between sessions.
+
+- **List view** (default): contexts list discovered DocumentDB clusters directly, with the namespace shown in each cluster's grey description. Empty namespaces are not shown, so you see clusters immediately without scanning past namespaces that contain no targets.
+- **Tree view**: contexts list namespaces, and DocumentDB clusters live under each namespace (with empty namespaces grouped under **Other namespaces**, as described above).
+
+Use the inline button on a context node, or its right-click context menu, to switch. Following the same convention as the VS Code Search view, the button's icon reflects the **current** mode and its label states the action: in tree view it shows **View as List**, and in list view it shows **View as Tree**. Namespaces whose pre-scan failed stay visible in both modes so you can retry them.
+
 ## Reading a discovered target
 
 Each discovered DocumentDB target appears as a cluster node using the **DocumentDB** icon, so it reads as a first-class cluster you can expand and connect to, just like a saved connection.

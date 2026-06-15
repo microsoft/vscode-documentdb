@@ -1502,6 +1502,67 @@ purpose), and left a note on PR #621 asking that non-feature UX changes be split
 
 ---
 
+## 14. Iteration 14 — context view toggle (flat list vs. tree)
+
+This iteration adds a **per-discovery view toggle** so users can flip the whole Kubernetes discovery
+between the original namespace **tree** and a **flat list** of clusters. It directly addresses the
+"empty namespaces are noise" friction surfaced in earlier iterations: in tree mode a user expanding a
+context first sees namespaces (including ones with no DocumentDB target) and only then the clusters.
+
+### 14.1 Context view toggle — list (default) vs. tree
+
+**Verdict:** ✅ **Done.**
+
+**Expected:** make discovered clusters visible immediately, without scanning past empty namespaces, while
+keeping the namespace-grouped view available for users who want it.
+
+**Decision / Code today:**
+
+- **Two modes, global, persisted.** A single global choice (not per-context) controls every context in
+  the Kubernetes discovery; it is surfaced on the **context node** for discoverability and stored in
+  `globalState` (key `kubernetes-discovery.viewMode`) — like the survey state, **not** a user-facing
+  setting — so the last choice always persists. Default is **`list`**.
+  - **`list`** (default): a context lists DocumentDB clusters directly; the namespace moves into each
+    cluster's grey description. Empty namespaces are not shown. Namespaces whose pre-scan failed stay
+    visible as expandable nodes so the **Retry** path is preserved.
+  - **`tree`**: the original context → namespaces → clusters hierarchy, with empty namespaces bucketed
+    under **Other namespaces**.
+- **Icon = current state, label = action (Search-view convention).** Two commands, each with a static
+  icon, gated by the current-mode marker added to the context node's `contextValue`
+  (`discovery.kubernetesViewMode.list|tree`). In **tree** mode the button shows `list-tree` + **"View as
+  List"**; in **list** mode it shows `list-selection` + **"View as Tree"**. The toggle appears both
+  **inline** on the context row and in the context menu, in the group just above **Refresh**.
+- **Cluster identity is mode-independent.** `clusterId`/`treeId` suffixes are derived from
+  source/context/namespace/service, not the parent path, so "open collection by clusterId" and
+  reveal-saved-cluster keep resolving when a node is listed flat.
+
+**Code today:**
+
+- [config.ts](src/plugins/service-kubernetes/config.ts) — `KubernetesViewMode`, `DEFAULT_VIEW_MODE`
+  (`'list'`), and `DISCOVERY_VIEW_MODE_STATE_KEY`.
+- [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts) —
+  `getViewMode()`, the `list`-mode flattening branch in `getChildren()`, and the mode marker appended to
+  `contextValue`.
+- [KubernetesResourceItem.ts](src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts)
+  — `showNamespaceInDescription` option; `buildDescription()` prepends the namespace in list mode.
+- [switchKubernetesViewMode.ts](src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts) —
+  `switchToKubernetesTreeView` / `switchToKubernetesFlatListView` (persist + `refreshKubernetesRoot()`).
+- [ClustersExtension.ts](src/documentdb/ClustersExtension.ts) — command registration.
+- [package.json](package.json) — `switchToTreeView` / `switchToFlatListView` commands + `view/item/context`
+  menus (inline + `yheAlmostLastGroup`, hidden from the command palette).
+- Tests: [KubernetesContextItem.test.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.test.ts)
+  covers both modes. User docs updated in
+  [service-discovery-kubernetes.md](docs/user-manual/service-discovery-kubernetes.md)
+  ("Switch between list and tree view").
+
+### 14.2 Follow-up — internal settings store
+
+**Verdict:** 🟡 **Deferred (enhancement).** The view mode joins the survey state and similar flags in
+writing ad-hoc stringly-typed keys directly to `globalState`. A small typed "internal settings store"
+abstraction would centralize these; noted as future work, not blocking this PR.
+
+---
+
 _Generated for the bug‑bash‑090 UX review. Code references were verified against the
 `dev/guanzhousong/kubernetes-service-discovery` branch state present in this workspace. Behavioral items
 marked "verify live" depend on runtime timing and should be confirmed by hand._
