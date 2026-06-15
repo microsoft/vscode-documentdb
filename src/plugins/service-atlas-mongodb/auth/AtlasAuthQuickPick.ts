@@ -26,6 +26,11 @@ export async function promptAtlasAuthMethod(): Promise<AtlasAuthMethod | undefin
             description: vscode.l10n.t('Enter an Atlas API public and private key pair'),
             authMethod: 'apikey',
         },
+        {
+            label: vscode.l10n.t('$(server) Service Account'),
+            description: vscode.l10n.t('Use a Service Account client ID and secret (machine-to-machine)'),
+            authMethod: 'serviceaccount',
+        },
     ];
 
     const selected = await vscode.window.showQuickPick(items, {

@@ -15,6 +15,7 @@ import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
 import { executeApiKeyFlow } from '../auth/AtlasApiKeyFlow';
 import { promptAtlasAuthMethod } from '../auth/AtlasAuthQuickPick';
 import { executeOAuthDeviceFlow } from '../auth/AtlasOAuthDeviceFlow';
+import { executeServiceAccountFlow } from '../auth/AtlasServiceAccountFlow';
 import { AtlasSessionState } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { DISCOVERY_PROVIDER_ID } from '../config';
@@ -59,7 +60,8 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             const client = new AtlasApiClient(session);
 
             // Lazily fetch user display name if not already stored
-            if (!this.sessionManager.getUserDisplayName()) {
+            // (Service Accounts don't have user profiles, so skip for them)
+            if (!this.sessionManager.getUserDisplayName() && session.type !== 'serviceaccount') {
                 void client.getCurrentUser().then(
                     (user) => {
                         const displayName =
@@ -183,6 +185,8 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
         if (authMethod === 'oauth') {
             return executeOAuthDeviceFlow(this.sessionManager);
+        } else if (authMethod === 'serviceaccount') {
+            return executeServiceAccountFlow(this.sessionManager);
         } else {
             return executeApiKeyFlow(this.sessionManager);
         }

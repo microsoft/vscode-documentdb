@@ -6,7 +6,7 @@
 /**
  * Represents the authentication method used to connect to Atlas.
  */
-export type AtlasAuthMethod = 'oauth' | 'apikey';
+export type AtlasAuthMethod = 'oauth' | 'apikey' | 'serviceaccount';
 
 /**
  * Base session interface.
@@ -33,9 +33,18 @@ export interface AtlasApiKeySession extends AtlasSessionBase {
 }
 
 /**
+ * Service Account session using OAuth2 client_credentials grant.
+ * Uses client_id/client_secret to obtain a Bearer access token.
+ */
+export interface AtlasServiceAccountSession extends AtlasSessionBase {
+    readonly type: 'serviceaccount';
+    readonly accessToken: string;
+}
+
+/**
  * Union type representing a valid Atlas session.
  */
-export type AtlasSession = AtlasOAuthSession | AtlasApiKeySession;
+export type AtlasSession = AtlasOAuthSession | AtlasApiKeySession | AtlasServiceAccountSession;
 
 /**
  * Session state enumeration for the state machine.

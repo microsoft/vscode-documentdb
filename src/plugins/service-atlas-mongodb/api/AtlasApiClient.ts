@@ -79,7 +79,7 @@ export class AtlasApiClient {
             Accept: 'application/vnd.atlas.2023-02-01+json',
         };
 
-        if (this.session.type === 'oauth') {
+        if (this.session.type === 'oauth' || this.session.type === 'serviceaccount') {
             headers['Authorization'] = `Bearer ${this.session.accessToken}`;
 
             const response = await fetch(url, { method: 'GET', headers, signal });
