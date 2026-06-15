@@ -113,12 +113,20 @@ function sanitizeForId(value: string): string {
  * collections underneath open the collection view directly.
  */
 export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterModel> {
+    /**
+     * When true, the namespace is prepended to the node's grey description. Used by the
+     * flat "list" view mode, where clusters are listed directly under a context and the
+     * namespace is no longer visible as a parent node.
+     */
+    private readonly showNamespaceInDescription: boolean;
+
     constructor(
         journeyCorrelationId: string,
         readonly sourceId: string,
         readonly contextInfo: KubeContextInfo,
         readonly serviceInfo: KubeServiceInfo,
         parentId: string,
+        options?: { readonly showNamespaceInDescription?: boolean },
     ) {
         const sanitizedSource = sanitizeForId(sourceId);
         const sanitizedContext = sanitizeForId(contextInfo.name);
@@ -151,6 +159,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
 
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;
+        this.showNamespaceInDescription = options?.showNamespaceInDescription ?? false;
         // Keep the base `treeItem_documentdbcluster` so the standard cluster commands
         // apply uniformly (they self-guard on sign-in). `discovery.kubernetesService`
         // is retained because the copy command uses it to pick the read-only, no-tunnel
@@ -527,7 +536,15 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         // "direct" case returns an empty string so the node shows just its name; a non-empty
         // description therefore signals "there is a connectivity caveat here" at a glance. The
         // provenance ([DKO]/[Generic]), service type, and port live in the tooltip instead.
-        return this.getReachabilityInfo().description;
+        const reachability = this.getReachabilityInfo().description;
+
+        // In the flat "list" view mode the namespace is no longer a parent node, so surface it
+        // in the description (alongside any connectivity caveat) to keep clusters identifiable.
+        if (this.showNamespaceInDescription) {
+            return [this.serviceInfo.namespace, reachability].filter(Boolean).join(' · ');
+        }
+
+        return reachability;
     }
 
     private buildTooltip(): vscode.MarkdownString {
