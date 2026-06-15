@@ -664,6 +664,24 @@ export class ClustersExtension implements vscode.Disposable {
                     }),
                 );
 
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToKubernetesTreeView } =
+                            await import('../plugins/service-kubernetes/commands/switchKubernetesViewMode');
+                        await switchToKubernetesTreeView(context);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToKubernetesFlatListView } =
+                            await import('../plugins/service-kubernetes/commands/switchKubernetesViewMode');
+                        await switchToKubernetesFlatListView(context);
+                    }),
+                );
+
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.discoveryView.addConnectionToConnectionsView',
                     withTreeNodeCommandCorrelation(addConnectionFromRegistry),
