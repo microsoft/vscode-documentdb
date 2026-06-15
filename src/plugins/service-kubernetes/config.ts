@@ -62,6 +62,37 @@ export const INLINE_KUBECONFIG_SECRET_PREFIX = 'kubernetes-discovery.inlineKubec
 /** Stable id of the built-in Default kubeconfig source. */
 export const DEFAULT_SOURCE_ID = 'default';
 
+// -----------------------------------------------------------------------------
+// Discovery tree view mode (global, persisted)
+// -----------------------------------------------------------------------------
+
+/**
+ * How the Kubernetes discovery tree renders the levels beneath a context (cluster):
+ *
+ * - `list` (default): contexts list DocumentDB clusters directly, with the namespace
+ *   shown in each cluster's description. Empty namespaces are not shown.
+ * - `tree`: contexts list namespaces, and DocumentDB clusters live under each namespace.
+ *
+ * The choice is global (applies to the whole Kubernetes discovery, not a single context)
+ * and is surfaced at the context node for discoverability.
+ */
+export type KubernetesViewMode = 'list' | 'tree';
+
+/** Default view mode when the user has not toggled it yet. */
+export const DEFAULT_VIEW_MODE: KubernetesViewMode = 'list';
+
+/**
+ * GlobalState key persisting the discovery tree {@link KubernetesViewMode}.
+ *
+ * Stored directly via `ext.context.globalState` (like the survey state in
+ * `src/utils/survey.ts`) rather than a user-facing setting, so the last choice
+ * always persists without exposing it in Settings.
+ *
+ * TODO: a future "internal settings store" abstraction could centralize these
+ * ad-hoc globalState keys (see follow-up issue).
+ */
+export const DISCOVERY_VIEW_MODE_STATE_KEY = 'kubernetes-discovery.viewMode';
+
 /**
  * Discriminator describing where a kubeconfig source's bytes live.
  *
