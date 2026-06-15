@@ -8,6 +8,7 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 const mockShowInputBox = jest.fn();
 const mockAliasFor = jest.fn(async (): Promise<string | undefined> => undefined);
 const mockSetAlias = jest.fn(async (): Promise<void> => undefined);
+const mockReadAliases = jest.fn(async (): Promise<unknown[]> => []);
 const mockRefreshKubernetesRoot = jest.fn();
 
 jest.mock('vscode', () => ({
@@ -37,6 +38,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => {
 jest.mock('../sources/aliasStore', () => ({
     aliasFor: (...args: unknown[]) => mockAliasFor(...(args as [])),
     setAlias: (...args: unknown[]) => mockSetAlias(...(args as [])),
+    readAliases: (...args: unknown[]) => mockReadAliases(...(args as [])),
 }));
 
 jest.mock('./refreshKubernetesRoot', () => ({
@@ -73,6 +75,8 @@ beforeEach(() => {
     mockAliasFor.mockResolvedValue(undefined);
     mockSetAlias.mockReset();
     mockSetAlias.mockResolvedValue(undefined);
+    mockReadAliases.mockReset();
+    mockReadAliases.mockResolvedValue([]);
     mockRefreshKubernetesRoot.mockReset();
 });
 
@@ -82,7 +86,6 @@ describe('renameKubernetesContext', () => {
         const ctx = makeContext();
         const node = makeNode();
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await renameKubernetesContext(ctx, node as any);
 
         expect(mockSetAlias).toHaveBeenCalledWith('source-1', 'my-context', 'Prod AKS');
@@ -96,7 +99,6 @@ describe('renameKubernetesContext', () => {
         const ctx = makeContext();
         const node = makeNode();
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await renameKubernetesContext(ctx, node as any);
 
         expect(mockSetAlias).toHaveBeenCalledWith('source-1', 'my-context', undefined);
@@ -109,10 +111,7 @@ describe('renameKubernetesContext', () => {
         const ctx = makeContext();
         const node = makeNode();
 
-        await expect(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            renameKubernetesContext(ctx, node as any),
-        ).rejects.toBeInstanceOf(UserCancelledError);
+        await expect(renameKubernetesContext(ctx, node as any)).rejects.toBeInstanceOf(UserCancelledError);
 
         expect(mockSetAlias).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
@@ -124,7 +123,6 @@ describe('renameKubernetesContext', () => {
         const ctx = makeContext();
         const node = makeNode();
 
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         await renameKubernetesContext(ctx, node as any);
 
         const inputArgs = mockShowInputBox.mock.calls[0][0] as { value?: string };
@@ -134,10 +132,7 @@ describe('renameKubernetesContext', () => {
     it('throws a hard error when the node has no contextInfo', async () => {
         const ctx = makeContext();
 
-        await expect(
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            renameKubernetesContext(ctx, undefined as any),
-        ).rejects.toThrow('No Kubernetes context selected.');
+        await expect(renameKubernetesContext(ctx, undefined as any)).rejects.toThrow('No Kubernetes context selected.');
 
         expect(mockShowInputBox).not.toHaveBeenCalled();
     });

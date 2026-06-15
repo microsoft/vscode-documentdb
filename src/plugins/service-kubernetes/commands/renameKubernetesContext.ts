@@ -7,7 +7,7 @@ import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext
 import * as vscode from 'vscode';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { type KubernetesContextItem } from '../discovery-tree/KubernetesContextItem';
-import { aliasFor, setAlias } from '../sources/aliasStore';
+import { aliasFor, readAliases, setAlias } from '../sources/aliasStore';
 
 /**
  * Sets or clears the display alias for a Kubernetes context.
@@ -43,7 +43,15 @@ export async function renameKubernetesContext(context: IActionContext, node: Kub
 
     const trimmed = input.trim();
     await setAlias(node.sourceId, node.contextInfo.name, trimmed.length === 0 ? undefined : trimmed);
-    context.telemetry.properties.kubernetesContextResult = trimmed.length === 0 ? 'cleared' : 'renamed';
+
+    // Distinguish first-time alias ('renamed') from editing an existing one ('edited') and from
+    // clearing it ('cleared') so adoption (new aliases) is separable from churn (edits).
+    context.telemetry.properties.kubernetesContextResult =
+        trimmed.length === 0 ? 'cleared' : currentAlias ? 'edited' : 'renamed';
+    context.telemetry.measurements.aliasLength = trimmed.length;
+
+    // Total aliases now persisted across all sources — a cheap adoption-breadth signal.
+    context.telemetry.measurements.totalAliasCount = (await readAliases()).length;
 
     const { refreshKubernetesRoot } = await import('./refreshKubernetesRoot');
     refreshKubernetesRoot();
