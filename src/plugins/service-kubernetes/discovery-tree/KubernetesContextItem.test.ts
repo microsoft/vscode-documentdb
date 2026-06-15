@@ -491,7 +491,7 @@ describe('KubernetesContextItem', () => {
             expect(mockResourceItemInstances.map((r) => r.serviceInfo.name)).toEqual(['svc-a', 'svc-b']);
             expect(mockResourceItemInstances.every((r) => r.parentId === 'parent/my-context')).toBe(true);
             expect(mockResourceItemInstances.every((r) => r.options?.showNamespaceInDescription === true)).toBe(true);
-            expect(telemetryContextMock.telemetry.properties).toHaveProperty('viewMode', 'list');
+            expect(telemetryContextMock.telemetry.properties).toHaveProperty('kubernetesViewMode', 'list');
         });
 
         it('shows an informational node when no DocumentDB clusters exist in any namespace', async () => {

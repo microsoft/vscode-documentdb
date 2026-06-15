@@ -142,7 +142,7 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                 ).length;
 
                 const viewMode = this.getViewMode();
-                context.telemetry.properties.viewMode = viewMode;
+                context.telemetry.properties.kubernetesViewMode = viewMode;
 
                 if (viewMode === 'list') {
                     // Flat "list" view: list DocumentDB clusters directly under the context, with the
