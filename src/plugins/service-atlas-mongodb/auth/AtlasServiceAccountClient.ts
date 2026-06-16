@@ -38,8 +38,8 @@ export async function fetchServiceAccountToken(
         method: 'POST',
         headers: {
             'Content-Type': 'application/x-www-form-urlencoded',
-            'Authorization': `Basic ${credentials}`,
-            'Accept': 'application/json',
+            Authorization: `Basic ${credentials}`,
+            Accept: 'application/json',
             'Cache-Control': 'no-cache',
         },
         body: body.toString(),

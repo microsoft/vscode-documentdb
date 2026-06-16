@@ -6,7 +6,12 @@
 import * as vscode from 'vscode';
 import { type AtlasSession } from '../auth/AtlasSession';
 import { ATLAS_API_BASE_URL } from '../config';
-import { type AtlasCluster, type AtlasOrganization, type AtlasProject, type AtlasUserInfo } from '../models/AtlasProjectModel';
+import {
+    type AtlasCluster,
+    type AtlasOrganization,
+    type AtlasProject,
+    type AtlasUserInfo,
+} from '../models/AtlasProjectModel';
 import { computeDigestHeader, parseDigestChallenge } from './AtlasDigestAuth';
 
 /** Atlas API response envelope for paginated results */

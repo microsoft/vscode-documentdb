@@ -50,7 +50,13 @@ export function createAtlasClusterModel(
         stateName: string;
         clusterType: string;
         providerSettings?: { providerName: string; regionName: string; instanceSizeName: string };
-        replicationSpecs?: { regionConfigs?: { providerName?: string; regionName?: string; electableSpecs?: { instanceSize?: string } }[] }[];
+        replicationSpecs?: {
+            regionConfigs?: {
+                providerName?: string;
+                regionName?: string;
+                electableSpecs?: { instanceSize?: string };
+            }[];
+        }[];
     },
     dbExperience: Experience,
 ): AtlasClusterModel {
@@ -58,12 +64,18 @@ export function createAtlasClusterModel(
     const clusterId = `atlas-mongodb-discovery_${projectId}_${cluster.name}`;
 
     // Resolve provider info from top-level providerSettings or replicationSpecs
-    const provider = cluster.providerSettings ?? (() => {
-        const rc = cluster.replicationSpecs?.[0]?.regionConfigs?.[0];
-        return rc
-            ? { providerName: rc.providerName ?? '', regionName: rc.regionName ?? '', instanceSizeName: rc.electableSpecs?.instanceSize ?? '' }
-            : { providerName: '', regionName: '', instanceSizeName: '' };
-    })();
+    const provider =
+        cluster.providerSettings ??
+        (() => {
+            const rc = cluster.replicationSpecs?.[0]?.regionConfigs?.[0];
+            return rc
+                ? {
+                      providerName: rc.providerName ?? '',
+                      regionName: rc.regionName ?? '',
+                      instanceSizeName: rc.electableSpecs?.instanceSize ?? '',
+                  }
+                : { providerName: '', regionName: '', instanceSizeName: '' };
+        })();
 
     return {
         name: cluster.name,

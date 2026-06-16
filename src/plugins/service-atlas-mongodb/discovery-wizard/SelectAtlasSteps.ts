@@ -62,15 +62,18 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
         const items: (vscode.QuickPickItem & { cluster: AtlasCluster })[] = clusters
             .filter((c) => c.stateName === 'IDLE') // Only show active clusters
             .map((c) => {
-                const provider = c.providerSettings ?? (() => {
-                    const rc = c.replicationSpecs?.[0]?.regionConfigs?.[0];
-                    return rc
-                        ? { instanceSizeName: rc.electableSpecs?.instanceSize ?? '', providerName: rc.providerName ?? '' }
-                        : undefined;
-                })();
-                const desc = provider
-                    ? `${provider.instanceSizeName}, ${provider.providerName}`
-                    : c.clusterType;
+                const provider =
+                    c.providerSettings ??
+                    (() => {
+                        const rc = c.replicationSpecs?.[0]?.regionConfigs?.[0];
+                        return rc
+                            ? {
+                                  instanceSizeName: rc.electableSpecs?.instanceSize ?? '',
+                                  providerName: rc.providerName ?? '',
+                              }
+                            : undefined;
+                    })();
+                const desc = provider ? `${provider.instanceSizeName}, ${provider.providerName}` : c.clusterType;
                 return {
                     label: c.name,
                     description: desc,

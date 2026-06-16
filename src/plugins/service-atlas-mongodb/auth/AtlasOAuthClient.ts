@@ -122,25 +122,17 @@ export async function pollForDeviceToken(
 
         const errorCode = errorBody.errorCode ?? errorBody.error ?? '';
 
-        if (
-            errorCode === 'DEVICE_AUTHORIZATION_PENDING' ||
-            errorCode === 'authorization_pending'
-        ) {
+        if (errorCode === 'DEVICE_AUTHORIZATION_PENDING' || errorCode === 'authorization_pending') {
             // User hasn't authenticated yet, continue polling
             continue;
         } else if (errorCode === 'slow_down') {
             // Increase interval — wait extra time on next iteration
             await new Promise((resolve) => setTimeout(resolve, 5000));
             continue;
-        } else if (
-            errorCode === 'DEVICE_AUTHORIZATION_EXPIRED' ||
-            errorCode === 'expired_token'
-        ) {
+        } else if (errorCode === 'DEVICE_AUTHORIZATION_EXPIRED' || errorCode === 'expired_token') {
             throw new Error(vscode.l10n.t('Authentication timed out. Please try again.'));
         } else {
-            throw new Error(
-                vscode.l10n.t('Atlas authentication failed: {0}', errorCode || String(response.status)),
-            );
+            throw new Error(vscode.l10n.t('Atlas authentication failed: {0}', errorCode || String(response.status)));
         }
     }
 
@@ -167,7 +159,11 @@ export async function refreshOAuthToken(refreshToken: string): Promise<AtlasOAut
     if (!response.ok) {
         let errorDetail = `${response.status}`;
         try {
-            const errorBody = (await response.json()) as { error?: string; error_description?: string; errorCode?: string };
+            const errorBody = (await response.json()) as {
+                error?: string;
+                error_description?: string;
+                errorCode?: string;
+            };
             errorDetail = errorBody.error ?? errorBody.errorCode ?? errorDetail;
             if (errorBody.error_description) {
                 errorDetail += `: ${errorBody.error_description}`;

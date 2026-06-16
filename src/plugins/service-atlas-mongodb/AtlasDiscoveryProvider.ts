@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext, type IWizardOptions } from '@microsoft/vscode-azext-utils';
+import { type IActionContext, type IWizardOptions, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { Disposable, l10n, QuickPickItemKind, window } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { Views } from '../../documentdb/Views';
@@ -14,7 +14,7 @@ import { AtlasApiClient } from './api/AtlasApiClient';
 import { executeApiKeyFlow } from './auth/AtlasApiKeyFlow';
 import { promptAtlasAuthMethod } from './auth/AtlasAuthQuickPick';
 import { executeOAuthDeviceFlow } from './auth/AtlasOAuthDeviceFlow';
-import { AtlasSessionState } from './auth/AtlasSession';
+import { type AtlasSession, AtlasSessionState } from './auth/AtlasSession';
 import { AtlasSessionManager } from './auth/AtlasSessionManager';
 import { DESCRIPTION, DISCOVERY_PROVIDER_ID, ICON_PATH, LABEL, WIZARD_TITLE } from './config';
 import { AtlasServiceRootItem } from './discovery-tree/AtlasServiceRootItem';
@@ -59,9 +59,12 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         return new AtlasServiceRootItem(this.sessionManager, parentId);
     }
 
-    getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext> {
-        // Ensure session is available for wizard steps
-        const session = this.sessionManager.getSession();
+    async getDiscoveryWizard(context: NewConnectionWizardContext): Promise<IWizardOptions<NewConnectionWizardContext>> {
+        let session = await this.sessionManager.getSession();
+        if (!session) {
+            session = await this.promptSignInForWizard(context);
+        }
+
         context.properties['atlas.session'] = session;
 
         return {
@@ -70,6 +73,32 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
             executeSteps: [new AtlasExecuteStep()],
             showLoadingPrompt: true,
         };
+    }
+
+    /**
+     * Prompts the user to authenticate to Atlas during the new-connection wizard and returns the
+     * resulting session. Throws {@link UserCancelledError} if the user dismisses the auth-method
+     * prompt, and returns undefined if authentication was attempted but did not succeed.
+     */
+    private async promptSignInForWizard(context: NewConnectionWizardContext): Promise<AtlasSession | undefined> {
+        const authMethod = await promptAtlasAuthMethod();
+        if (!authMethod) {
+            throw new UserCancelledError();
+        }
+
+        const success =
+            authMethod === 'oauth'
+                ? await executeOAuthDeviceFlow(this.sessionManager)
+                : await executeApiKeyFlow(this.sessionManager);
+
+        if (!success) {
+            return undefined;
+        }
+
+        context.telemetry.properties.authMethod = authMethod;
+        context.telemetry.properties.authSuccess = 'true';
+
+        return this.sessionManager.getSession();
     }
 
     getLearnMoreUrl(): string | undefined {
@@ -102,9 +131,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         if (selectedOrgId) {
             projects = projects.filter((project) => project.orgId === selectedOrgId);
             if (projects.length === 0) {
-                void window.showInformationMessage(
-                    l10n.t('No projects found for the selected organization.'),
-                );
+                void window.showInformationMessage(l10n.t('No projects found for the selected organization.'));
                 return;
             }
         }

@@ -390,10 +390,12 @@ export class AtlasSessionManager {
         if (error instanceof Error) {
             const message = error.message.toLowerCase();
             // Server explicitly rejected the refresh token (HTTP 400/401 from token endpoint)
-            return message.includes('invalid_grant') ||
+            return (
+                message.includes('invalid_grant') ||
                 message.includes('invalid_token') ||
                 message.includes('token has been revoked') ||
-                (message.includes('refresh token') && message.includes('expired'));
+                (message.includes('refresh token') && message.includes('expired'))
+            );
         }
         return false;
     }

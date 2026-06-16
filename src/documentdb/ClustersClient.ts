@@ -1073,9 +1073,9 @@ export class ClustersClient {
             await this._mongoClient.db(databaseName).createCollection(collectionName);
         } else {
             const newCollection = await this._mongoClient
-            .db(databaseName)
-            .createCollection('_dummy_collection_creation_forces_db_creation');
-        await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
+                .db(databaseName)
+                .createCollection('_dummy_collection_creation_forces_db_creation');
+            await newCollection.drop({ writeConcern: { w: 'majority', wtimeoutMS: 5000 } });
         }
         this._databasesCache = null;
     }

@@ -92,7 +92,10 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
                     return [this.createSignInNode()];
                 }
 
-                // 403 — genuinely lacks permissions
+                // 403 — genuinely lacks permissions. Clear the cached session so that
+                // "Manage Credentials" re-prompts for authentication instead of showing
+                // the already-signed-in path with a stale, under-privileged session.
+                await this.sessionManager.signOut();
                 return [this.createErrorNode(error.message)];
             }
 
@@ -123,9 +126,8 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
         // Apply organization filter (set via Manage Credentials → Organizations)
         const selectedOrgId = this.sessionManager.getSelectedOrgId();
-        let filteredProjects = selectedOrgId === undefined
-            ? projects
-            : projects.filter((project) => project.orgId === selectedOrgId);
+        let filteredProjects =
+            selectedOrgId === undefined ? projects : projects.filter((project) => project.orgId === selectedOrgId);
 
         // Apply project filter (set via Filter icon)
         const selectedProjectIds = this.sessionManager.getSelectedProjectIds();
@@ -153,7 +155,9 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
         return filteredProjects
             .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-            .map((project) => new AtlasProjectItem(this.id, project, this.sessionManager, orgNameMap.get(project.orgId)));
+            .map(
+                (project) => new AtlasProjectItem(this.id, project, this.sessionManager, orgNameMap.get(project.orgId)),
+            );
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {

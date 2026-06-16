@@ -42,9 +42,13 @@ export interface DiscoveryProvider extends ProviderDescription {
      * Retrieves wizard options for discovering new connections.
      *
      * @param context - The wizard context used during the discovery process.
-     * @returns Wizard options configured for the discovery process.
+     * @returns Wizard options configured for the discovery process. Providers may return the
+     *          options synchronously or asynchronously (e.g. when they need to resolve a session
+     *          or prompt for authentication before the wizard steps run).
      */
-    getDiscoveryWizard(context: NewConnectionWizardContext): IWizardOptions<NewConnectionWizardContext>;
+    getDiscoveryWizard(
+        context: NewConnectionWizardContext,
+    ): IWizardOptions<NewConnectionWizardContext> | Promise<IWizardOptions<NewConnectionWizardContext>>;
 
     /**
      * Retrieves the root tree item for the discovery tree view.

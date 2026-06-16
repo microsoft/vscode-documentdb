@@ -71,9 +71,7 @@ export async function executeServiceAccountFlow(sessionManager: AtlasSessionMana
         return true;
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(
-            vscode.l10n.t('Failed to authenticate Service Account: {0}', errorMessage),
-        );
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to authenticate Service Account: {0}', errorMessage));
         return false;
     }
 }

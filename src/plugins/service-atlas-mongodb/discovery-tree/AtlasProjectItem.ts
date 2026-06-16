@@ -63,12 +63,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
             return clusters
                 .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
                 .map((cluster) => {
-                    const model = createAtlasClusterModel(
-                        this.project.id,
-                        this.project.name,
-                        cluster,
-                        AtlasExperience,
-                    );
+                    const model = createAtlasClusterModel(this.project.id, this.project.name, cluster, AtlasExperience);
                     const treeCluster = {
                         ...model,
                         treeId: `${this.id}/${cluster.name}`,
@@ -111,6 +106,20 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                         contextValue: 'error',
                         id: `${this.id}/auth-error`,
                         label: vscode.l10n.t('Authentication expired. Please sign in again.'),
+                        iconPath: new vscode.ThemeIcon('error'),
+                    }),
+                ];
+            }
+
+            if (error instanceof AtlasApiError && error.statusCode === 403) {
+                // Genuinely lacks permissions. Clear the cached session so that
+                // "Manage Credentials" re-prompts for authentication.
+                await this.sessionManager.signOut();
+                return [
+                    createGenericElementWithContext({
+                        contextValue: 'error',
+                        id: `${this.id}/auth-error`,
+                        label: error.message,
                         iconPath: new vscode.ThemeIcon('error'),
                     }),
                 ];

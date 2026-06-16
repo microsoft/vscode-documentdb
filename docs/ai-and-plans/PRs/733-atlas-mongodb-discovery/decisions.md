@@ -127,9 +127,9 @@ This prevents a jarring sign-out when the access token simply expired between se
 ### 9. 401 vs 403 handled differently
 
 - **401 Unauthorized**: the session is invalid/expired and refresh failed. Sign out completely (`sessionManager.signOut()`), reset to None state, show a "Sign in" node.
-- **403 Forbidden**: the session is valid but the user lacks permissions on this resource (e.g., not a project member). Do **not** sign out — the credentials are correct. Show an error node with the message.
+- **403 Forbidden**: the session authenticated, but the credentials lack the required permissions (e.g., an API key without the right project/org roles). For OAuth sessions, a silent token refresh is attempted first; if it still fails, the cached session is cleared via `sessionManager.signOut()` and an error node with the API message is shown.
 
-Signing out on 403 would be destructive and wrong: the user's credentials are fine; they just need to be added to the Atlas project.
+> **Revised (see Bug 5):** The original design did **not** sign out on 403, on the assumption that the credentials were correct and the user merely needed to be added to the project. In practice, the common 403 case is an under-privileged API key. Leaving the session cached meant "Manage Credentials" took the already-signed-in path and never let the user re-enter credentials. The session is now cleared on 403 so that "Manage Credentials" re-prompts for authentication.
 
 ### 10. User display name loaded lazily, fire-and-forget
 
@@ -343,3 +343,44 @@ if (error instanceof AtlasApiError && error.statusCode === 401) {
 **Root cause:** The Service Account flow was designed and implemented as part of the initial plugin, but the `AtlasSession` type definition was written before the Service Account requirements were fully fleshed out, so it only covered the two originally planned methods.
 
 **Fix:** Added `AtlasServiceAccountSession` to the union and updated all switch/narrowing points in `AtlasApiClient`, `AtlasSessionManager`, and `AtlasServiceRootItem`. The fix was made within the same initial commit (`39a43bf8`) before it was pushed.
+
+---
+
+### Bug 5 — 403 "Access denied" left a stale session cached, so "Manage Credentials" never re-prompted for credentials
+
+**Symptom:** When the Atlas Admin API returned `403 Forbidden` ("Access denied. Verify your API key has the required permissions.") — typically because the supplied API key lacked the required project/org roles — the tree showed an error node, but the under-privileged session stayed cached as `Active`. Clicking **Manage Credentials** then took the "already signed in" path (showing the account with a *Sign Out* option) instead of letting the user re-enter their credentials. The only way to recover was to manually sign out first, then sign back in.
+
+**Root cause:** `AtlasServiceRootItem.getChildren()` treated 403 as a non-destructive "lacks permissions" case and returned an error node **without** clearing the session:
+
+```typescript
+// BEFORE (broken — in AtlasServiceRootItem)
+if (error.statusCode === 401) {
+    await this.sessionManager.signOut();
+    return [this.createSignInNode()];
+}
+
+// 403 — genuinely lacks permissions
+return [this.createErrorNode(error.message)];
+```
+
+Because the session remained `Active`, `AtlasDiscoveryProvider.configureCredentials()` short-circuited into the signed-in branch and never reached `authenticateAndFetchUserInfo()` (which prompts for the auth method and credentials). `AtlasProjectItem.getChildren()` had the same gap — it only cleared the session on 401, not 403.
+
+**Fix:** On a 403, clear the cached session via `sessionManager.signOut()` in both tree levels (after the OAuth refresh-then-retry attempt still fails). With the session reset to `None`, the next **Manage Credentials** invocation skips the already-signed-in path and prompts for authentication again.
+
+```typescript
+// AFTER (fixed — in AtlasServiceRootItem)
+if (error.statusCode === 401) {
+    await this.sessionManager.signOut();
+    return [this.createSignInNode()];
+}
+
+// 403 — genuinely lacks permissions. Clear the cached session so that
+// "Manage Credentials" re-prompts for authentication instead of showing
+// the already-signed-in path with a stale, under-privileged session.
+await this.sessionManager.signOut();
+return [this.createErrorNode(error.message)];
+```
+
+`AtlasProjectItem.getChildren()` received the matching 403 branch (sign out + error node) alongside its existing 401 handling.
+
+**Why the original design was reconsidered:** The initial reasoning (Decision #9) assumed a 403 always meant "valid credentials, missing project membership," where signing out would be destructive. In practice the dominant 403 case is an API key that was never granted sufficient permissions — and for that case the user genuinely needs to supply different credentials, which the cached session was actively blocking.
