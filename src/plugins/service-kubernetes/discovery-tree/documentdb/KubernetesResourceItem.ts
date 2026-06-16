@@ -97,6 +97,15 @@ interface ReachabilityInfo {
 }
 
 /**
+ * Help/documentation entry point surfaced from the discovered-target tooltip when TLS certificate
+ * validation is disabled. Points (via aka.ms) at the Kubernetes Service Discovery user-manual page,
+ * whose "Connection security (TLS/SSL)" section explains why validation is disabled by default and how
+ * to re-enable it on a saved connection. Same URL as the provider's "Learn more" entry.
+ */
+const KUBERNETES_DISCOVERY_LEARN_MORE_TSLSSL_URL =
+    'https://aka.ms/vscode-documentdb-discovery-providers-kubernetes#connection-security-tlsssl';
+
+/**
  * Sanitizes a string for use in tree IDs and cluster IDs.
  * Uses double-underscore as separator to avoid collisions
  * (K8s names can contain single underscores but not double).
@@ -602,9 +611,19 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         // certificate), which disables TLS certificate verification. Surface this the same way the
         // Connections-view node flags an emulator with security disabled, so the user is aware the
         // discovered connection does not validate the server certificate. The note lives only in
-        // the tooltip (not the always-visible description) to avoid cluttering the row.
+        // the tooltip (not the always-visible description) to avoid cluttering the row. A second
+        // line links to the Help-section documentation (plain https links render clickable in
+        // tooltips without needing `isTrusted`).
         if (this.disablesTlsValidation()) {
-            sections.push(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL certificate validation disabled')}`);
+            sections.push(
+                [
+                    `⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL certificate validation disabled')}`,
+                    l10n.t(
+                        'Visit the [documentation]({0}) for more information about TLS/SSL certificates.',
+                        KUBERNETES_DISCOVERY_LEARN_MORE_TSLSSL_URL,
+                    ),
+                ].join('\n'),
+            );
         }
 
         const tooltip = new vscode.MarkdownString(sections.join('\n\n---\n\n'));

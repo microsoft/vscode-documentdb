@@ -1422,6 +1422,7 @@
   "View Raw Explain Output": "View Raw Explain Output",
   "View selected document": "View selected document",
   "Viewing Azure account information for: {0}": "Viewing Azure account information for: {0}",
+  "Visit the [documentation]({0}) for more information about TLS/SSL certificates.": "Visit the [documentation]({0}) for more information about TLS/SSL certificates.",
   "VS Code connects through the Kubernetes PortForward API. Connection strings using 127.0.0.1 only work on this machine while the tunnel is active.": "VS Code connects through the Kubernetes PortForward API. Connection strings using 127.0.0.1 only work on this machine while the tunnel is active.",
   "VS Code: v{0}": "VS Code: v{0}",
   "Waiting for Azure sign-in...": "Waiting for Azure sign-in...",

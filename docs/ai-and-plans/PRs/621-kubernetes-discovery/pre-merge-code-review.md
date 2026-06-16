@@ -14,12 +14,12 @@
 
 ## How to read the severity
 
-| Severity         | Meaning                                                                                                    |
-| ---------------- | ---------------------------------------------------------------------------------------------------------- |
-| 🔴 **High**      | Should be addressed (or consciously accepted with a tracking issue) **before** merge to `main`.            |
-| 🟠 **Medium**    | Real issue; **can ship** and be fixed in a follow-up **patch** (`vX.Y.1`). Document/track it.              |
-| 🟡 **Low**       | Minor / polish / hygiene. Backlog.                                                                          |
-| 🔵 **Info**      | Not a defect — an observation, a doc-vs-code drift, or something to confirm by hand.                        |
+| Severity      | Meaning                                                                                         |
+| ------------- | ----------------------------------------------------------------------------------------------- |
+| 🔴 **High**   | Should be addressed (or consciously accepted with a tracking issue) **before** merge to `main`. |
+| 🟠 **Medium** | Real issue; **can ship** and be fixed in a follow-up **patch** (`vX.Y.1`). Document/track it.   |
+| 🟡 **Low**    | Minor / polish / hygiene. Backlog.                                                              |
+| 🔵 **Info**   | Not a defect — an observation, a doc-vs-code drift, or something to confirm by hand.            |
 
 **Bottom line up front:** the feature is **well-architected and ship-able**. Integration into both
 discovery paths is correct, the port-forward lifecycle is carefully handled, and error surfacing is
@@ -78,7 +78,7 @@ Both entry points the user reaches the feature through are wired correctly.
 > ✅ **Resolved (commit `fix(kubernetes): surface disabled TLS validation on discovered targets`).** The
 > insecure default is **accepted** as the right behavior for the common DKO self-signed path, but it is no
 > longer silent: (1) discovered target nodes now show a `⚠️ Security: TLS/SSL certificate validation
-> disabled` line in their hover tooltip — same treatment the Connections-view node gives an emulator with
+disabled` line in their hover tooltip — same treatment the Connections-view node gives an emulator with
 > security disabled — via `disablesTlsValidation()` in
 > [KubernetesResourceItem.ts](../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts);
 > and (2) a new **"Connection security (TLS/SSL)"** section in the user manual explains the default, why it
@@ -118,7 +118,16 @@ DocumentDB connections accept invalid/self-signed certs, which means no protecti
   user, but it is an insecure default that ships silently. Not a hard blocker; **must be a conscious
   decision**, ideally with a tracking issue.
 
-### 2.2 🟠 No request-level timeout or cancellation on Kubernetes API calls
+### 2.2 🟠 No request-level timeout or cancellation on Kubernetes API calls — 📝 TRACKED (#741, 0.9.1)
+
+> 📝 **Tracked as [#741](https://github.com/microsoft/vscode-documentdb/issues/741) (milestone 0.9.1).**
+> Confirmed against the shipped `@kubernetes/client-node` v1.4.0 code: there is **no built-in request
+> timeout** — the transport is `node-fetch` v2 called with no `timeout`, generated methods take no
+> `AbortSignal`, and a connect blackhole hangs until the OS TCP timeout (minutes). **Agreed fix:** cap every
+> discovery API call at **30s** via a client-wide `pre` middleware (`AbortSignal.timeout(30_000)`) attached
+> where the API clients are built (`createCoreApi` + the DKO `CustomObjectsApi`), and on timeout render the
+> existing **"Click here to retry"** error node. **No** cancellation-on-collapse. See the issue for the full
+> implementation plan.
 
 The discovery tree calls `listNamespace()`, `listNamespacedCustomObject()` (DKO `dbs`),
 `listNamespacedService()` (via `listDocumentDBServices`), `readNamespacedEndpoints()`, and secret reads
@@ -131,9 +140,9 @@ using the `@kubernetes/client-node` defaults — **no per-request timeout and no
   "cancel" affordance; the user can't tell discovery from a hang.
 - **Where it bites:** `KubernetesContextItem.getChildren()` (namespace list, then the bounded-concurrency
   per-namespace prescan) and any connect/expand of a target.
-- **Mitigations already present:** errors that *do* surface are turned into retry/error nodes, logged to
-  `[KubernetesDiscovery]` in the output channel, and the prescan uses bounded concurrency (5). So a *fast*
-  failure is handled well — it's the *slow/hung* case that has no ceiling.
+- **Mitigations already present:** errors that _do_ surface are turned into retry/error nodes, logged to
+  `[KubernetesDiscovery]` in the output channel, and the prescan uses bounded concurrency (5). So a _fast_
+  failure is handled well — it's the _slow/hung_ case that has no ceiling.
 - **Suggested (follow-up, patch-able):** wrap the API calls in a bounded timeout (e.g. 10–20s) that
   rejects into the existing error-node path, and/or pass a cancellation token so collapsing the node
   aborts in-flight requests.
@@ -151,7 +160,6 @@ using the `@kubernetes/client-node` defaults — **no per-request timeout and no
 > in-product clipboard consent (#4) already gates the paste path. An optional `exec`-block detection caveat
 > remains a possible future enhancement.
 
-
 `@kubernetes/client-node` honors `users[].user.exec` credential plugins (the standard mechanism AKS/EKS/GKE
 use: `kubelogin`, `aws`, `gke-gcloud-auth-plugin`). When the user **expands** a source (namespace listing),
 the client may **spawn the configured external command** to obtain a token.
@@ -160,11 +168,11 @@ the client may **spawn the configured external command** to obtain a token.
   user-supplied content. A malicious YAML could specify an arbitrary `exec.command`, so expanding it would
   execute that command locally with the user's privileges.
 - **Context:** this is exactly `kubectl`'s threat model — loading a kubeconfig is implicitly trusting it.
-  The clipboard **consent** dialog (#4) only warns about *reading the clipboard*, not about the *exec*
+  The clipboard **consent** dialog (#4) only warns about _reading the clipboard_, not about the _exec_
   consequence of trusting the YAML.
 - **Suggested (follow-up):** (a) document the trust model ("only add kubeconfig sources you trust; they can
   reference external auth helper programs that run on your machine"); (b) optionally detect an `exec` auth
-  block in a *pasted/dropped* source and add a one-line caveat to the existing consent/validation step.
+  block in a _pasted/dropped_ source and add a one-line caveat to the existing consent/validation step.
 - **Severity rationale:** Medium — consistent with established kubectl behavior and requires the user to
   paste a hostile config, but the IDE clipboard-paste flow lowers the bar vs. hand-editing `~/.kube/config`.
   Document before broad release; not a code blocker.
@@ -222,11 +230,11 @@ The UX review doc (`bugbash-090-kubernetes-ux-review.md`) still describes some t
 from the current code. A reviewer trusting that doc could be misled:
 
 - **§8.1 ClusterIP "Copy…" quick pick** (with `kubectl port-forward` command + Learn more) is described as
-  *deferred to iteration 3*, but it is **implemented** in
+  _deferred to iteration 3_, but it is **implemented** in
   [copyConnectionString.ts](../../../../src/commands/copyConnectionString/copyConnectionString.ts)
   (`copyKubernetesPortForwardConnection`, `buildKubectlPortForwardCommand`,
   `KUBERNETES_PORT_FORWARD_LEARN_MORE_URL`).
-- **Discovered-target icon:** §8.1/§9.4 describe a *reachability glyph* (`globe`/`server`/`plug`/`warning`)
+- **Discovered-target icon:** §8.1/§9.4 describe a _reachability glyph_ (`globe`/`server`/`plug`/`warning`)
   as the node icon, but the shipped code uses the **DocumentDB brand icon** (matching the user manual). The
   reachability glyph now lives only on the tooltip's "Reachability" line.
 
@@ -238,7 +246,7 @@ as the source of truth — it matches the code. Recommend reconciling or stampin
 §9.4 removed the negative-lookahead exclusions so **Create Database / Copy Connection String / Open
 Interactive Shell / Data Migration** now apply uniformly to the K8s node, relying on each command's
 sign-in self-guard (expand-to-connect first establishes the tunnel). The doc explicitly leaves **Open
-Interactive Shell on a ClusterIP** as *pending manual verification*. Worth a deliberate hand-test before
+Interactive Shell on a ClusterIP** as _pending manual verification_. Worth a deliberate hand-test before
 sign-off: expand a ClusterIP target (tunnel up), then open the shell, and confirm it connects (or is
 gracefully guarded) rather than handing the shell an opaque `127.0.0.1` with no tunnel.
 
@@ -260,12 +268,12 @@ Confirmed the documented RBAC matrix matches the code: `namespaces`/`services`/`
 | Context (namespace list) fails (RBAC/net) | Non-modal tree **error node** with retry; logged to output channel; telemetry tags error type                   | ✅ good    |
 | Per-namespace prescan fails               | That namespace stays expandable with its own retry; other namespaces unaffected                                 | ✅ good    |
 | LoadBalancer pending / InternalIP only    | `pending`/`node-routed` reachability word + warning toast; honest connection-string portability messaging       | ✅ good    |
-| ClusterIP, no ready pods                   | `resolveServiceBackend` throws a localized "No ready pods found…" error                                          | ✅ good    |
-| Port bind EADDRINUSE after reload          | One 750ms bind-retry, then "use existing process?" prompt; cancellation-checked; audited to output channel      | ✅ good    |
-| Source removed while tunnel active         | `stopTunnelsForSource` closes only that source's tunnels + cancels pending starts                               | ✅ good    |
-| Saved ClusterIP reconnect                  | `ConnectionReachabilityService` re-establishes tunnel from stored metadata before connect/copy                  | ✅ good    |
-| Extension deactivate                       | `KubernetesDiscoveryProvider.deactivate` → `PortForwardTunnelManager.stopAll()`                                 | ✅ good    |
-| Removed source referenced by saved conn    | `ensureKubernetesPortForward` throws a friendly "source not found, re-add it" message using saved `sourceLabel` | ✅ good    |
+| ClusterIP, no ready pods                  | `resolveServiceBackend` throws a localized "No ready pods found…" error                                         | ✅ good    |
+| Port bind EADDRINUSE after reload         | One 750ms bind-retry, then "use existing process?" prompt; cancellation-checked; audited to output channel      | ✅ good    |
+| Source removed while tunnel active        | `stopTunnelsForSource` closes only that source's tunnels + cancels pending starts                               | ✅ good    |
+| Saved ClusterIP reconnect                 | `ConnectionReachabilityService` re-establishes tunnel from stored metadata before connect/copy                  | ✅ good    |
+| Extension deactivate                      | `KubernetesDiscoveryProvider.deactivate` → `PortForwardTunnelManager.stopAll()`                                 | ✅ good    |
+| Removed source referenced by saved conn   | `ensureKubernetesPortForward` throws a friendly "source not found, re-add it" message using saved `sourceLabel` | ✅ good    |
 
 Error messages are consistently localized (`vscode.l10n.t`), type-guard `error instanceof Error`, and route
 diagnostics to the `[KubernetesDiscovery]` output channel. Telemetry is instrumented on the key flows with
@@ -295,17 +303,17 @@ call **returns** (success or failure) in a reasonable time.
 
 ## 5. Undocumented / under-documented behavior
 
-| Behavior                                                                                              | Documented?                                              | Note |
-| ----------------------------------------------------------------------------------------------------- | -------------------------------------------------------- | ---- |
-| **List vs Tree view mode** toggle (global, persisted in `globalState`, no setting)                    | ✅ "Switch between list and tree view" section            | Good |
-| **Rename context (display alias)**, per-source, kubeconfig untouched                                  | ✅ "Rename a context (display alias)" section             | Good |
-| **DKO + generic + known-port** discovery order, opt-in annotation/label                               | ✅ "Discovery rules" section                              | Good |
-| **Credential secret conventions** (DKO `documentDbCredentialSecret`, generic annotation)              | ✅ "Credential secret conventions" section                | Good |
-| **Port-forward settings** (`localPortStrategy`, `localPortBase`)                                       | ✅ in package.json + user manual                          | Good |
-| **`tlsAllowInvalidCertificates=true`** on every discovered connection string                          | ✅ **now documented** (§2.1 — "Connection security (TLS/SSL)")    | Done |
-| **`exec` credential plugins may run local binaries** when expanding a source                           | ✅ **now documented** (§2.3 — "Add a kubeconfig source" warning) | Done |
-| **No timeout** on API calls / "tree may spin on an unreachable cluster"                                | ❌ not documented (see 2.2)                               | Gap  |
-| `DISCOVERY_VIEW_MODE_STATE_KEY` and other ad-hoc `globalState` keys                                    | n/a (internal); TODO comment notes a future settings store | Info |
+| Behavior                                                                                 | Documented?                                                      | Note |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------- | ---- |
+| **List vs Tree view mode** toggle (global, persisted in `globalState`, no setting)       | ✅ "Switch between list and tree view" section                   | Good |
+| **Rename context (display alias)**, per-source, kubeconfig untouched                     | ✅ "Rename a context (display alias)" section                    | Good |
+| **DKO + generic + known-port** discovery order, opt-in annotation/label                  | ✅ "Discovery rules" section                                     | Good |
+| **Credential secret conventions** (DKO `documentDbCredentialSecret`, generic annotation) | ✅ "Credential secret conventions" section                       | Good |
+| **Port-forward settings** (`localPortStrategy`, `localPortBase`)                         | ✅ in package.json + user manual                                 | Good |
+| **`tlsAllowInvalidCertificates=true`** on every discovered connection string             | ✅ **now documented** (§2.1 — "Connection security (TLS/SSL)")   | Done |
+| **`exec` credential plugins may run local binaries** when expanding a source             | ✅ **now documented** (§2.3 — "Add a kubeconfig source" warning) | Done |
+| **No timeout** on API calls / "tree may spin on an unreachable cluster"                  | ❌ not documented (see 2.2)                                      | Gap  |
+| `DISCOVERY_VIEW_MODE_STATE_KEY` and other ad-hoc `globalState` keys                      | n/a (internal); TODO comment notes a future settings store       | Info |
 
 The user manual is **excellent** overall (RBAC matrix, provider-detection table, troubleshooting table,
 endpoint-resolution table). The only documentation gaps are the two **security-relevant defaults** (2.1,
@@ -342,18 +350,18 @@ No correctness defects surfaced in these paths.
 
 ## 7. Summary table
 
-| #    | Finding                                                                  | Severity   | Ship blocker? | Suggested disposition                          |
-| ---- | ------------------------------------------------------------------------ | ---------- | ------------- | ---------------------------------------------- |
-| 2.1  | TLS cert validation disabled by default on all discovered conn strings   | 🟠 Medium  | No            | ✅ DONE — accepted + tooltip warning + docs (saved-conn override) |
-| 2.2  | No request timeout / cancellation on K8s API calls (tree can hang)       | 🟠 Medium  | No            | Under investigation (subagent analysis of client-node) |
-| 2.3  | Pasted/dropped kubeconfig `exec` plugin can run a local binary           | 🟠 Medium  | No            | ✅ DONE — trust model documented               |
-| 2.4  | `createCoreApi` mutates shared `KubeConfig`                              | 🟡 Low     | No            | Keep invariant or clone defensively            |
-| 2.5  | Namespace prescan has no per-namespace ceiling (pairs with 2.2)          | 🟡 Low     | No            | Revisit with telemetry (already planned)       |
-| 2.6  | `bufferutil` / `utf-8-validate` externalized (not bundled)              | 🟡 Low     | No            | Verify against packaged VSIX                    |
-| 2.7  | `@kubernetes/client-node` caret-ranged (`^1.4.0`)                       | 🟡 Low     | No            | ✅ DONE — pinned to exact `1.4.0`              |
-| 2.8  | UX-review doc drift (Copy quick pick / icon already shipped)             | 🔵 Info    | No            | Reconcile doc; user manual is source of truth  |
-| 2.9  | Open Interactive Shell on ClusterIP unverified                          | 🔵 Info    | No            | Hand-test before sign-off                       |
-| 4.x  | Ellipsis convention nit on Edit/View Kubeconfig                          | 🟡 Low     | No            | Optional eyeball                                |
+| #   | Finding                                                                | Severity  | Ship blocker? | Suggested disposition                                                                                        |
+| --- | ---------------------------------------------------------------------- | --------- | ------------- | ------------------------------------------------------------------------------------------------------------ |
+| 2.1 | TLS cert validation disabled by default on all discovered conn strings | 🟠 Medium | No            | ✅ DONE — accepted + tooltip warning + docs (saved-conn override)                                            |
+| 2.2 | No request timeout / cancellation on K8s API calls (tree can hang)     | 🟠 Medium | No            | 📝 TRACKED — [#741](https://github.com/microsoft/vscode-documentdb/issues/741) (0.9.1): cap 30s + retry node |
+| 2.3 | Pasted/dropped kubeconfig `exec` plugin can run a local binary         | 🟠 Medium | No            | ✅ DONE — trust model documented                                                                             |
+| 2.4 | `createCoreApi` mutates shared `KubeConfig`                            | 🟡 Low    | No            | Keep invariant or clone defensively                                                                          |
+| 2.5 | Namespace prescan has no per-namespace ceiling (pairs with 2.2)        | 🟡 Low    | No            | Revisit with telemetry (already planned)                                                                     |
+| 2.6 | `bufferutil` / `utf-8-validate` externalized (not bundled)             | 🟡 Low    | No            | Verify against packaged VSIX                                                                                 |
+| 2.7 | `@kubernetes/client-node` caret-ranged (`^1.4.0`)                      | 🟡 Low    | No            | ✅ DONE — pinned to exact `1.4.0`                                                                            |
+| 2.8 | UX-review doc drift (Copy quick pick / icon already shipped)           | 🔵 Info   | No            | Reconcile doc; user manual is source of truth                                                                |
+| 2.9 | Open Interactive Shell on ClusterIP unverified                         | 🔵 Info   | No            | Hand-test before sign-off                                                                                    |
+| 4.x | Ellipsis convention nit on Edit/View Kubeconfig                        | 🟡 Low    | No            | Optional eyeball                                                                                             |
 
 > **Post-review update (2026-06-16):** **2.1**, **2.3**, and **2.7** have been **resolved** (see the inline
 > ✅ DONE notes above), each as its own commit. **2.1** was accepted as the right default and made visible
@@ -370,7 +378,8 @@ No correctness defects surfaced in these paths.
 **Merge-ready** from an architecture, integration, and error-handling standpoint. No code-level blockers.
 
 **2.1 (TLS default)**, **2.3 (exec-plugin trust)**, and **2.7 (dependency pin)** are now **resolved**
-(see the ✅ DONE notes in §2). **2.2 (timeouts)** is **under investigation** before deciding whether any
-code change is warranted (the working hypothesis is that the upstream Kubernetes client already imposes a
-request timeout). Hand-verify **2.9 (shell on ClusterIP)** and **2.6 (packaged native optionals)** as part
-of release validation. Everything else is Low/Info and can ride the backlog.
+(see the ✅ DONE notes in §2). **2.2 (timeouts)** is **tracked as
+[#741](https://github.com/microsoft/vscode-documentdb/issues/741) (milestone 0.9.1)** — confirmed the
+upstream client has no built-in timeout, so the agreed follow-up caps discovery calls at 30s and falls into
+the existing retry error node. Hand-verify **2.9 (shell on ClusterIP)** and **2.6 (packaged native
+optionals)** as part of release validation. Everything else is Low/Info and can ride the backlog.
