@@ -226,7 +226,7 @@ which shows _no_ in-webview progress at all. While the container work runs,
 the **Start** button is disabled and shows a spinner, and a failure renders
 as a single inline error message with a **Retry** (the terminal carries the
 detail). The staged progress list, per-stage percentages, and per-step
-inline expansion shown below are the **v1.1** enriched view (§15); the
+inline expansion shown below are the **v1.2** enriched view (§15); the
 diagram illustrates that target, not the v1.0 surface.
 
 ```
@@ -256,7 +256,7 @@ diagram illustrates that target, not the v1.0 surface.
 +======================================================================+
 ```
 
-On failure (v1.1 enriched view), the failed step expands with guidance; in
+On failure (v1.2 enriched view), the failed step expands with guidance; in
 v1.0 the same guidance is a single inline error message with **Retry** (the
 terminal carries the detail). When `docker run` fails, distinguish the cause
 via `docker inspect` — if the container exists it is a **start** failure,
@@ -310,7 +310,7 @@ databases/collections from the Quick Start subtree).
 
 **Load Sample Data** is rendered only when a seed dataset is available at
 ship time (see §8.4); otherwise it appears disabled with a "Coming soon"
-tooltip, since it is a v1.1 item (§15).
+tooltip, since it is a v1.2 item (§15).
 
 ### 5.6 Cancel rules
 
@@ -369,7 +369,7 @@ Badges (overlay any state):
   stored credentials and data volume if present) and
   **Delete Container...** (clear the stale metadata). No other lifecycle
   actions apply.
-- **`UpdateAvailable`** _(v1.1)_ — newer image detected. Shows
+- **`UpdateAvailable`** _(v1.2)_ — newer image detected. Shows
   `Running · localhost:10260 · update available`.
 
 ### 6.2 Action matrix
@@ -562,12 +562,12 @@ metric cards.
 | Docker daemon reachable  | v1.0  | ✅ Ready                 | ❌ "Start Docker Desktop" action |
 | Port available           | v1.0  | ✅ Free                  | ⚠️ Fallback port (see §8.3)      |
 | Platform supported       | v1.0  | ✅ amd64/arm64           | ⚠️ "Use x86_64 emulation?"       |
-| Image registry reachable | v1.1  | ✅ OK                    | ⚠️ "Check proxy settings"        |
+| Image registry reachable | v1.2  | ✅ OK                    | ⚠️ "Check proxy settings"        |
 
 v1.0 ships the same minimal readiness the PostgreSQL reference ships (CLI
 present + daemon reachable + a generic troubleshooting link, §15) plus two
 cheap local checks — port-free and platform. The categorized
-registry/proxy/Apple-Silicon diagnosis is v1.1.
+registry/proxy/Apple-Silicon diagnosis is v1.2.
 
 Platform check should detect unsupported CPU architectures per
 [Azure emulator Docker issue #254](https://github.com/Azure/azure-cosmos-db-emulator-docker/issues/254#issuecomment-4515601488).
@@ -648,9 +648,9 @@ collision is resolved as follows.
 | **Stop**                     | Stops           | Unchanged   | Unchanged   | → Stopped                |
 | **Restart**                  | Stop + start    | Unchanged   | Unchanged   | → Running                |
 | **Delete Container...**      | Removed         | Kept        | Kept        | → NotInstalled (Missing) |
-| **Update Image...** _(v1.1)_ | Recreated       | Kept        | Kept        | → Running                |
-| **Move Port...** _(v1.1)_    | Recreated       | Kept        | Kept        | → Running                |
-| **Reset...** _(v1.1)_        | Removed         | **Dropped** | **Dropped** | → NotInstalled           |
+| **Update Image...** _(v1.2)_ | Recreated       | Kept        | Kept        | → Running                |
+| **Move Port...** _(v1.2)_    | Recreated       | Kept        | Kept        | → Running                |
+| **Reset...** _(v1.2)_        | Removed         | **Dropped** | **Dropped** | → NotInstalled           |
 
 Confirmations:
 
@@ -665,7 +665,7 @@ Confirmations:
 The container is shared machine state. No window "owns" it.
 
 - v1: **polling only** (on activation, on view refresh, on overflow-menu
-  open). Docker event subscription deferred to v1.1.
+  open). Docker event subscription deferred to v1.2.
 - Destructive actions re-check live state before executing.
 - If state changed, show: "The instance is now Stopping (from another
   window). Action is no longer available."
@@ -701,7 +701,7 @@ The container is shared machine state. No window "owns" it.
     including a retained test container — can be connected to through the
     regular new-connection wizard at its `localhost:<port>`; Quick Start
     does not need to own it. Auto-discovery of unmanaged DocumentDB
-    containers is a v1.1 item.
+    containers is a v1.2 item.
 
 ---
 
@@ -751,18 +751,31 @@ not user-identifying, unlike a raw tag string or digest.
 - Polling-only multi-window coordination
 - Docker readiness: CLI present + daemon reachable + port-free + platform
   supported, plus a generic troubleshooting link (categorized
-  registry/proxy/Apple-Silicon diagnosis is v1.1; see §9)
+  registry/proxy/Apple-Silicon diagnosis is v1.2; see §9)
 - Connection edit dialog (needed for TLS exception on non-gated hosts)
 - Container initialization via the image's init-script convention (§8.4)
 
-### v1.1 (deferred)
+### v1.1 (prefer to ship)
+
+- Goal: ship v1.1 with meaningful but lightweight webview progress
+  visibility
+- Lightweight in-webview stage progress notification while create/start is
+  running (for example: current stage + completed stages + failure stage),
+  without full per-stage percentages or per-step inline retry controls
+- Keep terminal-first transparency: integrated terminal remains the source
+  of detailed Docker command output
+- Maintain v1.0 constraints for simplicity: no `docker pull` percentage
+  streaming into the webview
+
+### v1.2 (deferred)
 
 - Adopt-existing-container flow
 - Update Image with version/digest diff
 - Move to a different port
 - Reset (drop data + credentials)
 - In-webview staged progress card (per-stage percentages + per-step inline
-  retry); v1.0 uses terminal-first progress (§5.4)
+  retry); v1.1 ships lightweight stage notification and v1.0 remains
+  terminal-first (§5.4)
 - Categorized Docker readiness (Apple Silicon, WSL2, sudo group,
   proxy, Windows engine, etc.)
 - Docker event subscription (replaces polling)
@@ -816,9 +829,10 @@ The Quick Start webview follows existing extension patterns:
   as a **VS Code terminal task** so the raw commands and output stay visible
   in the integrated terminal (the PostgreSQL-proven model).
 - **v1.0 progress is terminal-first** — the webview shows a spinner + inline
-  error (with **Retry**); the staged in-webview progress card (§5.4) is a
-  v1.1 enrichment, avoiding `docker pull` percentage streaming into the
-  webview for v1.0.
+  error (with **Retry**); lightweight stage progress notification is the
+  v1.1 target, while the staged in-webview progress card (§5.4) remains a
+  v1.2 enrichment, avoiding `docker pull` percentage streaming into the
+  webview for v1.0/v1.1.
 
 ---
 
@@ -853,18 +867,18 @@ it is resolved.
 | URL-encode generated passwords (xgerman)                     | Belt-and-suspenders: safe alphabet **and** percent-encode at composition; applies to Advanced + migrated creds                                      | §8.1            |
 | Check a custom (Advanced) port is free (xgerman)             | "Port available" prereq check + fallback band                                                                                                       | §8.3, §9        |
 | Reuse the Docker VS Code extension? (xgerman)                | Out of scope — no hard dependency; in-tree management only                                                                                          | §13.9           |
-| View logs + tracing (xgerman)                                | Deferred to v1.1                                                                                                                                    | §15             |
-| Connect to a retained test container (xgerman)               | Attach via the regular wizard at `localhost:<port>`; auto-discovery is v1.1                                                                         | §13.10, §15     |
-| Manage multiple containers / versions / other DBs (xgerman)  | Single instance in v1; labels keep the model forward-compatible; multi-instance + multi-version are v1.1                                            | §10.1, §15      |
+| View logs + tracing (xgerman)                                | Deferred to v1.2                                                                                                                                    | §15             |
+| Connect to a retained test container (xgerman)               | Attach via the regular wizard at `localhost:<port>`; auto-discovery is v1.2                                                                         | §13.10, §15     |
+| Manage multiple containers / versions / other DBs (xgerman)  | Single instance in v1; labels keep the model forward-compatible; multi-instance + multi-version are v1.2                                            | §10.1, §15      |
 | Container initialization & init-script dev (xgerman)         | Use the image's standard init-script convention; Seed = a bundled init script; Advanced can mount a local scripts folder                            | §8.4            |
 | New image available — notify or auto-update? (xgerman)       | Notify only via the `UpdateAvailable` badge; never auto-update (no-surprises rule)                                                                  | §6.1, §11       |
-| Help file a DocumentDB issue on failure (xgerman)            | Report Issue action (pre-filled, sanitized) on Error / readiness timeout — v1.1                                                                     | §14, §15        |
+| Help file a DocumentDB issue on failure (xgerman)            | Report Issue action (pre-filled, sanitized) on Error / readiness timeout — v1.2                                                                     | §14, §15        |
 | Progress location / webview lifetime (screenshots, tnaum-ms) | Heavy work runs as terminal tasks (transparency); webview auto-closes on success; tree takes over                                                   | §5.4, §5.5, §16 |
 | TLS gate over-matched local/private hosts (gap)              | Tightened ranges (added IPv6 ULA/link-local, IPv4 link-local, loopback block); `.local`/single-word only _offer_ the step and default to Enable TLS | §7.1, §7.2      |
 | Cancel undefined for Starting/Stopping (gap)                 | Defined as non-destructive for already-provisioned instances                                                                                        | §5.6            |
 | Legacy storage deleted in the migration release (gap)        | Retain the old zone read-only for one release as a rollback path                                                                                    | §4              |
 | `Missing` badge actions undefined (gap)                      | Specified: Quick Start (recreate) and Delete Container (clear metadata)                                                                             | §6.1            |
-| `Load Sample Data` shown but is v1.1 (gap)                   | Rendered disabled with "Coming soon" until a dataset ships                                                                                          | §5.5, §15       |
+| `Load Sample Data` shown but is v1.2 (gap)                   | Rendered disabled with "Coming soon" until a dataset ships                                                                                          | §5.5, §15       |
 | Telemetry: version-vs-tag tension (gap)                      | Resolved semantic version is allowed; raw tags and digests are not                                                                                  | §14             |
 
 ### 18.1 PostgreSQL source-benchmark learnings
@@ -873,16 +887,16 @@ The design was benchmarked against the PostgreSQL extension's "Local Docker
 Server" flow (`ms-ossdata.vscode-pgsql`, read at the source level). Changes
 folded in from that study:
 
-| Learning from the reference                                                                           | Change                                                                                                                  |
-| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------- |
-| Runs container work as terminal tasks with **no in-webview progress**; webview auto-closes on success | v1.0 create progress is terminal-first (spinner + inline error); the staged card is v1.1 — §5.4, §15, §16               |
-| Uses **`@microsoft/vscode-container-client`** (`DockerClient` + `PodmanClient`)                       | Adopt the same library instead of a hand-rolled abstraction — §13.8, §16                                                |
-| Auto-allocates a port **only when the field is blank/invalid**; never relocates an explicit user port | Fallback applies to the default port only; explicit Advanced ports error instead of moving — §8.3                       |
-| Reads the bound port from `docker inspect`                                                            | Use the inspected bound port when composing the connection string — §8.3                                                |
-| Distinguishes **failed-to-create vs failed-to-start** after a failed run                              | Same distinction in error copy — §5.4                                                                                   |
-| Checks duplicate **connection name and container name** before side effects                           | Validate both up front — §10.2                                                                                          |
-| Ships only CLI + daemon prereqs                                                                       | v1.0 prereqs labeled (CLI/daemon/port/platform); registry/proxy diagnosis is v1.1 — §9, §15                             |
-| (Kept **better in v2**)                                                                               | Zero required fields, persistent volume, 60 s wire-protocol readiness, full lifecycle, labels+adopt, stricter telemetry |
+| Learning from the reference                                                                           | Change                                                                                                                                                |
+| ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Runs container work as terminal tasks with **no in-webview progress**; webview auto-closes on success | v1.0 create progress is terminal-first (spinner + inline error); lightweight stage notification is v1.1, and the staged card is v1.2 — §5.4, §15, §16 |
+| Uses **`@microsoft/vscode-container-client`** (`DockerClient` + `PodmanClient`)                       | Adopt the same library instead of a hand-rolled abstraction — §13.8, §16                                                                              |
+| Auto-allocates a port **only when the field is blank/invalid**; never relocates an explicit user port | Fallback applies to the default port only; explicit Advanced ports error instead of moving — §8.3                                                     |
+| Reads the bound port from `docker inspect`                                                            | Use the inspected bound port when composing the connection string — §8.3                                                                              |
+| Distinguishes **failed-to-create vs failed-to-start** after a failed run                              | Same distinction in error copy — §5.4                                                                                                                 |
+| Checks duplicate **connection name and container name** before side effects                           | Validate both up front — §10.2                                                                                                                        |
+| Ships only CLI + daemon prereqs                                                                       | v1.0 prereqs labeled (CLI/daemon/port/platform); registry/proxy diagnosis is v1.2 — §9, §15                                                           |
+| (Kept **better in v2**)                                                                               | Zero required fields, persistent volume, 60 s wire-protocol readiness, full lifecycle, labels+adopt, stricter telemetry                               |
 
 A reviewer-facing decision note for this PR lives at
 [`../PRs/653-local-quickstart-design/description.md`](../PRs/653-local-quickstart-design/description.md).
