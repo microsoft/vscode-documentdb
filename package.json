@@ -166,7 +166,7 @@
     "@azure/identity": "~4.13.0",
     "@fluentui/react-components": "~9.73.3",
     "@fluentui/react-icons": "~2.0.320",
-    "@kubernetes/client-node": "^1.4.0",
+    "@kubernetes/client-node": "1.4.0",
     "@microsoft/vscode-azext-azureauth": "~4.1.1",
     "@microsoft/vscode-azext-azureutils": "~4.2.0",
     "@microsoft/vscode-azext-utils": "~4.1.0",

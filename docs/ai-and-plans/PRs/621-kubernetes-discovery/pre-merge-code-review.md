@@ -181,15 +181,20 @@ clean machine**, since a `require()` of a missing external throws if `ws` ever h
 - **Severity rationale:** Low / verify — most likely fine; confirm by installing the built VSIX and opening
   a ClusterIP tunnel.
 
-### 2.7 🟡 `@kubernetes/client-node` pinned with a caret (`^1.4.0`)
+### 2.7 🟡 `@kubernetes/client-node` pinned with a caret (`^1.4.0`) — ✅ DONE
 
-[package.json](../../../../package.json#L169) — `^1.4.0` (1.4.0 installed). A caret range lets a future
+> ✅ **Resolved (commit `build(deps): pin @kubernetes/client-node to 1.4.0`).** The dependency is now pinned
+> to an **exact** `1.4.0` (no caret) in [package.json](../../../../package.json) and `package-lock.json` was
+> synced. A future `npm install` can no longer silently pull a newer 1.x with behavior changes in the areas
+> this feature depends on (`onInvalidEntry`, `loadFromDefault` synthetic-config shape, exec auth).
+
+[package.json](../../../../package.json) — was `^1.4.0` (1.4.0 installed). A caret range lets a future
 `npm install` pull a newer 1.x with behavior changes in the very area this feature depends on
 (`onInvalidEntry`, `loadFromDefault` synthetic-config shape, exec auth). The code already hardens against
 some of this defensively (`isSyntheticDefaultKubeConfig`, `?? []` guards).
 
-- **Severity rationale:** Low / hygiene — consider pinning exactly (or `~1.4`) for release reproducibility,
-  and run `npm audit` at package time.
+- **Severity rationale:** Low / hygiene — now pinned exactly for release reproducibility. Still run
+  `npm audit` at package time.
 
 ### 2.8 🔵 Review-doc drift: several "deferred" items are actually shipped
 
