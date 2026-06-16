@@ -52,18 +52,31 @@ export function computeDigestHeader(
     const cnonce = crypto.randomBytes(8).toString('hex');
     const ncHex = nc.toString(16).padStart(8, '0');
 
-    function md5(data: string): string {
-        return crypto.createHash('md5').update(data).digest('hex');
+    function resolveHashAlgorithm(digestAlgorithm: string): string {
+        const normalized = digestAlgorithm.trim().toUpperCase();
+        if (normalized === 'SHA-256' || normalized === 'SHA-256-SESS') {
+            return 'sha256';
+        }
+        if (normalized === 'SHA-512-256' || normalized === 'SHA-512-256-SESS') {
+            return 'sha512-256';
+        }
+        return 'md5';
     }
 
-    const ha1 = md5(`${username}:${challenge.realm}:${password}`);
-    const ha2 = md5(`${method}:${uri}`);
+    const hashAlgorithm = resolveHashAlgorithm(algorithm);
+
+    function digest(data: string): string {
+        return crypto.createHash(hashAlgorithm).update(data).digest('hex');
+    }
+
+    const ha1 = digest(`${username}:${challenge.realm}:${password}`);
+    const ha2 = digest(`${method}:${uri}`);
 
     let response: string;
     if (challenge.qop === 'auth' || challenge.qop?.includes('auth')) {
-        response = md5(`${ha1}:${challenge.nonce}:${ncHex}:${cnonce}:auth:${ha2}`);
+        response = digest(`${ha1}:${challenge.nonce}:${ncHex}:${cnonce}:auth:${ha2}`);
     } else {
-        response = md5(`${ha1}:${challenge.nonce}:${ha2}`);
+        response = digest(`${ha1}:${challenge.nonce}:${ha2}`);
     }
 
     let header = `Digest username="${username}", realm="${challenge.realm}", nonce="${challenge.nonce}", uri="${uri}", response="${response}", algorithm=${algorithm}`;
