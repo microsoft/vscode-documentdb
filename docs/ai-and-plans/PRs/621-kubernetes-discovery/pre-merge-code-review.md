@@ -141,7 +141,16 @@ using the `@kubernetes/client-node` defaults — **no per-request timeout and no
   surface. Ship-able as a patch, but worth a tracking issue because "the tree just spins forever" is a
   common first-impression bug report.
 
-### 2.3 🟠 Pasted/dropped kubeconfig with an `exec` credential plugin can run a local binary
+### 2.3 🟠 Pasted/dropped kubeconfig with an `exec` credential plugin can run a local binary — ✅ DONE (documented)
+
+> ✅ **Resolved (commit `docs(kubernetes): warn that kubeconfig exec plugins run local binaries`).** The
+> trust model is now documented: the **"Add a kubeconfig source"** section in the user manual carries a
+> prominent warning that a kubeconfig can reference `exec` credential plugins that run on the user's machine
+> when a source is expanded, and that pasted/dropped kubeconfigs should be treated with the same caution as
+> any locally-run script. No code change — this is accepted as the standard `kubectl` trust model; the
+> in-product clipboard consent (#4) already gates the paste path. An optional `exec`-block detection caveat
+> remains a possible future enhancement.
+
 
 `@kubernetes/client-node` honors `users[].user.exec` credential plugins (the standard mechanism AKS/EKS/GKE
 use: `kubelogin`, `aws`, `gke-gcloud-auth-plugin`). When the user **expands** a source (namespace listing),
@@ -293,8 +302,8 @@ call **returns** (success or failure) in a reasonable time.
 | **DKO + generic + known-port** discovery order, opt-in annotation/label                               | ✅ "Discovery rules" section                              | Good |
 | **Credential secret conventions** (DKO `documentDbCredentialSecret`, generic annotation)              | ✅ "Credential secret conventions" section                | Good |
 | **Port-forward settings** (`localPortStrategy`, `localPortBase`)                                       | ✅ in package.json + user manual                          | Good |
-| **`tlsAllowInvalidCertificates=true`** on every discovered connection string                          | ❌ **not documented** (see 2.1)                            | Gap  |
-| **`exec` credential plugins may run local binaries** when expanding a source                           | ❌ **not documented** (see 2.3)                            | Gap  |
+| **`tlsAllowInvalidCertificates=true`** on every discovered connection string                          | ✅ **now documented** (§2.1 — "Connection security (TLS/SSL)")    | Done |
+| **`exec` credential plugins may run local binaries** when expanding a source                           | ✅ **now documented** (§2.3 — "Add a kubeconfig source" warning) | Done |
 | **No timeout** on API calls / "tree may spin on an unreachable cluster"                                | ❌ not documented (see 2.2)                               | Gap  |
 | `DISCOVERY_VIEW_MODE_STATE_KEY` and other ad-hoc `globalState` keys                                    | n/a (internal); TODO comment notes a future settings store | Info |
 
@@ -335,20 +344,24 @@ No correctness defects surfaced in these paths.
 
 | #    | Finding                                                                  | Severity   | Ship blocker? | Suggested disposition                          |
 | ---- | ------------------------------------------------------------------------ | ---------- | ------------- | ---------------------------------------------- |
-| 2.1  | TLS cert validation disabled by default on all discovered conn strings   | 🟠 Medium  | No\*          | Conscious decision + document; consider gating on `tlsReady` (patch) |
-| 2.2  | No request timeout / cancellation on K8s API calls (tree can hang)       | 🟠 Medium  | No            | Add bounded timeout → error node (patch); track issue |
-| 2.3  | Pasted/dropped kubeconfig `exec` plugin can run a local binary           | 🟠 Medium  | No            | Document trust model; optional consent caveat (patch) |
+| 2.1  | TLS cert validation disabled by default on all discovered conn strings   | 🟠 Medium  | No            | ✅ DONE — accepted + tooltip warning + docs (saved-conn override) |
+| 2.2  | No request timeout / cancellation on K8s API calls (tree can hang)       | 🟠 Medium  | No            | Under investigation (subagent analysis of client-node) |
+| 2.3  | Pasted/dropped kubeconfig `exec` plugin can run a local binary           | 🟠 Medium  | No            | ✅ DONE — trust model documented               |
 | 2.4  | `createCoreApi` mutates shared `KubeConfig`                              | 🟡 Low     | No            | Keep invariant or clone defensively            |
 | 2.5  | Namespace prescan has no per-namespace ceiling (pairs with 2.2)          | 🟡 Low     | No            | Revisit with telemetry (already planned)       |
 | 2.6  | `bufferutil` / `utf-8-validate` externalized (not bundled)              | 🟡 Low     | No            | Verify against packaged VSIX                    |
-| 2.7  | `@kubernetes/client-node` caret-ranged (`^1.4.0`)                       | 🟡 Low     | No            | Pin for release; `npm audit` at package time   |
+| 2.7  | `@kubernetes/client-node` caret-ranged (`^1.4.0`)                       | 🟡 Low     | No            | ✅ DONE — pinned to exact `1.4.0`              |
 | 2.8  | UX-review doc drift (Copy quick pick / icon already shipped)             | 🔵 Info    | No            | Reconcile doc; user manual is source of truth  |
 | 2.9  | Open Interactive Shell on ClusterIP unverified                          | 🔵 Info    | No            | Hand-test before sign-off                       |
 | 4.x  | Ellipsis convention nit on Edit/View Kubeconfig                          | 🟡 Low     | No            | Optional eyeball                                |
 
-\* "No blocker" assumes 2.1 is an **accepted, documented** decision rather than an oversight. If the team
-has not explicitly signed off on shipping `tlsAllowInvalidCertificates=true` for **generic** (non-DKO)
-targets, treat 2.1 as the one item to resolve (decision, not necessarily code) before merge.
+> **Post-review update (2026-06-16):** **2.1**, **2.3**, and **2.7** have been **resolved** (see the inline
+> ✅ DONE notes above), each as its own commit. **2.1** was accepted as the right default and made visible
+> (tooltip warning + user-manual "Connection security (TLS/SSL)" section incl. the saved-connection
+> override). **2.3** is documented as the standard `kubectl` trust model. **2.7** is pinned to exact
+> `1.4.0`. **2.2 (timeouts)** is **under investigation** — the assumption is that `@kubernetes/client-node`
+> already applies a built-in request timeout; pending a subagent analysis of the upstream client before any
+> code change.
 
 ---
 
@@ -356,8 +369,8 @@ targets, treat 2.1 as the one item to resolve (decision, not necessarily code) b
 
 **Merge-ready** from an architecture, integration, and error-handling standpoint. No code-level blockers.
 
-Before merging to `main`, get an explicit **decision** on **2.1 (insecure TLS default)** — ship-as-is with
-documentation, or scope it to self-signed/DKO. File tracking issues for **2.2 (timeouts)** and **2.3
-(exec-plugin trust)** so they don't get lost as patch follow-ups, and add the three documentation gaps from
-§5 to the user manual. Hand-verify **2.9 (shell on ClusterIP)** and **2.6 (packaged native optionals)** as
-part of release validation. Everything else is Low/Info and can ride the backlog.
+**2.1 (TLS default)**, **2.3 (exec-plugin trust)**, and **2.7 (dependency pin)** are now **resolved**
+(see the ✅ DONE notes in §2). **2.2 (timeouts)** is **under investigation** before deciding whether any
+code change is warranted (the working hypothesis is that the upstream Kubernetes client already imposes a
+request timeout). Hand-verify **2.9 (shell on ClusterIP)** and **2.6 (packaged native optionals)** as part
+of release validation. Everything else is Low/Info and can ride the backlog.

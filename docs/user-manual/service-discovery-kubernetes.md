@@ -35,6 +35,8 @@ Custom file and pasted-YAML sources are validated before they are saved. If the 
 
 The Kubernetes default kubeconfig path is `~/.kube/config` on macOS/Linux and `%USERPROFILE%\.kube\config` on Windows.
 
+> **⚠️ Only add kubeconfig sources you trust.** A kubeconfig is executable configuration: it can reference external credential helper programs through an [`exec` credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins) (the standard mechanism used by AKS, EKS, and GKE — for example `kubelogin`, `aws`, or `gke-gcloud-auth-plugin`). When you expand a source to list its contexts and namespaces, the Kubernetes client may run the command configured in that kubeconfig on your machine, with your privileges. This is the same trust model as `kubectl`. Only add, paste, or drop a kubeconfig that comes from a source you trust; treat a kubeconfig pasted from the clipboard or dropped from disk with the same caution as any script you would run locally.
+
 ## Manage existing sources
 
 Manage each source from its **right-click context menu** in the discovery tree:
