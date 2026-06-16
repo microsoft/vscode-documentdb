@@ -118,9 +118,14 @@ export async function pollForDeviceToken(
 
         // Atlas returns errors in its own format: { errorCode: "DEVICE_AUTHORIZATION_PENDING" }
         // Also handle standard OAuth2 format: { error: "authorization_pending" }
-        const errorBody = (await response.json()) as { error?: string; errorCode?: string };
-
-        const errorCode = errorBody.errorCode ?? errorBody.error ?? '';
+        const errorText = await response.text();
+        let errorCode = '';
+        try {
+            const errorBody = JSON.parse(errorText) as { error?: string; errorCode?: string };
+            errorCode = errorBody.errorCode ?? errorBody.error ?? '';
+        } catch {
+            // Ignore JSON parse errors for error body
+        }
 
         if (errorCode === 'DEVICE_AUTHORIZATION_PENDING' || errorCode === 'authorization_pending') {
             // User hasn't authenticated yet, continue polling
