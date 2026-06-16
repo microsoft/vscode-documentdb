@@ -60,7 +60,7 @@ cold and understand both _what_ was decided and _why_.
 > 2. **Discovered‑target icon — DocumentDB brand mark, not the reachability glyph.** §8.1 / §9.2 describe
 >    the node `iconPath` as a `globe`/`server`/`plug`/`warning` reachability glyph. The shipped node uses
 >    the **DocumentDB brand icon** (so it reads as a first‑class cluster); the reachability glyph now
->    lives only on the tooltip's "Reachability" line. See `buildTooltip()` /  the constructor `iconPath`
+>    lives only on the tooltip's "Reachability" line. See `buildTooltip()` / the constructor `iconPath`
 >    in
 >    [KubernetesResourceItem.ts](../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts).
 >
