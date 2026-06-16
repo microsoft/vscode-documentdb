@@ -79,14 +79,17 @@ export async function executeApiKeyFlow(sessionManager: AtlasSessionManager): Pr
  * Uses HTTP Digest Authentication as required by the Atlas Admin API.
  */
 async function validateApiKeyCredentials(publicKey: string, privateKey: string): Promise<boolean> {
-    const { AtlasApiClient } = await import('../api/AtlasApiClient');
+    const { AtlasApiClient, AtlasApiError } = await import('../api/AtlasApiClient');
     const client = new AtlasApiClient({ type: 'apikey', publicKey, privateKey });
 
     try {
         // A successful call to list projects means the credentials are valid
         await client.listProjects();
         return true;
-    } catch {
-        return false;
+    } catch (error) {
+        if (error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403)) {
+            return false;
+        }
+        throw error;
     }
 }
