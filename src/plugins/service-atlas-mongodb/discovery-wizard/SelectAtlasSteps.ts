@@ -97,6 +97,7 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
         }
 
         context.properties['atlas.selectedClusterConnectionString'] = connectionString;
+    }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
         return !context.properties['atlas.selectedClusterConnectionString'];
