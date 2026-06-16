@@ -126,12 +126,38 @@ export async function getSource(id: string): Promise<KubeconfigSourceRecord | un
  * if one is already present; otherwise creates one with the reserved id
  * {@link DEFAULT_SOURCE_ID} so saved connections that reference it via
  * `sourceId` keep working after a remove + re-add round trip.
+ *
+ * Callers that need to know whether the record was newly created should use
+ * {@link tryAddDefaultSource} instead.
  */
 export async function addDefaultSource(): Promise<KubeconfigSourceRecord> {
+    const { record } = await tryAddDefaultSource();
+    return record;
+}
+
+/**
+ * Result of {@link tryAddDefaultSource}: the persisted record plus whether
+ * this call actually created it.
+ */
+export interface TryAddDefaultSourceResult {
+    readonly record: KubeconfigSourceRecord;
+    /**
+     * `true` when this call created the Default source, `false` when an
+     * existing Default source was returned unchanged.
+     */
+    readonly created: boolean;
+}
+
+/**
+ * Adds (or reuses) the singleton Default source and reports whether storage
+ * actually changed. Lets callers show an accurate "added" vs. "already exists"
+ * message instead of always claiming a new source was added.
+ */
+export async function tryAddDefaultSource(): Promise<TryAddDefaultSourceResult> {
     const sources = await ensureCache();
     const existing = sources.find((s) => s.kind === 'default');
     if (existing) {
-        return existing;
+        return { record: existing, created: false };
     }
 
     const newRecord: KubeconfigSourceRecord = {
@@ -141,7 +167,7 @@ export async function addDefaultSource(): Promise<KubeconfigSourceRecord> {
     };
     await pushItem(newRecord, /* order */ -1);
     invalidateCache();
-    return newRecord;
+    return { record: newRecord, created: true };
 }
 
 /**
@@ -197,7 +223,7 @@ export async function tryAddFileSource(absolutePath: string): Promise<TryAddFile
     // duplicate creator. With it, the follower whose catch happens to run
     // first wins the lock; the rest see its in-flight entry on the next
     // iteration and await it normally.
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
         const inFlight = inFlightFileAdds.get(normalizedPath);
         if (inFlight) {
@@ -261,7 +287,9 @@ async function doTryAddFileSource(_absolutePath: string, normalizedPath: string)
  * Adds (or reuses) an inline source backed by Secret Storage (via StorageService).
  *
  * If an inline source already exists whose stored YAML matches the provided
- * YAML (after trimming), the existing record is returned unchanged.
+ * YAML (after trimming), the existing record is returned unchanged. Callers
+ * that need to know whether the record was newly created should use
+ * {@link tryAddInlineSource} instead.
  */
 /**
  * Tracks the in-flight inline add for each YAML hash. Mirrors
@@ -269,9 +297,33 @@ async function doTryAddFileSource(_absolutePath: string, normalizedPath: string)
  * same YAML resolve to a single shared record instead of producing
  * duplicates with colliding `nextInlineLabel` numbering.
  */
-const inFlightInlineAdds = new Map<string, Promise<KubeconfigSourceRecord>>();
+const inFlightInlineAdds = new Map<string, Promise<TryAddInlineSourceResult>>();
+
+/**
+ * Result of {@link tryAddInlineSource}: the persisted record plus whether this
+ * call actually created it.
+ */
+export interface TryAddInlineSourceResult {
+    readonly record: KubeconfigSourceRecord;
+    /**
+     * `true` when this call created a new entry in storage, `false` when an
+     * existing inline source with identical YAML was returned unchanged.
+     */
+    readonly created: boolean;
+}
 
 export async function addInlineSource(yaml: string): Promise<KubeconfigSourceRecord> {
+    const { record } = await tryAddInlineSource(yaml);
+    return record;
+}
+
+/**
+ * Adds (or reuses) an inline source and reports whether storage actually
+ * changed. Returning a `created` flag lets callers show an accurate "added"
+ * vs. "already exists" message — e.g. when a user re-pastes YAML they just
+ * copied from the read-only "View Kubeconfig" of an existing inline source.
+ */
+export async function tryAddInlineSource(yaml: string): Promise<TryAddInlineSourceResult> {
     const trimmed = yaml.trim();
     if (trimmed.length === 0) {
         throw new Error(vscode.l10n.t('Pasted kubeconfig YAML is empty.'));
@@ -282,12 +334,13 @@ export async function addInlineSource(yaml: string): Promise<KubeconfigSourceRec
     // Same retry-through-the-lock pattern used by tryAddFileSource: keyed by
     // the YAML hash so two concurrent pastes of the same content share a
     // single underlying create instead of each generating a fresh UUID.
-    // eslint-disable-next-line no-constant-condition
+
     while (true) {
         const inFlight = inFlightInlineAdds.get(incomingHash);
         if (inFlight) {
             try {
-                return await inFlight;
+                const winner = await inFlight;
+                return { record: winner.record, created: false };
             } catch {
                 continue;
             }
@@ -305,7 +358,7 @@ export async function addInlineSource(yaml: string): Promise<KubeconfigSourceRec
     }
 }
 
-async function doAddInlineSource(trimmed: string, incomingHash: string): Promise<KubeconfigSourceRecord> {
+async function doAddInlineSource(trimmed: string, incomingHash: string): Promise<TryAddInlineSourceResult> {
     const sources = await ensureCache();
 
     for (const record of sources) {
@@ -314,7 +367,7 @@ async function doAddInlineSource(trimmed: string, incomingHash: string): Promise
         }
         const existingYaml = (await readInlineYaml(record)) ?? '';
         if (existingYaml.length > 0 && sha256(existingYaml.trim()) === incomingHash) {
-            return record;
+            return { record, created: false };
         }
     }
 
@@ -327,7 +380,7 @@ async function doAddInlineSource(trimmed: string, incomingHash: string): Promise
 
     await pushItem(newRecord, await nextOrder(sources), [trimmed]);
     invalidateCache();
-    return newRecord;
+    return { record: newRecord, created: true };
 }
 
 export async function renameSource(id: string, newLabel: string): Promise<void> {

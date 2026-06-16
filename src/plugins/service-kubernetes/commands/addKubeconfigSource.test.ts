@@ -16,9 +16,9 @@ const mockDescribeDefaultKubeconfigPath = jest.fn(() => '~/.kube/config');
 const mockResolveKubeconfigPath = jest.fn(() => '/home/test/.kube/config');
 const mockLoadKubeConfig = jest.fn();
 const mockGetContexts = jest.fn((): { name: string }[] => []);
-const mockAddDefaultSource = jest.fn();
-const mockAddFileSource = jest.fn();
-const mockAddInlineSource = jest.fn();
+const mockTryAddDefaultSource = jest.fn();
+const mockTryAddFileSource = jest.fn();
+const mockTryAddInlineSource = jest.fn();
 const mockExistsSync = jest.fn();
 const mockHomedir = jest.fn(() => '/home/test');
 const mockRefreshKubernetesRoot = jest.fn();
@@ -83,9 +83,9 @@ jest.mock('../kubernetesClient', () => ({
 }));
 
 jest.mock('../sources/sourceStore', () => ({
-    addDefaultSource: () => mockAddDefaultSource(),
-    addFileSource: (...args: unknown[]) => mockAddFileSource(...args),
-    addInlineSource: (...args: unknown[]) => mockAddInlineSource(...args),
+    tryAddDefaultSource: () => mockTryAddDefaultSource(),
+    tryAddFileSource: (...args: unknown[]) => mockTryAddFileSource(...args),
+    tryAddInlineSource: (...args: unknown[]) => mockTryAddInlineSource(...args),
 }));
 
 jest.mock('./refreshKubernetesRoot', () => ({
@@ -281,11 +281,14 @@ describe('addKubeconfigSource default branch validation', () => {
         const context = makeContext(createDefaultSelectingUi());
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'kind-documentdb-dev' }]);
-        mockAddDefaultSource.mockResolvedValue({ id: 'default', label: 'Default kubeconfig', kind: 'default' });
+        mockTryAddDefaultSource.mockResolvedValue({
+            record: { id: 'default', label: 'Default kubeconfig', kind: 'default' },
+            created: true,
+        });
 
         await addKubeconfigSource(context);
 
-        expect(mockAddDefaultSource).toHaveBeenCalledTimes(1);
+        expect(mockTryAddDefaultSource).toHaveBeenCalledTimes(1);
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('added');
         expect(mockShowInformationMessage).toHaveBeenCalledWith('Added kubeconfig source "Default kubeconfig".');
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
@@ -298,7 +301,7 @@ describe('addKubeconfigSource default branch validation', () => {
 
         await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
 
-        expect(mockAddDefaultSource).not.toHaveBeenCalled();
+        expect(mockTryAddDefaultSource).not.toHaveBeenCalled();
         expect(mockShowInformationMessage).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
@@ -316,7 +319,7 @@ describe('addKubeconfigSource default branch validation', () => {
 
         await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
 
-        expect(mockAddDefaultSource).not.toHaveBeenCalled();
+        expect(mockTryAddDefaultSource).not.toHaveBeenCalled();
         expect(mockShowInformationMessage).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
@@ -343,7 +346,7 @@ describe('addKubeconfigSource inline branch modal confirmation', () => {
             expect.any(String),
         );
         expect(mockReadText).not.toHaveBeenCalled();
-        expect(mockAddInlineSource).not.toHaveBeenCalled();
+        expect(mockTryAddInlineSource).not.toHaveBeenCalled();
     });
 
     it('opens preview editor without storing when user clicks Preview', async () => {
@@ -362,7 +365,7 @@ describe('addKubeconfigSource inline branch modal confirmation', () => {
             language: 'yaml',
         });
         expect(mockShowTextDocument).toHaveBeenCalledWith(mockDoc, { preview: true });
-        expect(mockAddInlineSource).not.toHaveBeenCalled();
+        expect(mockTryAddInlineSource).not.toHaveBeenCalled();
     });
 
     it('reads clipboard and stores after user clicks Continue', async () => {
@@ -373,13 +376,42 @@ describe('addKubeconfigSource inline branch modal confirmation', () => {
         mockReadText.mockResolvedValue(yamlContent);
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'test' }]);
-        mockAddInlineSource.mockResolvedValue({ id: 'inline-1', label: 'Pasted YAML 1', kind: 'inline' });
+        mockTryAddInlineSource.mockResolvedValue({
+            record: { id: 'inline-1', label: 'Pasted YAML 1', kind: 'inline' },
+            created: true,
+        });
 
         await addKubeconfigSource(context);
 
         expect(mockReadText).toHaveBeenCalled();
-        expect(mockAddInlineSource).toHaveBeenCalledWith(yamlContent);
+        expect(mockTryAddInlineSource).toHaveBeenCalledWith(yamlContent);
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('added');
+        expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('inline-1');
+    });
+
+    it('selects the existing source and reports a duplicate when the pasted YAML already exists', async () => {
+        const ui = createInlineSelectingUi();
+        const context = makeContext(ui);
+        const yamlContent = 'apiVersion: v1\nkind: Config\ncontexts:\n- name: test';
+        mockShowWarningMessage.mockResolvedValue('Continue');
+        mockReadText.mockResolvedValue(yamlContent);
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([{ name: 'test' }]);
+        mockTryAddInlineSource.mockResolvedValue({
+            record: { id: 'inline-1', label: 'Pasted YAML 1', kind: 'inline' },
+            created: false,
+        });
+
+        await addKubeconfigSource(context);
+
+        // Reports the duplicate instead of pretending a new source was added.
+        expect(context.telemetry.properties.kubeconfigSourceResult).toBe('duplicate');
+        expect(mockShowInformationMessage).toHaveBeenCalledWith(
+            'A kubeconfig source with identical YAML already exists.',
+            expect.objectContaining({ modal: true, detail: expect.stringContaining('Pasted YAML 1') }),
+        );
+        // Still reveals + selects the existing node so the user can see it.
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('inline-1');
     });
@@ -391,7 +423,10 @@ describe('addKubeconfigSource inline branch modal confirmation', () => {
         mockReadText.mockResolvedValue('apiVersion: v1\nkind: Config\ncontexts:\n- name: test');
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'test' }]);
-        mockAddInlineSource.mockResolvedValue({ id: 'inline-1', label: 'Pasted YAML 1', kind: 'inline' });
+        mockTryAddInlineSource.mockResolvedValue({
+            record: { id: 'inline-1', label: 'Pasted YAML 1', kind: 'inline' },
+            created: true,
+        });
         mockRevealKubernetesSource.mockRejectedValue(new Error('Tree not ready'));
 
         await expect(addKubeconfigSource(context)).resolves.toEqual({
@@ -413,7 +448,7 @@ describe('addKubeconfigSource inline branch modal confirmation', () => {
         await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
 
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('emptyClipboard');
-        expect(mockAddInlineSource).not.toHaveBeenCalled();
+        expect(mockTryAddInlineSource).not.toHaveBeenCalled();
     });
 
     it('shows error when pasted YAML has no contexts after Continue', async () => {
@@ -427,6 +462,6 @@ describe('addKubeconfigSource inline branch modal confirmation', () => {
         await expect(addKubeconfigSource(context)).rejects.toThrow(UserCancelledError);
 
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('noContexts');
-        expect(mockAddInlineSource).not.toHaveBeenCalled();
+        expect(mockTryAddInlineSource).not.toHaveBeenCalled();
     });
 });

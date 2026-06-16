@@ -11,9 +11,45 @@ import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { DISCOVERY_PROVIDER_ID, type KubeconfigSourceRecord } from '../config';
 import { describeDefaultKubeconfigPath, getContexts, loadKubeConfig, resolveKubeconfigPath } from '../kubernetesClient';
-import { addDefaultSource, addFileSource, addInlineSource } from '../sources/sourceStore';
+import { tryAddDefaultSource, tryAddFileSource, tryAddInlineSource } from '../sources/sourceStore';
 
 type AddBranch = 'default' | 'file' | 'inline';
+
+/**
+ * Reports the result of an add-source attempt to the user.
+ *
+ * Mirrors the "Save to DocumentDB Connections" UX: when the source already
+ * exists we don't pretend a new one was created. Instead we surface a modal
+ * message explaining that the existing source was selected in the view (the
+ * caller reveals + selects it via {@link revealAddedKubeconfigSource}), so the
+ * user understands why no new node appeared. A genuinely new source still gets
+ * the lightweight confirmation toast.
+ */
+function notifyKubeconfigSourceAdded(
+    context: IActionContext,
+    record: KubeconfigSourceRecord,
+    created: boolean,
+    alreadyExistsMessage: string,
+): void {
+    if (created) {
+        context.telemetry.properties.kubeconfigSourceResult = 'added';
+        void vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
+        ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
+        return;
+    }
+
+    context.telemetry.properties.kubeconfigSourceResult = 'duplicate';
+    void vscode.window.showInformationMessage(alreadyExistsMessage, {
+        modal: true,
+        detail: vscode.l10n.t(
+            'The existing source has been selected in the Services view.\n\nSelected source name:\n"{0}"',
+            record.label,
+        ),
+    });
+    ext.outputChannel.appendLine(
+        vscode.l10n.t('Kubeconfig source "{0}" already exists; selected the existing one.', record.label),
+    );
+}
 
 /**
  * Prompts the user to add a new kubeconfig source (file or pasted YAML).
@@ -83,11 +119,8 @@ async function addDefaultBranch(context: IActionContext): Promise<KubeconfigSour
         throw new UserCancelledError();
     }
 
-    const record = await addDefaultSource();
-    context.telemetry.properties.kubeconfigSourceResult =
-        context.telemetry.properties.kubeconfigSourceResult ?? 'added';
-    void vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
-    ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
+    const { record, created } = await tryAddDefaultSource();
+    notifyKubeconfigSourceAdded(context, record, created, vscode.l10n.t('A default kubeconfig source already exists.'));
     return record;
 }
 
@@ -137,7 +170,6 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
         defaultUri: getKubeconfigFileDialogDefaultUri(),
         title: vscode.l10n.t('Select kubeconfig file'),
         filters: {
-            // eslint-disable-next-line @typescript-eslint/naming-convention
             'Kubeconfig files': ['yaml', 'yml', 'conf', 'config', '*'],
         },
     });
@@ -171,10 +203,13 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
         throw new UserCancelledError();
     }
 
-    const record = await addFileSource(absolutePath);
-    context.telemetry.properties.kubeconfigSourceResult = 'added';
-    void vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
-    ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
+    const { record, created } = await tryAddFileSource(absolutePath);
+    notifyKubeconfigSourceAdded(
+        context,
+        record,
+        created,
+        vscode.l10n.t('A kubeconfig source for this file already exists.'),
+    );
     return record;
 }
 
@@ -253,10 +288,13 @@ async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourc
         throw new UserCancelledError();
     }
 
-    const record = await addInlineSource(clipboardText);
-    context.telemetry.properties.kubeconfigSourceResult = 'added';
-    void vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
-    ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
+    const { record, created } = await tryAddInlineSource(clipboardText);
+    notifyKubeconfigSourceAdded(
+        context,
+        record,
+        created,
+        vscode.l10n.t('A kubeconfig source with identical YAML already exists.'),
+    );
     return record;
 }
 
