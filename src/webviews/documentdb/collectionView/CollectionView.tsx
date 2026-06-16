@@ -4,14 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
+import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
 import { UsageImpact } from '../../../utils/surveyTypes';
-import { Announcer } from '../../api/webview-client/accessibility';
-import { useConfiguration } from '../../api/webview-client/useConfiguration';
-import { useTrpcClient } from '../../api/webview-client/useTrpcClient';
-import { useSelectiveContextMenuPrevention } from '../../api/webview-client/utils/useSelectiveContextMenuPrevention';
+import { useTrpcClient } from '../../_integration/useTrpcClient';
+import { Announcer } from '../../components/accessibility';
+import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
 import './collectionView.scss';
 import {
@@ -31,6 +31,7 @@ import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
+import { stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 
 interface QueryResults {
@@ -145,7 +146,7 @@ export const CollectionView = (): JSX.Element => {
         // Only reset on actual query changes, not pagination
         if (intent === 'initial' || intent === 'refresh') {
             console.trace('[CollectionView] Query changed (intent: {0}), resetting Query Insights', intent);
-            // eslint-disable-next-line react-hooks/set-state-in-effect -- Resetting derived state on query intent change
+
             setCurrentContext((prev) => ({
                 ...prev,
                 queryInsights: DefaultCollectionViewContext.queryInsights,
@@ -155,61 +156,84 @@ export const CollectionView = (): JSX.Element => {
     }, [currentContext.activeQuery]);
 
     /**
-     * Non-blocking Stage 1 prefetch after query execution
-     * Populates ClusterSession cache so data is ready when user switches to Query Insights tab
-     * Uses promise tracking to prevent duplicate requests
+     * Non-blocking Stage 1 prefetch after query execution. Populates the
+     * ClusterSession cache so data is ready when the user switches to the
+     * Query Insights tab. Called only for a fresh query (`initial`/`refresh`)
+     * — see the intent gate at the call site.
+     *
+     * Dedupe contract (shared with the fallback fetch in
+     * QueryInsightsTab.tsx): the claim below flips the pipeline to
+     * `s1Loading`, so whichever of the two paths gets there first "claims"
+     * the load and the other observes `kind === 's1Loading'` and bails. See
+     * `startStage1Load` in `queryInsightsReducer.ts`.
      */
     const prefetchQueryInsights = (): void => {
-        // Check if already loaded or in-flight promise
-        // Don't check status === 'loading' because we just reset to that state before calling this
-        if (currentContext.queryInsights.stage1Data || currentContext.queryInsights.stage1Promise) {
-            return; // Already handled
-        }
+        // Claim the Stage 1 load from inside the functional updater so the
+        // gate reads React's latest queued state via `prev`, never the render
+        // closure or a ref. The reset effect's `queryInsights → idle` is
+        // queued synchronously in the same effect phase, strictly before this
+        // promise microtask, so it is already composed into `prev`: on a fresh
+        // query `prev.queryInsights` is `idle` here. This is what makes the
+        // stale pre-reset read (F2) structurally impossible rather than merely
+        // unlikely — a closure read saw the previous run's terminal state and
+        // a ref lags by one commit. If the tab fallback already claimed the
+        // load, `prev` is `s1Loading`/later and we leave it untouched.
+        setCurrentContext((prev) => {
+            if (prev.queryInsights.kind !== 'idle') {
+                return prev;
+            }
+            return { ...prev, queryInsights: startStage1Load(prev.queryInsights) };
+        });
 
+        // Fire the warm-up request. In the rare both-paths race the fallback
+        // fetches too; the F8 guards below drop whichever result lands second,
+        // and `getQueryInsightsStage1` is an idempotent cache read.
         // Query parameters are now retrieved from ClusterSession - no need to pass them
-        const promise = trpcClient.mongoClusters.collectionView.getQueryInsightsStage1.query();
-
-        // Track the promise immediately
-        setCurrentContext((prev) => ({
-            ...prev,
-            queryInsights: {
-                ...prev.queryInsights,
-                stage1Promise: promise,
-            },
-        }));
-
-        // Handle completion
-        void promise
+        void trpcClient.mongoClusters.collectionView.queryInsights.getQueryInsightsStage1
+            .query()
             .then((stage1Data) => {
-                // Update state with data and mark stage as successful
-                // This prevents redundant fetch when user switches to Query Insights tab
-                setCurrentContext((prev) => ({
-                    ...prev,
-                    queryInsights: {
-                        ...prev.queryInsights,
-                        currentStage: { phase: 1, status: 'success' },
-                        stage1Data: stage1Data,
-                        stage1Promise: null,
-                    },
-                }));
+                // The reducer auto-chains `s1Loading → s2Loading` so the
+                // Stage 2 fetch effect in QueryInsightsTab picks up
+                // immediately when the user lands on the tab.
+                setCurrentContext((prev) => {
+                    // F8 guard (mirror of the .catch guard below): if the
+                    // pipeline has moved past `s1Loading` (typically because
+                    // the user kicked off a newer query / reset), the
+                    // resolved payload is stale — drop it rather than
+                    // clobber the live state.
+                    if (prev.queryInsights.kind !== 's1Loading') {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        queryInsights: stage1Succeeded(prev.queryInsights, stage1Data),
+                    };
+                });
                 console.debug('Stage 1 data prefetched:', stage1Data);
             })
             .catch((error) => {
-                // Extract error code by traversing the cause chain using the helper function
                 const errorCode = extractErrorCode(error);
-
-                // Mark stage as failed to prevent redundant fetch on tab switch
-                // Store both error message and code for UI pattern matching
-                setCurrentContext((prev) => ({
-                    ...prev,
-                    queryInsights: {
-                        ...prev.queryInsights,
-                        currentStage: { phase: 1, status: 'error' },
-                        stage1ErrorMessage: error instanceof Error ? error.message : String(error),
-                        stage1ErrorCode: errorCode,
-                        stage1Promise: null,
-                    },
-                }));
+                const message = error instanceof Error ? error.message : String(error);
+                setCurrentContext((prev) => {
+                    // F8: only fold the failure into the state machine if
+                    // the current pipeline is still the one we kicked off.
+                    // Stage 1 is short-lived and the only way to leave
+                    // `s1Loading` is for our `.then`/`.catch` to fire or
+                    // for a query reset/new run to start a fresh pipeline —
+                    // in the latter case the stale failure must not
+                    // overwrite the new state. Note: doesn't fully cover a
+                    // second `s1Loading` racing the first (would need a
+                    // requestKey, like Stage 3); accepted as Low risk
+                    // because Stage 1 typically completes in well under
+                    // the time it takes a user to retrigger.
+                    if (prev.queryInsights.kind !== 's1Loading') {
+                        return prev;
+                    }
+                    return {
+                        ...prev,
+                        queryInsights: stage1Failed(prev.queryInsights, message, errorCode),
+                    };
+                });
                 console.warn('Stage 1 prefetch failed:', error);
             });
     };
@@ -321,7 +345,6 @@ export const CollectionView = (): JSX.Element => {
     }
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- Setting loading state before async query execution
         setCurrentContext((prev) => ({ ...prev, isLoading: true }));
 
         // 1. Run the query, this operation only acknowledges the request.
@@ -350,9 +373,16 @@ export const CollectionView = (): JSX.Element => {
                 // 3. Load the data for the current view
                 getDataForView(currentContext.currentView);
 
-                // 4. Non-blocking Stage 1 prefetch to populate cache
-                //    This runs in background and doesn't block results display
-                prefetchQueryInsights();
+                // 4. Non-blocking Stage 1 prefetch to populate cache. Only on a
+                //    fresh query (initial/refresh): pagination keeps the same
+                //    query, so the existing Query Insights pipeline (and any
+                //    Stage 1+ data) stays valid and must not be reset. This
+                //    mirrors the reset effect's own intent gate, so the prefetch
+                //    fires exactly when the pipeline is being reset to `idle`.
+                const prefetchIntent = currentContext.activeQuery.executionIntent;
+                if (prefetchIntent === 'initial' || prefetchIntent === 'refresh') {
+                    prefetchQueryInsights();
+                }
 
                 setCurrentContext((prev) => ({ ...prev, isLoading: false, isFirstTimeLoad: false }));
             })

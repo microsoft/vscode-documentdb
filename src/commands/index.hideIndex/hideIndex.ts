@@ -47,7 +47,7 @@ export async function hideIndex(context: IActionContext, node: IndexItem): Promi
         const client = await ClustersClient.getClient(node.cluster.clusterId);
 
         let success = false;
-        await ext.state.showCreatingChild(node.id, l10n.t('Hiding index…'), async () => {
+        await ext.state.runWithTemporaryDescription(node.id, l10n.t('Hiding…'), async () => {
             const result = await client.hideIndex(
                 node.databaseInfo.name,
                 node.collectionInfo.name,

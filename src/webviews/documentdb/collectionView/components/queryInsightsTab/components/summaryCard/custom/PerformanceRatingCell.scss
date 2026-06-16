@@ -4,13 +4,24 @@
  *--------------------------------------------------------------------------------------------*/
 
 // Performance rating specific styles
+
+// Shared card + 2-column grid layout used by both the real rating and its loading skeleton.
+// Column 1: dot / rating-text indent · Column 2: rating text and diagnostic badges.
 .efficiencyIndicator {
-    display: flex;
-    align-items: center;
-    gap: 8px;
+    display: grid;
+    grid-template-columns: auto 1fr;
+    column-gap: 8px;
+    row-gap: 8px;
     padding: 12px;
     border-radius: var(--borderRadiusMedium);
     background-color: var(--vscode-editorWidget-background);
+
+    // Skeleton variant: minor offsets that make the placeholder align pixel-perfectly
+    // with the real content (which is slightly taller due to text line-height).
+    &.efficiencyIndicator--skeleton {
+        row-gap: 6px;
+        padding-top: 14px;
+    }
 }
 
 .efficiencyDot {
@@ -18,4 +29,27 @@
     height: 12px;
     border-radius: 50%;
     flex-shrink: 0;
+    align-self: center;
+}
+
+// Rating label ("Excellent", "Good", …) sitting in the first row, second column.
+.efficiencyRatingText {
+    align-self: center;
+}
+
+// First-column spacer that keeps the badges aligned under the rating text.
+.efficiencyDotSkeleton {
+    align-self: center;
+}
+
+// Container holding the diagnostic badges (and their skeleton placeholders).
+.efficiencyBadges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+
+    // Skeleton badges need a small top nudge to match the real badge baseline.
+    &.efficiencyBadges--skeleton {
+        padding-top: 4px;
+    }
 }

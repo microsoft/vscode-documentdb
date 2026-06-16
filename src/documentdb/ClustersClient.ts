@@ -71,6 +71,7 @@ export interface DatabaseItemModel {
 export interface CollectionItemModel {
     name: string;
     type?: string;
+    shardKey?: Record<string, number | string>;
 }
 
 /**
@@ -559,6 +560,10 @@ export class ClustersClient {
             return this._databasesCache;
         }
 
+        // Note: we intentionally do NOT pass `{ nameOnly: true }` here. The empty-`admin`
+        // filter below relies on the `empty` field, which `nameOnly` omits (along with
+        // `sizeOnDisk`). Keeping the full listing ensures an empty `admin` database stays
+        // hidden while a non-empty `admin` (user-managed roles/collections) remains visible.
         const rawDatabases: ListDatabasesResult = await this._mongoClient.db().admin().listDatabases();
         const databases: DatabaseItemModel[] = rawDatabases.databases.filter(
             // Filter out the 'admin' database if it's empty
@@ -602,11 +607,47 @@ export class ClustersClient {
         }
 
         const rawCollections = await this._mongoClient.db(databaseName).listCollections().toArray();
-        const collections: CollectionItemModel[] = rawCollections;
+        const collections: CollectionItemModel[] = rawCollections.map((c) => ({
+            name: c.name,
+            type: c.type,
+            shardKey:
+                'options' in c
+                    ? (c.options as { shardKey?: Record<string, number | string> } | undefined)?.shardKey
+                    : undefined,
+        }));
 
         this._collectionsCache.set(databaseName, collections);
 
         return collections;
+    }
+
+    /**
+     * Counts collections in a database using a cursor with `nameOnly: true`.
+     * Fetches at most `limit + 1` items and closes the cursor early.
+     *
+     * @returns An object with `count` (capped at `limit`) and `hasMore`
+     *          (`true` when the database has more than `limit` collections).
+     */
+    async countCollections(databaseName: string, limit: number): Promise<{ count: number; hasMore: boolean }> {
+        const cursor = this._mongoClient
+            .db(databaseName)
+            .listCollections({}, { nameOnly: true })
+            .batchSize(limit + 1);
+
+        try {
+            let count = 0;
+            while (count <= limit && (await cursor.hasNext())) {
+                await cursor.next();
+                count++;
+            }
+
+            if (count > limit) {
+                return { count: limit, hasMore: true };
+            }
+            return { count, hasMore: false };
+        } finally {
+            await cursor.close();
+        }
     }
 
     /**

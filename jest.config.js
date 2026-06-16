@@ -2,7 +2,7 @@
 module.exports = {
     // Limit workers to avoid OOM kills on machines with many cores.
     // Each ts-jest worker loads the TypeScript compiler and consumes ~500MB+.
-    maxWorkers: '50%',
+    maxWorkers: '25%',
     // Exclude VS Code test binaries downloaded by @vscode/test-electron.
     // They contain package.json files whose "name" fields collide with real
     // workspace packages, triggering jest-haste-map "naming collision" warnings.
@@ -19,5 +19,6 @@ module.exports = {
         '<rootDir>/packages/documentdb-js-schema-analyzer',
         '<rootDir>/packages/documentdb-js-operator-registry',
         '<rootDir>/packages/documentdb-js-shell-runtime',
+        '<rootDir>/packages/vscode-ext-react-webview',
     ],
 };

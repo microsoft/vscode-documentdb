@@ -1,0 +1,54 @@
+{
+  "name": "@microsoft/vscode-ext-react-webview",
+  "version": "0.8.0-preview",
+  "description": "Webview infrastructure for VS Code extensions with type-safe tRPC RPC over postMessage, React hooks, and pluggable telemetry middleware",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./server": {
+      "types": "./dist/server.d.ts",
+      "default": "./dist/server.js"
+    }
+  },
+  "typesVersions": {
+    "*": {
+      "server": [
+        "./dist/server.d.ts"
+      ]
+    }
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsc -p .",
+    "clean": "rimraf dist tsconfig.tsbuildinfo",
+    "test": "jest --config jest.config.js",
+    "prettier-fix": "prettier -w \"src/**/*.@(js|ts|jsx|tsx|json|md)\" \"./*.@(js|ts|jsx|tsx|json|md)\""
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/microsoft/vscode-documentdb",
+    "directory": "packages/vscode-ext-react-webview"
+  },
+  "license": "MIT",
+  "publishConfig": {
+    "access": "public"
+  },
+  "peerDependencies": {
+    "@trpc/client": "^11.0.0",
+    "@trpc/server": "^11.0.0",
+    "react": ">=18.0.0",
+    "vscode-webview": "^1.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vscode-webview": {
+      "optional": true
+    }
+  }
+}

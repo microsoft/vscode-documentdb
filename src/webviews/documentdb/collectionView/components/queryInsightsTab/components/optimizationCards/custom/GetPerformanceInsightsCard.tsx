@@ -7,17 +7,17 @@ import {
     Button,
     Card,
     CardHeader,
+    Link,
     MessageBar,
     MessageBarBody,
     MessageBarTitle,
-    Spinner,
     Text,
     tokens,
 } from '@fluentui/react-components';
-import { SparkleRegular } from '@fluentui/react-icons';
+import { InfoRegular, SparkleRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import type * as React from 'react';
-import { Announcer } from '../../../../../../../api/webview-client/accessibility';
+import { Announcer } from '../../../../../../../components/accessibility';
 import '../baseOptimizationCard.scss';
 import './GetPerformanceInsightsCard.scss';
 
@@ -63,6 +63,12 @@ export interface GetPerformanceInsightsCardProps {
     onCancel: () => void;
 
     /**
+     * Handler for the "Learn more about the utility model" link in the cost-disclosure row.
+     * Navigates to the utility-model documentation page (separate from the general AI insights docs).
+     */
+    onLearnMoreUtilityModel: () => void;
+
+    /**
      * Optional className to apply to the Card component (e.g., for spacing)
      */
     className?: string;
@@ -97,6 +103,7 @@ export function GetPerformanceInsightsCard({
     onGetInsights,
     onLearnMore,
     onCancel,
+    onLearnMoreUtilityModel,
     className,
     ref,
 }: GetPerformanceInsightsCardProps) {
@@ -117,9 +124,11 @@ export function GetPerformanceInsightsCard({
                 <div style={{ flex: 1 }}>
                     <CardHeader
                         header={
-                            <Text weight="semibold" size={500}>
-                                {l10n.t('AI Performance Insights')}
-                            </Text>
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', flexWrap: 'wrap' }}>
+                                <Text weight="semibold" size={500}>
+                                    {l10n.t('AI Performance Insights')}
+                                </Text>
+                            </div>
                         }
                         action={
                             <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
@@ -144,11 +153,20 @@ export function GetPerformanceInsightsCard({
                             </MessageBarBody>
                         </MessageBar>
                     )}
-                    <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing...')} />
+                    <Announcer when={isLoading} politeness="assertive" message={l10n.t('AI is analyzing…')} />
                     {isLoading ? (
-                        <div className="get-performance-insights-card-loading">
-                            <Spinner size="small" aria-hidden="true" />
-                            <Text size={300}>{l10n.t('AI is analyzing...')}</Text>
+                        // During Stage 3 loading we no longer render an
+                        // in-card spinner + "AI is analyzing…" row. The
+                        // three pre-reserved Stage 3 slots below the
+                        // card each carry their own StreamingInlineProgress
+                        // spinner (Analyzing… / Drafting… / Explaining…),
+                        // so a fourth spinner inside this card was
+                        // visually redundant. We keep ONLY the Cancel
+                        // affordance so the user can still stop the
+                        // request from this card. The accessibility
+                        // announcer above continues to fire so screen
+                        // readers hear "AI is analyzing…" once.
+                        <div className="get-performance-insights-card-actions">
                             <Button appearance="subtle" size="small" onClick={onCancel}>
                                 {l10n.t('Cancel')}
                             </Button>
@@ -168,6 +186,37 @@ export function GetPerformanceInsightsCard({
                             </Button>
                         </div>
                     )}
+                    {/* Cost-neutral disclosure row.
+                        Always rendered so users see the disclosure both before clicking and during loading.
+                        The "Learn more" link wires to `onLearnMoreUtilityModel` (the utility-model
+                        cost-disclosure page), distinct from the general feature `onLearnMore` used by
+                        the button above. Keeping the two URLs separate lets the parent panel update
+                        each independently. */}
+                    <div
+                        style={{
+                            display: 'flex',
+                            alignItems: 'flex-start',
+                            gap: '6px',
+                            marginTop: '12px',
+                            color: tokens.colorNeutralForeground3,
+                        }}
+                    >
+                        <InfoRegular aria-hidden="true" style={{ flexShrink: 0, marginTop: '2px' }} />
+                        <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
+                            {l10n.t('No additional cost for most GitHub Copilot subscribers.')}{' '}
+                            <Link
+                                appearance="subtle"
+                                onClick={onLearnMoreUtilityModel}
+                                inline
+                                style={{
+                                    fontSize: tokens.fontSizeBase200,
+                                    lineHeight: tokens.lineHeightBase200,
+                                }}
+                            >
+                                {l10n.t('Learn more about the utility model used.')}
+                            </Link>
+                        </Text>
+                    </div>
                 </div>
             </div>
         </Card>
