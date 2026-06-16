@@ -108,7 +108,7 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
         },
         {
             label: vscode.l10n.t('Paste kubeconfig YAML from clipboard'),
-            detail: vscode.l10n.t('Reads the current clipboard text and stores it in VS Code Secret Storage'),
+            detail: vscode.l10n.t('Use the current clipboard content as a kubeconfig'),
             iconPath: new vscode.ThemeIcon('clippy'),
             data: 'inline',
         },
