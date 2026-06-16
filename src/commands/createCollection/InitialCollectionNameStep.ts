@@ -20,7 +20,9 @@ export class InitialCollectionNameStep extends AzureWizardPromptStep<CreateDatab
                 prompt,
                 validateInput: (name?: string) => {
                     const trimmed = name?.trim() ?? '';
-                    return trimmed.length === 0 ? l10n.t('Collection name is required.') : this.baseStep.validateInput(trimmed);
+                    return trimmed.length === 0
+                        ? l10n.t('Collection name is required.')
+                        : this.baseStep.validateInput(trimmed);
                 },
             })
         ).trim();
