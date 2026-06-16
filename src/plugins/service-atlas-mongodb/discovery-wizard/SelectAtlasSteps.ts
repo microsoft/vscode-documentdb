@@ -90,9 +90,13 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             placeHolder: vscode.l10n.t('Select a cluster'),
         });
 
-        context.properties['atlas.selectedClusterConnectionString'] =
+        const connectionString =
             selected.cluster.connectionStrings.standardSrv ?? selected.cluster.connectionStrings.standard;
-    }
+        if (!connectionString) {
+            throw new Error(vscode.l10n.t('No Atlas cluster connection string available.'));
+        }
+
+        context.properties['atlas.selectedClusterConnectionString'] = connectionString;
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
         return !context.properties['atlas.selectedClusterConnectionString'];
