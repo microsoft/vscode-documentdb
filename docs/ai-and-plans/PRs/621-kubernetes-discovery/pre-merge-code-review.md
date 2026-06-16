@@ -73,7 +73,18 @@ Both entry points the user reaches the feature through are wired correctly.
 
 ## 2. Findings
 
-### 2.1 🟠 Discovered connection strings disable TLS certificate validation by default
+### 2.1 🟠 Discovered connection strings disable TLS certificate validation by default — ✅ DONE (accepted + surfaced)
+
+> ✅ **Resolved (commit `fix(kubernetes): surface disabled TLS validation on discovered targets`).** The
+> insecure default is **accepted** as the right behavior for the common DKO self-signed path, but it is no
+> longer silent: (1) discovered target nodes now show a `⚠️ Security: TLS/SSL certificate validation
+> disabled` line in their hover tooltip — same treatment the Connections-view node gives an emulator with
+> security disabled — via `disablesTlsValidation()` in
+> [KubernetesResourceItem.ts](../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts);
+> and (2) a new **"Connection security (TLS/SSL)"** section in the user manual explains the default, why it
+> exists, and that **after saving** a discovered target you can edit the connection and remove
+> `tlsAllowInvalidCertificates=true` to re-enable certificate validation. Gating on the DKO `tlsReady`
+> signal remains a possible future refinement but is intentionally **not** done now.
 
 `buildDocumentDbConnectionParams()` unconditionally sets:
 

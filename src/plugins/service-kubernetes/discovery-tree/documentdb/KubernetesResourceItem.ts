@@ -596,10 +596,35 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         // `\n\n---\n\n` as a horizontal line, giving a clean reachability / key-info /
         // placement separation in the rich tooltip.
         const sections = [reachabilitySection.join('\n\n'), keyInfo.join('\n\n'), placement.join('\n\n')];
+
+        // Group 4 — security notice. Discovered DocumentDB targets are connected to with
+        // `tlsAllowInvalidCertificates=true` (the DKO gateway typically serves a self-signed
+        // certificate), which disables TLS certificate verification. Surface this the same way the
+        // Connections-view node flags an emulator with security disabled, so the user is aware the
+        // discovered connection does not validate the server certificate. The note lives only in
+        // the tooltip (not the always-visible description) to avoid cluttering the row.
+        if (this.disablesTlsValidation()) {
+            sections.push(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL certificate validation disabled')}`);
+        }
+
         const tooltip = new vscode.MarkdownString(sections.join('\n\n---\n\n'));
         // Required so the single `$(...)` glyph on the reachability line renders as an icon.
         tooltip.supportThemeIcons = true;
         return tooltip;
+    }
+
+    /**
+     * True when the connection string this target produces will disable TLS certificate
+     * validation (`tlsAllowInvalidCertificates=true`). Discovered targets set this via
+     * {@link buildDocumentDbConnectionParams} because the DKO gateway commonly serves a
+     * self-signed certificate. Read from the resolved connection params rather than assumed,
+     * so the tooltip stays accurate if the param set ever changes.
+     */
+    private disablesTlsValidation(): boolean {
+        if (!this.serviceInfo.connectionParams) {
+            return false;
+        }
+        return new URLSearchParams(this.serviceInfo.connectionParams).get('tlsAllowInvalidCertificates') === 'true';
     }
 
     private getReachabilityInfo(): ReachabilityInfo {

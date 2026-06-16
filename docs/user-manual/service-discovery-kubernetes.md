@@ -201,6 +201,14 @@ stringData:
 
 Missing, invalid, or unreadable credential Secrets do not block discovery. The extension prompts for credentials later when needed.
 
+## Connection security (TLS/SSL)
+
+Kubernetes-discovered DocumentDB targets are connected to with TLS enabled but **certificate validation disabled** (`tls=true&tlsAllowInvalidCertificates=true`). The DocumentDB Kubernetes Operator (DKO) gateway commonly serves a **self-signed certificate**, so strict certificate verification would otherwise break the most common discovery path. With validation disabled, the connection is still encrypted in transit, but the server certificate is not verified, so it does not protect against an on-path (man-in-the-middle) attacker.
+
+Discovered target nodes show a `⚠️ Security: TLS/SSL certificate validation disabled` line in their hover tooltip so this is visible before you connect.
+
+When you **save** a discovered target to the Connections view, the `tlsAllowInvalidCertificates=true` parameter is stored as part of the connection string. If your service presents a certificate that your machine trusts (for example, a CA-signed certificate rather than the DKO self-signed one), you can **edit the saved connection and remove `tlsAllowInvalidCertificates=true`** to re-enable certificate validation. As with [local connections](./local-connection#tls-ssl-security), it is worth investing a little time in proper certificates even outside production so security-related issues surface early.
+
 ## Endpoint resolution and port forwarding
 
 | Kubernetes Service type | Behavior                                                                                                                                                            |
