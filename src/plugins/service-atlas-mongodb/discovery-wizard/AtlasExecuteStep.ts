@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
+import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 
 /**
@@ -18,7 +19,7 @@ export class AtlasExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         const connectionString = context.properties['atlas.selectedClusterConnectionString'] as string | undefined;
 
         if (!connectionString) {
-            throw new Error('No Atlas cluster connection string available.');
+            throw new Error(vscode.l10n.t('No Atlas cluster connection string available.'));
         }
 
         context.connectionString = connectionString;

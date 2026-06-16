@@ -31,6 +31,14 @@ import { type AtlasClusterModel } from '../models/AtlasClusterModel';
 const RESOURCE_TYPE = 'atlas-mongodb-cluster';
 
 /**
+ * Escapes markdown special characters so Atlas-provided text is always rendered
+ * as plain text rather than being interpreted as markdown formatting or links.
+ */
+function escapeMarkdown(text: string): string {
+    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
+}
+
+/**
  * Tree item representing a MongoDB Atlas cluster within a project.
  * Extends ClusterItemBase to support expanding into databases,
  * credential caching, and the unified connection experience.
@@ -272,22 +280,24 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
     private buildTooltip(): vscode.MarkdownString {
         const md = new vscode.MarkdownString();
-        md.appendMarkdown(`**${this.cluster.name}**\n\n`);
-        md.appendMarkdown(`- **State:** ${this.cluster.stateName}\n`);
-        md.appendMarkdown(`- **Type:** ${this.cluster.clusterType}\n`);
-        md.appendMarkdown(`- **MongoDB:** v${this.cluster.mongoDBVersion}\n`);
+        md.isTrusted = false;
+
+        md.appendMarkdown(`**${escapeMarkdown(this.cluster.name)}**\n\n`);
+        md.appendMarkdown(`- **State:** ${escapeMarkdown(this.cluster.stateName)}\n`);
+        md.appendMarkdown(`- **Type:** ${escapeMarkdown(this.cluster.clusterType)}\n`);
+        md.appendMarkdown(`- **MongoDB:** v${escapeMarkdown(this.cluster.mongoDBVersion)}\n`);
 
         if (this.cluster.instanceSizeName) {
-            md.appendMarkdown(`- **Tier:** ${this.cluster.instanceSizeName}\n`);
+            md.appendMarkdown(`- **Tier:** ${escapeMarkdown(this.cluster.instanceSizeName)}\n`);
         }
         if (this.cluster.providerName) {
-            md.appendMarkdown(`- **Provider:** ${this.cluster.providerName}\n`);
+            md.appendMarkdown(`- **Provider:** ${escapeMarkdown(this.cluster.providerName)}\n`);
         }
         if (this.cluster.regionName) {
-            md.appendMarkdown(`- **Region:** ${this.formatRegion(this.cluster.regionName)}\n`);
+            md.appendMarkdown(`- **Region:** ${escapeMarkdown(this.formatRegion(this.cluster.regionName))}\n`);
         }
 
-        md.appendMarkdown(`- **Project:** ${this.cluster.projectName}\n`);
+        md.appendMarkdown(`- **Project:** ${escapeMarkdown(this.cluster.projectName)}\n`);
 
         if (this.cluster.connectionString) {
             md.appendMarkdown(`\n---\n`);

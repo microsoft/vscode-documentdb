@@ -17,7 +17,7 @@ export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionW
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const session = context.properties['atlas.session'] as AtlasSession | undefined;
         if (!session) {
-            throw new Error('Atlas session not available');
+            throw new Error(vscode.l10n.t('Atlas session not available'));
         }
 
         const client = new AtlasApiClient(session);
@@ -48,12 +48,12 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const session = context.properties['atlas.session'] as AtlasSession | undefined;
         if (!session) {
-            throw new Error('Atlas session not available');
+            throw new Error(vscode.l10n.t('Atlas session not available'));
         }
 
         const project = context.properties['atlas.selectedProject'] as AtlasProject | undefined;
         if (!project) {
-            throw new Error('Atlas project not selected');
+            throw new Error(vscode.l10n.t('Atlas project not selected'));
         }
 
         const client = new AtlasApiClient(session);

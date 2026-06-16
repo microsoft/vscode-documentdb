@@ -12,12 +12,10 @@ import {
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
-import { executeApiKeyFlow } from '../auth/AtlasApiKeyFlow';
 import { promptAtlasAuthMethod } from '../auth/AtlasAuthQuickPick';
-import { executeOAuthDeviceFlow } from '../auth/AtlasOAuthDeviceFlow';
-import { executeServiceAccountFlow } from '../auth/AtlasServiceAccountFlow';
 import { AtlasSessionState } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
+import { executeAtlasAuthFlow } from '../auth/executeAtlasAuthFlow';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { AtlasProjectItem } from './AtlasProjectItem';
 
@@ -187,13 +185,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             return false; // User cancelled
         }
 
-        if (authMethod === 'oauth') {
-            return executeOAuthDeviceFlow(this.sessionManager);
-        } else if (authMethod === 'serviceaccount') {
-            return executeServiceAccountFlow(this.sessionManager);
-        } else {
-            return executeApiKeyFlow(this.sessionManager);
-        }
+        return executeAtlasAuthFlow(authMethod, this.sessionManager);
     }
 
     private createSignInNode(): TreeElement & TreeElementWithContextValue {

@@ -11,11 +11,10 @@ import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { AtlasApiClient } from './api/AtlasApiClient';
-import { executeApiKeyFlow } from './auth/AtlasApiKeyFlow';
 import { promptAtlasAuthMethod } from './auth/AtlasAuthQuickPick';
-import { executeOAuthDeviceFlow } from './auth/AtlasOAuthDeviceFlow';
 import { type AtlasSession, AtlasSessionState } from './auth/AtlasSession';
 import { AtlasSessionManager } from './auth/AtlasSessionManager';
+import { executeAtlasAuthFlow } from './auth/executeAtlasAuthFlow';
 import { DESCRIPTION, DISCOVERY_PROVIDER_ID, ICON_PATH, LABEL, WIZARD_TITLE } from './config';
 import { AtlasServiceRootItem } from './discovery-tree/AtlasServiceRootItem';
 import { AtlasExecuteStep } from './discovery-wizard/AtlasExecuteStep';
@@ -86,10 +85,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
             throw new UserCancelledError();
         }
 
-        const success =
-            authMethod === 'oauth'
-                ? await executeOAuthDeviceFlow(this.sessionManager)
-                : await executeApiKeyFlow(this.sessionManager);
+        const success = await executeAtlasAuthFlow(authMethod, this.sessionManager);
 
         if (!success) {
             return undefined;
@@ -289,12 +285,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
             return; // User cancelled
         }
 
-        let success: boolean;
-        if (authMethod === 'oauth') {
-            success = await executeOAuthDeviceFlow(this.sessionManager);
-        } else {
-            success = await executeApiKeyFlow(this.sessionManager);
-        }
+        const success = await executeAtlasAuthFlow(authMethod, this.sessionManager);
 
         if (success) {
             context.telemetry.properties.authMethod = authMethod;

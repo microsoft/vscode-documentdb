@@ -15,7 +15,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<CreateDatabaseWizardCont
     public async execute(context: CreateDatabaseWizardContext): Promise<void> {
         const credentialsId = context.credentialsId;
         const databaseName = context.databaseName!;
-        const collectionName = context.collectionName!;
+        const collectionName = context.collectionName;
         const nodeId = context.nodeId;
         const client = await ClustersClient.getClient(credentialsId);
 
