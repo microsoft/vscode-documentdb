@@ -312,7 +312,7 @@ call **returns** (success or failure) in a reasonable time.
 | **Port-forward settings** (`localPortStrategy`, `localPortBase`)                         | ✅ in package.json + user manual                                 | Good |
 | **`tlsAllowInvalidCertificates=true`** on every discovered connection string             | ✅ **now documented** (§2.1 — "Connection security (TLS/SSL)")   | Done |
 | **`exec` credential plugins may run local binaries** when expanding a source             | ✅ **now documented** (§2.3 — "Add a kubeconfig source" warning) | Done |
-| **No timeout** on API calls / "tree may spin on an unreachable cluster"                  | ❌ not documented (see 2.2)                                      | Gap  |
+| **No timeout** on API calls / "tree may spin on an unreachable cluster"                  | 📝 tracked [#741](https://github.com/microsoft/vscode-documentdb/issues/741) (0.9.1)     | Tracked |
 | `DISCOVERY_VIEW_MODE_STATE_KEY` and other ad-hoc `globalState` keys                      | n/a (internal); TODO comment notes a future settings store       | Info |
 
 The user manual is **excellent** overall (RBAC matrix, provider-detection table, troubleshooting table,
@@ -378,8 +378,10 @@ No correctness defects surfaced in these paths.
 **Merge-ready** from an architecture, integration, and error-handling standpoint. No code-level blockers.
 
 **2.1 (TLS default)**, **2.3 (exec-plugin trust)**, and **2.7 (dependency pin)** are now **resolved**
-(see the ✅ DONE notes in §2). **2.2 (timeouts)** is **tracked as
-[#741](https://github.com/microsoft/vscode-documentdb/issues/741) (milestone 0.9.1)** — confirmed the
-upstream client has no built-in timeout, so the agreed follow-up caps discovery calls at 30s and falls into
-the existing retry error node. Hand-verify **2.9 (shell on ClusterIP)** and **2.6 (packaged native
-optionals)** as part of release validation. Everything else is Low/Info and can ride the backlog.
+(see the ✅ DONE notes in §2). The remaining items are tracked for the **0.9.1** patch:
+[#741](https://github.com/microsoft/vscode-documentdb/issues/741) (API-call 30s timeout + namespace-prescan
+ceiling — folds in 2.2 and 2.5), [#743](https://github.com/microsoft/vscode-documentdb/issues/743) (manual
+release-validation hand tests — covers 2.6 packaged-VSIX and 2.9 shell-on-ClusterIP), and
+[#742](https://github.com/microsoft/vscode-documentdb/issues/742) (the `rs0` / directConnection
+investigation). The UX-review doc drift (2.8) is reconciled with a banner. Everything else (2.4, 4.x) is
+Low/Info backlog with no milestone.

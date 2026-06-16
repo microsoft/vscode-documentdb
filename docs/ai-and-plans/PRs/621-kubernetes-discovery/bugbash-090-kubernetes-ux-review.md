@@ -44,6 +44,34 @@ cold and understand both _what_ was decided and _why_.
 
 ---
 
+## ⏱️ Post‑merge reconciliation (2026‑06‑16)
+
+> **This is a running log written during iteration; some passages below were authored when items were
+> still open and now read as out‑of‑date. The two corrections that matter are stamped here. For
+> _current_ behavior, the [Kubernetes user manual](../../../user-manual/service-discovery-kubernetes.md)
+> and the [pre‑merge code review](./pre-merge-code-review.md) are the source of truth — not this log.**
+>
+> 1. **ClusterIP "Copy…" quick pick — SHIPPED (not deferred).** §4.3 / §7.2 / §8.1 discuss the
+>    teammate‑share `kubectl port-forward` snippet as "still deferred." It actually **shipped**: the
+>    ClusterIP node has a grouped **"Copy…"** quick pick (connection string with/without password, the
+>    `kubectl port-forward` command, and a **Learn more** docs link). See
+>    [copyConnectionString.ts](../../../../src/commands/copyConnectionString/copyConnectionString.ts)
+>    (`copyKubernetesPortForwardConnection`, `buildKubectlPortForwardCommand`).
+> 2. **Discovered‑target icon — DocumentDB brand mark, not the reachability glyph.** §8.1 / §9.2 describe
+>    the node `iconPath` as a `globe`/`server`/`plug`/`warning` reachability glyph. The shipped node uses
+>    the **DocumentDB brand icon** (so it reads as a first‑class cluster); the reachability glyph now
+>    lives only on the tooltip's "Reachability" line. See `buildTooltip()` /  the constructor `iconPath`
+>    in
+>    [KubernetesResourceItem.ts](../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts).
+>
+> Everything else in this log is accurate as of merge. Findings the review tracked for the **0.9.1** patch
+> live in issues [#741](https://github.com/microsoft/vscode-documentdb/issues/741) (API timeouts +
+> namespace‑prescan ceiling), [#742](https://github.com/microsoft/vscode-documentdb/issues/742) (`rs0` /
+> directConnection investigation), and [#743](https://github.com/microsoft/vscode-documentdb/issues/743)
+> (manual release‑validation hand tests).
+
+---
+
 ## 1. The story in one paragraph
 
 The feature adds a **Kubernetes** root under the Discovery view. From there a user registers one or
@@ -745,7 +773,12 @@ A third round acted on three of the open discussions below:
 | §7.4 / #20       | Freeze the settings surface; drop deferred settings from the backlog.   | Kept the two `portForward.*` keys; `namespaceScanConcurrency` stays a hardcoded `5` with a comment marking it a deliberate non-setting; `showEmptyNamespaces` dropped (Others bucket).             |
 | §4.2 / §7.5 / #1 | Add **"Open in Editor"** for file sources (recovery + context menu).    | New `openKubeconfigInEditor` command; `discovery.kubernetesSourceFile` context-value marker scopes the context-menu entry and recovery child to file sources only.                                 |
 
-### 7.2 Discussion — #21 ClusterIP "share with a teammate" snippet (still deferred)
+### 7.2 Discussion — #21 ClusterIP "share with a teammate" snippet (✅ shipped — see reconciliation banner)
+
+> ✅ **Update (post‑merge): this shipped.** The text below was written while the snippet was still open.
+> The grouped **"Copy…"** quick pick (incl. the `kubectl port-forward` command + Learn more) is now in
+> [copyConnectionString.ts](../../../../src/commands/copyConnectionString/copyConnectionString.ts). The
+> discussion is retained for the record.
 
 **The gap.** A ClusterIP target is only reachable through a **machine-local** `port-forward` tunnel.
 Copying its connection string yields a `127.0.0.1:<port>` URI that works on this machine only while the
