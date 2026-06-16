@@ -66,7 +66,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                     const model = createAtlasClusterModel(this.project.id, this.project.name, cluster, AtlasExperience);
                     const treeCluster = {
                         ...model,
-                        treeId: `${this.id}/${cluster.name}`,
+                        treeId: `${this.id}/${cluster.name.replaceAll('/', '_')}`,
                         viewId: Views.DiscoveryView,
                     };
                     return new AtlasClusterItem('', treeCluster);
