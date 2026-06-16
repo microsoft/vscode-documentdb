@@ -47,7 +47,7 @@ cold and understand both _what_ was decided and _why_.
 ## ⏱️ Post‑merge reconciliation (2026‑06‑16)
 
 > **This is a running log written during iteration; some passages below were authored when items were
-> still open and now read as out‑of‑date. The two corrections that matter are stamped here. For
+> still open and now read as out‑of‑date. The corrections that matter are stamped here. For
 > _current_ behavior, the [Kubernetes user manual](../../../user-manual/service-discovery-kubernetes.md)
 > and the [pre‑merge code review](./pre-merge-code-review.md) are the source of truth — not this log.**
 >
@@ -63,6 +63,12 @@ cold and understand both _what_ was decided and _why_.
 >    lives only on the tooltip's "Reachability" line. See `buildTooltip()` / the constructor `iconPath`
 >    in
 >    [KubernetesResourceItem.ts](../../../../src/plugins/service-kubernetes/discovery-tree/documentdb/KubernetesResourceItem.ts).
+> 3. **Context/namespace connection errors — modal only, no in‑tree error‑summary node (post‑merge,
+>    2026‑06‑16).** §F/#19 Iteration 1 says the classified `⚠ Connection failed: …` summary node was
+>    "retained but now sits below the retry action." That is now **out‑of‑date**: the summary node was
+>    **removed** from both the context‑level and namespace‑level error states, which now show the failure
+>    as a **modal** (`showErrorMessage(…, { modal: true })`) and keep **only** the "Click here to retry"
+>    node — matching the Connections view exactly. See §F/#19 **Iteration 2** below for details.
 >
 > Everything else in this log is accurate as of merge. Findings the review tracked for the **0.9.1** patch
 > live in issues [#741](https://github.com/microsoft/vscode-documentdb/issues/741) (API timeouts +
@@ -489,6 +495,28 @@ defined it), **Decision / Code today** (verified), and any **Flag**.
     and the namespace/service-level error children
     ([KubernetesNamespaceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesNamespaceItem.ts)).
     The classified error-summary node is retained but now sits **below** the retry action.
+- ➡️ **Iteration 2 (review feedback) — resolved:** the in-tree classified error-summary node
+  (the `⚠ Connection failed: …` / `⚠ Failed to list services …` row) should **not** persist in the tree at
+  all. The Connections view never leaves a passive error row under a cluster — it shows the failure as a
+  **modal** and keeps only a retry affordance in the tree (see
+  [DocumentDBClusterItem.ts](src/tree/connections-view/DocumentDBClusterItem.ts) `authenticateAndConnect` →
+  `showErrorMessage(…, { modal: true })`, then `getChildren()` renders just the retry node). The
+  context/namespace error states should match that exactly.
+  - **Decision / Implemented:** The `error-info` summary node was **removed** from both the context-level
+    (`createConnectionErrorChildren`) and namespace-level (`createServiceErrorChildren`) error states.
+    Each now surfaces the failure through `vscode.window.showErrorMessage(…, { modal: true })` — title
+    "Failed to connect to '<context>'" / "Failed to list services in '<context>/<namespace>'", with the
+    classified summary + hint + full error in the modal **detail** — and returns **only** the
+    “Click here to retry” node. The full error is still written to `ext.outputChannel`. See
+    [KubernetesContextItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesContextItem.ts) and
+    [KubernetesNamespaceItem.ts](src/plugins/service-kubernetes/discovery-tree/KubernetesNamespaceItem.ts).
+  - **No modal spam:** same guarantee as the source-node modal (#25) — the retry-node cache (#19) stops
+    `getChildren()` from re-running on passive refreshes, so the modal only fires on a real load attempt
+    (expand or “Click here to retry”). This **supersedes** the Iteration 1 note above that kept the
+    summary node below the retry action; the three tree error states (source / context / namespace) are
+    now consistent with each other **and** with the Connections view: modal error + output channel, retry
+    node only.
+
 
 **#25 — "What does Retry do here?"** ✅ rename / ⚠️ two review asks NOT shipped
 
