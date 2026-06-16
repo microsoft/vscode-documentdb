@@ -63,7 +63,12 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                     context.telemetry.properties.serviceFetchError = 'true';
                     context.telemetry.properties.serviceFetchErrorType =
                         error instanceof Error ? error.name : 'UnknownError';
-                    return createServiceErrorChildren(this.id, errorMessage, this);
+                    return createServiceErrorChildren(
+                        this.id,
+                        errorMessage,
+                        this,
+                        `${this.contextInfo.name}/${this.namespace}`,
+                    );
                 }
 
                 context.telemetry.measurements.discoveryResourcesCount = services.length;
@@ -133,10 +138,24 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
 }
 
 /**
- * Builds tree children for a service-list error with a classified summary,
- * actionable hint in the tooltip, and a retry action.
+ * Builds tree children for a service-list error.
+ *
+ * Mirrors the Connections View behavior: the failure is surfaced as a modal
+ * dialog (with the full error in the output channel) instead of persisting an
+ * "error-info" node in the tree. Only a retry affordance remains so the user
+ * can re-attempt the listing.
+ *
+ * The modal cannot spam the user: services are only (re)loaded on an explicit
+ * user action (expanding the namespace or clicking "Click here to retry"), and
+ * the retry-node cache (see {@link hasRetryNode}) prevents `getChildren()` from
+ * re-running on passive tree refreshes.
  */
-function createServiceErrorChildren(parentId: string, errorMessage: string, retryTarget: TreeElement): TreeElement[] {
+function createServiceErrorChildren(
+    parentId: string,
+    errorMessage: string,
+    retryTarget: TreeElement,
+    namespaceLabel: string,
+): TreeElement[] {
     const lower = errorMessage.toLowerCase();
 
     let summary: string;
@@ -149,10 +168,14 @@ function createServiceErrorChildren(parentId: string, errorMessage: string, retr
         summary = vscode.l10n.t('Authentication failed listing services (401)');
         hint = vscode.l10n.t('Credentials may have expired. Re-authenticate with your cluster.');
     } else {
-        const truncated = errorMessage.length > 120 ? errorMessage.slice(0, 117) + '...' : errorMessage;
-        summary = vscode.l10n.t('Failed to list services: {0}', truncated);
+        summary = vscode.l10n.t('Failed to list services');
         hint = vscode.l10n.t('Check the output channel for details.');
     }
+
+    void vscode.window.showErrorMessage(vscode.l10n.t('Failed to list services in "{0}"', namespaceLabel), {
+        modal: true,
+        detail: `${summary}\n\n${hint}\n\n${vscode.l10n.t('Error: {0}', errorMessage)}`,
+    });
 
     return [
         createGenericElementWithContext({
@@ -162,14 +185,6 @@ function createServiceErrorChildren(parentId: string, errorMessage: string, retr
             iconPath: new vscode.ThemeIcon('refresh'),
             commandId: 'vscode-documentdb.command.internal.retry',
             commandArgs: [retryTarget],
-        }),
-        createGenericElementWithContext({
-            contextValue: 'error',
-            id: `${parentId}/error-info`,
-            label: summary,
-            description: hint,
-            iconPath: new vscode.ThemeIcon('warning'),
-            tooltip: `${summary}\n\n${hint}\n\nFull error: ${errorMessage}`,
         }),
     ];
 }

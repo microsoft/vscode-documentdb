@@ -89,7 +89,12 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                     context.telemetry.properties.namespaceFetchErrorType =
                         error instanceof Error ? error.name : 'UnknownError';
 
-                    return createConnectionErrorChildren(this.id, errorMessage, this);
+                    return createConnectionErrorChildren(
+                        this.id,
+                        errorMessage,
+                        this,
+                        this.alias ?? this.contextInfo.name,
+                    );
                 }
 
                 context.telemetry.measurements.namespacesCount = namespaceNames.length;
@@ -386,15 +391,31 @@ function classifyConnectionError(errorMessage: string): { summary: string; hint:
 }
 
 /**
- * Builds tree children for a connection-level error: a classified error
- * summary, a retry action, and a troubleshooting docs link.
+ * Builds tree children for a connection-level error.
+ *
+ * Mirrors the Connections View behavior (see {@link DocumentDBClusterItem}):
+ * the failure is surfaced as a modal dialog with the full error available in
+ * the output channel, instead of persisting a verbose "error-info" node in the
+ * tree. Only a retry affordance remains in the tree so the user can re-attempt
+ * the connection.
+ *
+ * The modal cannot spam the user: a failed connection is only (re)loaded on an
+ * explicit user action (expanding the node or clicking "Click here to retry"),
+ * and the retry-node cache (see {@link hasRetryNode}) prevents `getChildren()`
+ * from re-running on passive tree refreshes.
  */
 function createConnectionErrorChildren(
     parentId: string,
     errorMessage: string,
     retryTarget: TreeElement,
+    connectionLabel: string,
 ): TreeElement[] {
     const { summary, hint } = classifyConnectionError(errorMessage);
+
+    void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect to "{0}"', connectionLabel), {
+        modal: true,
+        detail: `${summary}\n\n${hint}\n\n${vscode.l10n.t('Error: {0}', errorMessage)}`,
+    });
 
     return [
         createGenericElementWithContext({
@@ -404,14 +425,6 @@ function createConnectionErrorChildren(
             iconPath: new vscode.ThemeIcon('refresh'),
             commandId: 'vscode-documentdb.command.internal.retry',
             commandArgs: [retryTarget],
-        }),
-        createGenericElementWithContext({
-            contextValue: 'error',
-            id: `${parentId}/error-info`,
-            label: summary,
-            description: hint,
-            iconPath: new vscode.ThemeIcon('warning'),
-            tooltip: `${summary}\n\n${hint}\n\nFull error: ${errorMessage}`,
         }),
     ];
 }

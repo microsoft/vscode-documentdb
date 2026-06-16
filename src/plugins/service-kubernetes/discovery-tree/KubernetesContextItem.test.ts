@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as vscode from 'vscode';
 import { type KubeContextInfo } from '../kubernetesClient';
 import { KubernetesContextItem } from './KubernetesContextItem';
 
@@ -56,6 +57,9 @@ jest.mock('vscode', () => ({
         getConfiguration: jest.fn(() => ({
             get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
         })),
+    },
+    window: {
+        showErrorMessage: jest.fn(),
     },
 }));
 
@@ -302,26 +306,26 @@ describe('KubernetesContextItem', () => {
             expect(mockListDocumentDBServices).toHaveBeenCalledTimes(2);
         });
 
-        it('should return error/retry node when kubeconfig load fails', async () => {
+        it('should return retry node and show a modal when kubeconfig load fails', async () => {
+            (vscode.window.showErrorMessage as jest.Mock).mockClear();
             mockLoadConfiguredKubeConfig.mockRejectedValue(new Error('ENOENT: no such file or directory'));
 
             const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(2);
-            // First child: retry action
+            // Only a retry node — the error itself is shown as a modal, not a tree node.
+            expect(children).toHaveLength(1);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const retryNode = children![0] as any;
             expect(retryNode.contextValue).toBe('error');
             expect(retryNode.id).toContain('retry');
-            // Second child: classified error summary
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const errorInfoNode = children![1] as any;
-            expect(errorInfoNode.contextValue).toBe('error');
-            expect(errorInfoNode.id).toContain('error-info');
             expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalled();
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to connect'),
+                expect.objectContaining({ modal: true }),
+            );
         });
 
         it('should ignore stale hidden namespace filters from earlier builds', async () => {
@@ -403,22 +407,26 @@ describe('KubernetesContextItem', () => {
             expect((children![0] as any).contextValue).toBe('informational');
         });
 
-        it('should return error node when createCoreApi fails', async () => {
+        it('should return retry node and show a modal when createCoreApi fails', async () => {
+            (vscode.window.showErrorMessage as jest.Mock).mockClear();
             mockCreateCoreApi.mockRejectedValue(new Error('context not found'));
 
             const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(2);
+            // Only a retry node — the error itself is shown as a modal, not a tree node.
+            expect(children).toHaveLength(1);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             expect((children![0] as any).contextValue).toBe('error');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             expect((children![0] as any).id).toContain('retry');
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            expect((children![1] as any).id).toContain('error-info');
             expect(item.hasRetryNode(children)).toBe(true);
             expect(mockOutputChannelError).toHaveBeenCalled();
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to connect'),
+                expect.objectContaining({ modal: true }),
+            );
         });
 
         it('should keep namespaces expandable when service pre-scan throws', async () => {

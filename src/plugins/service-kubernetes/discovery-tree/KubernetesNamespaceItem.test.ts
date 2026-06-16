@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as vscode from 'vscode';
 import { type KubeContextInfo, type KubeServiceInfo } from '../kubernetesClient';
 import { KubernetesNamespaceItem } from './KubernetesNamespaceItem';
 
@@ -39,6 +40,9 @@ jest.mock('vscode', () => ({
         getConfiguration: jest.fn(() => ({
             get: jest.fn((_key: string, defaultValue?: unknown) => defaultValue),
         })),
+    },
+    window: {
+        showErrorMessage: jest.fn(),
     },
     l10n: {
         t: jest.fn((template: string, ...args: unknown[]) =>
@@ -198,45 +202,50 @@ describe('KubernetesNamespaceItem', () => {
             expect((children![0] as any).label).toBe('No DocumentDB services found in this namespace.');
         });
 
-        it('should show retry/error child and log diagnostics on RBAC or service-list failure', async () => {
+        it('should show retry node, modal, and log diagnostics on RBAC or service-list failure', async () => {
+            (vscode.window.showErrorMessage as jest.Mock).mockClear();
             mockListDocumentDBServices.mockRejectedValue(new Error('RBAC: forbidden'));
 
             const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(2);
-            // First child: retry action
+            // Only a retry node — the error itself is shown as a modal, not a tree node.
+            expect(children).toHaveLength(1);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const retryNode = children![0] as any;
             expect(retryNode.contextValue).toBe('error');
             expect(retryNode.id).toContain('retry');
-            // Second child: classified error summary
-            // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            const errorInfoNode = children![1] as any;
-            expect(errorInfoNode.contextValue).toBe('error');
-            expect(errorInfoNode.id).toContain('error-info');
-            expect(errorInfoNode.label).toContain('403');
             expect(item.hasRetryNode(children)).toBe(true);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to list services in "my-context/my-ns"'),
+                expect.objectContaining({ modal: true }),
+            );
             expect(mockOutputChannelError).toHaveBeenCalledWith(
                 expect.stringContaining('Failed to list services in "my-context/my-ns"'),
             );
             expect(telemetryContextMock.telemetry.properties).toHaveProperty('serviceFetchError', 'true');
         });
 
-        it('should show retry/error child when kubeconfig fails to load', async () => {
+        it('should show retry node and modal when kubeconfig fails to load', async () => {
+            (vscode.window.showErrorMessage as jest.Mock).mockClear();
             mockLoadConfiguredKubeConfig.mockRejectedValue(new Error('ENOENT: config not found'));
 
             const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
             const children = await item.getChildren();
 
             expect(children).toBeDefined();
-            expect(children).toHaveLength(2);
+            // Only a retry node — the error itself is shown as a modal, not a tree node.
+            expect(children).toHaveLength(1);
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             expect((children![0] as any).contextValue).toBe('error');
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
             expect((children![0] as any).id).toContain('retry');
             expect(item.hasRetryNode(children)).toBe(true);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to list services in "my-context/my-ns"'),
+                expect.objectContaining({ modal: true }),
+            );
             expect(mockOutputChannelError).toHaveBeenCalled();
         });
 
