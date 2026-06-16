@@ -61,8 +61,9 @@ export function createAtlasClusterModel(
     dbExperience: Experience,
 ): AtlasClusterModel {
     // clusterId must not contain '/' — use provider prefix + project + cluster name
-    const clusterId = `atlas-mongodb-discovery_${projectId}_${cluster.name}`;
-
+    const safeProjectId = projectId.replaceAll('/', '_');
+    const safeClusterName = cluster.name.replaceAll('/', '_');
+    const clusterId = `atlas-mongodb-discovery_${safeProjectId}_${safeClusterName}`;
     // Resolve provider info from top-level providerSettings or replicationSpecs
     const provider =
         cluster.providerSettings ??
