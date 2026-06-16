@@ -10,6 +10,22 @@ import { redactCredentialsFromConnectionString } from '../../documentdb/utils/co
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+// FIXME (discovery plugin API coupling): this generic command imports directly from the
+// `service-kubernetes` plugin so that duplicate-connection detection can compare two
+// port-forwarded targets by their tunnel identity instead of host + username (two tunnels can
+// share localhost:<port> yet point at different services). This leaks plugin-specific knowledge
+// into core. The discovery plugin API is still experimental and has no source-agnostic way for a
+// provider to declare what makes two of its connections "the same".
+//
+// Potential workaround / target design: have the plugin write a generic `connectionIdentity`
+// string into the source-agnostic `context.connectionProperties` bag when it builds a connection.
+// The dedup logic below would compare `connectionIdentity` whenever both sides have one and fall
+// back to host + username otherwise, keeping this command plugin-agnostic. Tracked in the discovery
+// API issue: https://github.com/microsoft/vscode-documentdb/issues/739 (milestone 0.12.0).
+import {
+    getKubernetesPortForwardIdentity,
+    getKubernetesPortForwardMetadata,
+} from '../../plugins/service-kubernetes/portForwardMetadata';
 
 import {
     type ConnectionItem,
@@ -48,6 +64,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
             const newParsedCS = new DocumentDBConnectionString(newConnectionString);
             const newJoinedHosts = [...newParsedCS.hosts].sort().join(',');
+            const newPortForwardMetadata = getKubernetesPortForwardMetadata(context.connectionProperties);
 
             //  Sanity Check 1/2: is there a connection with the same username + host in there?
             const existingConnections = await ConnectionStorageService.getAll(ConnectionType.Clusters);
@@ -66,6 +83,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     const existingHostsJoined = [...existingCS.hosts].sort().join(',');
                     // Use nativeAuthConfig for comparison
                     const existingUsername = existingConnection.secrets.nativeAuthConfig?.connectionUser;
+                    const existingPortForwardMetadata = getKubernetesPortForwardMetadata(existingConnection.properties);
+
+                    if (newPortForwardMetadata || existingPortForwardMetadata) {
+                        return (
+                            existingUsername === newUsername &&
+                            !!newPortForwardMetadata &&
+                            !!existingPortForwardMetadata &&
+                            getKubernetesPortForwardIdentity(existingPortForwardMetadata) ===
+                                getKubernetesPortForwardIdentity(newPortForwardMetadata)
+                        );
+                    }
 
                     return existingUsername === newUsername && existingHostsJoined === newJoinedHosts;
                 } catch (error) {
@@ -148,6 +176,7 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 id: storageId,
                 name: newConnectionLabel,
                 properties: {
+                    ...context.connectionProperties,
                     type: ItemType.Connection,
                     api: api,
                     parentId: parentId ? parentId : undefined, // Set parent folder ID if in a subfolder

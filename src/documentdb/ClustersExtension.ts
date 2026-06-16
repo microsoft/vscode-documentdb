@@ -81,6 +81,9 @@ import { ext } from '../extensionVariables';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
+import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/KubernetesDiscoveryProvider';
+import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
+import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
@@ -97,6 +100,7 @@ import { ClustersWorkspaceBranchDataProvider } from '../tree/azure-workspace-vie
 import { DocumentDbWorkspaceResourceProvider } from '../tree/azure-workspace-view/DocumentDbWorkspaceResourceProvider';
 import { ConnectionsBranchDataProvider } from '../tree/connections-view/ConnectionsBranchDataProvider';
 import { DiscoveryBranchDataProvider } from '../tree/discovery-view/DiscoveryBranchDataProvider';
+import { DiscoveryViewDragAndDropController } from '../tree/discovery-view/DiscoveryViewDragAndDropController';
 import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
@@ -121,14 +125,23 @@ import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
-    dispose(): Promise<void> {
-        return Promise.resolve();
+    async dispose(): Promise<void> {
+        // Clean up any active port-forward tunnels
+        const { PortForwardTunnelManager } = await import('../plugins/service-kubernetes/portForwardTunnel');
+        PortForwardTunnelManager.getInstance().dispose();
     }
 
     registerDiscoveryServices(_activateContext: IActionContext) {
         DiscoveryService.registerProvider(new AzureDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
+        DiscoveryService.registerProvider(new KubernetesDiscoveryProvider());
+
+        // Connection-reachability providers: source-specific steps that make a saved connection
+        // reachable before connecting (e.g. re-establishing a Kubernetes port-forward tunnel).
+        // The generic Connections-view cluster node delegates to these via ConnectionReachabilityService.
+        // See docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
+        ConnectionReachabilityService.registerProvider(new KubernetesReachabilityProvider());
     }
 
     registerConnectionsTree(_activateContext: IActionContext): void {
@@ -157,12 +170,13 @@ export class ClustersExtension implements vscode.Disposable {
          */
         ext.discoveryBranchDataProvider = new DiscoveryBranchDataProvider();
 
-        const treeView = vscode.window.createTreeView(Views.DiscoveryView, {
+        ext.discoveryTreeView = vscode.window.createTreeView(Views.DiscoveryView, {
             showCollapseAll: true,
             treeDataProvider: ext.discoveryBranchDataProvider,
+            dragAndDropController: new DiscoveryViewDragAndDropController(),
         });
 
-        ext.context.subscriptions.push(treeView);
+        ext.context.subscriptions.push(ext.discoveryTreeView);
     }
 
     registerHelpAndFeedbackTree(_activateContext: IActionContext): void {
@@ -565,6 +579,107 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
                     withTreeNodeCommandCorrelation(learnMoreAboutServiceProvider),
+                );
+
+                //// Kubernetes-specific source commands
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.addSource',
+                    withTreeNodeCommandCorrelation(async (context, _node) => {
+                        const { addKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/addKubeconfigSource');
+                        try {
+                            await addKubeconfigSource(context);
+                        } catch (error) {
+                            const { UserCancelledError } = await import('@microsoft/vscode-azext-utils');
+                            if (!(error instanceof UserCancelledError)) {
+                                throw error;
+                            }
+                            return;
+                        }
+
+                        const { refreshKubernetesRoot } =
+                            await import('../plugins/service-kubernetes/commands/refreshKubernetesRoot');
+                        refreshKubernetesRoot();
+                    }),
+                );
+
+                ext.context.subscriptions.push(
+                    (
+                        await import('../plugins/service-kubernetes/commands/viewKubeconfig')
+                    ).registerInlineKubeconfigContentProvider(),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.renameSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { renameKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/renameKubeconfigSource');
+                        await renameKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.removeSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { removeKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/removeKubeconfigSource');
+                        await removeKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { reloadKubeconfigSource } =
+                            await import('../plugins/service-kubernetes/commands/reloadKubeconfigSource');
+                        await reloadKubeconfigSource(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.editSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { editKubeconfig } =
+                            await import('../plugins/service-kubernetes/commands/editKubeconfig');
+                        await editKubeconfig(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.viewSource',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { viewKubeconfig } =
+                            await import('../plugins/service-kubernetes/commands/viewKubeconfig');
+                        await viewKubeconfig(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.renameContext',
+                    withTreeNodeCommandCorrelation(async (context, node) => {
+                        const { renameKubernetesContext } =
+                            await import('../plugins/service-kubernetes/commands/renameKubernetesContext');
+                        await renameKubernetesContext(context, node as never);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToKubernetesTreeView } =
+                            await import('../plugins/service-kubernetes/commands/switchKubernetesViewMode');
+                        await switchToKubernetesTreeView(context);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToKubernetesFlatListView } =
+                            await import('../plugins/service-kubernetes/commands/switchKubernetesViewMode');
+                        await switchToKubernetesFlatListView(context);
+                    }),
                 );
 
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(

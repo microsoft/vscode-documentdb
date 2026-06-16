@@ -6,19 +6,12 @@
 import { AzureWizardPromptStep, openUrl, UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { QuickPickItemKind, type QuickPickItem } from 'vscode';
-import { ext } from '../../extensionVariables';
-import { DiscoveryService } from '../../services/discoveryServices';
+import { getHiddenDiscoveryProviders } from '../../services/discoveryProviderVisibility';
 import { type AddRegistryWizardContext } from './AddRegistryWizardContext';
 
 export class PromptRegistryStep extends AzureWizardPromptStep<AddRegistryWizardContext> {
     public async prompt(context: AddRegistryWizardContext): Promise<void> {
-        const activeDiscoveryProviderIds = ext.context.globalState.get<string[]>('activeDiscoveryProviderIds', []);
-
-        const promptItems: (QuickPickItem & { id: string })[] = DiscoveryService.listProviders()
-            // Filter out already enabled providers
-            .filter((provider) => {
-                return !activeDiscoveryProviderIds.includes(provider.id);
-            })
+        const promptItems: (QuickPickItem & { id: string })[] = (await getHiddenDiscoveryProviders())
             // Map to QuickPickItem format
             .map((provider) => ({
                 id: provider.id,
@@ -35,7 +28,7 @@ export class PromptRegistryStep extends AzureWizardPromptStep<AddRegistryWizardC
         if (promptItems.length === 0) {
             promptItems.push({
                 id: 'noProviders',
-                label: l10n.t('All available providers have been added already.'),
+                label: l10n.t('All available providers are already visible.'),
                 alwaysShow: true,
             });
         }
@@ -57,7 +50,7 @@ export class PromptRegistryStep extends AzureWizardPromptStep<AddRegistryWizardC
             ],
             {
                 enableGrouping: true,
-                placeHolder: l10n.t('Choose your provider…'),
+                placeHolder: l10n.t('Choose a provider to show…'),
                 stepName: 'selectProvider',
                 suppressPersistence: true,
             },

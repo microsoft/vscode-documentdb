@@ -166,6 +166,7 @@
     "@azure/identity": "~4.13.0",
     "@fluentui/react-components": "~9.73.3",
     "@fluentui/react-icons": "~2.0.320",
+    "@kubernetes/client-node": "1.4.0",
     "@microsoft/vscode-azext-azureauth": "~4.1.1",
     "@microsoft/vscode-azext-azureutils": "~4.2.0",
     "@microsoft/vscode-azext-utils": "~4.1.0",
@@ -260,7 +261,7 @@
       },
       {
         "view": "discoveryView",
-        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
+        "contents": "All service discovery providers are currently hidden.\n[$(search) Explore Providers…](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to explore available discovery providers."
       }
     ],
     "languages": [
@@ -420,17 +421,17 @@
         "title": "Start Demo Task"
       },
       {
-        "//": "[DiscoveryView] Enable Registry",
+        "//": "[DiscoveryView] Show Hidden Provider",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.addRegistry",
-        "title": "Enable New Registry…",
+        "title": "Show Hidden Provider…",
         "icon": "$(add)"
       },
       {
-        "//": "[DiscoveryView] Disable Registry",
+        "//": "[DiscoveryView] Hide Provider",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.removeRegistry",
-        "title": "Disable Registry"
+        "title": "Hide Provider"
       },
       {
         "//": "[DiscoveryView] Save To DocumentDB Connections",
@@ -479,6 +480,62 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.copyConnectionString",
         "title": "Copy Connection String…"
+      },
+      {
+        "//": "[DiscoveryView] Rename Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+        "title": "Rename…",
+        "icon": "$(edit)"
+      },
+      {
+        "//": "[DiscoveryView] Remove Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+        "title": "Remove…",
+        "icon": "$(trash)"
+      },
+      {
+        "//": "[DiscoveryView] Edit Kubernetes kubeconfig file source in the editor",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
+        "title": "Edit Kubeconfig",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "//": "[DiscoveryView] View Kubernetes inline (pasted) kubeconfig source read-only",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
+        "title": "View Kubeconfig",
+        "icon": "$(eye)"
+      },
+      {
+        "//": "[DiscoveryView] Add Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+        "title": "Add Kubeconfig…",
+        "icon": "$(add)"
+      },
+      {
+        "//": "[DiscoveryView] Rename Kubernetes context (display alias)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+        "title": "Rename Context…",
+        "icon": "$(edit)"
+      },
+      {
+        "//": "[DiscoveryView] Switch Kubernetes discovery to the flat list view. Shown while the TREE view is active, so following the Search-view convention the icon reflects the CURRENT (tree) mode and the title states the action.",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+        "title": "View as List",
+        "icon": "$(list-tree)"
+      },
+      {
+        "//": "[DiscoveryView] Switch Kubernetes discovery to the hierarchical tree view. Shown while the LIST view is active, so the icon reflects the CURRENT (list) mode and the title states the action.",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+        "title": "View as Tree",
+        "icon": "$(list-selection)"
       },
       {
         "//": "Create Database",
@@ -750,11 +807,6 @@
           "group": "2@1"
         },
         {
-          "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
-          "group": "0@1"
-        },
-        {
           "command": "vscode-documentdb.command.discoveryView.manageCredentials",
           "when": "view == discoveryView && viewItem =~ /\\benableManageCredentialsCommand\\b/i",
           "group": "inline@1"
@@ -783,6 +835,62 @@
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
           "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
           "group": "2@4"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
+          "group": "1@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
+          "group": "1@2"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceFile\\b/i",
+          "group": "2@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceInline\\b/i",
+          "group": "2@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesRootItem\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesRootItem\\b/i",
+          "group": "2@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesContext\\b/i",
+          "group": "1@1"
+        },
+        {
+          "//": "[DiscoveryView] View-mode toggle on the Kubernetes context node. The icon reflects the CURRENT mode and the action switches to the other (Search-view convention). Two commands gated by the current-mode marker; each contributed inline and in the menu group just above Refresh (zheLastGroup).",
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.tree\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.tree\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.list\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.list\\b/i",
+          "group": "yheAlmostLastGroup@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
@@ -1030,6 +1138,38 @@
           "when": "never"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+          "when": "never"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
           "when": "never"
         },
@@ -1192,6 +1332,28 @@
             "type": "integer",
             "default": 10260,
             "description": "Port to use when connecting to DocumentDB Local instance"
+          },
+          "documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy": {
+            "order": 30,
+            "type": "string",
+            "default": "matchRemote",
+            "enum": [
+              "matchRemote",
+              "autoSelect"
+            ],
+            "enumDescriptions": [
+              "Use the same port number as the remote Kubernetes service port.",
+              "Automatically find a free local port starting from localPortBase."
+            ],
+            "description": "How to choose the local port when opening a port-forward tunnel to a ClusterIP Kubernetes service."
+          },
+          "documentDB.serviceDiscovery.kubernetes.portForward.localPortBase": {
+            "order": 31,
+            "type": "integer",
+            "default": 27100,
+            "minimum": 1024,
+            "maximum": 65535,
+            "description": "Starting port for automatic local port selection when localPortStrategy is 'autoSelect'. The extension scans upward until a free port is found."
           },
           "documentDB.playground.confirmRunAll": {
             "order": 14,
