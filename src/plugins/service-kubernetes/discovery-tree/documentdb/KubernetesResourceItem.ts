@@ -622,7 +622,7 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
                         'Visit the [documentation]({0}) for more information about TLS/SSL certificates.',
                         KUBERNETES_DISCOVERY_LEARN_MORE_TSLSSL_URL,
                     ),
-                ].join('\n'),
+                ].join('\n\n'),
             );
         }
 
