@@ -446,6 +446,34 @@ describe('handleKubeconfigFileDrop', () => {
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('preview');
     });
+
+    it('warns (not just logs) when a previewed file cannot be opened as text', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        // The binary file (e.g. an image) cannot be opened as text.
+        mockShowTextDocument.mockRejectedValue(new Error('File seems to be binary and cannot be opened as text'));
+
+        // The modal returns Preview (the second button).
+        mockShowInformationMessage.mockReset();
+        mockShowInformationMessage.mockImplementation((_m: unknown, _o: unknown, ...items: unknown[]) =>
+            Promise.resolve(items[1]),
+        );
+
+        await handleKubeconfigFileDrop([fileUri('/downloads/diagram.png')] as never);
+
+        // A visible warning is shown, not just an output-channel line.
+        expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+        const [warning, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(warning).toContain('diagram.png');
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/binary file rather than a kubeconfig/);
+        expect(mockOutputWarn).toHaveBeenCalled();
+        // Still exits the flow without importing.
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+        expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('preview');
+    });
 });
 
 describe('shortenPathMiddle', () => {

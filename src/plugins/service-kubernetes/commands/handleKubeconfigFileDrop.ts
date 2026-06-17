@@ -274,15 +274,39 @@ async function confirmKubeconfigDrop(fileUris: readonly vscode.Uri[]): Promise<D
 
 /**
  * Opens each dropped file in a non-preview editor tab so the user can inspect
- * the contents before importing. Failures are logged but never block the flow.
+ * the contents before importing.
+ *
+ * Files that can't be opened as text (e.g. a binary such as an image) are
+ * collected and surfaced in a single visible warning rather than failing
+ * silently — such a file is almost certainly not a kubeconfig. The per-file
+ * reason is still written to the output channel for diagnostics.
  */
 async function previewKubeconfigFiles(fileUris: readonly vscode.Uri[]): Promise<void> {
+    const failed: string[] = [];
     for (const uri of fileUris) {
         try {
             await vscode.window.showTextDocument(uri, { preview: false, preserveFocus: true });
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             ext.outputChannel.warn(`[KubernetesDiscovery] Could not open "${uri.fsPath}" for preview: ${message}`);
+            failed.push(uri.fsPath);
         }
     }
+
+    if (failed.length === 0) {
+        return;
+    }
+
+    void vscode.window.showWarningMessage(
+        failed.length === 1
+            ? vscode.l10n.t('Could not open "{0}" for preview.', path.basename(failed[0]))
+            : vscode.l10n.t('Could not open {0} of the dropped files for preview.', String(failed.length)),
+        {
+            modal: true,
+            detail:
+                failed.length === 1
+                    ? vscode.l10n.t('It looks like a binary file rather than a kubeconfig.')
+                    : vscode.l10n.t('They look like binary files rather than kubeconfigs.'),
+        },
+    );
 }
