@@ -39,6 +39,7 @@ export async function editKubeconfig(context: IActionContext, node: KubernetesKu
             context.telemetry.properties.kubeconfigSourceResult = 'notAFileSource';
             void vscode.window.showWarningMessage(
                 vscode.l10n.t('Only file-based kubeconfig sources can be opened in the editor.'),
+                { modal: true },
             );
             return;
         }
@@ -69,6 +70,7 @@ export async function editKubeconfig(context: IActionContext, node: KubernetesKu
         context.telemetry.properties.kubeconfigSourceResult = 'notAFileSource';
         void vscode.window.showWarningMessage(
             vscode.l10n.t('Only file-based kubeconfig sources can be opened in the editor.'),
+            { modal: true },
         );
         return;
     }
@@ -89,6 +91,8 @@ export async function editKubeconfig(context: IActionContext, node: KubernetesKu
         const message = error instanceof Error ? error.message : String(error);
         ext.outputChannel.error(`[KubernetesDiscovery] Failed to open kubeconfig "${filePath}" in editor: ${message}`);
         context.telemetry.properties.kubeconfigSourceResult = 'openFailed';
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to open kubeconfig in editor: {0}', message));
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to open kubeconfig in editor: {0}', message), {
+            modal: true,
+        });
     }
 }

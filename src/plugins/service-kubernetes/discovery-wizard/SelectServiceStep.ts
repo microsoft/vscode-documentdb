@@ -31,13 +31,33 @@ export class SelectServiceStep extends AzureWizardPromptStep<NewConnectionWizard
             throw new Error('Kubernetes context not selected.');
         }
 
-        const kubeConfig = await loadConfiguredKubeConfig(sourceId);
-        const coreApi = await createCoreApi(kubeConfig, selectedContext.name);
-        const namespaceNames = await listNamespaces(coreApi);
+        // First real round-trip to the cluster's API server. A failure here breaks the
+        // user-initiated discovery flow, so surface a modal (mirroring the tree path's
+        // connection-failure dialog) and cancel rather than letting the framework show a
+        // bare error toast.
+        let kubeConfig: Awaited<ReturnType<typeof loadConfiguredKubeConfig>>;
+        let coreApi: Awaited<ReturnType<typeof createCoreApi>>;
+        let namespaceNames: string[];
+        try {
+            kubeConfig = await loadConfiguredKubeConfig(sourceId);
+            coreApi = await createCoreApi(kubeConfig, selectedContext.name);
+            namespaceNames = await listNamespaces(coreApi);
+        } catch (error) {
+            const message = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.error(
+                `[KubernetesDiscovery] Failed to list namespaces for context "${selectedContext.name}": ${message}`,
+            );
+            void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect to "{0}"', selectedContext.name), {
+                modal: true,
+                detail: vscode.l10n.t('Error: {0}', message),
+            });
+            throw new UserCancelledError();
+        }
 
         if (namespaceNames.length === 0) {
             void vscode.window.showWarningMessage(
                 vscode.l10n.t('No namespaces found in context "{0}".', selectedContext.name),
+                { modal: true },
             );
             throw new UserCancelledError();
         }
@@ -63,6 +83,7 @@ export class SelectServiceStep extends AzureWizardPromptStep<NewConnectionWizard
                     'No DocumentDB targets were found in context "{0}". DKO resources are preferred, and generic fallback currently looks for DocumentDB gateway services.',
                     selectedContext.name,
                 ),
+                { modal: true },
             );
             throw new UserCancelledError();
         }

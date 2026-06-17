@@ -97,7 +97,10 @@ export class KubernetesExecuteStep extends AzureWizardExecuteStep<NewConnectionW
             }
             case 'pending':
             case 'unreachable':
-                void vscode.window.showWarningMessage(endpoint.reason);
+                void vscode.window.showWarningMessage(
+                    vscode.l10n.t('Cannot connect to "{0}"', selectedService.displayName),
+                    { modal: true, detail: endpoint.reason },
+                );
                 throw new UserCancelledError();
         }
 

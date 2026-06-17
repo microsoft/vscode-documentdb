@@ -290,7 +290,8 @@ describe('addKubeconfigSource default branch validation', () => {
 
         expect(mockTryAddDefaultSource).toHaveBeenCalledTimes(1);
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('added');
-        expect(mockShowInformationMessage).toHaveBeenCalledWith('Added kubeconfig source "Default kubeconfig".');
+        // Success is silent: the revealed + selected node is the confirmation, no toast.
+        expect(mockShowInformationMessage).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('default');
     });

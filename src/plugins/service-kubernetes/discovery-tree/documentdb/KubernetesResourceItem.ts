@@ -533,7 +533,10 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
             }
             case 'pending':
             case 'unreachable':
-                void vscode.window.showWarningMessage(endpoint.reason);
+                void vscode.window.showWarningMessage(
+                    l10n.t('Cannot connect to "{service}"', { service: this.serviceInfo.displayName }),
+                    { modal: true, detail: endpoint.reason },
+                );
                 context.telemetry.properties.connectionResult = endpoint.kind;
                 context.telemetry.properties.unreachableReason = this.serviceInfo.type;
                 return undefined;

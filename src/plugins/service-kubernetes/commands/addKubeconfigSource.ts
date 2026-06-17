@@ -22,8 +22,9 @@ type AddBranch = 'default' | 'file' | 'inline';
  * exists we don't pretend a new one was created. Instead we surface a modal
  * message explaining that the existing source was selected in the view (the
  * caller reveals + selects it via {@link revealAddedKubeconfigSource}), so the
- * user understands why no new node appeared. A genuinely new source still gets
- * the lightweight confirmation toast.
+ * user understands why no new node appeared. A genuinely new source is added
+ * silently — the freshly revealed + selected node in the view is the
+ * confirmation, so we only record it in the output channel (no success toast).
  */
 function notifyKubeconfigSourceAdded(
     context: IActionContext,
@@ -33,7 +34,6 @@ function notifyKubeconfigSourceAdded(
 ): void {
     if (created) {
         context.telemetry.properties.kubeconfigSourceResult = 'added';
-        void vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
         ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
         return;
     }

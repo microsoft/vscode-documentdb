@@ -130,12 +130,14 @@ describe('editKubeconfig', () => {
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('fileMissing');
     });
 
-    it('refuses inline sources with a warning', async () => {
+    it('refuses inline sources with a modal warning', async () => {
         const context = makeContext();
         await editKubeconfig(context, makeNode({ kind: 'inline' }) as never);
 
         expect(mockOpenTextDocument).not.toHaveBeenCalled();
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+        const [, options] = mockShowWarningMessage.mock.calls[0] as [string, { modal?: boolean }];
+        expect(options.modal).toBe(true);
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('notAFileSource');
     });
 });
