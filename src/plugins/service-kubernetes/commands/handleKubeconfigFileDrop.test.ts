@@ -10,6 +10,7 @@ const mockRefreshKubernetesRoot = jest.fn();
 const mockRevealKubernetesSource = jest.fn();
 const mockShowInformationMessage = jest.fn();
 const mockShowWarningMessage = jest.fn();
+const mockShowTextDocument = jest.fn();
 const mockOutputAppendLine = jest.fn();
 const mockOutputError = jest.fn();
 const mockOutputWarn = jest.fn();
@@ -27,6 +28,7 @@ jest.mock('vscode', () => ({
     window: {
         showInformationMessage: (...args: unknown[]) => mockShowInformationMessage(...args),
         showWarningMessage: (...args: unknown[]) => mockShowWarningMessage(...args),
+        showTextDocument: (...args: unknown[]) => mockShowTextDocument(...args),
     },
 }));
 
@@ -87,7 +89,7 @@ jest.mock('./refreshKubernetesRoot', () => ({
     revealKubernetesSource: (...args: unknown[]) => mockRevealKubernetesSource(...args),
 }));
 
-import { handleKubeconfigFileDrop } from './handleKubeconfigFileDrop';
+import { handleKubeconfigFileDrop, shortenPathMiddle } from './handleKubeconfigFileDrop';
 
 function fileUri(absolutePath: string): { scheme: string; fsPath: string } {
     return { scheme: 'file', fsPath: absolutePath };
@@ -101,12 +103,35 @@ beforeEach(() => {
     mockRevealKubernetesSource.mockReset();
     mockShowInformationMessage.mockReset();
     mockShowWarningMessage.mockReset();
+    mockShowTextDocument.mockReset();
     mockOutputAppendLine.mockReset();
     mockOutputError.mockReset();
     mockOutputWarn.mockReset();
     mockStat.mockReset();
     lastTelemetryContext = undefined;
+
+    // By default, auto-confirm the import-confirmation modal (the first, modal
+    // showInformationMessage call returns its first button = "Import"). The
+    // success toast is a separate, non-modal showInformationMessage call.
+    mockShowInformationMessage.mockImplementation((_message: unknown, options: unknown, ...items: unknown[]) => {
+        const isModal = typeof options === 'object' && options !== null && (options as { modal?: boolean }).modal;
+        if (isModal && items.length > 0) {
+            return Promise.resolve(items[0]);
+        }
+        return Promise.resolve(undefined);
+    });
 });
+
+/**
+ * The non-modal success-toast calls to `showInformationMessage`, excluding the
+ * modal import-confirmation prompt.
+ */
+function successToastCalls(): unknown[][] {
+    return mockShowInformationMessage.mock.calls.filter((call) => {
+        const options = call[1] as { modal?: boolean } | undefined;
+        return !options || !options.modal;
+    });
+}
 
 /**
  * Convenience to build the `{ record, created }` shape that addFileSource now
@@ -135,8 +160,9 @@ describe('handleKubeconfigFileDrop', () => {
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('src-1');
         // Toast must include the source label (consistency with the wizard pattern).
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
-        const successMessage = mockShowInformationMessage.mock.calls[0][0] as string;
+        const toasts = successToastCalls();
+        expect(toasts).toHaveLength(1);
+        const successMessage = toasts[0][0] as string;
         expect(successMessage).toContain('team.yaml');
         expect(mockShowWarningMessage).not.toHaveBeenCalled();
     });
@@ -151,8 +177,9 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/a.yaml'), fileUri('/b.yaml')] as never);
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
-        const message = mockShowInformationMessage.mock.calls[0][0] as string;
+        const toasts = successToastCalls();
+        expect(toasts).toHaveLength(1);
+        const message = toasts[0][0] as string;
         expect(message).toMatch(/2 kubeconfig sources/);
         // Reveal targets the FIRST added source so the user immediately sees the result.
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('a');
@@ -228,6 +255,10 @@ describe('handleKubeconfigFileDrop', () => {
         // One warning for the invalid middle file.
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
+        // Telemetry tracks how many dropped files were rejected as invalid.
+        expect(lastTelemetryContext?.telemetry.measurements.confirmedFileCount).toBe(3);
+        expect(lastTelemetryContext?.telemetry.measurements.addedCount).toBe(2);
+        expect(lastTelemetryContext?.telemetry.measurements.invalidCount).toBe(1);
     });
 
     it('ignores non-file scheme URIs in the input', async () => {
@@ -268,7 +299,7 @@ describe('handleKubeconfigFileDrop', () => {
         // addFileSource IS called (it has to be, to learn whether the file was
         // already registered), but nothing user-visible changes.
         expect(mockAddFileSource).toHaveBeenCalledTimes(1);
-        expect(mockShowInformationMessage).not.toHaveBeenCalled();
+        expect(successToastCalls()).toHaveLength(0);
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
         expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
         // One audit-trail line in the output channel.
@@ -290,9 +321,10 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/abs/team.yaml'), fileUri('/abs/team.yaml')] as never);
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
+        const toasts = successToastCalls();
+        expect(toasts).toHaveLength(1);
         // Singular toast (1 actually added, not 2).
-        const message = mockShowInformationMessage.mock.calls[0][0] as string;
+        const message = toasts[0][0] as string;
         expect(message).toContain('team.yaml');
         expect(message).not.toMatch(/2 kubeconfig sources/);
     });
@@ -312,8 +344,9 @@ describe('handleKubeconfigFileDrop', () => {
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
         // Singular toast: only one new file was actually added.
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowInformationMessage.mock.calls[0][0] as string).toContain('b.yaml');
+        const toasts = successToastCalls();
+        expect(toasts).toHaveLength(1);
+        expect(toasts[0][0] as string).toContain('b.yaml');
         // Refresh runs because something was actually added.
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('src-b');
@@ -322,5 +355,107 @@ describe('handleKubeconfigFileDrop', () => {
         expect(lastTelemetryContext?.telemetry.measurements.fileCount).toBe(2);
         expect(lastTelemetryContext?.telemetry.measurements.addedCount).toBe(1);
         expect(lastTelemetryContext?.telemetry.measurements.alreadyRegisteredCount).toBe(1);
+    });
+
+    it('shows a confirmation modal before importing and lists each dropped file', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([{ name: 'ctx' }]);
+        mockAddFileSource.mockResolvedValueOnce(added('a', 'a.yaml')).mockResolvedValueOnce(added('b', 'b.yaml'));
+        mockRevealKubernetesSource.mockResolvedValue(undefined);
+
+        await handleKubeconfigFileDrop([fileUri('/home/a.yaml'), fileUri('/home/b.yaml')] as never);
+
+        // The modal is the first showInformationMessage call (modal: true with buttons).
+        const modalCall = mockShowInformationMessage.mock.calls.find(
+            (call) => (call[1] as { modal?: boolean } | undefined)?.modal,
+        );
+        expect(modalCall).toBeDefined();
+        const [modalMessage, modalOptions] = modalCall as [string, { modal: boolean; detail: string }];
+        expect(modalMessage).toMatch(/2 dropped kubeconfig files/);
+        expect(modalOptions.detail).toContain('/home/a.yaml');
+        expect(modalOptions.detail).toContain('/home/b.yaml');
+        expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('import');
+        expect(lastTelemetryContext?.telemetry.measurements.confirmedFileCount).toBe(2);
+        expect(lastTelemetryContext?.telemetry.measurements.invalidCount).toBe(0);
+    });
+
+    it('uses the singular confirmation message for a single dropped file', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([{ name: 'ctx' }]);
+        mockAddFileSource.mockResolvedValue(added('a', 'a.yaml'));
+        mockRevealKubernetesSource.mockResolvedValue(undefined);
+
+        await handleKubeconfigFileDrop([fileUri('/home/a.yaml')] as never);
+
+        const modalCall = mockShowInformationMessage.mock.calls.find(
+            (call) => (call[1] as { modal?: boolean } | undefined)?.modal,
+        );
+        expect((modalCall as [string])[0]).toMatch(/Add the dropped kubeconfig file/);
+    });
+
+    it('imports nothing when the user cancels the confirmation modal', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        // User dismisses the modal (returns undefined).
+        mockShowInformationMessage.mockReset();
+        mockShowInformationMessage.mockResolvedValue(undefined);
+
+        await handleKubeconfigFileDrop([fileUri('/home/a.yaml')] as never);
+
+        expect(mockStat).not.toHaveBeenCalled();
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+        expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
+        expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('cancelled');
+    });
+
+    it('opens all dropped files on Preview and then exits without importing', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        mockShowTextDocument.mockResolvedValue(undefined);
+
+        // The modal returns Preview (the second button).
+        mockShowInformationMessage.mockReset();
+        mockShowInformationMessage.mockImplementation((_m: unknown, _o: unknown, ...items: unknown[]) =>
+            Promise.resolve(items[1]),
+        );
+
+        await handleKubeconfigFileDrop([fileUri('/home/a.yaml'), fileUri('/home/b.yaml')] as never);
+
+        // Both files opened for preview.
+        expect(mockShowTextDocument).toHaveBeenCalledTimes(2);
+        // The modal is shown exactly once — Preview exits the flow (no re-prompt).
+        const modalCalls = mockShowInformationMessage.mock.calls.filter(
+            (call) => (call[1] as { modal?: boolean } | undefined)?.modal,
+        );
+        expect(modalCalls).toHaveLength(1);
+        // Nothing is imported; the user can drop again later.
+        expect(mockStat).not.toHaveBeenCalled();
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+        expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
+        expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('preview');
+    });
+});
+
+describe('shortenPathMiddle', () => {
+    it('returns short paths unchanged', () => {
+        expect(shortenPathMiddle('/home/user/.kube/config', 64)).toBe('/home/user/.kube/config');
+    });
+
+    it('keeps the start of the path and the full filename, collapsing the middle', () => {
+        const longPath = '/home/user/projects/some/very/deeply/nested/directory/structure/config.yaml';
+        const result = shortenPathMiddle(longPath, 40);
+
+        expect(result.length).toBeLessThanOrEqual(40);
+        expect(result).toContain('…');
+        expect(result.startsWith('/home/user/')).toBe(true);
+        expect(result.endsWith('config.yaml')).toBe(true);
+    });
+
+    it('middle-truncates the filename itself when even the filename does not fit', () => {
+        const longName = 'a-really-really-really-long-kubeconfig-filename-that-is-huge.yaml';
+        const result = shortenPathMiddle(`/x/${longName}`, 20);
+
+        expect(result.length).toBeLessThanOrEqual(20);
+        expect(result).toContain('…');
     });
 });
