@@ -128,20 +128,20 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
     const defaultPath = describeDefaultKubeconfigPath();
     const picks: IAzureQuickPickItem<AddBranch>[] = [
         {
-            label: vscode.l10n.t('Use my default kubeconfig'),
-            detail: vscode.l10n.t('{0}, or the file named by the KUBECONFIG environment variable', defaultPath),
+            label: vscode.l10n.t('Default kubeconfig'),
+            detail: vscode.l10n.t('Uses the KUBECONFIG environment variable, or {0}', defaultPath),
             iconPath: new vscode.ThemeIcon('home'),
             data: 'default',
         },
         {
-            label: vscode.l10n.t('Add custom kubeconfig file…'),
-            detail: vscode.l10n.t('Browse for a kubeconfig file on disk'),
+            label: vscode.l10n.t('Kubeconfig file…'),
+            detail: vscode.l10n.t('Browse for a kubeconfig YAML file on disk'),
             iconPath: new vscode.ThemeIcon('folder-opened'),
             data: 'file',
         },
         {
-            label: vscode.l10n.t('Paste kubeconfig YAML from clipboard'),
-            detail: vscode.l10n.t('Use the current clipboard content as a kubeconfig'),
+            label: vscode.l10n.t('Paste kubeconfig YAML…'),
+            detail: vscode.l10n.t('Reads clipboard content and saves it as a kubeconfig source'),
             iconPath: new vscode.ThemeIcon('clippy'),
             data: 'inline',
         },
@@ -149,7 +149,7 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
 
     try {
         const selected = await context.ui.showQuickPick(picks, {
-            placeHolder: vscode.l10n.t('Add Kubeconfig'),
+            placeHolder: vscode.l10n.t('Select kubeconfig source'),
             suppressPersistence: true,
         });
         context.telemetry.properties.kubeconfigSourceKind = selected.data;
