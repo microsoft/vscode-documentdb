@@ -8,6 +8,13 @@ import { DEFAULT_SOURCE_ID, type KubeconfigSourceRecord } from '../config';
 const mockEnsureMigration = jest.fn(async () => undefined);
 const mockReadSources = jest.fn<Promise<readonly KubeconfigSourceRecord[]>, []>();
 
+// --- Telemetry mock context ---
+const telemetryContextMock = {
+    telemetry: { properties: {} as Record<string, string>, measurements: {} as Record<string, number> },
+    errorHandling: { issueProperties: {} },
+    valuesToMask: [],
+};
+
 jest.mock('vscode', () => ({
     ThemeIcon: class ThemeIcon {
         constructor(public readonly id: string) {}
@@ -23,6 +30,9 @@ jest.mock('vscode', () => ({
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     createContextValue: (parts: string[]) => parts.join(';'),
+    callWithTelemetryAndErrorHandling: jest.fn(
+        async (_eventName: string, callback: (context: unknown) => Promise<unknown>) => callback(telemetryContextMock),
+    ),
 }));
 
 jest.mock('../sources/migrationV2', () => ({
@@ -61,6 +71,8 @@ describe('KubernetesRootItem (v2 multi-source)', () => {
     beforeEach(() => {
         mockEnsureMigration.mockClear();
         mockReadSources.mockReset();
+        telemetryContextMock.telemetry.properties = {};
+        telemetryContextMock.telemetry.measurements = {};
     });
 
     it('runs the v2 migration and renders one source per stored entry', async () => {
@@ -108,6 +120,35 @@ describe('KubernetesRootItem (v2 multi-source)', () => {
         expect(root.contextValue).not.toContain('enableFilterCommand');
         expect(root.contextValue).toContain('enableLearnMoreCommand');
         expect(root.contextValue).toContain('enableAddKubernetesSourceCommand');
+    });
+
+    it('records how many kubeconfig sources exist, split by kind', async () => {
+        const sources: KubeconfigSourceRecord[] = [
+            { id: DEFAULT_SOURCE_ID, kind: 'default', label: 'Default kubeconfig' },
+            { id: 'f-1', kind: 'file', label: 'team.yaml', path: '/abs/team.yaml' },
+            { id: 'f-2', kind: 'file', label: 'prod.yaml', path: '/abs/prod.yaml' },
+            { id: 'i-1', kind: 'inline', label: 'Pasted YAML 1' },
+        ];
+        mockReadSources.mockResolvedValue(sources);
+
+        await new KubernetesRootItem('discoveryView').getChildren();
+
+        const { measurements, properties } = telemetryContextMock.telemetry;
+        expect(measurements.sourcesCount).toBe(4);
+        expect(measurements.fileSourcesCount).toBe(2);
+        expect(measurements.inlineSourcesCount).toBe(1);
+        expect(measurements.defaultSourcesCount).toBe(1);
+        expect(properties.hasSources).toBe('true');
+    });
+
+    it('records hasSources=false and a zero source count when empty', async () => {
+        mockReadSources.mockResolvedValue([]);
+
+        await new KubernetesRootItem('discoveryView').getChildren();
+
+        const { measurements, properties } = telemetryContextMock.telemetry;
+        expect(measurements.sourcesCount).toBe(0);
+        expect(properties.hasSources).toBe('false');
     });
 
     it('shows all sources without hidden-source filtering', async () => {

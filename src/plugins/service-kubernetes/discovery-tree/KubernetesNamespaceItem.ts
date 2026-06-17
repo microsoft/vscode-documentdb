@@ -60,6 +60,10 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                     ext.outputChannel.error(
                         `[KubernetesDiscovery] Failed to list services in "${this.contextInfo.name}/${this.namespace}": ${errorMessage}`,
                     );
+                    // Recovered via an error/retry node instead of throwing, so set
+                    // result=Failed explicitly to keep the service-listing failure rate
+                    // visible in dashboards.
+                    context.telemetry.properties.result = 'Failed';
                     context.telemetry.properties.serviceFetchError = 'true';
                     context.telemetry.properties.serviceFetchErrorType =
                         error instanceof Error ? error.name : 'UnknownError';

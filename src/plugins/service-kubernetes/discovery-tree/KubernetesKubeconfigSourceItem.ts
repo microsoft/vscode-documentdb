@@ -76,6 +76,10 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
                         )) ?? [];
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
+                    // The inner load sub-step already recorded result=Failed for itself;
+                    // mark the outer source-load event Failed too (it recovers with a retry
+                    // node instead of throwing) so the failure rate is countable here as well.
+                    context.telemetry.properties.result = 'Failed';
                     context.telemetry.properties.kubeconfigLoadResult = 'failed';
                     ext.outputChannel.error(
                         `[KubernetesDiscovery] Failed to load kubeconfig for source "${this.source.label}": ${errorMessage}`,
