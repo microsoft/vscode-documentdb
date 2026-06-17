@@ -17,8 +17,83 @@ import {
     type V1Node,
     type V1Service,
 } from '@kubernetes/client-node';
+import { ext } from '../../extensionVariables';
 import { CREDENTIAL_SECRET_ANNOTATION, DISCOVERY_ANNOTATION, DOCUMENTDB_PORTS } from './config';
 import { getSource, readInlineYaml } from './sources/sourceStore';
+
+/**
+ * Runtime shape of the lazily-imported @kubernetes/client-node module.
+ *
+ * `typeof import()` is the idiomatic way to type a module that is only loaded
+ * lazily (so it is never eagerly imported as a value); the consistent-type-imports
+ * rule is disabled for this single declaration on purpose.
+ */
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+type KubernetesClientModule = typeof import('@kubernetes/client-node');
+
+/**
+ * Lazily imports `@kubernetes/client-node` with defensive interop and diagnostics.
+ *
+ * The library is bundled into a lazily-loaded webpack chunk. If that chunk fails
+ * to resolve, or the ESM/CJS interop yields an unexpected shape, a bare
+ * `await import('@kubernetes/client-node')` can surface as a confusing
+ * `Cannot read properties of undefined (reading 'KubeConfig')` TypeError far from
+ * the real cause. This wrapper normalizes the namespace (handling a `default`
+ * nesting), verifies the expected `KubeConfig` export is present, logs the actual
+ * runtime shape for diagnosis, and otherwise throws an actionable error.
+ *
+ * @returns The resolved client-node module namespace.
+ * @throws Error if the module cannot be loaded or is missing expected exports.
+ */
+async function importKubernetesClient(): Promise<KubernetesClientModule> {
+    let mod: unknown;
+    try {
+        mod = await import('@kubernetes/client-node');
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.error(
+            `[KubernetesDiscovery] Failed to load the bundled @kubernetes/client-node module: ${errorMessage}`,
+        );
+        throw new Error(
+            vscode.l10n.t(
+                'Failed to load the Kubernetes client library: {0}. Try reloading the window; if the problem persists, reinstall the extension.',
+                errorMessage,
+            ),
+        );
+    }
+
+    // Defensive ESM/CJS interop: some bundler/runtime combinations nest the real
+    // namespace under `.default`. Prefer whichever object actually exposes the
+    // expected `KubeConfig` constructor.
+    const candidate = mod as Partial<KubernetesClientModule> | undefined;
+    const nested = (mod as { default?: Partial<KubernetesClientModule> } | undefined)?.default;
+    const resolved =
+        typeof candidate?.KubeConfig === 'function'
+            ? candidate
+            : typeof nested?.KubeConfig === 'function'
+              ? nested
+              : undefined;
+
+    if (!resolved) {
+        const inspect = (value: unknown): string =>
+            value && typeof value === 'object'
+                ? `{ ${Object.keys(value as Record<string, unknown>)
+                      .slice(0, 20)
+                      .join(', ')} }`
+                : typeof value;
+        ext.outputChannel.error(
+            `[KubernetesDiscovery] The bundled @kubernetes/client-node module did not expose 'KubeConfig'. ` +
+                `Module: ${inspect(mod)}; default: ${inspect(nested)}.`,
+        );
+        throw new Error(
+            vscode.l10n.t(
+                'The Kubernetes client library failed to initialize (missing KubeConfig export). Try reloading the window; if the problem persists, reinstall the extension.',
+            ),
+        );
+    }
+
+    return resolved as KubernetesClientModule;
+}
 
 /**
  * Information about a Kubernetes context extracted from kubeconfig.
@@ -231,8 +306,20 @@ export function describeDefaultKubeconfigPath(): string {
  * @throws Error if the kubeconfig file cannot be loaded or parsed
  */
 export async function loadKubeConfig(kubeconfigPath?: string, kubeconfigContents?: string): Promise<KubeConfig> {
-    const k8s = await import('@kubernetes/client-node');
-    const kc = new k8s.KubeConfig();
+    const k8s = await importKubernetesClient();
+    let kc: KubeConfig;
+    try {
+        kc = new k8s.KubeConfig();
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.error(`[KubernetesDiscovery] Failed to construct KubeConfig: ${errorMessage}`);
+        throw new Error(
+            vscode.l10n.t(
+                'Failed to initialize the Kubernetes client: {0}. Try reloading the window; if the problem persists, reinstall the extension.',
+                errorMessage,
+            ),
+        );
+    }
 
     // Skip malformed entries (e.g. contexts with missing names) instead of
     // aborting the entire load. Real-world kubeconfigs often contain stale or
@@ -484,7 +571,7 @@ function getUrlHostname(server: string): string {
  * @returns A CoreV1Api client
  */
 export async function createCoreApi(kubeConfig: KubeConfig, contextName: string): Promise<CoreV1Api> {
-    const k8s = await import('@kubernetes/client-node');
+    const k8s = await importKubernetesClient();
     kubeConfig.setCurrentContext(contextName);
     return kubeConfig.makeApiClient(k8s.CoreV1Api);
 }
@@ -584,7 +671,7 @@ async function listDkoDocumentDbResources(
     options: ListDkoDocumentDbResourcesOptions = {},
 ): Promise<DkoDocumentDbResourceInfo[]> {
     try {
-        const k8s = await import('@kubernetes/client-node');
+        const k8s = await importKubernetesClient();
         const customApi = kubeConfig.makeApiClient(k8s.CustomObjectsApi);
         const response: unknown = await customApi.listNamespacedCustomObject({
             group: 'documentdb.io',
