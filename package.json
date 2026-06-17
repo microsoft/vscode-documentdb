@@ -496,7 +496,7 @@
         "icon": "$(trash)"
       },
       {
-        "//": "[DiscoveryView] Edit Kubernetes kubeconfig file source in the editor",
+        "//": "[DiscoveryView] Edit Kubernetes kubeconfig file source in the editor (file and default sources)",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
         "title": "Edit Kubeconfig",
@@ -848,7 +848,7 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceFile\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSource(File|Default)\\b/i",
           "group": "2@1"
         },
         {

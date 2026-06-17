@@ -256,15 +256,14 @@ export function resolveKubeconfigPath(kubeconfigPath?: string): string {
 }
 
 /**
- * Returns `true` when a default kubeconfig is likely available — either via the
- * `KUBECONFIG` env var or the standard Kubernetes default kubeconfig fallback.
- * When `KUBECONFIG` lists multiple paths (kubectl-style merge), returns true
- * if **any** of the listed paths exists, since `loadFromDefault()` will succeed
- * on the first reachable entry. Falls back to checking `~/.kube/config` when
- * `KUBECONFIG` is unset. Synchronous so callers (e.g. migration) can cheaply
- * gate whether the default source should be pre-populated.
+ * Resolves the first **existing** default kubeconfig file path, mirroring how
+ * `loadFromDefault()` selects a file: the first reachable entry of the
+ * `KUBECONFIG` path list (kubectl-style merge), or the standard
+ * `~/.kube/config` fallback. Returns `undefined` when none of the candidate
+ * paths exist on disk — useful for callers (e.g. "Edit Kubeconfig") that need a
+ * real file to open and want to fail gracefully when there is nothing to edit.
  */
-export function defaultKubeconfigExists(): boolean {
+export function resolveExistingDefaultKubeconfigPath(): string | undefined {
     const envValue = process.env.KUBECONFIG;
     if (envValue) {
         const separator = process.platform === 'win32' ? ';' : ':';
@@ -275,12 +274,26 @@ export function defaultKubeconfigExists(): boolean {
         for (const candidate of paths) {
             const expanded = candidate.startsWith('~') ? path.join(os.homedir(), candidate.slice(1)) : candidate;
             if (fs.existsSync(expanded)) {
-                return true;
+                return expanded;
             }
         }
-        return false;
+        return undefined;
     }
-    return fs.existsSync(path.join(os.homedir(), '.kube', 'config'));
+    const fallback = path.join(os.homedir(), '.kube', 'config');
+    return fs.existsSync(fallback) ? fallback : undefined;
+}
+
+/**
+ * Returns `true` when a default kubeconfig is likely available — either via the
+ * `KUBECONFIG` env var or the standard Kubernetes default kubeconfig fallback.
+ * When `KUBECONFIG` lists multiple paths (kubectl-style merge), returns true
+ * if **any** of the listed paths exists, since `loadFromDefault()` will succeed
+ * on the first reachable entry. Falls back to checking `~/.kube/config` when
+ * `KUBECONFIG` is unset. Synchronous so callers (e.g. migration) can cheaply
+ * gate whether the default source should be pre-populated.
+ */
+export function defaultKubeconfigExists(): boolean {
+    return resolveExistingDefaultKubeconfigPath() !== undefined;
 }
 
 /**

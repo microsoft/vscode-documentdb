@@ -191,13 +191,19 @@ describe('handleKubeconfigFileDrop', () => {
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('b');
     });
 
-    it('skips a directory with a per-file warning and does not refresh', async () => {
+    it('skips a directory with a modal warning and does not refresh', async () => {
         mockStat.mockResolvedValue({ isFile: () => false });
 
         await handleKubeconfigFileDrop([fileUri('/some/dir')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/not a regular file/);
+        const [message, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(message).toMatch(/Could not add "dir"/);
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/not a regular file/);
         expect(mockAddFileSource).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
     });
@@ -208,7 +214,13 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/missing.yaml')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/Cannot read "missing.yaml": ENOENT/);
+        const [message, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(message).toMatch(/Could not add "missing.yaml"/);
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/could not be read: ENOENT/);
         expect(mockOutputWarn).toHaveBeenCalled();
         expect(mockAddFileSource).not.toHaveBeenCalled();
     });
@@ -220,7 +232,9 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/huge.yaml')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/far larger than any kubeconfig/);
+        const [, options] = mockShowWarningMessage.mock.calls[0] as [string, { modal?: boolean; detail?: string }];
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/far larger than any kubeconfig/);
         // Rejected before reading/parsing.
         expect(mockLoadKubeConfig).not.toHaveBeenCalled();
         expect(mockAddFileSource).not.toHaveBeenCalled();
@@ -235,23 +249,55 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/empty.yaml')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/does not contain any Kubernetes contexts/);
+        const [, options] = mockShowWarningMessage.mock.calls[0] as [string, { modal?: boolean; detail?: string }];
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/does not contain any Kubernetes contexts/);
         expect(mockAddFileSource).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
     });
 
-    it('skips a file that fails to parse as a kubeconfig and logs the reason', async () => {
+    it('shows a modal (not a toast) and keeps the raw parser error in the output channel for a binary file', async () => {
         mockStat.mockResolvedValue({ isFile: () => true });
-        mockLoadKubeConfig.mockRejectedValue(new Error('YAML syntax error at line 3'));
+        mockLoadKubeConfig.mockRejectedValue(new Error('null byte is not allowed in input (1:9)'));
 
-        await handleKubeconfigFileDrop([fileUri('/garbage.yaml')] as never);
+        await handleKubeconfigFileDrop([fileUri('/garbage.png')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/is not a valid kubeconfig/);
+        const [message, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(message).toMatch(/Could not add "garbage.png"/);
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/not a valid kubeconfig/);
+        // The noisy parser error (with raw bytes) is kept out of the dialog and
+        // logged to the output channel instead.
+        expect(options?.detail).not.toContain('null byte');
         expect(mockOutputError).toHaveBeenCalled();
         const logged = mockOutputError.mock.calls[0][0] as string;
-        expect(logged).toContain('/garbage.yaml');
-        expect(logged).toContain('YAML syntax error');
+        expect(logged).toContain('/garbage.png');
+        expect(logged).toContain('null byte');
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+    });
+
+    it('lists every rejected file as a bullet in one modal when several are invalid', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        mockLoadKubeConfig
+            .mockRejectedValueOnce(new Error('null byte is not allowed in input (1:9)'))
+            .mockRejectedValueOnce(new Error('null byte is not allowed in input (1:9)'));
+
+        await handleKubeconfigFileDrop([fileUri('/one.png'), fileUri('/two.png')] as never);
+
+        // A single aggregated modal, not one per file.
+        expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+        const [message, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(message).toMatch(/Could not add 2 of the dropped files/);
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toContain('• one.png:');
+        expect(options?.detail).toContain('• two.png:');
         expect(mockAddFileSource).not.toHaveBeenCalled();
     });
 

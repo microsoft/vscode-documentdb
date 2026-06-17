@@ -166,6 +166,17 @@ describe('KubernetesKubeconfigSourceItem', () => {
             expect(inlineItem.contextValue).not.toContain('discovery.kubernetesSourceFile');
         });
 
+        it('adds the default marker only for the default source so it also exposes "Edit Kubeconfig"', () => {
+            const defaultItem = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
+            expect(defaultItem.contextValue).toContain('discovery.kubernetesSourceDefault');
+
+            const fileItem = new KubernetesKubeconfigSourceItem('parent', makeSource('file'));
+            expect(fileItem.contextValue).not.toContain('discovery.kubernetesSourceDefault');
+
+            const inlineItem = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
+            expect(inlineItem.contextValue).not.toContain('discovery.kubernetesSourceDefault');
+        });
+
         it('adds the inline marker only for inline sources', () => {
             const inlineItem = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
             expect(inlineItem.contextValue).toContain('discovery.kubernetesSourceInline');

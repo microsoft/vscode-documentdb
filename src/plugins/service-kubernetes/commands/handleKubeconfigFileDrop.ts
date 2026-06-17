@@ -92,7 +92,7 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
 
         let added = 0;
         let alreadyRegistered = 0;
-        let invalid = 0;
+        const invalidReasons: Array<{ name: string; reason: string }> = [];
         const processed: Array<{ record: KubeconfigSourceRecord; created: boolean }> = [];
 
         for (const uri of fileUris) {
@@ -103,10 +103,7 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
             try {
                 const stat = await fs.promises.stat(absPath);
                 if (!stat.isFile()) {
-                    invalid++;
-                    void vscode.window.showWarningMessage(
-                        vscode.l10n.t('Cannot add "{0}" as a kubeconfig source: not a regular file.', baseName),
-                    );
+                    invalidReasons.push({ name: baseName, reason: vscode.l10n.t('It is not a regular file.') });
                     continue;
                 }
 
@@ -115,22 +112,23 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
                 // of a huge file (e.g. a multi-hundred-MB log or data dump) fails
                 // fast with a clear message instead of stalling the parser.
                 if (stat.size > MAX_KUBECONFIG_BYTES) {
-                    invalid++;
-                    void vscode.window.showWarningMessage(
-                        vscode.l10n.t(
-                            'Cannot add "{0}" as a kubeconfig source: the file is {1} MB, which is far larger than any kubeconfig (limit {2} MB).',
-                            baseName,
+                    invalidReasons.push({
+                        name: baseName,
+                        reason: vscode.l10n.t(
+                            'The file is {0} MB, which is far larger than any kubeconfig (limit {1} MB).',
                             (stat.size / (1024 * 1024)).toFixed(1),
                             String(MAX_KUBECONFIG_BYTES / (1024 * 1024)),
                         ),
-                    );
+                    });
                     continue;
                 }
             } catch (error) {
-                invalid++;
                 const message = error instanceof Error ? error.message : String(error);
                 ext.outputChannel.warn(`[KubernetesDiscovery] Could not stat dropped path "${absPath}": ${message}`);
-                void vscode.window.showWarningMessage(vscode.l10n.t('Cannot read "{0}": {1}', baseName, message));
+                invalidReasons.push({
+                    name: baseName,
+                    reason: vscode.l10n.t('The file could not be read: {0}', message),
+                });
                 continue;
             }
 
@@ -139,21 +137,26 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
                 const kubeConfig = await loadKubeConfig(absPath);
                 const contexts = getContexts(kubeConfig);
                 if (contexts.length === 0) {
-                    invalid++;
-                    void vscode.window.showWarningMessage(
-                        vscode.l10n.t('"{0}" does not contain any Kubernetes contexts.', baseName),
-                    );
+                    invalidReasons.push({
+                        name: baseName,
+                        reason: vscode.l10n.t('It does not contain any Kubernetes contexts.'),
+                    });
                     continue;
                 }
             } catch (error) {
-                invalid++;
                 const message = error instanceof Error ? error.message : String(error);
+                // Keep the full parser error (which can include a code frame full of
+                // raw bytes for a binary file) in the output channel only — the modal
+                // gets a clean, concise reason instead of a wall of garbage.
                 ext.outputChannel.error(
                     `[KubernetesDiscovery] Dropped file "${absPath}" is not a valid kubeconfig: ${message}`,
                 );
-                void vscode.window.showWarningMessage(
-                    vscode.l10n.t('"{0}" is not a valid kubeconfig: {1}', baseName, message),
-                );
+                invalidReasons.push({
+                    name: baseName,
+                    reason: vscode.l10n.t(
+                        'It is not a valid kubeconfig (it may be a binary file or contain invalid YAML).',
+                    ),
+                });
                 continue;
             }
 
@@ -174,11 +177,15 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
         context.telemetry.measurements.confirmedFileCount = fileUris.length;
         context.telemetry.measurements.addedCount = added;
         context.telemetry.measurements.alreadyRegisteredCount = alreadyRegistered;
-        context.telemetry.measurements.invalidCount = invalid;
+        context.telemetry.measurements.invalidCount = invalidReasons.length;
+
+        // Surface every rejected file in a single modal (mirrors the preview-failure
+        // modal). Shown first so problems are acknowledged before any success modals.
+        await notifyInvalidDroppedFiles(invalidReasons);
 
         if (processed.length === 0) {
-            // Every dropped file failed validation; the per-file warnings above
-            // already explained why. Nothing to reveal or refresh.
+            // Every dropped file failed validation; the modal above explained why.
+            // Nothing to reveal or refresh.
             return;
         }
 
@@ -196,6 +203,27 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
             await notifyAndRevealDroppedSource(record, created);
         }
     });
+}
+
+/**
+ * Reports the dropped files that failed validation in a single modal warning,
+ * matching the preview-failure modal. A single failure shows the file name in
+ * the title and the reason as the detail; multiple failures are listed as
+ * bullets. Full technical details (e.g. the raw YAML parser error for a binary
+ * file) stay in the output channel and are deliberately kept out of the dialog.
+ */
+async function notifyInvalidDroppedFiles(invalid: ReadonlyArray<{ name: string; reason: string }>): Promise<void> {
+    if (invalid.length === 0) {
+        return;
+    }
+
+    const single = invalid.length === 1;
+    const message = single
+        ? vscode.l10n.t('Could not add "{0}" as a kubeconfig source.', invalid[0].name)
+        : vscode.l10n.t('Could not add {0} of the dropped files as kubeconfig sources.', String(invalid.length));
+    const detail = single ? invalid[0].reason : invalid.map(({ name, reason }) => `• ${name}: ${reason}`).join('\n');
+
+    await vscode.window.showWarningMessage(message, { modal: true, detail });
 }
 
 /**

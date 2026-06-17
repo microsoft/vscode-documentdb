@@ -221,6 +221,12 @@ function buildContextValue(source: KubeconfigSourceRecord): string {
         markers.push('discovery.kubernetesSourceFile');
     }
 
+    // The default source also resolves to a real on-disk kubeconfig (KUBECONFIG
+    // env var or ~/.kube/config), so it likewise exposes "Edit Kubeconfig".
+    if (source.kind === 'default') {
+        markers.push('discovery.kubernetesSourceDefault');
+    }
+
     // Inline (pasted) sources have no on-disk file, so they expose a read-only "View Kubeconfig".
     if (source.kind === 'inline') {
         markers.push('discovery.kubernetesSourceInline');
