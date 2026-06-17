@@ -1068,7 +1068,6 @@
   "Reloaded kubeconfig source \"{0}\". Found {1} context(s).": "Reloaded kubeconfig source \"{0}\". Found {1} context(s).",
   "Reloading kubeconfig source \"{0}\"…": "Reloading kubeconfig source \"{0}\"…",
   "Remind Me Later": "Remind Me Later",
-  "Remove": "Remove",
   "Remove kubeconfig source \"{0}\"?": "Remove kubeconfig source \"{0}\"?",
   "remove this connection": "remove this connection",
   "Removed {successCount} of {totalCount} connections. {failureCount} failed.": "Removed {successCount} of {totalCount} connections. {failureCount} failed.",
