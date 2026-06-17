@@ -142,7 +142,6 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             id: this.id,
             contextValue: this.contextValue,
             label: this.source.label,
-            description: buildDescription(this.source),
             tooltip: buildTooltip(this.source),
             iconPath: buildIcon(this.source),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
@@ -226,18 +225,6 @@ function buildContextValue(source: KubeconfigSourceRecord): string {
     return createContextValue(markers);
 }
 
-function buildDescription(source: KubeconfigSourceRecord): string | undefined {
-    switch (source.kind) {
-        case 'file':
-            return source.path ? `(file: ${shortenPath(source.path)})` : '(file)';
-        case 'inline':
-        case 'default':
-            return undefined;
-        default:
-            return undefined;
-    }
-}
-
 function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
     const lines: string[] = [`**Source:** ${source.label}`, `**Kind:** ${source.kind}`];
     if (source.kind === 'file' && source.path) {
@@ -255,14 +242,6 @@ function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
 
 function buildIcon(_source: KubeconfigSourceRecord): vscode.ThemeIcon {
     return new vscode.ThemeIcon('group-by-ref-type');
-}
-
-function shortenPath(absolutePath: string): string {
-    const segments = absolutePath.split(/[/\\]/);
-    if (segments.length <= 3) {
-        return absolutePath;
-    }
-    return `…/${segments.slice(-2).join('/')}`;
 }
 
 function sanitize(value: string): string {

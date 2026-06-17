@@ -107,14 +107,14 @@ describe('KubernetesKubeconfigSourceItem', () => {
             expect(item.getTreeItem().description).toBeUndefined();
         });
 
-        it('shows file path for file sources', () => {
+        it('shows no description for file sources (the path lives in the tooltip)', () => {
             const item = new KubernetesKubeconfigSourceItem('parent', {
                 id: 'f1',
                 kind: 'file',
                 label: 'my-config',
                 path: '/some/path',
             });
-            expect(item.getTreeItem().description).toBe('(file: /some/path)');
+            expect(item.getTreeItem().description).toBeUndefined();
         });
 
         it('shows no description for inline sources', () => {

@@ -9,7 +9,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
 import { shortenPathMiddle } from '../../../utils/shortenPathMiddle';
-import { DISCOVERY_PROVIDER_ID } from '../config';
+import { DISCOVERY_PROVIDER_ID, type KubeconfigSourceRecord } from '../config';
 import { getContexts, loadKubeConfig } from '../kubernetesClient';
 import { tryAddFileSource } from '../sources/sourceStore';
 import { refreshKubernetesRoot, revealKubernetesSource } from './refreshKubernetesRoot';
@@ -34,13 +34,15 @@ export { shortenPathMiddle };
  *      returns `{ record, created }`. We trust `created` rather than racing a
  *      separate snapshot of the cache (which a concurrent drop or a concurrent
  *      wizard add could invalidate between snapshot and write).
- *   5. If `created` is `false` we log a single audit-trail line to the output
- *      channel and continue without an aggregate toast or a refresh.
  *
- * On success we refresh the Kubernetes root and reveal the first added source
- * so the user immediately sees the result of their drop. If every dropped file
- * was either invalid or a duplicate, no aggregate toast fires (matching the
- * existing per-file-only feedback pattern for the all-invalid case).
+ * Every successfully processed file (added or already-registered) gets an
+ * explicit modal that also selects the relevant node in the tree, mirroring the
+ * "Add Kubeconfig Source" / "Save to DocumentDB Connections" UX: a new file
+ * confirms the freshly added node, a duplicate explains that the existing node
+ * was selected instead of silently doing nothing. For a single dropped file
+ * this reliably reveals the right node; for several, the modals appear in
+ * sequence and the last revealed node stays selected. Files that fail
+ * validation only produce their per-file warning.
  */
 export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Promise<void> {
     await callWithTelemetryAndErrorHandling('kubernetes.dropKubeconfigFile', async (context: IActionContext) => {
@@ -83,8 +85,7 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
         let added = 0;
         let alreadyRegistered = 0;
         let invalid = 0;
-        let firstAddedSourceId: string | undefined;
-        let firstAddedLabel: string | undefined;
+        const processed: Array<{ record: KubeconfigSourceRecord; created: boolean }> = [];
 
         for (const uri of fileUris) {
             const absPath = uri.fsPath;
@@ -137,17 +138,12 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
             // Source wizard running in parallel) that a snapshot-and-compare
             // approach could miss.
             const { record, created } = await tryAddFileSource(absPath);
-            if (!created) {
+            processed.push({ record, created });
+            if (created) {
+                added++;
+            } else {
                 alreadyRegistered++;
-                ext.outputChannel.appendLine(
-                    vscode.l10n.t('Kubeconfig source for "{0}" is already registered; skipping.', baseName),
-                );
-                continue;
             }
-
-            added++;
-            firstAddedSourceId = firstAddedSourceId ?? record.id;
-            firstAddedLabel = firstAddedLabel ?? record.label;
         }
 
         context.telemetry.measurements.confirmedFileCount = fileUris.length;
@@ -155,35 +151,65 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
         context.telemetry.measurements.alreadyRegisteredCount = alreadyRegistered;
         context.telemetry.measurements.invalidCount = invalid;
 
-        if (added === 0) {
-            // Nothing actually changed in storage. Per-file warnings (for
-            // rejected files) and per-file output-channel notes (for dedup
-            // hits) are already enough; no aggregate toast.
+        if (processed.length === 0) {
+            // Every dropped file failed validation; the per-file warnings above
+            // already explained why. Nothing to reveal or refresh.
             return;
         }
 
-        if (added === 1) {
-            void vscode.window.showInformationMessage(
-                vscode.l10n.t('Added kubeconfig source "{0}" via drag-and-drop.', firstAddedLabel ?? ''),
-            );
-        } else {
-            void vscode.window.showInformationMessage(
-                vscode.l10n.t('Added {0} kubeconfig sources via drag-and-drop.', String(added)),
-            );
+        // Refresh once so any newly added node exists in the tree before we
+        // reveal it. Duplicates already exist, so a refresh is only needed when
+        // something was actually added.
+        if (added > 0) {
+            refreshKubernetesRoot();
         }
 
-        // Refresh the tree so the new source(s) appear.
-        refreshKubernetesRoot();
-
-        // Best-effort reveal of the first added source. Failure here is
-        // cosmetic; the source is added either way.
-        if (firstAddedSourceId !== undefined) {
-            try {
-                await revealKubernetesSource(firstAddedSourceId);
-            } catch {
-                // Cosmetic only — swallow.
-            }
+        // Give every processed file an explicit modal that also selects the
+        // relevant node — no silent skips. For a single dropped file this lands
+        // on exactly the right node; for several, the modals appear in sequence.
+        for (const { record, created } of processed) {
+            await notifyAndRevealDroppedSource(record, created);
         }
+    });
+}
+
+/**
+ * Reveals (and thereby selects) a dropped source's node in the Services view,
+ * then shows a modal confirming the outcome.
+ *
+ * Mirrors the "Add Kubeconfig Source" UX: a newly added file confirms the new
+ * node, while an already-registered file explains that the existing node was
+ * selected instead of silently doing nothing. Revealing is best-effort — a
+ * failure here is cosmetic and never blocks the confirmation.
+ */
+async function notifyAndRevealDroppedSource(record: KubeconfigSourceRecord, created: boolean): Promise<void> {
+    try {
+        await revealKubernetesSource(record.id);
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.warn(
+            `[KubernetesDiscovery] Failed to reveal kubeconfig source "${record.label}": ${message}`,
+        );
+    }
+
+    if (created) {
+        ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}" via drag-and-drop.', record.label));
+        await vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label), {
+            modal: true,
+            detail: vscode.l10n.t('The new source has been selected in the Services view.'),
+        });
+        return;
+    }
+
+    ext.outputChannel.appendLine(
+        vscode.l10n.t('Kubeconfig source "{0}" already exists; selected the existing one.', record.label),
+    );
+    await vscode.window.showInformationMessage(vscode.l10n.t('A kubeconfig source for this file already exists.'), {
+        modal: true,
+        detail: vscode.l10n.t(
+            'The existing source has been selected in the Services view.\n\nSelected source name:\n"{0}"',
+            record.label,
+        ),
     });
 }
 

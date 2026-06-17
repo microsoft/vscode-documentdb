@@ -110,9 +110,10 @@ beforeEach(() => {
     mockStat.mockReset();
     lastTelemetryContext = undefined;
 
-    // By default, auto-confirm the import-confirmation modal (the first, modal
-    // showInformationMessage call returns its first button = "Import"). The
-    // success toast is a separate, non-modal showInformationMessage call.
+    // By default, auto-confirm the import-confirmation modal (the first modal
+    // showInformationMessage call has buttons and returns its first = "Import").
+    // The per-file outcome notifications are modal too, but have NO buttons, so
+    // the mock resolves them to undefined (dismissed).
     mockShowInformationMessage.mockImplementation((_message: unknown, options: unknown, ...items: unknown[]) => {
         const isModal = typeof options === 'object' && options !== null && (options as { modal?: boolean }).modal;
         if (isModal && items.length > 0) {
@@ -123,13 +124,16 @@ beforeEach(() => {
 });
 
 /**
- * The non-modal success-toast calls to `showInformationMessage`, excluding the
- * modal import-confirmation prompt.
+ * The per-file outcome notifications: modal `showInformationMessage` calls that
+ * carry no button items (the import-confirmation prompt, by contrast, passes
+ * "Import"/"Preview" buttons).
  */
-function successToastCalls(): unknown[][] {
+function notificationModalCalls(): unknown[][] {
     return mockShowInformationMessage.mock.calls.filter((call) => {
         const options = call[1] as { modal?: boolean } | undefined;
-        return !options || !options.modal;
+        const isModal = !!options?.modal;
+        const hasButtons = call.length > 2;
+        return isModal && !hasButtons;
     });
 }
 
@@ -159,15 +163,16 @@ describe('handleKubeconfigFileDrop', () => {
         expect(mockAddFileSource).toHaveBeenCalledWith('/abs/team.yaml');
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('src-1');
-        // Toast must include the source label (consistency with the wizard pattern).
-        const toasts = successToastCalls();
-        expect(toasts).toHaveLength(1);
-        const successMessage = toasts[0][0] as string;
-        expect(successMessage).toContain('team.yaml');
+        // A single modal confirms the add and references the source label.
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(1);
+        const message = modals[0][0] as string;
+        expect(message).toMatch(/Added kubeconfig source/);
+        expect(message).toContain('team.yaml');
         expect(mockShowWarningMessage).not.toHaveBeenCalled();
     });
 
-    it('uses the plural success toast when multiple sources are added', async () => {
+    it('shows a modal and reveals each source when multiple are added', async () => {
         mockStat.mockResolvedValue({ isFile: () => true });
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'ctx' }]);
@@ -177,12 +182,13 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/a.yaml'), fileUri('/b.yaml')] as never);
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
-        const toasts = successToastCalls();
-        expect(toasts).toHaveLength(1);
-        const message = toasts[0][0] as string;
-        expect(message).toMatch(/2 kubeconfig sources/);
-        // Reveal targets the FIRST added source so the user immediately sees the result.
+        // One modal per added file (the user accepted that many files = many modals).
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(2);
+        expect(modals.every((call) => /Added kubeconfig source/.test(call[0] as string))).toBe(true);
+        // Each added source is revealed/selected in turn.
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('a');
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('b');
     });
 
     it('skips a directory with a per-file warning and does not refresh', async () => {
@@ -285,7 +291,7 @@ describe('handleKubeconfigFileDrop', () => {
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
     });
 
-    it('treats a re-dropped already-registered file as a no-op (no toast, no refresh)', async () => {
+    it('reveals the existing source and shows a modal when a re-dropped file is already registered', async () => {
         // addFileSource reports the dup via `created: false` — race-safe single
         // source of truth (no snapshot of the cache that another flow could
         // race against).
@@ -293,21 +299,23 @@ describe('handleKubeconfigFileDrop', () => {
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'ctx-1' }]);
         mockAddFileSource.mockResolvedValue(existing('pre-existing', 'team.yaml'));
+        mockRevealKubernetesSource.mockResolvedValue(undefined);
 
         await handleKubeconfigFileDrop([fileUri('/abs/team.yaml')] as never);
 
-        // addFileSource IS called (it has to be, to learn whether the file was
-        // already registered), but nothing user-visible changes.
         expect(mockAddFileSource).toHaveBeenCalledTimes(1);
-        expect(successToastCalls()).toHaveLength(0);
+        // No silent skip: a modal explains the collision and the existing node is selected.
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(1);
+        expect(modals[0][0] as string).toMatch(/already exists/);
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('pre-existing');
+        // Nothing new was stored, so no refresh is needed.
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
-        expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
         // One audit-trail line in the output channel.
-        expect(mockOutputAppendLine).toHaveBeenCalledTimes(1);
-        expect(mockOutputAppendLine.mock.calls[0][0] as string).toMatch(/already registered/);
+        expect(mockOutputAppendLine.mock.calls.some((call) => /already exists/.test(call[0] as string))).toBe(true);
     });
 
-    it('counts a duplicate URI appearing twice in the same drop payload only once', async () => {
+    it('shows both an added and an already-exists modal when a duplicate URI appears twice in one drop', async () => {
         mockStat.mockResolvedValue({ isFile: () => true });
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'ctx' }]);
@@ -321,12 +329,14 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/abs/team.yaml'), fileUri('/abs/team.yaml')] as never);
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
-        const toasts = successToastCalls();
-        expect(toasts).toHaveLength(1);
-        // Singular toast (1 actually added, not 2).
-        const message = toasts[0][0] as string;
-        expect(message).toContain('team.yaml');
-        expect(message).not.toMatch(/2 kubeconfig sources/);
+        // Two modals: one confirming the add, one explaining the duplicate.
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(2);
+        expect(modals[0][0] as string).toMatch(/Added kubeconfig source/);
+        expect(modals[1][0] as string).toMatch(/already exists/);
+        // Telemetry still counts it as one added, one already-registered.
+        expect(lastTelemetryContext?.telemetry.measurements.addedCount).toBe(1);
+        expect(lastTelemetryContext?.telemetry.measurements.alreadyRegisteredCount).toBe(1);
     });
 
     it('separates added vs already-registered when a batch mixes both', async () => {
@@ -343,12 +353,14 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/a.yaml'), fileUri('/b.yaml')] as never);
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
-        // Singular toast: only one new file was actually added.
-        const toasts = successToastCalls();
-        expect(toasts).toHaveLength(1);
-        expect(toasts[0][0] as string).toContain('b.yaml');
+        // One modal per file: the duplicate is explained, the new one confirmed.
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(2);
+        expect(modals[0][0] as string).toMatch(/already exists/);
+        expect(modals[1][0] as string).toMatch(/Added kubeconfig source/);
         // Refresh runs because something was actually added.
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('pre-existing');
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('src-b');
         // Telemetry must distinguish the two outcomes so dashboards can tell
         // "user re-dropped a file" from "user added a new file".
