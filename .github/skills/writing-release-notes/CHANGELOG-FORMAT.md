@@ -44,9 +44,15 @@ Use these categories in order of priority:
 
 1. **Bold title** summarizing the change (2-5 words)
 2. **Description** in 1-2 sentences, factual and technical
+   - Target **25–45 words** per description.
+   - **Hard cap: 50 words.** Descriptions consistently above this are too long.
+   - 1-sentence entries: aim for **20–30 words**.
+   - 2-sentence entries: aim for **30–50 words**.
+   - Do **not** enumerate every sub-feature; pick the 2-3 most user-visible highlights.
 3. **Links** to issues and PRs at the end
 4. Use present tense ("Adds", "Fixes", "Updates")
 5. No trailing period after links
+6. **No em dashes (—).** Use commas, colons, or semicolons instead. En dashes for numeric ranges (e.g. `10–12 s`) are acceptable.
 
 ## Examples
 
