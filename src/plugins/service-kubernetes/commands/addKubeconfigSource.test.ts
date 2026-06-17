@@ -341,7 +341,7 @@ describe('addKubeconfigSource inline branch modal confirmation', () => {
 
         expect(mockShowWarningMessage).toHaveBeenCalledWith(
             expect.stringContaining('clipboard'),
-            { modal: true },
+            expect.objectContaining({ modal: true }),
             expect.any(String),
             expect.any(String),
         );

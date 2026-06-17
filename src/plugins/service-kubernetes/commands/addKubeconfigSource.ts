@@ -232,10 +232,11 @@ async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourc
     const confirmLabel = vscode.l10n.t('Continue');
     const previewLabel = vscode.l10n.t('Preview Clipboard');
     const confirmation = await vscode.window.showWarningMessage(
-        vscode.l10n.t(
-            'The contents of your clipboard will be read and stored as a kubeconfig source in VS Code Secret Storage. Make sure you have the correct content copied before continuing.',
-        ),
-        { modal: true },
+        vscode.l10n.t('Your clipboard contents will be saved as a kubeconfig source.'),
+        {
+            modal: true,
+            detail: vscode.l10n.t('Make sure the correct kubeconfig YAML is in your clipboard before continuing.'),
+        },
         confirmLabel,
         previewLabel,
     );
