@@ -1,5 +1,21 @@
 # Change Log
 
+## 0.9.0
+
+### New Features
+
+- **Kubernetes Service Discovery**: Adds Kubernetes service discovery to the Discovery view. Register kubeconfig sources (default, custom file, pasted YAML, or drag-and-drop), browse contexts and namespaces, and connect to discovered DocumentDB targets automatically. Supports DocumentDB Kubernetes Operator managed clusters, generic opt-in services, and transparent port-forwarding for ClusterIP targets across AKS, EKS, GKE, and local clusters. [#621](https://github.com/microsoft/vscode-documentdb/pull/621)
+- **Streaming Query Insights**: Query Insights AI recommendations now stream progressively to the webview instead of appearing all at once after a ~15 s wait. Summary and educational content render line by line; each recommendation card appears as soon as the model completes it rather than all at once at the end. [#711](https://github.com/microsoft/vscode-documentdb/pull/711)
+
+### Security
+
+- **`ws` DoS Vulnerability Fix**: Upgraded `ws` from 8.20.0 to 8.21.0, fixing a remote memory exhaustion denial-of-service vulnerability (high-volume tiny WebSocket fragments). [#744](https://github.com/microsoft/vscode-documentdb/pull/744)
+- **`form-data` Encoding Fix**: Upgraded `form-data` from 4.0.5 to 4.0.6, fixing improper escaping of CR, LF, and `"` characters in multipart field names and filenames. [#745](https://github.com/microsoft/vscode-documentdb/pull/745)
+
+### Dependencies
+
+- **Dependency Update**: Upgraded `launch-editor` from 2.13.2 to 2.14.1 (fixes UNC path handling). [#747](https://github.com/microsoft/vscode-documentdb/pull/747)
+
 ## 0.8.1
 
 ### New Features
