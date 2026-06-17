@@ -18,6 +18,14 @@ import { refreshKubernetesRoot, revealKubernetesSource } from './refreshKubernet
 export { shortenPathMiddle };
 
 /**
+ * Upper bound on the size of a file we'll attempt to import as a kubeconfig.
+ * Real kubeconfigs are a few KB; 5 MB is generous headroom while still guarding
+ * against an accidental drop of a huge file that would otherwise be read and
+ * YAML-parsed in full.
+ */
+const MAX_KUBECONFIG_BYTES = 5 * 1024 * 1024;
+
+/**
  * Handles a batch of file URIs dropped onto the discovery tree by trying to
  * register each as a kubeconfig source.
  *
@@ -98,6 +106,23 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
                     invalid++;
                     void vscode.window.showWarningMessage(
                         vscode.l10n.t('Cannot add "{0}" as a kubeconfig source: not a regular file.', baseName),
+                    );
+                    continue;
+                }
+
+                // A real kubeconfig is a few KB at most. Reject anything wildly
+                // larger before we read and YAML-parse it, so an accidental drop
+                // of a huge file (e.g. a multi-hundred-MB log or data dump) fails
+                // fast with a clear message instead of stalling the parser.
+                if (stat.size > MAX_KUBECONFIG_BYTES) {
+                    invalid++;
+                    void vscode.window.showWarningMessage(
+                        vscode.l10n.t(
+                            'Cannot add "{0}" as a kubeconfig source: the file is {1} MB, which is far larger than any kubeconfig (limit {2} MB).',
+                            baseName,
+                            (stat.size / (1024 * 1024)).toFixed(1),
+                            String(MAX_KUBECONFIG_BYTES / (1024 * 1024)),
+                        ),
                     );
                     continue;
                 }

@@ -213,6 +213,20 @@ describe('handleKubeconfigFileDrop', () => {
         expect(mockAddFileSource).not.toHaveBeenCalled();
     });
 
+    it('skips an oversized file before parsing it', async () => {
+        // 6 MB — above the 5 MB import limit.
+        mockStat.mockResolvedValue({ isFile: () => true, size: 6 * 1024 * 1024 });
+
+        await handleKubeconfigFileDrop([fileUri('/huge.yaml')] as never);
+
+        expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/far larger than any kubeconfig/);
+        // Rejected before reading/parsing.
+        expect(mockLoadKubeConfig).not.toHaveBeenCalled();
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+        expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
+    });
+
     it('skips a file with no Kubernetes contexts', async () => {
         mockStat.mockResolvedValue({ isFile: () => true });
         mockLoadKubeConfig.mockResolvedValue({});
