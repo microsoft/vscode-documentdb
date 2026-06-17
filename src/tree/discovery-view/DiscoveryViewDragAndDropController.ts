@@ -35,12 +35,6 @@ export class DiscoveryViewDragAndDropController implements vscode.TreeDragAndDro
         dataTransfer: vscode.DataTransfer,
         token: vscode.CancellationToken,
     ): Promise<void> {
-        const availableMimeTypes: string[] = [];
-        dataTransfer.forEach((_item, mimeType) => availableMimeTypes.push(mimeType));
-        ext.outputChannel.appendLine(
-            `[DiscoveryDrop] handleDrop called. Available MIME types: ${availableMimeTypes.join(', ') || '(none)'}`,
-        );
-
         const uriListItem = dataTransfer.get('text/uri-list') ?? dataTransfer.get('application/vnd.code.uri-list');
         if (!uriListItem) {
             ext.outputChannel.warn(
@@ -50,10 +44,8 @@ export class DiscoveryViewDragAndDropController implements vscode.TreeDragAndDro
         }
 
         const uriListText = await uriListItem.asString();
-        ext.outputChannel.appendLine(`[DiscoveryDrop] Raw URI list: ${uriListText.trim()}`);
 
         if (token.isCancellationRequested) {
-            ext.outputChannel.warn(`[DiscoveryDrop] Drop cancelled before URI parsing.`);
             return;
         }
 
@@ -91,9 +83,6 @@ export class DiscoveryViewDragAndDropController implements vscode.TreeDragAndDro
         }
 
         const uris = usable;
-        ext.outputChannel.appendLine(
-            `[DiscoveryDrop] Resolved ${uris.length} file URI(s): ${uris.map((u) => u.fsPath).join(', ')}`,
-        );
 
         // Dynamic import so the discovery view stays decoupled from any specific
         // discovery plugin. Future providers can chain additional handlers here.

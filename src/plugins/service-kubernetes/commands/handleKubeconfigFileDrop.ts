@@ -70,13 +70,13 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
         context.telemetry.properties.dropConfirmation = confirmation;
         if (confirmation !== 'import') {
             // Preview opens the file(s) and then deliberately exits — the user can
-            // drop them again to import. Cancel does nothing. Either way we stop
-            // here without importing.
-            ext.outputChannel.appendLine(
-                confirmation === 'preview'
-                    ? '[KubernetesDiscovery] Previewed dropped kubeconfig file(s); not importing. Drop again to import.'
-                    : '[KubernetesDiscovery] Kubeconfig drop cancelled by the user.',
-            );
+            // drop them again to import. Note this so the no-op isn't surprising;
+            // an explicit cancel needs no log.
+            if (confirmation === 'preview') {
+                ext.outputChannel.appendLine(
+                    '[KubernetesDiscovery] Previewed dropped kubeconfig file(s); not importing. Drop again to import.',
+                );
+            }
             return;
         }
 
@@ -148,9 +148,6 @@ export async function handleKubeconfigFileDrop(uris: readonly vscode.Uri[]): Pro
             added++;
             firstAddedSourceId = firstAddedSourceId ?? record.id;
             firstAddedLabel = firstAddedLabel ?? record.label;
-            ext.outputChannel.appendLine(
-                vscode.l10n.t('Added kubeconfig source "{0}" via drag-and-drop.', record.label),
-            );
         }
 
         context.telemetry.measurements.confirmedFileCount = fileUris.length;
