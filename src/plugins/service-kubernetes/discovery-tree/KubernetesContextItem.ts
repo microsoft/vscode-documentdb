@@ -42,7 +42,7 @@ const NAMESPACE_PRESCAN_CONCURRENCY = 5;
 
 export class KubernetesContextItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public contextValue: string = 'enableRefreshCommand;discovery.kubernetesContext';
+    public contextValue: string = 'enableRefreshCommand;discoveryKubernetesContext';
 
     constructor(
         public readonly parentId: string,
@@ -295,7 +295,9 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
 
         // Append the current view-mode marker so the context-menu / inline "View as …" toggle
         // commands can target this node and show the icon matching the active mode.
-        const contextValue = `${this.contextValue};discovery.kubernetesViewMode.${this.getViewMode()}`;
+        const viewModeMarker =
+            this.getViewMode() === 'tree' ? 'discoveryKubernetesViewModeTree' : 'discoveryKubernetesViewModeList';
+        const contextValue = `${this.contextValue};${viewModeMarker}`;
 
         return {
             id: this.id,

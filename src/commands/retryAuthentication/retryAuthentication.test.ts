@@ -48,7 +48,7 @@ describe('retryAuthentication', () => {
     it('retries discovery nodes based on tree id when the context value lacks the view token', async () => {
         const node = {
             id: 'discoveryView/kubernetes-discovery/kind-documentdb-dev',
-            contextValue: 'enableRefreshCommand;discovery.kubernetesContext',
+            contextValue: 'enableRefreshCommand;discoveryKubernetesContext',
             getTreeItem,
         };
 

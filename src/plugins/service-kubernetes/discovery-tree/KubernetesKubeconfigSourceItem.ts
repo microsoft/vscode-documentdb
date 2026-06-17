@@ -214,22 +214,22 @@ function buildContextValue(source: KubeconfigSourceRecord): string {
     // All sources, including the default, share the same context-value markers
     // so Rename / Remove are exposed uniformly. The Default source is
     // re-creatable through the "+" inline action via {@link addDefaultSource}.
-    const markers = ['enableRefreshCommand', 'discovery.kubernetesSource', 'discovery.kubernetesSourceMutable'];
+    const markers = ['enableRefreshCommand', 'discoveryKubernetesSource', 'discoveryKubernetesSourceMutable'];
 
     // File sources have an on-disk path, so they additionally expose "Edit Kubeconfig".
     if (source.kind === 'file') {
-        markers.push('discovery.kubernetesSourceFile');
+        markers.push('discoveryKubernetesSourceFile');
     }
 
     // The default source also resolves to a real on-disk kubeconfig (KUBECONFIG
     // env var or ~/.kube/config), so it likewise exposes "Edit Kubeconfig".
     if (source.kind === 'default') {
-        markers.push('discovery.kubernetesSourceDefault');
+        markers.push('discoveryKubernetesSourceDefault');
     }
 
     // Inline (pasted) sources have no on-disk file, so they expose a read-only "View Kubeconfig".
     if (source.kind === 'inline') {
-        markers.push('discovery.kubernetesSourceInline');
+        markers.push('discoveryKubernetesSourceInline');
     }
 
     return createContextValue(markers);

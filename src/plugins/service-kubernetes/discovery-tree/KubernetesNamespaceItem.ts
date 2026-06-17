@@ -24,7 +24,7 @@ import { hasRetryActionNode } from './retryNodeDetection';
 
 export class KubernetesNamespaceItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public contextValue: string = 'enableRefreshCommand;discovery.kubernetesNamespace';
+    public contextValue: string = 'enableRefreshCommand;discoveryKubernetesNamespace';
 
     constructor(
         public readonly parentId: string,

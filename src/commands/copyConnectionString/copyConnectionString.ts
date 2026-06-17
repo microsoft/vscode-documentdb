@@ -77,9 +77,9 @@ export async function copyAzureConnectionString(context: IActionContext, node: C
 export async function copyConnectionString(context: IActionContext, node: ClusterItemBase): Promise<void> {
     const resolved = await ext.state.runWithTemporaryDescription(node.id, l10n.t('Working…'), async () => {
         context.telemetry.properties.experience = node.experience.api;
-        // KubernetesResourceItem.contextValue contains "discovery.kubernetesService"; the
-        // \b boundary inside containsDelimited treats "." as a non-word boundary so this matches.
-        const isKubernetesDiscoveryItem = containsDelimited(node.contextValue, 'kubernetesService');
+        // KubernetesResourceItem.contextValue contains the delimited "discoveryKubernetesService"
+        // marker; the copy command uses it to pick the read-only, no-tunnel copy path.
+        const isKubernetesDiscoveryItem = containsDelimited(node.contextValue, 'discoveryKubernetesService');
 
         const credentials =
             isKubernetesDiscoveryItem && hasReadOnlyCopyCredentialsProvider(node)

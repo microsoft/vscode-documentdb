@@ -157,35 +157,35 @@ describe('KubernetesKubeconfigSourceItem', () => {
     describe('contextValue', () => {
         it('adds the file marker only for file sources', () => {
             const fileItem = new KubernetesKubeconfigSourceItem('parent', makeSource('file'));
-            expect(fileItem.contextValue).toContain('discovery.kubernetesSourceFile');
+            expect(fileItem.contextValue).toContain('discoveryKubernetesSourceFile');
 
             const defaultItem = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
-            expect(defaultItem.contextValue).not.toContain('discovery.kubernetesSourceFile');
+            expect(defaultItem.contextValue).not.toContain('discoveryKubernetesSourceFile');
 
             const inlineItem = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
-            expect(inlineItem.contextValue).not.toContain('discovery.kubernetesSourceFile');
+            expect(inlineItem.contextValue).not.toContain('discoveryKubernetesSourceFile');
         });
 
         it('adds the default marker only for the default source so it also exposes "Edit Kubeconfig"', () => {
             const defaultItem = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
-            expect(defaultItem.contextValue).toContain('discovery.kubernetesSourceDefault');
+            expect(defaultItem.contextValue).toContain('discoveryKubernetesSourceDefault');
 
             const fileItem = new KubernetesKubeconfigSourceItem('parent', makeSource('file'));
-            expect(fileItem.contextValue).not.toContain('discovery.kubernetesSourceDefault');
+            expect(fileItem.contextValue).not.toContain('discoveryKubernetesSourceDefault');
 
             const inlineItem = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
-            expect(inlineItem.contextValue).not.toContain('discovery.kubernetesSourceDefault');
+            expect(inlineItem.contextValue).not.toContain('discoveryKubernetesSourceDefault');
         });
 
         it('adds the inline marker only for inline sources', () => {
             const inlineItem = new KubernetesKubeconfigSourceItem('parent', makeSource('inline'));
-            expect(inlineItem.contextValue).toContain('discovery.kubernetesSourceInline');
+            expect(inlineItem.contextValue).toContain('discoveryKubernetesSourceInline');
 
             const fileItem = new KubernetesKubeconfigSourceItem('parent', makeSource('file'));
-            expect(fileItem.contextValue).not.toContain('discovery.kubernetesSourceInline');
+            expect(fileItem.contextValue).not.toContain('discoveryKubernetesSourceInline');
 
             const defaultItem = new KubernetesKubeconfigSourceItem('parent', makeSource('default'));
-            expect(defaultItem.contextValue).not.toContain('discovery.kubernetesSourceInline');
+            expect(defaultItem.contextValue).not.toContain('discoveryKubernetesSourceInline');
         });
     });
 
