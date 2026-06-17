@@ -4,7 +4,7 @@
 
 ### New Features
 
-- **Kubernetes Service Discovery**: Adds Kubernetes service discovery to the Discovery view. Register kubeconfig sources (default, custom file, pasted YAML, or drag-and-drop), browse contexts and namespaces, and connect to discovered DocumentDB targets automatically. Supports DocumentDB Kubernetes Operator managed clusters, generic opt-in services, and transparent port-forwarding for ClusterIP targets across AKS, EKS, GKE, and local clusters. [#621](https://github.com/microsoft/vscode-documentdb/pull/621)
+- **Kubernetes Service Discovery**: Adds Kubernetes service discovery in the Discovery view. Register kubeconfig sources and connect to discovered DocumentDB targets, with operator-managed cluster awareness and automatic port-forwarding for ClusterIP services. [#621](https://github.com/microsoft/vscode-documentdb/pull/621)
 - **Streaming Query Insights**: Query Insights AI recommendations now stream progressively to the webview instead of appearing all at once after a ~15 s wait. Summary and educational content render line by line; each recommendation card appears as soon as the model completes it rather than all at once at the end. [#711](https://github.com/microsoft/vscode-documentdb/pull/711)
 
 ### Security
