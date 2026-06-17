@@ -186,7 +186,10 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
         if (getContexts(kubeConfig).length === 0) {
             context.telemetry.properties.kubeconfigSourceResult = 'noContexts';
             void vscode.window.showErrorMessage(
-                vscode.l10n.t('No Kubernetes contexts were found in "{0}".', absolutePath),
+                vscode.l10n.t(
+                    'No Kubernetes contexts were found in "{0}". Fix the kubeconfig and try again.',
+                    absolutePath,
+                ),
                 { modal: true },
             );
             throw new UserCancelledError();
@@ -199,7 +202,14 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
         const stack = error instanceof Error && error.stack ? error.stack : message;
         ext.outputChannel.error(`[KubernetesDiscovery] File kubeconfig load/validate failed: ${stack}`);
         context.telemetry.properties.kubeconfigSourceResult = 'invalidFile';
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to load kubeconfig: {0}', message), { modal: true });
+        void vscode.window.showErrorMessage(
+            vscode.l10n.t(
+                'The kubeconfig file "{0}" could not be loaded: {1}. Fix the file and try again.',
+                absolutePath,
+                message,
+            ),
+            { modal: true },
+        );
         throw new UserCancelledError();
     }
 
