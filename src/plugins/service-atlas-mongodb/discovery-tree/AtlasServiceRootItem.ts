@@ -168,12 +168,12 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     public getTreeItem(): vscode.TreeItem {
-        const stateIcon = this.getStateIcon();
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: vscode.l10n.t('MongoDB Atlas'),
-            iconPath: stateIcon,
+            description: this.getStateDescription(),
+            iconPath: new vscode.ThemeIcon('cloud'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
@@ -223,16 +223,14 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         });
     }
 
-    private getStateIcon(): vscode.ThemeIcon {
+    private getStateDescription(): string {
         switch (this.sessionManager.state) {
-            case AtlasSessionState.Active:
-                return new vscode.ThemeIcon('cloud');
             case AtlasSessionState.Expired:
-                return new vscode.ThemeIcon('warning');
+                return vscode.l10n.t('Session expired');
             case AtlasSessionState.Authenticating:
-                return new vscode.ThemeIcon('loading~spin');
+                return vscode.l10n.t('Authenticating…');
             default:
-                return new vscode.ThemeIcon('cloud');
+                return "";
         }
     }
 }

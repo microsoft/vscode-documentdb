@@ -1076,6 +1076,7 @@
   "Selectivity": "Selectivity",
   "Service Discovery": "Service Discovery",
   "Service Discovery for MongoDB Atlas": "Service Discovery for MongoDB Atlas",
+  "Session expired": "Session expired",
   "Session ID is required": "Session ID is required",
   "sessionId is required for query optimization": "sessionId is required for query optimization",
   "Settings:": "Settings:",
