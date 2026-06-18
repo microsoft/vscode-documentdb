@@ -208,7 +208,7 @@ describe('KubernetesResourceItem', () => {
         const treeItem = item.getTreeItem();
         expect(treeItem.collapsibleState).toBe(1);
         expect(treeItem.contextValue).toContain('treeItem_documentdbcluster');
-        expect(treeItem.contextValue).toContain('discovery.kubernetesService');
+        expect(treeItem.contextValue).toContain('discoveryKubernetesService');
         expect(treeItem.contextValue).not.toContain('documentdbTargetLeaf');
 
         const children = await item.getChildren();

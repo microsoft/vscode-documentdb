@@ -170,13 +170,13 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
         this.journeyCorrelationId = journeyCorrelationId;
         this.showNamespaceInDescription = options?.showNamespaceInDescription ?? false;
         // Keep the base `treeItem_documentdbcluster` so the standard cluster commands
-        // apply uniformly (they self-guard on sign-in). `discovery.kubernetesService`
+        // apply uniformly (they self-guard on sign-in). `discoveryKubernetesService`
         // is retained because the copy command uses it to pick the read-only, no-tunnel
         // copy path (see copyConnectionString.ts). The old `documentdbTargetLeaf` marker
         // was redundant — menus already match on `treeItem_documentdbcluster`.
         this.contextValue = createContextValue([
             'treeItem_documentdbcluster',
-            'discovery.kubernetesService',
+            'discoveryKubernetesService',
             `experience_${this.experience.api}`,
         ]);
         // Use the DocumentDB brand mark (the same icon as the "DocumentDB Local" node in the
@@ -533,7 +533,10 @@ export class KubernetesResourceItem extends ClusterItemBase<KubernetesClusterMod
             }
             case 'pending':
             case 'unreachable':
-                void vscode.window.showWarningMessage(endpoint.reason);
+                void vscode.window.showWarningMessage(
+                    l10n.t('Cannot connect to "{service}"', { service: this.serviceInfo.displayName }),
+                    { modal: true, detail: endpoint.reason },
+                );
                 context.telemetry.properties.connectionResult = endpoint.kind;
                 context.telemetry.properties.unreachableReason = this.serviceInfo.type;
                 return undefined;

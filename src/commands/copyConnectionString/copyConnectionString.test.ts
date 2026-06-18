@@ -143,7 +143,7 @@ describe('copyConnectionString', () => {
     it('T-03 K8s discovery + native + password, picks WITH password -> includes password', async () => {
         mockShowQuickPick.mockResolvedValue({ includePassword: true });
         const ctx = makeContext();
-        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+        const node = makeNode('treeItem_documentdbcluster;discoveryKubernetesService;experience_documentdb', {
             connectionString: baseConnString,
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,
@@ -164,7 +164,7 @@ describe('copyConnectionString', () => {
     it('T-04 K8s discovery + native + password, picks WITHOUT password -> omits password', async () => {
         mockShowQuickPick.mockResolvedValue({ includePassword: false });
         const ctx = makeContext();
-        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+        const node = makeNode('treeItem_documentdbcluster;discoveryKubernetesService;experience_documentdb', {
             connectionString: baseConnString,
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,
@@ -182,7 +182,7 @@ describe('copyConnectionString', () => {
 
     it('T-05 K8s discovery + native + NO password -> no prompt, copies username only', async () => {
         const ctx = makeContext();
-        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+        const node = makeNode('treeItem_documentdbcluster;discoveryKubernetesService;experience_documentdb', {
             connectionString: baseConnString,
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,
@@ -201,7 +201,7 @@ describe('copyConnectionString', () => {
 
     it('T-06 K8s discovery + EntraID -> no password prompt, sets MONGODB-OIDC authMechanism', async () => {
         const ctx = makeContext();
-        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+        const node = makeNode('treeItem_documentdbcluster;discoveryKubernetesService;experience_documentdb', {
             connectionString: baseConnString,
             availableAuthMethods: [AuthMethodId.MicrosoftEntraID],
             selectedAuthMethod: AuthMethodId.MicrosoftEntraID,
@@ -272,7 +272,7 @@ describe('copyConnectionString', () => {
     it('T-09 K8s discovery copy uses read-only credentials provider, grouped picker', async () => {
         mockShowQuickPick.mockResolvedValue({ action: 'withoutPassword' });
         const ctx = makeContext();
-        const node = makeNode('treeItem_documentdbcluster;discovery.kubernetesService;experience_documentdb', {
+        const node = makeNode('treeItem_documentdbcluster;discoveryKubernetesService;experience_documentdb', {
             connectionString: 'mongodb://should-not-be-used:10260/',
             availableAuthMethods: [AuthMethodId.NativeAuth],
             selectedAuthMethod: AuthMethodId.NativeAuth,

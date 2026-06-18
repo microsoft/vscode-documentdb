@@ -10,6 +10,7 @@ const mockRefreshKubernetesRoot = jest.fn();
 const mockRevealKubernetesSource = jest.fn();
 const mockShowInformationMessage = jest.fn();
 const mockShowWarningMessage = jest.fn();
+const mockShowTextDocument = jest.fn();
 const mockOutputAppendLine = jest.fn();
 const mockOutputError = jest.fn();
 const mockOutputWarn = jest.fn();
@@ -27,6 +28,7 @@ jest.mock('vscode', () => ({
     window: {
         showInformationMessage: (...args: unknown[]) => mockShowInformationMessage(...args),
         showWarningMessage: (...args: unknown[]) => mockShowWarningMessage(...args),
+        showTextDocument: (...args: unknown[]) => mockShowTextDocument(...args),
     },
 }));
 
@@ -87,7 +89,7 @@ jest.mock('./refreshKubernetesRoot', () => ({
     revealKubernetesSource: (...args: unknown[]) => mockRevealKubernetesSource(...args),
 }));
 
-import { handleKubeconfigFileDrop } from './handleKubeconfigFileDrop';
+import { handleKubeconfigFileDrop, shortenPathMiddle } from './handleKubeconfigFileDrop';
 
 function fileUri(absolutePath: string): { scheme: string; fsPath: string } {
     return { scheme: 'file', fsPath: absolutePath };
@@ -101,12 +103,39 @@ beforeEach(() => {
     mockRevealKubernetesSource.mockReset();
     mockShowInformationMessage.mockReset();
     mockShowWarningMessage.mockReset();
+    mockShowTextDocument.mockReset();
     mockOutputAppendLine.mockReset();
     mockOutputError.mockReset();
     mockOutputWarn.mockReset();
     mockStat.mockReset();
     lastTelemetryContext = undefined;
+
+    // By default, auto-confirm the import-confirmation modal (the first modal
+    // showInformationMessage call has buttons and returns its first = "Import").
+    // The per-file outcome notifications are modal too, but have NO buttons, so
+    // the mock resolves them to undefined (dismissed).
+    mockShowInformationMessage.mockImplementation((_message: unknown, options: unknown, ...items: unknown[]) => {
+        const isModal = typeof options === 'object' && options !== null && (options as { modal?: boolean }).modal;
+        if (isModal && items.length > 0) {
+            return Promise.resolve(items[0]);
+        }
+        return Promise.resolve(undefined);
+    });
 });
+
+/**
+ * The per-file outcome notifications: modal `showInformationMessage` calls that
+ * carry no button items (the import-confirmation prompt, by contrast, passes
+ * "Import"/"Preview" buttons).
+ */
+function notificationModalCalls(): unknown[][] {
+    return mockShowInformationMessage.mock.calls.filter((call) => {
+        const options = call[1] as { modal?: boolean } | undefined;
+        const isModal = !!options?.modal;
+        const hasButtons = call.length > 2;
+        return isModal && !hasButtons;
+    });
+}
 
 /**
  * Convenience to build the `{ record, created }` shape that addFileSource now
@@ -134,14 +163,16 @@ describe('handleKubeconfigFileDrop', () => {
         expect(mockAddFileSource).toHaveBeenCalledWith('/abs/team.yaml');
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('src-1');
-        // Toast must include the source label (consistency with the wizard pattern).
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
-        const successMessage = mockShowInformationMessage.mock.calls[0][0] as string;
-        expect(successMessage).toContain('team.yaml');
+        // A single modal confirms the add and references the source label.
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(1);
+        const message = modals[0][0] as string;
+        expect(message).toMatch(/Added kubeconfig source/);
+        expect(message).toContain('team.yaml');
         expect(mockShowWarningMessage).not.toHaveBeenCalled();
     });
 
-    it('uses the plural success toast when multiple sources are added', async () => {
+    it('shows a modal and reveals each source when multiple are added', async () => {
         mockStat.mockResolvedValue({ isFile: () => true });
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'ctx' }]);
@@ -151,20 +182,28 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/a.yaml'), fileUri('/b.yaml')] as never);
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
-        const message = mockShowInformationMessage.mock.calls[0][0] as string;
-        expect(message).toMatch(/2 kubeconfig sources/);
-        // Reveal targets the FIRST added source so the user immediately sees the result.
+        // One modal per added file (the user accepted that many files = many modals).
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(2);
+        expect(modals.every((call) => /Added kubeconfig source/.test(call[0] as string))).toBe(true);
+        // Each added source is revealed/selected in turn.
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('a');
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('b');
     });
 
-    it('skips a directory with a per-file warning and does not refresh', async () => {
+    it('skips a directory with a modal warning and does not refresh', async () => {
         mockStat.mockResolvedValue({ isFile: () => false });
 
         await handleKubeconfigFileDrop([fileUri('/some/dir')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/not a regular file/);
+        const [message, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(message).toMatch(/Could not add "dir"/);
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/not a regular file/);
         expect(mockAddFileSource).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
     });
@@ -175,9 +214,31 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/missing.yaml')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/Cannot read "missing.yaml": ENOENT/);
+        const [message, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(message).toMatch(/Could not add "missing.yaml"/);
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/could not be read: ENOENT/);
         expect(mockOutputWarn).toHaveBeenCalled();
         expect(mockAddFileSource).not.toHaveBeenCalled();
+    });
+
+    it('skips an oversized file before parsing it', async () => {
+        // 6 MB — above the 5 MB import limit.
+        mockStat.mockResolvedValue({ isFile: () => true, size: 6 * 1024 * 1024 });
+
+        await handleKubeconfigFileDrop([fileUri('/huge.yaml')] as never);
+
+        expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+        const [, options] = mockShowWarningMessage.mock.calls[0] as [string, { modal?: boolean; detail?: string }];
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/far larger than any kubeconfig/);
+        // Rejected before reading/parsing.
+        expect(mockLoadKubeConfig).not.toHaveBeenCalled();
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+        expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
     });
 
     it('skips a file with no Kubernetes contexts', async () => {
@@ -188,23 +249,55 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/empty.yaml')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/does not contain any Kubernetes contexts/);
+        const [, options] = mockShowWarningMessage.mock.calls[0] as [string, { modal?: boolean; detail?: string }];
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/does not contain any Kubernetes contexts/);
         expect(mockAddFileSource).not.toHaveBeenCalled();
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
     });
 
-    it('skips a file that fails to parse as a kubeconfig and logs the reason', async () => {
+    it('shows a modal (not a toast) and keeps the raw parser error in the output channel for a binary file', async () => {
         mockStat.mockResolvedValue({ isFile: () => true });
-        mockLoadKubeConfig.mockRejectedValue(new Error('YAML syntax error at line 3'));
+        mockLoadKubeConfig.mockRejectedValue(new Error('null byte is not allowed in input (1:9)'));
 
-        await handleKubeconfigFileDrop([fileUri('/garbage.yaml')] as never);
+        await handleKubeconfigFileDrop([fileUri('/garbage.png')] as never);
 
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowWarningMessage.mock.calls[0][0]).toMatch(/is not a valid kubeconfig/);
+        const [message, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(message).toMatch(/Could not add "garbage.png"/);
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/not a valid kubeconfig/);
+        // The noisy parser error (with raw bytes) is kept out of the dialog and
+        // logged to the output channel instead.
+        expect(options?.detail).not.toContain('null byte');
         expect(mockOutputError).toHaveBeenCalled();
         const logged = mockOutputError.mock.calls[0][0] as string;
-        expect(logged).toContain('/garbage.yaml');
-        expect(logged).toContain('YAML syntax error');
+        expect(logged).toContain('/garbage.png');
+        expect(logged).toContain('null byte');
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+    });
+
+    it('lists every rejected file as a bullet in one modal when several are invalid', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        mockLoadKubeConfig
+            .mockRejectedValueOnce(new Error('null byte is not allowed in input (1:9)'))
+            .mockRejectedValueOnce(new Error('null byte is not allowed in input (1:9)'));
+
+        await handleKubeconfigFileDrop([fileUri('/one.png'), fileUri('/two.png')] as never);
+
+        // A single aggregated modal, not one per file.
+        expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+        const [message, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(message).toMatch(/Could not add 2 of the dropped files/);
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toContain('• one.png:');
+        expect(options?.detail).toContain('• two.png:');
         expect(mockAddFileSource).not.toHaveBeenCalled();
     });
 
@@ -228,6 +321,10 @@ describe('handleKubeconfigFileDrop', () => {
         // One warning for the invalid middle file.
         expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
+        // Telemetry tracks how many dropped files were rejected as invalid.
+        expect(lastTelemetryContext?.telemetry.measurements.confirmedFileCount).toBe(3);
+        expect(lastTelemetryContext?.telemetry.measurements.addedCount).toBe(2);
+        expect(lastTelemetryContext?.telemetry.measurements.invalidCount).toBe(1);
     });
 
     it('ignores non-file scheme URIs in the input', async () => {
@@ -254,7 +351,7 @@ describe('handleKubeconfigFileDrop', () => {
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
     });
 
-    it('treats a re-dropped already-registered file as a no-op (no toast, no refresh)', async () => {
+    it('reveals the existing source and shows a modal when a re-dropped file is already registered', async () => {
         // addFileSource reports the dup via `created: false` — race-safe single
         // source of truth (no snapshot of the cache that another flow could
         // race against).
@@ -262,21 +359,23 @@ describe('handleKubeconfigFileDrop', () => {
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'ctx-1' }]);
         mockAddFileSource.mockResolvedValue(existing('pre-existing', 'team.yaml'));
+        mockRevealKubernetesSource.mockResolvedValue(undefined);
 
         await handleKubeconfigFileDrop([fileUri('/abs/team.yaml')] as never);
 
-        // addFileSource IS called (it has to be, to learn whether the file was
-        // already registered), but nothing user-visible changes.
         expect(mockAddFileSource).toHaveBeenCalledTimes(1);
-        expect(mockShowInformationMessage).not.toHaveBeenCalled();
+        // No silent skip: a modal explains the collision and the existing node is selected.
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(1);
+        expect(modals[0][0] as string).toMatch(/already exists/);
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('pre-existing');
+        // Nothing new was stored, so no refresh is needed.
         expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
-        expect(mockRevealKubernetesSource).not.toHaveBeenCalled();
         // One audit-trail line in the output channel.
-        expect(mockOutputAppendLine).toHaveBeenCalledTimes(1);
-        expect(mockOutputAppendLine.mock.calls[0][0] as string).toMatch(/already registered/);
+        expect(mockOutputAppendLine.mock.calls.some((call) => /already exists/.test(call[0] as string))).toBe(true);
     });
 
-    it('counts a duplicate URI appearing twice in the same drop payload only once', async () => {
+    it('shows both an added and an already-exists modal when a duplicate URI appears twice in one drop', async () => {
         mockStat.mockResolvedValue({ isFile: () => true });
         mockLoadKubeConfig.mockResolvedValue({});
         mockGetContexts.mockReturnValue([{ name: 'ctx' }]);
@@ -290,11 +389,14 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/abs/team.yaml'), fileUri('/abs/team.yaml')] as never);
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
-        // Singular toast (1 actually added, not 2).
-        const message = mockShowInformationMessage.mock.calls[0][0] as string;
-        expect(message).toContain('team.yaml');
-        expect(message).not.toMatch(/2 kubeconfig sources/);
+        // Two modals: one confirming the add, one explaining the duplicate.
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(2);
+        expect(modals[0][0] as string).toMatch(/Added kubeconfig source/);
+        expect(modals[1][0] as string).toMatch(/already exists/);
+        // Telemetry still counts it as one added, one already-registered.
+        expect(lastTelemetryContext?.telemetry.measurements.addedCount).toBe(1);
+        expect(lastTelemetryContext?.telemetry.measurements.alreadyRegisteredCount).toBe(1);
     });
 
     it('separates added vs already-registered when a batch mixes both', async () => {
@@ -311,16 +413,149 @@ describe('handleKubeconfigFileDrop', () => {
         await handleKubeconfigFileDrop([fileUri('/a.yaml'), fileUri('/b.yaml')] as never);
 
         expect(mockAddFileSource).toHaveBeenCalledTimes(2);
-        // Singular toast: only one new file was actually added.
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
-        expect(mockShowInformationMessage.mock.calls[0][0] as string).toContain('b.yaml');
+        // One modal per file: the duplicate is explained, the new one confirmed.
+        const modals = notificationModalCalls();
+        expect(modals).toHaveLength(2);
+        expect(modals[0][0] as string).toMatch(/already exists/);
+        expect(modals[1][0] as string).toMatch(/Added kubeconfig source/);
         // Refresh runs because something was actually added.
         expect(mockRefreshKubernetesRoot).toHaveBeenCalledTimes(1);
+        expect(mockRevealKubernetesSource).toHaveBeenCalledWith('pre-existing');
         expect(mockRevealKubernetesSource).toHaveBeenCalledWith('src-b');
         // Telemetry must distinguish the two outcomes so dashboards can tell
         // "user re-dropped a file" from "user added a new file".
         expect(lastTelemetryContext?.telemetry.measurements.fileCount).toBe(2);
         expect(lastTelemetryContext?.telemetry.measurements.addedCount).toBe(1);
         expect(lastTelemetryContext?.telemetry.measurements.alreadyRegisteredCount).toBe(1);
+    });
+
+    it('shows a confirmation modal before importing and lists each dropped file', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([{ name: 'ctx' }]);
+        mockAddFileSource.mockResolvedValueOnce(added('a', 'a.yaml')).mockResolvedValueOnce(added('b', 'b.yaml'));
+        mockRevealKubernetesSource.mockResolvedValue(undefined);
+
+        await handleKubeconfigFileDrop([fileUri('/home/a.yaml'), fileUri('/home/b.yaml')] as never);
+
+        // The modal is the first showInformationMessage call (modal: true with buttons).
+        const modalCall = mockShowInformationMessage.mock.calls.find(
+            (call) => (call[1] as { modal?: boolean } | undefined)?.modal,
+        );
+        expect(modalCall).toBeDefined();
+        const [modalMessage, modalOptions] = modalCall as [string, { modal: boolean; detail: string }];
+        expect(modalMessage).toMatch(/2 dropped kubeconfig files/);
+        expect(modalOptions.detail).toContain('/home/a.yaml');
+        expect(modalOptions.detail).toContain('/home/b.yaml');
+        expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('import');
+        expect(lastTelemetryContext?.telemetry.measurements.confirmedFileCount).toBe(2);
+        expect(lastTelemetryContext?.telemetry.measurements.invalidCount).toBe(0);
+    });
+
+    it('uses the singular confirmation message for a single dropped file', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        mockLoadKubeConfig.mockResolvedValue({});
+        mockGetContexts.mockReturnValue([{ name: 'ctx' }]);
+        mockAddFileSource.mockResolvedValue(added('a', 'a.yaml'));
+        mockRevealKubernetesSource.mockResolvedValue(undefined);
+
+        await handleKubeconfigFileDrop([fileUri('/home/a.yaml')] as never);
+
+        const modalCall = mockShowInformationMessage.mock.calls.find(
+            (call) => (call[1] as { modal?: boolean } | undefined)?.modal,
+        );
+        expect((modalCall as [string])[0]).toMatch(/Add the dropped kubeconfig file/);
+    });
+
+    it('imports nothing when the user cancels the confirmation modal', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        // User dismisses the modal (returns undefined).
+        mockShowInformationMessage.mockReset();
+        mockShowInformationMessage.mockResolvedValue(undefined);
+
+        await handleKubeconfigFileDrop([fileUri('/home/a.yaml')] as never);
+
+        expect(mockStat).not.toHaveBeenCalled();
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+        expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
+        expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('cancelled');
+    });
+
+    it('opens all dropped files on Preview and then exits without importing', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        mockShowTextDocument.mockResolvedValue(undefined);
+
+        // The modal returns Preview (the second button).
+        mockShowInformationMessage.mockReset();
+        mockShowInformationMessage.mockImplementation((_m: unknown, _o: unknown, ...items: unknown[]) =>
+            Promise.resolve(items[1]),
+        );
+
+        await handleKubeconfigFileDrop([fileUri('/home/a.yaml'), fileUri('/home/b.yaml')] as never);
+
+        // Both files opened for preview.
+        expect(mockShowTextDocument).toHaveBeenCalledTimes(2);
+        // The modal is shown exactly once — Preview exits the flow (no re-prompt).
+        const modalCalls = mockShowInformationMessage.mock.calls.filter(
+            (call) => (call[1] as { modal?: boolean } | undefined)?.modal,
+        );
+        expect(modalCalls).toHaveLength(1);
+        // Nothing is imported; the user can drop again later.
+        expect(mockStat).not.toHaveBeenCalled();
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+        expect(mockRefreshKubernetesRoot).not.toHaveBeenCalled();
+        expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('preview');
+    });
+
+    it('warns (not just logs) when a previewed file cannot be opened as text', async () => {
+        mockStat.mockResolvedValue({ isFile: () => true });
+        // The binary file (e.g. an image) cannot be opened as text.
+        mockShowTextDocument.mockRejectedValue(new Error('File seems to be binary and cannot be opened as text'));
+
+        // The modal returns Preview (the second button).
+        mockShowInformationMessage.mockReset();
+        mockShowInformationMessage.mockImplementation((_m: unknown, _o: unknown, ...items: unknown[]) =>
+            Promise.resolve(items[1]),
+        );
+
+        await handleKubeconfigFileDrop([fileUri('/downloads/diagram.png')] as never);
+
+        // A visible warning is shown, not just an output-channel line.
+        expect(mockShowWarningMessage).toHaveBeenCalledTimes(1);
+        const [warning, options] = mockShowWarningMessage.mock.calls[0] as [
+            string,
+            { modal?: boolean; detail?: string },
+        ];
+        expect(warning).toContain('diagram.png');
+        expect(options?.modal).toBe(true);
+        expect(options?.detail).toMatch(/binary file rather than a kubeconfig/);
+        expect(mockOutputWarn).toHaveBeenCalled();
+        // Still exits the flow without importing.
+        expect(mockAddFileSource).not.toHaveBeenCalled();
+        expect(lastTelemetryContext?.telemetry.properties.dropConfirmation).toBe('preview');
+    });
+});
+
+describe('shortenPathMiddle', () => {
+    it('returns short paths unchanged', () => {
+        expect(shortenPathMiddle('/home/user/.kube/config', 64)).toBe('/home/user/.kube/config');
+    });
+
+    it('keeps the start of the path and the full filename, collapsing the middle', () => {
+        const longPath = '/home/user/projects/some/very/deeply/nested/directory/structure/config.yaml';
+        const result = shortenPathMiddle(longPath, 40);
+
+        expect(result.length).toBeLessThanOrEqual(40);
+        expect(result).toContain('…');
+        expect(result.startsWith('/home/user/')).toBe(true);
+        expect(result.endsWith('config.yaml')).toBe(true);
+    });
+
+    it('middle-truncates the filename itself when even the filename does not fit', () => {
+        const longName = 'a-really-really-really-long-kubeconfig-filename-that-is-huge.yaml';
+        const result = shortenPathMiddle(`/x/${longName}`, 20);
+
+        expect(result.length).toBeLessThanOrEqual(20);
+        expect(result).toContain('…');
     });
 });

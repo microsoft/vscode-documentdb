@@ -22,8 +22,8 @@ import { getContexts, loadConfiguredKubeConfig } from '../kubernetesClient';
  *   - Runs a probe load under a status-bar progress indicator so the user
  *     sees that their action actually did something (the primary complaint
  *     against the old "Retry" label was that it appeared to be a no-op).
- *   - Surfaces an action-attributed success toast on the happy path. On
- *     failure / zero-contexts we deliberately defer to the warning toast that
+ *   - Stays silent on the happy path — the refreshed tree node is the
+ *     confirmation. On failure / zero-contexts we defer to the modal that
  *     {@link KubernetesKubeconfigSourceItem.createKubeconfigRecoveryChildren}
  *     raises during the tree refresh, so the user does not see two redundant
  *     messages.
@@ -57,19 +57,12 @@ export async function reloadKubeconfigSource(
                     contexts.length === 0 ? 'reloadedEmpty' : 'reloaded';
                 context.telemetry.measurements.contextCount = contexts.length;
 
-                if (contexts.length > 0) {
-                    void vscode.window.showInformationMessage(
-                        vscode.l10n.t(
-                            'Reloaded kubeconfig source "{0}". Found {1} context(s).',
-                            sourceLabel,
-                            String(contexts.length),
-                        ),
-                    );
-                }
-                // For zero-context or load-failure cases we deliberately stay
-                // quiet here; the tree refresh below re-runs getChildren() and
-                // KubernetesKubeconfigSourceItem.createKubeconfigRecoveryChildren
-                // raises a single warning toast describing exactly what is wrong.
+                // Success is silent on purpose: the refreshed tree node (with its
+                // up-to-date children) is the confirmation. For zero-context or
+                // load-failure cases we also stay quiet here; the tree refresh below
+                // re-runs getChildren() and KubernetesKubeconfigSourceItem
+                // .createKubeconfigRecoveryChildren raises a single modal describing
+                // exactly what is wrong.
             } catch (error) {
                 const errorMessage = error instanceof Error ? error.message : String(error);
                 context.telemetry.properties.kubeconfigSourceResult = 'failed';
