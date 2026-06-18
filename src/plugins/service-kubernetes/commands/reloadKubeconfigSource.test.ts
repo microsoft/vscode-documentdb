@@ -97,16 +97,13 @@ describe('reloadKubeconfigSource', () => {
         expect(resetOrder).toBeLessThan(refreshOrder);
     });
 
-    it('shows a success toast that mentions the source label and context count', async () => {
+    it('stays silent on success and lets the refreshed tree node be the confirmation', async () => {
         mockLoadConfiguredKubeConfig.mockResolvedValueOnce({});
         mockGetContexts.mockReturnValueOnce([{ name: 'a' }, { name: 'b' }, { name: 'c' }]);
 
         await reloadKubeconfigSource(makeContext(), makeNode() as never);
 
-        expect(mockShowInformationMessage).toHaveBeenCalledTimes(1);
-        const message = mockShowInformationMessage.mock.calls[0][0] as string;
-        expect(message).toContain('my-config');
-        expect(message).toContain('3');
+        expect(mockShowInformationMessage).not.toHaveBeenCalled();
     });
 
     it('does not show a success toast when zero contexts are returned', async () => {
@@ -120,7 +117,7 @@ describe('reloadKubeconfigSource', () => {
         expect(context.telemetry.properties.kubeconfigSourceResult).toBe('reloadedEmpty');
         expect(context.telemetry.measurements.contextCount).toBe(0);
         // Tree is still refreshed so createKubeconfigRecoveryChildren can render
-        // the dedicated "No contexts" warning toast on the next getChildren call.
+        // the dedicated "No contexts" modal on the next getChildren call.
         expect(mockResetNodeErrorState).toHaveBeenCalled();
         expect(mockRefresh).toHaveBeenCalled();
     });

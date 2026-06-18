@@ -42,7 +42,7 @@ const NAMESPACE_PRESCAN_CONCURRENCY = 5;
 
 export class KubernetesContextItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public contextValue: string = 'enableRefreshCommand;discovery.kubernetesContext';
+    public contextValue: string = 'enableRefreshCommand;discoveryKubernetesContext';
 
     constructor(
         public readonly parentId: string,
@@ -73,18 +73,35 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                 context.telemetry.properties.view = Views.DiscoveryView;
                 context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
 
+                // What kind of cluster the user is reaching (AKS / EKS / GKE / etc.,
+                // when the kubeconfig exposes it) so connect latency and failures can
+                // be segmented by distribution.
+                if (this.contextInfo.provider) {
+                    context.telemetry.properties.clusterProvider = this.contextInfo.provider;
+                }
+
                 let kubeConfig: Awaited<ReturnType<typeof loadConfiguredKubeConfig>>;
                 let namespaceNames: string[];
                 let coreApi: Awaited<ReturnType<typeof createCoreApi>>;
+                // First real round-trip to the cluster's API server. Timed separately
+                // from the event's total duration (which also covers the per-namespace
+                // DocumentDB prescan) so "how long it takes to connect to the cluster"
+                // is measurable on its own — on both success and failure (e.g. timeouts).
+                const clusterConnectStart = Date.now();
                 try {
                     kubeConfig = await loadConfiguredKubeConfig(this.sourceId);
                     coreApi = await createCoreApi(kubeConfig, this.contextInfo.name);
                     namespaceNames = await listNamespaces(coreApi);
                 } catch (error) {
+                    context.telemetry.measurements.clusterConnectMs = Date.now() - clusterConnectStart;
                     const errorMessage = error instanceof Error ? error.message : String(error);
                     ext.outputChannel.error(
                         `[KubernetesDiscovery] Failed to list namespaces for context "${this.contextInfo.name}": ${errorMessage}`,
                     );
+                    // We recover by returning an error/retry node rather than throwing,
+                    // so the wrapper would otherwise record result=Succeeded. Mark it
+                    // Failed explicitly so the namespace-listing failure rate is countable.
+                    context.telemetry.properties.result = 'Failed';
                     context.telemetry.properties.namespaceFetchError = 'true';
                     context.telemetry.properties.namespaceFetchErrorType =
                         error instanceof Error ? error.name : 'UnknownError';
@@ -96,6 +113,8 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                         this.alias ?? this.contextInfo.name,
                     );
                 }
+
+                context.telemetry.measurements.clusterConnectMs = Date.now() - clusterConnectStart;
 
                 context.telemetry.measurements.namespacesCount = namespaceNames.length;
 
@@ -276,7 +295,9 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
 
         // Append the current view-mode marker so the context-menu / inline "View as …" toggle
         // commands can target this node and show the icon matching the active mode.
-        const contextValue = `${this.contextValue};discovery.kubernetesViewMode.${this.getViewMode()}`;
+        const viewModeMarker =
+            this.getViewMode() === 'tree' ? 'discoveryKubernetesViewModeTree' : 'discoveryKubernetesViewModeList';
+        const contextValue = `${this.contextValue};${viewModeMarker}`;
 
         return {
             id: this.id,

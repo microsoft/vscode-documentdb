@@ -77,6 +77,7 @@ export async function viewKubeconfig(context: IActionContext, node: KubernetesKu
         context.telemetry.properties.kubeconfigSourceResult = 'notAnInlineSource';
         void vscode.window.showWarningMessage(
             vscode.l10n.t('Only pasted kubeconfig sources can be viewed. Use "Edit Kubeconfig" for file sources.'),
+            { modal: true },
         );
         return;
     }
@@ -98,6 +99,6 @@ export async function viewKubeconfig(context: IActionContext, node: KubernetesKu
             `[KubernetesDiscovery] Failed to view kubeconfig source "${node.source.label}": ${message}`,
         );
         context.telemetry.properties.kubeconfigSourceResult = 'viewFailed';
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to view kubeconfig: {0}', message));
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to view kubeconfig: {0}', message), { modal: true });
     }
 }

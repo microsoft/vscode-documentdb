@@ -496,7 +496,7 @@
         "icon": "$(trash)"
       },
       {
-        "//": "[DiscoveryView] Edit Kubernetes kubeconfig file source in the editor",
+        "//": "[DiscoveryView] Edit Kubernetes kubeconfig file source in the editor (file and default sources)",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
         "title": "Edit Kubeconfig",
@@ -838,22 +838,22 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesSourceMutable\\b/i",
           "group": "1@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceMutable\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesSourceMutable\\b/i",
           "group": "1@2"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceFile\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesSource(File|Default)\\b/i",
           "group": "2@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesSourceInline\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesSourceInline\\b/i",
           "group": "2@1"
         },
         {
@@ -868,28 +868,28 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesContext\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesContext\\b/i",
           "group": "1@1"
         },
         {
           "//": "[DiscoveryView] View-mode toggle on the Kubernetes context node. The icon reflects the CURRENT mode and the action switches to the other (Search-view convention). Two commands gated by the current-mode marker; each contributed inline and in the menu group just above Refresh (zheLastGroup).",
           "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.tree\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesViewModeTree\\b/i",
           "group": "inline@0"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.tree\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesViewModeTree\\b/i",
           "group": "yheAlmostLastGroup@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.list\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesViewModeList\\b/i",
           "group": "inline@0"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
-          "when": "view == discoveryView && viewItem =~ /\\bdiscovery\\.kubernetesViewMode\\.list\\b/i",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesViewModeList\\b/i",
           "group": "yheAlmostLastGroup@1"
         },
         {

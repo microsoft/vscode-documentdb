@@ -6,6 +6,7 @@
 import { UserCancelledError, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
+import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { type KubernetesKubeconfigSourceItem } from '../discovery-tree/KubernetesKubeconfigSourceItem';
 import { PortForwardTunnelManager } from '../portForwardTunnel';
@@ -30,19 +31,16 @@ export async function removeKubeconfigSource(
         throw new Error(vscode.l10n.t('No kubeconfig source selected.'));
     }
 
-    const removeAction = vscode.l10n.t('Remove');
-    const confirmation = await vscode.window.showWarningMessage(
+    const confirmed = await getConfirmationAsInSettings(
         vscode.l10n.t('Remove kubeconfig source "{0}"?', node.source.label),
-        {
-            modal: true,
-            detail: vscode.l10n.t(
-                'Saved connections that depend on this source will need to be reconfigured. Active port-forward tunnels for this source will be stopped.',
-            ),
-        },
-        removeAction,
+        vscode.l10n.t(
+            'Saved connections that depend on this source will need to be reconfigured. Active port-forward tunnels for this source will be stopped.',
+        ),
+        node.source.label,
+        { fallbackWord: 'remove' },
     );
 
-    if (confirmation !== removeAction) {
+    if (!confirmed) {
         throw new UserCancelledError();
     }
 

@@ -22,8 +22,9 @@ type AddBranch = 'default' | 'file' | 'inline';
  * exists we don't pretend a new one was created. Instead we surface a modal
  * message explaining that the existing source was selected in the view (the
  * caller reveals + selects it via {@link revealAddedKubeconfigSource}), so the
- * user understands why no new node appeared. A genuinely new source still gets
- * the lightweight confirmation toast.
+ * user understands why no new node appeared. A genuinely new source is added
+ * silently — the freshly revealed + selected node in the view is the
+ * confirmation, so we only record it in the output channel (no success toast).
  */
 function notifyKubeconfigSourceAdded(
     context: IActionContext,
@@ -33,7 +34,6 @@ function notifyKubeconfigSourceAdded(
 ): void {
     if (created) {
         context.telemetry.properties.kubeconfigSourceResult = 'added';
-        void vscode.window.showInformationMessage(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
         ext.outputChannel.appendLine(vscode.l10n.t('Added kubeconfig source "{0}".', record.label));
         return;
     }
@@ -128,20 +128,20 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
     const defaultPath = describeDefaultKubeconfigPath();
     const picks: IAzureQuickPickItem<AddBranch>[] = [
         {
-            label: vscode.l10n.t('Use my default kubeconfig'),
-            detail: vscode.l10n.t('{0}, or the file named by the KUBECONFIG environment variable', defaultPath),
+            label: vscode.l10n.t('Default kubeconfig'),
+            detail: vscode.l10n.t('Always reads your default kubeconfig ($KUBECONFIG or {0}).', defaultPath),
             iconPath: new vscode.ThemeIcon('home'),
             data: 'default',
         },
         {
-            label: vscode.l10n.t('Add custom kubeconfig file…'),
-            detail: vscode.l10n.t('Browse for a kubeconfig file on disk'),
+            label: vscode.l10n.t('Kubeconfig file…'),
+            detail: vscode.l10n.t('Reads a kubeconfig YAML file from disk and links to it by path.'),
             iconPath: new vscode.ThemeIcon('folder-opened'),
             data: 'file',
         },
         {
-            label: vscode.l10n.t('Paste kubeconfig YAML from clipboard'),
-            detail: vscode.l10n.t('Use the current clipboard content as a kubeconfig'),
+            label: vscode.l10n.t('Paste kubeconfig YAML…'),
+            detail: vscode.l10n.t('Reads clipboard content and saves a copy as a kubeconfig source.'),
             iconPath: new vscode.ThemeIcon('clippy'),
             data: 'inline',
         },
@@ -149,7 +149,7 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
 
     try {
         const selected = await context.ui.showQuickPick(picks, {
-            placeHolder: vscode.l10n.t('Add Kubeconfig'),
+            placeHolder: vscode.l10n.t('Select kubeconfig source'),
             suppressPersistence: true,
         });
         context.telemetry.properties.kubeconfigSourceKind = selected.data;
@@ -186,7 +186,10 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
         if (getContexts(kubeConfig).length === 0) {
             context.telemetry.properties.kubeconfigSourceResult = 'noContexts';
             void vscode.window.showErrorMessage(
-                vscode.l10n.t('No Kubernetes contexts were found in "{0}".', absolutePath),
+                vscode.l10n.t(
+                    'No Kubernetes contexts were found in "{0}". Fix the kubeconfig and try again.',
+                    absolutePath,
+                ),
                 { modal: true },
             );
             throw new UserCancelledError();
@@ -199,7 +202,14 @@ async function addFileBranch(context: IActionContext): Promise<KubeconfigSourceR
         const stack = error instanceof Error && error.stack ? error.stack : message;
         ext.outputChannel.error(`[KubernetesDiscovery] File kubeconfig load/validate failed: ${stack}`);
         context.telemetry.properties.kubeconfigSourceResult = 'invalidFile';
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to load kubeconfig: {0}', message), { modal: true });
+        void vscode.window.showErrorMessage(
+            vscode.l10n.t(
+                'The kubeconfig file "{0}" could not be loaded: {1}. Fix the file and try again.',
+                absolutePath,
+                message,
+            ),
+            { modal: true },
+        );
         throw new UserCancelledError();
     }
 
@@ -232,10 +242,11 @@ async function addInlineBranch(context: IActionContext): Promise<KubeconfigSourc
     const confirmLabel = vscode.l10n.t('Continue');
     const previewLabel = vscode.l10n.t('Preview Clipboard');
     const confirmation = await vscode.window.showWarningMessage(
-        vscode.l10n.t(
-            'The contents of your clipboard will be read and stored as a kubeconfig source in VS Code Secret Storage. Make sure you have the correct content copied before continuing.',
-        ),
-        { modal: true },
+        vscode.l10n.t('Your clipboard contents will be saved as a kubeconfig source.'),
+        {
+            modal: true,
+            detail: vscode.l10n.t('Make sure the correct kubeconfig YAML is in your clipboard before continuing.'),
+        },
         confirmLabel,
         previewLabel,
     );

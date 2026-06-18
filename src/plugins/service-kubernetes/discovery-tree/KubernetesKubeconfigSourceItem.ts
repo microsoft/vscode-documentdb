@@ -76,6 +76,10 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
                         )) ?? [];
                 } catch (error) {
                     const errorMessage = error instanceof Error ? error.message : String(error);
+                    // The inner load sub-step already recorded result=Failed for itself;
+                    // mark the outer source-load event Failed too (it recovers with a retry
+                    // node instead of throwing) so the failure rate is countable here as well.
+                    context.telemetry.properties.result = 'Failed';
                     context.telemetry.properties.kubeconfigLoadResult = 'failed';
                     ext.outputChannel.error(
                         `[KubernetesDiscovery] Failed to load kubeconfig for source "${this.source.label}": ${errorMessage}`,
@@ -142,7 +146,6 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             id: this.id,
             contextValue: this.contextValue,
             label: this.source.label,
-            description: buildDescription(this.source),
             tooltip: buildTooltip(this.source),
             iconPath: buildIcon(this.source),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
@@ -203,17 +206,6 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
             );
         }
 
-        children.push(
-            createGenericElementWithContext({
-                contextValue: 'error',
-                id: `${this.id}/open-docs`,
-                label: vscode.l10n.t('Learn more about Kubernetes discovery'),
-                iconPath: new vscode.ThemeIcon('book'),
-                commandId: 'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
-                commandArgs: [this],
-            }),
-        );
-
         return children;
     }
 }
@@ -222,58 +214,47 @@ function buildContextValue(source: KubeconfigSourceRecord): string {
     // All sources, including the default, share the same context-value markers
     // so Rename / Remove are exposed uniformly. The Default source is
     // re-creatable through the "+" inline action via {@link addDefaultSource}.
-    const markers = ['enableRefreshCommand', 'discovery.kubernetesSource', 'discovery.kubernetesSourceMutable'];
+    const markers = ['enableRefreshCommand', 'discoveryKubernetesSource', 'discoveryKubernetesSourceMutable'];
 
     // File sources have an on-disk path, so they additionally expose "Edit Kubeconfig".
     if (source.kind === 'file') {
-        markers.push('discovery.kubernetesSourceFile');
+        markers.push('discoveryKubernetesSourceFile');
+    }
+
+    // The default source also resolves to a real on-disk kubeconfig (KUBECONFIG
+    // env var or ~/.kube/config), so it likewise exposes "Edit Kubeconfig".
+    if (source.kind === 'default') {
+        markers.push('discoveryKubernetesSourceDefault');
     }
 
     // Inline (pasted) sources have no on-disk file, so they expose a read-only "View Kubeconfig".
     if (source.kind === 'inline') {
-        markers.push('discovery.kubernetesSourceInline');
+        markers.push('discoveryKubernetesSourceInline');
     }
 
     return createContextValue(markers);
 }
 
-function buildDescription(source: KubeconfigSourceRecord): string | undefined {
-    switch (source.kind) {
-        case 'file':
-            return source.path ? `(file: ${shortenPath(source.path)})` : '(file)';
-        case 'inline':
-        case 'default':
-            return undefined;
-        default:
-            return undefined;
-    }
-}
-
 function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
-    const lines: string[] = [`**Source:** ${source.label}`, `**Kind:** ${source.kind}`];
-    if (source.kind === 'file' && source.path) {
-        lines.push(`**Path:** \`${source.path}\``);
+    const lines: string[] = [`**Source:** ${source.label}`];
+    if (source.kind === 'file') {
+        lines.push('**Type:** Linked file. Re-read from disk on refresh.');
+        if (source.path) {
+            lines.push(`**Path:** \`${source.path}\``);
+        }
     } else if (source.kind === 'inline') {
+        lines.push('**Type:** Copy (snapshot). Re-parsed on refresh; does not track the original.');
         lines.push('**Storage:** VS Code Secret Storage');
     } else if (source.kind === 'default') {
+        lines.push('**Type:** Linked (dynamic). Re-resolved on refresh.');
         lines.push(`**Path:** \`${describeDefaultKubeconfigPath()}\``);
-        lines.push(
-            '**Source:** Resolved from the `KUBECONFIG` environment variable, otherwise your default kubeconfig.',
-        );
+        lines.push('**Resolved from:** `KUBECONFIG` environment variable, otherwise your default kubeconfig.');
     }
     return new vscode.MarkdownString(lines.join('\n\n'));
 }
 
 function buildIcon(_source: KubeconfigSourceRecord): vscode.ThemeIcon {
     return new vscode.ThemeIcon('group-by-ref-type');
-}
-
-function shortenPath(absolutePath: string): string {
-    const segments = absolutePath.split(/[/\\]/);
-    if (segments.length <= 3) {
-        return absolutePath;
-    }
-    return `…/${segments.slice(-2).join('/')}`;
 }
 
 function sanitize(value: string): string {

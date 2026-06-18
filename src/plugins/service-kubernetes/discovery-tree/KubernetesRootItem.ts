@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
@@ -12,6 +14,7 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { DISCOVERY_PROVIDER_ID } from '../config';
 import { ensureMigration } from '../sources/migrationV2';
 import { readSources } from '../sources/sourceStore';
 import { KubernetesKubeconfigSourceItem } from './KubernetesKubeconfigSourceItem';
@@ -26,15 +29,35 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        await ensureMigration();
+        const children = await callWithTelemetryAndErrorHandling(
+            'kubernetes-discovery.listSources',
+            async (context: IActionContext) => {
+                context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
+                context.telemetry.properties.view = Views.DiscoveryView;
 
-        const sources = await readSources();
+                await ensureMigration();
 
-        if (sources.length === 0) {
-            return [this.createAddSourceChild()];
-        }
+                const sources = await readSources();
 
-        return sources.map((source) => new KubernetesKubeconfigSourceItem(this.id, source));
+                // How many kubeconfig sources users keep, and of which kind — this is
+                // the top-of-funnel adoption signal for the feature. Counts are split
+                // by kind so the relative use of Default vs file vs pasted YAML is
+                // visible.
+                context.telemetry.measurements.sourcesCount = sources.length;
+                context.telemetry.measurements.fileSourcesCount = sources.filter((s) => s.kind === 'file').length;
+                context.telemetry.measurements.inlineSourcesCount = sources.filter((s) => s.kind === 'inline').length;
+                context.telemetry.measurements.defaultSourcesCount = sources.filter((s) => s.kind === 'default').length;
+                context.telemetry.properties.hasSources = sources.length > 0 ? 'true' : 'false';
+
+                if (sources.length === 0) {
+                    return [this.createAddSourceChild()];
+                }
+
+                return sources.map((source) => new KubernetesKubeconfigSourceItem(this.id, source));
+            },
+        );
+
+        return children ?? [];
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {

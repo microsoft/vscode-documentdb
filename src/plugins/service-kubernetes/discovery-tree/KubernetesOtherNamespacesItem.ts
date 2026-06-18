@@ -10,7 +10,7 @@ import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithC
 
 export class KubernetesOtherNamespacesItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
-    public readonly contextValue: string = 'discovery.kubernetesOtherNamespaces';
+    public readonly contextValue: string = 'discoveryKubernetesOtherNamespaces';
 
     constructor(
         public readonly parentId: string,
@@ -22,7 +22,7 @@ export class KubernetesOtherNamespacesItem implements TreeElement, TreeElementWi
     public getChildren(): ExtTreeElementBase[] {
         return this.namespaces.map((namespace) =>
             createGenericElementWithContext({
-                contextValue: 'informational;discovery.kubernetesEmptyNamespace',
+                contextValue: 'informational;discoveryKubernetesEmptyNamespace',
                 id: `${this.id}/${namespace}`,
                 label: namespace,
                 iconPath: new vscode.ThemeIcon('symbol-namespace'),
