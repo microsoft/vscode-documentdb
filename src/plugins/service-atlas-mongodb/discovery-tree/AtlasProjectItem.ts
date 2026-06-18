@@ -39,7 +39,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                 createGenericElementWithContext({
                     contextValue: 'error',
                     id: `${this.id}/no-session`,
-                    label: vscode.l10n.t('Session expired. Please sign in again.'),
+                    label: vscode.l10n.t('Please sign in to MongoDB Atlas again.'),
                     iconPath: new vscode.ThemeIcon('warning'),
                 }),
             ];
@@ -105,7 +105,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                     createGenericElementWithContext({
                         contextValue: 'error',
                         id: `${this.id}/auth-error`,
-                        label: vscode.l10n.t('Authentication expired. Please sign in again.'),
+                        label: vscode.l10n.t('Please sign in to MongoDB Atlas again.'),
                         iconPath: new vscode.ThemeIcon('error'),
                     }),
                 ];

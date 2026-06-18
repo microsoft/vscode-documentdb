@@ -6,14 +6,14 @@
 import { l10n, ThemeIcon } from 'vscode';
 
 /**
- * Configuration constants for the Atlas MongoDB discovery provider.
+ * Configuration constants for the MongoDB Atlas discovery provider.
  */
 
 /** Unique identifier for this discovery provider */
 export const DISCOVERY_PROVIDER_ID = 'atlas-mongodb-discovery';
 
 /** Display label for the discovery provider */
-export const LABEL = l10n.t('Atlas MongoDB');
+export const LABEL = l10n.t('MongoDB Atlas');
 
 /** Description shown in the discovery provider list */
 export const DESCRIPTION = l10n.t('Service Discovery for MongoDB Atlas');
@@ -22,7 +22,7 @@ export const DESCRIPTION = l10n.t('Service Discovery for MongoDB Atlas');
 export const ICON_PATH = new ThemeIcon('cloud');
 
 /** Title shown in the discovery wizard */
-export const WIZARD_TITLE = l10n.t('Atlas MongoDB Service Discovery');
+export const WIZARD_TITLE = l10n.t('MongoDB Atlas Service Discovery');
 
 /** Base URL for Atlas Admin API v2 */
 export const ATLAS_API_BASE_URL = 'https://cloud.mongodb.com/api/atlas/v2';

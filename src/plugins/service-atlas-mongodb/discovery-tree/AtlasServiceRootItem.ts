@@ -20,7 +20,7 @@ import { DISCOVERY_PROVIDER_ID } from '../config';
 import { AtlasProjectItem } from './AtlasProjectItem';
 
 /**
- * Root tree item for the Atlas MongoDB discovery provider.
+ * Root tree item for the MongoDB Atlas discovery provider.
  * Handles authentication gating — on expand, ensures a valid session exists
  * before fetching and displaying projects.
  */
@@ -169,7 +169,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         return {
             id: this.id,
             contextValue: this.contextValue,
-            label: vscode.l10n.t('Atlas MongoDB'),
+            label: vscode.l10n.t('MongoDB Atlas'),
             iconPath: stateIcon,
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
@@ -192,7 +192,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         return createGenericElementWithContext({
             contextValue: 'error',
             id: `${this.id}/sign-in`,
-            label: vscode.l10n.t('Sign in to view Atlas clusters'),
+            label: vscode.l10n.t('Sign in to view MongoDB Atlas clusters'),
             iconPath: new vscode.ThemeIcon('sign-in'),
             commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
             commandArgs: [this],
