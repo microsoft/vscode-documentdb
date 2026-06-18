@@ -30,6 +30,7 @@ export async function executeApiKeyFlow(sessionManager: AtlasSessionManager): Pr
     });
 
     if (!publicKey) {
+        sessionManager.cancelAuthentication();
         return false; // User cancelled
     }
 
@@ -49,6 +50,7 @@ export async function executeApiKeyFlow(sessionManager: AtlasSessionManager): Pr
     });
 
     if (!privateKey) {
+        sessionManager.cancelAuthentication();
         return false; // User cancelled
     }
 
@@ -56,14 +58,20 @@ export async function executeApiKeyFlow(sessionManager: AtlasSessionManager): Pr
     try {
         const isValid = await validateApiKeyCredentials(publicKey.trim(), privateKey.trim());
         if (!isValid) {
-            void vscode.window.showErrorMessage(
-                vscode.l10n.t('Invalid Atlas API key. Please verify your public and private key pair.'),
-            );
+            sessionManager.cancelAuthentication();
+            void vscode.window.showErrorMessage(vscode.l10n.t('Invalid MongoDB Atlas API key.'), {
+                modal: true,
+                detail: vscode.l10n.t('Please verify your public and private key pair.'),
+            });
             return false;
         }
     } catch (error) {
+        sessionManager.cancelAuthentication();
         const errorMessage = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to validate Atlas API key: {0}', errorMessage));
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to validate MongoDB Atlas API key.'), {
+            modal: true,
+            detail: vscode.l10n.t('Error: {0}', errorMessage),
+        });
         return false;
     }
 

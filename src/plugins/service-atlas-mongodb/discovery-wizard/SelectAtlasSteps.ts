@@ -8,19 +8,24 @@ import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { AtlasApiClient } from '../api/AtlasApiClient';
 import { type AtlasSession } from '../auth/AtlasSession';
+import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { type AtlasCluster, type AtlasProject } from '../models/AtlasProjectModel';
 
 /**
  * Wizard step that prompts the user to select an Atlas project.
  */
 export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
+    constructor(private readonly sessionManager?: AtlasSessionManager) {
+        super();
+    }
+
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const session = context.properties['atlas.session'] as AtlasSession | undefined;
         if (!session) {
             throw new Error(vscode.l10n.t('Atlas session not available'));
         }
 
-        const client = new AtlasApiClient(session);
+        const client = new AtlasApiClient(session, this.sessionManager);
         const projects = await client.listProjects();
 
         const items: (vscode.QuickPickItem & { project: AtlasProject })[] = projects.map((p) => ({
@@ -45,6 +50,10 @@ export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionW
  * Wizard step that prompts the user to select an Atlas cluster within the selected project.
  */
 export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
+    constructor(private readonly sessionManager?: AtlasSessionManager) {
+        super();
+    }
+
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
         const session = context.properties['atlas.session'] as AtlasSession | undefined;
         if (!session) {
@@ -56,7 +65,7 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             throw new Error(vscode.l10n.t('Atlas project not selected'));
         }
 
-        const client = new AtlasApiClient(session);
+        const client = new AtlasApiClient(session, this.sessionManager);
         const clusters = await client.listClusters(project.id);
 
         const items: (vscode.QuickPickItem & { cluster: AtlasCluster })[] = clusters

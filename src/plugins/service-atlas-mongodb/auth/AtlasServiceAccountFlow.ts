@@ -30,6 +30,7 @@ export async function executeServiceAccountFlow(sessionManager: AtlasSessionMana
     });
 
     if (!clientId) {
+        sessionManager.cancelAuthentication();
         return false; // User cancelled
     }
 
@@ -49,6 +50,7 @@ export async function executeServiceAccountFlow(sessionManager: AtlasSessionMana
     });
 
     if (!clientSecret) {
+        sessionManager.cancelAuthentication();
         return false; // User cancelled
     }
 
@@ -70,8 +72,12 @@ export async function executeServiceAccountFlow(sessionManager: AtlasSessionMana
         );
         return true;
     } catch (error) {
+        sessionManager.cancelAuthentication();
         const errorMessage = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to authenticate Service Account: {0}', errorMessage));
+        void vscode.window.showErrorMessage(vscode.l10n.t('Failed to authenticate MongoDB Atlas Service Account.'), {
+            modal: true,
+            detail: vscode.l10n.t('Error: {0}', errorMessage),
+        });
         return false;
     }
 }

@@ -39,6 +39,8 @@ const SA_EXPIRES_AT_KEY = `${SECRET_KEY_PREFIX}.serviceaccount.expiresAt`;
  */
 export class AtlasSessionManager {
     private _state: AtlasSessionState = AtlasSessionState.None;
+    private _stateBeforeAuthenticating: AtlasSessionState = AtlasSessionState.None;
+    private _suppressAutoPrompt = false;
     private _cachedSession: AtlasSession | undefined;
 
     private readonly _onDidChangeSession = new vscode.EventEmitter<AtlasSessionState>();
@@ -242,9 +244,42 @@ export class AtlasSessionManager {
 
     /**
      * Transitions to Authenticating state (for UI feedback).
+     * Remembers the state that was active before sign-in started so it can be restored
+     * if the user cancels (see {@link cancelAuthentication}).
      */
     public setAuthenticating(): void {
+        if (this._state !== AtlasSessionState.Authenticating) {
+            this._stateBeforeAuthenticating = this._state;
+        }
         this.transitionTo(AtlasSessionState.Authenticating);
+    }
+
+    /**
+     * Reverts an in-progress authentication, restoring the state that was active before
+     * {@link setAuthenticating} was called. Used when the user cancels (or the flow fails)
+     * so the UI does not stay stuck on “Authenticating…”.
+     */
+    public cancelAuthentication(): void {
+        if (this._state === AtlasSessionState.Authenticating) {
+            // Reverting fires a session-change event, which refreshes the discovery tree.
+            // Suppress the next auto-prompt so that refresh shows the sign-in node instead of
+            // immediately re-opening the authentication prompt (which would loop on cancel).
+            this._suppressAutoPrompt = true;
+            this.transitionTo(this._stateBeforeAuthenticating);
+        }
+    }
+
+    /**
+     * Returns whether the next discovery-tree auto-prompt should be suppressed (consuming the
+     * flag). Set right after a cancelled sign-in so the cancel-triggered refresh does not
+     * immediately re-open the authentication prompt.
+     */
+    public consumeSuppressAutoPrompt(): boolean {
+        if (this._suppressAutoPrompt) {
+            this._suppressAutoPrompt = false;
+            return true;
+        }
+        return false;
     }
 
     /**

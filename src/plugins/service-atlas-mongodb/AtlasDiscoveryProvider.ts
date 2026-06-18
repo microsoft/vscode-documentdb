@@ -68,7 +68,10 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
 
         return {
             title: WIZARD_TITLE,
-            promptSteps: [new SelectAtlasProjectStep(), new SelectAtlasClusterStep()],
+            promptSteps: [
+                new SelectAtlasProjectStep(this.sessionManager),
+                new SelectAtlasClusterStep(this.sessionManager),
+            ],
             executeSteps: [new AtlasExecuteStep()],
             showLoadingPrompt: true,
         };
@@ -110,15 +113,15 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
 
         const session = await this.sessionManager.getSession();
         if (!session) {
-            void window.showWarningMessage(l10n.t('Please sign in to Atlas first.'));
+            void window.showWarningMessage(l10n.t('Please sign in to MongoDB Atlas first.'));
             return;
         }
 
-        const client = new AtlasApiClient(session);
+        const client = new AtlasApiClient(session, this.sessionManager);
         let projects = await client.listProjects();
 
         if (projects.length === 0) {
-            void window.showInformationMessage(l10n.t('No projects found in your Atlas account.'));
+            void window.showInformationMessage(l10n.t('No projects found in your MongoDB Atlas account.'));
             return;
         }
 
@@ -127,7 +130,9 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         if (selectedOrgId) {
             projects = projects.filter((project) => project.orgId === selectedOrgId);
             if (projects.length === 0) {
-                void window.showInformationMessage(l10n.t('No projects found for the selected organization.'));
+                void window.showInformationMessage(
+                    l10n.t('No projects found for the selected organization in your MongoDB Atlas account.'),
+                );
                 return;
             }
         }
@@ -227,11 +232,11 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         }
 
         try {
-            const client = new AtlasApiClient(session);
+            const client = new AtlasApiClient(session, this.sessionManager);
             const orgs = await client.listOrganizations();
 
             if (orgs.length === 0) {
-                void window.showInformationMessage(l10n.t('No organizations found for this account.'));
+                void window.showInformationMessage(l10n.t('No organizations found for this MongoDB Atlas account.'));
                 return;
             }
 
@@ -271,8 +276,12 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
             context.telemetry.properties.filterAction = selected.orgId === undefined ? 'showAll' : 'filtered';
 
             ext.discoveryBranchDataProvider.refresh();
-        } catch {
-            void window.showErrorMessage(l10n.t('Failed to fetch organizations.'));
+        } catch (error) {
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            void window.showErrorMessage(l10n.t('Failed to fetch MongoDB Atlas organizations.'), {
+                modal: true,
+                detail: l10n.t('Error: {0}', errorMessage),
+            });
         }
     }
 
@@ -317,7 +326,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
                 return;
             }
 
-            const client = new AtlasApiClient(session);
+            const client = new AtlasApiClient(session, this.sessionManager);
             const user = await client.getCurrentUser();
             const displayName = user.emailAddress || user.username || `${user.firstName} ${user.lastName}`.trim();
             await this.sessionManager.setUserDisplayName(displayName);

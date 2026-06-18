@@ -41,6 +41,12 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         let session = await this.sessionManager.getSession();
 
         if (!session) {
+            // A sign-in was just cancelled — the resulting refresh should show the sign-in
+            // node rather than immediately re-opening the auth prompt.
+            if (this.sessionManager.consumeSuppressAutoPrompt()) {
+                return [this.createSignInNode()];
+            }
+
             // No session — prompt user to authenticate
             const authenticated = await this.promptAuthentication();
             if (!authenticated) {
@@ -55,7 +61,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
         // Fetch projects from Atlas
         try {
-            const client = new AtlasApiClient(session);
+            const client = new AtlasApiClient(session, this.sessionManager);
 
             // Lazily fetch user display name if not already stored
             // (Service Accounts don't have user profiles, so skip for them)
@@ -75,26 +81,15 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             return await this.fetchProjectItems(client);
         } catch (error) {
             if (error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403)) {
-                // Attempt token refresh for OAuth sessions before giving up
-                const refreshedSession = await this.sessionManager.tryRefreshIfOAuth();
-                if (refreshedSession) {
-                    try {
-                        return await this.fetchProjectItems(new AtlasApiClient(refreshedSession));
-                    } catch {
-                        // Refresh succeeded but still got an error — fall through
-                    }
+                // The client already attempted a silent token refresh + retry before throwing.
+                // Only when the refresh token is completely rejected does the session manager
+                // sign out (state === None) — in that case prompt the user to sign in again.
+                if (this.sessionManager.state === AtlasSessionState.None) {
+                    return [this.createSignInNode()];
                 }
 
-                if (error.statusCode === 401) {
-                    await this.sessionManager.signOut();
-                    await this.showLoadFailure(error.message);
-                    return [this.createRetryNode()];
-                }
-
-                // 403 — genuinely lacks permissions. Clear the cached session so that
-                // "Manage Credentials" re-prompts for authentication instead of showing
-                // the already-signed-in path with a stale, under-privileged session.
-                await this.sessionManager.signOut();
+                // Transient failure or insufficient permissions — keep the session intact and
+                // offer a retry instead of forcing the user to re-authenticate.
                 await this.showLoadFailure(error.message);
                 return [this.createRetryNode()];
             }
@@ -230,7 +225,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             case AtlasSessionState.Authenticating:
                 return vscode.l10n.t('Authenticating…');
             default:
-                return "";
+                return '';
         }
     }
 }

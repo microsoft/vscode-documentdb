@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { type AtlasSession } from '../auth/AtlasSession';
+import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { ATLAS_API_BASE_URL } from '../config';
 import {
     type AtlasCluster,
@@ -27,8 +28,21 @@ interface AtlasPaginatedResponse<T> {
  */
 export class AtlasApiClient {
     private digestNonceCount = 0;
+    private session: AtlasSession;
 
-    constructor(private readonly session: AtlasSession) {}
+    /**
+     * @param session The active Atlas session used to authenticate requests.
+     * @param sessionManager Optional session manager. When provided, token-based sessions
+     * (OAuth / Service Account) are transparently refreshed and the request retried once if
+     * the access token is rejected (401/403). The user is only signed out — and therefore
+     * prompted to sign in again — when the refresh token itself is completely rejected.
+     */
+    constructor(
+        session: AtlasSession,
+        private readonly sessionManager?: AtlasSessionManager,
+    ) {
+        this.session = session;
+    }
 
     /**
      * Lists all projects (groups) accessible by the authenticated user.
@@ -76,9 +90,40 @@ export class AtlasApiClient {
 
     /**
      * Makes an authenticated request to the Atlas Admin API.
-     * Handles OAuth Bearer and API Key Digest authentication transparently.
+     *
+     * For token-based sessions (OAuth / Service Account) backed by a session manager, a single
+     * silent token refresh is attempted when the access token is rejected (401/403), and the
+     * request is retried with the freshly minted token. If the refresh token is completely
+     * rejected, {@link AtlasSessionManager} signs out and the original error propagates so the
+     * caller can prompt the user to sign in again.
      */
     private async request<T>(path: string, signal?: AbortSignal): Promise<T> {
+        try {
+            return await this.requestOnce<T>(path, signal);
+        } catch (error) {
+            const isAuthFailure =
+                error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403);
+            const canRefresh =
+                this.sessionManager !== undefined &&
+                (this.session.type === 'oauth' || this.session.type === 'serviceaccount');
+
+            if (isAuthFailure && canRefresh) {
+                const refreshedSession = await this.sessionManager!.tryRefreshIfOAuth();
+                if (refreshedSession) {
+                    this.session = refreshedSession;
+                    return await this.requestOnce<T>(path, signal);
+                }
+            }
+
+            throw error;
+        }
+    }
+
+    /**
+     * Performs a single authenticated request to the Atlas Admin API.
+     * Handles OAuth Bearer and API Key Digest authentication transparently.
+     */
+    private async requestOnce<T>(path: string, signal?: AbortSignal): Promise<T> {
         const url = `${ATLAS_API_BASE_URL}${path}`;
         const headers: Record<string, string> = {
             Accept: 'application/vnd.atlas.2023-02-01+json',

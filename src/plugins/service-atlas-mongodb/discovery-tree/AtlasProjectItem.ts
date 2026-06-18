@@ -10,6 +10,7 @@ import { createGenericElementWithContext } from '../../../tree/api/createGeneric
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
+import { AtlasSessionState } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { createAtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasProject } from '../models/AtlasProjectModel';
@@ -46,7 +47,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
         }
 
         try {
-            const client = new AtlasApiClient(session);
+            const client = new AtlasApiClient(session, this.sessionManager);
             const clusters = await client.listClusters(this.project.id);
 
             if (clusters.length === 0) {
@@ -72,49 +73,23 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                     return new AtlasClusterItem('', treeCluster);
                 });
         } catch (error) {
-            if (error instanceof AtlasApiError && error.statusCode === 401) {
-                // Attempt token refresh for OAuth sessions before signing out
-                const refreshedSession = await this.sessionManager.tryRefreshIfOAuth();
-                if (refreshedSession) {
-                    try {
-                        const retryClient = new AtlasApiClient(refreshedSession);
-                        const retryClusters = await retryClient.listClusters(this.project.id);
-                        return retryClusters
-                            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-                            .map((cluster) => {
-                                const model = createAtlasClusterModel(
-                                    this.project.id,
-                                    this.project.name,
-                                    cluster,
-                                    AtlasExperience,
-                                );
-                                const treeCluster = {
-                                    ...model,
-                                    treeId: `${this.id}/${cluster.name.replaceAll('/', '_')}`,
-                                    viewId: Views.DiscoveryView,
-                                };
-                                return new AtlasClusterItem('', treeCluster);
-                            });
-                    } catch {
-                        // Refresh succeeded but retry still failed — fall through to sign out
-                    }
+            if (error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403)) {
+                // The client already attempted a silent token refresh + retry before throwing.
+                // Only when the refresh token is completely rejected does the session manager
+                // sign out (state === None) — in that case prompt the user to sign in again.
+                if (this.sessionManager.state === AtlasSessionState.None) {
+                    return [
+                        createGenericElementWithContext({
+                            contextValue: 'error',
+                            id: `${this.id}/auth-error`,
+                            label: vscode.l10n.t('Please sign in to MongoDB Atlas again.'),
+                            iconPath: new vscode.ThemeIcon('error'),
+                        }),
+                    ];
                 }
 
-                await this.sessionManager.signOut();
-                return [
-                    createGenericElementWithContext({
-                        contextValue: 'error',
-                        id: `${this.id}/auth-error`,
-                        label: vscode.l10n.t('Please sign in to MongoDB Atlas again.'),
-                        iconPath: new vscode.ThemeIcon('error'),
-                    }),
-                ];
-            }
-
-            if (error instanceof AtlasApiError && error.statusCode === 403) {
-                // Genuinely lacks permissions. Clear the cached session so that
-                // "Manage Credentials" re-prompts for authentication.
-                await this.sessionManager.signOut();
+                // Transient failure or insufficient permissions — keep the session intact
+                // and surface the error without forcing a re-authentication.
                 return [
                     createGenericElementWithContext({
                         contextValue: 'error',

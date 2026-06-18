@@ -74,11 +74,20 @@ export async function executeOAuthDeviceFlow(sessionManager: AtlasSessionManager
 
         return authenticated;
     } catch (error) {
+        // Sign-in did not complete (cancelled or failed). Revert the in-progress
+        // "Authenticating" state back to whatever it was before sign-in started so the
+        // tree does not stay stuck on "Authenticating…". The progress notification is
+        // dismissed automatically once the withProgress callback settles.
+        sessionManager.cancelAuthentication();
+
         if (cts.token.isCancellationRequested) {
             return false;
         }
         const errorMessage = error instanceof Error ? error.message : String(error);
-        void vscode.window.showErrorMessage(vscode.l10n.t('Atlas authentication failed: {0}', errorMessage));
+        void vscode.window.showErrorMessage(vscode.l10n.t('MongoDB Atlas authentication failed.'), {
+            modal: true,
+            detail: vscode.l10n.t('Error: {0}', errorMessage),
+        });
         return false;
     } finally {
         cts.dispose();
