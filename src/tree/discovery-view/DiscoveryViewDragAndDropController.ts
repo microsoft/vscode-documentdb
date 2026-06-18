@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { shortenPathMiddle } from '../../utils/shortenPathMiddle';
@@ -52,7 +53,10 @@ export class DiscoveryViewDragAndDropController implements vscode.TreeDragAndDro
         // Categorize the dropped URIs so we can give a tailored explanation for
         // anything we can't reach (Windows-host files under WSL, remote files,
         // web URLs, UNC/network shares, unsaved editors, …) instead of failing
-        // silently.
+        // silently. Windows-host files dropped into a WSL window are first run
+        // through a /mnt/<drive> heuristic (see resolveWindowsHostFileOnWslMount)
+        // so the common "drag a kubeconfig from Windows Explorer" case links
+        // successfully instead of being rejected.
         const { usable, rejected } = categorizeDroppedUris(uriListText);
 
         for (const { uri, reason } of rejected) {
@@ -177,16 +181,97 @@ function explainUnsupportedUri(uri: vscode.Uri): string | undefined {
 }
 
 /**
+ * Translates a `vscode-local` Windows-host file URI into the equivalent path on
+ * the WSL automount (`/mnt/<drive>/…`), or `undefined` when the URI is not a
+ * Windows drive path.
+ *
+ * This is the pure, filesystem-free half of the heuristic so it can be unit
+ * tested deterministically; {@link resolveWindowsHostFileOnWslMount} adds the
+ * platform guard and existence probe on top.
+ *
+ * Example: `vscode-local:/c%3A/Users/me/config.yaml` → `/mnt/c/Users/me/config.yaml`.
+ *
+ * Exported for unit-testing only.
+ */
+export function windowsHostUriToWslMountPath(uri: vscode.Uri): string | undefined {
+    if (uri.scheme.toLowerCase() !== 'vscode-local') {
+        return undefined;
+    }
+
+    // After URI parsing the Windows path surfaces on `uri.path` as e.g.
+    // "/c:/Users/me/config.yaml" (the drive's colon is decoded from %3A).
+    const match = /^\/([a-zA-Z]):(\/.*)$/.exec(uri.path);
+    if (!match) {
+        return undefined;
+    }
+
+    const drive = match[1].toLowerCase();
+    const rest = match[2].replace(/\\/g, '/');
+    return `/mnt/${drive}${rest}`;
+}
+
+/**
+ * Best-effort resolution of a Windows-host file dropped into a WSL window to a
+ * readable path on the WSL automount.
+ *
+ * When the editor runs in WSL, a file dropped from Windows Explorer arrives as a
+ * `vscode-local:` URI that the (Linux) extension host cannot read directly.
+ * Windows drives are, however, usually mounted under `/mnt/<drive>` inside WSL,
+ * so we map the drive path and probe for the file there. A hit means we found
+ * the same file (same drive, same path, same name) and can register it as a
+ * normal **file-link** source — no copy, no fabricated path.
+ *
+ * Returns a local `file:` URI when a regular file actually exists at the mapped
+ * location, otherwise `undefined` so the caller rejects the drop exactly as it
+ * did before this heuristic existed. We never link to a path we couldn't
+ * confirm, and we deliberately do not fall back to copying the file's contents.
+ *
+ * Exported for unit-testing only.
+ */
+export function resolveWindowsHostFileOnWslMount(uri: vscode.Uri): vscode.Uri | undefined {
+    // `/mnt/<drive>` only exists on the Linux (WSL) extension-host side.
+    if (process.platform !== 'linux') {
+        return undefined;
+    }
+
+    const candidate = windowsHostUriToWslMountPath(uri);
+    if (!candidate) {
+        return undefined;
+    }
+
+    try {
+        if (fs.statSync(candidate).isFile()) {
+            ext.outputChannel.appendLine(
+                `[DiscoveryDrop] Windows-host file "${uri.toString()}" found on the WSL mount at "${candidate}"; linking to it.`,
+            );
+            return vscode.Uri.file(candidate);
+        }
+    } catch {
+        // Not present on the mount (drive not mounted under /mnt, a different
+        // automount root, or the file really isn't there). Fall through so the
+        // caller rejects the drop with its existing explanation.
+    }
+
+    return undefined;
+}
+
+/**
  * Parses a `text/uri-list` payload (RFC 2483) and splits the entries into the
  * file URIs we can read (`usable`) and the ones we cannot, each annotated with a
  * reason (`rejected`).
  *
  * - Blank lines and `#`-prefixed comment lines are stripped per the RFC.
  * - Malformed lines are skipped silently rather than failing the whole drop.
+ * - URIs that aren't directly readable are passed through `resolveInaccessibleUri`
+ *   first (the WSL /mnt heuristic by default); only if that also fails to find
+ *   the file are they rejected.
  *
  * Exported for unit-testing only.
  */
-export function categorizeDroppedUris(text: string): CategorizedDropUris {
+export function categorizeDroppedUris(
+    text: string,
+    resolveInaccessibleUri: (uri: vscode.Uri) => vscode.Uri | undefined = resolveWindowsHostFileOnWslMount,
+): CategorizedDropUris {
     const usable: vscode.Uri[] = [];
     const rejected: RejectedDropUri[] = [];
 
@@ -207,9 +292,21 @@ export function categorizeDroppedUris(text: string): CategorizedDropUris {
         const reason = explainUnsupportedUri(uri);
         if (reason === undefined) {
             usable.push(uri);
-        } else {
-            rejected.push({ uri, reason });
+            continue;
         }
+
+        // Not directly readable from the extension host. Before rejecting, try
+        // the WSL automount heuristic: a Windows-host file is often reachable at
+        // /mnt/<drive>/… from the Linux extension host, in which case we link to
+        // it like any other file source. Only used when resolution actually
+        // finds the file; otherwise we keep the original rejection.
+        const resolved = resolveInaccessibleUri(uri);
+        if (resolved) {
+            usable.push(resolved);
+            continue;
+        }
+
+        rejected.push({ uri, reason });
     }
 
     return { usable, rejected };

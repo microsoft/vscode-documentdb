@@ -10,16 +10,24 @@ jest.mock('vscode', () => ({
     Uri: {
         parse: (value: string, _strict?: boolean) => {
             // Minimal URI parser that mimics the shape DiscoveryViewDragAndDropController
-            // depends on (`scheme` + `authority` + `fsPath`). Strict mode rejects anything
-            // without an explicit scheme to match real Uri.parse behavior used by the SUT.
+            // depends on (`scheme` + `authority` + `path` + `fsPath`). Strict mode rejects
+            // anything without an explicit scheme to match real Uri.parse behavior used by
+            // the SUT.
             const match = /^([a-zA-Z][a-zA-Z0-9+.-]*):/.exec(value);
             if (!match) {
                 throw new Error(`Invalid URI: ${value}`);
             }
             const scheme = match[1];
             const rest = value.slice(match[0].length);
+            const safeDecode = (s: string): string => {
+                try {
+                    return decodeURIComponent(s);
+                } catch {
+                    return s;
+                }
+            };
             let authority = '';
-            let path = rest;
+            let path = safeDecode(rest);
             if (rest.startsWith('//')) {
                 const afterSlashes = rest.slice(2);
                 const slashIdx = afterSlashes.indexOf('/');
@@ -31,8 +39,15 @@ jest.mock('vscode', () => ({
                     path = decodeURIComponent(afterSlashes.slice(slashIdx));
                 }
             }
-            return { scheme, authority, fsPath: path, toString: () => value };
+            return { scheme, authority, path, fsPath: path, toString: () => value };
         },
+        file: (fsPath: string) => ({
+            scheme: 'file',
+            authority: '',
+            path: fsPath,
+            fsPath,
+            toString: () => `file://${fsPath}`,
+        }),
     },
     l10n: {
         t: (message: string, ...args: unknown[]) =>
@@ -60,11 +75,18 @@ jest.mock('../../plugins/service-kubernetes/commands/handleKubeconfigFileDrop', 
     handleKubeconfigFileDrop: (...args: unknown[]) => mockHandleKubeconfigFileDrop(...args),
 }));
 
+import * as vscode from 'vscode';
 import {
     categorizeDroppedUris,
     DiscoveryViewDragAndDropController,
     parseUriList,
+    windowsHostUriToWslMountPath,
 } from './DiscoveryViewDragAndDropController';
+
+/** Parse a single URI through the same mocked `Uri.parse` the SUT uses. */
+function parseSingleUri(value: string): vscode.Uri {
+    return vscode.Uri.parse(value);
+}
 
 interface MockDataTransferItem {
     asString: () => Promise<string>;
@@ -273,11 +295,34 @@ describe('categorizeDroppedUris', () => {
         expect(rejected).toHaveLength(0);
     });
 
-    it('rejects vscode-local URIs (Windows host file under WSL) with an explanation', () => {
-        const { usable, rejected } = categorizeDroppedUris('vscode-local:/c%3A/Users/me/config.yaml\n');
+    it('rejects vscode-local URIs (Windows host file under WSL) when the file is not on the mount', () => {
+        // Inject a resolver that reports "not found on the mount" so the test is
+        // deterministic regardless of the host's real /mnt contents.
+        const { usable, rejected } = categorizeDroppedUris(
+            'vscode-local:/c%3A/Users/me/config.yaml\n',
+            () => undefined,
+        );
         expect(usable).toHaveLength(0);
         expect(rejected).toHaveLength(1);
         expect(rejected[0].reason).toMatch(/local \(Windows\) machine/i);
+    });
+
+    it('links a vscode-local Windows file when the WSL /mnt heuristic resolves it', () => {
+        // Simulate the file being present on the WSL automount: the injected
+        // resolver maps the Windows-host URI to a readable /mnt/<drive> file URI.
+        const resolved = {
+            scheme: 'file',
+            authority: '',
+            path: '/mnt/c/Users/me/config.yaml',
+            fsPath: '/mnt/c/Users/me/config.yaml',
+            toString: () => 'file:///mnt/c/Users/me/config.yaml',
+        };
+        const { usable, rejected } = categorizeDroppedUris(
+            'vscode-local:/c%3A/Users/me/config.yaml\n',
+            () => resolved as never,
+        );
+        expect(rejected).toHaveLength(0);
+        expect(usable.map((u) => u.fsPath)).toEqual(['/mnt/c/Users/me/config.yaml']);
     });
 
     it('rejects file:// URIs that point at a network/UNC share', () => {
@@ -323,5 +368,28 @@ describe('categorizeDroppedUris', () => {
         const { usable, rejected } = categorizeDroppedUris(payload);
         expect(usable.map((u) => u.fsPath)).toEqual(['/kept.yaml']);
         expect(rejected).toHaveLength(0);
+    });
+});
+
+describe('windowsHostUriToWslMountPath', () => {
+    it('maps a vscode-local Windows drive path to the /mnt/<drive> automount path', () => {
+        const uri = parseSingleUri('vscode-local:/c%3A/Users/me/config.yaml');
+        expect(windowsHostUriToWslMountPath(uri)).toBe('/mnt/c/Users/me/config.yaml');
+    });
+
+    it('lower-cases the drive letter', () => {
+        const uri = parseSingleUri('vscode-local:/D%3A/work/cluster.yaml');
+        expect(windowsHostUriToWslMountPath(uri)).toBe('/mnt/d/work/cluster.yaml');
+    });
+
+    it('returns undefined for non vscode-local schemes', () => {
+        const uri = parseSingleUri('file:///home/user/config.yaml');
+        expect(windowsHostUriToWslMountPath(uri)).toBeUndefined();
+    });
+
+    it('returns undefined for a vscode-local path without a drive letter', () => {
+        // e.g. a macOS/Linux client file behind an SSH remote — no /mnt mapping applies.
+        const uri = parseSingleUri('vscode-local:/Users/me/config.yaml');
+        expect(windowsHostUriToWslMountPath(uri)).toBeUndefined();
     });
 });

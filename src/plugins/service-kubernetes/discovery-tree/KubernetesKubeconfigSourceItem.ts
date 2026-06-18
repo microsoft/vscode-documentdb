@@ -236,16 +236,19 @@ function buildContextValue(source: KubeconfigSourceRecord): string {
 }
 
 function buildTooltip(source: KubeconfigSourceRecord): vscode.MarkdownString {
-    const lines: string[] = [`**Source:** ${source.label}`, `**Kind:** ${source.kind}`];
-    if (source.kind === 'file' && source.path) {
-        lines.push(`**Path:** \`${source.path}\``);
+    const lines: string[] = [`**Source:** ${source.label}`];
+    if (source.kind === 'file') {
+        lines.push('**Type:** Linked file. Re-read from disk on refresh.');
+        if (source.path) {
+            lines.push(`**Path:** \`${source.path}\``);
+        }
     } else if (source.kind === 'inline') {
+        lines.push('**Type:** Copy (snapshot). Re-parsed on refresh; does not track the original.');
         lines.push('**Storage:** VS Code Secret Storage');
     } else if (source.kind === 'default') {
+        lines.push('**Type:** Linked (dynamic). Re-resolved on refresh.');
         lines.push(`**Path:** \`${describeDefaultKubeconfigPath()}\``);
-        lines.push(
-            '**Source:** Resolved from the `KUBECONFIG` environment variable, otherwise your default kubeconfig.',
-        );
+        lines.push('**Resolved from:** `KUBECONFIG` environment variable, otherwise your default kubeconfig.');
     }
     return new vscode.MarkdownString(lines.join('\n\n'));
 }

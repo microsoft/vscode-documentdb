@@ -129,19 +129,19 @@ async function pickBranch(context: IActionContext): Promise<AddBranch | undefine
     const picks: IAzureQuickPickItem<AddBranch>[] = [
         {
             label: vscode.l10n.t('Default kubeconfig'),
-            detail: vscode.l10n.t('Uses the KUBECONFIG environment variable, or {0}', defaultPath),
+            detail: vscode.l10n.t('Always reads your default kubeconfig ($KUBECONFIG or {0}).', defaultPath),
             iconPath: new vscode.ThemeIcon('home'),
             data: 'default',
         },
         {
             label: vscode.l10n.t('Kubeconfig file…'),
-            detail: vscode.l10n.t('Browse for a kubeconfig YAML file on disk'),
+            detail: vscode.l10n.t('Reads a kubeconfig YAML file from disk and links to it by path.'),
             iconPath: new vscode.ThemeIcon('folder-opened'),
             data: 'file',
         },
         {
             label: vscode.l10n.t('Paste kubeconfig YAML…'),
-            detail: vscode.l10n.t('Reads clipboard content and saves it as a kubeconfig source'),
+            detail: vscode.l10n.t('Reads clipboard content and saves a copy as a kubeconfig source.'),
             iconPath: new vscode.ThemeIcon('clippy'),
             data: 'inline',
         },
