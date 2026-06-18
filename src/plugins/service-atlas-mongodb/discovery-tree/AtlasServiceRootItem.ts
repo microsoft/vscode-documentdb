@@ -87,18 +87,21 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
                 if (error.statusCode === 401) {
                     await this.sessionManager.signOut();
-                    return [this.createSignInNode()];
+                    await this.showLoadFailure(error.message);
+                    return [this.createRetryNode()];
                 }
 
                 // 403 — genuinely lacks permissions. Clear the cached session so that
                 // "Manage Credentials" re-prompts for authentication instead of showing
                 // the already-signed-in path with a stale, under-privileged session.
                 await this.sessionManager.signOut();
-                return [this.createErrorNode(error.message)];
+                await this.showLoadFailure(error.message);
+                return [this.createRetryNode()];
             }
 
             const errorMessage = error instanceof Error ? error.message : String(error);
-            return [this.createErrorNode(errorMessage)];
+            await this.showLoadFailure(errorMessage);
+            return [this.createRetryNode()];
         }
     }
 
@@ -199,14 +202,24 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         });
     }
 
-    private createErrorNode(message: string): TreeElement & TreeElementWithContextValue {
+    private createRetryNode(): TreeElement & TreeElementWithContextValue {
         return createGenericElementWithContext({
             contextValue: 'error',
-            id: `${this.id}/error`,
-            label: message,
-            iconPath: new vscode.ThemeIcon('error'),
+            id: `${this.id}/retry`,
+            label: vscode.l10n.t('Click here to retry'),
+            iconPath: new vscode.ThemeIcon('refresh'),
             commandId: 'vscode-documentdb.command.internal.retry',
             commandArgs: [this],
+        });
+    }
+
+    private async showLoadFailure(errorMessage: string): Promise<void> {
+        await vscode.window.showErrorMessage(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), {
+            modal: true,
+            detail:
+                vscode.l10n.t('Revisit credentials and filters, then try again.') +
+                '\n\n' +
+                vscode.l10n.t('Error: {0}', errorMessage),
         });
     }
 
