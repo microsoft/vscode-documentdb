@@ -17,23 +17,38 @@ For a step-by-step lab that creates a local or AKS DocumentDB cluster and tests 
 
 The **Kubernetes Clusters** node lists one or more **kubeconfig sources** as siblings:
 
-- **Default kubeconfig**: uses the Kubernetes client's default loading (`KUBECONFIG` environment variable, or the Kubernetes default kubeconfig path in your user profile). It is created by default, but if you remove it explicitly, it stays removed until you add it again.
-- **Custom kubeconfig file…**: a kubeconfig YAML file you select on disk.
-- **Pasted kubeconfig YAML**: kubeconfig YAML pasted from the clipboard, kept in VS Code Secret Storage.
+- **Default kubeconfig** (linked): uses the Kubernetes client's default loading (`KUBECONFIG` environment variable, or the Kubernetes default kubeconfig path in your user profile). It is created by default, but if you remove it explicitly, it stays removed until you add it again.
+- **Custom kubeconfig file** (linked): a kubeconfig YAML file you select on disk, or drag and drop onto the view.
+- **Pasted kubeconfig YAML** (copy): kubeconfig YAML pasted from the clipboard, kept in VS Code Secret Storage.
 
 Each source expands independently to its own contexts -> namespaces -> services subtree. Failures in one source do not affect the others.
+
+### Linked sources versus copies
+
+Kubeconfig sources use one of two storage models, and the source's hover tooltip states which one applies:
+
+- **Linked** (Default and file sources): the extension stores only a reference (the default-resolution rule, or the file path) and reads the kubeconfig fresh every time the source is loaded or refreshed. Edits you make in the file, token rotations, and contexts you add or remove are all picked up automatically. Nothing is copied into the extension, so the credentials stay in their original file.
+- **Copy** (pasted YAML): the extension stores a snapshot of the YAML in VS Code Secret Storage at the moment you paste it. The snapshot is self-contained and portable, but it does not track the original: if the original kubeconfig later changes, the copy keeps the old content until you replace it. Because the snapshot can contain credential material, it is kept in Secret Storage.
+
+Most kubeconfigs for cloud clusters (AKS, EKS, GKE) do not embed a long-lived token; they reference an `exec` credential plugin that fetches a short-lived token on demand. For those, a linked source runs the plugin each time, so it always has fresh credentials, while a copy only carries the `exec` instructions and still depends on that helper program being installed wherever the editor runs.
 
 ## Add a kubeconfig source
 
 The **Kubernetes Clusters** node has an inline **`+` (Add Kubeconfig…)** action that opens a quick pick:
 
-- **Default kubeconfig**: uses the `KUBECONFIG` environment variable or Kubernetes default kubeconfig path.
-- **Add custom kubeconfig file...**: pick a file from disk.
-- **Paste kubeconfig YAML from clipboard**: kept in VS Code Secret Storage.
+- **Default kubeconfig**: always reads your default kubeconfig (`$KUBECONFIG` or the Kubernetes default kubeconfig path). Added as a linked source.
+- **Kubeconfig file…**: reads a kubeconfig YAML file from disk and links to it by path. Added as a linked source.
+- **Paste kubeconfig YAML…**: reads the clipboard content and saves a copy as a kubeconfig source. Added as a copy in VS Code Secret Storage.
 
 Custom file and pasted-YAML sources are validated before they are saved. If the file or pasted YAML cannot be loaded or contains zero contexts, the source is not added and an error is shown. The Default source also validates the current default kubeconfig before it is added; if it is missing, invalid, or empty, fix the underlying `KUBECONFIG` value or default kubeconfig file and try again. Adding the same path twice or pasting identical YAML reuses the existing entry.
 
 The Kubernetes default kubeconfig path is `~/.kube/config` on macOS/Linux and `%USERPROFILE%\.kube\config` on Windows.
+
+### Drag and drop a kubeconfig file
+
+You can drag a kubeconfig file from your file manager (or from the VS Code Explorer) and drop it onto the Discovery view to add it as a **linked** file source, the same as picking it with **Kubeconfig file…**. You are asked to confirm, with an option to preview, before anything is imported.
+
+When the editor runs in a remote context (WSL, SSH, Dev Containers, Codespaces), the extension can only read files on the machine where it runs. A file dropped from the **Windows host into a WSL window** is automatically located on the WSL drive mount (`/mnt/<drive>`) and linked from there when found. If the file is not reachable that way (for example a different remote host, a network share, or a web link), the drop is rejected with an explanation instead of guessing. In that case, copy the file into the editor's filesystem (for example your WSL or remote home directory) and drop that, or use **Paste kubeconfig YAML…** to add its contents as a copy.
 
 > **⚠️ Only add kubeconfig sources you trust.** A kubeconfig is executable configuration: it can reference external credential helper programs through an [`exec` credential plugin](https://kubernetes.io/docs/reference/access-authn-authz/authentication/#client-go-credential-plugins) (the standard mechanism used by AKS, EKS, and GKE — for example `kubelogin`, `aws`, or `gke-gcloud-auth-plugin`). When you expand a source to list its contexts and namespaces, the Kubernetes client may run the command configured in that kubeconfig on your machine, with your privileges. This is the same trust model as `kubectl`. Only add, paste, or drop a kubeconfig that comes from a source you trust; treat a kubeconfig pasted from the clipboard or dropped from disk with the same caution as any script you would run locally.
 
