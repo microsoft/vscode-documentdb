@@ -16,6 +16,11 @@ import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microso
  *     t.distributions.candidateCount = candidates.length;
  * });
  * ```
+ *
+ * Note: on flush each distribution key `foo` is written to
+ * `ctx.telemetry.measurements` as `dist_foo_min/max/sum/count`. The `dist_`
+ * measurement-key prefix is therefore reserved; do not set measurements with
+ * that shape manually or they will be overwritten by the distribution rollup.
  */
 export type TelemetryWithDistributions = IActionContext['telemetry'] & {
     distributions: Record<string, number>;
