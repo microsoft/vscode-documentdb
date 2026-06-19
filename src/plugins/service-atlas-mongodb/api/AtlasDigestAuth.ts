@@ -21,11 +21,11 @@ interface DigestChallenge {
  */
 export function parseDigestChallenge(header: string): DigestChallenge {
     const params: Record<string, string> = {};
-    const regex = /(\w+)="([^"]+)"/g;
+    const regex = /(\w+)=(?:"([^"]*)"|([^\s,]+))/g;
     let match: RegExpExecArray | null;
 
     while ((match = regex.exec(header)) !== null) {
-        params[match[1]] = match[2];
+        params[match[1]] = match[2] ?? match[3];
     }
 
     return {
