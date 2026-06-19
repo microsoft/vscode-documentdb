@@ -18,6 +18,14 @@ describe('getOidcAllowedHosts', () => {
         expect(getOidcAllowedHosts('mongodb://cluster.mongocluster.cosmos.azure.cn:10255/')).toEqual(['*.azure.cn']);
     });
 
+    it('handles mongodb+srv:// seedlist connection strings', () => {
+        // SRV hosts carry no port and the resolved nodes stay under the same
+        // Azure suffix, so *.azure.com still covers them.
+        expect(getOidcAllowedHosts('mongodb+srv://cluster.mongocluster.cosmos.azure.com/?tls=true')).toEqual([
+            '*.azure.com',
+        ]);
+    });
+
     it('does not widen the allowlist to an attacker-supplied host', () => {
         // A connection string the user was tricked into pasting must not be able
         // to authorize token delivery to a non-Azure host.
