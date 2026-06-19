@@ -32,6 +32,15 @@ interface DistributionAccumulator {
 }
 
 /**
+ * Reserved distribution key under which every successful call automatically
+ * records its own wall-clock duration (in milliseconds). This is collected by
+ * the wrapper itself, so every call site gets latency min / max / sum / count
+ * for free without any caller bookkeeping. On flush it surfaces as
+ * `dist_auto_duration_ms_min`, `_max`, `_sum`, `_count`.
+ */
+export const AUTO_DURATION_DISTRIBUTION_KEY = 'auto_duration_ms';
+
+/**
  * Options controlling how `callWithAccumulatingTelemetry` batches events.
  */
 export interface AccumulatingTelemetryOptions {
@@ -91,7 +100,11 @@ function getOrCreateState(callbackId: string, options: AccumulatingTelemetryOpti
  *   **distribution metrics** (min / max / sum / count) across the batch.
  *   Use this for gauges like candidate counts, latencies, or sizes.
  *   On flush each key is emitted as four measurement fields:
-         *   `dist_{key}_min`, `dist_{key}_max`, `dist_{key}_sum`, `dist_{key}_count`.
+ *   `dist_{key}_min`, `dist_{key}_max`, `dist_{key}_sum`, `dist_{key}_count`.
+ * - Every successful call automatically contributes its own wall-clock
+ *   duration to the `auto_duration_ms` distribution, with no caller code.
+ *   This surfaces as `dist_auto_duration_ms_min/max/sum/count` on flush,
+ *   giving per-event latency for free at every call site.
  * - String values on `context.telemetry.properties` are **last-wins**
  *   (overwritten on each call). Use this for stable metadata only
  *   (e.g., session id, version). Do NOT use properties to bucket data —
@@ -127,7 +140,10 @@ export async function callWithAccumulatingTelemetry<T>(
 
         // Run the user callback first. If it throws, suppressAll stays false
         // and the error flows through the standard pipeline (errors never batch).
+        // Time the call so we can record its duration automatically below.
+        const startTime = performance.now();
         const value = await callback(ctx);
+        const durationMs = performance.now() - startTime;
 
         // Success path: capture measurements/properties and suppress per-call emit.
         const m: Record<string, number> = {};
@@ -154,6 +170,12 @@ export async function callWithAccumulatingTelemetry<T>(
                     d[k] = v;
                 }
             }
+        }
+        // Always record the call's own duration as a distribution. A caller
+        // value under the reserved key (if any) does not override this; the
+        // wrapper's measured duration wins.
+        if (Number.isFinite(durationMs)) {
+            d[AUTO_DURATION_DISTRIBUTION_KEY] = durationMs;
         }
         capturedDistributions = Object.keys(d).length ? d : undefined;
 
