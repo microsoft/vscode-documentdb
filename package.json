@@ -741,17 +741,17 @@
       "view/item/context": [
         {
           "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
-          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "3@1"
         },
         {
           "command": "vscode-documentdb.command.connectionsView.updateCredentials",
-          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "3@2"
         },
         {
           "command": "vscode-documentdb.command.connectionsView.renameConnection",
-          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "3@3"
         },
         {
@@ -769,19 +769,19 @@
         {
           "//": "New Connection in Folder...",
           "command": "vscode-documentdb.command.connectionsView.newConnectionInFolder",
-          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i && !listMultiSelection",
           "group": "0@1"
         },
         {
           "//": "Create Subfolder in Folder...",
           "command": "vscode-documentdb.command.connectionsView.createSubfolder",
-          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i && !listMultiSelection",
           "group": "0@2"
         },
         {
           "//": "Rename Folder...",
           "command": "vscode-documentdb.command.connectionsView.renameFolder",
-          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i && !listMultiSelection",
           "group": "1@1"
         },
         {
@@ -793,7 +793,7 @@
         {
           "//": "Delete Folder...",
           "command": "vscode-documentdb.command.connectionsView.deleteFolder",
-          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i && !listMultiSelection",
           "group": "1@3"
         },
         {
@@ -905,145 +905,145 @@
         {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "1@1"
         },
         {
           "//": "Copy connection string",
           "command": "vscode-documentdb.command.copyConnectionString",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "2@1"
         },
         {
           "//": "[Account] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "5@1"
         },
         {
           "//": "[Database] Create collection",
           "command": "vscode-documentdb.command.createCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "1@1"
         },
         {
           "//": "[Database] Delete database",
           "command": "vscode-documentdb.command.dropDatabase",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "2@1"
         },
         {
           "//": "[Database] Paste Collection",
           "command": "vscode-documentdb.command.pasteCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "1@2"
         },
         {
           "//": "[Database] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "5@1"
         },
         {
           "//": "[Database] Open Interactive Shell (inline)",
           "command": "vscode-documentdb.command.shell.open.inline",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "inline@1"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "1@1"
         },
         {
           "//": "[Collection] Create document",
           "command": "vscode-documentdb.command.createDocument",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "2@1"
         },
         {
           "//": "[Collection] Import Documents",
           "command": "vscode-documentdb.command.importDocuments",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@1"
         },
         {
           "//": "[Collection] Export documents",
           "command": "vscode-documentdb.command.exportDocuments",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@2"
         },
         {
           "//": "[Cluster] Data Migration",
           "command": "vscode-documentdb.command.accessDataMigrationServices",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "2@2"
         },
         {
           "//": "[Collection] Drop collection",
           "command": "vscode-documentdb.command.dropCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "4@1"
         },
         {
           "//": "[Index] Hide Index",
           "command": "vscode-documentdb.command.hideIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && !(viewItem =~ /\\bstate_hidden\\b/i) && !(viewItem =~ /\\bstate_default\\b/i) && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && !(viewItem =~ /\\bstate_hidden\\b/i) && !(viewItem =~ /\\bstate_default\\b/i) && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@1"
         },
         {
           "//": "[Index] Unhide Index",
           "command": "vscode-documentdb.command.unhideIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bstate_hidden\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bstate_hidden\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@2"
         },
         {
           "//": "[Index] Delete Index",
           "command": "vscode-documentdb.command.dropIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "4@1"
         },
         {
           "//": "[Collection] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "5@1"
         },
         {
           "//": "[Collection] Open Collection (inline)",
           "command": "vscode-documentdb.command.containerView.open.inline",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "inline@1"
         },
         {
           "//": "[Collection] Open Interactive Shell (inline)",
           "command": "vscode-documentdb.command.shell.open.inline",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "inline@3"
         },
         {
           "//": "[Collection] New Query Playground (inline)",
           "command": "vscode-documentdb.command.playground.new.inline",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "inline@2"
         },
         {
           "//": "[Database/Collection] New Query Playground",
           "command": "vscode-documentdb.command.playground.new",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "5@2"
         },
         {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documents\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documents\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "2@1"
         },
         {
           "//": "[TreeItem] Refresh Item (cluster, database, collection, documents, indexes) -> but not in azure(ResourceGroups|FocusView) as it's done there by the Azure Resources host extension.",
           "command": "vscode-documentdb.command.refresh",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection|documents|indexes|index)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection|documents|indexes|index)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "zheLastGroup@1"
         },
         {
@@ -1055,31 +1055,31 @@
         {
           "//": "[Collection] Copy Collection",
           "command": "vscode-documentdb.command.copyCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@3"
         },
         {
           "//": "[Collection] Paste Collection",
           "command": "vscode-documentdb.command.pasteCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@4"
         },
         {
           "//": "[Database] Copy Reference",
           "command": "vscode-documentdb.command.copyReference",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "yheAlmostLastGroup@1"
         },
         {
           "//": "[Collection] Copy Reference",
           "command": "vscode-documentdb.command.copyReference",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "yheAlmostLastGroup@1"
         },
         {
           "//": "[Index] Copy Reference",
           "command": "vscode-documentdb.command.copyReference",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "yheAlmostLastGroup@1"
         }
       ],
