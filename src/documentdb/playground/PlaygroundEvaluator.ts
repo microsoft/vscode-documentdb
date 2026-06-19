@@ -53,8 +53,9 @@ import { type MainToWorkerMessage, type SerializableMongoClientOptions, type Wor
  *
  * The evaluator is only removed from the pool by `shutdownEvaluator()` (when
  * all playground documents for the cluster close) or by `disposeEvaluators()`
- * (on extension deactivation). Both paths call `shutdown()` which gracefully
- * closes the worker before removing the evaluator.
+ * (on extension deactivation). `shutdownEvaluator()` calls `shutdown()`, while
+ * `disposeEvaluators()` calls `dispose()`. Both paths gracefully close the
+ * worker before removing the evaluator.
  */
 export class PlaygroundEvaluator implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
