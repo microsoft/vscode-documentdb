@@ -426,7 +426,7 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
     context.telemetry.properties.uriUnknownParamCount = String(unknownParamCount);
 
     if (!params.connectionString) {
-        // Throw a descriptive error — the telemetry wrapper will surface it to the user.
+        // Throw a descriptive error so the telemetry wrapper will surface it to the user.
         throw new Error(
             l10n.t(
                 'A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.',
