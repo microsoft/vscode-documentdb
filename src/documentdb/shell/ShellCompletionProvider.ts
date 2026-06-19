@@ -355,7 +355,9 @@ export class ShellCompletionProvider {
 
             // Skip regex literals: when '/' is encountered in a context where
             // it is a regex delimiter (not a division operator), jump backward
-            // past the matching opening '/'.
+            // past the matching opening '/'. This is a lightweight heuristic;
+            // in ambiguous cases (for example division with nearby whitespace),
+            // we prefer occasional missed completions over miscounting parens.
             if (ch === '/' && i > 0) {
                 const prev = text[i - 1];
                 if (/[\s(,:=[\]!&|{}?;^~]/.test(prev)) {
