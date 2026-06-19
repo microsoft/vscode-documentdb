@@ -30,6 +30,7 @@ import { type API } from '../../DocumentDBExperiences';
 import { openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
+import { clusterViewRouter } from '../documentdb/clusterView/clusterViewRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { WEBVIEW_CONFIG } from './configuration';
@@ -188,6 +189,7 @@ export const appRouter = router({
     mongoClusters: {
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,
+        clusterView: clusterViewRouter,
     },
 });
 

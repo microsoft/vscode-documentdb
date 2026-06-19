@@ -283,6 +283,22 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                               : ''),
                   ),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            // Double-click opens the cluster dashboard / home page. Single
+            // click is a no-op (the double-click command only starts a timer),
+            // so VS Code's native expand/collapse on the node is preserved.
+            command: {
+                title: l10n.t('Open Cluster Overview'), // unused, but required by TreeItem
+                command: 'vscode-documentdb.command.internal.clusterView.openFromTree',
+                arguments: [
+                    {
+                        id: this.id,
+                        clusterId: this.cluster.clusterId,
+                        clusterDisplayName: this.cluster.name,
+                        viewId: this.cluster.viewId ?? '',
+                        clusterTreeId: this.cluster.treeId,
+                    },
+                ],
+            },
         };
     }
 }

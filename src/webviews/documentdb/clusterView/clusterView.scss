@@ -1,0 +1,118 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../../index';
+
+.clusterViewRoot {
+    @extend .selectionDisabled;
+
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    row-gap: 10px;
+    padding-top: 10px;
+
+    .dashboardBreadcrumb {
+        padding: 0 10px;
+    }
+
+    .dashboardPage {
+        display: flex;
+        flex-direction: column;
+        flex-grow: 1;
+        flex-shrink: 1;
+        min-height: 0;
+        row-gap: 10px;
+    }
+
+    .dashboardToolbar {
+        display: flex;
+        flex-direction: column;
+        align-items: stretch;
+        row-gap: 10px;
+        padding: 0 10px;
+    }
+
+    .dashboardSearch {
+        flex: 0 0 auto;
+        max-width: 320px;
+    }
+
+    .dashboardToolbarActions {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 4px;
+    }
+
+    .dashboardCentered {
+        display: flex;
+        flex-grow: 1;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+    }
+
+    .dashboardEmpty {
+        color: var(--colorNeutralForeground3);
+    }
+
+    .dashboardTableContainer,
+    .dashboardTable {
+        flex-grow: 1;
+        flex-shrink: 1;
+        min-height: 0;
+    }
+
+    .dashboardTable {
+        overflow: auto;
+        padding: 0 10px;
+
+        td,
+        th {
+            vertical-align: middle;
+        }
+
+        /*
+         * Alternating row backgrounds — mirrors the VS Code tree-view
+         * convention also used by the Results and Index tabs. Parity is
+         * computed in the component (rowEven / rowOdd) from the row index.
+         */
+        .rowEven > td {
+            background-color: var(--colorNeutralBackground1);
+        }
+        .rowOdd > td {
+            background-color: var(--colorNeutralBackground2);
+        }
+
+        /* Database rows drill into a collection list, so cue interactivity. */
+        .interactiveRow {
+            cursor: pointer;
+        }
+        .interactiveRow:hover > td {
+            background-color: var(--colorNeutralBackground1Hover);
+        }
+
+        /* Column alignment helpers shared by header and body cells. */
+        .cell-start {
+            justify-content: flex-start;
+            text-align: left;
+        }
+        .cell-center {
+            justify-content: center;
+            text-align: center;
+        }
+        .cell-end {
+            justify-content: flex-end;
+            text-align: right;
+        }
+    }
+}
+
+.createDialogBody {
+    display: flex;
+    flex-direction: column;
+    row-gap: 10px;
+}

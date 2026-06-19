@@ -49,6 +49,7 @@ import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
+import { openClusterView, openClusterViewInternal } from '../commands/openClusterView/openClusterView';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
 import {
@@ -664,6 +665,34 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation((context, node) => {
                         context.telemetry.properties.activationSource = 'treeNodeInline';
                         return openCollectionView(context, node as CollectionItem);
+                    }),
+                );
+
+                /**
+                 * Cluster dashboard / home page. Like the collection view, it is
+                 * reachable in three ways that share one underlying handler:
+                 *  - a double-click on the cluster node (openFromTree),
+                 *  - a context-menu "Cluster Overview" action,
+                 *  - an inline action button on the cluster node.
+                 */
+                registerCommand(
+                    'vscode-documentdb.command.internal.clusterView.open',
+                    withCommandCorrelation(openClusterViewInternal),
+                );
+                registerDoubleClickCommand(
+                    'vscode-documentdb.command.internal.clusterView.openFromTree',
+                    withCommandCorrelation(openClusterViewInternal),
+                    doubleClickDebounceDelay,
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.clusterView.open',
+                    withTreeNodeCommandCorrelation(openClusterView),
+                );
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.clusterView.open.inline',
+                    withTreeNodeCommandCorrelation((context, node) => {
+                        context.telemetry.properties.activationSource = 'treeNodeInline';
+                        return openClusterView(context, node as ClusterItemBase);
                     }),
                 );
 

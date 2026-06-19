@@ -575,6 +575,20 @@
         "icon": "$(files)"
       },
       {
+        "//": "Open Cluster Dashboard / Home Page",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.clusterView.open",
+        "title": "Open Cluster Overview",
+        "icon": "$(dashboard)"
+      },
+      {
+        "//": "Open Cluster Dashboard / Home Page (inline button)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.clusterView.open.inline",
+        "title": "Open Cluster Overview",
+        "icon": "$(dashboard)"
+      },
+      {
         "//": "Copy Collection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.copyCollection",
@@ -793,6 +807,18 @@
           "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
           "when": "view =~ /azureResourceGroups|azureFocusView/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
           "group": "inline"
+        },
+        {
+          "//": "[Cluster] Open Cluster Overview (inline)",
+          "command": "vscode-documentdb.command.clusterView.open.inline",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "//": "[Cluster] Open Cluster Overview",
+          "command": "vscode-documentdb.command.clusterView.open",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "group": "1@0"
         },
         {
           "//": "Create database",
@@ -1103,6 +1129,10 @@
         },
         {
           "command": "vscode-documentdb.command.containerView.open.inline",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.clusterView.open.inline",
           "when": "never"
         },
         {

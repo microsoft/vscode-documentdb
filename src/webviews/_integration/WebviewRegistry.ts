@@ -3,10 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ClusterView } from '../documentdb/clusterView/ClusterView';
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
 
 export const WebviewRegistry = {
+    clusterView: ClusterView,
     collectionView: CollectionView,
     documentView: DocumentView,
 } as const;

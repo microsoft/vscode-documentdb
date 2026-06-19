@@ -75,6 +75,32 @@ export interface CollectionItemModel {
 }
 
 /**
+ * Database-wide statistics, as returned by the `dbStats` command. Used by the
+ * cluster dashboard to show per-database collection count, index count, and
+ * total size. All numeric fields default to 0 when the server omits them.
+ *
+ * @see https://www.mongodb.com/docs/manual/reference/command/dbStats/
+ */
+export interface DatabaseStats {
+    /** Number of collections in the database. */
+    collections: number;
+    /** Total number of indexes across all collections in the database. */
+    indexes: number;
+    /** Total size in bytes of the uncompressed data held in the database. */
+    dataSize: number;
+    /** Total size in bytes of all indexes in the database. */
+    indexSize: number;
+    /** Total size in bytes of all documents plus the storage padding. */
+    storageSize: number;
+    /**
+     * Total size in bytes of the database (data + indexes). Mirrors the
+     * `totalSize` field of `dbStats`; falls back to `dataSize + indexSize`
+     * when the server does not report it.
+     */
+    totalSize: number;
+}
+
+/**
  * Find query parameters for MongoDB find operations.
  * Each field accepts a JSON string representation of the MongoDB query syntax.
  */
@@ -664,6 +690,34 @@ export class ClustersClient {
      */
     getCachedDatabases(): DatabaseItemModel[] | undefined {
         return this._databasesCache ?? undefined;
+    }
+
+    /**
+     * Returns database-wide statistics via the `dbStats` command. Used by the
+     * cluster dashboard for the per-database collection count, index count, and
+     * total size columns.
+     *
+     * The caller is responsible for handling failures (e.g. tiers that restrict
+     * `dbStats`); this method does not swallow errors so the dashboard can show a
+     * per-row "unavailable" state without masking real connection problems.
+     *
+     * @param databaseName - Name of the database to inspect.
+     * @returns The mapped {@link DatabaseStats}.
+     */
+    async getDatabaseStats(databaseName: string): Promise<DatabaseStats> {
+        const stats = await this._mongoClient.db(databaseName).command({ dbStats: 1 });
+
+        const dataSize = (stats.dataSize as number) ?? 0;
+        const indexSize = (stats.indexSize as number) ?? 0;
+
+        return {
+            collections: (stats.collections as number) ?? 0,
+            indexes: (stats.indexes as number) ?? 0,
+            dataSize,
+            indexSize,
+            storageSize: (stats.storageSize as number) ?? 0,
+            totalSize: (stats.totalSize as number) ?? dataSize + indexSize,
+        };
     }
 
     async listIndexes(databaseName: string, collectionName: string): Promise<IndexItemModel[]> {
