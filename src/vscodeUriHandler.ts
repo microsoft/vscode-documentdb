@@ -83,6 +83,9 @@ export async function globalUriHandler(uri: vscode.Uri): Promise<void> {
             if (!context.telemetry.properties.failureStage) {
                 context.telemetry.properties.failureStage = 'unknown';
             }
+            // Record the error type (not the message, which can carry user data)
+            // so we can group failures without exposing connection details.
+            context.telemetry.properties.errorName = error instanceof Error ? error.name : 'NonError';
             throw new Error(l10n.t('Failed to process URI: {0}', errMsg));
         }
     });
@@ -405,10 +408,39 @@ function extractAndValidateParams(context: IActionContext, queryFragment: string
     // Add sensitive values to valuesToMask to prevent sensitive data in logs
     maskParamsInTelemetry(context, params);
 
+    // Record non-sensitive shape diagnostics: how many params were present and
+    // how many were not ones we recognize. This helps spot malformed deep-links
+    // (for example empty queries or links built against an older URL format)
+    // without ever capturing the parameter values themselves.
+    const knownKeys = new Set(['connectionString', 'database', 'collection']);
+    const allParams = new URLSearchParams(queryFragment);
+    let paramCount = 0;
+    let unknownParamCount = 0;
+    for (const [key] of allParams) {
+        paramCount++;
+        if (!knownKeys.has(key)) {
+            unknownParamCount++;
+        }
+    }
+    context.telemetry.properties.uriParamCount = String(paramCount);
+    context.telemetry.properties.uriUnknownParamCount = String(unknownParamCount);
+
     if (!params.connectionString) {
         // Throw a descriptive error — the telemetry wrapper will surface it to the user.
-        throw new Error(l10n.t('A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.'));
+        throw new Error(
+            l10n.t(
+                'A DocumentDB deep-link was opened without a connection string. Ensure the link includes a connectionString query parameter.',
+            ),
+        );
     }
+
+    // The scheme is not sensitive and tells us whether a wrong scheme (or none)
+    // is a common cause of failures. The value itself is already masked.
+    context.telemetry.properties.connectionStringScheme = params.connectionString.startsWith('mongodb+srv://')
+        ? 'mongodb+srv'
+        : params.connectionString.startsWith('mongodb://')
+          ? 'mongodb'
+          : 'other';
 
     context.telemetry.properties.hasParamConnectionString = params.connectionString ? 'true' : undefined;
     context.telemetry.properties.hasParamDatabase = params.database ? 'true' : undefined;
