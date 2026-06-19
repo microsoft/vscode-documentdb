@@ -318,6 +318,10 @@ export class ClustersExtension implements vscode.Disposable {
                 let tsRestarted = false;
                 let tsPluginUnavailable = false;
                 let tsPluginRetryRegistered = false;
+                // Shared reference so the retry command always acts on the current
+                // status bar item. Reusing one item avoids stranding a stale warning
+                // when a retry fails again on a still-read-only install.
+                let tsPluginStatusBarItem: vscode.StatusBarItem | undefined;
 
                 const ensureTsRestart = async (): Promise<void> => {
                     if (tsRestarted || tsPluginUnavailable) {
@@ -402,32 +406,42 @@ export class ClustersExtension implements vscode.Disposable {
                             // understand the limitation instead of silently failing.
                             if (errorCode === 'EACCES' || errorCode === 'EROFS') {
                                 tsPluginUnavailable = true;
-                                const TS_PLUGIN_WARNING_PRIORITY = 100;
-                                const statusBarItem = vscode.window.createStatusBarItem(
-                                    vscode.StatusBarAlignment.Right,
-                                    TS_PLUGIN_WARNING_PRIORITY,
-                                );
-                                statusBarItem.text = '$(warning) DocumentDB TS Plugin';
-                                statusBarItem.tooltip =
-                                    'TypeScript-powered completions are unavailable on this read-only extension install. Click to retry.';
-                                statusBarItem.command = {
-                                    title: 'Retry TS Plugin Setup',
-                                    command: 'vscode-documentdb.command.retryTsPluginBootstrap',
-                                };
-                                statusBarItem.show();
-                                ext.context.subscriptions.push(statusBarItem);
 
-                                // Register a retry command so users can re-attempt after fixing permissions.
+                                // Create the status bar item once and reuse it. A failed
+                                // retry re-shows the same item instead of leaking a new one.
+                                if (!tsPluginStatusBarItem) {
+                                    const TS_PLUGIN_WARNING_PRIORITY = 100;
+                                    tsPluginStatusBarItem = vscode.window.createStatusBarItem(
+                                        vscode.StatusBarAlignment.Right,
+                                        TS_PLUGIN_WARNING_PRIORITY,
+                                    );
+                                    tsPluginStatusBarItem.command = {
+                                        title: vscode.l10n.t('Retry TS Plugin Setup'),
+                                        command: 'vscode-documentdb.command.retryTsPluginBootstrap',
+                                    };
+                                    ext.context.subscriptions.push(tsPluginStatusBarItem);
+                                }
+                                tsPluginStatusBarItem.text = `$(warning) ${vscode.l10n.t('DocumentDB TS Plugin')}`;
+                                tsPluginStatusBarItem.tooltip = vscode.l10n.t(
+                                    'TypeScript-powered completions are unavailable on this read-only extension install. Click to retry.',
+                                );
+                                tsPluginStatusBarItem.show();
+
+                                // Register the retry command once. It always acts on the
+                                // shared status bar item, so retries cannot strand an item
+                                // that an earlier closure captured.
                                 if (!tsPluginRetryRegistered) {
                                     tsPluginRetryRegistered = true;
-                                    vscode.commands.registerCommand(
-                                        'vscode-documentdb.command.retryTsPluginBootstrap',
-                                        () => {
-                                            statusBarItem.dispose();
-                                            tsPluginUnavailable = false;
-                                            tsRestarted = false;
-                                            void ensureTsRestart();
-                                        },
+                                    ext.context.subscriptions.push(
+                                        vscode.commands.registerCommand(
+                                            'vscode-documentdb.command.retryTsPluginBootstrap',
+                                            () => {
+                                                tsPluginStatusBarItem?.hide();
+                                                tsPluginUnavailable = false;
+                                                tsRestarted = false;
+                                                void ensureTsRestart();
+                                            },
+                                        ),
                                     );
                                 }
 
