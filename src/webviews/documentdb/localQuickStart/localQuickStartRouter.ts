@@ -18,8 +18,12 @@
  * `../../_integration/trpc`, never from `appRouter.ts`.
  */
 
-import { type DockerReadiness, type QuickStartStatus, type StageEvent } from '../../../services/localQuickStart/quickStartTypes';
-import { ContainerRuntime } from '../../../services/localQuickStart/ContainerRuntime';
+import {
+    type DockerStatusResult,
+    type QuickStartStatus,
+    type StageEvent,
+} from '../../../services/localQuickStart/quickStartTypes';
+import { ContainerRuntime, getQuickStartOutputChannel } from '../../../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router } from '../../_integration/trpc';
@@ -28,12 +32,6 @@ export type RouterContext = BaseRouterContext & {
     /** Disposes the webview panel (success auto-close). Wired by the controller. */
     closePanel: () => void;
 };
-
-export interface DockerStatusResult {
-    readonly readiness: DockerReadiness;
-    readonly status: QuickStartStatus;
-    readonly busy: boolean;
-}
 
 export const localQuickStartRouter = router({
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
@@ -48,6 +46,11 @@ export const localQuickStartRouter = router({
     /** Disposes the panel (success auto-close → tree takes over). */
     closePanel: publicProcedure.mutation(({ ctx }) => {
         (ctx as RouterContext).closePanel();
+    }),
+
+    /** Reveal the OutputChannel with the (masked) docker command output. */
+    showOutput: publicProcedure.mutation(() => {
+        getQuickStartOutputChannel().show(true);
     }),
 
     /**

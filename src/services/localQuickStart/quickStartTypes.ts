@@ -85,3 +85,10 @@ export interface QuickStartStatus {
     readonly metadata?: InstanceMetadata;
     readonly errorMessage?: string;
 }
+
+/** Result of the `getDockerStatus` query (powers the webview review cards). */
+export interface DockerStatusResult {
+    readonly readiness: DockerReadiness;
+    readonly status: QuickStartStatus;
+    readonly busy: boolean;
+}
