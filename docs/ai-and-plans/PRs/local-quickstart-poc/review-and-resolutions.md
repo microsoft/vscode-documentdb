@@ -218,3 +218,39 @@ for a POC demo.
 
 **Consensus reached.** The plan is consistent with the design, aligned with the manager's
 perspective, and judged implementable. Ready to start at WI-0.
+
+---
+
+## Implementation review (POC code, 2026-06-22)
+
+After implementing WI-0…WI-6, the working POC was reviewed by **5 more agents** against the
+running code (functional correctness · design fidelity · webview/tRPC · tree+browse · secret
+masking/robustness). **All five returned APPROVE-WITH-CHANGES — no P0, no NEEDS-WORK.** The
+security agent **ran the real image** and confirmed no actual password leak today. The core demo
+path (provision → masked output → wire-protocol readiness → inline browse) was verified sound.
+
+**12 findings, all fixed** (commit `fix(quickstart): address 5-agent POC review`):
+
+| Sev | Finding | Resolution |
+| --- | ------- | ---------- |
+| P1 | `followLogs` masked per-chunk, not line-buffered (D14 split-secret gap; design+security) | Route container logs through `MaskingLineBuffer` |
+| P1 | `followLogs` leaked on success — `cts` disposed but never cancelled, so `docker logs -f` ran forever (functional) | `cts.cancel()` in `finally` (all outcomes) |
+| P1 | Container orphaned if cancelled in the create window (id not yet captured) (functional) | `createAttempted` flag + label-based sweep in `finally` |
+| P1 | Re-provision reused a stale `ClustersClient` cached by id (tree) | `ClustersClient.deleteClient(clusterId)` before publishing new creds |
+| P1 | Webview could hang in `provisioning` on a busy/empty stream (webview) | `provision()` emits a terminal error when busy + `onComplete` handler recovers to review |
+| P2 | Subscription leak on double-click Start (webview) | Unsubscribe-before-resubscribe + null the ref on terminal callbacks |
+| P2 | Cancel deferred up to ~30s during an in-flight readiness connect (functional) | Direct `MongoClient` with `serverSelectionTimeoutMS: 3000` |
+| P2 | Redundant `-t` in `customOptions` — `detached` already adds `--tty` (functional) | Removed `customOptions` |
+| P2 | `savedConnections` telemetry undercounted (tree) | Count real connections/folders by contextValue, excluding synthetic nodes |
+| P2 | "Learn more…" row missing from the empty state (design) | Added (opens the DocumentDB repo) |
+| P2 | Review screen lacked a Cancel button (design) | Added (closes the panel) |
+| P2 | WI-5 sample seed not implemented (design) | Best-effort 1-doc seed after readiness so the tree isn't empty to browse |
+
+**Verified correct by the reviewers (no change needed):** the cancellation plumbing
+(`ctx.signal` → mirror → `provision` → `cts` → tree-kill) and `return()` propagation through the
+nested generator; the browse/cache-key path (`CredentialCache.setAuthCredentials` under the same
+`clusterId` the tree item uses); no double-appearance (nothing written to the Emulators zone);
+webview mount/typing/auto-close/bundle-purity; and split-safe masking on the primary paths.
+
+**Post-fix gates:** `npm run lint` ✅ · `npx jest --no-coverage` (2055/2055) ✅ · `npm run build` ✅
+· webview webpack bundle ✅.

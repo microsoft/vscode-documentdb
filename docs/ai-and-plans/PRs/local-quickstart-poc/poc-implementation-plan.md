@@ -5,7 +5,7 @@
 > Review history & resolutions: [`review-and-resolutions.md`](./review-and-resolutions.md).
 >
 > **Audience:** an implementation agent (Opus/Sonnet-class) or a developer.
-> **Status:** **Reviewed by 5 agents in two rounds; revised to consensus (rev. 3) — all five APPROVE / no blocking issues.** Not started.
+> **Status:** **Implemented (WI-0…WI-6) and reviewed by 5 agents against the running code — all APPROVE, 12 findings fixed.** See review-and-resolutions.md "Implementation review".
 > **Goal of this plan:** a demoable POC, built as small focused work items, grounded in
 > the existing codebase so it is *easy to implement*.
 
