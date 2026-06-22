@@ -19,13 +19,13 @@
  * generator of {@link StageEvent}s, consumed directly by the tRPC subscription.
  */
 
+import { MongoClient } from 'mongodb';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
-import { connectToClient } from '../../documentdb/connectToClient';
+import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
-import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
 import { ContainerRuntime, getQuickStartOutputChannel } from './ContainerRuntime';
 import { composeConnectionString, generateCredentials } from './quickStartCredentials';
 import {
@@ -47,8 +47,8 @@ export const QUICK_START_CLUSTER_ID = 'quickstart-local-documentdb';
 
 const SECRET_KEY = 'documentdb.quickstart.connectionString';
 const READINESS_TIMEOUT_MS = 180_000;
-const APP_NAME = 'DocumentDB-QuickStart';
-const EMULATOR_CONFIG: EmulatorConfiguration = { isEmulator: true, disableEmulatorSecurity: true };
+/** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
+const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
 
 function errMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -123,6 +123,7 @@ class QuickStartServiceImpl {
      */
     public async *provision(signal: AbortSignal): AsyncGenerator<StageEvent> {
         if (this.provisioning) {
+            yield stageEvent('error', 'error', 'Setup is already in progress.', 'Setup is already in progress.');
             return;
         }
         this.provisioning = true;
@@ -139,6 +140,7 @@ class QuickStartServiceImpl {
 
         let containerId: string | undefined;
         let containerCreated = false;
+        let createAttempted = false;
         let success = false;
 
         try {
@@ -182,6 +184,7 @@ class QuickStartServiceImpl {
 
             // --- creating (docker run -d creates and starts) ---
             yield stageEvent('creating', 'active', 'Creating container…');
+            createAttempted = true;
             containerId = await ContainerRuntime.createAndRunContainer(
                 {
                     imageRef: QUICK_START_IMAGE,
@@ -216,8 +219,14 @@ class QuickStartServiceImpl {
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
+            // Best-effort: seed one sample document so the tree isn't empty to browse.
+            await this.seedSampleData(connectionString);
+
             // --- success ---
             await ext.secretStorage.store(SECRET_KEY, connectionString);
+            // Drop any stale client cached under this id (e.g. from a prior run with
+            // different credentials) so the next browse uses the fresh credentials.
+            await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
             this.populateCredentialCache(connectionString, credentials.username, credentials.password);
             const metadata: InstanceMetadata = {
                 containerId,
@@ -241,17 +250,29 @@ class QuickStartServiceImpl {
             // the generator skips straight to `finally`.
             yield stageEvent('error', 'error', message, aborted ? undefined : message);
         } finally {
-            // Cleanup (D12): only when we did not succeed AND a container exists.
-            if (!success && containerCreated && containerId) {
-                channel.appendLine(`Cleaning up container ${containerId}…`);
-                await ContainerRuntime.stopContainer(containerId).catch(() => undefined);
-                await ContainerRuntime.removeContainer(containerId).catch(() => undefined);
-            }
-            // If we were interrupted (cancel / unsubscribe) before settling, the
-            // state is still `Provisioning` — reset it. The error path already
-            // settled to `Error` in `catch`, and success settled to `Running`.
-            if (!success && this.state === InstanceState.Provisioning) {
-                this.setStatus(InstanceState.NotInstalled, undefined, undefined);
+            // Stop the followLogs stream (started with cts.token). Disposing alone
+            // does NOT signal cancellation — only cancel() stops `docker logs -f`.
+            cts.cancel();
+            if (!success) {
+                // Cleanup (D12): when a container exists, stop+remove it.
+                if (containerCreated && containerId) {
+                    channel.appendLine(`Cleaning up container ${containerId}…`);
+                    await ContainerRuntime.stopContainer(containerId).catch(() => undefined);
+                    await ContainerRuntime.removeContainer(containerId).catch(() => undefined);
+                } else if (createAttempted && !containerId) {
+                    // The CLI may have been killed after the daemon created the
+                    // container but before its id was captured — sweep by label.
+                    const orphan = await this.findManagedContainer();
+                    if (orphan) {
+                        channel.appendLine(`Removing orphaned container ${orphan.id}…`);
+                        await ContainerRuntime.removeContainer(orphan.id).catch(() => undefined);
+                    }
+                }
+                // Interrupted before settling (cancel / unsubscribe) → reset state.
+                // The error path already settled to `Error` in `catch`.
+                if (this.state === InstanceState.Provisioning) {
+                    this.setStatus(InstanceState.NotInstalled, undefined, undefined);
+                }
             }
             signal.removeEventListener('abort', onAbort);
             cts.dispose();
@@ -266,16 +287,20 @@ class QuickStartServiceImpl {
         let lastError: unknown;
         while (Date.now() < deadline) {
             this.throwIfAborted(signal);
+            // A bounded per-attempt timeout keeps Cancel responsive (~3s) — the
+            // connection string already carries tls/allow-invalid for the local image.
+            const client = new MongoClient(connectionString, {
+                serverSelectionTimeoutMS: PROBE_SERVER_SELECTION_TIMEOUT_MS,
+                tlsAllowInvalidCertificates: true,
+            });
             try {
-                const client = await connectToClient(connectionString, APP_NAME, EMULATOR_CONFIG);
-                try {
-                    await client.db('admin').command({ ping: 1 });
-                    return;
-                } finally {
-                    await client.close().catch(() => undefined);
-                }
+                await client.connect();
+                await client.db('admin').command({ ping: 1 });
+                return;
             } catch (error) {
                 lastError = error;
+            } finally {
+                await client.close().catch(() => undefined);
             }
             attempt += 1;
             const backoff = Math.min(3000, 500 + attempt * 250);
@@ -284,6 +309,32 @@ class QuickStartServiceImpl {
         throw new Error(
             `Timed out waiting for DocumentDB to accept connections.${lastError ? ` (${errMessage(lastError)})` : ''}`,
         );
+    }
+
+    /**
+     * Insert a single sample document so the freshly-provisioned instance has a
+     * browsable database/collection for the demo. Best-effort: never fails the flow.
+     */
+    private async seedSampleData(connectionString: string): Promise<void> {
+        const client = new MongoClient(connectionString, {
+            serverSelectionTimeoutMS: 5_000,
+            tlsAllowInvalidCertificates: true,
+        });
+        try {
+            await client.connect();
+            const collection = client.db('quickstart').collection('sample');
+            if ((await collection.estimatedDocumentCount()) === 0) {
+                await collection.insertOne({
+                    name: 'DocumentDB Local Quick Start',
+                    createdAt: new Date(),
+                    note: 'Sample document created by Quick Start.',
+                });
+            }
+        } catch {
+            // Seeding is best-effort; an empty instance is still a successful setup.
+        } finally {
+            await client.close().catch(() => undefined);
+        }
     }
 
     private async findManagedContainer(): Promise<{ id: string } | undefined> {

@@ -59,7 +59,15 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                     return null;
                 }
 
-                context.telemetry.measurements.savedConnections = Math.max(0, rootItems.length - 3); // count - 'Quick Start', 'DocumentDB Local', 'New Connection'
+                // Count only real saved connections/folders, excluding the synthetic
+                // structural nodes (Quick Start, Local emulators, New Connection).
+                context.telemetry.measurements.savedConnections = rootItems.filter((item) => {
+                    if (!isTreeElementWithContextValue(item)) {
+                        return false;
+                    }
+                    const contextValue = item.contextValue.toLowerCase();
+                    return contextValue.includes('documentdbcluster') || contextValue.includes('treeitem_folder');
+                }).length;
 
                 // Now process and add each root item to the cache
                 for (const item of rootItems) {
@@ -118,7 +126,9 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
              * Start entry point on a fresh machine.
              */
             const quickStartOnly = new LocalQuickStartItem(parentId);
-            return [ext.state.wrapItemInStateHandling(quickStartOnly, () => this.refresh(quickStartOnly)) as TreeElement];
+            return [
+                ext.state.wrapItemInStateHandling(quickStartOnly, () => this.refresh(quickStartOnly)) as TreeElement,
+            ];
         }
 
         // Import FolderItem and ItemType

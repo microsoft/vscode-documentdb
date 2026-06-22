@@ -95,6 +95,14 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 iconPath: new vscode.ThemeIcon('rocket'),
                 commandId: 'vscode-documentdb.command.localQuickStart.open',
             }),
+            createGenericElementWithContext({
+                id: `${this.id}/learnMore`,
+                contextValue: 'treeItem_quickStartLearnMore',
+                label: l10n.t('Learn more…'),
+                iconPath: new vscode.ThemeIcon('link-external'),
+                commandId: 'vscode.open',
+                commandArgs: [vscode.Uri.parse('https://github.com/microsoft/documentdb')],
+            }),
         ];
 
         if (status.state === InstanceState.Error && status.errorMessage) {

@@ -148,6 +148,11 @@ export const LocalQuickStart = (): JSX.Element => {
     }, [loadDockerStatus]);
 
     const handleStart = useCallback((): void => {
+        // Cancel any prior in-flight subscription so a fast double-click can't leak
+        // an uncancellable stream (mirrors the Query Insights pattern).
+        subscriptionRef.current?.unsubscribe();
+        subscriptionRef.current = null;
+
         setStageStatus(emptyStageStatus());
         setErrorMessage(undefined);
         setSuccessMessage(undefined);
@@ -157,10 +162,12 @@ export const LocalQuickStart = (): JSX.Element => {
         const startedAt = Date.now();
         timerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
 
+        let settled = false;
         const subscription = trpcClient.localQuickStart.startQuickStart.subscribe(undefined, {
             onData(event: StageEvent) {
                 setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
                 if (event.stage === 'done' && event.status === 'done') {
+                    settled = true;
                     stopTimer();
                     setSuccessMessage(event.message);
                     setPhase('success');
@@ -168,19 +175,40 @@ export const LocalQuickStart = (): JSX.Element => {
                         void trpcClient.localQuickStart.closePanel.mutate().catch(() => undefined);
                     }, 1800);
                 } else if (event.status === 'error') {
+                    settled = true;
                     stopTimer();
                     setErrorMessage(event.error ?? event.message ?? l10n.t('Setup failed.'));
                     setPhase('failed');
                 }
             },
             onError(error: unknown) {
+                settled = true;
                 stopTimer();
                 setErrorMessage(error instanceof Error ? error.message : String(error));
                 setPhase('failed');
+                if (subscriptionRef.current === subscription) {
+                    subscriptionRef.current = null;
+                }
+            },
+            onComplete() {
+                // The stream ended without a terminal stage event (e.g. the service
+                // was already busy and returned early) — recover to review rather
+                // than hang on 'provisioning' with a runaway timer.
+                if (!settled) {
+                    stopTimer();
+                    setPhase('review');
+                }
+                if (subscriptionRef.current === subscription) {
+                    subscriptionRef.current = null;
+                }
             },
         });
         subscriptionRef.current = subscription;
     }, [trpcClient, stopTimer]);
+
+    const handleClose = useCallback((): void => {
+        void trpcClient.localQuickStart.closePanel.mutate().catch(() => undefined);
+    }, [trpcClient]);
 
     const handleCancel = useCallback((): void => {
         subscriptionRef.current?.unsubscribe();
@@ -364,6 +392,9 @@ export const LocalQuickStart = (): JSX.Element => {
             {renderReviewCards()}
             {renderSummary()}
             <div className={styles.actions}>
+                <Button appearance="secondary" onClick={handleClose}>
+                    {l10n.t('Cancel')}
+                </Button>
                 <Button appearance="primary" icon={<RocketRegular />} onClick={handleStart}>
                     {l10n.t('Start DocumentDB Local')}
                 </Button>

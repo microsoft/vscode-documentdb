@@ -150,10 +150,9 @@ class ContainerRuntimeImpl {
             this.client.runContainer({
                 imageRef: options.imageRef,
                 name: options.name,
+                // `detached: true` already emits `-d --tty` (the client adds --tty
+                // whenever detached/interactive), matching the image README's `-dt`.
                 detached: true,
-                // The image README runs with `-dt`; `-t` (allocate a TTY) is added
-                // via customOptions since the typed options expose no `tty` field.
-                customOptions: '-t',
                 labels: { ...options.labels },
                 ports: [{ containerPort: options.containerPort, hostPort: options.hostPort }],
                 command: [...options.command],
@@ -212,13 +211,15 @@ class ContainerRuntimeImpl {
         token?: vscode.CancellationToken,
     ): Promise<void> {
         const channel = getQuickStartOutputChannel();
+        // Line-buffer + mask (D14) so a secret split across log chunks can't leak.
+        const lineBuffer = new MaskingLineBuffer((line) => channel.appendLine(line), secrets);
         const factory = new ShellStreamCommandRunnerFactory({ strict: false, cancellationToken: token });
         const streamingRunner = factory.getStreamingCommandRunner();
         try {
-            for await (const line of streamingRunner(
+            for await (const chunk of streamingRunner(
                 this.client.logsForContainer({ container: id, follow: true, tail: 50 }),
             )) {
-                channel.appendLine(maskSecrets(String(line), secrets));
+                lineBuffer.push(String(chunk));
                 if (token?.isCancellationRequested) {
                     break;
                 }
@@ -226,6 +227,8 @@ class ContainerRuntimeImpl {
         } catch {
             // Following logs ends (throws) when the stream is cancelled or the
             // container stops — both are expected; nothing to surface here.
+        } finally {
+            lineBuffer.flush();
         }
     }
 }
