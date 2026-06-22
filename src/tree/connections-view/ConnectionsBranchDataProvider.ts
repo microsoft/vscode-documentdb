@@ -16,6 +16,7 @@ import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
+import { LocalQuickStartItem } from './LocalQuickStart/LocalQuickStartItem';
 import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
 
@@ -58,7 +59,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                     return null;
                 }
 
-                context.telemetry.measurements.savedConnections = rootItems.length - 2; // count - 'DocumentDB Local' and 'New Connection'
+                context.telemetry.measurements.savedConnections = Math.max(0, rootItems.length - 3); // count - 'Quick Start', 'DocumentDB Local', 'New Connection'
 
                 // Now process and add each root item to the cache
                 for (const item of rootItems) {
@@ -110,9 +111,14 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
 
         if (allConnections.length === 0 && allEmulators.length === 0) {
             /**
-             * we have a special case here as we want to show a "welcome screen" in the case when no connections were found.
+             * Even with no saved connections, the Quick Start node must render — its
+             * managed instance is service-owned/in-memory (not a stored connection),
+             * so it cannot depend on the stored-connection count. Returning it here
+             * (instead of `null`) replaces the bare welcome screen with the Quick
+             * Start entry point on a fresh machine.
              */
-            return null;
+            const quickStartOnly = new LocalQuickStartItem(parentId);
+            return [ext.state.wrapItemInStateHandling(quickStartOnly, () => this.refresh(quickStartOnly)) as TreeElement];
         }
 
         // Import FolderItem and ItemType
@@ -173,6 +179,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         const newConnectionItem = hasClusterItems ? [] : [new NewConnectionItemCV(parentId)];
 
         const rootItems = [
+            new LocalQuickStartItem(parentId),
             new LocalEmulatorsItem(parentId),
             ...clusterFolderItems,
             ...clusterItems,

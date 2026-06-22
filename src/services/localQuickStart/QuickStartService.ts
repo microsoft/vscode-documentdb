@@ -20,7 +20,9 @@
  */
 
 import * as vscode from 'vscode';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { connectToClient } from '../../documentdb/connectToClient';
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
@@ -216,6 +218,7 @@ class QuickStartServiceImpl {
 
             // --- success ---
             await ext.secretStorage.store(SECRET_KEY, connectionString);
+            this.populateCredentialCache(connectionString, credentials.username, credentials.password);
             const metadata: InstanceMetadata = {
                 containerId,
                 alias: QUICK_START_ALIAS,
@@ -289,6 +292,21 @@ class QuickStartServiceImpl {
     }
 
     /**
+     * Pre-populate the in-memory CredentialCache so the inline tree cluster item
+     * connects without re-prompting. `DocumentDBClusterItem.getChildren` takes the
+     * cached path when `CredentialCache.hasCredentials(clusterId)` is true.
+     */
+    private populateCredentialCache(connectionString: string, username: string, password: string): void {
+        CredentialCache.setAuthCredentials(
+            QUICK_START_CLUSTER_ID,
+            AuthMethodId.NativeAuth,
+            connectionString,
+            { connectionUser: username, connectionPassword: password },
+            { isEmulator: true, disableEmulatorSecurity: true },
+        );
+    }
+
+    /**
      * Activation reconciliation (risk-review item): after a window reload the
      * in-memory state is lost while the container keeps running. Detect the
      * labelled container; if we still hold its credentials, re-adopt it so the
@@ -315,10 +333,16 @@ class QuickStartServiceImpl {
             const boundPort = (inspected && ContainerRuntime.getBoundHostPort(inspected)) || QUICK_START_PORT;
             const running = ContainerRuntime.isRunning(inspected);
             let username = '';
+            let password = '';
             try {
-                username = new DocumentDBConnectionString(stored).username;
+                const parsed = new DocumentDBConnectionString(stored);
+                username = parsed.username;
+                password = parsed.password;
             } catch {
                 username = '';
+            }
+            if (running) {
+                this.populateCredentialCache(stored, username, password);
             }
             this.setStatus(running ? InstanceState.Running : InstanceState.Stopped, {
                 containerId: container.id,
