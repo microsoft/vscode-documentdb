@@ -241,6 +241,11 @@ export class ClustersExtension implements vscode.Disposable {
                 // Reconcile detects a still-running container after a window reload.
                 ext.context.subscriptions.push(QuickStartService);
                 ext.context.subscriptions.push({ dispose: disposeQuickStartOutputChannel });
+                ext.context.subscriptions.push(
+                    QuickStartService.onDidChangeStatus(() => {
+                        ext.connectionsBranchDataProvider?.refresh();
+                    }),
+                );
                 void QuickStartService.reconcile();
 
                 // Register evaluator disposal for clean worker shutdown on deactivation

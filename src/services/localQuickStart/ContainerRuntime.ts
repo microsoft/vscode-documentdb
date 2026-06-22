@@ -29,7 +29,7 @@ import {
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
-import { maskSecrets, MaskingLineBuffer } from './outputMasking';
+import { MaskingLineBuffer, maskSecrets } from './outputMasking';
 import { type DockerReadiness, QUICK_START_PORT } from './quickStartTypes';
 
 function errMessage(error: unknown): string {
@@ -206,12 +206,18 @@ class ContainerRuntimeImpl {
      * or the container stops. Compensates for detached mode (D2) so the channel
      * shows live output during the readiness wait.
      */
-    public async followLogs(id: string, secrets: ReadonlyArray<string>, token?: vscode.CancellationToken): Promise<void> {
+    public async followLogs(
+        id: string,
+        secrets: ReadonlyArray<string>,
+        token?: vscode.CancellationToken,
+    ): Promise<void> {
         const channel = getQuickStartOutputChannel();
         const factory = new ShellStreamCommandRunnerFactory({ strict: false, cancellationToken: token });
         const streamingRunner = factory.getStreamingCommandRunner();
         try {
-            for await (const line of streamingRunner(this.client.logsForContainer({ container: id, follow: true, tail: 50 }))) {
+            for await (const line of streamingRunner(
+                this.client.logsForContainer({ container: id, follow: true, tail: 50 }),
+            )) {
                 channel.appendLine(maskSecrets(String(line), secrets));
                 if (token?.isCancellationRequested) {
                     break;

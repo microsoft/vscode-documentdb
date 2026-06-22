@@ -313,7 +313,18 @@ inline-tree handoff.
 
 ## 7. Deviation log
 
-_(Append any implementation-time divergence from this plan, with rationale. Empty at plan time.)_
+- **WI-1 — `QuickStartService` is a standalone service, not built on the `Task` base class
+  (deviates from D13).** Rationale: the `Task` base class is single-use (`start()` throws once
+  it has run; terminal states don't reset) which conflicts with the **Retry**/re-provision
+  requirement, and its progress model is numeric `0-100` driving a VS Code *notification* — at
+  odds with D3's in-webview stage checklist. A standalone singleton with a per-attempt
+  `AbortSignal` + a `vscode.EventEmitter` status sink satisfies every functional requirement the
+  reviewers raised (cancellation threaded to docker, fresh-per-attempt, no single-use breakage)
+  with less ceremony. D13 explicitly permits a standalone service; provisioning is an async
+  generator consumed directly by the tRPC subscription.
+- **`-dt` TTY** is applied via `runContainer({ customOptions: '-t' })` since the typed options
+  expose `detached` but no `tty` field. If a manual run shows the placement is wrong, drop it
+  (detached alone is sufficient for most images).
 
 ---
 

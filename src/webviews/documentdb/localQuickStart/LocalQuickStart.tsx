@@ -138,6 +138,7 @@ export const LocalQuickStart = (): JSX.Element => {
     }, []);
 
     useEffect(() => {
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load sets the 'loading' phase before the async docker query
         loadDockerStatus();
         return () => {
             subscriptionRef.current?.unsubscribe();
@@ -297,7 +298,9 @@ export const LocalQuickStart = (): JSX.Element => {
                     <Text>
                         {docker?.readiness.cliInstalled === false
                             ? l10n.t('Docker CLI was not found on your PATH. Install Docker and retry.')
-                            : l10n.t('Docker is installed but the daemon is not reachable. Start Docker Desktop and retry.')}
+                            : l10n.t(
+                                  'Docker is installed but the daemon is not reachable. Start Docker Desktop and retry.',
+                              )}
                     </Text>
                 </div>
                 <div className={styles.actions}>

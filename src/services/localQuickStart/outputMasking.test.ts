@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { maskSecrets, MaskingLineBuffer } from './outputMasking';
+import { MaskingLineBuffer, maskSecrets } from './outputMasking';
 
 describe('outputMasking (Quick Start D14)', () => {
     const PASSWORD = 'Sup3rS3cretPwd';

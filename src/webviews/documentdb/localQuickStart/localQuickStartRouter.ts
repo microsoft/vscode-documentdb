@@ -18,13 +18,13 @@
  * `../../_integration/trpc`, never from `appRouter.ts`.
  */
 
+import { ContainerRuntime, getQuickStartOutputChannel } from '../../../services/localQuickStart/ContainerRuntime';
+import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
     type DockerStatusResult,
     type QuickStartStatus,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
-import { ContainerRuntime, getQuickStartOutputChannel } from '../../../services/localQuickStart/ContainerRuntime';
-import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router } from '../../_integration/trpc';
 
