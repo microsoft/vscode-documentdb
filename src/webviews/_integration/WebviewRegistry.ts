@@ -5,10 +5,12 @@
 
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
+import { LocalQuickStart } from '../documentdb/localQuickStart/LocalQuickStart';
 
 export const WebviewRegistry = {
     collectionView: CollectionView,
     documentView: DocumentView,
+    localQuickStart: LocalQuickStart,
 } as const;
 
 /**

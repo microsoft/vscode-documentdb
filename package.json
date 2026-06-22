@@ -357,6 +357,13 @@
         "icon": "$(add)"
       },
       {
+        "//": "[Local Quick Start] Open the Quick Start webview",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.open",
+        "title": "Local Quick Start",
+        "icon": "$(rocket)"
+      },
+      {
         "//": "[ConnectionsView] Delete Connection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.removeConnection",

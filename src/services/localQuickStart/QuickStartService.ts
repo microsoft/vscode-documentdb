@@ -244,9 +244,11 @@ class QuickStartServiceImpl {
                 await ContainerRuntime.stopContainer(containerId).catch(() => undefined);
                 await ContainerRuntime.removeContainer(containerId).catch(() => undefined);
             }
-            if (!success) {
-                // Aborted via return() leaves us Provisioning — settle the state.
-                this.setStatus(signal.aborted ? InstanceState.NotInstalled : this.state, undefined, this.errorMessage);
+            // If we were interrupted (cancel / unsubscribe) before settling, the
+            // state is still `Provisioning` — reset it. The error path already
+            // settled to `Error` in `catch`, and success settled to `Running`.
+            if (!success && this.state === InstanceState.Provisioning) {
+                this.setStatus(InstanceState.NotInstalled, undefined, undefined);
             }
             signal.removeEventListener('abort', onAbort);
             cts.dispose();

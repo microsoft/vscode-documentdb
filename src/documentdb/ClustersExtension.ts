@@ -47,6 +47,9 @@ import { dropIndex } from '../commands/index.dropIndex/dropIndex';
 import { hideIndex } from '../commands/index.hideIndex/hideIndex';
 import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
+import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
+import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
+import { QuickStartService } from '../services/localQuickStart/QuickStartService';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
@@ -233,6 +236,12 @@ export class ClustersExtension implements vscode.Disposable {
                 // Initialize PlaygroundService (connection state + StatusBarItem)
                 const playgroundService = PlaygroundService.getInstance();
                 ext.context.subscriptions.push(playgroundService);
+
+                // Initialize Local Quick Start (managed local DocumentDB container).
+                // Reconcile detects a still-running container after a window reload.
+                ext.context.subscriptions.push(QuickStartService);
+                ext.context.subscriptions.push({ dispose: disposeQuickStartOutputChannel });
+                void QuickStartService.reconcile();
 
                 // Register evaluator disposal for clean worker shutdown on deactivation
                 ext.context.subscriptions.push({ dispose: disposeEvaluators });
@@ -526,6 +535,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.connectionsView.newEmulatorConnection',
                     withTreeNodeCommandCorrelation(newLocalConnection),
+                );
+
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.open',
+                    withCommandCorrelation(openLocalQuickStart),
                 );
 
                 registerCommand(
