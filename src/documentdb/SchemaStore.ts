@@ -47,11 +47,11 @@ export interface SchemaStoreStats {
  * Schema change notifications are debounced per key (1 second) to avoid
  * excessive churn when pages are navigated rapidly.
  *
- * The cache enforces a soft entry limit (default 100) with LRU eviction
- * to prevent unbounded memory growth in long-running sessions.
+ * The cache enforces a soft entry limit (default 50 collections) with LRU
+ * eviction to prevent unbounded memory growth in long-running sessions.
  */
 export class SchemaStore implements vscode.Disposable {
-    private static readonly DEFAULT_MAX_ENTRIES = 100;
+    private static readonly DEFAULT_MAX_ENTRIES = 50;
 
     private static _instance: SchemaStore | undefined;
     private readonly _analyzers = new Map<string, SchemaAnalyzer>();
@@ -102,6 +102,10 @@ export class SchemaStore implements vscode.Disposable {
                 this._analyzers.delete(oldestKey);
                 this._accessOrder.delete(oldestKey);
                 this._evictionCount++;
+                // Flag a stats change so the eviction is reported to telemetry
+                // promptly (eviction lowers the cache size, so the high-water
+                // mark check in _updateMaxStats would otherwise not flush it).
+                this._statsChanged = true;
                 const pending = this._pendingNotifications.get(oldestKey);
                 if (pending !== undefined) {
                     clearTimeout(pending);
