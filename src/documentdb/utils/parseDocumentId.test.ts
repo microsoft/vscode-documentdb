@@ -42,18 +42,20 @@ describe('parseDocumentId', () => {
         outputChannelError.mockClear();
     });
 
-    it('parses an ObjectId from canonical EJSON', () => {
+    it('parses an ObjectId from its EJSON $oid form (no hex guessing needed)', () => {
         const oid = new ObjectId();
+        // This is exactly how the UI serializes an ObjectId _id: {"$oid":"..."}.
+        expect(canonical(oid)).toBe(`{"$oid":"${oid.toHexString()}"}`);
+
         const result = parseDocumentId(canonical(oid));
         expect(result).toBeInstanceOf(ObjectId);
         expect((result as ObjectId).toHexString()).toBe(oid.toHexString());
     });
 
-    it('parses a bare 24-character hex string as an ObjectId (legacy shape)', () => {
+    it('does NOT guess: a bare 24-character hex string (no $oid) throws', () => {
         const hex = 'a'.repeat(24);
-        const result = parseDocumentId(hex);
-        expect(result).toBeInstanceOf(ObjectId);
-        expect((result as ObjectId).toHexString()).toBe(hex);
+        expect(() => parseDocumentId(hex)).toThrow(/Unable to parse the document _id/);
+        expect(outputChannelError).toHaveBeenCalledTimes(1);
     });
 
     it('keeps a string _id as a string', () => {
