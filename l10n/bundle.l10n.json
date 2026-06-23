@@ -604,6 +604,7 @@
   "Failed to initialize Azure management clients": "Failed to initialize Azure management clients",
   "Failed to initialize task": "Failed to initialize task",
   "Failed to initialize the Kubernetes client: {0}. Try reloading the window; if the problem persists, reinstall the extension.": "Failed to initialize the Kubernetes client: {0}. Try reloading the window; if the problem persists, reinstall the extension.",
+  "Failed to list databases for \"{cluster}\": {error}": "Failed to list databases for \"{cluster}\": {error}",
   "Failed to list DKO resources in namespace \"{0}\": {1}. Check that the DocumentDB Kubernetes Operator CRD is installed and that your Kubernetes credentials can list documentdb.io dbs resources.": "Failed to list DKO resources in namespace \"{0}\": {1}. Check that the DocumentDB Kubernetes Operator CRD is installed and that your Kubernetes credentials can list documentdb.io dbs resources.",
   "Failed to list namespaces: {0}. Check that your credentials are valid and you have the required RBAC permissions.": "Failed to list namespaces: {0}. Check that your credentials are valid and you have the required RBAC permissions.",
   "Failed to list services": "Failed to list services",

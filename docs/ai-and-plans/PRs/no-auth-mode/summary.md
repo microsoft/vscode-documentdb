@@ -36,6 +36,33 @@ For native/no-auth connections the driver already honors connection-string `tls`
 parameters; the extension only *adds* the emulator-specific `tlsAllowInvalidCertificates`
 rule and never forces TLS. This is now locked with tests in `NoAuthHandler.test.ts`.
 
+## Tree expansion error recovery (`tree/documentdb/ClusterItemBase.ts`)
+
+Expanding a cluster establishes the connection and then calls `listDatabases()`. A connection
+can succeed while the server still rejects that call — e.g. an anonymous "No Authentication"
+connection against a server that actually requires credentials fails with *"Command
+listDatabases is not allowed as the connection is not authenticated yet"*. Previously that
+rejection threw out of `getChildren()`, so the tree showed **no children and no way to retry**
+(plain refresh re-uses the cached empty result; nothing actionable is rendered).
+
+The `listDatabases()` call is now wrapped in `try/catch`. On failure it:
+
+- records failure telemetry via `callWithTelemetryAndErrorHandling('connect', …)` with
+  `connectionResult = 'Failed'`, `source = 'treeExpansion'`, `experience`, and
+  `failurePhase = 'listDatabases'` (so the failure is still captured — it simply moves from the
+  provider-level `getChildren` event to a more descriptive `connect` event), and surfaces a
+  non-modal error notification with the underlying message;
+- logs the full error to the output channel; and
+- returns the same `…/reconnect` retry node used by the existing `!clustersClient` branch, which
+  `hasRetryNode()` detects and the branch data provider caches. Clicking it runs
+  `vscode-documentdb.command.internal.retry` → `resetNodeErrorState()` + refresh, re-attempting
+  the connection (useful after the user changes the auth configuration). The Connections View
+  also appends its standard "Click here to update credentials" helper node.
+
+This is intentionally **not** NoAuth-specific: any `listDatabases` failure (expired credentials,
+revoked permission, transient network) now yields an actionable retry node instead of an empty
+node.
+
 ## Tests added
 
 - `auth/NoAuthHandler.test.ts` — connection string passes through verbatim; TLS never
@@ -49,6 +76,9 @@ rule and never forces TLS. This is now locked with tests in `NoAuthHandler.test.
 - `newConnection/ExecuteStep.test.ts` — pasted credentials are ignored for NoAuth/Entra ID
   (no false duplicate, no leaked secrets), anonymous-vs-anonymous duplicates are still detected,
   and Native duplicate detection + credential persistence are preserved.
+- `tree/documentdb/ClusterItemBase.test.ts` — a rejected `listDatabases()` yields a single
+  `…/reconnect` retry node (detected by `hasRetryNode()`) and records `connect`/`Failed`
+  telemetry; success and empty-database paths are unaffected.
 
 ## Out of scope / unchanged
 
@@ -69,3 +99,5 @@ added on top):
 6. Integrated shell NoAuth support.
 7. Query playground NoAuth support.
 8. Tests (TLS/no-auth/migration contract).
+9. Ignore pasted credentials for NoAuth/Entra ID in the new-connection wizard (dedup + storage).
+10. Tree expansion: return a retry node when `listDatabases()` fails (e.g. unauthenticated NoAuth).

@@ -209,31 +209,72 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             ];
         }
 
-        // List the databases
-        return clustersClient.listDatabases().then((databases: DatabaseItemModel[]) => {
-            if (databases.length === 0) {
-                return [
-                    createGenericElement({
-                        contextValue: createContextValue(['treeItem_no-databases', this.experienceContextValue]),
-                        id: `${this.id}/no-databases`,
-                        label: l10n.t('Create Database…'),
-                        iconPath: new vscode.ThemeIcon('plus'),
-                        commandId: 'vscode-documentdb.command.createDatabase',
-                        commandArgs: [this],
-                    }) as TreeElement,
-                ];
-            }
-
-            // Sort databases alphabetically by name
-            databases.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
-
-            // Map the databases to DatabaseItem elements
-            return databases.map((database) => {
-                const databaseItem = new DatabaseItem(this.cluster, database);
-                // Start loading collection count in background (fire-and-forget).
-                databaseItem.loadCollectionCount();
-                return databaseItem;
+        // List the databases.
+        //
+        // The connection itself may have succeeded while the server still rejects this request —
+        // for example an anonymous ("No Authentication") connection against a server that actually
+        // requires credentials fails here with "Command listDatabases is not allowed as the
+        // connection is not authenticated yet". Without handling, the rejected promise would throw
+        // out of getChildren(), leaving the tree with no children and — crucially — no way for the
+        // user to retry. We therefore catch the failure, record telemetry, surface a notification,
+        // and return a retry node (mirroring the `!clustersClient` branch above).
+        let databases: DatabaseItemModel[];
+        try {
+            databases = await clustersClient.listDatabases();
+        } catch (error) {
+            // Record failure telemetry and surface a (non-modal) error notification. Throwing inside
+            // the callback lets callWithTelemetryAndErrorHandling capture the error details and
+            // display it, without propagating out of getChildren().
+            void callWithTelemetryAndErrorHandling('connect', (telemetryContext) => {
+                telemetryContext.telemetry.properties.connectionResult = 'Failed';
+                telemetryContext.telemetry.properties.source = 'treeExpansion';
+                telemetryContext.telemetry.properties.experience = this.experience.api;
+                telemetryContext.telemetry.properties.failurePhase = 'listDatabases';
+                throw error;
             });
+
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            ext.outputChannel.appendLine(
+                l10n.t('Failed to list databases for "{cluster}": {error}', {
+                    cluster: this.cluster.name,
+                    error: errorMessage,
+                }),
+            );
+
+            return [
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/reconnect`, // note: keep this in sync with the `hasRetryNode` function in this file
+                    label: vscode.l10n.t('Click here to retry'),
+                    iconPath: new vscode.ThemeIcon('refresh'),
+                    commandId: 'vscode-documentdb.command.internal.retry',
+                    commandArgs: [this],
+                }),
+            ];
+        }
+
+        if (databases.length === 0) {
+            return [
+                createGenericElement({
+                    contextValue: createContextValue(['treeItem_no-databases', this.experienceContextValue]),
+                    id: `${this.id}/no-databases`,
+                    label: l10n.t('Create Database…'),
+                    iconPath: new vscode.ThemeIcon('plus'),
+                    commandId: 'vscode-documentdb.command.createDatabase',
+                    commandArgs: [this],
+                }) as TreeElement,
+            ];
+        }
+
+        // Sort databases alphabetically by name
+        databases.sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }));
+
+        // Map the databases to DatabaseItem elements
+        return databases.map((database) => {
+            const databaseItem = new DatabaseItem(this.cluster, database);
+            // Start loading collection count in background (fire-and-forget).
+            databaseItem.loadCollectionCount();
+            return databaseItem;
         });
     }
 
