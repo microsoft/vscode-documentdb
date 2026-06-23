@@ -322,9 +322,17 @@ inline-tree handoff.
   reviewers raised (cancellation threaded to docker, fresh-per-attempt, no single-use breakage)
   with less ceremony. D13 explicitly permits a standalone service; provisioning is an async
   generator consumed directly by the tRPC subscription.
-- **`-dt` TTY** is applied via `runContainer({ customOptions: '-t' })` since the typed options
-  expose `detached` but no `tty` field. If a manual run shows the placement is wrong, drop it
-  (detached alone is sufficient for most images).
+- **Windows arg-quoting fix (manual-testing finding).** The container-client's
+  `ShellStreamCommandRunnerFactory` must be given a **`shellProvider`** (`Cmd` on Windows, `Bash`
+  elsewhere); without one it drops each argument's quoting and sets `windowsVerbatimArguments` on
+  Windows, splitting Go-template `--format {{json .}}` args and breaking `info`/`inspect`/`list`.
+  Added the `@microsoft/vscode-processutils` dependency. `-dt` is achieved with `detached: true`
+  alone (the client adds `--tty` automatically) — no `customOptions` needed.
+- **Sample data uses the image's native `--init-data true`** (decision from reviewing the
+  DocumentDB source), not a bespoke driver-side seed. This matches §8.4 ("use the image's standard
+  init-script convention") and loads the rich `sampledb` (users/products/orders/analytics). A
+  capped, non-fatal `waitForSampleData()` waits for `sampledb` to appear so the browse step
+  reliably shows data. The old single-document driver seed was removed.
 
 ---
 
