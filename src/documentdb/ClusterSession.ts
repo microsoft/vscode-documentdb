@@ -7,7 +7,7 @@ import { type FieldEntry } from '@documentdb-js/schema-analyzer';
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
-import { ObjectId, type Document, type Filter, type WithId } from 'mongodb';
+import { type Document, type Filter, type WithId } from 'mongodb';
 import { ext } from '../extensionVariables';
 import { getDataAtPath } from '../utils/slickgrid/mongo/toSlickGridTable';
 import { toSlickGridTree, type TreeData } from '../utils/slickgrid/mongo/toSlickGridTree';
@@ -15,6 +15,7 @@ import { type QueryInsightsStage2Response } from '../webviews/documentdb/collect
 import { ClustersClient, type FindQueryParams } from './ClustersClient';
 import { SchemaStore } from './SchemaStore';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
+import { parseDocumentId } from './utils/parseDocumentId';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export type TableDataEntry = {
@@ -336,16 +337,7 @@ export class ClusterSession {
         if (acknowledged) {
             this._currentRawDocuments = this._currentRawDocuments.filter((doc) => {
                 return !documentIds.some((id) => {
-                    let parsedId: unknown;
-                    try {
-                        parsedId = EJSON.parse(id);
-                    } catch {
-                        if (ObjectId.isValid(id)) {
-                            parsedId = new ObjectId(id);
-                        } else {
-                            parsedId = id;
-                        }
-                    }
+                    const parsedId = parseDocumentId(id);
 
                     const docIdStr = EJSON.stringify(doc._id, { relaxed: false }, 0);
                     const parsedIdStr = EJSON.stringify(parsedId as Document, { relaxed: false }, 0);
