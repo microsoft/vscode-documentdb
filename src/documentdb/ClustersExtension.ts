@@ -316,9 +316,15 @@ export class ClustersExtension implements vscode.Disposable {
                 // extension was discovered, so its TS server might not include our plugin.
                 // We restart it once when the first query playground file is opened.
                 let tsRestarted = false;
+                let tsPluginUnavailable = false;
+                let tsPluginRetryRegistered = false;
+                // Shared reference so the retry command always acts on the current
+                // status bar item. Reusing one item avoids stranding a stale warning
+                // when a retry fails again on a still-read-only install.
+                let tsPluginStatusBarItem: vscode.StatusBarItem | undefined;
 
                 const ensureTsRestart = async (): Promise<void> => {
-                    if (tsRestarted) {
+                    if (tsRestarted || tsPluginUnavailable) {
                         return;
                     }
                     // Mark attempted up front to prevent concurrent bootstraps from racing.
@@ -391,14 +397,64 @@ export class ClustersExtension implements vscode.Disposable {
 
                             stage = 'complete';
                         } catch (error) {
-                            // Reset so the next playground open retries the bootstrap.
-                            // This matters for read-only extension installs (Snap, system
-                            // package, locked enterprise) where the first attempt fails
-                            // but a later run after a workspace setting change may succeed,
-                            // and for slow-init environments where the TS server was not
-                            // ready in time.
-                            tsRestarted = false;
                             const message = error instanceof Error ? error.message : String(error);
+                            const errorCode = (error as NodeJS.ErrnoException)?.code;
+
+                            // EACCES / EROFS signal a read-only extension install
+                            // (Snap, system package, locked enterprise, network share).
+                            // Retrying won't help — surface a status bar warning so users
+                            // understand the limitation instead of silently failing.
+                            if (errorCode === 'EACCES' || errorCode === 'EROFS') {
+                                tsPluginUnavailable = true;
+
+                                // Create the status bar item once and reuse it. A failed
+                                // retry re-shows the same item instead of leaking a new one.
+                                if (!tsPluginStatusBarItem) {
+                                    const TS_PLUGIN_WARNING_PRIORITY = 100;
+                                    tsPluginStatusBarItem = vscode.window.createStatusBarItem(
+                                        vscode.StatusBarAlignment.Right,
+                                        TS_PLUGIN_WARNING_PRIORITY,
+                                    );
+                                    tsPluginStatusBarItem.command = {
+                                        title: vscode.l10n.t('Retry TS Plugin Setup'),
+                                        command: 'vscode-documentdb.command.retryTsPluginBootstrap',
+                                    };
+                                    ext.context.subscriptions.push(tsPluginStatusBarItem);
+                                }
+                                tsPluginStatusBarItem.text = `$(warning) ${vscode.l10n.t('DocumentDB TS Plugin')}`;
+                                tsPluginStatusBarItem.tooltip = vscode.l10n.t(
+                                    'TypeScript-powered completions are unavailable on this read-only extension install. Click to retry.',
+                                );
+                                tsPluginStatusBarItem.show();
+
+                                // Register the retry command once. It always acts on the
+                                // shared status bar item, so retries cannot strand an item
+                                // that an earlier closure captured.
+                                if (!tsPluginRetryRegistered) {
+                                    tsPluginRetryRegistered = true;
+                                    ext.context.subscriptions.push(
+                                        vscode.commands.registerCommand(
+                                            'vscode-documentdb.command.retryTsPluginBootstrap',
+                                            () => {
+                                                tsPluginStatusBarItem?.hide();
+                                                tsPluginUnavailable = false;
+                                                tsRestarted = false;
+                                                void ensureTsRestart();
+                                            },
+                                        ),
+                                    );
+                                }
+
+                                ext.outputChannel.debug(
+                                    `[Playground] TS plugin stub unavailable (read-only install): ${message}`,
+                                );
+                            } else {
+                                // Reset so the next playground open retries the bootstrap
+                                // for transient failures (e.g., slow-init environments
+                                // where the TS server was not ready in time).
+                                tsRestarted = false;
+                            }
+
                             ext.outputChannel.debug(
                                 `[Playground] TS server bootstrap failed at stage=${stage}: ${message}`,
                             );
