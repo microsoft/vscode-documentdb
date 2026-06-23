@@ -17,7 +17,6 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
-import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
@@ -60,6 +59,7 @@ import { SchemaStore } from './SchemaStore';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
+import { parseDocumentId } from './utils/parseDocumentId';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export interface DatabaseItemModel {
@@ -974,49 +974,24 @@ export class ClustersClient {
     // TODO: revisit, maybe we can work on BSON here for the documentIds, and the conversion from string etc.,
     // will remain in the ClusterSession class
     async deleteDocuments(databaseName: string, collectionName: string, documentIds: string[]): Promise<boolean> {
-        // Convert input data to BSON types
-        const parsedDocumentIds = documentIds.map((id) => {
-            let parsedId;
-            try {
-                // eslint-disable-next-line
-                parsedId = EJSON.parse(id);
-            } catch {
-                if (ObjectId.isValid(id)) {
-                    parsedId = new ObjectId(id);
-                } else {
-                    throw new Error(l10n.t('Invalid document ID: {0}', id));
-                }
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-            return parsedId;
-        });
+        const parsedDocumentIds = documentIds.map((id) => parseDocumentId(id));
 
         // Connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
-        const deleteResult: DeleteResult = await collection.deleteMany({ _id: { $in: parsedDocumentIds } });
+        const deleteResult: DeleteResult = await collection.deleteMany({
+            _id: { $in: parsedDocumentIds },
+        } as Filter<Document>);
 
         return deleteResult.acknowledged;
     }
 
     async pointRead(databaseName: string, collectionName: string, documentId: string) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let parsedDocumentId: any;
-        try {
-            // eslint-disable-next-line
-            parsedDocumentId = EJSON.parse(documentId);
-        } catch (error) {
-            if (ObjectId.isValid(documentId)) {
-                parsedDocumentId = new ObjectId(documentId);
-            } else {
-                throw error;
-            }
-        }
+        const parsedDocumentId = parseDocumentId(documentId);
 
         // connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
-        // eslint-disable-next-line
-        const documentContent = await collection.findOne({ _id: parsedDocumentId });
+        const documentContent = await collection.findOne({ _id: parsedDocumentId } as Filter<Document>);
 
         return documentContent;
     }
@@ -1033,17 +1008,10 @@ export class ClustersClient {
         let parsedId: any;
 
         if (documentId === '') {
-            // TODO: do not rely in empty string, use null or undefined
+            // TODO: do not rely on empty string, use null or undefined
             parsedId = new ObjectId();
         } else {
-            try {
-                // eslint-disable-next-line
-                parsedId = EJSON.parse(documentId);
-            } catch {
-                if (ObjectId.isValid(documentId)) {
-                    parsedId = new ObjectId(documentId);
-                }
-            }
+            parsedId = parseDocumentId(documentId);
         }
 
         // connect and execute
