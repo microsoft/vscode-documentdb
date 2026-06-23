@@ -165,4 +165,35 @@ describe('newConnection ExecuteStep — credential-free auth methods', () => {
         expect(mockSave).toHaveBeenCalledTimes(1);
         expect(savedSecrets().nativeAuthConfig).toEqual({ connectionUser: 'a11y', connectionPassword: 'pw' });
     });
+
+    it('does NOT persist stale Entra config when the user changed the method to No Authentication', async () => {
+        // Regression: if the user picked Entra ID first and then backtracked to No Authentication,
+        // the wizard context may still hold entraIdAuthConfig. It must not be saved onto a
+        // credential-free connection.
+        mockGetAll.mockResolvedValue([]);
+
+        const context = makeContext(AuthMethodId.NoAuth);
+        context.entraIdAuthConfig = { tenantId: 'stale-tenant', subscriptionId: 'stale-sub' };
+
+        const step = new ExecuteStep();
+        await expect(step.execute(context as never)).resolves.toBeUndefined();
+
+        expect(mockSave).toHaveBeenCalledTimes(1);
+        expect(savedSecrets().nativeAuthConfig).toBeUndefined();
+        expect(savedSecrets().entraIdAuthConfig).toBeUndefined();
+    });
+
+    it('does NOT persist stale Entra config when the user changed the method to Native authentication', async () => {
+        mockGetAll.mockResolvedValue([]);
+
+        const context = makeContext(AuthMethodId.NativeAuth);
+        context.entraIdAuthConfig = { tenantId: 'stale-tenant', subscriptionId: 'stale-sub' };
+
+        const step = new ExecuteStep();
+        await expect(step.execute(context as never)).resolves.toBeUndefined();
+
+        expect(mockSave).toHaveBeenCalledTimes(1);
+        expect(savedSecrets().entraIdAuthConfig).toBeUndefined();
+        expect(savedSecrets().nativeAuthConfig).toEqual({ connectionUser: 'a11y', connectionPassword: 'pw' });
+    });
 });

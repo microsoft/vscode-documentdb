@@ -66,6 +66,12 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             const usesNativeCredentials = newAuthenticationMethod === AuthMethodId.NativeAuth;
             const newUsername = usesNativeCredentials ? context.nativeAuthConfig?.connectionUser : undefined;
 
+            // Entra ID configuration only applies to the Microsoft Entra ID method. If the user
+            // backtracked through the wizard and changed the method (e.g. Entra -> No Authentication
+            // or Entra -> Native), stale Entra config could otherwise be persisted onto a connection
+            // that is supposed to be credential-free or native. Mirror the native-credential gate.
+            const usesEntraId = newAuthenticationMethod === AuthMethodId.MicrosoftEntraID;
+
             const newAvailableAuthenticationMethods =
                 context.availableAuthenticationMethods ?? (newAuthenticationMethod ? [newAuthenticationMethod] : []);
 
@@ -197,7 +203,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                     // Persist native credentials only for the Native authentication method.
                     // No Authentication and Microsoft Entra ID are credential-free.
                     nativeAuthConfig: usesNativeCredentials ? context.nativeAuthConfig : undefined,
-                    entraIdAuthConfig: context.entraIdAuthConfig,
+                    // Persist Entra ID config only for the Microsoft Entra ID method, so a
+                    // credential-free or native connection never carries stale Entra metadata.
+                    entraIdAuthConfig: usesEntraId ? context.entraIdAuthConfig : undefined,
                 },
             };
 
