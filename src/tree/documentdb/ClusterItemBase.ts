@@ -216,16 +216,21 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         // requires credentials fails here with "Command listDatabases is not allowed as the
         // connection is not authenticated yet". Without handling, the rejected promise would throw
         // out of getChildren(), leaving the tree with no children and — crucially — no way for the
-        // user to retry. We therefore catch the failure, record telemetry, surface a notification,
+        // user to retry. We therefore catch the failure, record telemetry, surface a modal error,
         // and return a retry node (mirroring the `!clustersClient` branch above).
         let databases: DatabaseItemModel[];
         try {
             databases = await clustersClient.listDatabases();
         } catch (error) {
-            // Record failure telemetry and surface a (non-modal) error notification. Throwing inside
-            // the callback lets callWithTelemetryAndErrorHandling capture the error details and
-            // display it, without propagating out of getChildren().
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            // Record failure telemetry, but suppress azext's default (non-modal) notification:
+            // this failure blocks the user's interactive expand flow, so we present a modal below
+            // instead (consistent with how blocking errors are surfaced elsewhere). Throwing inside
+            // the callback lets callWithTelemetryAndErrorHandling capture the error details without
+            // propagating out of getChildren().
             void callWithTelemetryAndErrorHandling('connect', (telemetryContext) => {
+                telemetryContext.errorHandling.suppressDisplay = true;
                 telemetryContext.telemetry.properties.connectionResult = 'Failed';
                 telemetryContext.telemetry.properties.source = 'treeExpansion';
                 telemetryContext.telemetry.properties.experience = this.experience.api;
@@ -233,12 +238,16 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 throw error;
             });
 
-            const errorMessage = error instanceof Error ? error.message : String(error);
             ext.outputChannel.appendLine(
                 l10n.t('Failed to list databases for "{cluster}": {error}', {
                     cluster: this.cluster.name,
                     error: errorMessage,
                 }),
+            );
+
+            void vscode.window.showErrorMessage(
+                vscode.l10n.t('Failed to load databases for "{0}"', this.cluster.name),
+                { modal: true, detail: errorMessage },
             );
 
             return [

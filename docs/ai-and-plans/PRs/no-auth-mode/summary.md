@@ -50,9 +50,11 @@ The `listDatabases()` call is now wrapped in `try/catch`. On failure it:
 - records failure telemetry via `callWithTelemetryAndErrorHandling('connect', …)` with
   `connectionResult = 'Failed'`, `source = 'treeExpansion'`, `experience`, and
   `failurePhase = 'listDatabases'` (so the failure is still captured — it simply moves from the
-  provider-level `getChildren` event to a more descriptive `connect` event), and surfaces a
-  non-modal error notification with the underlying message;
-- logs the full error to the output channel; and
+  provider-level `getChildren` event to a more descriptive `connect` event), while setting
+  `errorHandling.suppressDisplay` so azext's default non-modal notification is suppressed;
+- surfaces the failure as a **modal** error dialog (it blocks the user's interactive expand flow,
+  matching the convention of showing modals for blocking operations) and logs the full error to
+  the output channel; and
 - returns the same `…/reconnect` retry node used by the existing `!clustersClient` branch, which
   `hasRetryNode()` detects and the branch data provider caches. Clicking it runs
   `vscode-documentdb.command.internal.retry` → `resetNodeErrorState()` + refresh, re-attempting

@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
 import { type ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
@@ -10,21 +11,33 @@ import { type TreeElement } from '../TreeElement';
 import { ClusterItemBase, type EphemeralClusterCredentials } from './ClusterItemBase';
 
 // Captures telemetry events emitted via callWithTelemetryAndErrorHandling when its callback throws.
-const mockTelemetryEvents: Array<{ eventName: string; properties: Record<string, string> }> = [];
+const mockTelemetryEvents: Array<{ eventName: string; properties: Record<string, string>; suppressDisplay?: boolean }> =
+    [];
 
 jest.mock('@microsoft/vscode-azext-utils', () => ({
     UserCancelledError: class UserCancelledError extends Error {},
     callWithTelemetryAndErrorHandling: jest.fn(
         async (
             eventName: string,
-            callback: (ctx: { telemetry: { properties: Record<string, string> } }) => unknown,
+            callback: (ctx: {
+                telemetry: { properties: Record<string, string> };
+                errorHandling: { suppressDisplay?: boolean };
+            }) => unknown,
         ) => {
-            const context = { telemetry: { properties: {} as Record<string, string>, measurements: {} } };
+            const context = {
+                telemetry: { properties: {} as Record<string, string>, measurements: {} },
+                errorHandling: {} as { suppressDisplay?: boolean },
+            };
             try {
                 return await callback(context);
             } catch {
-                // Mirrors azext: the error is recorded as telemetry (and would be displayed) rather than rethrown.
-                mockTelemetryEvents.push({ eventName, properties: context.telemetry.properties });
+                // Mirrors azext: the error is recorded as telemetry rather than rethrown. azext would
+                // display the error unless context.errorHandling.suppressDisplay was set.
+                mockTelemetryEvents.push({
+                    eventName,
+                    properties: context.telemetry.properties,
+                    suppressDisplay: context.errorHandling.suppressDisplay,
+                });
                 return undefined;
             }
         },
@@ -125,6 +138,20 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
         // The branch data provider detects (and caches) the error state via hasRetryNode().
         expect(item.hasRetryNode(children)).toBe(true);
+    });
+
+    it('surfaces the failure as a modal dialog and suppresses the default non-modal notification', async () => {
+        const listDatabases = jest.fn().mockRejectedValue(new Error('not authenticated'));
+        const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
+
+        await item.getChildren();
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+            'Failed to load databases for "My Cluster"',
+            expect.objectContaining({ modal: true, detail: 'not authenticated' }),
+        );
+        // azext's own (non-modal) display is suppressed so the user only sees the modal.
+        expect(mockTelemetryEvents[0].suppressDisplay).toBe(true);
     });
 
     it('records failure telemetry with the expected properties', async () => {
