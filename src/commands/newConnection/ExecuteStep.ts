@@ -134,8 +134,10 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
             newParsedCS.username = '';
             newParsedCS.password = '';
 
-            let newConnectionLabel =
-                newUsername && newUsername.length > 0 ? `${newUsername}@${newJoinedHosts}` : newJoinedHosts;
+            // The connection label is derived from the host(s) only. We intentionally do not
+            // prefix it with the username so that all new connections share a consistent,
+            // credential-free naming scheme.
+            let newConnectionLabel = newJoinedHosts;
 
             // Sanity Check 2/2: is there a connection with the same 'label' in there?
             // If so, append a number to the label.
@@ -186,13 +188,15 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 secrets: {
                     connectionString: newParsedCS.toString(),
                     nativeAuthConfig:
-                        context.nativeAuthConfig ??
-                        (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
-                            ? {
-                                  connectionUser: newUsername ?? '',
-                                  connectionPassword: newPassword,
-                              }
-                            : undefined),
+                        newAuthenticationMethod === AuthMethodId.NoAuth
+                            ? undefined
+                            : (context.nativeAuthConfig ??
+                              (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
+                                  ? {
+                                        connectionUser: newUsername ?? '',
+                                        connectionPassword: newPassword,
+                                    }
+                                  : undefined)),
                     entraIdAuthConfig: context.entraIdAuthConfig,
                 },
             };
