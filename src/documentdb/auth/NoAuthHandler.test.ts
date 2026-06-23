@@ -45,9 +45,7 @@ describe('NoAuthHandler', () => {
 
     it('preserves an explicit tls=true&tlsAllowInvalidCertificates=true override', async () => {
         const cs = 'mongodb://anon-host:27017/?tls=true&tlsAllowInvalidCertificates=true';
-        const handler = new NoAuthHandler(
-            buildCredentials({ connectionString: cs, connectionStringWithPassword: cs }),
-        );
+        const handler = new NoAuthHandler(buildCredentials({ connectionString: cs, connectionStringWithPassword: cs }));
 
         const { connectionString, options } = await handler.configureAuth();
 
