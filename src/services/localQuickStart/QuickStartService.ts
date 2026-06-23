@@ -49,6 +49,13 @@ const SECRET_KEY = 'documentdb.quickstart.connectionString';
 const READINESS_TIMEOUT_MS = 180_000;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
+/**
+ * Built-in sample data (`--init-data true`) loads into this database shortly
+ * after the gateway becomes ready. We wait (best-effort, capped) for it to
+ * appear so the demo's browse step reliably shows data.
+ */
+const SAMPLE_DATA_DB = 'sampledb';
+const SAMPLE_DATA_TIMEOUT_MS = 60_000;
 
 function errMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -192,7 +199,18 @@ class QuickStartServiceImpl {
                     labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: QUICK_START_ALIAS },
                     hostPort: QUICK_START_PORT,
                     containerPort: QUICK_START_PORT,
-                    command: ['--username', credentials.username, '--password', credentials.password],
+                    // `--init-data true` loads the image's built-in sample data into the
+                    // `sampledb` database (users/products/orders/analytics) via the image's
+                    // own init-script convention (design §8.4) — portable and identical to
+                    // running the image by hand, instead of a bespoke driver-side seed.
+                    command: [
+                        '--username',
+                        credentials.username,
+                        '--password',
+                        credentials.password,
+                        '--init-data',
+                        'true',
+                    ],
                 },
                 secrets,
                 cts.token,
@@ -219,8 +237,10 @@ class QuickStartServiceImpl {
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
-            // Best-effort: seed one sample document so the tree isn't empty to browse.
-            await this.seedSampleData(connectionString);
+            // Built-in sample data (`--init-data true`) loads just after readiness;
+            // wait briefly (capped, non-fatal) so the tree shows data on first expand.
+            await this.waitForSampleData(connectionString, signal);
+            this.throwIfAborted(signal);
 
             // --- success ---
             await ext.secretStorage.store(SECRET_KEY, connectionString);
@@ -312,28 +332,30 @@ class QuickStartServiceImpl {
     }
 
     /**
-     * Insert a single sample document so the freshly-provisioned instance has a
-     * browsable database/collection for the demo. Best-effort: never fails the flow.
+     * Best-effort wait for the built-in `sampledb` to appear after `--init-data true`.
+     * Capped and non-fatal: if it never shows, provisioning still succeeds (the
+     * instance is usable, just without sample data).
      */
-    private async seedSampleData(connectionString: string): Promise<void> {
-        const client = new MongoClient(connectionString, {
-            serverSelectionTimeoutMS: 5_000,
-            tlsAllowInvalidCertificates: true,
-        });
-        try {
-            await client.connect();
-            const collection = client.db('quickstart').collection('sample');
-            if ((await collection.estimatedDocumentCount()) === 0) {
-                await collection.insertOne({
-                    name: 'DocumentDB Local Quick Start',
-                    createdAt: new Date(),
-                    note: 'Sample document created by Quick Start.',
-                });
+    private async waitForSampleData(connectionString: string, signal: AbortSignal): Promise<void> {
+        const deadline = Date.now() + SAMPLE_DATA_TIMEOUT_MS;
+        while (Date.now() < deadline) {
+            this.throwIfAborted(signal);
+            const client = new MongoClient(connectionString, {
+                serverSelectionTimeoutMS: PROBE_SERVER_SELECTION_TIMEOUT_MS,
+                tlsAllowInvalidCertificates: true,
+            });
+            try {
+                await client.connect();
+                const dbs = await client.db().admin().listDatabases();
+                if (dbs.databases.some((db) => db.name === SAMPLE_DATA_DB)) {
+                    return;
+                }
+            } catch {
+                // keep waiting — the gateway may briefly drop during data load
+            } finally {
+                await client.close().catch(() => undefined);
             }
-        } catch {
-            // Seeding is best-effort; an empty instance is still a successful setup.
-        } finally {
-            await client.close().catch(() => undefined);
+            await delay(1500, signal);
         }
     }
 
