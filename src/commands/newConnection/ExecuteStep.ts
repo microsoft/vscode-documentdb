@@ -55,10 +55,17 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
 
             const newConnectionString = context.connectionString!.trim();
 
-            const newPassword = context.nativeAuthConfig?.connectionPassword;
-            const newUsername = context.nativeAuthConfig?.connectionUser;
-
             const newAuthenticationMethod = context.selectedAuthenticationMethod;
+
+            // Native credentials only apply to the Native authentication method. When a user
+            // pastes a connection string that embeds a username/password but then selects a
+            // credential-free method (No Authentication or Microsoft Entra ID), those parsed
+            // credentials must be ignored. Otherwise duplicate detection compares against a stale
+            // username (incorrectly blocking creation) and the credentials would leak into the
+            // stored secrets of a connection that is supposed to be credential-free.
+            const usesNativeCredentials = newAuthenticationMethod === AuthMethodId.NativeAuth;
+            const newUsername = usesNativeCredentials ? context.nativeAuthConfig?.connectionUser : undefined;
+
             const newAvailableAuthenticationMethods =
                 context.availableAuthenticationMethods ?? (newAuthenticationMethod ? [newAuthenticationMethod] : []);
 
@@ -187,16 +194,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewConnectionWizardConte
                 },
                 secrets: {
                     connectionString: newParsedCS.toString(),
-                    nativeAuthConfig:
-                        newAuthenticationMethod === AuthMethodId.NoAuth
-                            ? undefined
-                            : (context.nativeAuthConfig ??
-                              (newAuthenticationMethod === AuthMethodId.NativeAuth && (newUsername || newPassword)
-                                  ? {
-                                        connectionUser: newUsername ?? '',
-                                        connectionPassword: newPassword,
-                                    }
-                                  : undefined)),
+                    // Persist native credentials only for the Native authentication method.
+                    // No Authentication and Microsoft Entra ID are credential-free.
+                    nativeAuthConfig: usesNativeCredentials ? context.nativeAuthConfig : undefined,
                     entraIdAuthConfig: context.entraIdAuthConfig,
                 },
             };
