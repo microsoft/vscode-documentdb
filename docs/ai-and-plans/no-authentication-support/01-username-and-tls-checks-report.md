@@ -252,3 +252,16 @@ a hardening recommendation (Phase 5).
    — skip when `NoAuth` is selected.
 10. `src/commands/openInteractiveShell/openInteractiveShell.ts:55,102` — `hasCredentials`
     works once the cache is populated for `NoAuth`; verify messaging.
+
+**Migration tools API (no API change — verify-only, host-side):**
+
+11. `src/commands/accessDataMigrationServices/accessDataMigrationServices.ts:114‑130` — the
+    sole connection-sharing point; injects `getConnectionUser()/getConnectionPassword()`
+    (→ empty for NoAuth) into `options.connectionString`. Empty creds yield a credential-free
+    URI; TLS params preserved.
+12. `src/commands/accessDataMigrationServices/accessDataMigrationServices.ts:214‑219`
+    (`ensureAuthentication`) — gates on `CredentialCache.hasCredentials(clusterId)`; passes
+    once Phase 3 populates the cache for NoAuth.
+13. `api/src/migration/*`, `api/src/utils/getApi.ts` — **unchanged**; the whitelist is an
+    extension-ID allow-list, and `ActionsOptions.connectionString` transports NoAuth
+    transparently. See plan Phase 8.

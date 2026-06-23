@@ -175,6 +175,110 @@ No dedicated change expected. Database/collection tree items reuse the authentic
       assumptions on the database/collection read paths (grep showed only display/dedup
       usages). Add a regression test that lists databases over a NoAuth client.
 
+### Phase 8 — Migration tools API (whitelisted external extension)
+
+**Goal:** Confirm a NoAuth connection flows through the migration API to the whitelisted
+external extension **without changing the public API surface** (`api/src/migration/*`).
+
+#### 8.1 How the migration integration works today (traced)
+
+There are two distinct boundaries:
+
+1. **API acquisition + provider registration** (whitelist):
+   - `api/src/utils/getApi.ts:52‑81` — `getDocumentDBExtensionApi(context, version)` reads
+     the host extension's `package.json` → `x-documentdbApi.registeredClients` and throws
+     unless `context.extension.id` is in that whitelist. This is purely an **allow-list of
+     extension IDs**; it has nothing to do with cluster credentials.
+   - `src/extension.ts:124‑138` — v0.3.0 `registerProvider(context, provider)` →
+     `MigrationService.registerProviderWithContext(extensionId, provider)`
+     (`src/services/migrationServices.ts:109‑123`), enforcing **one provider per
+     extension**.
+   - The external extension implements `MigrationProvider`
+     (`api/src/migration/migrationProvider.ts`): `getAvailableActions(options)` and
+     `executeAction(options, id)`.
+
+2. **Per-operation connection sharing** (the part that matters for NoAuth):
+   - `src/commands/accessDataMigrationServices/accessDataMigrationServices.ts:114‑130` is the
+     **single place** where connection details are handed to the provider:
+
+     ```ts
+     const credentials = await node.getCredentials();              // storage read
+     if (!credentials) { throw new Error('No credentials found …'); }
+
+     const parsedCS_WithCredentials = new DocumentDBConnectionString(credentials.connectionString);
+     parsedCS_WithCredentials.username = CredentialCache.getConnectionUser(node.cluster.clusterId) ?? '';
+     parsedCS_WithCredentials.password = CredentialCache.getConnectionPassword(node.cluster.clusterId) ?? '';
+
+     const options = {
+         connectionString: parsedCS_WithCredentials.toString(),     // ← the channel
+         extendedProperties: { clusterId: node.cluster.clusterId },
+     };
+     // → selectedProvider.getAvailableActions(options) / executeAction(options, id)
+     ```
+
+   - So the **only** way credentials cross the API boundary is the
+     `ActionsOptions.connectionString` string (`api/src/migration/migrationProvider.ts:47‑57`).
+     The external extension parses it and connects with its own MongoDB driver.
+
+3. **Auth gating** before sharing:
+   - `accessDataMigrationServices.ts:100‑112` (provider-level) and `:181‑192` (action-level)
+     call `ensureAuthentication()` →
+     `accessDataMigrationServices.ts:214‑219`:
+     ```ts
+     return CredentialCache.hasCredentials(_node.cluster.clusterId);
+     ```
+     i.e. it only checks that a **cache entry exists**, not that a username is present.
+
+#### 8.2 What happens for a NoAuth connection (analysis)
+
+Walking the same path with empty username/password:
+
+| Step | Behavior for NoAuth | Verdict |
+|------|---------------------|---------|
+| `node.getCredentials()` (`DocumentDBClusterItem.ts:61‑86`) | Reads from storage; returns the `connectionString` (already credential-free) + `availableAuthMethods`/`selectedAuthMethod`. Independent of username. | ✅ Works |
+| `CredentialCache.getConnectionUser()` / `getConnectionPassword()` | Return `undefined` for NoAuth → `?? ''` → empty. | ✅ |
+| `parsedCS.username = '' ; parsedCS.password = ''` | The whatwg-url setters drop the userinfo → `mongodb://host/?tls=false` (no `user:pass@`). Same empty-safe behavior already relied on by `CredentialCache.setAuthCredentials` (report §2.3). | ✅ Credential-free CS |
+| `options.connectionString` handed to provider | A valid anonymous connection string, **TLS params preserved** (we never strip/inject `tls`/`ssl` here). | ✅ |
+| `ensureAuthentication()` → `hasCredentials(clusterId)` | True **once Phase 3 populates the cache** for NoAuth on expand/connect. | ✅ (depends on Phase 3) |
+
+**Conclusion: no API change is required.** `ActionsOptions.connectionString` is a generic
+connection string; an empty username/password naturally yields a credential-free URI, and
+the whitelist is an extension-ID allow-list unrelated to cluster auth. The migration path
+"just works" for NoAuth **provided** the runtime cache is populated (Phase 3) so that:
+(a) `node.getCredentials()` returns a record, and (b) `hasCredentials()` returns true for
+providers/actions that set `requiresAuthentication`.
+
+#### 8.3 Required work (small, host-side only — no `api/` changes)
+
+- [ ] **Verify-only:** Confirm `accessDataMigrationServices.ts:121‑126` produces a
+      credential-free connection string for NoAuth and that `tls`/`ssl` query params from the
+      stored connection string survive (add a unit test around this block, mocking
+      `CredentialCache.getConnectionUser/Password` → `undefined`).
+- [ ] **Cache dependency:** Ensure the NoAuth changes in Phase 3 cause
+      `CredentialCache.hasCredentials(clusterId)` to be `true` after the user expands/connects,
+      so `ensureAuthentication()` (`:215`) passes for providers that set
+      `requiresAuthentication`. (No change in `accessDataMigrationServices.ts` expected.)
+- [ ] **Edge guard (optional):** `accessDataMigrationServices.ts:117‑119` throws "No
+      credentials found" if `node.getCredentials()` is `undefined`. For NoAuth this returns a
+      record (it's keyed on stored connection, not username), so the throw won't fire — but add
+      a test to lock that contract.
+
+#### 8.4 Explicitly out of scope (do NOT change)
+
+- `api/src/migration/migrationApi.ts`, `migrationProvider.ts`, `index.ts`,
+  `api/src/utils/getApi.ts`, `api/src/extensionApi.ts` — the public API stays as-is. NoAuth
+  is transported transparently via the existing `connectionString` field.
+- The whitelist mechanism (`x-documentdbApi.registeredClients`) — unrelated to auth method.
+
+#### 8.5 Caveat to communicate to provider authors (no code change)
+
+The external (whitelisted) migration extension connects using the connection string we give
+it. If **its** own code assumes a non-empty username (e.g. validates `user:pass@` is
+present, or force-injects TLS), it may reject a NoAuth/`tls=false` URI. That's outside this
+repo, but worth a note in the API docs (`api/README.md`) that the shared `connectionString`
+may be credential-free and may carry explicit `tls`/`ssl` overrides, and providers should
+pass it to the driver verbatim rather than reconstructing it.
+
 ---
 
 ## 4. Persistence & migration
@@ -199,6 +303,10 @@ No dedicated change expected. Database/collection tree items reuse the authentic
 - [ ] Integration: connect → list databases → list collections over NoAuth.
 - [ ] Integration: open integrated shell against a NoAuth connection.
 - [ ] Integration: run a playground statement against a NoAuth connection.
+- [ ] Migration API: `accessDataMigrationServices` builds a credential-free
+      `options.connectionString` for NoAuth (mock `getConnectionUser/Password → undefined`)
+      and preserves `tls`/`ssl` query params; `ensureAuthentication` passes once the cache is
+      populated.
 - [ ] TLS: connection string `tls=false` / `ssl=false` is honored end-to-end (Phase 0).
 - [ ] Regression: Native and Entra flows unchanged.
 - [ ] `TDD:`-prefixed tests: if any exist around auth, **do not** auto-edit — confirm intent
@@ -223,3 +331,7 @@ No dedicated change expected. Database/collection tree items reuse the authentic
   `selectedAuthMethod === 'NoAuth'` and not fall back to Native.
 - **TLS:** no override risk for native/no-auth today; the only forced-TLS path is Entra
   (intentional). Don't generalize the Entra TLS forcing into the shared worker code.
+- **Migration API:** no public API change; the risk is entirely host-side and hinges on the
+  Phase 3 cache population (so `getCredentials()`/`hasCredentials()` behave). External
+  providers that assume embedded credentials are out of our control — document the
+  credential-free/TLS-override possibility in `api/README.md`.
