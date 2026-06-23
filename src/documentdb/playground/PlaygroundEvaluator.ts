@@ -252,7 +252,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         if (authMechanism === 'NativeAuth') {
             connectionString = CredentialCache.getConnectionStringWithPassword(connection.clusterId);
         } else {
-            // Entra ID: use connection string without embedded credentials
+            // Entra ID and NoAuth: use connection string without embedded credentials
             connectionString = credentials.connectionString;
         }
 
@@ -272,7 +272,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             connectionString,
             clientOptions,
             databaseName: connection.databaseName,
-            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
+            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth',
             tenantId: credentials.entraIdConfig?.tenantId,
         };
     }
