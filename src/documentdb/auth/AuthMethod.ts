@@ -14,6 +14,8 @@ export enum AuthMethodId {
     NativeAuth = 'NativeAuth',
     /** Microsoft Entra ID (Azure AD) authentication. */
     MicrosoftEntraID = 'MicrosoftEntraID',
+    /** Anonymous connection without a username, password, or Entra ID. */
+    NoAuth = 'NoAuth',
 }
 
 /**
@@ -44,8 +46,14 @@ export const MicrosoftEntraIDAuthMethod: AuthMethodInfo = {
     // iconName: 'Microsoft-Entra-ID-BW-icon.svg',
 } as const;
 
+export const NoAuthMethod: AuthMethodInfo = {
+    id: AuthMethodId.NoAuth,
+    label: vscode.l10n.t('No Authentication'),
+    detail: vscode.l10n.t('Connect without a username or password'),
+} as const;
+
 // Arrays for different contexts
-const authMethodsArray: AuthMethodInfo[] = [NativeAuthMethod, MicrosoftEntraIDAuthMethod];
+const authMethodsArray: AuthMethodInfo[] = [NativeAuthMethod, MicrosoftEntraIDAuthMethod, NoAuthMethod];
 
 // Map for efficient lookup
 const authMethodsMap = new Map<AuthMethodId, AuthMethodInfo>(
