@@ -88,14 +88,17 @@ class QuickStartServiceImpl {
     private state: InstanceState = InstanceState.NotInstalled;
     private metadata: InstanceMetadata | undefined;
     private errorMessage: string | undefined;
+    private missing = false;
     private provisioning = false;
+    /** Serializes lifecycle ops (start/stop/restart/delete) so they don't overlap. */
+    private lifecycleBusy = false;
 
     private readonly statusEmitter = new vscode.EventEmitter<void>();
     /** Fires whenever the managed-instance status changes (drives the tree). */
     public readonly onDidChangeStatus = this.statusEmitter.event;
 
     public getStatus(): QuickStartStatus {
-        return { state: this.state, metadata: this.metadata, errorMessage: this.errorMessage };
+        return { state: this.state, metadata: this.metadata, errorMessage: this.errorMessage, missing: this.missing };
     }
 
     public get isBusy(): boolean {
@@ -112,6 +115,7 @@ class QuickStartServiceImpl {
             this.metadata = metadata;
         }
         this.errorMessage = errorMessage;
+        this.missing = false;
         this.statusEmitter.fire();
     }
 
@@ -377,6 +381,124 @@ class QuickStartServiceImpl {
             { connectionUser: username, connectionPassword: password },
             { isEmulator: true, disableEmulatorSecurity: true },
         );
+    }
+
+    /**
+     * Verify a container is ours before acting on it (design §9/§13.1): never
+     * touch a container that doesn't carry the Quick Start label, even if the id
+     * matches.
+     */
+    private async isManaged(containerId: string): Promise<boolean> {
+        const item = await ContainerRuntime.inspectContainer(containerId);
+        return !!item && item.labels?.[QUICK_START_LABEL_KEY] === '1';
+    }
+
+    /** Start a stopped instance (design §11). */
+    public async start(): Promise<void> {
+        await this.runLifecycle(async () => {
+            const id = this.metadata?.containerId;
+            if (!id || !(await this.isManaged(id))) {
+                return;
+            }
+            this.setStatus(InstanceState.Starting);
+            await ContainerRuntime.startContainer(id);
+            const inspected = await ContainerRuntime.inspectContainer(id);
+            this.setStatus(ContainerRuntime.isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped);
+        });
+    }
+
+    /** Stop a running instance (design §11). */
+    public async stop(): Promise<void> {
+        await this.runLifecycle(async () => {
+            const id = this.metadata?.containerId;
+            if (!id || !(await this.isManaged(id))) {
+                return;
+            }
+            this.setStatus(InstanceState.Stopping);
+            await ContainerRuntime.stopContainer(id);
+            this.setStatus(InstanceState.Stopped);
+        });
+    }
+
+    /** Restart (stop + start) a running instance (design §11). */
+    public async restart(): Promise<void> {
+        await this.runLifecycle(async () => {
+            const id = this.metadata?.containerId;
+            if (!id || !(await this.isManaged(id))) {
+                return;
+            }
+            this.setStatus(InstanceState.Stopping);
+            await ContainerRuntime.stopContainer(id).catch(() => undefined);
+            this.setStatus(InstanceState.Starting);
+            await ContainerRuntime.startContainer(id);
+            const inspected = await ContainerRuntime.inspectContainer(id);
+            this.setStatus(ContainerRuntime.isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped);
+        });
+    }
+
+    /**
+     * Remove the container and clear all stored metadata/credentials (design §11
+     * "Delete Container"). POC keeps no data volume, so this returns to a clean
+     * NotInstalled state.
+     */
+    public async deleteContainer(): Promise<void> {
+        await this.runLifecycle(async () => {
+            const id = this.metadata?.containerId;
+            // If the container still exists, only remove it when it is ours.
+            if (id && (this.missing || (await this.isManaged(id)))) {
+                await ContainerRuntime.removeContainer(id).catch(() => undefined);
+            }
+            try {
+                await ext.secretStorage.delete(SECRET_KEY);
+            } catch {
+                // ignore — best-effort cleanup
+            }
+            await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
+            CredentialCache.deleteCredentials(QUICK_START_CLUSTER_ID);
+            this.metadata = undefined;
+            this.setStatus(InstanceState.NotInstalled);
+        });
+    }
+
+    /**
+     * Re-check live Docker state for the managed instance (cheap multi-window /
+     * external-change freshness, design §12). Sets the `Missing` badge when we
+     * hold metadata but Docker no longer has the container.
+     */
+    public async refreshLiveState(): Promise<void> {
+        if (this.provisioning || this.lifecycleBusy || !this.metadata) {
+            return;
+        }
+        try {
+            const inspected = await ContainerRuntime.inspectContainer(this.metadata.containerId);
+            if (!inspected) {
+                // Container is gone — keep metadata so the user can recreate.
+                this.missing = true;
+                this.statusEmitter.fire();
+                return;
+            }
+            const running = ContainerRuntime.isRunning(inspected);
+            const nextState = running ? InstanceState.Running : InstanceState.Stopped;
+            if (this.missing || this.state !== nextState) {
+                this.setStatus(nextState);
+            }
+        } catch {
+            // Best-effort freshness; never throw into the tree render.
+        }
+    }
+
+    private async runLifecycle(op: () => Promise<void>): Promise<void> {
+        if (this.provisioning || this.lifecycleBusy) {
+            return;
+        }
+        this.lifecycleBusy = true;
+        try {
+            await op();
+        } catch (error) {
+            this.setStatus(InstanceState.Error, undefined, errMessage(error));
+        } finally {
+            this.lifecycleBusy = false;
+        }
     }
 
     /**

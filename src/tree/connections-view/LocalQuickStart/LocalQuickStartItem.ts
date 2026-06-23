@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createContextValue } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import path from 'path';
 import * as vscode from 'vscode';
@@ -19,16 +20,21 @@ import { type TreeElementWithContextValue } from '../../TreeElementWithContextVa
 import { DocumentDBClusterItem } from '../DocumentDBClusterItem';
 import { type ConnectionClusterModel } from '../models/ConnectionClusterModel';
 
+/** Base context token for the managed-instance row; menus gate on this + a state token. */
+const INSTANCE_CONTEXT = 'treeItem_quickStartInstance';
+
 /**
- * Inline managed-instance cluster item. Extends the regular cluster item only to
- * stamp a state-aware description (`Running · localhost:<port>`); browsing reuses
- * the base `DocumentDBClusterItem` (which connects via the pre-populated
- * `CredentialCache`, so no re-prompt).
+ * Inline managed-instance cluster item (shown only when Running). Extends the
+ * regular cluster item to (a) stamp a state-aware description and (b) carry a
+ * Quick-Start-specific context value so the instance shows Quick Start lifecycle
+ * actions instead of the generic cluster menus. Browsing reuses the base
+ * `DocumentDBClusterItem` (connects via the pre-populated `CredentialCache`).
  */
 class QuickStartClusterItem extends DocumentDBClusterItem {
-    constructor(model: TreeCluster<ConnectionClusterModel>, description: string) {
+    constructor(model: TreeCluster<ConnectionClusterModel>, description: string, stateToken: string) {
         super(model);
         this.descriptionOverride = description;
+        this.contextValue = createContextValue([INSTANCE_CONTEXT, stateToken]);
     }
 }
 
@@ -38,7 +44,8 @@ class QuickStartClusterItem extends DocumentDBClusterItem {
  *
  * - No managed instance → a rocket empty-state row that opens the Quick Start
  *   webview, plus a "Learn more…" link.
- * - A managed instance → the inline cluster (expand to browse, WI-5).
+ * - A managed instance → the inline cluster (Running, expand to browse) or a
+ *   state row (Stopped/Starting/Stopping/Missing/Error) carrying lifecycle menus.
  */
 export class LocalQuickStartItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
@@ -48,12 +55,29 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         this.id = `${parentId}/localQuickStart`;
     }
 
-    // eslint-disable-next-line @typescript-eslint/require-await
     async getChildren(): Promise<TreeElement[]> {
-        const status: QuickStartStatus = QuickStartService.getStatus();
+        // Cheap freshness: reconcile against live Docker state (external changes,
+        // other windows) and set the Missing badge if the container vanished.
+        await QuickStartService.refreshLiveState();
 
-        if (status.metadata && (status.state === InstanceState.Running || status.state === InstanceState.Stopped)) {
-            const metadata = status.metadata;
+        const status: QuickStartStatus = QuickStartService.getStatus();
+        const metadata = status.metadata;
+
+        // Missing badge (design §6.1): metadata exists but Docker has no container.
+        if (metadata && status.missing) {
+            return [
+                createGenericElementWithContext({
+                    id: `${this.id}/instance`,
+                    contextValue: createContextValue([INSTANCE_CONTEXT, 'state_missing']),
+                    label: l10n.t('DocumentDB Local'),
+                    description: l10n.t('Missing · click to recreate'),
+                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
+                    commandId: 'vscode-documentdb.command.localQuickStart.open',
+                }),
+            ];
+        }
+
+        if (metadata && status.state === InstanceState.Running) {
             const model: TreeCluster<ConnectionClusterModel> = {
                 treeId: `${this.id}/instance`,
                 viewId: this.parentId,
@@ -66,13 +90,53 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 selectedAuthMethod: AuthMethodId.NativeAuth,
                 connectionUser: metadata.username,
             };
+            return [
+                new QuickStartClusterItem(
+                    model,
+                    l10n.t('Running · localhost:{0}', metadata.boundPort),
+                    'state_running',
+                ),
+            ];
+        }
 
-            const description =
-                status.state === InstanceState.Running
-                    ? l10n.t('Running · localhost:{0}', metadata.boundPort)
-                    : l10n.t('Stopped · localhost:{0}', metadata.boundPort);
+        // Non-running managed states render as a non-browsable row carrying the
+        // lifecycle menus (a stopped container can't be connected to / browsed).
+        if (metadata) {
+            const port = metadata.boundPort;
+            const row = (stateToken: string, description: string, icon: vscode.ThemeIcon): TreeElement =>
+                createGenericElementWithContext({
+                    id: `${this.id}/instance`,
+                    contextValue: createContextValue([INSTANCE_CONTEXT, stateToken]),
+                    label: l10n.t('DocumentDB Local'),
+                    description,
+                    iconPath: icon,
+                });
 
-            return [new QuickStartClusterItem(model, description)];
+            const spin = new vscode.ThemeIcon('loading~spin');
+            switch (status.state) {
+                case InstanceState.Starting:
+                    return [row('state_starting', l10n.t('Starting… · localhost:{0}', port), spin)];
+                case InstanceState.Stopping:
+                    return [row('state_stopping', l10n.t('Stopping… · localhost:{0}', port), spin)];
+                case InstanceState.Stopped:
+                    return [
+                        row(
+                            'state_stopped',
+                            l10n.t('Stopped · localhost:{0}', port),
+                            new vscode.ThemeIcon('circle-outline'),
+                        ),
+                    ];
+                case InstanceState.Error:
+                    return [
+                        row(
+                            'state_error',
+                            status.errorMessage ?? l10n.t('Error · click for details'),
+                            new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.errorForeground')),
+                        ),
+                    ];
+                default:
+                    break;
+            }
         }
 
         if (status.state === InstanceState.Provisioning) {
@@ -86,7 +150,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             ];
         }
 
-        // NotInstalled / Error → empty-state rocket + learn more.
+        // NotInstalled (no metadata) → empty-state rocket + learn more.
         const children: TreeElement[] = [
             createGenericElementWithContext({
                 id: `${this.id}/start`,

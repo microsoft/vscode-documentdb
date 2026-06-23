@@ -34,7 +34,9 @@ export const QUICK_START_ALIAS_LABEL_KEY = 'vscode.documentdb.alias';
 export enum InstanceState {
     NotInstalled = 'NotInstalled',
     Provisioning = 'Provisioning',
+    Starting = 'Starting',
     Running = 'Running',
+    Stopping = 'Stopping',
     Stopped = 'Stopped',
     Error = 'Error',
 }
@@ -84,6 +86,11 @@ export interface QuickStartStatus {
     readonly state: InstanceState;
     readonly metadata?: InstanceMetadata;
     readonly errorMessage?: string;
+    /**
+     * `Missing` badge (design §6.1): the extension holds metadata but Docker has
+     * no matching container (e.g. the user removed it outside the extension).
+     */
+    readonly missing?: boolean;
 }
 
 /** Result of the `getDockerStatus` query (powers the webview review cards). */

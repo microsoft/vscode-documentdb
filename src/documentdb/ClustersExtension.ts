@@ -48,6 +48,15 @@ import { hideIndex } from '../commands/index.hideIndex/hideIndex';
 import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
 import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
+import {
+    copyQuickStartConnectionString,
+    copyQuickStartPassword,
+    deleteQuickStartInstance,
+    restartQuickStartInstance,
+    startQuickStartInstance,
+    stopQuickStartInstance,
+    viewQuickStartLogs,
+} from '../commands/localQuickStart/localQuickStartCommands';
 import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../services/localQuickStart/QuickStartService';
 import { newConnection } from '../commands/newConnection/newConnection';
@@ -545,6 +554,34 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(
                     'vscode-documentdb.command.localQuickStart.open',
                     withCommandCorrelation(openLocalQuickStart),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.start',
+                    withCommandCorrelation(startQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.stop',
+                    withCommandCorrelation(stopQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.restart',
+                    withCommandCorrelation(restartQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.delete',
+                    withCommandCorrelation(deleteQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.copyConnectionString',
+                    withCommandCorrelation(copyQuickStartConnectionString),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.copyPassword',
+                    withCommandCorrelation(copyQuickStartPassword),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.viewLogs',
+                    withCommandCorrelation(viewQuickStartLogs),
                 );
 
                 registerCommand(
