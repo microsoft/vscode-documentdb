@@ -43,6 +43,7 @@ import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
+import { NoAuthHandler } from './auth/NoAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
@@ -231,6 +232,9 @@ export class ClustersClient {
                 break;
             case AuthMethodId.MicrosoftEntraID:
                 authHandler = new MicrosoftEntraIDAuthHandler(credentials);
+                break;
+            case AuthMethodId.NoAuth:
+                authHandler = new NoAuthHandler(credentials);
                 break;
             default:
                 throw new Error(l10n.t('Unsupported authentication method: {0}', authMethod));

@@ -61,7 +61,11 @@ export class CredentialCache {
      *   ⚠️ Use cluster.clusterId, NOT treeId.
      */
     public static getConnectionStringWithPassword(clusterId: string): string {
-        return CredentialCache._store.get(clusterId)?.connectionStringWithPassword as string;
+        const entry = CredentialCache._store.get(clusterId);
+        // Fall back to the credential-free connection string so callers (shell, playground)
+        // never receive `undefined`. For NoAuth connections there is no embedded password,
+        // so `connectionStringWithPassword` equals `connectionString` anyway.
+        return entry?.connectionStringWithPassword ?? entry?.connectionString ?? '';
     }
 
     /**
@@ -258,14 +262,19 @@ export class CredentialCache {
         // Determine auth method if not explicitly provided
         let selectedAuthMethod = authMethod;
         if (!selectedAuthMethod) {
-            if (secrets.entraIdAuthConfig) {
+            const explicitMethod = connectionItem.properties.selectedAuthMethod as AuthMethodIdType | undefined;
+            if (explicitMethod === AuthMethodId.NoAuth) {
+                // Respect an explicit "No Authentication" choice even though there is no
+                // native/entra config to infer from; otherwise it would fall back to Native.
+                selectedAuthMethod = AuthMethodId.NoAuth;
+            } else if (secrets.entraIdAuthConfig) {
                 selectedAuthMethod = AuthMethodId.MicrosoftEntraID;
             } else if (secrets.nativeAuthConfig) {
                 selectedAuthMethod = AuthMethodId.NativeAuth;
             } else {
                 // Use the selected method from properties or first available method
                 selectedAuthMethod =
-                    (connectionItem.properties.selectedAuthMethod as AuthMethodIdType) ??
+                    explicitMethod ??
                     (connectionItem.properties.availableAuthMethods[0] as AuthMethodIdType) ??
                     AuthMethodId.NativeAuth;
             }
