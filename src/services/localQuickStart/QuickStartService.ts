@@ -50,12 +50,24 @@ const READINESS_TIMEOUT_MS = 180_000;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
 /**
- * Built-in sample data (`--init-data true`) loads into this database shortly
- * after the gateway becomes ready. We wait (best-effort, capped) for it to
- * appear so the demo's browse step reliably shows data.
+ * The image ships a native init script + sample-data directory (see
+ * `Dockerfile_documentdb_local`). We run that script ONCE via `docker exec` after
+ * the gateway is ready, instead of baking `--init-data true` into the run args:
+ * the baked flag re-runs the init on every Stop/Start, hits a duplicate-key error,
+ * and crashes the container (`set -e`). Exec-once keeps restarts safe while loading
+ * the same `sampledb` (users/products/orders/analytics). `-P` is the container's
+ * internal gateway port (always {@link QUICK_START_PORT} inside the container,
+ * independent of the bound host port).
  */
-const SAMPLE_DATA_DB = 'sampledb';
-const SAMPLE_DATA_TIMEOUT_MS = 60_000;
+const SAMPLE_DATA_INIT_SCRIPT = '/home/documentdb/gateway/scripts/init_documentdb_data.sh';
+const SAMPLE_DATA_DIR = '/home/documentdb/gateway/sample-data';
+/**
+ * After a `docker start`, a container that re-runs a failing entrypoint reports
+ * "running" for a moment before exiting, so a single immediate inspect can be a
+ * false positive. We poll {@link START_CONFIRM_ATTEMPTS} times to require it stays up.
+ */
+const START_CONFIRM_ATTEMPTS = 3;
+const START_CONFIRM_INTERVAL_MS = 1_500;
 
 function errMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -203,18 +215,12 @@ class QuickStartServiceImpl {
                     labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: QUICK_START_ALIAS },
                     hostPort: QUICK_START_PORT,
                     containerPort: QUICK_START_PORT,
-                    // `--init-data true` loads the image's built-in sample data into the
-                    // `sampledb` database (users/products/orders/analytics) via the image's
-                    // own init-script convention (design §8.4) — portable and identical to
-                    // running the image by hand, instead of a bespoke driver-side seed.
-                    command: [
-                        '--username',
-                        credentials.username,
-                        '--password',
-                        credentials.password,
-                        '--init-data',
-                        'true',
-                    ],
+                    // Only credentials are passed at run time. We intentionally do NOT
+                    // bake `--init-data true` here: it re-runs the sample-data init on
+                    // every Stop/Start and crashes the container on duplicate keys.
+                    // Sample data is seeded once, post-readiness, via `docker exec`
+                    // (see seedSampleData) which keeps restarts safe.
+                    command: ['--username', credentials.username, '--password', credentials.password],
                 },
                 secrets,
                 cts.token,
@@ -241,9 +247,11 @@ class QuickStartServiceImpl {
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
-            // Built-in sample data (`--init-data true`) loads just after readiness;
-            // wait briefly (capped, non-fatal) so the tree shows data on first expand.
-            await this.waitForSampleData(connectionString, signal);
+            // Seed the image's built-in sample data ONCE, now that the gateway is
+            // ready, by running the image's native init script via `docker exec`
+            // (best-effort, non-fatal). See seedSampleData for why this is exec-once
+            // rather than the baked `--init-data true` flag.
+            await this.seedSampleData(containerId, credentials.username, credentials.password, secrets, cts.token);
             this.throwIfAborted(signal);
 
             // --- success ---
@@ -336,30 +344,39 @@ class QuickStartServiceImpl {
     }
 
     /**
-     * Best-effort wait for the built-in `sampledb` to appear after `--init-data true`.
-     * Capped and non-fatal: if it never shows, provisioning still succeeds (the
-     * instance is usable, just without sample data).
+     * Seed the image's built-in sample data ONCE by running its native init
+     * script inside the container (`docker exec`). Best-effort and non-fatal: the
+     * instance is fully usable without sample data, so any failure is logged to the
+     * Quick Start channel and swallowed rather than failing provisioning.
      */
-    private async waitForSampleData(connectionString: string, signal: AbortSignal): Promise<void> {
-        const deadline = Date.now() + SAMPLE_DATA_TIMEOUT_MS;
-        while (Date.now() < deadline) {
-            this.throwIfAborted(signal);
-            const client = new MongoClient(connectionString, {
-                serverSelectionTimeoutMS: PROBE_SERVER_SELECTION_TIMEOUT_MS,
-                tlsAllowInvalidCertificates: true,
-            });
-            try {
-                await client.connect();
-                const dbs = await client.db().admin().listDatabases();
-                if (dbs.databases.some((db) => db.name === SAMPLE_DATA_DB)) {
-                    return;
-                }
-            } catch {
-                // keep waiting — the gateway may briefly drop during data load
-            } finally {
-                await client.close().catch(() => undefined);
-            }
-            await delay(1500, signal);
+    private async seedSampleData(
+        containerId: string,
+        username: string,
+        password: string,
+        secrets: ReadonlyArray<string>,
+        token: vscode.CancellationToken,
+    ): Promise<void> {
+        try {
+            await ContainerRuntime.execInContainer(
+                containerId,
+                [
+                    SAMPLE_DATA_INIT_SCRIPT,
+                    '-H',
+                    'localhost',
+                    '-P',
+                    String(QUICK_START_PORT),
+                    '-u',
+                    username,
+                    '-p',
+                    password,
+                    '-d',
+                    SAMPLE_DATA_DIR,
+                ],
+                secrets,
+                token,
+            );
+        } catch (error) {
+            getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
         }
     }
 
@@ -402,8 +419,15 @@ class QuickStartServiceImpl {
             }
             this.setStatus(InstanceState.Starting);
             await ContainerRuntime.startContainer(id);
-            const inspected = await ContainerRuntime.inspectContainer(id);
-            this.setStatus(ContainerRuntime.isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped);
+            if (await this.confirmStaysRunning(id)) {
+                this.setStatus(InstanceState.Running);
+            } else {
+                this.setStatus(
+                    InstanceState.Error,
+                    undefined,
+                    'The container started but exited shortly after. Check the Quick Start logs.',
+                );
+            }
         });
     }
 
@@ -431,9 +455,32 @@ class QuickStartServiceImpl {
             await ContainerRuntime.stopContainer(id).catch(() => undefined);
             this.setStatus(InstanceState.Starting);
             await ContainerRuntime.startContainer(id);
-            const inspected = await ContainerRuntime.inspectContainer(id);
-            this.setStatus(ContainerRuntime.isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped);
+            if (await this.confirmStaysRunning(id)) {
+                this.setStatus(InstanceState.Running);
+            } else {
+                this.setStatus(
+                    InstanceState.Error,
+                    undefined,
+                    'The container restarted but exited shortly after. Check the Quick Start logs.',
+                );
+            }
         });
+    }
+
+    /**
+     * After a `docker start`, confirm the container is still running a few seconds
+     * later. A container that re-runs a failing entrypoint reports "running" for a
+     * moment before exiting, so a single immediate inspect can be a false positive.
+     */
+    private async confirmStaysRunning(id: string): Promise<boolean> {
+        for (let attempt = 0; attempt < START_CONFIRM_ATTEMPTS; attempt++) {
+            await new Promise((resolve) => setTimeout(resolve, START_CONFIRM_INTERVAL_MS));
+            const inspected = await ContainerRuntime.inspectContainer(id);
+            if (!ContainerRuntime.isRunning(inspected)) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**

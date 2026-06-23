@@ -207,6 +207,40 @@ class ContainerRuntimeImpl {
         await runner(this.client.removeContainers({ containers: [id], force }));
     }
 
+    /**
+     * Run a one-off command inside a running container (`docker exec`). Used to
+     * seed the image's built-in sample data via its native init script — see
+     * {@link QuickStartService} — instead of baking `--init-data true` into the
+     * run args (which re-runs on every restart and crashes the container).
+     * `secrets` are masked in the echoed command line and streamed output (D14).
+     * Rejects on a non-zero exit so the caller can treat it as best-effort.
+     */
+    public async execInContainer(
+        id: string,
+        command: ReadonlyArray<string>,
+        secrets: ReadonlyArray<string>,
+        token?: vscode.CancellationToken,
+    ): Promise<void> {
+        const channel = getQuickStartOutputChannel();
+        // `execContainer` is a streaming response, so use the streaming runner and
+        // line-buffer + mask its output (D14), mirroring followLogs.
+        const lineBuffer = new MaskingLineBuffer((line) => channel.appendLine(line), secrets);
+        const factory = new ShellStreamCommandRunnerFactory({
+            strict: false,
+            shellProvider: SHELL_PROVIDER,
+            onCommand: (cmd: string) => channel.appendLine('$ ' + maskSecrets(cmd, secrets)),
+            cancellationToken: token,
+        });
+        const streamingRunner = factory.getStreamingCommandRunner();
+        try {
+            for await (const chunk of streamingRunner(this.client.execContainer({ container: id, command: [...command] }))) {
+                lineBuffer.push(String(chunk));
+            }
+        } finally {
+            lineBuffer.flush();
+        }
+    }
+
     public async listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]> {
         const runner = this.makeRunner([]);
         return runner(this.client.listContainers({ all: true, labels }));

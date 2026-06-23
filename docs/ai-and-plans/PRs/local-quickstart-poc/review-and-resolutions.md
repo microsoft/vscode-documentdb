@@ -336,3 +336,34 @@ with the label-ownership check confirmed. Gates: `lint` ✅ · `jest` (2055/2055
 port-fallback random band (§8.3), "Start Docker Desktop" action (§5.3/§9), and success-card action
 buttons (§5.5, lower value since the webview auto-closes and the tree is now the control surface).
 Full multi-window *polling* (§12) remains beyond the on-expand refresh.
+
+---
+
+## Restart-safe sample data — `docker start` bug fix (2026-06-23)
+
+**Symptom (found in manual test action 5 "Start"):** after a Stop, clicking **Start** showed the
+row flip to *Running* in the tree, but the Docker backend showed the container had **exited**.
+
+**Root cause (confirmed via live container logs):** provisioning baked `--init-data true` into the
+container's *run args*. That flag is **not restart-safe** — the image's entrypoint re-runs the
+sample-data init on **every** `docker start`, the second run hits
+`Duplicate key violation Index '_id_'` on `01-users.js`, the init script exits non-zero, and
+`set -e` tears the whole entrypoint (and container) down. A secondary bug: `start()` inspected the
+container *immediately* after `docker start`, catching the ~3 s window where it still reports
+"running" before it dies — hence the false *Running* badge.
+
+**Fix:**
+- **Drop the baked flag.** `provision()` now runs the container with only
+  `--username/--password` (restart-safe), and seeds the built-in sample data **once**, after
+  readiness, by running the image's *native* init script via `docker exec`:
+  `/home/documentdb/gateway/scripts/init_documentdb_data.sh -H localhost -P 10260 -u … -p … -d /home/documentdb/gateway/sample-data`
+  (paths verified against `Dockerfile_documentdb_local`). New `ContainerRuntime.execInContainer`
+  streams + masks the exec output (D14); seeding is best-effort/non-fatal.
+- **Confirm-stays-running.** `start()`/`restart()` now poll `confirmStaysRunning` (3 × 1.5 s) and
+  only declare *Running* if the container is still up after the settle window; otherwise they set
+  *Error* with a "exited shortly after — check the logs" message instead of a false *Running*.
+
+**Live verification (real Docker on Windows):** run (no `--init-data`) → `exec` native init →
+`sampledb` loaded (users 5 · products 5 · orders 4 · analytics 2) → **stop → start stays
+`running`** at +1/5/10/15 s and the **sample data persists** (identical counts). Gates: `build` ✅ ·
+`lint` ✅ · `jest` (2055/2055) ✅ · `webpack-prod` ✅.
