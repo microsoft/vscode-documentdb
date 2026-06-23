@@ -181,20 +181,40 @@ function resolveAction(action: string): string {
     return action;
 }
 
+// ─── Lazy Set cache for O(1) keyword/operator lookups ────────────────────────
+
+const rulesSetCache = new WeakMap<MonarchLanguageRules, Map<string, Set<string>>>();
+
 /**
  * Resolve a `cases` lookup: check if the matched text is in a named array.
+ *
+ * Named arrays (keywords, bsonConstructors, shellCommands, operators) are
+ * lazily converted to Sets on first lookup so subsequent `.has()` calls are O(1).
  */
 function resolveCases(matchedText: string, cases: Record<string, string>, rules: MonarchLanguageRules): string {
+    let arrayMap = rulesSetCache.get(rules);
+    if (!arrayMap) {
+        arrayMap = new Map();
+        rulesSetCache.set(rules, arrayMap);
+    }
+
     for (const [key, tokenType] of Object.entries(cases)) {
         if (key === '@default') {
             continue;
         }
 
-        // Look up the named array in the rules object
         const arrayName = key.startsWith('@') ? key.slice(1) : key;
-        const array = rules[arrayName as keyof MonarchLanguageRules];
 
-        if (Array.isArray(array) && (array as string[]).includes(matchedText)) {
+        let set = arrayMap.get(arrayName);
+        if (!set) {
+            const array = rules[arrayName as keyof MonarchLanguageRules];
+            if (Array.isArray(array)) {
+                set = new Set(array as readonly string[]);
+                arrayMap.set(arrayName, set);
+            }
+        }
+
+        if (set?.has(matchedText)) {
             return resolveAction(tokenType);
         }
     }
