@@ -276,5 +276,39 @@ describe('Credential Cache Stability', () => {
             expect(typeof connString).toBe('string');
             expect(connString).toContain('mongodb://');
         });
+
+        it('never surfaces stale native or Entra secrets left in storage for a NoAuth item', () => {
+            // Defense in depth: a connection that was switched to NoAuth may still carry leftover
+            // native/Entra secrets in storage (e.g. saved before the write-side clear shipped).
+            // The cache must not re-expose those credentials for an explicit NoAuth connection.
+            CredentialCache.setFromConnectionItem({
+                id: clusterId,
+                name: 'anon-host:27017',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.NativeAuth, AuthMethodId.NoAuth],
+                    selectedAuthMethod: AuthMethodId.NoAuth,
+                },
+                secrets: {
+                    connectionString: 'mongodb://anon-host:27017/',
+                    nativeAuthConfig: { connectionUser: 'stale-user', connectionPassword: 'stale-pw' },
+                    entraIdAuthConfig: { tenantId: 'stale-tenant', subscriptionId: 'stale-sub' },
+                },
+            });
+
+            const credentials = CredentialCache.getCredentials(clusterId);
+            expect(credentials?.authMechanism).toBe(AuthMethodId.NoAuth);
+            expect(credentials?.nativeAuthConfig).toBeUndefined();
+            expect(credentials?.entraIdConfig).toBeUndefined();
+
+            // The credential-bearing connection string must not contain the stale username/password.
+            const connString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            expect(connString).toBe('mongodb://anon-host:27017/');
+            expect(connString).not.toContain('stale-user');
+            expect(connString).not.toContain('@');
+            expect(CredentialCache.getConnectionUser(clusterId)).toBeUndefined();
+            expect(CredentialCache.getConnectionPassword(clusterId)).toBeUndefined();
+        });
     });
 });

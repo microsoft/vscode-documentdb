@@ -281,15 +281,21 @@ export class CredentialCache {
         }
 
         // Convert central auth configs to local cache format
+        //
+        // Defense in depth: for an explicit "No Authentication" connection we never surface any
+        // (possibly stale) native or Entra secrets from storage. Anonymous connections must remain
+        // credential-free even if older auth configs were left behind by a previous auth method.
+        const isNoAuth = selectedAuthMethod === AuthMethodId.NoAuth;
+
         let cacheEntraIdConfig: EntraIdAuthConfig | undefined;
-        if (secrets.entraIdAuthConfig) {
+        if (!isNoAuth && secrets.entraIdAuthConfig) {
             // Preserve all optional fields for backward compatibility
             cacheEntraIdConfig = { ...secrets.entraIdAuthConfig };
         }
 
         // Use structured configurations
-        const username = secrets.nativeAuthConfig?.connectionUser ?? '';
-        const password = secrets.nativeAuthConfig?.connectionPassword ?? '';
+        const username = isNoAuth ? '' : (secrets.nativeAuthConfig?.connectionUser ?? '');
+        const password = isNoAuth ? '' : (secrets.nativeAuthConfig?.connectionPassword ?? '');
 
         // Use the existing setAuthCredentials method to ensure consistent behavior
         CredentialCache.setAuthCredentials(
