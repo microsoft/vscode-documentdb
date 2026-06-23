@@ -1,5 +1,6 @@
 # PR Summary — "No Authentication" connection support
 
+> PR: [microsoft/vscode-documentdb#755](https://github.com/microsoft/vscode-documentdb/pull/755)
 > Iterative working summary of what was implemented and why. Update as the PR evolves.
 > Companion analysis: [`01-username-and-tls-checks-report.md`](./01-username-and-tls-checks-report.md).
 
