@@ -175,6 +175,7 @@
     "@microsoft/vscode-azureresources-api": "~2.5.0",
     "@microsoft/vscode-container-client": "^0.5.4",
     "@microsoft/vscode-ext-react-webview": "*",
+    "@microsoft/vscode-processutils": "^0.2.2",
     "@monaco-editor/react": "~4.7.0",
     "@mongodb-js/explain-plan-helper": "1.4.24",
     "@mongodb-js/shell-bson-parser": "^1.5.6",

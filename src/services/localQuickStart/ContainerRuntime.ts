@@ -26,11 +26,20 @@ import {
     type ListContainersItem,
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
+import { Bash, Cmd, type Shell } from '@microsoft/vscode-processutils';
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
 import { MaskingLineBuffer, maskSecrets } from './outputMasking';
 import { type DockerReadiness, QUICK_START_PORT } from './quickStartTypes';
+
+/**
+ * Shell used to run docker commands. A shell provider is REQUIRED so the runner
+ * applies each argument's quoting metadata: without one it sets
+ * `windowsVerbatimArguments` on Windows and drops quoting, which splits Go-template
+ * `--format {{json .}}` arguments on the space and breaks info/inspect/list.
+ */
+const SHELL_PROVIDER: Shell = process.platform === 'win32' ? new Cmd() : new Bash();
 
 function errMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
@@ -95,7 +104,10 @@ class ContainerRuntimeImpl {
     private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken) {
         const channel = getQuickStartOutputChannel();
         const factory = new ShellStreamCommandRunnerFactory({
-            strict: true,
+            // Non-strict: a non-zero exit still rejects, but harmless stderr warnings
+            // (e.g. `docker info`) do not. A shellProvider is required for arg quoting.
+            strict: false,
+            shellProvider: SHELL_PROVIDER,
             onCommand: (command: string) => channel.appendLine('$ ' + maskSecrets(command, secrets)),
             stdOutPipe: new MaskedChannelWritable(channel, secrets),
             stdErrPipe: new MaskedChannelWritable(channel, secrets),
@@ -213,7 +225,11 @@ class ContainerRuntimeImpl {
         const channel = getQuickStartOutputChannel();
         // Line-buffer + mask (D14) so a secret split across log chunks can't leak.
         const lineBuffer = new MaskingLineBuffer((line) => channel.appendLine(line), secrets);
-        const factory = new ShellStreamCommandRunnerFactory({ strict: false, cancellationToken: token });
+        const factory = new ShellStreamCommandRunnerFactory({
+            strict: false,
+            shellProvider: SHELL_PROVIDER,
+            cancellationToken: token,
+        });
         const streamingRunner = factory.getStreamingCommandRunner();
         try {
             for await (const chunk of streamingRunner(
