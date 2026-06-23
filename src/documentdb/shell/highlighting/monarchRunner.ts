@@ -192,19 +192,18 @@ const rulesSetCache = new WeakMap<MonarchLanguageRules, Map<string, Set<string>>
  * lazily converted to Sets on first lookup so subsequent `.has()` calls are O(1).
  */
 function resolveCases(matchedText: string, cases: Record<string, string>, rules: MonarchLanguageRules): string {
+    let arrayMap = rulesSetCache.get(rules);
+    if (!arrayMap) {
+        arrayMap = new Map();
+        rulesSetCache.set(rules, arrayMap);
+    }
+
     for (const [key, tokenType] of Object.entries(cases)) {
         if (key === '@default') {
             continue;
         }
 
         const arrayName = key.startsWith('@') ? key.slice(1) : key;
-
-        // Lazily convert the named array to a Set on first access
-        let arrayMap = rulesSetCache.get(rules);
-        if (!arrayMap) {
-            arrayMap = new Map();
-            rulesSetCache.set(rules, arrayMap);
-        }
 
         let set = arrayMap.get(arrayName);
         if (!set) {
