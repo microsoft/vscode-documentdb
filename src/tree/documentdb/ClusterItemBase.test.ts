@@ -163,7 +163,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         expect(mockTelemetryEvents).toHaveLength(1);
         expect(mockTelemetryEvents[0].eventName).toBe('connect');
         expect(mockTelemetryEvents[0].properties).toMatchObject({
-            connectionResult: 'Failed',
+            connectionResult: 'failed',
             source: 'treeExpansion',
             experience: 'MongoDB',
             failurePhase: 'listDatabases',

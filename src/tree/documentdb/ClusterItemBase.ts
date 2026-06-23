@@ -231,7 +231,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
             // propagating out of getChildren().
             void callWithTelemetryAndErrorHandling('connect', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
-                telemetryContext.telemetry.properties.connectionResult = 'Failed';
+                telemetryContext.telemetry.properties.connectionResult = 'failed';
                 telemetryContext.telemetry.properties.source = 'treeExpansion';
                 telemetryContext.telemetry.properties.experience = this.experience.api;
                 telemetryContext.telemetry.properties.failurePhase = 'listDatabases';
