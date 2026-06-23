@@ -301,3 +301,38 @@ sequence passed — Docker readiness (the previously-broken `info`), `runContain
 args + labels, `inspect` bound port, wire-protocol `ping`, sample seed, browse
 (`dbs=[quickstart]`), and cleanup. The official image also ships a default `sampledb`, so the demo's
 final browse step is never an empty tree.
+
+---
+
+## v1.0 management layer (2026-06-23)
+
+After a tier-by-tier gap analysis against the design's §15, the biggest v1.0 gap was the
+**managed-instance management surface** (§6.2 action matrix / §11 lifecycle vocabulary) — the POC
+could provision and browse but not manage the instance. Implemented:
+
+- **Lifecycle actions:** Start · Stop · Restart · Delete Container · Copy Connection String ·
+  Copy Password · View Logs (inline icons + context menu, gated by state).
+- **State machine completed:** added `Starting` / `Stopping`; `Stopped` is now reachable; each
+  state renders a distinct row (icon + `Running · localhost:<port>` style description).
+- **`Missing` badge (§6.1):** when the extension holds metadata but Docker has no matching
+  container, the row shows `Missing · click to recreate` (primary action re-opens Quick Start;
+  Delete clears the stale metadata).
+- **Live freshness (§12, partial):** the tree re-checks live Docker state on expand
+  (`refreshLiveState`), so external/other-window changes (and the Missing case) are reflected
+  without a full polling subsystem.
+- **Safety (§9/§13.1):** every destructive op (`stop`/`start`/`remove`) verifies the
+  `vscode.documentdb.quickstart` **label** on the container before acting; Delete uses a one-line
+  modal confirm (§11); View Logs masks the password (D14).
+
+The instance row carries a Quick-Start-specific `contextValue`
+(`treeItem_quickStartInstance` + a `state_*` token) so it shows Quick Start actions instead of the
+generic cluster menus, while still browsing via the pre-populated `CredentialCache`.
+
+**Live verification (real Docker on Windows):** run → stop (`exited`) → start (`running`) → remove,
+with the label-ownership check confirmed. Gates: `lint` ✅ · `jest` (2055/2055) ✅ · `build` ✅ ·
+`webpack-prod` ✅.
+
+**Still open in v1.0** (readiness polish, not yet implemented): platform-supported check (§9),
+port-fallback random band (§8.3), "Start Docker Desktop" action (§5.3/§9), and success-card action
+buttons (§5.5, lower value since the webview auto-closes and the tree is now the control surface).
+Full multi-window *polling* (§12) remains beyond the on-expand refresh.
