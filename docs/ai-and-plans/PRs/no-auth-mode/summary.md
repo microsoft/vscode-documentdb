@@ -25,6 +25,7 @@ and maps cleanly onto the existing auth-handler `switch` architecture.
 | Cache (`CredentialCache.ts`) | `setFromConnectionItem` respects an explicit `selectedAuthMethod === NoAuth` (no Native misclassification). `getConnectionStringWithPassword` is now null-safe (falls back to `connectionString`). | Prevents broken/undefined cache state for anonymous connections. |
 | Tree gate (`DocumentDBClusterItem.ts`) | The connect gate no longer re-prompts for credentials when the method is `NoAuth`. Added a TLS/SSL-disabled **description** and a tooltip line for non-emulator connections whose connection string disables TLS (`tls=false`/`ssl=false`), mirroring the emulator "disable security" UX. The tooltip line is only added when TLS is disabled. | Anonymous connections can connect; TLS-off state is visible. |
 | Creation wizard (`newConnection/*`) | `NoAuth` offered in the auth-method list. New connection labels are now derived from the host(s) only — the username prefix (`user@host`) was dropped for **all** new connections. NoAuth connections are stored with `nativeAuthConfig: undefined`. | Consistent, credential-free naming; correct persistence. |
+| Creation wizard dedup/persistence (`newConnection/ExecuteStep.ts`) | Native credentials parsed from a *pasted* connection string are now ignored unless the user actually selects **Native** auth. Previously, pasting `user:pass@host` and then choosing **No Authentication** (or **Entra ID**) reused the pasted username for duplicate detection — producing a false "A connection with the same username and host already exists." error — and leaked the pasted username/password into stored secrets. | Anonymous/Entra connections can be created next to an existing native connection on the same host, and never persist stray native credentials. |
 | Integrated shell (`shell/*`, `playground/workerTypes.ts`) | `authMechanism` union widened to include `'NoAuth'`; NoAuth uses the credential-free connection string; a "No Authentication" banner label is shown. | Shell works against anonymous connections. |
 | Query playground (`playground/PlaygroundEvaluator.ts`) | Same NoAuth handling as the shell. | Playground works against anonymous connections. |
 | Migration tools API | **No `api/` changes.** Verified host-side that a NoAuth connection yields a credential-free `options.connectionString` while preserving `tls`/`ssl`. Locked with a test. | The whitelist is an extension-ID allow-list; NoAuth is transported transparently via the existing `connectionString`. |
@@ -45,6 +46,9 @@ rule and never forces TLS. This is now locked with tests in `NoAuthHandler.test.
   `getConnectionStringWithPassword` never returns `undefined`.
 - `accessDataMigrationServices/noAuthMigration.test.ts` — the shared connection string for a
   NoAuth connection is credential-free and preserves `tls=false` / `ssl=false`.
+- `newConnection/ExecuteStep.test.ts` — pasted credentials are ignored for NoAuth/Entra ID
+  (no false duplicate, no leaked secrets), anonymous-vs-anonymous duplicates are still detected,
+  and Native duplicate detection + credential persistence are preserved.
 
 ## Out of scope / unchanged
 
