@@ -254,3 +254,50 @@ webview mount/typing/auto-close/bundle-purity; and split-safe masking on the pri
 
 **Post-fix gates:** `npm run lint` ✅ · `npx jest --no-coverage` (2055/2055) ✅ · `npm run build` ✅
 · webview webpack bundle ✅.
+
+---
+
+## Manual testing (live on Windows, 2026-06-23)
+
+Running the POC end-to-end surfaced two issues — one launch-recipe gotcha (not a code bug) and one
+genuine Windows bug — both resolved.
+
+### 1. Blank webview (launch recipe, not a code bug)
+
+A `webpack-dev` build bakes `DEVSERVER='true'` (via `webpack.config.ext.js` `EnvironmentPlugin`),
+so the extension fetches the webview script from the dev server at `http://localhost:18080`. A
+one-shot `code --extensionDevelopmentPath=dist` launch does **not** start that dev server → the
+webview HTML had no script to load → blank page.
+
+**How to run a standalone manual test (no dev server, no `Watch` task, no problem-matcher
+extension):**
+
+```powershell
+npm run webpack-prod    # bakes DEVSERVER='' + IS_BUNDLE='true' → loads dist/views.js from disk
+code --extensionDevelopmentPath="<repo>\dist" --profile=noExtensionsProfile
+```
+
+(Or press **F5**, which starts the dev server via the `Watch` task — but that task references the
+`amodio.tsl-problem-matcher` extension, absent in `--profile=noExtensionsProfile`, so install it
+first: `code --install-extension amodio.tsl-problem-matcher`.)
+
+### 2. P1 (real bug) — "Docker daemon not reachable" on Windows even when Docker is running
+
+**Symptom:** `isDockerReady()` reported the daemon unreachable; `docker info` worked fine from a
+shell.
+
+**Root cause:** `ShellStreamCommandRunnerFactory` **without a `shellProvider`** discards each
+argument's quoting metadata (`args.map(a => a.value)`) and sets `windowsVerbatimArguments` on
+Windows. Go-template arguments like `--format {{json .}}` were therefore split on the space, so
+`docker info` (and `inspect`/`list`) failed — breaking readiness and, latently, the whole flow.
+
+**Fix (commit `fix(quickstart): pass shell provider …`):** provide a platform shell provider —
+`Cmd` on Windows, `Bash` elsewhere — to every runner; switch `makeRunner` to `strict:false`
+(non-zero exit still rejects, harmless stderr warnings don't). Added the
+`@microsoft/vscode-processutils` dependency.
+
+**Live verification (real Docker on Windows):** a full end-to-end run of the exact provision
+sequence passed — Docker readiness (the previously-broken `info`), `runContainer` with credential
+args + labels, `inspect` bound port, wire-protocol `ping`, sample seed, browse
+(`dbs=[quickstart]`), and cleanup. The official image also ships a default `sampledb`, so the demo's
+final browse step is never an empty tree.
