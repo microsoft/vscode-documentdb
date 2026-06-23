@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { API } from '../DocumentDBExperiences';
+import { ItemType } from '../services/connectionStorageService';
 import { AuthMethodId } from './auth/AuthMethod';
 import { CredentialCache } from './CredentialCache';
 
@@ -207,6 +209,72 @@ describe('Credential Cache Stability', () => {
             expect(retrievedConfig).toBeDefined();
             expect(retrievedConfig?.isEmulator).toBe(true);
             expect(retrievedConfig?.disableEmulatorSecurity).toBe(false);
+        });
+    });
+
+    describe('NoAuth (anonymous) connections', () => {
+        const clusterId = 'no-auth-cluster';
+
+        beforeEach(() => {
+            CredentialCache.deleteCredentials(clusterId);
+        });
+
+        it('produces a credential-free entry that preserves a tls=false override', () => {
+            CredentialCache.setFromConnectionItem({
+                id: clusterId,
+                name: 'anon-host:27017',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.NoAuth],
+                    selectedAuthMethod: AuthMethodId.NoAuth,
+                },
+                secrets: {
+                    connectionString: 'mongodb://anon-host:27017/?tls=false',
+                    nativeAuthConfig: undefined,
+                    entraIdAuthConfig: undefined,
+                },
+            });
+
+            const credentials = CredentialCache.getCredentials(clusterId);
+            expect(credentials).toBeDefined();
+            expect(credentials?.authMechanism).toBe(AuthMethodId.NoAuth);
+            expect(credentials?.nativeAuthConfig).toBeUndefined();
+
+            // No embedded credentials, and the user's TLS override survives.
+            const connString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            expect(connString).toBe('mongodb://anon-host:27017/?tls=false');
+            expect(connString).not.toContain('@');
+            expect(CredentialCache.getConnectionUser(clusterId)).toBeUndefined();
+            expect(CredentialCache.getConnectionPassword(clusterId)).toBeUndefined();
+        });
+
+        it('does not misclassify an explicit NoAuth item as Native', () => {
+            CredentialCache.setFromConnectionItem({
+                id: clusterId,
+                name: 'anon-host:27017',
+                properties: {
+                    type: ItemType.Connection,
+                    api: API.DocumentDB,
+                    availableAuthMethods: [AuthMethodId.NativeAuth, AuthMethodId.NoAuth],
+                    selectedAuthMethod: AuthMethodId.NoAuth,
+                },
+                secrets: {
+                    connectionString: 'mongodb://anon-host:27017/',
+                    nativeAuthConfig: undefined,
+                    entraIdAuthConfig: undefined,
+                },
+            });
+
+            expect(CredentialCache.getCredentials(clusterId)?.authMechanism).toBe(AuthMethodId.NoAuth);
+        });
+
+        it('getConnectionStringWithPassword never returns undefined for a valid entry', () => {
+            CredentialCache.setAuthCredentials(clusterId, AuthMethodId.NoAuth, 'mongodb://anon-host:27017/');
+
+            const connString = CredentialCache.getConnectionStringWithPassword(clusterId);
+            expect(typeof connString).toBe('string');
+            expect(connString).toContain('mongodb://');
         });
     });
 });
