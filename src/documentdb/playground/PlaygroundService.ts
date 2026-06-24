@@ -89,23 +89,26 @@ export class PlaygroundService implements vscode.Disposable {
             }),
         );
 
-        // Migrate the connection when an untitled playground is saved to disk.
+        // Migrate the connection when a playground is saved under a new URI.
         //
-        // Saving an untitled document opens a brand-new `file:` document (with a
-        // different URI — Save As can change directory and filename freely) and then
-        // closes the untitled one. We correlate the two by content and re-key the
-        // connection onto the new URI.
+        // Two save flows change a playground's URI and would otherwise drop its
+        // connection:
+        //   • untitled → file: a scratch playground saved to disk for the first time.
+        //   • file → file: an already-saved playground re-saved under a new name
+        //     ("Save As…").
+        // In both cases VS Code opens the new `file:` document, fires the save event
+        // while the source document is still open, and then closes the source. We
+        // correlate the two by content and re-key the connection onto the new URI.
         //
-        // We trigger on `onDidSaveTextDocument` rather than `onDidOpenTextDocument`:
-        // for a brand-new file the file's document model is still empty when it opens,
-        // so content correlation would fail. By the time the save event fires the text
-        // is populated and the untitled document is still open, so the match is
-        // reliable. This also runs before the untitled closes, so the cluster never
-        // appears "orphaned" during the transition and its worker is not torn down.
+        // We trigger on `onDidSaveTextDocument` rather than `onDidOpenTextDocument`
+        // because a brand-new file's document model is still empty when it opens; by
+        // the time the save event fires the text is populated and the source is still
+        // open, so the match is reliable. Running before the source closes also keeps
+        // the cluster from looking "orphaned" during the transition.
         this._disposables.push(
             vscode.workspace.onDidSaveTextDocument((doc) => {
                 if (doc.languageId === PLAYGROUND_LANGUAGE_ID && doc.uri.scheme === 'file') {
-                    this.migrateConnectionFromSavedUntitled(doc);
+                    this.migrateConnectionToSavedFile(doc);
                 }
             }),
         );
@@ -138,23 +141,25 @@ export class PlaygroundService implements vscode.Disposable {
     }
 
     /**
-     * Re-key a connection from a just-saved untitled playground onto its new
-     * `file:` document.
+     * Re-key a connection onto a freshly saved `file:` playground.
      *
-     * When an untitled playground is saved, the connection is keyed by the old
-     * `untitled:` URI. We find the still-open untitled playground whose content
-     * matches the new file document and move its connection onto the new URI.
+     * Triggered on save, this covers both URI-changing save flows:
+     *   • untitled → file: a scratch playground saved to disk for the first time.
+     *   • file → file: an already-saved playground re-saved as a new file ("Save As…").
+     * In both, the source document is still open when the save event fires, so we
+     * find it by content and move its connection onto the new URI.
      *
-     * Correlation is by content (URI and filename are unreliable: Save As can
-     * change both, and the untitled path lives under a temp/workspace folder).
-     * To stay unambiguous we only migrate when exactly one untitled playground
-     * matches — e.g. "Save All" of two byte-identical fresh playgrounds is left
-     * alone rather than risk binding the wrong connection.
+     * Correlation is by content (URI and filename are unreliable: Save As changes
+     * both). To stay unambiguous we only migrate when exactly one *other* open
+     * playground holds a connection and matches — e.g. "Save All" of two identical
+     * fresh playgrounds is left alone rather than risk binding the wrong connection.
+     * A regular save of an already-connected playground is a no-op (its URI is
+     * unchanged, so it is already bound).
      */
-    private migrateConnectionFromSavedUntitled(fileDoc: vscode.TextDocument): void {
+    private migrateConnectionToSavedFile(fileDoc: vscode.TextDocument): void {
         const fileKey = fileDoc.uri.toString();
         if (this._connections.has(fileKey)) {
-            return; // already bound (e.g. re-save of an already-migrated file)
+            return; // already bound (regular save of a connected playground)
         }
 
         // Size-gate before reading: `getDocumentCharLength` uses `offsetAt` and
@@ -164,14 +169,16 @@ export class PlaygroundService implements vscode.Disposable {
         }
         const fileText = normalizePlaygroundText(fileDoc.getText());
 
-        // Cheap filters first (scheme → language → has-connection → size); only the
-        // few still-open untitled playgrounds that hold a connection ever reach the
-        // content comparison, so `getText()` is not called on unrelated or large documents.
+        // The source is any *other* open playground (untitled from a first save, or a
+        // file from "Save As") that still holds a connection and whose content matches.
+        // Cheap filters (identity → language → has-connection → size) run before
+        // `getText()`, so it is not called on unrelated or large documents.
         const matches = vscode.workspace.textDocuments.filter((doc) => {
-            if (doc.uri.scheme !== 'untitled' || doc.languageId !== PLAYGROUND_LANGUAGE_ID) {
+            const key = doc.uri.toString();
+            if (key === fileKey || doc.languageId !== PLAYGROUND_LANGUAGE_ID) {
                 return false;
             }
-            if (!this._connections.has(doc.uri.toString())) {
+            if (!this._connections.has(key)) {
                 return false;
             }
             if (getDocumentCharLength(doc) > MAX_MIGRATION_TEXT_LENGTH) {

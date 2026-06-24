@@ -229,7 +229,7 @@ describe('PlaygroundService', () => {
         });
     });
 
-    describe('untitled→file connection migration on save', () => {
+    describe('connection migration on save (untitled→file and file→file Save As)', () => {
         const connection: PlaygroundConnection = {
             clusterId: 'cluster-123',
             clusterDisplayName: 'MyCluster',
@@ -286,6 +286,37 @@ describe('PlaygroundService', () => {
             expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(true);
             expect(service.getConnection(fileDoc.uri as vscode.Uri)).toEqual(connection);
             expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(false);
+        });
+
+        it('re-keys the connection on a file→file Save As', () => {
+            const content = "// Query Playground: MyCluster\ndb.getCollection('orders').find({ })";
+            // The previously-saved file still holds the connection and is still open.
+            const oldFile = makeFileDoc('file:///home/u/orders.documentdb.documentdb.js', content);
+            service.setConnection(oldFile.uri as vscode.Uri, connection);
+
+            // "Save As" opens the new file (no connection yet) with identical content.
+            const newFile = makeFileDoc('file:///home/u/orders-copy.documentdb.documentdb.js', content);
+            setOpenDocuments([oldFile, newFile]);
+            getSaveDocHandler()(newFile);
+
+            expect(service.isConnected(newFile.uri as vscode.Uri)).toBe(true);
+            expect(service.getConnection(newFile.uri as vscode.Uri)).toEqual(connection);
+            expect(service.isConnected(oldFile.uri as vscode.Uri)).toBe(false);
+        });
+
+        it('is a no-op when saving a file that already has a connection (regular save)', () => {
+            const content = 'db.orders.find({})';
+            const fileDoc = makeFileDoc('file:///home/u/orders.documentdb.documentdb.js', content);
+            service.setConnection(fileDoc.uri as vscode.Uri, connection);
+            // A second, unconnected playground with identical content is also open.
+            const sibling = makeFileDoc('file:///home/u/sibling.documentdb.documentdb.js', content);
+            setOpenDocuments([fileDoc, sibling]);
+
+            getSaveDocHandler()(fileDoc);
+
+            // The saved file keeps its own connection; the sibling stays unconnected.
+            expect(service.getConnection(fileDoc.uri as vscode.Uri)).toEqual(connection);
+            expect(service.isConnected(sibling.uri as vscode.Uri)).toBe(false);
         });
 
         it('does not migrate when no untitled playground has matching content', () => {
