@@ -229,7 +229,7 @@ describe('PlaygroundService', () => {
         });
     });
 
-    describe('connection migration on save (untitled→file and file→file Save As)', () => {
+    describe('connection transfer on save (untitled→file and file→file Save As)', () => {
         const connection: PlaygroundConnection = {
             clusterId: 'cluster-123',
             clusterDisplayName: 'MyCluster',
@@ -319,7 +319,7 @@ describe('PlaygroundService', () => {
             expect(service.isConnected(sibling.uri as vscode.Uri)).toBe(false);
         });
 
-        it('does not migrate when no untitled playground has matching content', () => {
+        it('does not transfer when no untitled playground has matching content', () => {
             const untitled = makeUntitledDoc('untitled:/tmp/orders.documentdb.js', 'db.orders.find({})');
             service.setConnection(untitled.uri as vscode.Uri, connection);
             setOpenDocuments([untitled]);
@@ -331,7 +331,7 @@ describe('PlaygroundService', () => {
             expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(true);
         });
 
-        it('does not migrate when the content match is ambiguous (Save All of identical buffers)', () => {
+        it('does not transfer when the content match is ambiguous (Save All of identical buffers)', () => {
             const content = 'db.orders.find({})';
             const untitledA = makeUntitledDoc('untitled:/tmp/a.documentdb.js', content);
             const untitledB = makeUntitledDoc('untitled:/tmp/b.documentdb.js', content);
@@ -352,7 +352,7 @@ describe('PlaygroundService', () => {
             expect(service.isConnected(untitledB.uri as vscode.Uri)).toBe(true);
         });
 
-        it('does not migrate when the document exceeds the size cap', () => {
+        it('does not transfer when the document exceeds the size cap', () => {
             const huge = 'x'.repeat(1_000_001);
             const untitled = makeUntitledDoc('untitled:/tmp/big.documentdb.js', huge);
             service.setConnection(untitled.uri as vscode.Uri, connection);

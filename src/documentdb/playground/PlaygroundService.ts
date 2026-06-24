@@ -35,7 +35,7 @@ function getDocumentCharLength(doc: vscode.TextDocument): number {
  * to avoid unnecessary string work — such a file simply won't auto-reconnect
  * (no worse than before this feature existed).
  */
-const MAX_MIGRATION_TEXT_LENGTH = 1_000_000; // ~1 MB of text
+const MAX_TRANSFER_TEXT_LENGTH = 1_000_000; // ~1 MB of text
 
 /**
  * Singleton service managing per-document query playground connections and execution state.
@@ -89,7 +89,7 @@ export class PlaygroundService implements vscode.Disposable {
             }),
         );
 
-        // Migrate the connection when a playground is saved under a new URI.
+        // Transfer the connection when a playground is saved under a new URI.
         //
         // Two save flows change a playground's URI and would otherwise drop its
         // connection:
@@ -108,7 +108,7 @@ export class PlaygroundService implements vscode.Disposable {
         this._disposables.push(
             vscode.workspace.onDidSaveTextDocument((doc) => {
                 if (doc.languageId === PLAYGROUND_LANGUAGE_ID && doc.uri.scheme === 'file') {
-                    this.migrateConnectionToSavedFile(doc);
+                    this.transferConnectionToSavedFile(doc);
                 }
             }),
         );
@@ -150,13 +150,13 @@ export class PlaygroundService implements vscode.Disposable {
      * find it by content and move its connection onto the new URI.
      *
      * Correlation is by content (URI and filename are unreliable: Save As changes
-     * both). To stay unambiguous we only migrate when exactly one *other* open
+     * both). To stay unambiguous we only transfer when exactly one *other* open
      * playground holds a connection and matches — e.g. "Save All" of two identical
      * fresh playgrounds is left alone rather than risk binding the wrong connection.
      * A regular save of an already-connected playground is a no-op (its URI is
      * unchanged, so it is already bound).
      */
-    private migrateConnectionToSavedFile(fileDoc: vscode.TextDocument): void {
+    private transferConnectionToSavedFile(fileDoc: vscode.TextDocument): void {
         const fileKey = fileDoc.uri.toString();
         if (this._connections.has(fileKey)) {
             return; // already bound (regular save of a connected playground)
@@ -164,8 +164,8 @@ export class PlaygroundService implements vscode.Disposable {
 
         // Size-gate before reading: `getDocumentCharLength` uses `offsetAt` and
         // does not pull the whole file into memory the way `getText()` does.
-        if (getDocumentCharLength(fileDoc) > MAX_MIGRATION_TEXT_LENGTH) {
-            return; // too large to correlate cheaply — skip auto-migration
+        if (getDocumentCharLength(fileDoc) > MAX_TRANSFER_TEXT_LENGTH) {
+            return; // too large to correlate cheaply — skip the transfer
         }
         const fileText = normalizePlaygroundText(fileDoc.getText());
 
@@ -181,7 +181,7 @@ export class PlaygroundService implements vscode.Disposable {
             if (!this._connections.has(key)) {
                 return false;
             }
-            if (getDocumentCharLength(doc) > MAX_MIGRATION_TEXT_LENGTH) {
+            if (getDocumentCharLength(doc) > MAX_TRANSFER_TEXT_LENGTH) {
                 return false;
             }
             return normalizePlaygroundText(doc.getText()) === fileText;
@@ -200,7 +200,7 @@ export class PlaygroundService implements vscode.Disposable {
         this._connections.delete(sourceKey);
         this._connections.set(fileKey, connection);
         ext.outputChannel?.trace(
-            `[PlaygroundService] migrated connection on save: ${sourceKey} → ${fileKey} ` +
+            `[PlaygroundService] transferred connection on save: ${sourceKey} → ${fileKey} ` +
                 `(cluster=${connection.clusterId}, db=${connection.databaseName})`,
         );
         this._onDidChangeState.fire();
