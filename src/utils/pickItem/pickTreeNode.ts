@@ -134,18 +134,17 @@ async function buildLevelPicks(
 
     if (itemPicks.length === 0) {
         if (depth > 0) {
-            // Empty folder / nothing connectable here — show an "empty" hint alongside Back.
+            // Empty folder / nothing connectable here — a bare "Empty" hint next to Back.
             picks.push({
                 id: EMPTY_PICK_ID,
                 label: l10n.t('$(info) Empty'),
-                description: l10n.t('Nothing to show here'),
                 data: undefined,
             });
         } else {
             picks.push({
                 id: NO_CONNECTIONS_PICK_ID,
                 label: l10n.t('$(info) No connections found'),
-                description: l10n.t('Add a connection in the DocumentDB panel first'),
+                detail: l10n.t('Add a connection in the DocumentDB panel first'),
                 data: undefined,
             });
         }

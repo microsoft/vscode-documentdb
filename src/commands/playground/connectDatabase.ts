@@ -22,8 +22,13 @@ const DATABASE_CONTEXT_VALUE = 'treeItem_database';
 /**
  * Shows connection information for the active query playground document.
  * Invoked from the CodeLens on line 0 and from the status bar.
+ *
+ * When the playground is already connected, offer (via a modal) to switch it to
+ * a different database. The switch is deferred: the existing connection is only
+ * replaced once a new database is actually selected, so cancelling the picker
+ * leaves the current connection intact.
  */
-export async function showConnectionInfo(_context: IActionContext): Promise<void> {
+export async function showConnectionInfo(context: IActionContext): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
         return;
@@ -32,16 +37,29 @@ export async function showConnectionInfo(_context: IActionContext): Promise<void
     const service = PlaygroundService.getInstance();
     const connection = service.getConnection(editor.document.uri);
 
-    if (connection) {
-        void vscode.window.showInformationMessage(
-            l10n.t('Connected to {0}/{1}', connection.clusterDisplayName, connection.databaseName),
-        );
-    } else {
-        void vscode.window.showInformationMessage(
-            l10n.t(
-                'This playground has no connection. Create a new playground by right-clicking a database or collection in the DocumentDB panel.',
-            ),
-        );
+    if (!connection) {
+        // Disconnected playgrounds normally route to the connect command directly,
+        // but if we get here, just launch the picker.
+        await promptAndConnectPlayground(context, editor.document.uri);
+        return;
+    }
+
+    const switchAction = l10n.t('Connect to a different database…');
+    const choice = await vscode.window.showInformationMessage(
+        l10n.t('This playground is connected to {0} / {1}.', connection.clusterDisplayName, connection.databaseName),
+        {
+            modal: true,
+            detail: l10n.t('Disconnect and connect this playground to a different database?'),
+        },
+        switchAction,
+    );
+
+    context.telemetry.properties.reconnectChoice = choice === switchAction ? 'switch' : 'dismissed';
+
+    if (choice === switchAction) {
+        // Re-pick. promptAndConnectPlayground only overwrites the binding once a new
+        // database is selected, so aborting the picker preserves the old connection.
+        await promptAndConnectPlayground(context, editor.document.uri);
     }
 }
 
