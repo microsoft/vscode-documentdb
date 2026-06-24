@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type TreeItem } from 'vscode';
 import { type TreeElement } from '../../tree/TreeElement';
 import { pickTreeNode, type TreeChildrenProvider } from './pickTreeNode';
 
@@ -48,13 +49,18 @@ interface FakeNodeOptions {
     id: string;
     label: string;
     contextValue: string;
+    iconPath?: unknown;
     children?: TreeElement[];
 }
 
 function makeNode(opts: FakeNodeOptions): TreeElement {
     const node: TreeElement = {
         id: opts.id,
-        getTreeItem: () => ({ label: opts.label, contextValue: opts.contextValue }),
+        getTreeItem: () => ({
+            label: opts.label,
+            contextValue: opts.contextValue,
+            iconPath: opts.iconPath as TreeItem['iconPath'],
+        }),
     };
     if (opts.children) {
         (node as TreeElement & { getChildren: () => TreeElement[] }).getChildren = () => opts.children!;
@@ -77,13 +83,14 @@ function providerFor(rootChildren: TreeElement[]): TreeChildrenProvider {
 /** Programs showQuickPick to pick, in order, the item whose label contains each substring. */
 function queuePicks(...labelSubstrings: string[]): void {
     let call = 0;
-    showQuickPickMock.mockImplementation((picks: { label: string }[]) => {
+    showQuickPickMock.mockImplementation(async (picks: Promise<{ label: string }[]> | { label: string }[]) => {
+        const resolved = await picks;
         const wanted = labelSubstrings[call++];
-        const found = picks.find((p) => p.label.includes(wanted));
+        const found = resolved.find((p) => p.label.includes(wanted));
         if (!found) {
-            throw new Error(`No pick matching "${wanted}" among [${picks.map((p) => p.label).join(', ')}]`);
+            throw new Error(`No pick matching "${wanted}" among [${resolved.map((p) => p.label).join(', ')}]`);
         }
-        return Promise.resolve(found);
+        return found;
     });
 }
 
@@ -143,17 +150,41 @@ describe('pickTreeNode', () => {
 
         expect(result).toBe(dbX);
         // The root-level pick list must not include the "New Connection" action node.
-        const rootPicks = showQuickPickMock.mock.calls[0][0] as { label: string }[];
+        const rootPicks = (await showQuickPickMock.mock.calls[0][0]) as { label: string }[];
         expect(rootPicks.some((p) => p.label.includes('New Connection'))).toBe(false);
     });
 
-    it('steps back automatically out of an empty level', async () => {
+    it('carries each tree item icon onto its pick', async () => {
+        const icon = { id: 'server-environment' };
+        const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
+        const cluster = makeNode({
+            id: 'c1',
+            label: 'Cluster A',
+            contextValue: CLUSTER_CV,
+            iconPath: icon,
+            children: [dbX],
+        });
+
+        queuePicks('Cluster A', 'orders');
+
+        await pickTreeNode({
+            leafContextValue: 'treeItem_database',
+            provider: providerFor([cluster]),
+            telemetrySource: 'test',
+        });
+
+        const rootPicks = (await showQuickPickMock.mock.calls[0][0]) as { label: string; iconPath?: unknown }[];
+        const clusterPick = rootPicks.find((p) => p.label.includes('Cluster A'));
+        expect(clusterPick?.iconPath).toBe(icon);
+    });
+
+    it('shows an Empty entry (not a warning) for an empty level and supports Back', async () => {
         const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
         const emptyCluster = makeNode({ id: 'c1', label: 'Empty Cluster', contextValue: CLUSTER_CV, children: [] });
         const goodCluster = makeNode({ id: 'c2', label: 'Good Cluster', contextValue: CLUSTER_CV, children: [dbX] });
 
-        // Enter the empty cluster (auto-back to root), then enter the good one and pick its db.
-        queuePicks('Empty Cluster', 'Good Cluster', 'orders');
+        // Enter the empty cluster, go Back, then enter the good one and pick its db.
+        queuePicks('Empty Cluster', 'Back', 'Good Cluster', 'orders');
 
         const result = await pickTreeNode({
             leafContextValue: 'treeItem_database',
@@ -162,7 +193,11 @@ describe('pickTreeNode', () => {
         });
 
         expect(result).toBe(dbX);
-        expect(showWarningMessageMock).toHaveBeenCalled();
+        expect(showWarningMessageMock).not.toHaveBeenCalled();
+        // The empty level offered an explicit "Empty" entry alongside Back.
+        const emptyLevelPicks = (await showQuickPickMock.mock.calls[1][0]) as { label: string }[];
+        expect(emptyLevelPicks.some((p) => p.label.includes('Empty'))).toBe(true);
+        expect(emptyLevelPicks.some((p) => p.label.includes('Back'))).toBe(true);
     });
 
     it('supports going back up a level via the Back entry', async () => {
@@ -183,7 +218,9 @@ describe('pickTreeNode', () => {
         expect(result).toBe(dbB);
     });
 
-    it('returns undefined and informs the user when there are no connections', async () => {
+    it('shows a no-connections entry and returns undefined when the tree is empty', async () => {
+        queuePicks('No connections found');
+
         const result = await pickTreeNode({
             leafContextValue: 'treeItem_database',
             provider: providerFor([]),
@@ -191,8 +228,8 @@ describe('pickTreeNode', () => {
         });
 
         expect(result).toBeUndefined();
-        expect(showInformationMessageMock).toHaveBeenCalled();
-        expect(showQuickPickMock).not.toHaveBeenCalled();
+        expect(showQuickPickMock).toHaveBeenCalledTimes(1);
+        expect(showWarningMessageMock).not.toHaveBeenCalled();
     });
 
     it('returns undefined when the user cancels', async () => {

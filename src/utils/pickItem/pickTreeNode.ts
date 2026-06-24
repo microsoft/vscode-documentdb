@@ -10,7 +10,7 @@ import {
     type IAzureQuickPickItem,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
+import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
 
@@ -56,6 +56,12 @@ const EXCLUDED_CONTEXT_TOKENS = new Set<string>(['treeItem_newConnection', 'tree
 /** Quick-pick id used for the synthetic "go back one level" entry. */
 const BACK_PICK_ID = '__pickTreeNode_back__';
 
+/** Quick-pick id for the informational "this level is empty" entry (selecting it goes back). */
+const EMPTY_PICK_ID = '__pickTreeNode_empty__';
+
+/** Quick-pick id for the root-level "no connections" entry (selecting it cancels the picker). */
+const NO_CONNECTIONS_PICK_ID = '__pickTreeNode_noConnections__';
+
 function tokenize(contextValue: string | undefined): string[] {
     return (contextValue ?? '').split(';').filter(Boolean);
 }
@@ -66,6 +72,88 @@ function getTreeItemLabel(treeItem: vscode.TreeItem, fallback: string): string {
         return label;
     }
     return label?.label ?? fallback;
+}
+
+/**
+ * Carry the tree item's own icon onto the quick pick so clusters, folders and
+ * databases look the same as in the tree. `string` icon paths (file paths) are
+ * not valid quick-pick icons and are dropped.
+ */
+function toQuickPickIconPath(treeItem: vscode.TreeItem): vscode.QuickPickItem['iconPath'] {
+    const iconPath = treeItem.iconPath;
+    if (!iconPath || typeof iconPath === 'string') {
+        return undefined;
+    }
+    return iconPath as vscode.QuickPickItem['iconPath'];
+}
+
+/**
+ * Build the quick-pick list for one tree level. Runs inside the promise handed
+ * to `showQuickPick`, so the quick pick shows a busy/loading indicator while
+ * `getChildren` does its work (e.g. establishing a cluster connection).
+ *
+ * The list always contains at least one entry so the quick pick never collapses:
+ *  - a "Back" entry on non-root levels,
+ *  - an "empty" entry when a level has no selectable children, and
+ *  - a "no connections" entry at an empty root.
+ */
+async function buildLevelPicks(
+    provider: TreeChildrenProvider,
+    parent: TreeElement | undefined,
+    depth: number,
+    leafContextValue: string,
+): Promise<IAzureQuickPickItem<TreeElement | undefined>[]> {
+    const children = (await provider.getChildren(parent)) ?? [];
+
+    const itemPicks: IAzureQuickPickItem<TreeElement | undefined>[] = [];
+    for (const child of children) {
+        const treeItem = await child.getTreeItem();
+        const tokens = tokenize(treeItem.contextValue);
+        if (tokens.some((t) => EXCLUDED_CONTEXT_TOKENS.has(t))) {
+            continue;
+        }
+
+        const isLeaf = tokens.includes(leafContextValue);
+        const isNavigable = !isLeaf && typeof child.getChildren === 'function';
+        if (!isLeaf && !isNavigable) {
+            continue;
+        }
+
+        itemPicks.push({
+            label: getTreeItemLabel(treeItem, child.id),
+            description: typeof treeItem.description === 'string' ? treeItem.description : undefined,
+            iconPath: toQuickPickIconPath(treeItem),
+            data: child,
+        });
+    }
+
+    const picks: IAzureQuickPickItem<TreeElement | undefined>[] = [];
+    if (depth > 0) {
+        picks.push({ id: BACK_PICK_ID, label: l10n.t('$(arrow-left) Back'), data: undefined });
+    }
+
+    if (itemPicks.length === 0) {
+        if (depth > 0) {
+            // Empty folder / nothing connectable here — show an "empty" hint alongside Back.
+            picks.push({
+                id: EMPTY_PICK_ID,
+                label: l10n.t('$(info) Empty'),
+                description: l10n.t('Nothing to show here'),
+                data: undefined,
+            });
+        } else {
+            picks.push({
+                id: NO_CONNECTIONS_PICK_ID,
+                label: l10n.t('$(info) No connections found'),
+                description: l10n.t('Add a connection in the DocumentDB panel first'),
+                data: undefined,
+            });
+        }
+        return picks;
+    }
+
+    picks.push(...itemPicks);
+    return picks;
 }
 
 /**
@@ -101,59 +189,28 @@ export async function pickTreeNode(options: PickTreeNodeOptions): Promise<TreeEl
                 maxDepth = Math.max(maxDepth, depth);
 
                 const parent = parents[parents.length - 1];
-                const children = (await provider.getChildren(parent)) ?? [];
 
-                const picks: IAzureQuickPickItem<TreeElement | undefined>[] = [];
-                for (const child of children) {
-                    const treeItem = await child.getTreeItem();
-                    const tokens = tokenize(treeItem.contextValue);
-                    if (tokens.some((t) => EXCLUDED_CONTEXT_TOKENS.has(t))) {
-                        continue;
-                    }
+                // Hand a *promise* of picks to showQuickPick: it shows the quick pick
+                // immediately with a busy/loading indicator while getChildren runs
+                // (which may establish a cluster connection that takes a few seconds),
+                // instead of leaving the user with no UI during the wait.
+                const picked = await context.ui.showQuickPick(
+                    buildLevelPicks(provider, parent, depth, options.leafContextValue),
+                    {
+                        placeHolder: options.placeHolder ?? l10n.t('Select an item'),
+                        loadingPlaceHolder: l10n.t('Loading…'),
+                        suppressPersistence: true,
+                        matchOnDescription: true,
+                    },
+                );
+                stepCount++;
 
-                    const isLeaf = tokens.includes(options.leafContextValue);
-                    const isNavigable = !isLeaf && typeof child.getChildren === 'function';
-                    if (!isLeaf && !isNavigable) {
-                        continue;
-                    }
-
-                    const label = getTreeItemLabel(treeItem, child.id);
-                    picks.push({
-                        label: isNavigable ? `$(chevron-right) ${label}` : label,
-                        description: typeof treeItem.description === 'string' ? treeItem.description : undefined,
-                        data: child,
-                    });
-                }
-
-                if (depth > 0) {
-                    picks.unshift({ id: BACK_PICK_ID, label: l10n.t('$(arrow-left) Back'), data: undefined });
-                }
-
-                const hasSelectablePicks = picks.some((p) => p.id !== BACK_PICK_ID);
-                if (!hasSelectablePicks) {
-                    if (depth > 0) {
-                        // Nothing here (e.g. failed connection / empty folder) — step back.
-                        void vscode.window.showWarningMessage(
-                            l10n.t('Nothing to select here. Going back to the previous level.'),
-                        );
-                        parents.pop();
-                        continue;
-                    }
+                if (picked.id === NO_CONNECTIONS_PICK_ID) {
                     outcome = 'empty';
-                    void vscode.window.showInformationMessage(
-                        l10n.t('No connections found. Add a connection in the DocumentDB panel first.'),
-                    );
                     return undefined;
                 }
 
-                const picked = await context.ui.showQuickPick(picks, {
-                    placeHolder: options.placeHolder ?? l10n.t('Select an item'),
-                    suppressPersistence: true,
-                    matchOnDescription: true,
-                });
-                stepCount++;
-
-                if (picked.id === BACK_PICK_ID) {
+                if (picked.id === BACK_PICK_ID || picked.id === EMPTY_PICK_ID) {
                     parents.pop();
                     continue;
                 }
