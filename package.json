@@ -663,6 +663,13 @@
         "title": "Query Playground: Show Connection Info"
       },
       {
+        "//": "[Query Playground] Connect / Reconnect",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.connect",
+        "title": "Query Playground: Connect to Database",
+        "icon": "$(plug)"
+      },
+      {
         "//": "[Query Playground] Run All",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.playground.runAll",
@@ -1251,6 +1258,10 @@
         {
           "command": "vscode-documentdb.command.playground.showConnectionInfo",
           "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.playground.connect",
+          "when": "editorLangId == 'documentdb-playground'"
         },
         {
           "command": "vscode-documentdb.command.playground.runAll",
