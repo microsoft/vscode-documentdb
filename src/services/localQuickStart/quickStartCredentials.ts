@@ -20,10 +20,22 @@ export function generateToken(length: number): string {
     if (length <= 0) {
         return '';
     }
-    const bytes = crypto.randomBytes(length);
+    const alphabetLength = SAFE_ALPHABET.length;
+    // Reject the biased tail of each random byte: only values in [0, limit) — where
+    // `limit` is the largest multiple of the alphabet length that fits in a byte —
+    // map uniformly onto the alphabet. Using a plain `byte % alphabetLength` would
+    // over-represent the first `256 % alphabetLength` characters
+    // (CodeQL js/biased-cryptographic-random). Rejection sampling removes that bias.
+    const limit = 256 - (256 % alphabetLength);
     let out = '';
-    for (let i = 0; i < length; i++) {
-        out += SAFE_ALPHABET.charAt(bytes[i] % SAFE_ALPHABET.length);
+    while (out.length < length) {
+        const bytes = crypto.randomBytes(length - out.length);
+        for (let i = 0; i < bytes.length && out.length < length; i++) {
+            const value = bytes[i];
+            if (value < limit) {
+                out += SAFE_ALPHABET.charAt(value % alphabetLength);
+            }
+        }
     }
     return out;
 }
