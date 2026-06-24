@@ -1,5 +1,32 @@
 # Change Log
 
+## 0.9.1
+
+### New Features
+
+- **"No Authentication" Connection Mode**: Adds a credential-free authentication option for DocumentDB clusters that require no username, password, or Entra ID. Works across the connection wizard, tree, integrated shell, and query playground. Switching an existing connection to this method automatically clears any previously stored credentials. [#755](https://github.com/microsoft/vscode-documentdb/pull/755)
+
+### Fixes
+
+- **Query Playground Run Button Disappears After Save**: The Run, Collection View, and Shell CodeLens buttons now remain visible after saving a `.documentdb.js` file. Previously they disappeared after saving, making it impossible to execute queries without reopening the playground. [#740](https://github.com/microsoft/vscode-documentdb/issues/740)
+- **Non-ObjectId `_id` Support**: Documents with string, numeric, UUID, or embedded-document `_id` values can now be deleted, read, and upserted correctly. Previously they threw "Invalid document ID" errors due to a hardcoded `ObjectId` assumption. Community contribution by [@hanhan761](https://github.com/hanhan761). [#217](https://github.com/microsoft/vscode-documentdb/issues/217), [#719](https://github.com/microsoft/vscode-documentdb/pull/719)
+- **Shell Completions in Strings, Regex, and Comments**: Field-name completions now appear correctly when a query contains parentheses inside string literals, regex literals, or line and block comments. Community contribution by [@hanhan761](https://github.com/hanhan761). [#710](https://github.com/microsoft/vscode-documentdb/issues/710), [#712](https://github.com/microsoft/vscode-documentdb/pull/712)
+- **Entra ID OIDC Host Allowlist**: The OIDC `ALLOWED_HOSTS` list for Entra ID authentication is now derived from the connection string hostname rather than hardcoded to `*.azure.com`, removing a restriction that could block token delivery for non-public-cloud Azure endpoints. Community contribution by [@hanhan761](https://github.com/hanhan761). [#639](https://github.com/microsoft/vscode-documentdb/issues/639), [#721](https://github.com/microsoft/vscode-documentdb/pull/721)
+- **TypeScript Plugin Warning on Read-Only Installs**: When the TS plugin fails to bootstrap on a read-only extension install, the extension now shows a status bar warning with a click-to-retry action instead of failing silently. Community contribution by [@hanhan761](https://github.com/hanhan761). [#637](https://github.com/microsoft/vscode-documentdb/issues/637), [#720](https://github.com/microsoft/vscode-documentdb/pull/720)
+- **Multi-Select Context Menu**: Single-item context menu commands in the Connections view are now hidden when multiple items are selected, preventing commands from silently acting on only the first item. Community contribution by [@hanhan761](https://github.com/hanhan761). [#668](https://github.com/microsoft/vscode-documentdb/issues/668), [#693](https://github.com/microsoft/vscode-documentdb/pull/693)
+- **Aggregation Reference Text for Special Field Names**: Fields with special characters (e.g., `order-items`, `my field`) now emit valid MQL reference text in completions using `$getField` form instead of invalid `$`-prefix syntax. Community contribution by [@Jacquelinezhong](https://github.com/Jacquelinezhong). [#709](https://github.com/microsoft/vscode-documentdb/issues/709), [#713](https://github.com/microsoft/vscode-documentdb/pull/713)
+- **URI Handler Diagnostics**: Failures in the VS Code URI handler now surface a user-visible warning and emit diagnostic telemetry instead of failing silently. Community contribution by [@hanhan761](https://github.com/hanhan761). [#655](https://github.com/microsoft/vscode-documentdb/issues/655), [#723](https://github.com/microsoft/vscode-documentdb/pull/723)
+- **Query Insights Prompt Framing**: Aligned the AI prompt role and task strings with the resource-file framing convention. Community contribution by [@hanhan761](https://github.com/hanhan761). [#619](https://github.com/microsoft/vscode-documentdb/issues/619), [#728](https://github.com/microsoft/vscode-documentdb/pull/728)
+
+### Improvements
+
+- **Performance: Azure Tenant Sign-In Throttling**: Throttles parallel Azure tenant sign-in checks to 5 concurrent requests, preventing unbounded Entra API fan-outs for users with many tenants. Community contribution by [@hanhan761](https://github.com/hanhan761). [#688](https://github.com/microsoft/vscode-documentdb/issues/688), [#694](https://github.com/microsoft/vscode-documentdb/pull/694)
+- **Performance: SchemaStore Memory Ceiling**: SchemaStore now enforces an LRU-based entry limit, preventing unbounded memory growth during long sessions with many collections. Community contribution by [@hanhan761](https://github.com/hanhan761). [#604](https://github.com/microsoft/vscode-documentdb/issues/604), [#724](https://github.com/microsoft/vscode-documentdb/pull/724)
+
+### Security
+
+- **Dependency Security Update**: Updated `undici` from 7.25.0 to 7.28.0 to address security vulnerabilities. [#754](https://github.com/microsoft/vscode-documentdb/pull/754)
+
 ## 0.9.0
 
 ### New Features
