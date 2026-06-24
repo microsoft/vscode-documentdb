@@ -10,6 +10,8 @@ import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { FolderItem } from '../../tree/connections-view/FolderItem';
+import { LocalEmulatorsItem } from '../../tree/connections-view/LocalEmulators/LocalEmulatorsItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
 import { type BaseClusterModel, type TreeCluster } from '../../tree/models/BaseClusterModel';
 import { type TreeElement } from '../../tree/TreeElement';
@@ -118,27 +120,45 @@ export async function promptAndConnectPlayground(
 }
 
 /**
- * Second-line detail for a pick: the cluster's host(s), and — for a database —
- * the owning cluster name as well, so similarly named items stay distinguishable.
+ * Second-line detail for a pick. Every selectable row gets one so the list has a
+ * uniform two-line height (no ragged mix of one- and two-line rows):
+ *  - folders          → a static "Folder" tag,
+ *  - local emulators  → a static "Local emulators" tag,
+ *  - clusters         → their host(s) (falling back to "Cluster"),
+ *  - databases        → "cluster · host" (falling back to the cluster name).
  * The connection string read here is the non-secret one stored on the cluster model.
  */
 function getNodeDetail(node: TreeElement): string | undefined {
+    if (node instanceof FolderItem) {
+        return l10n.t('Folder');
+    }
+    if (node instanceof LocalEmulatorsItem) {
+        return l10n.t('Local emulators');
+    }
+
     const cluster = getClusterFromNode(node);
-    if (!cluster?.connectionString) {
+    if (!cluster) {
         return undefined;
     }
 
-    let host: string | undefined;
+    const host = tryGetHost(cluster.connectionString);
+    if (node instanceof DatabaseItem) {
+        return host ? l10n.t('{0} · {1}', cluster.name, host) : cluster.name;
+    }
+    // Cluster node — always return a value so the row stays two lines.
+    return host ?? l10n.t('Cluster');
+}
+
+/** Parse the host(s) out of a (non-secret) connection string; `undefined` if missing/unparseable. */
+function tryGetHost(connectionString: string | undefined): string | undefined {
+    if (!connectionString) {
+        return undefined;
+    }
     try {
-        host = new DocumentDBConnectionString(cluster.connectionString).hosts?.join(', ') || undefined;
+        return new DocumentDBConnectionString(connectionString).hosts?.join(', ') || undefined;
     } catch {
-        host = undefined;
-    }
-    if (!host) {
         return undefined;
     }
-
-    return node instanceof DatabaseItem ? l10n.t('{0} · {1}', cluster.name, host) : host;
 }
 
 /** Duck-typed accessor for the `cluster` carried by cluster and database tree items. */
