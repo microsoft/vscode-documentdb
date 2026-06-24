@@ -112,6 +112,7 @@
   "{0}\n\nNothing is imported until you choose Import. Choose Preview to open the file(s) without importing.": "{0}\n\nNothing is imported until you choose Import. Choose Preview to open the file(s) without importing.",
   "{0}\n\nThe query did not complete successfully. Performance metrics shown are partial and measured up to the failure point.": "{0}\n\nThe query did not complete successfully. Performance metrics shown are partial and measured up to the failure point.",
   "{0}\n\nTip: copy the file into the same filesystem as the editor (for example your WSL or remote home directory), then drop it again, or use the \"Add Kubeconfig Source\" command to browse for it.": "{0}\n\nTip: copy the file into the same filesystem as the editor (for example your WSL or remote home directory), then drop it again, or use the \"Add Kubeconfig Source\" command to browse for it.",
+  "{0} · {1}": "{0} · {1}",
   "{0} (Emulator)": "{0} (Emulator)",
   "{0} completed successfully": "{0} completed successfully",
   "{0} connections": "{0} connections",

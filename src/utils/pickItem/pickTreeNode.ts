@@ -48,6 +48,14 @@ export interface PickTreeNodeOptions {
 
     /** Placeholder shown in the quick pick. */
     readonly placeHolder?: string;
+
+    /**
+     * Optional: produce a second-line `detail` string for a node (e.g. its
+     * host:port). Returning `undefined` shows no detail. Used to disambiguate
+     * items that share a display name. Only applied to real tree items, not the
+     * synthetic Back/empty entries.
+     */
+    readonly getDetail?: (node: TreeElement) => string | undefined;
 }
 
 /** Context-value tokens that are never navigable nor selectable (action / placeholder nodes). */
@@ -102,6 +110,7 @@ async function buildLevelPicks(
     parent: TreeElement | undefined,
     depth: number,
     leafContextValue: string,
+    getDetail?: (node: TreeElement) => string | undefined,
 ): Promise<IAzureQuickPickItem<TreeElement | undefined>[]> {
     const children = (await provider.getChildren(parent)) ?? [];
 
@@ -122,6 +131,7 @@ async function buildLevelPicks(
         itemPicks.push({
             label: getTreeItemLabel(treeItem, child.id),
             description: typeof treeItem.description === 'string' ? treeItem.description : undefined,
+            detail: getDetail?.(child),
             iconPath: toQuickPickIconPath(treeItem),
             data: child,
         });
@@ -194,12 +204,13 @@ export async function pickTreeNode(options: PickTreeNodeOptions): Promise<TreeEl
                 // (which may establish a cluster connection that takes a few seconds),
                 // instead of leaving the user with no UI during the wait.
                 const picked = await context.ui.showQuickPick(
-                    buildLevelPicks(provider, parent, depth, options.leafContextValue),
+                    buildLevelPicks(provider, parent, depth, options.leafContextValue, options.getDetail),
                     {
                         placeHolder: options.placeHolder ?? l10n.t('Select an item'),
                         loadingPlaceHolder: l10n.t('Loading…'),
                         suppressPersistence: true,
                         matchOnDescription: true,
+                        matchOnDetail: true,
                     },
                 );
                 stepCount++;

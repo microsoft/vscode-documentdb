@@ -9,7 +9,9 @@ import * as vscode from 'vscode';
 import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
 import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { type PlaygroundConnection } from '../../documentdb/playground/types';
+import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
+import { type BaseClusterModel, type TreeCluster } from '../../tree/models/BaseClusterModel';
 import { type TreeElement } from '../../tree/TreeElement';
 import { pickTreeNode } from '../../utils/pickItem/pickTreeNode';
 
@@ -93,6 +95,7 @@ export async function promptAndConnectPlayground(
         leafContextValue: DATABASE_CONTEXT_VALUE,
         telemetrySource: 'playground.connect',
         placeHolder: l10n.t('Select a database to connect this playground to'),
+        getDetail: getNodeDetail,
     });
 
     if (!node) {
@@ -112,6 +115,40 @@ export async function promptAndConnectPlayground(
 
     PlaygroundService.getInstance().setConnection(uri, connection);
     return connection;
+}
+
+/**
+ * Second-line detail for a pick: the cluster's host(s), and — for a database —
+ * the owning cluster name as well, so similarly named items stay distinguishable.
+ * The connection string read here is the non-secret one stored on the cluster model.
+ */
+function getNodeDetail(node: TreeElement): string | undefined {
+    const cluster = getClusterFromNode(node);
+    if (!cluster?.connectionString) {
+        return undefined;
+    }
+
+    let host: string | undefined;
+    try {
+        host = new DocumentDBConnectionString(cluster.connectionString).hosts?.join(', ') || undefined;
+    } catch {
+        host = undefined;
+    }
+    if (!host) {
+        return undefined;
+    }
+
+    return node instanceof DatabaseItem ? l10n.t('{0} · {1}', cluster.name, host) : host;
+}
+
+/** Duck-typed accessor for the `cluster` carried by cluster and database tree items. */
+function getClusterFromNode(node: TreeElement): TreeCluster<BaseClusterModel> | undefined {
+    const maybe = node as Partial<{ cluster: unknown }>;
+    const cluster = maybe.cluster;
+    if (cluster && typeof cluster === 'object' && 'clusterId' in cluster) {
+        return cluster as TreeCluster<BaseClusterModel>;
+    }
+    return undefined;
 }
 
 /**

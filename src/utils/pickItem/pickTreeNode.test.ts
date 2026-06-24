@@ -178,6 +178,24 @@ describe('pickTreeNode', () => {
         expect(clusterPick?.iconPath).toBe(icon);
     });
 
+    it('applies getDetail to each real pick as a second line', async () => {
+        const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
+        const cluster = makeNode({ id: 'c1', label: 'Cluster A', contextValue: CLUSTER_CV, children: [dbX] });
+
+        queuePicks('Cluster A', 'orders');
+
+        await pickTreeNode({
+            leafContextValue: 'treeItem_database',
+            provider: providerFor([cluster]),
+            telemetrySource: 'test',
+            getDetail: (node) => `detail-for-${node.id}`,
+        });
+
+        const rootPicks = (await showQuickPickMock.mock.calls[0][0]) as { label: string; detail?: string }[];
+        const clusterPick = rootPicks.find((p) => p.label.includes('Cluster A'));
+        expect(clusterPick?.detail).toBe('detail-for-c1');
+    });
+
     it('shows an Empty entry (not a warning) for an empty level and supports Back', async () => {
         const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
         const emptyCluster = makeNode({ id: 'c1', label: 'Empty Cluster', contextValue: CLUSTER_CV, children: [] });
