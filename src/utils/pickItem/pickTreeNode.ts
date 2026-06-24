@@ -3,6 +3,65 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+/**
+ * `pickTreeNode` — a generic, reusable quick pick that lets the user *browse* an
+ * existing tree view to select a node, instead of presenting a flat, hand-built
+ * list.
+ *
+ * ## Why this exists
+ * Several flows need the user to choose, say, a database from the Connections
+ * view (the query playground's "Connect to a database" being the first). The
+ * naive approach — enumerate every cluster, connect to each, list its databases,
+ * and flatten the result into one quick pick — is slow, eagerly connects to
+ * clusters the user doesn't care about, and re-implements folder nesting,
+ * sorting, auth-on-expand and icons that the tree already does.
+ *
+ * Instead this picker *walks the live tree*: at each level it calls the tree's
+ * own `getChildren`, shows those children as quick-pick items, and drills into
+ * the one the user selects — exactly mirroring what expanding a node in the tree
+ * view does. As a result we inherit, for free:
+ *  - folder nesting and ordering (no bespoke folder handling),
+ *  - lazy connect/auth-on-expand (selecting a cluster triggers the same
+ *    connection/authentication the tree performs when expanded), and
+ *  - each item's tree icon.
+ *
+ * The shape is deliberately the one the partner extension (vscode-cosmosdb)
+ * arrived at for its `pickAppResource`/`pickWorkspaceResource` helpers: drive a
+ * quick pick off `getChildren` + `getTreeItem` + a `contextValue` filter.
+ *
+ * ## How it works
+ *  - A node is a selectable **leaf** when its `contextValue` contains
+ *    {@link PickTreeNodeOptions.leafContextValue} (e.g. `'treeItem_database'`).
+ *    Any other node that exposes `getChildren` is a navigable **container**.
+ *  - Navigation is an explicit parent stack (root = `undefined`). "Back" pops it;
+ *    selecting a container pushes it. This is iterative (not recursive) so
+ *    "Back" is trivial and there is no call-stack growth.
+ *  - Each level's picks are produced as a **promise** handed to `showQuickPick`,
+ *    which renders the quick pick immediately with a busy/loading indicator while
+ *    `getChildren` runs (a cluster connection can take seconds). Without this the
+ *    quick pick would simply vanish during the wait.
+ *  - The list is never empty: "Back" (on nested levels) plus an "empty" /
+ *    "no connections" placeholder keep the quick pick alive so the user can
+ *    always navigate out.
+ *
+ * ## Termination / safety
+ * Every loop iteration either blocks on a quick pick (waiting for the user) or
+ * pops the stack toward the root, so the loop cannot spin: there is no infinite
+ * loop even if a level is empty. Cancellation (Esc → `UserCancelledError`) and
+ * the "no connections" root state both resolve to `undefined`.
+ *
+ * ## Telemetry
+ * Wrapped in its own `documentdb.pickTreeNode` event so we can see how the picker
+ * is used: `source` (caller), `leafContextValue`, `outcome`
+ * (`picked` | `cancelled` | `empty`), and measurements `stepCount` / `maxDepth`.
+ *
+ * ## Reuse
+ * The picker is intentionally domain-agnostic. Callers customize it via
+ * {@link PickTreeNodeOptions}: the leaf contextValue, an optional provider
+ * (defaults to the Connections view), and an optional `getDetail` to add a
+ * second line (e.g. a host) that disambiguates same-named items.
+ */
+
 import {
     callWithTelemetryAndErrorHandling,
     UserCancelledError,
@@ -169,16 +228,22 @@ async function buildLevelPicks(
 }
 
 /**
- * Generic, reusable quick-pick that drills through a tree (folders → clusters →
- * databases …) by repeatedly calling `getChildren`, presenting one quick pick
- * per level until the user selects a node matching {@link PickTreeNodeOptions.leafContextValue}.
+ * Browse a tree via a quick pick and return the node the user selects.
  *
- * The picker reuses the live tree, so:
- *  - folder nesting is navigated naturally (no bespoke folder handling), and
- *  - expanding a cluster triggers the same connect/auth flow as the tree view.
+ * Presents one quick pick per tree level, drilling from the root through
+ * navigable containers until the user picks a node whose `contextValue` matches
+ * {@link PickTreeNodeOptions.leafContextValue}. Because it walks the live tree
+ * (see the module overview), folder nesting and connect/auth-on-expand behave
+ * exactly as they do in the tree view.
  *
- * Returns the selected {@link TreeElement}, or `undefined` if the user cancelled
- * or there was nothing to pick.
+ * Behavior:
+ *  - **Back** (top of each nested level) steps up one level; **Esc** cancels.
+ *  - A busy indicator is shown while a level loads (e.g. a cluster connection).
+ *  - Empty levels and an empty root show a non-actionable placeholder rather
+ *    than collapsing the quick pick.
+ *
+ * @returns the selected {@link TreeElement}; `undefined` if the user cancelled,
+ *          exited via "Back" past the root, or there was nothing to pick.
  */
 export async function pickTreeNode(options: PickTreeNodeOptions): Promise<TreeElement | undefined> {
     return callWithTelemetryAndErrorHandling('documentdb.pickTreeNode', async (context: IActionContext) => {
