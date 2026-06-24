@@ -213,10 +213,43 @@ describe('pickTreeNode', () => {
 
         expect(result).toBe(dbX);
         expect(showWarningMessageMock).not.toHaveBeenCalled();
-        // The empty level offered an explicit "Empty" entry alongside Back.
-        const emptyLevelPicks = (await showQuickPickMock.mock.calls[1][0]) as { label: string }[];
-        expect(emptyLevelPicks.some((p) => p.label.includes('Empty'))).toBe(true);
+        // The empty level offered an explicit "Empty" entry (with a description) alongside Back.
+        const emptyLevelPicks = (await showQuickPickMock.mock.calls[1][0]) as {
+            label: string;
+            description?: string;
+        }[];
+        const emptyEntry = emptyLevelPicks.find((p) => p.label.includes('Empty'));
+        expect(emptyEntry).toBeDefined();
+        expect(emptyEntry?.description).toBe('No entries');
         expect(emptyLevelPicks.some((p) => p.label.includes('Back'))).toBe(true);
+    });
+
+    it('organizes items under group headers when multiple groups are present', async () => {
+        const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
+        const folder = makeNode({ id: 'f1', label: 'My Folder', contextValue: 'treeItem_folder', children: [] });
+        const cluster = makeNode({ id: 'c1', label: 'Cluster A', contextValue: CLUSTER_CV, children: [dbX] });
+
+        queuePicks('Exit');
+
+        await pickTreeNode({
+            leafContextValue: 'treeItem_database',
+            provider: providerFor([folder, cluster]),
+            telemetrySource: 'test',
+            getGroup: (node) => (node.id === 'f1' ? 'Folders' : 'Connections'),
+        });
+
+        const rootPicks = (await showQuickPickMock.mock.calls[0][0]) as { label: string; kind?: number }[];
+        const labels = rootPicks.map((p) => p.label);
+        const foldersHeader = rootPicks.findIndex((p) => p.kind === -1 && p.label === 'Folders');
+        const connectionsHeader = rootPicks.findIndex((p) => p.kind === -1 && p.label === 'Connections');
+        const folderItem = labels.findIndex((l) => l.includes('My Folder'));
+        const clusterItem = labels.findIndex((l) => l.includes('Cluster A'));
+
+        // Folders header, then the folder, then Connections header, then the cluster.
+        expect(foldersHeader).toBeGreaterThanOrEqual(0);
+        expect(folderItem).toBe(foldersHeader + 1);
+        expect(connectionsHeader).toBeGreaterThan(folderItem);
+        expect(clusterItem).toBe(connectionsHeader + 1);
     });
 
     it('supports going back up a level via the Back entry', async () => {

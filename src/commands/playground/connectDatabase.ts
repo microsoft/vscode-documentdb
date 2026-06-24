@@ -98,6 +98,7 @@ export async function promptAndConnectPlayground(
         telemetrySource: 'playground.connect',
         placeHolder: l10n.t('Select a database to connect this playground to'),
         getDetail: getNodeDetail,
+        getGroup: getNodeGroup,
     });
 
     if (!node) {
@@ -125,7 +126,7 @@ export async function promptAndConnectPlayground(
  *  - folders          → a static "Folder" tag,
  *  - local emulators  → a static "Local emulators" tag,
  *  - clusters         → their host(s) (falling back to "Cluster"),
- *  - databases        → "cluster · host" (falling back to the cluster name).
+ *  - databases        → a static "Database" tag.
  * The connection string read here is the non-secret one stored on the cluster model.
  */
 function getNodeDetail(node: TreeElement): string | undefined {
@@ -135,18 +136,31 @@ function getNodeDetail(node: TreeElement): string | undefined {
     if (node instanceof LocalEmulatorsItem) {
         return l10n.t('Local emulators');
     }
+    if (node instanceof DatabaseItem) {
+        return l10n.t('Database');
+    }
 
     const cluster = getClusterFromNode(node);
     if (!cluster) {
         return undefined;
     }
-
-    const host = tryGetHost(cluster.connectionString);
-    if (node instanceof DatabaseItem) {
-        return host ? l10n.t('{0} · {1}', cluster.name, host) : cluster.name;
-    }
     // Cluster node — always return a value so the row stays two lines.
-    return host ?? l10n.t('Cluster');
+    return tryGetHost(cluster.connectionString) ?? l10n.t('Cluster');
+}
+
+/**
+ * Group a node for the picker's section headers: folders together, everything
+ * else (clusters, emulators) under "Connections". Databases form their own group
+ * (shown flat since a level holds only databases).
+ */
+function getNodeGroup(node: TreeElement): string | undefined {
+    if (node instanceof FolderItem) {
+        return l10n.t('Folders');
+    }
+    if (node instanceof DatabaseItem) {
+        return l10n.t('Databases');
+    }
+    return l10n.t('Connections');
 }
 
 /** Parse the host(s) out of a (non-secret) connection string; `undefined` if missing/unparseable. */

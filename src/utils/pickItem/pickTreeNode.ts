@@ -56,6 +56,14 @@ export interface PickTreeNodeOptions {
      * synthetic Back/empty entries.
      */
     readonly getDetail?: (node: TreeElement) => string | undefined;
+
+    /**
+     * Optional: assign a node to a named group (e.g. `'Folders'`, `'Connections'`).
+     * When a level contains two or more distinct groups, the picks are organized
+     * under separator headers in first-seen group order. Levels with a single
+     * group (or none) are listed flat without a header.
+     */
+    readonly getGroup?: (node: TreeElement) => string | undefined;
 }
 
 /** Context-value tokens that are never navigable nor selectable (action / placeholder nodes). */
@@ -114,10 +122,11 @@ async function buildLevelPicks(
     depth: number,
     leafContextValue: string,
     getDetail?: (node: TreeElement) => string | undefined,
+    getGroup?: (node: TreeElement) => string | undefined,
 ): Promise<IAzureQuickPickItem<TreeElement | undefined>[]> {
     const children = (await provider.getChildren(parent)) ?? [];
 
-    const itemPicks: IAzureQuickPickItem<TreeElement | undefined>[] = [];
+    const collected: { pick: IAzureQuickPickItem<TreeElement | undefined>; group?: string }[] = [];
     for (const child of children) {
         const treeItem = await child.getTreeItem();
         const tokens = tokenize(treeItem.contextValue);
@@ -131,22 +140,30 @@ async function buildLevelPicks(
             continue;
         }
 
-        itemPicks.push({
-            label: getTreeItemLabel(treeItem, child.id),
-            description: typeof treeItem.description === 'string' ? treeItem.description : undefined,
-            detail: getDetail?.(child),
-            iconPath: toQuickPickIconPath(treeItem),
-            data: child,
+        collected.push({
+            pick: {
+                label: getTreeItemLabel(treeItem, child.id),
+                description: typeof treeItem.description === 'string' ? treeItem.description : undefined,
+                detail: getDetail?.(child),
+                iconPath: toQuickPickIconPath(treeItem),
+                data: child,
+            },
+            group: getGroup?.(child),
         });
     }
 
     // Real items first, then an informational placeholder when the level is empty.
     const picks: IAzureQuickPickItem<TreeElement | undefined>[] = [];
-    if (itemPicks.length > 0) {
-        picks.push(...itemPicks);
+    if (collected.length > 0) {
+        picks.push(...layOutItems(collected));
     } else if (depth > 0) {
-        // Empty folder / nothing connectable here — a bare "Empty" hint.
-        picks.push({ id: EMPTY_PICK_ID, label: l10n.t('$(info) Empty'), data: undefined });
+        // Empty folder / nothing connectable here — an "Empty" hint.
+        picks.push({
+            id: EMPTY_PICK_ID,
+            label: l10n.t('$(info) Empty'),
+            description: l10n.t('No entries'),
+            data: undefined,
+        });
     } else {
         picks.push({
             id: NO_CONNECTIONS_PICK_ID,
@@ -165,6 +182,43 @@ async function buildLevelPicks(
     picks.push({ id: EXIT_PICK_ID, label: l10n.t('$(close) Exit'), data: undefined });
 
     return picks;
+}
+
+/**
+ * Lay out collected item picks, inserting separator headers per group when two or
+ * more distinct groups are present. With a single group (or none) the items are
+ * returned flat, so single-type levels (e.g. a list of databases) stay clean.
+ */
+function layOutItems(
+    collected: { pick: IAzureQuickPickItem<TreeElement | undefined>; group?: string }[],
+): IAzureQuickPickItem<TreeElement | undefined>[] {
+    const distinctGroups: string[] = [];
+    for (const { group } of collected) {
+        if (group && !distinctGroups.includes(group)) {
+            distinctGroups.push(group);
+        }
+    }
+
+    if (distinctGroups.length < 2) {
+        return collected.map((c) => c.pick);
+    }
+
+    const out: IAzureQuickPickItem<TreeElement | undefined>[] = [];
+    for (const group of distinctGroups) {
+        out.push({ label: group, kind: vscode.QuickPickItemKind.Separator, data: undefined });
+        for (const c of collected) {
+            if (c.group === group) {
+                out.push(c.pick);
+            }
+        }
+    }
+    // Any items without a group go last, without a header.
+    for (const c of collected) {
+        if (!c.group) {
+            out.push(c.pick);
+        }
+    }
+    return out;
 }
 
 /**
@@ -206,7 +260,14 @@ export async function pickTreeNode(options: PickTreeNodeOptions): Promise<TreeEl
                 // (which may establish a cluster connection that takes a few seconds),
                 // instead of leaving the user with no UI during the wait.
                 const picked = await context.ui.showQuickPick(
-                    buildLevelPicks(provider, parent, depth, options.leafContextValue, options.getDetail),
+                    buildLevelPicks(
+                        provider,
+                        parent,
+                        depth,
+                        options.leafContextValue,
+                        options.getDetail,
+                        options.getGroup,
+                    ),
                     {
                         placeHolder: options.placeHolder ?? l10n.t('Select an item'),
                         loadingPlaceHolder: l10n.t('Loading…'),
