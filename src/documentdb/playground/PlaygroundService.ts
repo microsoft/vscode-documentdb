@@ -293,12 +293,14 @@ export class PlaygroundService implements vscode.Disposable {
 
         const displayName = this.getDisplayName(editor.document.uri);
         if (displayName) {
+            this._statusBarItem.command = PlaygroundCommandIds.showConnectionInfo;
             this._statusBarItem.text = `$(plug) ${displayName}`;
             this._statusBarItem.tooltip = l10n.t('Query Playground connected to {0}', displayName);
         } else {
-            this._statusBarItem.text = `$(warning) ${l10n.t('No database connected')}`;
+            this._statusBarItem.command = PlaygroundCommandIds.connect;
+            this._statusBarItem.text = `$(warning) ${l10n.t('Connect database')}`;
             this._statusBarItem.tooltip = l10n.t(
-                'This playground has no connection. Create a new playground from the DocumentDB panel.',
+                'This playground has no connection. Click to connect it to a database.',
             );
         }
 
