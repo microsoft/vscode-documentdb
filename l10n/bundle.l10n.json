@@ -1378,7 +1378,6 @@
   "This operation will copy all documents from the source to the target collection. Large collections may take several minutes to complete.": "This operation will copy all documents from the source to the target collection. Large collections may take several minutes to complete.",
   "This playground has no connection.": "This playground has no connection.",
   "This playground has no connection. Click to connect it to a database.": "This playground has no connection. Click to connect it to a database.",
-  "This playground has no connection. Create a new playground from the DocumentDB panel.": "This playground has no connection. Create a new playground from the DocumentDB panel.",
   "This playground is connected to {0} / {1}.": "This playground is connected to {0} / {1}.",
   "This query returns {0} of your collection.\n\nThis is a broad query that returns a large portion of the data. Consider adding more specific filters to narrow the results.": "This query returns {0} of your collection.\n\nThis is a broad query that returns a large portion of the data. Consider adding more specific filters to narrow the results.",
   "This query returns {0} of your collection.\n\nThis is a reasonable level of selectivity. The filter narrows results to a manageable portion of the data.": "This query returns {0} of your collection.\n\nThis is a reasonable level of selectivity. The filter narrows results to a manageable portion of the data.",
