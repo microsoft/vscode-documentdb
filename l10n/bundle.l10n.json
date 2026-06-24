@@ -155,6 +155,7 @@
   "$(arrow-left) Go Back": "$(arrow-left) Go Back",
   "$(check) Success": "$(check) Success",
   "$(close) Cancel": "$(close) Cancel",
+  "$(close) Exit": "$(close) Exit",
   "$(error) Failure": "$(error) Failure",
   "$(info) Empty": "$(info) Empty",
   "$(info) No connections found": "$(info) No connections found",

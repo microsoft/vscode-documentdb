@@ -32,6 +32,7 @@ jest.mock('@vscode/l10n', () => ({
 const showInformationMessageMock = jest.fn();
 const showWarningMessageMock = jest.fn();
 jest.mock('vscode', () => ({
+    QuickPickItemKind: { Separator: -1, Default: 0 },
     window: {
         showInformationMessage: (...args: unknown[]) => showInformationMessageMock(...args),
         showWarningMessage: (...args: unknown[]) => showWarningMessageMock(...args),
@@ -261,5 +262,45 @@ describe('pickTreeNode', () => {
         });
 
         expect(result).toBeUndefined();
+    });
+
+    it('returns undefined when the user selects Exit', async () => {
+        const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
+        const cluster = makeNode({ id: 'c1', label: 'Cluster A', contextValue: CLUSTER_CV, children: [dbX] });
+
+        queuePicks('Exit');
+
+        const result = await pickTreeNode({
+            leafContextValue: 'treeItem_database',
+            provider: providerFor([cluster]),
+            telemetrySource: 'test',
+        });
+
+        expect(result).toBeUndefined();
+    });
+
+    it('pins Back and Exit below a separator at the bottom of the list', async () => {
+        const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
+        const cluster = makeNode({ id: 'c1', label: 'Cluster A', contextValue: CLUSTER_CV, children: [dbX] });
+
+        queuePicks('Cluster A', 'orders');
+
+        await pickTreeNode({
+            leafContextValue: 'treeItem_database',
+            provider: providerFor([cluster]),
+            telemetrySource: 'test',
+        });
+
+        // Second quick pick is the cluster (depth 1) level: orders, separator, Back, Exit.
+        const levelPicks = (await showQuickPickMock.mock.calls[1][0]) as { label: string; kind?: number }[];
+        const labels = levelPicks.map((p) => p.label);
+        const separatorIndex = levelPicks.findIndex((p) => p.kind === -1);
+        const ordersIndex = labels.findIndex((l) => l.includes('orders'));
+        const backIndex = labels.findIndex((l) => l.includes('Back'));
+        const exitIndex = labels.findIndex((l) => l.includes('Exit'));
+
+        expect(ordersIndex).toBeLessThan(separatorIndex);
+        expect(backIndex).toBeGreaterThan(separatorIndex);
+        expect(exitIndex).toBeGreaterThan(backIndex);
     });
 });

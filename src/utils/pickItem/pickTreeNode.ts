@@ -10,7 +10,7 @@ import {
     type IAzureQuickPickItem,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import type * as vscode from 'vscode';
+import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { type TreeElement } from '../../tree/TreeElement';
 
@@ -63,6 +63,9 @@ const EXCLUDED_CONTEXT_TOKENS = new Set<string>(['treeItem_newConnection', 'tree
 
 /** Quick-pick id used for the synthetic "go back one level" entry. */
 const BACK_PICK_ID = '__pickTreeNode_back__';
+
+/** Quick-pick id used for the "exit" entry that cancels the whole picker. */
+const EXIT_PICK_ID = '__pickTreeNode_exit__';
 
 /** Quick-pick id for the informational "this level is empty" entry (selecting it goes back). */
 const EMPTY_PICK_ID = '__pickTreeNode_empty__';
@@ -137,31 +140,30 @@ async function buildLevelPicks(
         });
     }
 
+    // Real items first, then an informational placeholder when the level is empty.
     const picks: IAzureQuickPickItem<TreeElement | undefined>[] = [];
+    if (itemPicks.length > 0) {
+        picks.push(...itemPicks);
+    } else if (depth > 0) {
+        // Empty folder / nothing connectable here — a bare "Empty" hint.
+        picks.push({ id: EMPTY_PICK_ID, label: l10n.t('$(info) Empty'), data: undefined });
+    } else {
+        picks.push({
+            id: NO_CONNECTIONS_PICK_ID,
+            label: l10n.t('$(info) No connections found'),
+            detail: l10n.t('Add a connection in the DocumentDB panel first'),
+            data: undefined,
+        });
+    }
+
+    // Navigation actions pinned to the bottom after a separator, mirroring the
+    // Azure credentials-management browser (Back to previous level, then Exit).
+    picks.push({ label: '', kind: vscode.QuickPickItemKind.Separator, data: undefined });
     if (depth > 0) {
         picks.push({ id: BACK_PICK_ID, label: l10n.t('$(arrow-left) Back'), data: undefined });
     }
+    picks.push({ id: EXIT_PICK_ID, label: l10n.t('$(close) Exit'), data: undefined });
 
-    if (itemPicks.length === 0) {
-        if (depth > 0) {
-            // Empty folder / nothing connectable here — a bare "Empty" hint next to Back.
-            picks.push({
-                id: EMPTY_PICK_ID,
-                label: l10n.t('$(info) Empty'),
-                data: undefined,
-            });
-        } else {
-            picks.push({
-                id: NO_CONNECTIONS_PICK_ID,
-                label: l10n.t('$(info) No connections found'),
-                detail: l10n.t('Add a connection in the DocumentDB panel first'),
-                data: undefined,
-            });
-        }
-        return picks;
-    }
-
-    picks.push(...itemPicks);
     return picks;
 }
 
@@ -214,6 +216,11 @@ export async function pickTreeNode(options: PickTreeNodeOptions): Promise<TreeEl
                     },
                 );
                 stepCount++;
+
+                if (picked.id === EXIT_PICK_ID) {
+                    outcome = 'cancelled';
+                    return undefined;
+                }
 
                 if (picked.id === NO_CONNECTIONS_PICK_ID) {
                     outcome = 'empty';
