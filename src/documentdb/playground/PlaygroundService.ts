@@ -6,6 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { CredentialCache } from '../CredentialCache';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
 import { type PlaygroundConnection } from './types';
 
@@ -48,6 +49,17 @@ export class PlaygroundService implements vscode.Disposable {
 
     /** Per-document connections keyed by `uri.toString()`. */
     private readonly _connections = new Map<string, PlaygroundConnection>();
+
+    /**
+     * Last-known binding per document URI, kept in memory only (never persisted).
+     *
+     * Unlike `_connections`, an entry here is NOT removed when the document is
+     * closed, so that closing and reopening a playground *within the same session*
+     * can silently restore its binding — provided the target cluster still has
+     * live credentials. This does nothing across a VS Code restart (the map is
+     * gone); that case falls back to the explicit Connect affordance.
+     */
+    private readonly _lastBindingByPath = new Map<string, PlaygroundConnection>();
 
     /** Cluster IDs that currently have a running evaluation. */
     private readonly _executingClusterIds = new Set<string>();
@@ -113,6 +125,19 @@ export class PlaygroundService implements vscode.Disposable {
             }),
         );
 
+        // Silently restore a binding when a playground is reopened within the same
+        // session. Safe against the empty-model open race because it never reads the
+        // document body — it only matches the URI and checks that credentials still
+        // exist. If they don't (or there is no remembered binding), the playground
+        // stays disconnected and the Connect affordance takes over.
+        this._disposables.push(
+            vscode.workspace.onDidOpenTextDocument((doc) => {
+                if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
+                    this.tryRestoreBinding(doc);
+                }
+            }),
+        );
+
         // Initialize with current editor
         this.updateStatusBar(vscode.window.activeTextEditor);
     }
@@ -131,12 +156,16 @@ export class PlaygroundService implements vscode.Disposable {
             `[PlaygroundService] setConnection: ${uri.toString()} → cluster=${connection.clusterId}, db=${connection.databaseName}`,
         );
         this._connections.set(uri.toString(), connection);
+        this._lastBindingByPath.set(uri.toString(), connection);
         this._onDidChangeState.fire();
     }
 
     removeConnection(uri: vscode.Uri): void {
         ext.outputChannel?.trace(`[PlaygroundService] removeConnection: ${uri.toString()}`);
         this._connections.delete(uri.toString());
+        // Explicit removal also forgets the remembered binding so a later reopen
+        // does not silently restore a connection the user intentionally dropped.
+        this._lastBindingByPath.delete(uri.toString());
         this._onDidChangeState.fire();
     }
 
@@ -199,6 +228,10 @@ export class PlaygroundService implements vscode.Disposable {
 
         this._connections.delete(sourceKey);
         this._connections.set(fileKey, connection);
+        // Move the remembered binding onto the saved file too, so a later in-session
+        // reopen of that file can be restored silently.
+        this._lastBindingByPath.delete(sourceKey);
+        this._lastBindingByPath.set(fileKey, connection);
         ext.outputChannel?.trace(
             `[PlaygroundService] transferred connection on save: ${sourceKey} → ${fileKey} ` +
                 `(cluster=${connection.clusterId}, db=${connection.databaseName})`,
@@ -209,9 +242,35 @@ export class PlaygroundService implements vscode.Disposable {
     isConnected(uri: vscode.Uri): boolean {
         return this._connections.has(uri.toString());
     }
-
     getConnection(uri: vscode.Uri): PlaygroundConnection | undefined {
         return this._connections.get(uri.toString());
+    }
+
+    /**
+     * Attempt a silent, in-session restore of a previously remembered binding for
+     * a reopened playground. No-ops unless: the document is currently unbound,
+     * a binding was remembered for this exact URI, and the target cluster still
+     * has live credentials in this session.
+     */
+    private tryRestoreBinding(doc: vscode.TextDocument): void {
+        const key = doc.uri.toString();
+        if (this._connections.has(key)) {
+            return; // already bound (e.g. just created and bound)
+        }
+        const remembered = this._lastBindingByPath.get(key);
+        if (!remembered) {
+            return; // nothing to restore
+        }
+        if (!CredentialCache.hasCredentials(remembered.clusterId)) {
+            // Cluster is not available this session — leave it to the Connect affordance.
+            return;
+        }
+        this._connections.set(key, remembered);
+        ext.outputChannel?.trace(
+            `[PlaygroundService] restored connection on open: ${key} ` +
+                `(cluster=${remembered.clusterId}, db=${remembered.databaseName})`,
+        );
+        this._onDidChangeState.fire();
     }
 
     /**
@@ -315,6 +374,7 @@ export class PlaygroundService implements vscode.Disposable {
         }
         this._onDidChangeState.dispose();
         this._connections.clear();
+        this._lastBindingByPath.clear();
         PlaygroundService._instance = undefined;
     }
 }

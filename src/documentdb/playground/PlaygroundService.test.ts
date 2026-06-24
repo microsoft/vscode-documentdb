@@ -9,6 +9,14 @@ import { type PlaygroundConnection } from './types';
 // Access the vscode mock (auto-mock from __mocks__/vscode.js)
 import * as vscode from 'vscode';
 
+import { CredentialCache } from '../CredentialCache';
+
+jest.mock('../CredentialCache', () => ({
+    CredentialCache: { hasCredentials: jest.fn() },
+}));
+
+const hasCredentialsMock = CredentialCache.hasCredentials as jest.Mock;
+
 describe('PlaygroundService', () => {
     let service: PlaygroundService;
 
@@ -363,6 +371,72 @@ describe('PlaygroundService', () => {
 
             expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(false);
             expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(true);
+        });
+    });
+
+    describe('in-session binding restore on reopen', () => {
+        const connection: PlaygroundConnection = {
+            clusterId: 'cluster-123',
+            clusterDisplayName: 'MyCluster',
+            databaseName: 'orders',
+        };
+
+        function getCloseDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+            const calls = (vscode.workspace.onDidCloseTextDocument as jest.Mock).mock.calls;
+            return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
+        }
+
+        function getOpenDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+            const calls = (vscode.workspace.onDidOpenTextDocument as jest.Mock).mock.calls;
+            return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
+        }
+
+        const reopenDoc: Partial<vscode.TextDocument> = { uri: mockUri, languageId: 'documentdb-playground' };
+
+        beforeEach(() => {
+            hasCredentialsMock.mockReset();
+        });
+
+        it('restores a remembered binding when the cluster still has credentials', () => {
+            hasCredentialsMock.mockReturnValue(true);
+            service.setConnection(mockUri, connection);
+            getCloseDocHandler()(reopenDoc);
+            expect(service.isConnected(mockUri)).toBe(false);
+
+            getOpenDocHandler()(reopenDoc);
+
+            expect(service.isConnected(mockUri)).toBe(true);
+            expect(service.getConnection(mockUri)).toEqual(connection);
+            expect(hasCredentialsMock).toHaveBeenCalledWith('cluster-123');
+        });
+
+        it('does not restore when the cluster has no credentials this session', () => {
+            hasCredentialsMock.mockReturnValue(false);
+            service.setConnection(mockUri, connection);
+            getCloseDocHandler()(reopenDoc);
+
+            getOpenDocHandler()(reopenDoc);
+
+            expect(service.isConnected(mockUri)).toBe(false);
+        });
+
+        it('does not restore a binding the user explicitly removed', () => {
+            hasCredentialsMock.mockReturnValue(true);
+            service.setConnection(mockUri, connection);
+            service.removeConnection(mockUri);
+
+            getOpenDocHandler()(reopenDoc);
+
+            expect(service.isConnected(mockUri)).toBe(false);
+        });
+
+        it('does nothing when there is no remembered binding', () => {
+            hasCredentialsMock.mockReturnValue(true);
+
+            getOpenDocHandler()(reopenDoc);
+
+            expect(service.isConnected(mockUri)).toBe(false);
+            expect(hasCredentialsMock).not.toHaveBeenCalled();
         });
     });
 });
