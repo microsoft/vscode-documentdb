@@ -229,57 +229,109 @@ describe('PlaygroundService', () => {
         });
     });
 
-    describe('untitled→file URI migration', () => {
+    describe('untitled→file connection migration on save', () => {
         const connection: PlaygroundConnection = {
             clusterId: 'cluster-123',
             clusterDisplayName: 'MyCluster',
             databaseName: 'orders',
         };
 
-        function getCloseDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
-            const calls = (vscode.workspace.onDidCloseTextDocument as jest.Mock).mock.calls;
+        function getSaveDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+            const calls = (vscode.workspace.onDidSaveTextDocument as jest.Mock).mock.calls;
             return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
         }
 
-        function getOpenDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
-            const calls = (vscode.workspace.onDidOpenTextDocument as jest.Mock).mock.calls;
-            return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
+        function setOpenDocuments(docs: Partial<vscode.TextDocument>[]): void {
+            Object.defineProperty(vscode.workspace, 'textDocuments', {
+                value: docs,
+                configurable: true,
+            });
         }
 
-        it('migrates connection when untitled doc closes and file doc opens with same fsPath', () => {
-            const fsPath = '/workspace/playground-test.documentdb.js';
-            const untitledUri = {
-                toString: () => `untitled:${fsPath}`,
-                scheme: 'untitled',
-                fsPath,
-            } as vscode.Uri;
-            const fileUri = {
-                toString: () => `file://${fsPath}`,
-                scheme: 'file',
-                fsPath,
-            } as vscode.Uri;
-
-            service.setConnection(untitledUri, connection);
-            expect(service.isConnected(untitledUri)).toBe(true);
-
-            // Simulate VS Code closing the untitled doc on save
-            const closeHandler = getCloseDocHandler();
-            closeHandler({
-                uri: untitledUri,
+        function makeUntitledDoc(uriString: string, text: string): Partial<vscode.TextDocument> {
+            return {
+                uri: { toString: () => uriString, scheme: 'untitled' } as vscode.Uri,
                 languageId: 'documentdb-playground',
-            });
+                lineCount: text.split('\n').length,
+                getText: () => text,
+                offsetAt: () => text.length,
+            };
+        }
 
-            expect(service.isConnected(untitledUri)).toBe(false);
-
-            // Simulate VS Code opening the file doc
-            const openHandler = getOpenDocHandler();
-            openHandler({
-                uri: fileUri,
+        function makeFileDoc(uriString: string, text: string): Partial<vscode.TextDocument> {
+            return {
+                uri: { toString: () => uriString, scheme: 'file' } as vscode.Uri,
                 languageId: 'documentdb-playground',
-            });
+                lineCount: text.split('\n').length,
+                getText: () => text,
+                offsetAt: () => text.length,
+            };
+        }
 
-            expect(service.isConnected(fileUri)).toBe(true);
-            expect(service.getConnection(fileUri)).toEqual(connection);
+        afterEach(() => {
+            // Reset to an empty document list for other suites
+            setOpenDocuments([]);
+        });
+
+        it('re-keys the connection onto the saved file document (content match)', () => {
+            const content = "// Query Playground: MyCluster\ndb.getCollection('orders').find({ })";
+            const untitled = makeUntitledDoc('untitled:/tmp/orders.documentdb.js', content);
+            service.setConnection(untitled.uri as vscode.Uri, connection);
+            setOpenDocuments([untitled]);
+
+            // The saved file gains a trailing newline (insertFinalNewline) — still matches.
+            const fileDoc = makeFileDoc('file:///home/u/orders.documentdb.documentdb.js', content + '\n');
+            getSaveDocHandler()(fileDoc);
+
+            expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(true);
+            expect(service.getConnection(fileDoc.uri as vscode.Uri)).toEqual(connection);
+            expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(false);
+        });
+
+        it('does not migrate when no untitled playground has matching content', () => {
+            const untitled = makeUntitledDoc('untitled:/tmp/orders.documentdb.js', 'db.orders.find({})');
+            service.setConnection(untitled.uri as vscode.Uri, connection);
+            setOpenDocuments([untitled]);
+
+            const fileDoc = makeFileDoc('file:///home/u/other.documentdb.documentdb.js', 'db.products.find({})');
+            getSaveDocHandler()(fileDoc);
+
+            expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(false);
+            expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(true);
+        });
+
+        it('does not migrate when the content match is ambiguous (Save All of identical buffers)', () => {
+            const content = 'db.orders.find({})';
+            const untitledA = makeUntitledDoc('untitled:/tmp/a.documentdb.js', content);
+            const untitledB = makeUntitledDoc('untitled:/tmp/b.documentdb.js', content);
+            service.setConnection(untitledA.uri as vscode.Uri, connection);
+            service.setConnection(untitledB.uri as vscode.Uri, {
+                clusterId: 'cluster-999',
+                clusterDisplayName: 'Other',
+                databaseName: 'misc',
+            });
+            setOpenDocuments([untitledA, untitledB]);
+
+            const fileDoc = makeFileDoc('file:///home/u/a.documentdb.documentdb.js', content);
+            getSaveDocHandler()(fileDoc);
+
+            // Ambiguous → leave everything untouched rather than bind the wrong connection.
+            expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(false);
+            expect(service.isConnected(untitledA.uri as vscode.Uri)).toBe(true);
+            expect(service.isConnected(untitledB.uri as vscode.Uri)).toBe(true);
+        });
+
+        it('does not migrate when the document exceeds the size cap', () => {
+            const huge = 'x'.repeat(1_000_001);
+            const untitled = makeUntitledDoc('untitled:/tmp/big.documentdb.js', huge);
+            service.setConnection(untitled.uri as vscode.Uri, connection);
+            setOpenDocuments([untitled]);
+
+            const fileDoc = makeFileDoc('file:///home/u/big.documentdb.documentdb.js', huge);
+            getSaveDocHandler()(fileDoc);
+
+            expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(false);
+            expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(true);
         });
     });
 });

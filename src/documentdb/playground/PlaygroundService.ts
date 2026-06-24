@@ -10,6 +10,34 @@ import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
 import { type PlaygroundConnection } from './types';
 
 /**
+ * Normalize playground text for content correlation across an untitled→file save.
+ * Trailing whitespace/newlines are ignored so that save-time transforms (e.g.
+ * `files.insertFinalNewline`, `files.trimTrailingWhitespace`) don't break the match.
+ */
+function normalizePlaygroundText(text: string): string {
+    return text.replace(/\s+$/, '');
+}
+
+/**
+ * Character length of a document, computed via `offsetAt` so it does NOT
+ * materialize the full text the way `getText().length` would. `offsetAt` walks
+ * the document's internal line-offset model, so it stays cheap even for very
+ * large files (including a single huge line). Used to gate content correlation
+ * before any `getText()` call.
+ */
+function getDocumentCharLength(doc: vscode.TextDocument): number {
+    return doc.offsetAt(new vscode.Position(doc.lineCount, 0));
+}
+
+/**
+ * Upper bound (in characters) on documents eligible for save-time content
+ * correlation. Playgrounds are small query scripts; anything larger is skipped
+ * to avoid unnecessary string work — such a file simply won't auto-reconnect
+ * (no worse than before this feature existed).
+ */
+const MAX_MIGRATION_TEXT_LENGTH = 1_000_000; // ~1 MB of text
+
+/**
  * Singleton service managing per-document query playground connections and execution state.
  *
  * Each playground document is permanently bound to a cluster/database connection.
@@ -20,12 +48,6 @@ export class PlaygroundService implements vscode.Disposable {
 
     /** Per-document connections keyed by `uri.toString()`. */
     private readonly _connections = new Map<string, PlaygroundConnection>();
-    /**
-     * Temporarily stashed connections for untitled→file URI migration.
-     * When an untitled playground is saved, VS Code closes the untitled doc and opens a file doc.
-     * We stash the connection keyed by fsPath so it can be migrated to the new URI.
-     */
-    private readonly _pendingMigrations = new Map<string, PlaygroundConnection>();
 
     /** Cluster IDs that currently have a running evaluation. */
     private readonly _executingClusterIds = new Set<string>();
@@ -57,35 +79,33 @@ export class PlaygroundService implements vscode.Disposable {
         );
 
         // Clean up connection when a playground document is closed.
-        // For untitled documents, stash the connection briefly so it can be
-        // migrated if the document is being saved (untitled → file transition).
         this._disposables.push(
             vscode.workspace.onDidCloseTextDocument((doc) => {
                 if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
-                    const connection = this._connections.get(doc.uri.toString());
-                    if (connection && doc.uri.scheme === 'untitled') {
-                        this._pendingMigrations.set(doc.uri.fsPath, connection);
-                        // Clear the stash after a short delay if no file doc claims it
-                        setTimeout(() => {
-                            this._pendingMigrations.delete(doc.uri.fsPath);
-                        }, 2000);
+                    if (this._connections.delete(doc.uri.toString())) {
+                        this._onDidChangeState.fire();
                     }
-                    this._connections.delete(doc.uri.toString());
-                    this._onDidChangeState.fire();
                 }
             }),
         );
 
-        // Migrate connection when a playground file document opens after an untitled save
+        // Migrate the connection when an untitled playground is saved to disk.
+        //
+        // Saving an untitled document opens a brand-new `file:` document (with a
+        // different URI — Save As can change directory and filename freely) and then
+        // closes the untitled one. We correlate the two by content and re-key the
+        // connection onto the new URI.
+        //
+        // We trigger on `onDidSaveTextDocument` rather than `onDidOpenTextDocument`:
+        // for a brand-new file the file's document model is still empty when it opens,
+        // so content correlation would fail. By the time the save event fires the text
+        // is populated and the untitled document is still open, so the match is
+        // reliable. This also runs before the untitled closes, so the cluster never
+        // appears "orphaned" during the transition and its worker is not torn down.
         this._disposables.push(
-            vscode.workspace.onDidOpenTextDocument((doc) => {
+            vscode.workspace.onDidSaveTextDocument((doc) => {
                 if (doc.languageId === PLAYGROUND_LANGUAGE_ID && doc.uri.scheme === 'file') {
-                    const stashed = this._pendingMigrations.get(doc.uri.fsPath);
-                    if (stashed) {
-                        this._pendingMigrations.delete(doc.uri.fsPath);
-                        this._connections.set(doc.uri.toString(), stashed);
-                        this._onDidChangeState.fire();
-                    }
+                    this.migrateConnectionFromSavedUntitled(doc);
                 }
             }),
         );
@@ -114,6 +134,68 @@ export class PlaygroundService implements vscode.Disposable {
     removeConnection(uri: vscode.Uri): void {
         ext.outputChannel?.trace(`[PlaygroundService] removeConnection: ${uri.toString()}`);
         this._connections.delete(uri.toString());
+        this._onDidChangeState.fire();
+    }
+
+    /**
+     * Re-key a connection from a just-saved untitled playground onto its new
+     * `file:` document.
+     *
+     * When an untitled playground is saved, the connection is keyed by the old
+     * `untitled:` URI. We find the still-open untitled playground whose content
+     * matches the new file document and move its connection onto the new URI.
+     *
+     * Correlation is by content (URI and filename are unreliable: Save As can
+     * change both, and the untitled path lives under a temp/workspace folder).
+     * To stay unambiguous we only migrate when exactly one untitled playground
+     * matches — e.g. "Save All" of two byte-identical fresh playgrounds is left
+     * alone rather than risk binding the wrong connection.
+     */
+    private migrateConnectionFromSavedUntitled(fileDoc: vscode.TextDocument): void {
+        const fileKey = fileDoc.uri.toString();
+        if (this._connections.has(fileKey)) {
+            return; // already bound (e.g. re-save of an already-migrated file)
+        }
+
+        // Size-gate before reading: `getDocumentCharLength` uses `offsetAt` and
+        // does not pull the whole file into memory the way `getText()` does.
+        if (getDocumentCharLength(fileDoc) > MAX_MIGRATION_TEXT_LENGTH) {
+            return; // too large to correlate cheaply — skip auto-migration
+        }
+        const fileText = normalizePlaygroundText(fileDoc.getText());
+
+        // Cheap filters first (scheme → language → has-connection → size); only the
+        // few still-open untitled playgrounds that hold a connection ever reach the
+        // content comparison, so `getText()` is not called on unrelated or large documents.
+        const matches = vscode.workspace.textDocuments.filter((doc) => {
+            if (doc.uri.scheme !== 'untitled' || doc.languageId !== PLAYGROUND_LANGUAGE_ID) {
+                return false;
+            }
+            if (!this._connections.has(doc.uri.toString())) {
+                return false;
+            }
+            if (getDocumentCharLength(doc) > MAX_MIGRATION_TEXT_LENGTH) {
+                return false;
+            }
+            return normalizePlaygroundText(doc.getText()) === fileText;
+        });
+
+        if (matches.length !== 1) {
+            return; // no match, or ambiguous — leave connections untouched
+        }
+
+        const sourceKey = matches[0].uri.toString();
+        const connection = this._connections.get(sourceKey);
+        if (!connection) {
+            return;
+        }
+
+        this._connections.delete(sourceKey);
+        this._connections.set(fileKey, connection);
+        ext.outputChannel?.trace(
+            `[PlaygroundService] migrated connection on save: ${sourceKey} → ${fileKey} ` +
+                `(cluster=${connection.clusterId}, db=${connection.databaseName})`,
+        );
         this._onDidChangeState.fire();
     }
 
