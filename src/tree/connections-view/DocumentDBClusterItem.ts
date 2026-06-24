@@ -127,13 +127,16 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
             /**
              * Prompt for credentials if no auth method selected or
-             * native auth but no username/password set
+             * native auth but no username/password set.
+             *
+             * NoAuth connections are intentionally anonymous: they have a defined auth
+             * method and need no credentials, so they must skip the authenticate wizard.
              */
-            if (
-                !authMethod ||
-                (authMethod === AuthMethodId.NativeAuth &&
-                    (!username || username.length === 0 || !password || password.length === 0))
-            ) {
+            const needsNativeCredentials =
+                authMethod === AuthMethodId.NativeAuth &&
+                (!username || username.length === 0 || !password || password.length === 0);
+
+            if (!authMethod || needsNativeCredentials) {
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
                     availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
@@ -439,6 +442,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             this.cluster.emulatorConfiguration?.disableEmulatorSecurity
         ) {
             description = l10n.t('⚠ TLS/SSL Disabled');
+        } else if (!this.cluster.emulatorConfiguration?.isEmulator && this.isTlsDisabled()) {
+            // Surface a connection-string TLS/SSL override (e.g. tls=false) the same way the
+            // emulator's "disable security" state is shown.
+            description = l10n.t('⚠ TLS/SSL Disabled');
         }
 
         return {
@@ -493,9 +500,32 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             } else {
                 md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
             }
+        } else if (this.isTlsDisabled()) {
+            // For non-emulator connections, only add a line when the connection string
+            // explicitly disables TLS/SSL; otherwise show no security entry.
+            md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
         }
 
         return md;
+    }
+
+    /**
+     * Detects whether the connection string explicitly disables TLS/SSL
+     * (e.g. `tls=false` or `ssl=false`). Returns false when the parameter is
+     * absent or the connection string cannot be parsed.
+     */
+    private isTlsDisabled(): boolean {
+        if (!this.cluster.connectionString) {
+            return false;
+        }
+        try {
+            const parsed = new DocumentDBConnectionString(this.cluster.connectionString);
+            const tls = parsed.searchParams.get('tls');
+            const ssl = parsed.searchParams.get('ssl');
+            return tls === 'false' || ssl === 'false';
+        } catch {
+            return false;
+        }
     }
 
     /**
