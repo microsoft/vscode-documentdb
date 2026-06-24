@@ -25,8 +25,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 }));
 
 jest.mock('@vscode/l10n', () => ({
-    t: (message: string, ...args: unknown[]): string =>
-        message.replace(/\{(\d+)\}/g, (_m, i: string) => String(args[Number(i)] ?? '')),
+    t: (message: string): string => message,
 }));
 
 const showInformationMessageMock = jest.fn();
