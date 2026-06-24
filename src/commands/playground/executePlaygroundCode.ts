@@ -105,7 +105,7 @@ export async function executePlaygroundCode(
             async (context: IActionContext) => {
                 context.errorHandling.suppressDisplay = true;
                 context.telemetry.properties.runMode = runMode;
-                return promptAndConnectPlayground(context, documentUri);
+                return promptAndConnectPlayground(context, documentUri, 'playground.connectOnRun');
             },
         );
         if (!connection) {

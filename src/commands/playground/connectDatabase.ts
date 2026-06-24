@@ -44,7 +44,7 @@ export async function showConnectionInfo(context: IActionContext): Promise<void>
     if (!connection) {
         // Disconnected playgrounds normally route to the connect command directly,
         // but if we get here, just launch the picker.
-        await promptAndConnectPlayground(context, editor.document.uri);
+        await promptAndConnectPlayground(context, editor.document.uri, 'playground.connect');
         return;
     }
 
@@ -63,7 +63,7 @@ export async function showConnectionInfo(context: IActionContext): Promise<void>
     if (choice === switchAction) {
         // Re-pick. promptAndConnectPlayground only overwrites the binding once a new
         // database is selected, so aborting the picker preserves the old connection.
-        await promptAndConnectPlayground(context, editor.document.uri);
+        await promptAndConnectPlayground(context, editor.document.uri, 'playground.connect');
     }
 }
 
@@ -78,7 +78,7 @@ export async function connectPlayground(context: IActionContext): Promise<void> 
     if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
         return;
     }
-    await promptAndConnectPlayground(context, editor.document.uri);
+    await promptAndConnectPlayground(context, editor.document.uri, 'playground.connect');
 }
 
 /**
@@ -86,16 +86,21 @@ export async function connectPlayground(context: IActionContext): Promise<void> 
  * playground at {@link uri} to it. Reuses the live tree, so picking a cluster
  * triggers the same connect/auth flow as expanding it in the tree view.
  *
+ * @param telemetrySource Identifies the calling flow in `documentdb.pickTreeNode`
+ *   telemetry (e.g. `'playground.connect'` for the explicit connect affordance,
+ *   `'playground.connectOnRun'` for the connect-on-run path), so the callers stay
+ *   distinguishable.
  * @returns the bound connection, or `undefined` if the user cancelled or the
  *          selection could not be resolved.
  */
 export async function promptAndConnectPlayground(
     context: IActionContext,
     uri: vscode.Uri,
+    telemetrySource: string,
 ): Promise<PlaygroundConnection | undefined> {
     const node = await pickTreeNode({
         leafContextValue: DATABASE_CONTEXT_VALUE,
-        telemetrySource: 'playground.connect',
+        telemetrySource,
         placeHolder: l10n.t('Select a database to connect this playground to'),
         getDetail: getNodeDetail,
     });
