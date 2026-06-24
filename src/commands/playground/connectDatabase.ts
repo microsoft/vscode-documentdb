@@ -98,7 +98,6 @@ export async function promptAndConnectPlayground(
         telemetrySource: 'playground.connect',
         placeHolder: l10n.t('Select a database to connect this playground to'),
         getDetail: getNodeDetail,
-        getGroup: getNodeGroup,
     });
 
     if (!node) {
@@ -146,21 +145,6 @@ function getNodeDetail(node: TreeElement): string | undefined {
     }
     // Cluster node — always return a value so the row stays two lines.
     return tryGetHost(cluster.connectionString) ?? l10n.t('Cluster');
-}
-
-/**
- * Group a node for the picker's section headers: folders together, everything
- * else (clusters, emulators) under "Connections". Databases form their own group
- * (shown flat since a level holds only databases).
- */
-function getNodeGroup(node: TreeElement): string | undefined {
-    if (node instanceof FolderItem) {
-        return l10n.t('Folders');
-    }
-    if (node instanceof DatabaseItem) {
-        return l10n.t('Databases');
-    }
-    return l10n.t('Connections');
 }
 
 /** Parse the host(s) out of a (non-secret) connection string; `undefined` if missing/unparseable. */

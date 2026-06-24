@@ -213,43 +213,38 @@ describe('pickTreeNode', () => {
 
         expect(result).toBe(dbX);
         expect(showWarningMessageMock).not.toHaveBeenCalled();
-        // The empty level offered an explicit "Empty" entry (with a description) alongside Back.
+        // The empty level offered an explicit "Empty" entry (with a detail) alongside Back.
         const emptyLevelPicks = (await showQuickPickMock.mock.calls[1][0]) as {
             label: string;
-            description?: string;
+            detail?: string;
         }[];
         const emptyEntry = emptyLevelPicks.find((p) => p.label.includes('Empty'));
         expect(emptyEntry).toBeDefined();
-        expect(emptyEntry?.description).toBe('No entries');
+        expect(emptyEntry?.detail).toBe('No entries');
         expect(emptyLevelPicks.some((p) => p.label.includes('Back'))).toBe(true);
     });
 
-    it('organizes items under group headers when multiple groups are present', async () => {
+    it('lists items flat in natural order with no group headers', async () => {
         const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
         const folder = makeNode({ id: 'f1', label: 'My Folder', contextValue: 'treeItem_folder', children: [] });
         const cluster = makeNode({ id: 'c1', label: 'Cluster A', contextValue: CLUSTER_CV, children: [dbX] });
 
-        queuePicks('Exit');
+        // Cancel out via Esc after inspecting the root list.
+        showQuickPickMock.mockRejectedValue(new UserCancelledError());
 
         await pickTreeNode({
             leafContextValue: 'treeItem_database',
             provider: providerFor([folder, cluster]),
             telemetrySource: 'test',
-            getGroup: (node) => (node.id === 'f1' ? 'Folders' : 'Connections'),
         });
 
         const rootPicks = (await showQuickPickMock.mock.calls[0][0]) as { label: string; kind?: number }[];
-        const labels = rootPicks.map((p) => p.label);
-        const foldersHeader = rootPicks.findIndex((p) => p.kind === -1 && p.label === 'Folders');
-        const connectionsHeader = rootPicks.findIndex((p) => p.kind === -1 && p.label === 'Connections');
-        const folderItem = labels.findIndex((l) => l.includes('My Folder'));
-        const clusterItem = labels.findIndex((l) => l.includes('Cluster A'));
-
-        // Folders header, then the folder, then Connections header, then the cluster.
-        expect(foldersHeader).toBeGreaterThanOrEqual(0);
-        expect(folderItem).toBe(foldersHeader + 1);
-        expect(connectionsHeader).toBeGreaterThan(folderItem);
-        expect(clusterItem).toBe(connectionsHeader + 1);
+        // No separators / group headers, and the folder is listed before the connection.
+        expect(rootPicks.some((p) => p.kind === -1)).toBe(false);
+        const folderItem = rootPicks.findIndex((p) => p.label.includes('My Folder'));
+        const clusterItem = rootPicks.findIndex((p) => p.label.includes('Cluster A'));
+        expect(folderItem).toBeGreaterThanOrEqual(0);
+        expect(folderItem).toBeLessThan(clusterItem);
     });
 
     it('supports going back up a level via the Back entry', async () => {
@@ -297,22 +292,7 @@ describe('pickTreeNode', () => {
         expect(result).toBeUndefined();
     });
 
-    it('returns undefined when the user selects Exit', async () => {
-        const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
-        const cluster = makeNode({ id: 'c1', label: 'Cluster A', contextValue: CLUSTER_CV, children: [dbX] });
-
-        queuePicks('Exit');
-
-        const result = await pickTreeNode({
-            leafContextValue: 'treeItem_database',
-            provider: providerFor([cluster]),
-            telemetrySource: 'test',
-        });
-
-        expect(result).toBeUndefined();
-    });
-
-    it('pins Back and Exit below a separator at the bottom of the list', async () => {
+    it('places Back then a separator at the top of a nested level, with no Exit', async () => {
         const dbX = makeNode({ id: 'dbX', label: 'orders', contextValue: DATABASE_CV });
         const cluster = makeNode({ id: 'c1', label: 'Cluster A', contextValue: CLUSTER_CV, children: [dbX] });
 
@@ -324,16 +304,12 @@ describe('pickTreeNode', () => {
             telemetrySource: 'test',
         });
 
-        // Second quick pick is the cluster (depth 1) level: orders, separator, Back, Exit.
+        // Second quick pick is the cluster (depth 1) level: Back, separator, then the database.
         const levelPicks = (await showQuickPickMock.mock.calls[1][0]) as { label: string; kind?: number }[];
-        const labels = levelPicks.map((p) => p.label);
-        const separatorIndex = levelPicks.findIndex((p) => p.kind === -1);
-        const ordersIndex = labels.findIndex((l) => l.includes('orders'));
-        const backIndex = labels.findIndex((l) => l.includes('Back'));
-        const exitIndex = labels.findIndex((l) => l.includes('Exit'));
-
-        expect(ordersIndex).toBeLessThan(separatorIndex);
-        expect(backIndex).toBeGreaterThan(separatorIndex);
-        expect(exitIndex).toBeGreaterThan(backIndex);
+        expect(levelPicks[0].label).toContain('Back');
+        expect(levelPicks[1].kind).toBe(-1);
+        expect(levelPicks.some((p) => p.label.includes('Exit'))).toBe(false);
+        const ordersIndex = levelPicks.findIndex((p) => p.label.includes('orders'));
+        expect(ordersIndex).toBeGreaterThan(1);
     });
 });
