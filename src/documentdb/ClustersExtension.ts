@@ -56,7 +56,7 @@ import {
     openInteractiveShellWithInput,
 } from '../commands/openInteractiveShell/openInteractiveShell';
 import { pasteCollection } from '../commands/pasteCollection/pasteCollection';
-import { showConnectionInfo } from '../commands/playground/connectDatabase';
+import { connectPlayground, showConnectionInfo } from '../commands/playground/connectDatabase';
 import { disposeEvaluators, shutdownOrphanedEvaluators } from '../commands/playground/executePlaygroundCode';
 import { newPlayground, newPlaygroundWithContent } from '../commands/playground/newPlayground';
 import { playgroundOpenQueryInCollectionView } from '../commands/playground/playgroundOpenInCollectionView';
@@ -506,6 +506,8 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(PlaygroundCommandIds.newWithContent, withCommandCorrelation(newPlaygroundWithContent));
 
                 registerCommand(PlaygroundCommandIds.showConnectionInfo, withCommandCorrelation(showConnectionInfo));
+
+                registerCommand(PlaygroundCommandIds.connect, withCommandCorrelation(connectPlayground));
 
                 registerCommand(PlaygroundCommandIds.runAll, withCommandCorrelation(runAll));
 

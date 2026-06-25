@@ -46,8 +46,8 @@ describe('PlaygroundCodeLensProvider', () => {
 
         // First lens should be connection status
         const connectionLens = lenses[0];
-        expect(connectionLens.command?.command).toBe(PlaygroundCommandIds.showConnectionInfo);
-        expect(connectionLens.command?.title).toContain('Not connected');
+        expect(connectionLens.command?.command).toBe(PlaygroundCommandIds.connect);
+        expect(connectionLens.command?.title).toContain('Connect');
         expect(connectionLens.range.start.line).toBe(0);
     });
 
