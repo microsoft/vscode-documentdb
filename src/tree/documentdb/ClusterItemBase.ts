@@ -17,6 +17,7 @@ import { ClustersClient, type DatabaseItemModel } from '../../documentdb/Cluster
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { type TreeElement } from '../TreeElement';
@@ -24,6 +25,7 @@ import { type TreeElementWithContextValue } from '../TreeElementWithContextValue
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { type TreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
+import { containsRetryNode, createRetryNode } from '../api/retryNode';
 import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { DatabaseItem } from './DatabaseItem';
@@ -57,13 +59,26 @@ export type EphemeralClusterCredentials = {
  */
 export type ClusterCredentials = EphemeralClusterCredentials;
 
+/**
+ * Context-value tag identifying a DocumentDB cluster node.
+ *
+ * `contextValue` strings are built with azext-utils `createContextValue`, which de-duplicates and
+ * joins multiple tags with ';'. A cluster node's contextValue is therefore composite (e.g.
+ * `treeItem_documentdbcluster;experience_<api>`); the relative order of tags is not significant and
+ * callers must match individual tags rather than the whole string. Providers can gate view-specific
+ * error-recovery actions to clusters by checking for this tag (see `errorRecoveryActions` in
+ * BaseExtendedTreeDataProvider). This constant is the single source of truth for the tag — import it
+ * (e.g. in `clusterItemTypeGuard.ts`) rather than re-declaring the literal.
+ */
+export const CLUSTER_ITEM_CONTEXT_VALUE = 'treeItem_documentdbcluster';
+
 // This info will be available at every level in the tree for immediate access
 export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterModel>
     implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue, TreeElementWithRetryChildren
 {
     public readonly id: string;
     public readonly experience: Experience;
-    public contextValue: string = 'treeItem_documentdbcluster';
+    public contextValue: string = CLUSTER_ITEM_CONTEXT_VALUE;
 
     /**
      * Correlation ID used for telemetry funnel analysis.
@@ -143,6 +158,40 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     }
 
     /**
+     * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
+     *
+     * Always includes the canonical "retry" node (see {@link createRetryNode}); `hasRetryNode` and
+     * the provider detect the error state via that node. For post-authentication failures
+     * (`includeOpenShell`), an "open shell" node is added so the user can investigate the server
+     * directly. View-specific recovery actions (e.g. "update credentials") are added separately by
+     * the provider via `errorRecoveryActions`.
+     *
+     * Error-recovery nodes in this tree are produced by two layers:
+     * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "retry" (any failure) and, for
+     *   post-authentication failures, "open shell".
+     * - The PROVIDER layer (a BranchDataProvider) owns VIEW-SPECIFIC nodes (e.g. "update
+     *   credentials") via `errorRecoveryActions`, gated by the failing element's contextValue.
+     */
+    private createErrorRecoveryChildren(includeOpenShell: boolean): TreeElement[] {
+        const children: TreeElement[] = [createRetryNode(this.id, this)];
+
+        if (includeOpenShell) {
+            children.push(
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/open-shell`,
+                    label: vscode.l10n.t('Click here to open the shell'),
+                    iconPath: new vscode.ThemeIcon('terminal'),
+                    commandId: ShellCommandIds.open,
+                    commandArgs: [this],
+                }),
+            );
+        }
+
+        return children;
+    }
+
+    /**
      * Authenticates and connects to the cluster to list all available databases.
      * Here, the MongoDB client is created and cached for future use.
      *
@@ -185,9 +234,40 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     });
 
                     return [];
-                } else {
-                    throw error;
                 }
+
+                // Reusing a cached client can still fail (server down, stale credentials, dropped
+                // tunnel, TLS/auth renegotiation, …). If we let the rejection propagate out of
+                // getChildren(), the tree expansion would end with no children and — crucially —
+                // no retry affordance, leaving the user stuck. Mirror the `!clustersClient` and
+                // listDatabases branches: record telemetry, surface a modal, and return a retry
+                // node. We intentionally keep the cached credentials so the retry can re-attempt
+                // the connection without forcing the user to re-enter credentials (the failure may
+                // be transient).
+                const errorMessage = error instanceof Error ? error.message : String(error);
+
+                void callWithTelemetryAndErrorHandling('connect', (telemetryContext) => {
+                    telemetryContext.errorHandling.suppressDisplay = true;
+                    telemetryContext.telemetry.properties.connectionResult = 'failed';
+                    telemetryContext.telemetry.properties.source = 'treeExpansion';
+                    telemetryContext.telemetry.properties.experience = this.experience.api;
+                    telemetryContext.telemetry.properties.failurePhase = 'cachedClientConnect';
+                    throw error;
+                });
+
+                ext.outputChannel.appendLine(
+                    l10n.t('Failed to reuse the active connection for "{cluster}": {error}', {
+                        cluster: this.cluster.name,
+                        error: errorMessage,
+                    }),
+                );
+
+                void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name), {
+                    modal: true,
+                    detail: errorMessage,
+                });
+
+                return this.createErrorRecoveryChildren(false);
             }
         } else {
             // Call to the abstract method to authenticate and connect to the cluster
@@ -197,16 +277,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         // If authentication failed or cancelled, return the error element
         if (!clustersClient) {
             ext.outputChannel.appendLine(l10n.t('Could not connect to "{cluster}".', { cluster: this.cluster.name }));
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/reconnect`, // note: keep this in sync with the `hasRetryNode` function in this file
-                    label: vscode.l10n.t('Click here to retry'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
+            return this.createErrorRecoveryChildren(false);
         }
 
         // List the databases.
@@ -250,16 +321,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 { modal: true, detail: errorMessage },
             );
 
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/reconnect`, // note: keep this in sync with the `hasRetryNode` function in this file
-                    label: vscode.l10n.t('Click here to retry'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
+            return this.createErrorRecoveryChildren(true);
         }
 
         if (databases.length === 0) {
@@ -293,13 +355,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * @returns True if any child in the array is an error node, false otherwise.
      */
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        // Note: The check for `typeof child.id === 'string'` is necessary because `showCreatingChild`
-        // can add temporary nodes that don't have an `id` property, which would otherwise cause a runtime error.
-        return !!(
-            children &&
-            children.length > 0 &&
-            children.some((child) => typeof child.id === 'string' && child.id.endsWith('/reconnect'))
-        );
+        return containsRetryNode(children);
     }
 
     /**

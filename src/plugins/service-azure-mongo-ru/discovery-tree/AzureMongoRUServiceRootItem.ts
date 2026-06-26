@@ -7,12 +7,9 @@ import { type AzureTenant, type VSCodeAzureSubscriptionProvider } from '@microso
 import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
-import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
+import { containsRetryNode, createRetryNode } from '../../../tree/api/retryNode';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
-import {
-    isTreeElementWithContextValue,
-    type TreeElementWithContextValue,
-} from '../../../tree/TreeElementWithContextValue';
+import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { askToConfigureCredentials } from '../../api-shared/azure/askToConfigureCredentials';
 import { getTenantFilteredSubscriptions } from '../../api-shared/azure/subscriptionFiltering/subscriptionFilteringHelpers';
@@ -53,16 +50,7 @@ export class AzureMongoRUServiceRootItem
                 );
             }
 
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error', // note: keep this in sync with the `hasRetryNode` function in this file
-                    id: `${this.id}/retry`,
-                    label: vscode.l10n.t('Click here to retry'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
+            return [createRetryNode(this.id, this)];
         }
 
         // This information is extracted to improve the UX, that's why there are fallbacks to 'undefined'
@@ -103,9 +91,7 @@ export class AzureMongoRUServiceRootItem
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return (
-            children?.some((child) => isTreeElementWithContextValue(child) && child.contextValue === 'error') ?? false
-        );
+        return containsRetryNode(children);
     }
 
     public getTreeItem(): vscode.TreeItem {

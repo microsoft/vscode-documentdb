@@ -10,6 +10,7 @@ import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
+import { containsRetryNode, createRetryNode } from '../../../tree/api/retryNode';
 import {
     DEFAULT_VIEW_MODE,
     DISCOVERY_PROVIDER_ID,
@@ -27,7 +28,6 @@ import {
 import { KubernetesNamespaceItem } from './KubernetesNamespaceItem';
 import { KubernetesOtherNamespacesItem } from './KubernetesOtherNamespacesItem';
 import { KubernetesResourceItem } from './documentdb/KubernetesResourceItem';
-import { hasRetryActionNode } from './retryNodeDetection';
 
 interface NamespaceDiscoveryResult {
     readonly namespace: string;
@@ -247,7 +247,7 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return hasRetryActionNode(children);
+        return containsRetryNode(children);
     }
 
     public getTreeItem(): vscode.TreeItem {
@@ -438,14 +438,5 @@ function createConnectionErrorChildren(
         detail: `${summary}\n\n${hint}\n\n${vscode.l10n.t('Error: {0}', errorMessage)}`,
     });
 
-    return [
-        createGenericElementWithContext({
-            contextValue: 'error',
-            id: `${parentId}/retry`,
-            label: vscode.l10n.t('Click here to retry'),
-            iconPath: new vscode.ThemeIcon('refresh'),
-            commandId: 'vscode-documentdb.command.internal.retry',
-            commandArgs: [retryTarget],
-        }),
-    ];
+    return [createRetryNode(parentId, retryTarget)];
 }

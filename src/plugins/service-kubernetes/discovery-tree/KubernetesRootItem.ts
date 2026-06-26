@@ -61,6 +61,11 @@ export class KubernetesRootItem implements TreeElement, TreeElementWithContextVa
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
+        // Intentional exception to the canonical `containsRetryNode` (`/retry` + 'error') detector:
+        // this root has no retry node. Its only error-styled child is the empty-state "Add Kubeconfig…"
+        // placeholder (`/add-source`, contextValue 'error'), and detecting it here lets the provider
+        // cache the empty state so it isn't recomputed on passive refreshes. The "Add Source" command
+        // refreshes this node, which clears that cache.
         return (
             children?.some((child) => isTreeElementWithContextValue(child) && child.contextValue === 'error') ?? false
         );

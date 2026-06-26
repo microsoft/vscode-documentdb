@@ -459,23 +459,35 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
      * return children; // Already fully processed with multiple context values
      *
      * @example
-     * // With helper nodes (Connections provider):
+     * // With view-specific error-recovery actions (Connections provider):
+     * //
+     * // Error-recovery nodes come from two layers:
+     * //  - The ELEMENT layer owns failure-type nodes ("retry", "open shell") and appends them itself.
+     * //  - The PROVIDER layer (here) owns view-specific nodes via `errorRecoveryActions`. Each action
+     * //    may declare a `forContextValues` whitelist, matched against the FAILING element's
+     * //    contextValue tags, so an action only appears for the node types it makes sense for.
      * const children = await this.wrapGetChildrenWithErrorAndStateHandling(
      *   element,
      *   context,
      *   async () => element.getChildren?.(),
      *   {
      *     contextValue: [Views.ConnectionsView, 'anotherValue'],
-     *     createHelperNodes: (el) => [
-     *       createGenericElementWithContext({
-     *         contextValue: 'error',
-     *         id: `${el.id}/updateCredentials`,
-     *         label: vscode.l10n.t('Click here to update credentials'),
-     *         iconPath: new vscode.ThemeIcon('key'),
-     *         commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
-     *         commandArgs: [el],
-     *       }) as TreeElement,
-     *     ]
+     *     errorRecoveryActions: [
+     *       {
+     *         // Only attach when a cluster node fails (not when a database/collection/index fails).
+     *         forContextValues: ['treeItem_documentdbcluster'],
+     *         create: (el) => [
+     *           createGenericElementWithContext({
+     *             contextValue: 'error',
+     *             id: `${el.id}/updateCredentials`,
+     *             label: vscode.l10n.t('Click here to update credentials'),
+     *             iconPath: new vscode.ThemeIcon('key'),
+     *             commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
+     *             commandArgs: [el],
+     *           }) as TreeElement,
+     *         ],
+     *       },
+     *     ],
      *   }
      * );
      * return children; // Already fully processed
@@ -486,7 +498,20 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         childrenFetchFunc: () => Promise<T[] | null | undefined>,
         options: {
             detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
-            createHelperNodes?: (element: T) => T[];
+            /**
+             * View-specific error-recovery actions appended when an error is detected. Each action is
+             * gated by an optional `forContextValues` whitelist (see {@link elementMatchesContextValues}).
+             */
+            errorRecoveryActions?: ReadonlyArray<{
+                /**
+                 * Whitelist of contextValue tags. The action is only attached when the failing
+                 * element's contextValue contains at least one of these tags. Omit (or leave empty)
+                 * to attach for any failing element.
+                 */
+                forContextValues?: string[];
+                /** Builds the recovery node(s) to append for this action. */
+                create: (element: T) => T[];
+            }>;
             contextValue?: string | string[]; // For automatic context value appending - single or multiple values
         } = {},
     ): Promise<T[] | null | undefined> {
@@ -510,13 +535,18 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
             : isTreeElementWithRetryChildren(element) && element.hasRetryNode(children);
 
         if (hasError && element.id) {
-            // 4. Optionally create helper nodes to provide user-friendly error recovery actions
-            if (options.createHelperNodes) {
-                const helperNodes = options.createHelperNodes(element);
-                children?.push(...helperNodes);
+            // 4. Optionally append view-specific error-recovery actions (e.g. "update credentials").
+            //    Each action may be gated to specific node types via `forContextValues`, so it only
+            //    appears when a matching element fails (e.g. a cluster, but not a database/index).
+            if (options.errorRecoveryActions) {
+                for (const action of options.errorRecoveryActions) {
+                    if (this.elementMatchesContextValues(element, action.forContextValues)) {
+                        children?.push(...action.create(element));
+                    }
+                }
             }
 
-            // 5. Store the complete error state (error nodes + helper nodes) in our cache for future refreshes
+            // 5. Store the complete error state (error nodes + recovery actions) in our cache for future refreshes
             this.failedChildrenCache.set(element.id, children ?? []);
             context.telemetry.properties.cachedErrorNode = 'true';
         }
@@ -551,6 +581,32 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
     }
 
     /**
+     * Determines whether a failing element matches an error-recovery action's contextValue whitelist.
+     *
+     * A node's `contextValue` is a composite string of tags joined with ';' (built via azext-utils
+     * `createContextValue`). We parse it back into individual tags and check for membership, so a
+     * whitelist tag like `treeItem_documentdbcluster` matches the cluster node exactly without
+     * accidentally matching unrelated tags via substring comparison.
+     *
+     * @param element The failing element whose children triggered the error state.
+     * @param forContextValues Whitelist of tags. When omitted or empty, the action applies to any element.
+     * @returns `true` if the action should be attached for this element.
+     */
+    private elementMatchesContextValues(element: T, forContextValues?: string[]): boolean {
+        // No whitelist => the action applies to any failing element.
+        if (!forContextValues || forContextValues.length === 0) {
+            return true;
+        }
+
+        if (!isTreeElementWithContextValue(element)) {
+            return false;
+        }
+
+        const elementTags = element.contextValue.split(';');
+        return forContextValues.some((tag) => elementTags.includes(tag));
+    }
+
+    /**
      * Wraps element's getChildren call with error caching to prevent repeated failures.
      *
      * This method standardizes the error handling pattern used across all tree data providers,
@@ -575,7 +631,10 @@ export abstract class BaseExtendedTreeDataProvider<T extends TreeElement>
         childrenFetchFunc: () => Promise<T[] | null | undefined>,
         options: {
             detectErrorState?: (element: T, children: T[] | null | undefined) => boolean;
-            createHelperNodes?: (element: T) => T[];
+            errorRecoveryActions?: ReadonlyArray<{
+                forContextValues?: string[];
+                create: (element: T) => T[];
+            }>;
         } = {},
     ): Promise<T[] | null | undefined> {
         // Delegate to the enhanced method without child processing
