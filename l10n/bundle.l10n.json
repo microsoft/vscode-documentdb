@@ -267,6 +267,7 @@
   "Back": "Back",
   "Back to account selection": "Back to account selection",
   "Back to tenant selection": "Back to tenant selection",
+  "below {0}%": "below {0}%",
   "Bitmap index": "Bitmap index",
   "Bitmap index detected: typically used for low-cardinality fields": "Bitmap index detected: typically used for low-cardinality fields",
   "Bulk write error during import into \"{0}.{1}\": {2} document(s) inserted.": "Bulk write error during import into \"{0}.{1}\": {2} document(s) inserted.",
