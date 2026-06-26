@@ -52,6 +52,7 @@ import {
 } from '../../queryInsightsReducer';
 import { createImprovementCardConfig } from '../../utils/createImprovementCard';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
+import { formatSelectivityForDisplay } from '../../utils/formatSelectivityForDisplay';
 import { CardStack, FeedbackCard, FeedbackDialog, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
@@ -451,6 +452,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     const docsReturned = getMetricValue(stage2Data?.documentsReturned);
     const keysExamined = getMetricValue(stage2Data?.totalKeysExamined);
     const docsExamined = getMetricValue(stage2Data?.totalDocsExamined);
+    const selectivity = formatSelectivityForDisplay(
+        getCellValue((stage2) => stage2.efficiencyAnalysis.selectivity),
+        l10n.t('below {0}%', '0.1'),
+    );
 
     /**
      * Documentation URL for the AI Performance Insights feature itself
@@ -1133,7 +1138,7 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Selectivity')}
-                            value={getCellValue((stage2) => stage2.efficiencyAnalysis.selectivity)}
+                            value={selectivity}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 const selectivity = stage2Data?.efficiencyAnalysis.selectivity;

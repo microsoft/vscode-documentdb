@@ -200,7 +200,11 @@ function computeSelectivity(nReturned: number, totalCollectionDocs: number | und
         return null;
     }
     const ratio = Math.min(nReturned / totalCollectionDocs, 1);
-    return `${(ratio * 100).toFixed(1)}%`;
+    const percent = ratio * 100;
+    if (percent > 0 && percent < 0.1) {
+        return `${percent.toFixed(3).replace(/\.?0+$/, '')}%`;
+    }
+    return `${percent.toFixed(1)}%`;
 }
 
 /**
