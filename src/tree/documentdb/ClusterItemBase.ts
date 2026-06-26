@@ -25,6 +25,7 @@ import { type TreeElementWithContextValue } from '../TreeElementWithContextValue
 import { type TreeElementWithExperience } from '../TreeElementWithExperience';
 import { type TreeElementWithRetryChildren } from '../TreeElementWithRetryChildren';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
+import { containsRetryNode, createRetryNode } from '../api/retryNode';
 import { type AzureClusterModel } from '../azure-views/models/AzureClusterModel';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { DatabaseItem } from './DatabaseItem';
@@ -68,20 +69,6 @@ export type ClusterCredentials = EphemeralClusterCredentials;
  * BaseExtendedTreeDataProvider). Keep this in sync with the default `contextValue` below.
  */
 export const CLUSTER_ITEM_CONTEXT_VALUE = 'treeItem_documentdbcluster';
-
-/**
- * Id suffix of the "retry" recovery node a cluster appends when it fails to load its children.
- *
- * Error-recovery nodes in this tree are produced by two layers:
- * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "retry" (any failure) and, for
- *   post-authentication failures, "open shell". These are appended directly to the children.
- * - The PROVIDER layer (a BranchDataProvider) owns VIEW-SPECIFIC nodes (e.g. "update credentials")
- *   via `errorRecoveryActions`, gated by the failing element's contextValue.
- *
- * `hasRetryNode` detects the error state by looking for this suffix, so the value MUST match the id
- * used when the retry node is created in `createErrorRecoveryChildren`.
- */
-export const RECONNECT_NODE_ID_SUFFIX = '/reconnect';
 
 // This info will be available at every level in the tree for immediate access
 export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterModel>
@@ -171,23 +158,20 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     /**
      * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
      *
-     * Always includes a "retry" node (its id ends with {@link RECONNECT_NODE_ID_SUFFIX}, which is
-     * how `hasRetryNode` and the provider detect the error state). For post-authentication failures
+     * Always includes the canonical "retry" node (see {@link createRetryNode}); `hasRetryNode` and
+     * the provider detect the error state via that node. For post-authentication failures
      * (`includeOpenShell`), an "open shell" node is added so the user can investigate the server
      * directly. View-specific recovery actions (e.g. "update credentials") are added separately by
      * the provider via `errorRecoveryActions`.
+     *
+     * Error-recovery nodes in this tree are produced by two layers:
+     * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "retry" (any failure) and, for
+     *   post-authentication failures, "open shell".
+     * - The PROVIDER layer (a BranchDataProvider) owns VIEW-SPECIFIC nodes (e.g. "update
+     *   credentials") via `errorRecoveryActions`, gated by the failing element's contextValue.
      */
     private createErrorRecoveryChildren(includeOpenShell: boolean): TreeElement[] {
-        const children: TreeElement[] = [
-            createGenericElementWithContext({
-                contextValue: 'error',
-                id: `${this.id}${RECONNECT_NODE_ID_SUFFIX}`,
-                label: vscode.l10n.t('Click here to retry'),
-                iconPath: new vscode.ThemeIcon('refresh'),
-                commandId: 'vscode-documentdb.command.internal.retry',
-                commandArgs: [this],
-            }),
-        ];
+        const children: TreeElement[] = [createRetryNode(this.id, this)];
 
         if (includeOpenShell) {
             children.push(
@@ -338,13 +322,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
      * @returns True if any child in the array is an error node, false otherwise.
      */
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        // Note: The check for `typeof child.id === 'string'` is necessary because `showCreatingChild`
-        // can add temporary nodes that don't have an `id` property, which would otherwise cause a runtime error.
-        return !!(
-            children &&
-            children.length > 0 &&
-            children.some((child) => typeof child.id === 'string' && child.id.endsWith(RECONNECT_NODE_ID_SUFFIX))
-        );
+        return containsRetryNode(children);
     }
 
     /**

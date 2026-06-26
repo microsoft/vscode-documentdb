@@ -132,7 +132,7 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
 
         expect(children).toHaveLength(2);
-        expect(children[0].id).toBe('cluster-1/reconnect');
+        expect(children[0].id).toBe('cluster-1/retry');
         expect(children[0].contextValue).toBe('error');
         expect(children[0].commandId).toBe('vscode-documentdb.command.internal.retry');
         expect(children[0].commandArgs).toEqual([item]);

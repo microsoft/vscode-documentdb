@@ -13,6 +13,7 @@ import * as vscode from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
+import { containsRetryNode, createRetryNode } from '../../../tree/api/retryNode';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { DISCOVERY_PROVIDER_ID, type KubeconfigSourceRecord } from '../config';
@@ -24,7 +25,6 @@ import {
 } from '../kubernetesClient';
 import { aliasMapForSource, pruneAliasesForSource } from '../sources/aliasStore';
 import { KubernetesContextItem } from './KubernetesContextItem';
-import { hasRetryActionNode } from './retryNodeDetection';
 
 /**
  * Tree node representing a single kubeconfig source (Default / file / pasted YAML).
@@ -153,7 +153,7 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return hasRetryActionNode(children);
+        return containsRetryNode(children);
     }
 
     private createKubeconfigRecoveryChildren(message: string): ExtTreeElementBase[] {
@@ -167,13 +167,8 @@ export class KubernetesKubeconfigSourceItem implements TreeElement, TreeElementW
         );
 
         const children: ExtTreeElementBase[] = [
-            createGenericElementWithContext({
-                contextValue: 'error',
-                id: `${this.id}/retry`,
-                label: vscode.l10n.t('Click here to retry'),
-                iconPath: new vscode.ThemeIcon('refresh'),
+            createRetryNode(this.id, this, {
                 commandId: 'vscode-documentdb.command.discoveryView.kubernetes.reloadSource',
-                commandArgs: [this],
             }),
         ];
 
