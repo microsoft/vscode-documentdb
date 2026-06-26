@@ -39,7 +39,7 @@ instance.
 
 | # | Gap | Design | Current | What's needed |
 | - | --- | ------ | ------- | ------------- |
-| P2‑1 | **Legacy emulator migration** | §4 | Not implemented | One-time move of `ConnectionType.Emulators` → "Local Connections (Legacy)" folder, preserve creds/auth/`emulatorConfiguration`, one-time toast, remove `LocalEmulatorsItem` + "New Local Connection…" entry. Without it, existing users think their connections vanished on update. |
+| P2‑1 | **Legacy emulator migration** | §4 | Not implemented | One-time move of `ConnectionType.Emulators` → "Local Connections (Legacy)" folder, preserve creds/auth/`emulatorConfiguration`, one-time toast, remove `LocalEmulatorsItem` + "New Local Connection…" entry. Without it, existing users think their connections vanished on update. **⛔ BLOCKED — see "P2‑1 blocker" below.** |
 | P2‑2 | **TLS-exception step in the regular wizard** + connection edit dialog | §7, §7.3 | Not implemented | The emulator wizard is being removed; this is its replacement. Gated host step defaulting to *Enable TLS*. |
 | P2‑3 | **Manual-wizard `10255`→`10260`** | §13.5 | Not done | Design: *"must be fixed before Quick Start ships."* |
 
@@ -94,3 +94,35 @@ instance.
     provisionMs); `getDockerStatus` now reports `dockerReadiness` + `platformSupported`; lifecycle
     commands tag `action`. No names/ports/creds sent (§14).
   - Gates green: l10n · prettier · lint · jest (2055/2055) · build · webpack-prod.
+
+- _2026-06-26_: **P2‑1 attempted → REVERTED (architectural blocker found by 5-agent review).**
+  - A first cut (copy each `Emulators`-zone connection into a "Local Connections (Legacy)" folder
+    in the `Clusters` zone, keep the Emulators zone as rollback, gate the legacy node on a
+    completion flag) was implemented and passed all gates (build/lint/jest 2055).
+  - The mandatory 5-agent rubber-duck review **caught a release blocker** (GPT‑5.4 + GPT‑5.5 REJECT;
+    Opus 4.6/4.7 missed it). **Verified directly in code:** `emulatorConfiguration.isEmulator` is
+    **overloaded** — it is the **storage-zone selector** in connect/rename/delete/move/
+    update-credentials/update-connection-string paths and in `DocumentDBClusterItem`
+    (`isEmulator ? Emulators : Clusters`), *and* `connectToClient.ts:25` **requires**
+    `isEmulator && disableEmulatorSecurity` for local TLS-allow-invalid. So a migrated connection
+    living in the `Clusters` zone cannot be made correct: keep `isEmulator=true` → all operations
+    look it up in the **wrong zone** (broken connect/delete/rename); set `isEmulator=false` →
+    **TLS-allow-invalid breaks** (can't reach the self-signed local server). The completion flag would
+    then hide the working originals → effectively unreachable.
+  - Citations: `src/commands/removeConnection/removeConnection.ts:81`,
+    `src/commands/connections-view/moveItems/moveItems.ts:129`,
+    `src/commands/updateCredentials/updateCredentials.ts:53`,
+    `src/commands/updateConnectionString/updateConnectionString.ts:42`,
+    `src/commands/connections-view/renameConnection/renameConnection.ts:24`,
+    `src/tree/connections-view/DocumentDBClusterItem.ts:61,101,173`,
+    `src/documentdb/connectToClient.ts:25`.
+  - Secondary findings (also valid): `getAll()` triggers storage bootstrap **cleanup that iterates
+    the Emulators zone** (weakens the "untouched rollback" guarantee); a snapshot **race** if emulator
+    data changes during the migration window; corrupt/folder items skipped by the storage wrapper
+    become invisible once the node is gated off.
+  - **Conclusion:** P2‑1 has a hard **prerequisite (P2‑0)** — decouple *storage-zone selection* from
+    `emulatorConfiguration.isEmulator` (add an explicit `storageZone`/`connectionType` on the
+    connection model and route all operations by it; make TLS-allow-invalid depend on
+    `disableEmulatorSecurity` alone). This is essentially the **§7** "move emulator/TLS handling out
+    of a dedicated zone" work, and P2‑2 (TLS wizard) shares the same root cause. Reverted the cut;
+    branch left clean.
