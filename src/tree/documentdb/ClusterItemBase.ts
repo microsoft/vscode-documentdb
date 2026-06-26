@@ -63,10 +63,10 @@ export type ClusterCredentials = EphemeralClusterCredentials;
  * Context-value tag identifying a DocumentDB cluster node.
  *
  * `contextValue` strings are built with azext-utils `createContextValue`, which de-duplicates and
- * joins multiple tags with ';'. A cluster node's contextValue is therefore composite (e.g.
- * `experience_<api>;treeItem_documentdbcluster`). Providers can gate view-specific error-recovery
- * actions to clusters by checking for this tag (see `errorRecoveryActions` in
- * BaseExtendedTreeDataProvider). Keep this in sync with the default `contextValue` below.
+ * joins multiple tags with ';'. A cluster node's contextValue therefore contains this tag plus the
+ * experience tag (e.g. `treeItem_documentdbcluster;experience_<api>`). Providers can gate
+ * view-specific error-recovery actions to clusters by checking for this tag (see
+ * `errorRecoveryActions` in BaseExtendedTreeDataProvider).
  */
 export const CLUSTER_ITEM_CONTEXT_VALUE = 'treeItem_documentdbcluster';
 
