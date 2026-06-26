@@ -17,6 +17,7 @@ import { ClustersClient, type DatabaseItemModel } from '../../documentdb/Cluster
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { type EntraIdAuthConfig, type NativeAuthConfig } from '../../documentdb/auth/AuthConfig';
 import { type AuthMethodId } from '../../documentdb/auth/AuthMethod';
+import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { ext } from '../../extensionVariables';
 import { regionToDisplayName } from '../../utils/regionToDisplayName';
 import { type TreeElement } from '../TreeElement';
@@ -142,6 +143,34 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         );
     }
 
+    private createErrorRecoveryChildren(includeOpenShell: boolean): TreeElement[] {
+        const children: TreeElement[] = [
+            createGenericElementWithContext({
+                contextValue: 'error',
+                id: `${this.id}/reconnect`, // note: keep this in sync with the `hasRetryNode` function in this file
+                label: vscode.l10n.t('Click here to retry'),
+                iconPath: new vscode.ThemeIcon('refresh'),
+                commandId: 'vscode-documentdb.command.internal.retry',
+                commandArgs: [this],
+            }),
+        ];
+
+        if (includeOpenShell) {
+            children.push(
+                createGenericElementWithContext({
+                    contextValue: 'error',
+                    id: `${this.id}/open-shell`,
+                    label: vscode.l10n.t('Click here to open the shell'),
+                    iconPath: new vscode.ThemeIcon('terminal'),
+                    commandId: ShellCommandIds.open,
+                    commandArgs: [this],
+                }),
+            );
+        }
+
+        return children;
+    }
+
     /**
      * Authenticates and connects to the cluster to list all available databases.
      * Here, the MongoDB client is created and cached for future use.
@@ -197,16 +226,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         // If authentication failed or cancelled, return the error element
         if (!clustersClient) {
             ext.outputChannel.appendLine(l10n.t('Could not connect to "{cluster}".', { cluster: this.cluster.name }));
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/reconnect`, // note: keep this in sync with the `hasRetryNode` function in this file
-                    label: vscode.l10n.t('Click here to retry'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
+            return this.createErrorRecoveryChildren(false);
         }
 
         // List the databases.
@@ -250,16 +270,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                 { modal: true, detail: errorMessage },
             );
 
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/reconnect`, // note: keep this in sync with the `hasRetryNode` function in this file
-                    label: vscode.l10n.t('Click here to retry'),
-                    iconPath: new vscode.ThemeIcon('refresh'),
-                    commandId: 'vscode-documentdb.command.internal.retry',
-                    commandArgs: [this],
-                }),
-            ];
+            return this.createErrorRecoveryChildren(true);
         }
 
         if (databases.length === 0) {

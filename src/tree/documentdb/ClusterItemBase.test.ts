@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { type ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
+import { ShellCommandIds } from '../../documentdb/shell/constants';
 import { type Experience } from '../../DocumentDBExperiences';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
@@ -130,11 +131,17 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
 
         const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
 
-        expect(children).toHaveLength(1);
+        expect(children).toHaveLength(2);
         expect(children[0].id).toBe('cluster-1/reconnect');
         expect(children[0].contextValue).toBe('error');
         expect(children[0].commandId).toBe('vscode-documentdb.command.internal.retry');
         expect(children[0].commandArgs).toEqual([item]);
+
+        expect(children[1].id).toBe('cluster-1/open-shell');
+        expect(children[1].contextValue).toBe('error');
+        expect(children[1].label).toBe('Click here to open the shell');
+        expect(children[1].commandId).toBe(ShellCommandIds.open);
+        expect(children[1].commandArgs).toEqual([item]);
 
         // The branch data provider detects (and caches) the error state via hasRetryNode().
         expect(item.hasRetryNode(children)).toBe(true);
