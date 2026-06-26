@@ -36,7 +36,7 @@ describe('getTelemetryShape', () => {
             ok: 1,
         };
 
-        const result = getTelemetryShape(helloInfo, ['$', 'connectionId', 'localTime', 'hosts', 'me', 'primary']);
+        const result = getTelemetryShape(helloInfo);
 
         expect(result).toBe(
             [

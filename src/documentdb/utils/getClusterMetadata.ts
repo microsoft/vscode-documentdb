@@ -39,29 +39,41 @@ export function getDomainMetadata(hosts: string[]): ClusterMetadata {
  * @returns A promise that resolves to an object containing various metadata about the MongoDB cluster.
  *
  */
-export async function getClusterMetadata(
-    client: MongoClient,
-    hosts: string[],
-    ignoredPrefixes: string[] = ['$', 'connectionId', 'localTime', 'hosts', 'me', 'primary'],
-): Promise<ClusterMetadata> {
+export async function getClusterMetadata(client: MongoClient, hosts: string[]): Promise<ClusterMetadata> {
     const result: ClusterMetadata = {};
 
     const adminDb = client.db().admin();
 
     await fetchBuildInfo(adminDb, result);
     await fetchServerStatus(adminDb, result);
-    await fetchTopologyInfo(adminDb, result, ignoredPrefixes);
+    await fetchTopologyInfo(adminDb, result);
     await fetchHostInfo(adminDb, result);
     processDomainInfo(hosts, result);
 
     return result;
 }
 
-function isIgnoredKey(key: string, ignoredKeys: string[]): boolean {
-    return ignoredKeys.some((ignored) => (ignored === '$' ? key.startsWith('$') : key === ignored));
+/**
+ * Hello-response keys excluded from the telemetry shape by exact match.
+ * These carry per-connection or per-request values that are not useful as shape signals.
+ */
+const DEFAULT_IGNORED_HELLO_KEYS = ['connectionId', 'localTime', 'hosts', 'me', 'primary'];
+
+/**
+ * Hello-response key prefixes excluded from the telemetry shape.
+ * Keys starting with '$' (e.g. '$clusterTime') are protocol metadata and are pruned along with their subtrees.
+ */
+const DEFAULT_IGNORED_HELLO_KEY_PREFIXES = ['$'];
+
+function isIgnoredKey(key: string, ignoredKeys: string[], ignoredKeyPrefixes: string[]): boolean {
+    return ignoredKeys.includes(key) || ignoredKeyPrefixes.some((prefix) => key.startsWith(prefix));
 }
 
-export function getTelemetryShape(value: unknown, ignoredKeys: string[] = []): string {
+export function getTelemetryShape(
+    value: unknown,
+    ignoredKeys: string[] = DEFAULT_IGNORED_HELLO_KEYS,
+    ignoredKeyPrefixes: string[] = DEFAULT_IGNORED_HELLO_KEY_PREFIXES,
+): string {
     const shapeEntries: string[] = [];
     const stack: Array<{ value: unknown; path: string }> = [{ value, path: '' }];
 
@@ -92,7 +104,7 @@ export function getTelemetryShape(value: unknown, ignoredKeys: string[] = []): s
         }
 
         for (const [key, child] of Object.entries(currentValue)) {
-            if (isIgnoredKey(key, ignoredKeys)) {
+            if (isIgnoredKey(key, ignoredKeys, ignoredKeyPrefixes)) {
                 continue;
             }
 
@@ -165,11 +177,7 @@ async function fetchServerStatus(adminDb: Admin, result: ClusterMetadata): Promi
     }
 }
 
-async function fetchTopologyInfo(
-    adminDb: Admin,
-    result: ClusterMetadata,
-    ignoredPrefixes: string[] = ['$', 'connectionId', 'localTime', 'hosts', 'me', 'primary'],
-): Promise<void> {
+async function fetchTopologyInfo(adminDb: Admin, result: ClusterMetadata): Promise<void> {
     try {
         const helloInfo = await adminDb.command({ hello: 1 });
         result['topology_type'] = helloInfo.msg || 'unknown';
@@ -180,7 +188,7 @@ async function fetchTopologyInfo(
         setIfDefined(result, 'topology_hello_saslSupportedMechs', helloInfo.saslSupportedMechs);
         setIfDefined(result, 'topology_hello_internal_documentdb_versions', helloInfo.internal?.documentdb_versions);
         setIfDefined(result, 'topology_hello_internal_kind', helloInfo.internal?.kind);
-        result['topology_helloShape'] = getTelemetryShape(helloInfo, ignoredPrefixes);
+        result['topology_helloShape'] = getTelemetryShape(helloInfo);
     } catch (error) {
         try {
             result['topology_error'] = error instanceof Error ? error.message : String(error);
