@@ -27,11 +27,19 @@ import {
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
 import { Bash, Cmd, type Shell } from '@microsoft/vscode-processutils';
+import { spawn } from 'child_process';
+import * as fs from 'fs';
 import * as net from 'net';
+import * as path from 'path';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
 import { MaskingLineBuffer, maskSecrets } from './outputMasking';
-import { type DockerReadiness, QUICK_START_PORT } from './quickStartTypes';
+import {
+    type DockerReadiness,
+    QUICK_START_PORT,
+    QUICK_START_PORT_BAND_END,
+    QUICK_START_PORT_FALLBACK_ATTEMPTS,
+} from './quickStartTypes';
 
 /**
  * Shell used to run docker commands. A shell provider is REQUIRED so the runner
@@ -89,8 +97,13 @@ export interface CreateContainerOptions {
     readonly labels: Record<string, string>;
     readonly hostPort: number;
     readonly containerPort: number;
-    /** Post-image args appended after the image ref (e.g. `--username`/`--password`). */
-    readonly command: ReadonlyArray<string>;
+    /** Named volume mounted at {@link dataPath} so data survives recreation (§8/§11). */
+    readonly volumeName?: string;
+    readonly dataPath?: string;
+    /** Paths to `--env-file`s carrying credentials, so they stay off the CLI (§8.2). */
+    readonly environmentFiles?: ReadonlyArray<string>;
+    /** Post-image args appended after the image ref (optional; creds now go via env-file). */
+    readonly command?: ReadonlyArray<string>;
 }
 
 /**
@@ -118,22 +131,34 @@ class ContainerRuntimeImpl {
 
     /** CLI-on-PATH + daemon-reachable check (design §9 prereq cards). */
     public async isDockerReady(): Promise<DockerReadiness> {
+        // Host CPU architecture check (design §9): x64/arm64 are supported; arm64 may
+        // run the amd64 image under emulation. Independent of the Docker checks.
+        const arch = process.arch;
+        const platformSupported = arch === 'x64' || arch === 'arm64';
+
         let cliVersion: string | undefined;
         try {
             const runner = this.makeRunner([]);
             cliVersion = (await runner(this.client.checkInstall({}))).trim();
         } catch (error) {
-            return { cliInstalled: false, daemonReachable: false, error: errMessage(error) };
+            return { cliInstalled: false, daemonReachable: false, arch, platformSupported, error: errMessage(error) };
         }
 
         try {
             const runner = this.makeRunner([]);
             await runner(this.client.info({}));
         } catch (error) {
-            return { cliInstalled: true, cliVersion, daemonReachable: false, error: errMessage(error) };
+            return {
+                cliInstalled: true,
+                cliVersion,
+                daemonReachable: false,
+                arch,
+                platformSupported,
+                error: errMessage(error),
+            };
         }
 
-        return { cliInstalled: true, cliVersion, daemonReachable: true };
+        return { cliInstalled: true, cliVersion, daemonReachable: true, arch, platformSupported };
     }
 
     /** True if the TCP port can be bound on loopback right now (pre-check, design §8.3). */
@@ -144,6 +169,34 @@ class ContainerRuntimeImpl {
             server.once('listening', () => server.close(() => resolve(true)));
             server.listen(port, '127.0.0.1');
         });
+    }
+
+    /**
+     * Pick an available host port (design §8.3): prefer {@link preferred}, else try
+     * up to {@link attempts} random ports in `[preferred, bandEnd)`. Returns
+     * `undefined` if none are free. Only used for the default (non-explicit) port.
+     */
+    public async findAvailablePort(
+        preferred: number = QUICK_START_PORT,
+        bandEnd: number = QUICK_START_PORT_BAND_END,
+        attempts: number = QUICK_START_PORT_FALLBACK_ATTEMPTS,
+    ): Promise<number | undefined> {
+        if (await this.isPortFree(preferred)) {
+            return preferred;
+        }
+        const span = Math.max(1, bandEnd - preferred);
+        const tried = new Set<number>([preferred]);
+        for (let i = 0; i < attempts; i++) {
+            const candidate = preferred + Math.floor(Math.random() * span);
+            if (tried.has(candidate)) {
+                continue;
+            }
+            tried.add(candidate);
+            if (await this.isPortFree(candidate)) {
+                return candidate;
+            }
+        }
+        return undefined;
     }
 
     public async pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void> {
@@ -158,6 +211,17 @@ class ContainerRuntimeImpl {
         token?: vscode.CancellationToken,
     ): Promise<string | undefined> {
         const runner = this.makeRunner(secrets, token);
+        const mounts =
+            options.volumeName && options.dataPath
+                ? [
+                      {
+                          type: 'volume' as const,
+                          source: options.volumeName,
+                          destination: options.dataPath,
+                          readOnly: false,
+                      },
+                  ]
+                : undefined;
         return runner(
             this.client.runContainer({
                 imageRef: options.imageRef,
@@ -167,7 +231,9 @@ class ContainerRuntimeImpl {
                 detached: true,
                 labels: { ...options.labels },
                 ports: [{ containerPort: options.containerPort, hostPort: options.hostPort }],
-                command: [...options.command],
+                mounts,
+                environmentFiles: options.environmentFiles ? [...options.environmentFiles] : undefined,
+                command: options.command ? [...options.command] : undefined,
             }),
         );
     }
@@ -207,6 +273,12 @@ class ContainerRuntimeImpl {
         await runner(this.client.removeContainers({ containers: [id], force }));
     }
 
+    /** Remove a named volume (best-effort; used for a clean fresh provision and on Delete). */
+    public async removeVolume(name: string, force = true): Promise<void> {
+        const runner = this.makeRunner([]);
+        await runner(this.client.removeVolumes({ volumes: [name], force }));
+    }
+
     /**
      * Run a one-off command inside a running container (`docker exec`). Used to
      * seed the image's built-in sample data via its native init script — see
@@ -233,7 +305,9 @@ class ContainerRuntimeImpl {
         });
         const streamingRunner = factory.getStreamingCommandRunner();
         try {
-            for await (const chunk of streamingRunner(this.client.execContainer({ container: id, command: [...command] }))) {
+            for await (const chunk of streamingRunner(
+                this.client.execContainer({ container: id, command: [...command] }),
+            )) {
                 lineBuffer.push(String(chunk));
             }
         } finally {
@@ -285,3 +359,35 @@ class ContainerRuntimeImpl {
 
 /** Singleton container runtime. */
 export const ContainerRuntime = new ContainerRuntimeImpl();
+
+/**
+ * Best-effort launch of Docker Desktop (design §5.3 / §13.2 "Start Docker Desktop").
+ * Returns true when a launch was attempted. The user still clicks Retry afterwards —
+ * we never block waiting for the daemon. We never install Docker (cross-cutting rule 1).
+ */
+export async function startDockerDesktop(): Promise<boolean> {
+    try {
+        if (process.platform === 'win32') {
+            const roots = [process.env['ProgramFiles'], process.env['ProgramW6432'], 'C:\\Program Files'].filter(
+                (r): r is string => !!r,
+            );
+            const exe = roots
+                .map((root) => path.join(root, 'Docker', 'Docker', 'Docker Desktop.exe'))
+                .find((candidate) => fs.existsSync(candidate));
+            if (!exe) {
+                return false;
+            }
+            spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
+            return true;
+        }
+        if (process.platform === 'darwin') {
+            spawn('open', ['-a', 'Docker'], { detached: true, stdio: 'ignore' }).unref();
+            return true;
+        }
+        // Linux: Docker Desktop launch varies; try the common user service, best-effort.
+        spawn('systemctl', ['--user', 'start', 'docker-desktop'], { detached: true, stdio: 'ignore' }).unref();
+        return true;
+    } catch {
+        return false;
+    }
+}

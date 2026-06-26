@@ -19,7 +19,11 @@
  * generator of {@link StageEvent}s, consumed directly by the tRPC subscription.
  */
 
+import * as crypto from 'crypto';
+import * as fs from 'fs/promises';
 import { MongoClient } from 'mongodb';
+import * as os from 'os';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../documentdb/ClustersClient';
@@ -27,7 +31,7 @@ import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
 import { ContainerRuntime, getQuickStartOutputChannel } from './ContainerRuntime';
-import { composeConnectionString, generateCredentials } from './quickStartCredentials';
+import { composeConnectionString, generateCredentials, type GeneratedCredentials } from './quickStartCredentials';
 import {
     type InstanceMetadata,
     InstanceState,
@@ -35,9 +39,12 @@ import {
     QUICK_START_ALIAS,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_CONTAINER_NAME,
+    QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
     QUICK_START_LABEL_KEY,
     QUICK_START_PORT,
+    QUICK_START_PORT_BAND_END,
+    QUICK_START_VOLUME_NAME,
     type QuickStartStatus,
     type StageEvent,
 } from './quickStartTypes';
@@ -61,6 +68,8 @@ const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
  */
 const SAMPLE_DATA_INIT_SCRIPT = '/home/documentdb/gateway/scripts/init_documentdb_data.sh';
 const SAMPLE_DATA_DIR = '/home/documentdb/gateway/sample-data';
+/** Database the native init script creates; used to make seeding idempotent (§8.4). */
+const SAMPLE_DATA_DB = 'sampledb';
 /**
  * After a `docker start`, a container that re-runs a failing entrypoint reports
  * "running" for a moment before exiting, so a single immediate inspect can be a
@@ -152,7 +161,13 @@ class QuickStartServiceImpl {
         this.provisioning = true;
 
         const channel = getQuickStartOutputChannel();
-        const credentials = generateCredentials();
+        // Reuse stored credentials + the existing data volume when recreating a
+        // Missing instance (§6.1): the volume holds a PostgreSQL cluster bound to
+        // those credentials, so fresh credentials would fail against existing data.
+        // Otherwise generate fresh credentials and start from a clean volume.
+        const reusable = this.missing && this.metadata ? await this.getReusableCredentials() : undefined;
+        const credentials = reusable ?? generateCredentials();
+        const reusing = reusable !== undefined;
         const secrets: string[] = [credentials.password];
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
@@ -164,6 +179,7 @@ class QuickStartServiceImpl {
         let containerId: string | undefined;
         let containerCreated = false;
         let createAttempted = false;
+        let envFilePath: string | undefined;
         let success = false;
 
         try {
@@ -183,21 +199,33 @@ class QuickStartServiceImpl {
             }
 
             // Remove a pre-existing managed container so the run starts clean (it is
-            // labelled as ours, D9). Then verify the port is free (design §8.3).
+            // labelled as ours, D9). On a fresh (non-recreate) provision also drop any
+            // stale data volume, so the new credentials initialize a clean cluster.
             const existing = await this.findManagedContainer();
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await ContainerRuntime.removeContainer(existing.id).catch(() => undefined);
             }
-            const portFree = await ContainerRuntime.isPortFree(QUICK_START_PORT);
+            if (!reusing) {
+                await ContainerRuntime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
+            }
+
+            // Pick a host port (design §8.3): prefer the canonical port, else fall back
+            // to a random free port in the band and note the substitution for the user.
+            const chosenPort = await ContainerRuntime.findAvailablePort(QUICK_START_PORT);
             this.throwIfAborted(signal);
-            if (!portFree) {
-                const message = `Port ${QUICK_START_PORT} is already in use. Free it and retry.`;
+            if (chosenPort === undefined) {
+                const message = `Ports ${QUICK_START_PORT}-${QUICK_START_PORT_BAND_END - 1} are all in use. Free one and retry.`;
                 this.setStatus(InstanceState.Error, undefined, message);
                 yield stageEvent('checking', 'error', message, message);
                 return;
             }
-            yield stageEvent('checking', 'done');
+            let portFallbackNote: string | undefined;
+            if (chosenPort !== QUICK_START_PORT) {
+                portFallbackNote = `Port ${QUICK_START_PORT} was busy — using ${chosenPort} instead.`;
+                channel.appendLine(portFallbackNote);
+            }
+            yield stageEvent('checking', 'done', portFallbackNote);
 
             // --- pulling ---
             yield stageEvent('pulling', 'active', 'Pulling the official image…');
@@ -208,19 +236,25 @@ class QuickStartServiceImpl {
             // --- creating (docker run -d creates and starts) ---
             yield stageEvent('creating', 'active', 'Creating container…');
             createAttempted = true;
+            // Write credentials to a temp env-file (deleted in finally) so they never
+            // appear on the docker CLI / host process list (design §8.2). The image
+            // reads USERNAME/PASSWORD from the environment.
+            envFilePath = await this.writeEnvFile(credentials.username, credentials.password);
             containerId = await ContainerRuntime.createAndRunContainer(
                 {
                     imageRef: QUICK_START_IMAGE,
                     name: QUICK_START_CONTAINER_NAME,
                     labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: QUICK_START_ALIAS },
-                    hostPort: QUICK_START_PORT,
+                    hostPort: chosenPort,
                     containerPort: QUICK_START_PORT,
-                    // Only credentials are passed at run time. We intentionally do NOT
-                    // bake `--init-data true` here: it re-runs the sample-data init on
-                    // every Stop/Start and crashes the container on duplicate keys.
-                    // Sample data is seeded once, post-readiness, via `docker exec`
-                    // (see seedSampleData) which keeps restarts safe.
-                    command: ['--username', credentials.username, '--password', credentials.password],
+                    // Persist data across recreation (§8/§11).
+                    volumeName: QUICK_START_VOLUME_NAME,
+                    dataPath: QUICK_START_DATA_PATH,
+                    // Credentials via env-file (§8.2), not CLI args. We also do NOT bake
+                    // `--init-data true`: it re-runs the sample-data init on every
+                    // Stop/Start and crashes on duplicate keys; sample data is seeded
+                    // once, post-readiness, via `docker exec` (see seedSampleData).
+                    environmentFiles: [envFilePath],
                 },
                 secrets,
                 cts.token,
@@ -247,11 +281,13 @@ class QuickStartServiceImpl {
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
-            // Seed the image's built-in sample data ONCE, now that the gateway is
-            // ready, by running the image's native init script via `docker exec`
-            // (best-effort, non-fatal). See seedSampleData for why this is exec-once
-            // rather than the baked `--init-data true` flag.
-            await this.seedSampleData(containerId, credentials.username, credentials.password, secrets, cts.token);
+            // Seed the image's built-in sample data ONCE — only when it isn't already
+            // present (idempotent, so recreating onto an existing volume doesn't
+            // re-run the init and hit duplicate keys). Runs the image's native init
+            // script via `docker exec`; best-effort, non-fatal.
+            if (!(await this.sampleDataExists(connectionString))) {
+                await this.seedSampleData(containerId, credentials.username, credentials.password, secrets, cts.token);
+            }
             this.throwIfAborted(signal);
 
             // --- success ---
@@ -308,6 +344,10 @@ class QuickStartServiceImpl {
             }
             signal.removeEventListener('abort', onAbort);
             cts.dispose();
+            // Delete the temp env-file (it carried the password in plaintext, §8.2).
+            if (envFilePath) {
+                await fs.rm(envFilePath, { force: true }).catch(() => undefined);
+            }
             this.provisioning = false;
         }
     }
@@ -378,6 +418,61 @@ class QuickStartServiceImpl {
         } catch (error) {
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
         }
+    }
+
+    /**
+     * Whether the sample database is already present, so seeding can be skipped
+     * (idempotent — a recreate onto an existing volume must not re-run the init).
+     */
+    private async sampleDataExists(connectionString: string): Promise<boolean> {
+        const client = new MongoClient(connectionString, {
+            serverSelectionTimeoutMS: PROBE_SERVER_SELECTION_TIMEOUT_MS,
+            tlsAllowInvalidCertificates: true,
+        });
+        try {
+            await client.connect();
+            const dbs = await client.db().admin().listDatabases();
+            return dbs.databases.some((db) => db.name === SAMPLE_DATA_DB);
+        } catch {
+            return false;
+        } finally {
+            await client.close().catch(() => undefined);
+        }
+    }
+
+    /**
+     * Recover the stored credentials of a Missing instance so a recreate reuses
+     * them against the existing data volume (§6.1). Returns undefined if no usable
+     * stored connection string exists (caller then generates fresh credentials).
+     */
+    private async getReusableCredentials(): Promise<GeneratedCredentials | undefined> {
+        try {
+            const stored = await ext.secretStorage.get(SECRET_KEY);
+            if (!stored) {
+                return undefined;
+            }
+            const parsed = new DocumentDBConnectionString(stored);
+            const username = parsed.username;
+            const password = parsed.password;
+            if (!username || !password) {
+                return undefined;
+            }
+            return { username, password };
+        } catch {
+            return undefined;
+        }
+    }
+
+    /**
+     * Write credentials to a temp `--env-file` (mode 600) so they are passed to the
+     * container off the command line / process list (§8.2). The caller deletes it in
+     * a `finally`. Values use the URL-safe credential alphabet, so no quoting/escaping
+     * is required in the `KEY=VALUE` env-file format.
+     */
+    private async writeEnvFile(username: string, password: string): Promise<string> {
+        const filePath = path.join(os.tmpdir(), `documentdb-quickstart-${crypto.randomBytes(8).toString('hex')}.env`);
+        await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n`, { mode: 0o600 });
+        return filePath;
     }
 
     private async findManagedContainer(): Promise<{ id: string } | undefined> {
@@ -484,9 +579,11 @@ class QuickStartServiceImpl {
     }
 
     /**
-     * Remove the container and clear all stored metadata/credentials (design §11
-     * "Delete Container"). POC keeps no data volume, so this returns to a clean
-     * NotInstalled state.
+     * Remove the container, its data volume, and all stored metadata/credentials
+     * (design §11 "Delete Container"). In v1 this is the full clean slate, since the
+     * data-preserving "Reset" split is a v1.2 item; data is still preserved across
+     * Stop/Start/Restart and an external-loss `Missing` → recreate (which keeps the
+     * volume). Returns to NotInstalled.
      */
     public async deleteContainer(): Promise<void> {
         await this.runLifecycle(async () => {
@@ -495,6 +592,8 @@ class QuickStartServiceImpl {
             if (id && (this.missing || (await this.isManaged(id)))) {
                 await ContainerRuntime.removeContainer(id).catch(() => undefined);
             }
+            // Explicit Delete is a full clean slate: drop the data volume too.
+            await ContainerRuntime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
             try {
                 await ext.secretStorage.delete(SECRET_KEY);
             } catch {

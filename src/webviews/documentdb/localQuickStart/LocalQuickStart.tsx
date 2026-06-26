@@ -110,6 +110,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
+    const [startingDocker, setStartingDocker] = useState(false);
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -136,6 +137,20 @@ export const LocalQuickStart = (): JSX.Element => {
             timerRef.current = null;
         }
     }, []);
+
+    const handleStartDocker = useCallback((): void => {
+        setStartingDocker(true);
+        void trpcClient.localQuickStart.startDockerDesktop
+            .mutate()
+            .catch(() => false)
+            .then(() => {
+                // Give Docker Desktop a few seconds to come up, then re-check.
+                setTimeout(() => {
+                    setStartingDocker(false);
+                    loadDockerStatus();
+                }, 5000);
+            });
+    }, [trpcClient, loadDockerStatus]);
 
     useEffect(() => {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load sets the 'loading' phase before the async docker query
@@ -235,7 +250,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     }
                 />
                 <MetricCard label={l10n.t('Port')} value={String(QUICK_START_PORT)} />
-                <MetricCard label={l10n.t('Data')} value={l10n.t('Ephemeral (POC)')} />
+                <MetricCard label={l10n.t('Data')} value={l10n.t('Persistent volume')} />
                 <MetricCard label={l10n.t('Security')} value={l10n.t('TLS · self-signed')} />
             </div>
         );
@@ -316,23 +331,71 @@ export const LocalQuickStart = (): JSX.Element => {
     }
 
     if (phase === 'dockerNotReady') {
+        const r = docker?.readiness;
+        const cliOk = !!r?.cliInstalled;
+        const daemonOk = !!r?.daemonReachable;
+        const platformOk = r?.platformSupported !== false;
+        const statusBadge = (ok: boolean, notOkColor: 'danger' | 'warning'): JSX.Element => (
+            <Badge appearance="filled" color={ok ? 'success' : notOkColor} size="small">
+                {ok ? '✓' : '!'}
+            </Badge>
+        );
         return (
             <div className={styles.root}>
                 {hero(
                     l10n.t('Docker is required'),
-                    l10n.t('Local Quick Start runs DocumentDB on your machine using Docker.'),
+                    l10n.t(
+                        'Local Quick Start runs DocumentDB on your machine using Docker. The extension does not install Docker for you.',
+                    ),
                 )}
-                <div className={styles.errorBox}>
-                    <Text>
-                        {docker?.readiness.cliInstalled === false
-                            ? l10n.t('Docker CLI was not found on your PATH. Install Docker and retry.')
-                            : l10n.t(
-                                  'Docker is installed but the daemon is not reachable. Start Docker Desktop and retry.',
-                              )}
-                    </Text>
+                <div className={styles.cardGrid}>
+                    <MetricCard
+                        label={l10n.t('Docker CLI')}
+                        value={cliOk ? (r?.cliVersion ?? l10n.t('Found')) : l10n.t('Not found')}
+                        badge={statusBadge(cliOk, 'danger')}
+                    />
+                    <MetricCard
+                        label={l10n.t('Docker daemon')}
+                        value={daemonOk ? l10n.t('Reachable') : l10n.t('Stopped')}
+                        badge={statusBadge(daemonOk, 'danger')}
+                    />
+                    <MetricCard
+                        label={l10n.t('Platform')}
+                        value={r?.arch ?? l10n.t('unknown')}
+                        badge={statusBadge(platformOk, 'warning')}
+                    />
                 </div>
+                <Card className={styles.summaryCard}>
+                    <Text weight="semibold">{l10n.t('How to fix')}</Text>
+                    <Divider />
+                    <Text size={200}>
+                        {cliOk
+                            ? l10n.t('• Start Docker Desktop and wait for it to report “running”.')
+                            : l10n.t('• Install Docker Desktop, then reopen Quick Start.')}
+                    </Text>
+                    <Text size={200}>{l10n.t('• If you use a corporate proxy, check that ghcr.io is reachable.')}</Text>
+                    <div className={styles.actions}>
+                        {!cliOk && (
+                            <Link href="https://www.docker.com/products/docker-desktop/">
+                                {l10n.t('Install Docker')}
+                            </Link>
+                        )}
+                        <Link href="https://docs.docker.com/desktop/troubleshoot-and-support/troubleshoot/">
+                            {l10n.t('Troubleshooting')}
+                        </Link>
+                    </div>
+                </Card>
                 <div className={styles.actions}>
-                    <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={loadDockerStatus}>
+                    {cliOk && !daemonOk && (
+                        <Button appearance="primary" disabled={startingDocker} onClick={handleStartDocker}>
+                            {startingDocker ? l10n.t('Starting Docker Desktop…') : l10n.t('Start Docker Desktop')}
+                        </Button>
+                    )}
+                    <Button
+                        appearance={cliOk && !daemonOk ? 'secondary' : 'primary'}
+                        icon={<ArrowClockwiseRegular />}
+                        onClick={loadDockerStatus}
+                    >
                         {l10n.t('Retry')}
                     </Button>
                 </div>

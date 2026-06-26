@@ -47,7 +47,6 @@ import { dropIndex } from '../commands/index.dropIndex/dropIndex';
 import { hideIndex } from '../commands/index.hideIndex/hideIndex';
 import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
-import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
 import {
     copyQuickStartConnectionString,
     copyQuickStartPassword,
@@ -57,8 +56,7 @@ import {
     stopQuickStartInstance,
     viewQuickStartLogs,
 } from '../commands/localQuickStart/localQuickStartCommands';
-import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
-import { QuickStartService } from '../services/localQuickStart/QuickStartService';
+import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
@@ -94,6 +92,8 @@ import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
+import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
+import { QuickStartService } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';

@@ -23,6 +23,21 @@ export const QUICK_START_ALIAS = 'vscode-documentdb-local';
 export const QUICK_START_PORT = 10260;
 
 /**
+ * Persistent named volume + the image's in-container data directory (`DATA_PATH`,
+ * verified in the documentdb-local entrypoint). Mounting the volume at this path
+ * makes the instance's data survive container recreation (design §8 defaults, §11).
+ */
+export const QUICK_START_VOLUME_NAME = 'vscode-documentdb-local-data';
+export const QUICK_START_DATA_PATH = '/data';
+
+/**
+ * Port fallback band (design §8.3): if the canonical port is busy, try random
+ * ports in `[QUICK_START_PORT, QUICK_START_PORT_BAND_END)` before giving up.
+ */
+export const QUICK_START_PORT_BAND_END = 10360;
+export const QUICK_START_PORT_FALLBACK_ATTEMPTS = 10;
+
+/**
  * Docker labels applied at creation. These are the ONLY way a container is
  * recognized as a Quick Start instance (design §10.1) — name/image/port alone
  * are never sufficient.
@@ -78,6 +93,9 @@ export interface DockerReadiness {
     readonly cliInstalled: boolean;
     readonly cliVersion?: string;
     readonly daemonReachable: boolean;
+    /** Host CPU architecture (e.g. `x64`, `arm64`) and whether it is supported (§9). */
+    readonly arch?: string;
+    readonly platformSupported?: boolean;
     readonly error?: string;
 }
 

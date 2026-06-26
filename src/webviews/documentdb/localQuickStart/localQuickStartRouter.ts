@@ -18,7 +18,11 @@
  * `../../_integration/trpc`, never from `appRouter.ts`.
  */
 
-import { ContainerRuntime, getQuickStartOutputChannel } from '../../../services/localQuickStart/ContainerRuntime';
+import {
+    ContainerRuntime,
+    getQuickStartOutputChannel,
+    startDockerDesktop,
+} from '../../../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
     type DockerStatusResult,
@@ -52,6 +56,9 @@ export const localQuickStartRouter = router({
     showOutput: publicProcedure.mutation(() => {
         getQuickStartOutputChannel().show(true);
     }),
+
+    /** Best-effort launch of Docker Desktop (design §5.3). Returns true if attempted. */
+    startDockerDesktop: publicProcedure.mutation((): Promise<boolean> => startDockerDesktop()),
 
     /**
      * Provision the managed instance, streaming stage transitions to the webview.
