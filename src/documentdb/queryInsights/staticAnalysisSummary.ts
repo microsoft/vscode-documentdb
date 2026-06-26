@@ -42,7 +42,9 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
 
     // Summary indicators
     lines.push('### Summary Indicators (4 cells shown to user)');
-    lines.push(`- **Selectivity**: ${stage2.efficiencyAnalysis.selectivity ?? 'Unknown'}`);
+    const formattedSelectivity =
+        stage2.efficiencyAnalysis.selectivity !== null ? `${stage2.efficiencyAnalysis.selectivity.toFixed(1)}%` : 'Unknown';
+    lines.push(`- **Selectivity**: ${formattedSelectivity}`);
     lines.push(`- **Index Used**: ${stage2.efficiencyAnalysis.indexUsed ?? 'None (collection scan)'}`);
     lines.push(
         `- **Fetch Overhead**: ${stage2.efficiencyAnalysis.fetchOverhead} (${stage2.efficiencyAnalysis.fetchOverheadKind})`,

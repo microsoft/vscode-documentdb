@@ -22,7 +22,7 @@ function makeStage2Response(overrides: Partial<QueryInsightsStage2Response> = {}
         isCoveringQuery: false,
         concerns: [],
         efficiencyAnalysis: {
-            selectivity: '5.0%',
+            selectivity: 5,
             indexUsed: 'rating_1',
             fetchOverhead: 'Direct fetch',
             fetchOverheadKind: 'directFetch',
@@ -176,7 +176,7 @@ describe('buildStaticAnalysisSummary', () => {
             hadCollectionScan: true,
             concerns: ['Collection scan detected', 'In-memory sort required'],
             efficiencyAnalysis: {
-                selectivity: '0.008%',
+                selectivity: 0.008,
                 indexUsed: null,
                 fetchOverhead: 'Collection scan',
                 fetchOverheadKind: 'collectionScan',
@@ -228,7 +228,7 @@ describe('buildStaticAnalysisSummary', () => {
             documentsReturned: 50,
             isCoveringQuery: true,
             efficiencyAnalysis: {
-                selectivity: '0.5%',
+                selectivity: 0.5,
                 indexUsed: 'status_1_createdAt_-1',
                 fetchOverhead: 'Covered query',
                 fetchOverheadKind: 'covered',

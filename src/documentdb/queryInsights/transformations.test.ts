@@ -27,24 +27,24 @@ function createExecutionStatsAnalysis(overrides: Partial<ExecutionStatsAnalysis>
     };
 }
 
-describe('transformStage2Response - selectivity formatting', () => {
-    it('preserves precision below 0.1% for non-zero selectivity', () => {
+describe('transformStage2Response - selectivity computation', () => {
+    it('returns numeric precision below 0.1% for non-zero selectivity', () => {
         const analyzed = createExecutionStatsAnalysis({
             nReturned: 1,
         });
 
         const result = transformStage2Response(analyzed, 12_000);
 
-        expect(result.efficiencyAnalysis.selectivity).toBe('0.008%');
+        expect(result.efficiencyAnalysis.selectivity).toBeCloseTo(0.008333333333333333, 10);
     });
 
-    it('keeps one-decimal formatting for selectivity at or above 0.1%', () => {
+    it('returns numeric percent at or above 0.1%', () => {
         const analyzed = createExecutionStatsAnalysis({
             nReturned: 1,
         });
 
         const result = transformStage2Response(analyzed, 1_000);
 
-        expect(result.efficiencyAnalysis.selectivity).toBe('0.1%');
+        expect(result.efficiencyAnalysis.selectivity).toBe(0.1);
     });
 });

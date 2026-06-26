@@ -10,21 +10,16 @@
  * instead of a rounded numeric value.
  */
 export function formatSelectivityForDisplay(
-    selectivity: string | null | undefined,
+    selectivity: number | null | undefined,
     belowThresholdLabel: string,
 ): string | null | undefined {
-    if (!selectivity) {
+    if (selectivity === null || selectivity === undefined) {
         return selectivity;
     }
 
-    const selectivityPercent = Number.parseFloat(selectivity);
-    if (Number.isNaN(selectivityPercent)) {
-        return selectivity;
-    }
-
-    if (selectivityPercent > 0 && selectivityPercent < 0.1) {
+    if (selectivity > 0 && selectivity < 0.1) {
         return belowThresholdLabel;
     }
 
-    return selectivity;
+    return `${selectivity.toFixed(1)}%`;
 }

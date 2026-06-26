@@ -193,18 +193,13 @@ export function transformStage2Response(
  *
  * @param nReturned          - Number of documents returned
  * @param totalCollectionDocs - Estimated total documents in the collection
- * @returns Formatted percentage string (e.g., "33.2%") or null if unavailable
+ * @returns Percentage value (e.g., 33.2) or null if unavailable
  */
-function computeSelectivity(nReturned: number, totalCollectionDocs: number | undefined): string | null {
+function computeSelectivity(nReturned: number, totalCollectionDocs: number | undefined): number | null {
     if (!totalCollectionDocs || totalCollectionDocs <= 0 || nReturned === undefined) {
         return null;
     }
-    const ratio = Math.min(nReturned / totalCollectionDocs, 1);
-    const percent = ratio * 100;
-    if (percent > 0 && percent < 0.1) {
-        return `${percent.toFixed(3).replace(/\.?0+$/, '')}%`;
-    }
-    return `${percent.toFixed(1)}%`;
+    return Math.min((nReturned / totalCollectionDocs) * 100, 100);
 }
 
 /**

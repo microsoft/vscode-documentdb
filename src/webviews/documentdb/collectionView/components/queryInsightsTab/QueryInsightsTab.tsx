@@ -452,9 +452,10 @@ export const QueryInsightsMain = (): JSX.Element => {
     const docsReturned = getMetricValue(stage2Data?.documentsReturned);
     const keysExamined = getMetricValue(stage2Data?.totalKeysExamined);
     const docsExamined = getMetricValue(stage2Data?.totalDocsExamined);
+    const lowSelectivityLabel = l10n.t('below {0}%', '0.1');
     const selectivity = formatSelectivityForDisplay(
         getCellValue((stage2) => stage2.efficiencyAnalysis.selectivity),
-        l10n.t('below {0}%', '0.1'),
+        lowSelectivityLabel,
     );
 
     /**
@@ -1142,26 +1143,27 @@ export const QueryInsightsMain = (): JSX.Element => {
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 const selectivity = stage2Data?.efficiencyAnalysis.selectivity;
-                                if (!selectivity) {
+                                if (selectivity === null || selectivity === undefined) {
                                     return l10n.t(
                                         'The percentage of your collection this query returns. Could not be determined for this query.',
                                     );
                                 }
-                                const pct = parseFloat(selectivity);
+                                const displayValue = formatSelectivityForDisplay(selectivity, lowSelectivityLabel);
+                                const pct = selectivity;
                                 if (pct < 1) {
                                     return l10n.t(
                                         'This query returns {0} of your collection.\n\nThis is highly selective: only a small fraction of documents pass the filter. The database does minimal work to produce results.',
-                                        selectivity,
+                                        displayValue,
                                     );
                                 } else if (pct < 20) {
                                     return l10n.t(
                                         'This query returns {0} of your collection.\n\nThis is a reasonable level of selectivity. The filter narrows results to a manageable portion of the data.',
-                                        selectivity,
+                                        displayValue,
                                     );
                                 } else {
                                     return l10n.t(
                                         'This query returns {0} of your collection.\n\nThis is a broad query that returns a large portion of the data. Consider adding more specific filters to narrow the results.',
-                                        selectivity,
+                                        displayValue,
                                     );
                                 }
                             })()}
