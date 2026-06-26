@@ -39,26 +39,108 @@ export function getDomainMetadata(hosts: string[]): ClusterMetadata {
  * @returns A promise that resolves to an object containing various metadata about the MongoDB cluster.
  *
  */
-export async function getClusterMetadata(client: MongoClient, hosts: string[]): Promise<ClusterMetadata> {
+export async function getClusterMetadata(
+    client: MongoClient,
+    hosts: string[],
+    ignoredPrefixes: string[] = ['$', 'connectionId', 'localTime'],
+): Promise<ClusterMetadata> {
     const result: ClusterMetadata = {};
 
     const adminDb = client.db().admin();
 
     await fetchBuildInfo(adminDb, result);
     await fetchServerStatus(adminDb, result);
-    await fetchTopologyInfo(adminDb, result);
+    await fetchTopologyInfo(adminDb, result, ignoredPrefixes);
     await fetchHostInfo(adminDb, result);
     processDomainInfo(hosts, result);
 
     return result;
 }
 
+function isIgnoredKey(key: string, ignoredKeys: string[]): boolean {
+    return ignoredKeys.some((ignored) => (ignored === '$' ? key.startsWith('$') : key === ignored));
+}
+
+export function getTelemetryShape(value: unknown, ignoredKeys: string[] = []): string {
+    const shapeEntries: string[] = [];
+    const stack: Array<{ value: unknown; path: string }> = [{ value, path: '' }];
+
+    while (stack.length > 0) {
+        const current = stack.pop()!;
+        const currentValue = current.value;
+        const currentPath = current.path;
+
+        if (currentValue === undefined || currentValue === null) {
+            if (currentPath) {
+                shapeEntries.push(`${currentPath}:${currentValue === null ? 'null' : 'undefined'}`);
+            }
+            continue;
+        }
+
+        if (Array.isArray(currentValue)) {
+            if (currentPath) {
+                shapeEntries.push(`${currentPath}:array:${getArrayElementType(currentValue)}`);
+            }
+            continue;
+        }
+
+        if (typeof currentValue !== 'object') {
+            if (currentPath) {
+                shapeEntries.push(`${currentPath}:${typeof currentValue}`);
+            }
+            continue;
+        }
+
+        for (const [key, child] of Object.entries(currentValue)) {
+            if (isIgnoredKey(key, ignoredKeys)) {
+                continue;
+            }
+
+            stack.push({ value: child, path: currentPath ? `${currentPath}.${key}` : key });
+        }
+    }
+
+    return shapeEntries.sort().join(';');
+}
+
+function getArrayElementType(values: readonly unknown[]): string {
+    const elementTypes = new Set(values.map(getTelemetryValueType));
+
+    if (elementTypes.size === 0) {
+        return 'empty';
+    }
+
+    if (elementTypes.size === 1) {
+        return Array.from(elementTypes)[0] ?? 'unknown';
+    }
+
+    return 'mixed';
+}
+
+function getTelemetryValueType(value: unknown): string {
+    if (value === null) {
+        return 'null';
+    }
+
+    if (Array.isArray(value)) {
+        return 'array';
+    }
+
+    return typeof value;
+}
+
+function setIfDefined(result: ClusterMetadata, key: string, value: unknown): void {
+    if (value !== undefined && value !== null) {
+        result[key] = Array.isArray(value) ? value.map(String).join(';') : String(value);
+    }
+}
+
 async function fetchBuildInfo(adminDb: Admin, result: ClusterMetadata): Promise<void> {
     try {
         const buildInfo = await adminDb.command({ buildInfo: 1 });
-        result['serverInfo_version'] = buildInfo.version;
-        result['serverInfo_platform'] = buildInfo.platform;
-        result['serverInfo_storageEngines'] = (buildInfo.storageEngines as string[])?.join(';');
+        setIfDefined(result, 'serverInfo_version', buildInfo.version);
+        setIfDefined(result, 'serverInfo_platform', buildInfo.platform);
+        setIfDefined(result, 'serverInfo_storageEngines', buildInfo.storageEngines);
     } catch (error) {
         try {
             result['serverInfo_error'] = error instanceof Error ? error.message : String(error);
@@ -72,7 +154,7 @@ async function fetchBuildInfo(adminDb: Admin, result: ClusterMetadata): Promise<
 async function fetchServerStatus(adminDb: Admin, result: ClusterMetadata): Promise<void> {
     try {
         const serverStatus = await adminDb.command({ serverStatus: 1 });
-        result['serverStatus_uptime'] = serverStatus.uptime.toString();
+        setIfDefined(result, 'serverStatus_uptime', serverStatus.uptime);
     } catch (error) {
         try {
             result['serverStatus_error'] = error instanceof Error ? error.message : String(error);
@@ -83,13 +165,22 @@ async function fetchServerStatus(adminDb: Admin, result: ClusterMetadata): Promi
     }
 }
 
-async function fetchTopologyInfo(adminDb: Admin, result: ClusterMetadata): Promise<void> {
+async function fetchTopologyInfo(
+    adminDb: Admin,
+    result: ClusterMetadata,
+    ignoredPrefixes: string[] = ['$', 'connectionId', 'localTime'],
+): Promise<void> {
     try {
         const helloInfo = await adminDb.command({ hello: 1 });
         result['topology_type'] = helloInfo.msg || 'unknown';
         result['topology_numberOfServers'] = (helloInfo.hosts?.length || 0).toString();
-        result['topology_minWireVersion'] = helloInfo.minWireVersion.toString();
-        result['topology_maxWireVersion'] = helloInfo.maxWireVersion.toString();
+        result['topology_minWireVersion'] = helloInfo.minWireVersion?.toString() ?? 'unknown';
+        result['topology_maxWireVersion'] = helloInfo.maxWireVersion?.toString() ?? 'unknown';
+
+        setIfDefined(result, 'topology_hello_saslSupportedMechs', helloInfo.saslSupportedMechs);
+        setIfDefined(result, 'topology_hello_internal_documentdb_versions', helloInfo.internal?.documentdb_versions);
+        setIfDefined(result, 'topology_hello_internal_kind', helloInfo.internal?.kind);
+        result['topology_helloShape'] = getTelemetryShape(helloInfo, ignoredPrefixes);
     } catch (error) {
         try {
             result['topology_error'] = error instanceof Error ? error.message : String(error);
@@ -110,7 +201,7 @@ async function fetchHostInfo(adminDb: Admin, result: ClusterMetadata): Promise<v
             hostInfo.system.currentTime = 'redacted'; // Redact system current time
         }
         // TODO: review in April 2024 if we need to redact more of the hostInfo fields.
-        result['hostInfo_json'] = JSON.stringify(hostInfo);
+        setIfDefined(result, 'hostInfo_json', JSON.stringify(hostInfo));
     } catch (error) {
         try {
             result['hostInfo_error'] = error instanceof Error ? error.message : String(error);
