@@ -18,19 +18,23 @@ import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmati
  * ignored. The tree refreshes via `QuickStartService.onDidChangeStatus`.
  */
 
-export async function startQuickStartInstance(_context: IActionContext): Promise<void> {
+export async function startQuickStartInstance(context: IActionContext): Promise<void> {
+    context.telemetry.properties.action = 'start';
     await QuickStartService.start();
 }
 
-export async function stopQuickStartInstance(_context: IActionContext): Promise<void> {
+export async function stopQuickStartInstance(context: IActionContext): Promise<void> {
+    context.telemetry.properties.action = 'stop';
     await QuickStartService.stop();
 }
 
-export async function restartQuickStartInstance(_context: IActionContext): Promise<void> {
+export async function restartQuickStartInstance(context: IActionContext): Promise<void> {
+    context.telemetry.properties.action = 'restart';
     await QuickStartService.restart();
 }
 
-export async function deleteQuickStartInstance(_context: IActionContext): Promise<void> {
+export async function deleteQuickStartInstance(context: IActionContext): Promise<void> {
+    context.telemetry.properties.action = 'delete';
     const confirmed = await getConfirmationWithClick(
         l10n.t('Delete DocumentDB Local container?'),
         l10n.t('This removes the local DocumentDB container. You can recreate it any time with Quick Start.'),

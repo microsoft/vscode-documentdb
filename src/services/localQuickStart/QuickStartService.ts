@@ -19,6 +19,8 @@
  * generator of {@link StageEvent}s, consumed directly by the tRPC subscription.
  */
 
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import * as l10n from '@vscode/l10n';
 import * as crypto from 'crypto';
 import * as fs from 'fs/promises';
 import { MongoClient } from 'mongodb';
@@ -181,6 +183,8 @@ class QuickStartServiceImpl {
         let createAttempted = false;
         let envFilePath: string | undefined;
         let success = false;
+        let portFallback = false;
+        const provisionStartedAt = Date.now();
 
         try {
             this.setStatus(InstanceState.Provisioning, undefined, undefined);
@@ -222,6 +226,7 @@ class QuickStartServiceImpl {
             }
             let portFallbackNote: string | undefined;
             if (chosenPort !== QUICK_START_PORT) {
+                portFallback = true;
                 portFallbackNote = `Port ${QUICK_START_PORT} was busy — using ${chosenPort} instead.`;
                 channel.appendLine(portFallbackNote);
             }
@@ -348,6 +353,17 @@ class QuickStartServiceImpl {
             if (envFilePath) {
                 await fs.rm(envFilePath, { force: true }).catch(() => undefined);
             }
+            // Provisioning outcome telemetry (design §14): result + whether we reused a
+            // prior volume/creds + whether a port fallback was used + total duration.
+            // Never includes names/ports/credentials.
+            const provisionResult = success ? 'success' : signal.aborted ? 'cancelled' : 'error';
+            void callWithTelemetryAndErrorHandling('documentDB.quickstart.provision', (telemetryContext) => {
+                telemetryContext.errorHandling.suppressDisplay = true;
+                telemetryContext.telemetry.properties.provisionResult = provisionResult;
+                telemetryContext.telemetry.properties.reused = String(reusing);
+                telemetryContext.telemetry.properties.portFallback = String(portFallback);
+                telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
+            });
             this.provisioning = false;
         }
     }
@@ -505,11 +521,40 @@ class QuickStartServiceImpl {
         return !!item && item.labels?.[QUICK_START_LABEL_KEY] === '1';
     }
 
+    /**
+     * Multi-window coordination (design §12): the container is shared machine state
+     * no window owns, so a lifecycle action re-checks the live Docker state right
+     * before executing. If another window already changed it (so the action no longer
+     * applies), refresh the tree and inform the user instead of acting on stale state.
+     * Returns true when the action may proceed.
+     */
+    private async liveStateGuard(id: string, allowed: ReadonlyArray<'running' | 'stopped'>): Promise<boolean> {
+        const item = await ContainerRuntime.inspectContainer(id);
+        const live: 'running' | 'stopped' | 'missing' = !item
+            ? 'missing'
+            : ContainerRuntime.isRunning(item)
+              ? 'running'
+              : 'stopped';
+        if (live === 'missing' || !allowed.includes(live)) {
+            await this.refreshLiveState();
+            const label =
+                live === 'missing' ? l10n.t('missing') : live === 'running' ? l10n.t('running') : l10n.t('stopped');
+            void vscode.window.showInformationMessage(
+                l10n.t(
+                    'The DocumentDB Local instance changed in another window (now {0}). The view has been refreshed.',
+                    label,
+                ),
+            );
+            return false;
+        }
+        return true;
+    }
+
     /** Start a stopped instance (design §11). */
     public async start(): Promise<void> {
         await this.runLifecycle(async () => {
             const id = this.metadata?.containerId;
-            if (!id || !(await this.isManaged(id))) {
+            if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['stopped']))) {
                 return;
             }
             this.setStatus(InstanceState.Starting);
@@ -530,7 +575,7 @@ class QuickStartServiceImpl {
     public async stop(): Promise<void> {
         await this.runLifecycle(async () => {
             const id = this.metadata?.containerId;
-            if (!id || !(await this.isManaged(id))) {
+            if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['running']))) {
                 return;
             }
             this.setStatus(InstanceState.Stopping);
@@ -543,7 +588,7 @@ class QuickStartServiceImpl {
     public async restart(): Promise<void> {
         await this.runLifecycle(async () => {
             const id = this.metadata?.containerId;
-            if (!id || !(await this.isManaged(id))) {
+            if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['running', 'stopped']))) {
                 return;
             }
             this.setStatus(InstanceState.Stopping);

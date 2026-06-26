@@ -188,7 +188,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setPhase('success');
                     closeTimerRef.current = setTimeout(() => {
                         void trpcClient.localQuickStart.closePanel.mutate().catch(() => undefined);
-                    }, 1800);
+                    }, 4000);
                 } else if (event.status === 'error') {
                     settled = true;
                     stopTimer();
@@ -234,6 +234,19 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const handleViewOutput = useCallback((): void => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
+    }, [trpcClient]);
+
+    const handleOpenConnection = useCallback((): void => {
+        if (closeTimerRef.current) {
+            clearTimeout(closeTimerRef.current);
+            closeTimerRef.current = null;
+        }
+        void trpcClient.localQuickStart.openConnection.mutate().catch(() => undefined);
+        void trpcClient.localQuickStart.closePanel.mutate().catch(() => undefined);
+    }, [trpcClient]);
+
+    const handleCopyConnString = useCallback((): void => {
+        void trpcClient.localQuickStart.copyConnectionString.mutate().catch(() => undefined);
     }, [trpcClient]);
 
     const renderReviewCards = (): JSX.Element => {
@@ -434,6 +447,16 @@ export const LocalQuickStart = (): JSX.Element => {
                         <Button appearance="secondary" onClick={handleCancel}>
                             {l10n.t('Cancel')}
                         </Button>
+                    )}
+                    {phase === 'success' && (
+                        <>
+                            <Button appearance="secondary" onClick={handleCopyConnString}>
+                                {l10n.t('Copy Connection String')}
+                            </Button>
+                            <Button appearance="primary" onClick={handleOpenConnection}>
+                                {l10n.t('Open Connection')}
+                            </Button>
+                        </>
                     )}
                     {phase === 'failed' && (
                         <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={handleStart}>

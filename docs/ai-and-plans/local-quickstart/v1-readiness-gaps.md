@@ -80,5 +80,17 @@ instance.
     + **"Start Docker Desktop"** action (`startDockerDesktop`, best-effort per-OS launch) + Install /
     Troubleshooting links. Review "Data" card corrected to **Persistent volume**.
   - Gates green: l10n · prettier · lint · jest (2055/2055) · build · webpack-prod.
-- _Remaining:_ P1‑3 success handoff, P1‑4 Advanced panel, P2 (migration / TLS wizard / 10255),
-  P3 (telemetry / multi-window / a11y).
+- _Remaining:_ P1‑4 Advanced panel, P2 (migration / TLS wizard / 10255), P3‑4 a11y, P3‑5
+  readiness on-timeout actions.
+
+- _2026-06-26_: **P1‑3 + P3‑1 + P3‑2 complete (build + gates verified).**
+  - **P1‑3 success handoff:** success card now shows **Open Connection** (focuses the Connections
+    view, then closes) + **Copy Connection String**; auto-close delay extended so the buttons are
+    usable. New router mutations `openConnection` / `copyConnectionString`.
+  - **P3‑2 multi-window:** `start/stop/restart` now re-check live Docker state via `liveStateGuard`
+    immediately before acting; if another window already changed it, the tree refreshes and the user
+    is told *"changed in another window (now …)"* instead of acting on stale state (§12).
+  - **P3‑1 telemetry:** `documentDB.quickstart.provision` event (result · reused · portFallback ·
+    provisionMs); `getDockerStatus` now reports `dockerReadiness` + `platformSupported`; lifecycle
+    commands tag `action`. No names/ports/creds sent (§14).
+  - Gates green: l10n · prettier · lint · jest (2055/2055) · build · webpack-prod.

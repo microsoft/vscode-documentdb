@@ -18,6 +18,7 @@
  * `../../_integration/trpc`, never from `appRouter.ts`.
  */
 
+import * as vscode from 'vscode';
 import {
     ContainerRuntime,
     getQuickStartOutputChannel,
@@ -30,7 +31,7 @@ import {
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { type BaseRouterContext } from '../../_integration/appRouter';
-import { publicProcedure, publicProcedureWithTelemetry, router } from '../../_integration/trpc';
+import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 export type RouterContext = BaseRouterContext & {
     /** Disposes the webview panel (success auto-close). Wired by the controller. */
@@ -39,8 +40,16 @@ export type RouterContext = BaseRouterContext & {
 
 export const localQuickStartRouter = router({
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
-    getDockerStatus: publicProcedure.query(async (): Promise<DockerStatusResult> => {
+    getDockerStatus: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<DockerStatusResult> => {
         const readiness = await ContainerRuntime.isDockerReady();
+        const tctx = ctx as WithTelemetry<BaseRouterContext>;
+        // Design §14 quickstart.docker_readiness — never includes names/ports/creds.
+        tctx.telemetry.properties.dockerReadiness = !readiness.cliInstalled
+            ? 'cliMissing'
+            : !readiness.daemonReachable
+              ? 'daemonStopped'
+              : 'ok';
+        tctx.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
         return { readiness, status: QuickStartService.getStatus(), busy: QuickStartService.isBusy };
     }),
 
@@ -59,6 +68,19 @@ export const localQuickStartRouter = router({
 
     /** Best-effort launch of Docker Desktop (design §5.3). Returns true if attempted. */
     startDockerDesktop: publicProcedure.mutation((): Promise<boolean> => startDockerDesktop()),
+
+    /** Success hand-off (§5.5): focus the Connections view where the instance now lives. */
+    openConnection: publicProcedure.mutation(async () => {
+        await vscode.commands.executeCommand('connectionsView.focus');
+    }),
+
+    /** Success hand-off (§5.5): copy the managed instance's connection string. */
+    copyConnectionString: publicProcedure.mutation(() => {
+        const metadata = QuickStartService.getStatus().metadata;
+        if (metadata) {
+            void vscode.env.clipboard.writeText(metadata.connectionString);
+        }
+    }),
 
     /**
      * Provision the managed instance, streaming stage transitions to the webview.
