@@ -43,7 +43,9 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
     // Summary indicators
     lines.push('### Summary Indicators (4 cells shown to user)');
     const formattedSelectivity =
-        stage2.efficiencyAnalysis.selectivity !== null ? `${stage2.efficiencyAnalysis.selectivity.toFixed(1)}%` : 'Unknown';
+        stage2.efficiencyAnalysis.selectivity !== null
+            ? `${stage2.efficiencyAnalysis.selectivity.toFixed(1)}%`
+            : 'Unknown';
     lines.push(`- **Selectivity**: ${formattedSelectivity}`);
     lines.push(`- **Index Used**: ${stage2.efficiencyAnalysis.indexUsed ?? 'None (collection scan)'}`);
     lines.push(
