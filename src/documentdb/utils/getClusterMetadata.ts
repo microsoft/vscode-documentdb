@@ -42,7 +42,7 @@ export function getDomainMetadata(hosts: string[]): ClusterMetadata {
 export async function getClusterMetadata(
     client: MongoClient,
     hosts: string[],
-    ignoredPrefixes: string[] = ['$', 'connectionId', 'localTime'],
+    ignoredPrefixes: string[] = ['$', 'connectionId', 'localTime', 'hosts', 'me', 'primary'],
 ): Promise<ClusterMetadata> {
     const result: ClusterMetadata = {};
 
@@ -168,7 +168,7 @@ async function fetchServerStatus(adminDb: Admin, result: ClusterMetadata): Promi
 async function fetchTopologyInfo(
     adminDb: Admin,
     result: ClusterMetadata,
-    ignoredPrefixes: string[] = ['$', 'connectionId', 'localTime'],
+    ignoredPrefixes: string[] = ['$', 'connectionId', 'localTime', 'hosts', 'me', 'primary'],
 ): Promise<void> {
     try {
         const helloInfo = await adminDb.command({ hello: 1 });

@@ -36,11 +36,10 @@ describe('getTelemetryShape', () => {
             ok: 1,
         };
 
-        const result = getTelemetryShape(helloInfo, ['$', 'connectionId', 'localTime']);
+        const result = getTelemetryShape(helloInfo, ['$', 'connectionId', 'localTime', 'hosts', 'me', 'primary']);
 
         expect(result).toBe(
             [
-                'hosts:array:string',
                 'internal.documentdb_versions:array:string',
                 'internal.kind:string',
                 'isWritablePrimary:boolean',
@@ -115,7 +114,7 @@ describe('getClusterMetadata', () => {
         expect(result['topology_hello_saslSupportedMechs']).toBe('SCRAM-SHA-256;MONGODB-OIDC');
         expect(result['topology_hello_internal_documentdb_versions']).toBe('1.112-0;1.113.0;12.1-1');
         expect(result['topology_hello_internal_kind']).toBe('azuredocumentdb');
-        expect(result['topology_helloShape']).toContain('hosts:array:string');
+        expect(result['topology_helloShape']).not.toContain('hosts:array:string');
         expect(result['topology_helloShape']).not.toContain('host-a');
         expect(result['topology_hello_hosts_0']).toBeUndefined();
         expect(result['topology_hello_connectionId']).toBeUndefined();
