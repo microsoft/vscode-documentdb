@@ -651,6 +651,7 @@
   "Failed to rename connection: connection not found in storage.": "Failed to rename connection: connection not found in storage.",
   "Failed to rename the connection.": "Failed to rename the connection.",
   "Failed to retrieve Azure accounts: {0}": "Failed to retrieve Azure accounts: {0}",
+  "Failed to reuse the active connection for \"{cluster}\": {error}": "Failed to reuse the active connection for \"{cluster}\": {error}",
   "Failed to save credentials for \"{cluster}\".": "Failed to save credentials for \"{cluster}\".",
   "Failed to save credentials: {0}": "Failed to save credentials: {0}",
   "Failed to save credentials: connection not found in storage.": "Failed to save credentials: connection not found in storage.",

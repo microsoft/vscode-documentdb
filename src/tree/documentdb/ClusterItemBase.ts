@@ -232,9 +232,40 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
                     });
 
                     return [];
-                } else {
-                    throw error;
                 }
+
+                // Reusing a cached client can still fail (server down, stale credentials, dropped
+                // tunnel, TLS/auth renegotiation, …). If we let the rejection propagate out of
+                // getChildren(), the tree expansion would end with no children and — crucially —
+                // no retry affordance, leaving the user stuck. Mirror the `!clustersClient` and
+                // listDatabases branches: record telemetry, surface a modal, and return a retry
+                // node. We intentionally keep the cached credentials so the retry can re-attempt
+                // the connection without forcing the user to re-enter credentials (the failure may
+                // be transient).
+                const errorMessage = error instanceof Error ? error.message : String(error);
+
+                void callWithTelemetryAndErrorHandling('connect', (telemetryContext) => {
+                    telemetryContext.errorHandling.suppressDisplay = true;
+                    telemetryContext.telemetry.properties.connectionResult = 'failed';
+                    telemetryContext.telemetry.properties.source = 'treeExpansion';
+                    telemetryContext.telemetry.properties.experience = this.experience.api;
+                    telemetryContext.telemetry.properties.failurePhase = 'cachedClientConnect';
+                    throw error;
+                });
+
+                ext.outputChannel.appendLine(
+                    l10n.t('Failed to reuse the active connection for "{cluster}": {error}', {
+                        cluster: this.cluster.name,
+                        error: errorMessage,
+                    }),
+                );
+
+                void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect to "{0}"', this.cluster.name), {
+                    modal: true,
+                    detail: errorMessage,
+                });
+
+                return this.createErrorRecoveryChildren(false);
             }
         } else {
             // Call to the abstract method to authenticate and connect to the cluster

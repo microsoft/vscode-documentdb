@@ -202,3 +202,83 @@ describe('ClusterItemBase.getChildren — listDatabases failure handling', () =>
         expect(mockTelemetryEvents).toHaveLength(0);
     });
 });
+
+describe('ClusterItemBase.getChildren — cached client connection failure handling', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockTelemetryEvents.length = 0;
+        // Simulate cached credentials so getChildren() takes the "reuse cached client" path.
+        mockHasCredentials.mockReturnValue(true);
+
+        // jest-mock-vscode's withProgress is a no-op jest.fn(); make it actually run the task so
+        // getClientWithProgress() exercises ClustersClient.getClient() and surfaces its rejection.
+        (vscode.window.withProgress as unknown as jest.Mock).mockImplementation(
+            (
+                _options: unknown,
+                task: (
+                    progress: unknown,
+                    token: { isCancellationRequested: boolean; onCancellationRequested: jest.Mock },
+                ) => unknown,
+            ) => task({ report: jest.fn() }, { isCancellationRequested: false, onCancellationRequested: jest.fn() }),
+        );
+    });
+
+    it('returns a retry node when reusing the cached client fails (without listing databases)', async () => {
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new Error('server down'));
+
+        // listDatabases must never be reached when the cached client cannot connect.
+        const listDatabases = jest.fn();
+        const item = new TestClusterItem(makeCluster(), makeClient(listDatabases));
+
+        const children = (await item.getChildren()) as Array<TreeElement & Record<string, unknown>>;
+
+        expect(children).toHaveLength(1);
+        expect(children[0].id).toBe('cluster-1/retry');
+        expect(children[0].contextValue).toBe('error');
+        expect(children[0].commandId).toBe('vscode-documentdb.command.internal.retry');
+        expect(children[0].commandArgs).toEqual([item]);
+        expect(item.hasRetryNode(children)).toBe(true);
+        expect(listDatabases).not.toHaveBeenCalled();
+    });
+
+    it('surfaces a modal and records telemetry with failurePhase=cachedClientConnect', async () => {
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new Error('server down'));
+
+        const item = new TestClusterItem(makeCluster(), makeClient(jest.fn()));
+
+        await item.getChildren();
+
+        expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+            'Failed to connect to "My Cluster"',
+            expect.objectContaining({ modal: true, detail: 'server down' }),
+        );
+        expect(mockTelemetryEvents).toHaveLength(1);
+        expect(mockTelemetryEvents[0].eventName).toBe('connect');
+        // azext's own (non-modal) display is suppressed so the user only sees the modal.
+        expect(mockTelemetryEvents[0].suppressDisplay).toBe(true);
+        expect(mockTelemetryEvents[0].properties).toMatchObject({
+            connectionResult: 'failed',
+            source: 'treeExpansion',
+            experience: 'MongoDB',
+            failurePhase: 'cachedClientConnect',
+        });
+    });
+
+    it('returns an empty array (no retry node) when the user cancels the cached connection', async () => {
+        const { UserCancelledError } = jest.requireMock('@microsoft/vscode-azext-utils');
+        const { ClustersClient: ClustersClientMock } = jest.requireMock('../../documentdb/ClustersClient');
+        (ClustersClientMock.getClient as jest.Mock).mockRejectedValue(new UserCancelledError());
+
+        const item = new TestClusterItem(makeCluster(), makeClient(jest.fn()));
+
+        const children = await item.getChildren();
+
+        expect(children).toEqual([]);
+        expect(item.hasRetryNode(children)).toBe(false);
+        expect(vscode.window.showErrorMessage).not.toHaveBeenCalled();
+        expect(mockTelemetryEvents).toHaveLength(1);
+        expect(mockTelemetryEvents[0].properties.connectionResult).toBe('cancelled');
+    });
+});
