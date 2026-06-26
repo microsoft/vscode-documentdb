@@ -58,13 +58,38 @@ export type EphemeralClusterCredentials = {
  */
 export type ClusterCredentials = EphemeralClusterCredentials;
 
+/**
+ * Context-value tag identifying a DocumentDB cluster node.
+ *
+ * `contextValue` strings are built with azext-utils `createContextValue`, which de-duplicates and
+ * joins multiple tags with ';'. A cluster node's contextValue is therefore composite (e.g.
+ * `experience_<api>;treeItem_documentdbcluster`). Providers can gate view-specific error-recovery
+ * actions to clusters by checking for this tag (see `errorRecoveryActions` in
+ * BaseExtendedTreeDataProvider). Keep this in sync with the default `contextValue` below.
+ */
+export const CLUSTER_ITEM_CONTEXT_VALUE = 'treeItem_documentdbcluster';
+
+/**
+ * Id suffix of the "retry" recovery node a cluster appends when it fails to load its children.
+ *
+ * Error-recovery nodes in this tree are produced by two layers:
+ * - The ELEMENT layer (this class) owns FAILURE-TYPE nodes: "retry" (any failure) and, for
+ *   post-authentication failures, "open shell". These are appended directly to the children.
+ * - The PROVIDER layer (a BranchDataProvider) owns VIEW-SPECIFIC nodes (e.g. "update credentials")
+ *   via `errorRecoveryActions`, gated by the failing element's contextValue.
+ *
+ * `hasRetryNode` detects the error state by looking for this suffix, so the value MUST match the id
+ * used when the retry node is created in `createErrorRecoveryChildren`.
+ */
+export const RECONNECT_NODE_ID_SUFFIX = '/reconnect';
+
 // This info will be available at every level in the tree for immediate access
 export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterModel>
     implements TreeElement, TreeElementWithExperience, TreeElementWithContextValue, TreeElementWithRetryChildren
 {
     public readonly id: string;
     public readonly experience: Experience;
-    public contextValue: string = 'treeItem_documentdbcluster';
+    public contextValue: string = CLUSTER_ITEM_CONTEXT_VALUE;
 
     /**
      * Correlation ID used for telemetry funnel analysis.
@@ -143,11 +168,20 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         );
     }
 
+    /**
+     * Builds the FAILURE-TYPE error-recovery nodes owned by the element layer.
+     *
+     * Always includes a "retry" node (its id ends with {@link RECONNECT_NODE_ID_SUFFIX}, which is
+     * how `hasRetryNode` and the provider detect the error state). For post-authentication failures
+     * (`includeOpenShell`), an "open shell" node is added so the user can investigate the server
+     * directly. View-specific recovery actions (e.g. "update credentials") are added separately by
+     * the provider via `errorRecoveryActions`.
+     */
     private createErrorRecoveryChildren(includeOpenShell: boolean): TreeElement[] {
         const children: TreeElement[] = [
             createGenericElementWithContext({
                 contextValue: 'error',
-                id: `${this.id}/reconnect`, // note: keep this in sync with the `hasRetryNode` function in this file
+                id: `${this.id}${RECONNECT_NODE_ID_SUFFIX}`,
                 label: vscode.l10n.t('Click here to retry'),
                 iconPath: new vscode.ThemeIcon('refresh'),
                 commandId: 'vscode-documentdb.command.internal.retry',
@@ -309,7 +343,7 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
         return !!(
             children &&
             children.length > 0 &&
-            children.some((child) => typeof child.id === 'string' && child.id.endsWith('/reconnect'))
+            children.some((child) => typeof child.id === 'string' && child.id.endsWith(RECONNECT_NODE_ID_SUFFIX))
         );
     }
 
