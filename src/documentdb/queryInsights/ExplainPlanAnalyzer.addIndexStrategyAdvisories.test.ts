@@ -288,6 +288,121 @@ describe('ExplainPlanAnalyzer.addIndexStrategyAdvisories', () => {
         });
     });
 
+        it('detects isBitmap under a shard branch in the winning plan', () => {
+            // Simulates a sharded cluster where the IXSCAN with isBitmap lives
+            // under a SHARD_MERGE > shards > FETCH > IXSCAN path.
+            // Before the fix, findStageInPlan() did not recurse into shards.
+            const analysis = makeAnalysis();
+            const explainResult: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'SHARD_MERGE',
+                        shards: [
+                            {
+                                stage: 'SINGLE_SHARD',
+                                inputStage: {
+                                    stage: 'FETCH',
+                                    inputStage: {
+                                        stage: 'IXSCAN',
+                                        indexName: 'bitmapIndex_1',
+                                        isBitmap: true,
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+                executionStats: {
+                    nReturned: 100,
+                    executionTimeMillis: 13,
+                    totalDocsExamined: 100,
+                    totalKeysExamined: 100,
+                    executionStages: {
+                        stage: 'SHARD_MERGE',
+                        shards: [
+                            {
+                                stage: 'SINGLE_SHARD',
+                                inputStage: {
+                                    stage: 'FETCH',
+                                    inputStage: {
+                                        stage: 'IXSCAN',
+                                        indexName: 'bitmapIndex_1',
+                                        indexUsage: [
+                                            {
+                                                scanKeys: [
+                                                    'key 1: [(isInequality: false, estimatedEntryCount: 100)]',
+                                                ],
+                                            },
+                                        ],
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+            };
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            const ids = getDiagnosticIds(analysis.performanceRating.diagnostics);
+            expect(ids).toContain('bitmap_index');
+        });
+
+        it('detects IXSCAN in planner shards even when exec stats use flat structure', () => {
+            // Verifies that bitmap index detection works when the queryPlanner
+            // includes shard info (SHARD_MERGE > SINGLE_SHARD > IXSCAN) but
+            // executionStats use a simplified flat structure (FETCH > IXSCAN)
+            // without shard wrappers. This is important because production
+            // sharded clusters may return plan trees in either format, and the
+            // bitmap detector must be able to traverse both shapes correctly.
+            const analysis = makeAnalysis();
+            const explainResult: Document = {
+                queryPlanner: {
+                    winningPlan: {
+                        stage: 'SHARD_MERGE',
+                        shards: [
+                            {
+                                stage: 'SINGLE_SHARD',
+                                inputStage: {
+                                    stage: 'FETCH',
+                                    inputStage: {
+                                        stage: 'IXSCAN',
+                                        indexName: 'bitmapIndex_1',
+                                        isBitmap: true,
+                                    },
+                                },
+                            },
+                        ],
+                    },
+                },
+                executionStats: {
+                    nReturned: 100,
+                    executionTimeMillis: 13,
+                    totalDocsExamined: 100,
+                    totalKeysExamined: 100,
+                    executionStages: {
+                        stage: 'FETCH',
+                        inputStage: {
+                            stage: 'IXSCAN',
+                            indexName: 'bitmapIndex_1',
+                            indexUsage: [
+                                {
+                                    scanKeys: [
+                                        'key 1: [(isInequality: false, estimatedEntryCount: 100)]',
+                                    ],
+                                },
+                            ],
+                        },
+                    },
+                },
+            };
+
+            ExplainPlanAnalyzer.addIndexStrategyAdvisories(analysis, 1000, explainResult);
+
+            const ids = getDiagnosticIds(analysis.performanceRating.diagnostics);
+            expect(ids).toContain('bitmap_index');
+        });
+
     describe('cumulative advisory demotions', () => {
         it('demotes score twice when both bitmap and severe multikey thresholds are met', () => {
             // Single-field bitmap with 50% coverage + 25× multikey expansion
