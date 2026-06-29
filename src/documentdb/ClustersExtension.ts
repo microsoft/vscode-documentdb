@@ -92,6 +92,7 @@ import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
 import { DiscoveryService } from '../services/discoveryServices';
+import { migrateLegacyEmulatorConnections } from '../services/legacyEmulatorMigration';
 import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
@@ -256,6 +257,10 @@ export class ClustersExtension implements vscode.Disposable {
                     }),
                 );
                 void QuickStartService.reconcile();
+
+                // One-time migration of legacy emulator connections into a regular
+                // "Local Connections (Legacy)" folder (design §4). Non-blocking.
+                void migrateLegacyEmulatorConnections();
 
                 // Register evaluator disposal for clean worker shutdown on deactivation
                 ext.context.subscriptions.push({ dispose: disposeEvaluators });

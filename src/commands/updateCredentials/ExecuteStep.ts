@@ -27,7 +27,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
     public priority: number = 100;
 
     public async execute(context: UpdateCredentialsWizardContext): Promise<void> {
-        const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+        const resourceType =
+            context.storageZone ?? (context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
         const connectionCredentials = await ConnectionStorageService.get(context.storageId, resourceType);
 
         if (!connectionCredentials) {

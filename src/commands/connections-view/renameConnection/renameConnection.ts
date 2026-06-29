@@ -6,6 +6,7 @@
 import { AzureWizard, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { type DocumentDBClusterItem } from '../../../tree/connections-view/DocumentDBClusterItem';
+import { resolveStorageZone } from '../../../tree/connections-view/models/ConnectionClusterModel';
 import { ExecuteStep } from './ExecuteStep';
 import { PromptNewConnectionNameStep } from './PromptNewConnectionNameStep';
 import { type RenameConnectionWizardContext } from './RenameConnectionWizardContext';
@@ -22,6 +23,7 @@ export async function renameConnection(context: IActionContext, node: DocumentDB
         ...context,
         originalConnectionName: node.cluster.name,
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
+        storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
         treeItemPath: node.id,
     };

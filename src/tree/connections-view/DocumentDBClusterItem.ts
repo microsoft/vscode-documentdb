@@ -31,11 +31,11 @@ import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/Provi
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
+import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
-import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
+import { resolveStorageZone, type ConnectionClusterModel } from './models/ConnectionClusterModel';
 
 /**
  * Escapes markdown special characters so user-provided text is always rendered
@@ -58,9 +58,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-            ? ConnectionType.Emulators
-            : ConnectionType.Clusters;
+        const connectionType = resolveStorageZone(this.cluster);
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
         if (!connectionCredentials || !isConnection(connectionCredentials)) {
@@ -98,9 +96,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 }),
             );
 
-            const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-                ? ConnectionType.Emulators
-                : ConnectionType.Clusters;
+            const connectionType = resolveStorageZone(this.cluster);
 
             context.telemetry.properties.connectionType = connectionType;
 
@@ -170,9 +166,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         }),
                     );
 
-                    const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-                        ? ConnectionType.Emulators
-                        : ConnectionType.Clusters;
+                    const connectionType = resolveStorageZone(this.cluster);
 
                     const connection = await ConnectionStorageService.get(this.storageId, connectionType);
                     if (connection && isConnection(connection)) {

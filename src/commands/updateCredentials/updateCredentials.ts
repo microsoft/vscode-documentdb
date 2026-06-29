@@ -12,8 +12,9 @@ import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connection
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
+import { ConnectionStorageService, isConnection } from '../../services/connectionStorageService';
 import { type DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { refreshView } from '../refreshView/refreshView';
 import { PromptAuthMethodStep } from '../updateCredentials/PromptAuthMethodStep';
 import { ExecuteStep } from './ExecuteStep';
@@ -50,9 +51,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
     // Note to future maintainers: the node.cluster might be out of date
     // as the object is cached in the tree view, and in the 'retry/error' nodes
     // that's why we need to get the fresh one each time.
-    const resourceType = node.cluster.emulatorConfiguration?.isEmulator
-        ? ConnectionType.Emulators
-        : ConnectionType.Clusters;
+    const resourceType = resolveStorageZone(node.cluster);
 
     const storedItem = await ConnectionStorageService.get(node.storageId, resourceType);
     // Type guard ensures we have connection properties (not a folder)
@@ -83,6 +82,7 @@ export async function updateCredentials(context: IActionContext, node: DocumentD
         availableAuthenticationMethods: authMethodsFromString(supportedAuthMethods),
         selectedAuthenticationMethod: authMethodFromString(connectionCredentials?.properties.selectedAuthMethod),
         isEmulator: Boolean(node.cluster.emulatorConfiguration?.isEmulator),
+        storageZone: resolveStorageZone(node.cluster),
         storageId: node.storageId,
         isErrorState,
         reconnectAfterError: false,

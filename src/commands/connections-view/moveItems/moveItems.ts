@@ -13,6 +13,7 @@ import {
 } from '../../../services/connectionStorageService';
 import { DocumentDBClusterItem } from '../../../tree/connections-view/DocumentDBClusterItem';
 import { FolderItem } from '../../../tree/connections-view/FolderItem';
+import { resolveStorageZone } from '../../../tree/connections-view/models/ConnectionClusterModel';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { ConfirmMoveStep } from './ConfirmMoveStep';
 import { ExecuteStep } from './ExecuteStep';
@@ -126,7 +127,7 @@ function getConnectionType(item: MovableTreeElement): ConnectionType {
     }
 
     if (item instanceof DocumentDBClusterItem) {
-        return item.cluster.emulatorConfiguration?.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+        return resolveStorageZone(item.cluster);
     }
 
     // Default fallback

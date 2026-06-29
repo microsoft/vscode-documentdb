@@ -1368,6 +1368,7 @@
   "Your Cluster": "Your Cluster",
   "Your database stores documents with embedded fields, allowing for hierarchical data organization.": "Your database stores documents with embedded fields, allowing for hierarchical data organization.",
   "Your feedback helps us improve Query Insights. Tell us what could be better:": "Your feedback helps us improve Query Insights. Tell us what could be better:",
+  "Your local connections have been moved to '{0}' in the Connections view.": "Your local connections have been moved to '{0}' in the Connections view.",
   "Your positive feedback helps us understand what works well in Query Insights. Tell us more:": "Your positive feedback helps us understand what works well in Query Insights. Tell us more:",
   "Your query does not require sorting, which avoids additional processing overhead.": "Your query does not require sorting, which avoids additional processing overhead.",
   "Your query does not use an index.\n\nWhile not necessarily a problem for small collections, adding appropriate indexes can significantly improve query performance.": "Your query does not use an index.\n\nWhile not necessarily a problem for small collections, adding appropriate indexes can significantly improve query performance.",

@@ -9,6 +9,7 @@ import { Views } from '../../documentdb/Views';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
+import { isLegacyEmulatorMigrationComplete } from '../../services/legacyEmulatorMigration';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { type TreeCluster } from '../models/BaseClusterModel';
@@ -162,6 +163,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                 // Connection cluster data
                 clusterId: connection.id, // Stable storageId for cache lookups
                 storageId: connection.id,
+                storageZone: ConnectionType.Clusters,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,
                 connectionString: connection.secrets.connectionString,
@@ -190,7 +192,10 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
 
         const rootItems = [
             new LocalQuickStartItem(parentId),
-            new LocalEmulatorsItem(parentId),
+            // The legacy emulator node is retired once its connections have been migrated
+            // into a regular "Local Connections (Legacy)" folder (design §4). Until the
+            // one-time migration succeeds it stays visible so nothing is hidden un-migrated.
+            ...(isLegacyEmulatorMigrationComplete() ? [] : [new LocalEmulatorsItem(parentId)]),
             ...clusterFolderItems,
             ...clusterItems,
             ...newConnectionItem,

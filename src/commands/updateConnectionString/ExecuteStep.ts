@@ -15,7 +15,8 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
     public priority: number = 100;
 
     public async execute(context: UpdateCSWizardContext): Promise<void> {
-        const resourceType = context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters;
+        const resourceType =
+            context.storageZone ?? (context.isEmulator ? ConnectionType.Emulators : ConnectionType.Clusters);
         const connection = await ConnectionStorageService.get(context.storageId, resourceType);
 
         if (!connection || !connection.secrets?.connectionString) {

@@ -10,6 +10,7 @@ import * as vscode from 'vscode';
 import { type IconPath } from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
+import { StorageZone } from '../../../services/connectionStorageService';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { InstanceState, type QuickStartStatus } from '../../../services/localQuickStart/quickStartTypes';
 import { getResourcesPath } from '../../../utils/icons';
@@ -83,6 +84,11 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 viewId: this.parentId,
                 clusterId: metadata.clusterId,
                 storageId: metadata.clusterId,
+                // The Quick Start managed instance is in-memory (CredentialCache-based) and
+                // not stored in any zone; set an explicit storageZone so it never relies on
+                // the isEmulator→zone fallback. Storage-targeting commands are gated off this
+                // node by its contextValue, so this value is defensive only.
+                storageZone: StorageZone.Clusters,
                 name: l10n.t('DocumentDB Local'),
                 dbExperience: DocumentDBExperience,
                 connectionString: metadata.connectionString,

@@ -39,9 +39,10 @@ instance.
 
 | # | Gap | Design | Current | What's needed |
 | - | --- | ------ | ------- | ------------- |
-| P2‑1 | **Legacy emulator migration** | §4 | Not implemented | One-time move of `ConnectionType.Emulators` → "Local Connections (Legacy)" folder, preserve creds/auth/`emulatorConfiguration`, one-time toast, remove `LocalEmulatorsItem` + "New Local Connection…" entry. Without it, existing users think their connections vanished on update. **⛔ BLOCKED — see "P2‑1 blocker" below.** |
-| P2‑2 | **TLS-exception step in the regular wizard** + connection edit dialog | §7, §7.3 | Not implemented | The emulator wizard is being removed; this is its replacement. Gated host step defaulting to *Enable TLS*. |
-| P2‑3 | **Manual-wizard `10255`→`10260`** | §13.5 | Not done | Design: *"must be fixed before Quick Start ships."* |
+| P2‑0 | **Decouple storage-zone from `isEmulator`** (prerequisite) | §7 | ✅ **Done** | Explicit `storageZone` on the model + `resolveStorageZone`; route all ops by it. Unblocks P2‑1/P2‑2. |
+| P2‑1 | **Legacy emulator migration** | §4 | ✅ **Done** | One-time copy of `Emulators` → "Local Connections (Legacy)" folder (creds/auth/`emulatorConfiguration` preserved), keep Emulators as rollback, toast, retire `LocalEmulatorsItem`. 3-round 5-agent review; create-if-missing + race reconciliation. |
+| P2‑2 | **TLS-exception step in the regular wizard** + connection edit dialog | §7, §7.3 | Not implemented (now unblocked by P2‑0) | The emulator wizard is being removed; this is its replacement. Gated host step defaulting to *Enable TLS*. |
+| P2‑3 | **Manual-wizard `10255`→`10260`** | §13.5 | Not done | Design: *"must be fixed before Quick Start ships."* (Nuance: `10255` is also the Cosmos Mongo‑RU emulator port.) |
 
 ## 🔵 P3 — Observability & robustness
 
@@ -126,3 +127,30 @@ instance.
     `disableEmulatorSecurity` alone). This is essentially the **§7** "move emulator/TLS handling out
     of a dedicated zone" work, and P2‑2 (TLS wizard) shares the same root cause. Reverted the cut;
     branch left clean.
+
+- _2026-06-26_: **P2‑0 decoupling + P2‑1 migration — DONE (3-round 5-agent review, consensus on correctness).**
+  - **P2‑0 (decouple zone from `isEmulator`):** added `storageZone?: StorageZone` to
+    `ConnectionClusterModel` + a `resolveStorageZone(cluster)` helper (prefers explicit zone, falls
+    back to the old `isEmulator` inference for safety). Stamped `storageZone` at the 3 construction
+    sites (`ConnectionsBranchDataProvider`→Clusters, `FolderItem`→`_connectionType`,
+    `LocalEmulatorsItem`→Emulators) and routed every zone decision through the helper
+    (`DocumentDBClusterItem` ×3, `removeConnection`, `moveItems`, rename/updateCredentials/
+    updateConnectionString wizards). `isEmulator` is kept ONLY for behaviour (TLS/timeouts/icons).
+    +`resolveStorageZone` unit tests.
+  - **P2‑1 (migration), now correct on the decoupled arch:** copies keep `isEmulator:true` for TLS
+    and are rendered by `FolderItem` with `storageZone:Clusters`, so all operations route to Clusters.
+  - **3 review rounds (GPT‑5.4/5.5 xhigh, Opus 4.6/4.7/4.8 max):**
+    - R1 → caught the architectural blocker (above) → led to P2‑0.
+    - R2 on P2‑0+P2‑1 → **blocker resolved (5/5)**; found a partial-retry **BLOCKER** (overwrite could
+      revert user edits) + a URI-handler **MAJOR** (deep-link saves to the hidden Emulators zone).
+      Fixed: migration is now **create-if-missing** (never overwrites); URI handler routes new local
+      connections to Clusters once retired.
+    - R3 on the fixes → **unanimous the core is correct & data-safe; blocker stays resolved; no
+      regression.** Applied the reviewers' remaining hardening: a **reconciliation re-scan** before the
+      completion flag (closes the activation-window race), explicit `overwrite:false` (defense-in-depth),
+      an `isFolder` guard on the reused legacy folder, and telemetry refinement.
+  - **Known follow-up (pre-existing, documented):** the URI handler's deep-link **reveal** uses a flat
+    tree path, so auto-reveal of a connection *nested in a folder* (incl. a migrated one) can fail; the
+    connection is still found and navigable. Fix = folder-aware reveal via `buildFullTreePath` +
+    recursive `findNodeById` (tracked, not a regression).
+  - Gates green throughout: build · lint · jest (2058/2058, +3 tests) · l10n · prettier.
