@@ -76,6 +76,13 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
     return lines.join('\n');
 }
 
+/**
+ * Formats numeric selectivity for static analysis summary text.
+ * Values between 0 and 0.1 are rendered as a threshold label.
+ *
+ * @param selectivity - Raw selectivity percentage value
+ * @returns Formatted selectivity string for summary output
+ */
 function formatSelectivityForSummary(selectivity: number): string {
     if (selectivity > 0 && selectivity < 0.1) {
         return 'below 0.1%';
