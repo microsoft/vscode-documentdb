@@ -1189,6 +1189,7 @@
   "The database used a bitmap index to execute this query.\n\nBitmap indexes are an internal optimization that DocumentDB applies to low-cardinality fields (fields with few distinct values, such as booleans or status codes). They are space-efficient but less selective than B-tree indexes on high-cardinality fields.\n\nThis is expected behavior and does not indicate a problem. If query performance is a concern, consider filtering on a more selective field or using a compound index.": "The database used a bitmap index to execute this query.\n\nBitmap indexes are an internal optimization that DocumentDB applies to low-cardinality fields (fields with few distinct values, such as booleans or status codes). They are space-efficient but less selective than B-tree indexes on high-cardinality fields.\n\nThis is expected behavior and does not indicate a problem. If query performance is a concern, consider filtering on a more selective field or using a compound index.",
   "The default port: {defaultPort}": "The default port: {defaultPort}",
   "The default port: 10255": "The default port: 10255",
+  "The default port: 10260": "The default port: 10260",
   "The document with the _id \"{0}\" has been saved.": "The document with the _id \"{0}\" has been saved.",
   "The DocumentDB Local instance changed in another window (now {0}). The view has been refreshed.": "The DocumentDB Local instance changed in another window (now {0}). The view has been refreshed.",
   "The entered value does not match the original.": "The entered value does not match the original.",

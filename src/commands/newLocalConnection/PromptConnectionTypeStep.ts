@@ -94,7 +94,7 @@ export class PromptConnectionTypeStep extends AzureWizardPromptStep<NewLocalConn
             switch (context.emulatorType) {
                 case 'documentdb':
                     context.connectionString = `mongodb://localhost/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
-                    context.port = 10255;
+                    context.port = 10260;
                     break;
                 case 'mongo-ru':
                     context.connectionString = `mongodb://localhost/?directConnection=true&tls=true&tlsAllowInvalidCertificates=true`;
