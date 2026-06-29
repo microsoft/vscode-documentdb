@@ -27,7 +27,7 @@ export interface ShellTerminalInfo {
     /** Worker thread state. */
     readonly workerState: 'idle' | 'spawning' | 'ready' | 'executing';
     /** Authentication method used. */
-    readonly authMethod: 'NativeAuth' | 'MicrosoftEntraID' | undefined;
+    readonly authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth' | undefined;
     /** Username for SCRAM auth (undefined for Entra ID or before init). */
     readonly username: string | undefined;
 }

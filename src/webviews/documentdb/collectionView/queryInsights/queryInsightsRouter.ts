@@ -349,12 +349,9 @@ export const queryInsightsRouter = router({
             ctx.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
         }
 
-        // Selectivity as a number (strip the '%' if present)
-        if (transformed.efficiencyAnalysis.selectivity) {
-            const selectivityNum = parseFloat(transformed.efficiencyAnalysis.selectivity);
-            if (!isNaN(selectivityNum)) {
-                ctx.telemetry.measurements.selectivityPercent = selectivityNum;
-            }
+        const selectivityPercent = transformed.efficiencyAnalysis.selectivity;
+        if (selectivityPercent !== null && selectivityPercent !== undefined) {
+            ctx.telemetry.measurements.selectivityPercent = selectivityPercent;
         }
 
         // Badge IDs (safe categorical data, no PII)

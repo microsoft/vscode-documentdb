@@ -10,6 +10,7 @@ import { type MongoClientOptions, type OIDCCallbackParams, type OIDCResponse } f
 import { type CachedClusterCredentials } from '../CredentialCache';
 import { DocumentDBConnectionString } from '../utils/DocumentDBConnectionString';
 import { type AuthHandler, type AuthHandlerResponse } from './AuthHandler';
+import { getOidcAllowedHosts } from './oidcAllowedHosts';
 
 /**
  * Handler for Microsoft Entra ID authentication via OIDC
@@ -43,7 +44,7 @@ export class MicrosoftEntraIDAuthHandler implements AuthHandler {
             authMechanism: 'MONGODB-OIDC',
             tls: true,
             authMechanismProperties: {
-                ALLOWED_HOSTS: ['*.azure.com'],
+                ALLOWED_HOSTS: getOidcAllowedHosts(this.clusterCredentials.connectionString),
                 OIDC_CALLBACK: (_params: OIDCCallbackParams): Promise<OIDCResponse> =>
                     Promise.resolve({
                         accessToken: session.accessToken,

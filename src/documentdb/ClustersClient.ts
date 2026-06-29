@@ -17,7 +17,6 @@ import {
 } from '@microsoft/vscode-azext-utils';
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
-import { EJSON } from 'bson';
 import { randomUUID } from 'crypto';
 import {
     MongoBulkWriteError,
@@ -43,6 +42,7 @@ import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';
 import { MicrosoftEntraIDAuthHandler } from './auth/MicrosoftEntraIDAuthHandler';
 import { NativeAuthHandler } from './auth/NativeAuthHandler';
+import { NoAuthHandler } from './auth/NoAuthHandler';
 import { QueryInsightsApis, type ExplainVerbosity } from './client/QueryInsightsApis';
 import { CredentialCache, type CachedClusterCredentials } from './CredentialCache';
 import { QueryError } from './errors/QueryError';
@@ -60,6 +60,7 @@ import { SchemaStore } from './SchemaStore';
 import { getHostsFromConnectionString, hasAzureDomain } from './utils/connectionStringHelpers';
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
+import { parseDocumentId } from './utils/parseDocumentId';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export interface DatabaseItemModel {
@@ -232,6 +233,9 @@ export class ClustersClient {
             case AuthMethodId.MicrosoftEntraID:
                 authHandler = new MicrosoftEntraIDAuthHandler(credentials);
                 break;
+            case AuthMethodId.NoAuth:
+                authHandler = new NoAuthHandler(credentials);
+                break;
             default:
                 throw new Error(l10n.t('Unsupported authentication method: {0}', authMethod));
         }
@@ -295,8 +299,21 @@ export class ClustersClient {
             throw new UserCancelledError('abortConnection');
         }
 
+        // Track whether connect() has resolved so the abort handler can avoid
+        // closing an already-connected client during the micro window between
+        // connect() resolving and removeEventListener firing. This window exists
+        // because abort events are dispatched synchronously when abort() is
+        // called: if abort() fires during the synchronous continuation after
+        // connect() resolves but before the listener is removed, the handler
+        // would close the now-connected client without this guard.
+        let connected = false;
+
         // Wire up abort: closing the client causes the pending connect() to reject
         const onAbort = (): void => {
+            if (connected) {
+                // connect() already resolved — do not close the connected client.
+                return;
+            }
             ext.outputChannel.debug('AbortSignal fired — closing MongoClient to interrupt connection handshake.');
             void this._mongoClient.close().catch(() => {
                 // Ignore close errors during abort cleanup
@@ -306,10 +323,13 @@ export class ClustersClient {
 
         try {
             await this._mongoClient.connect();
+            connected = true;
 
-            // Remove the abort listener immediately after connect() resolves so that
-            // a late cancellation during synchronous API init below cannot close an
-            // already-connected client while the method continues as "successful".
+            // Remove the abort listener immediately after connect() resolves so
+            // that a late cancellation during synchronous API init below cannot
+            // close an already-connected client while the method continues as
+            // "successful". The connected flag above serves as a belt-and-suspenders
+            // guard in case abort fires between the assignment and this removal.
             abortSignal?.removeEventListener('abort', onAbort);
 
             this._llmEnhancedFeatureApis = new llmEnhancedFeatureApis(this._mongoClient);
@@ -336,7 +356,12 @@ export class ClustersClient {
             }
             throw error;
         } finally {
-            abortSignal?.removeEventListener('abort', onAbort);
+            // Clean up the abort listener if we didn't already remove it in the
+            // success path (i.e., connect() failed). In the success path the
+            // listener was already removed above.
+            if (abortSignal && !connected) {
+                abortSignal.removeEventListener('abort', onAbort);
+            }
         }
     }
 
@@ -953,49 +978,24 @@ export class ClustersClient {
     // TODO: revisit, maybe we can work on BSON here for the documentIds, and the conversion from string etc.,
     // will remain in the ClusterSession class
     async deleteDocuments(databaseName: string, collectionName: string, documentIds: string[]): Promise<boolean> {
-        // Convert input data to BSON types
-        const parsedDocumentIds = documentIds.map((id) => {
-            let parsedId;
-            try {
-                // eslint-disable-next-line
-                parsedId = EJSON.parse(id);
-            } catch {
-                if (ObjectId.isValid(id)) {
-                    parsedId = new ObjectId(id);
-                } else {
-                    throw new Error(l10n.t('Invalid document ID: {0}', id));
-                }
-            }
-            // eslint-disable-next-line @typescript-eslint/no-unsafe-return
-            return parsedId;
-        });
+        const parsedDocumentIds = documentIds.map((id) => parseDocumentId(id));
 
         // Connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
-        const deleteResult: DeleteResult = await collection.deleteMany({ _id: { $in: parsedDocumentIds } });
+        const deleteResult: DeleteResult = await collection.deleteMany({
+            _id: { $in: parsedDocumentIds },
+        } as Filter<Document>);
 
         return deleteResult.acknowledged;
     }
 
     async pointRead(databaseName: string, collectionName: string, documentId: string) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        let parsedDocumentId: any;
-        try {
-            // eslint-disable-next-line
-            parsedDocumentId = EJSON.parse(documentId);
-        } catch (error) {
-            if (ObjectId.isValid(documentId)) {
-                parsedDocumentId = new ObjectId(documentId);
-            } else {
-                throw error;
-            }
-        }
+        const parsedDocumentId = parseDocumentId(documentId);
 
         // connect and execute
         const collection = this._mongoClient.db(databaseName).collection(collectionName);
 
-        // eslint-disable-next-line
-        const documentContent = await collection.findOne({ _id: parsedDocumentId });
+        const documentContent = await collection.findOne({ _id: parsedDocumentId } as Filter<Document>);
 
         return documentContent;
     }
@@ -1012,17 +1012,10 @@ export class ClustersClient {
         let parsedId: any;
 
         if (documentId === '') {
-            // TODO: do not rely in empty string, use null or undefined
+            // TODO: do not rely on empty string, use null or undefined
             parsedId = new ObjectId();
         } else {
-            try {
-                // eslint-disable-next-line
-                parsedId = EJSON.parse(documentId);
-            } catch {
-                if (ObjectId.isValid(documentId)) {
-                    parsedId = new ObjectId(documentId);
-                }
-            }
+            parsedId = parseDocumentId(documentId);
         }
 
         // connect and execute

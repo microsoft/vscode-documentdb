@@ -76,6 +76,14 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCredentialsWizardC
 
                 // Clear any existing Entra ID config if no new config provided
                 connectionCredentials.secrets.entraIdAuthConfig = undefined;
+            } else if (authMethod === AuthMethodId.NoAuth) {
+                // "No Authentication" is credential-free. Clear any previously stored native or
+                // Entra ID secrets so that switching an existing Native/Entra connection to NoAuth
+                // cannot leave stale credentials behind. Without this, the leftover secrets would be
+                // re-injected into the credential cache on next load (re-adding a username/password
+                // to the connection string and exposing them through paths such as migration sharing).
+                connectionCredentials.secrets.nativeAuthConfig = undefined;
+                connectionCredentials.secrets.entraIdAuthConfig = undefined;
             }
 
             connectionCredentials.properties.selectedAuthMethod = context.selectedAuthenticationMethod?.toString();

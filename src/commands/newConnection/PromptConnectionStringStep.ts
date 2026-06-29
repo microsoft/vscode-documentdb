@@ -54,6 +54,9 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
             supportedAuthMethods.push(AuthMethodId.MicrosoftEntraID);
         }
 
+        // Anonymous ("no authentication") connections are always offered.
+        supportedAuthMethods.push(AuthMethodId.NoAuth);
+
         context.availableAuthenticationMethods = supportedAuthMethods;
     }
 

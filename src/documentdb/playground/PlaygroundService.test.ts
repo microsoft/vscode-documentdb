@@ -9,6 +9,14 @@ import { type PlaygroundConnection } from './types';
 // Access the vscode mock (auto-mock from __mocks__/vscode.js)
 import * as vscode from 'vscode';
 
+import { CredentialCache } from '../CredentialCache';
+
+jest.mock('../CredentialCache', () => ({
+    CredentialCache: { hasCredentials: jest.fn() },
+}));
+
+const hasCredentialsMock = CredentialCache.hasCredentials as jest.Mock;
+
 describe('PlaygroundService', () => {
     let service: PlaygroundService;
 
@@ -229,7 +237,144 @@ describe('PlaygroundService', () => {
         });
     });
 
-    describe('untitled→file URI migration', () => {
+    describe('connection transfer on save (untitled→file and file→file Save As)', () => {
+        const connection: PlaygroundConnection = {
+            clusterId: 'cluster-123',
+            clusterDisplayName: 'MyCluster',
+            databaseName: 'orders',
+        };
+
+        function getSaveDocHandler(): (doc: Partial<vscode.TextDocument>) => void {
+            const calls = (vscode.workspace.onDidSaveTextDocument as jest.Mock).mock.calls;
+            return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
+        }
+
+        function setOpenDocuments(docs: Partial<vscode.TextDocument>[]): void {
+            Object.defineProperty(vscode.workspace, 'textDocuments', {
+                value: docs,
+                configurable: true,
+            });
+        }
+
+        function makeUntitledDoc(uriString: string, text: string): Partial<vscode.TextDocument> {
+            return {
+                uri: { toString: () => uriString, scheme: 'untitled' } as vscode.Uri,
+                languageId: 'documentdb-playground',
+                lineCount: text.split('\n').length,
+                getText: () => text,
+                offsetAt: () => text.length,
+            };
+        }
+
+        function makeFileDoc(uriString: string, text: string): Partial<vscode.TextDocument> {
+            return {
+                uri: { toString: () => uriString, scheme: 'file' } as vscode.Uri,
+                languageId: 'documentdb-playground',
+                lineCount: text.split('\n').length,
+                getText: () => text,
+                offsetAt: () => text.length,
+            };
+        }
+
+        afterEach(() => {
+            // Reset to an empty document list for other suites
+            setOpenDocuments([]);
+        });
+
+        it('re-keys the connection onto the saved file document (content match)', () => {
+            const content = "// Query Playground: MyCluster\ndb.getCollection('orders').find({ })";
+            const untitled = makeUntitledDoc('untitled:/tmp/orders.documentdb.js', content);
+            service.setConnection(untitled.uri as vscode.Uri, connection);
+            setOpenDocuments([untitled]);
+
+            // The saved file gains a trailing newline (insertFinalNewline) — still matches.
+            const fileDoc = makeFileDoc('file:///home/u/orders.documentdb.documentdb.js', content + '\n');
+            getSaveDocHandler()(fileDoc);
+
+            expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(true);
+            expect(service.getConnection(fileDoc.uri as vscode.Uri)).toEqual(connection);
+            expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(false);
+        });
+
+        it('re-keys the connection on a file→file Save As', () => {
+            const content = "// Query Playground: MyCluster\ndb.getCollection('orders').find({ })";
+            // The previously-saved file still holds the connection and is still open.
+            const oldFile = makeFileDoc('file:///home/u/orders.documentdb.documentdb.js', content);
+            service.setConnection(oldFile.uri as vscode.Uri, connection);
+
+            // "Save As" opens the new file (no connection yet) with identical content.
+            const newFile = makeFileDoc('file:///home/u/orders-copy.documentdb.documentdb.js', content);
+            setOpenDocuments([oldFile, newFile]);
+            getSaveDocHandler()(newFile);
+
+            expect(service.isConnected(newFile.uri as vscode.Uri)).toBe(true);
+            expect(service.getConnection(newFile.uri as vscode.Uri)).toEqual(connection);
+            expect(service.isConnected(oldFile.uri as vscode.Uri)).toBe(false);
+        });
+
+        it('is a no-op when saving a file that already has a connection (regular save)', () => {
+            const content = 'db.orders.find({})';
+            const fileDoc = makeFileDoc('file:///home/u/orders.documentdb.documentdb.js', content);
+            service.setConnection(fileDoc.uri as vscode.Uri, connection);
+            // A second, unconnected playground with identical content is also open.
+            const sibling = makeFileDoc('file:///home/u/sibling.documentdb.documentdb.js', content);
+            setOpenDocuments([fileDoc, sibling]);
+
+            getSaveDocHandler()(fileDoc);
+
+            // The saved file keeps its own connection; the sibling stays unconnected.
+            expect(service.getConnection(fileDoc.uri as vscode.Uri)).toEqual(connection);
+            expect(service.isConnected(sibling.uri as vscode.Uri)).toBe(false);
+        });
+
+        it('does not transfer when no untitled playground has matching content', () => {
+            const untitled = makeUntitledDoc('untitled:/tmp/orders.documentdb.js', 'db.orders.find({})');
+            service.setConnection(untitled.uri as vscode.Uri, connection);
+            setOpenDocuments([untitled]);
+
+            const fileDoc = makeFileDoc('file:///home/u/other.documentdb.documentdb.js', 'db.products.find({})');
+            getSaveDocHandler()(fileDoc);
+
+            expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(false);
+            expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(true);
+        });
+
+        it('does not transfer when the content match is ambiguous (Save All of identical buffers)', () => {
+            const content = 'db.orders.find({})';
+            const untitledA = makeUntitledDoc('untitled:/tmp/a.documentdb.js', content);
+            const untitledB = makeUntitledDoc('untitled:/tmp/b.documentdb.js', content);
+            service.setConnection(untitledA.uri as vscode.Uri, connection);
+            service.setConnection(untitledB.uri as vscode.Uri, {
+                clusterId: 'cluster-999',
+                clusterDisplayName: 'Other',
+                databaseName: 'misc',
+            });
+            setOpenDocuments([untitledA, untitledB]);
+
+            const fileDoc = makeFileDoc('file:///home/u/a.documentdb.documentdb.js', content);
+            getSaveDocHandler()(fileDoc);
+
+            // Ambiguous → leave everything untouched rather than bind the wrong connection.
+            expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(false);
+            expect(service.isConnected(untitledA.uri as vscode.Uri)).toBe(true);
+            expect(service.isConnected(untitledB.uri as vscode.Uri)).toBe(true);
+        });
+
+        it('does not transfer when the document exceeds the size cap', () => {
+            const huge = 'x'.repeat(1_000_001);
+            const untitled = makeUntitledDoc('untitled:/tmp/big.documentdb.js', huge);
+            service.setConnection(untitled.uri as vscode.Uri, connection);
+            setOpenDocuments([untitled]);
+
+            const fileDoc = makeFileDoc('file:///home/u/big.documentdb.documentdb.js', huge);
+            getSaveDocHandler()(fileDoc);
+
+            expect(service.isConnected(fileDoc.uri as vscode.Uri)).toBe(false);
+            expect(service.isConnected(untitled.uri as vscode.Uri)).toBe(true);
+        });
+    });
+
+    describe('in-session binding restore on reopen', () => {
         const connection: PlaygroundConnection = {
             clusterId: 'cluster-123',
             clusterDisplayName: 'MyCluster',
@@ -246,40 +391,52 @@ describe('PlaygroundService', () => {
             return calls[calls.length - 1][0] as (doc: Partial<vscode.TextDocument>) => void;
         }
 
-        it('migrates connection when untitled doc closes and file doc opens with same fsPath', () => {
-            const fsPath = '/workspace/playground-test.documentdb.js';
-            const untitledUri = {
-                toString: () => `untitled:${fsPath}`,
-                scheme: 'untitled',
-                fsPath,
-            } as vscode.Uri;
-            const fileUri = {
-                toString: () => `file://${fsPath}`,
-                scheme: 'file',
-                fsPath,
-            } as vscode.Uri;
+        const reopenDoc: Partial<vscode.TextDocument> = { uri: mockUri, languageId: 'documentdb-playground' };
 
-            service.setConnection(untitledUri, connection);
-            expect(service.isConnected(untitledUri)).toBe(true);
+        beforeEach(() => {
+            hasCredentialsMock.mockReset();
+        });
 
-            // Simulate VS Code closing the untitled doc on save
-            const closeHandler = getCloseDocHandler();
-            closeHandler({
-                uri: untitledUri,
-                languageId: 'documentdb-playground',
-            });
+        it('restores a remembered binding when the cluster still has credentials', () => {
+            hasCredentialsMock.mockReturnValue(true);
+            service.setConnection(mockUri, connection);
+            getCloseDocHandler()(reopenDoc);
+            expect(service.isConnected(mockUri)).toBe(false);
 
-            expect(service.isConnected(untitledUri)).toBe(false);
+            getOpenDocHandler()(reopenDoc);
 
-            // Simulate VS Code opening the file doc
-            const openHandler = getOpenDocHandler();
-            openHandler({
-                uri: fileUri,
-                languageId: 'documentdb-playground',
-            });
+            expect(service.isConnected(mockUri)).toBe(true);
+            expect(service.getConnection(mockUri)).toEqual(connection);
+            expect(hasCredentialsMock).toHaveBeenCalledWith('cluster-123');
+        });
 
-            expect(service.isConnected(fileUri)).toBe(true);
-            expect(service.getConnection(fileUri)).toEqual(connection);
+        it('does not restore when the cluster has no credentials this session', () => {
+            hasCredentialsMock.mockReturnValue(false);
+            service.setConnection(mockUri, connection);
+            getCloseDocHandler()(reopenDoc);
+
+            getOpenDocHandler()(reopenDoc);
+
+            expect(service.isConnected(mockUri)).toBe(false);
+        });
+
+        it('does not restore a binding the user explicitly removed', () => {
+            hasCredentialsMock.mockReturnValue(true);
+            service.setConnection(mockUri, connection);
+            service.removeConnection(mockUri);
+
+            getOpenDocHandler()(reopenDoc);
+
+            expect(service.isConnected(mockUri)).toBe(false);
+        });
+
+        it('does nothing when there is no remembered binding', () => {
+            hasCredentialsMock.mockReturnValue(true);
+
+            getOpenDocHandler()(reopenDoc);
+
+            expect(service.isConnected(mockUri)).toBe(false);
+            expect(hasCredentialsMock).not.toHaveBeenCalled();
         });
     });
 });

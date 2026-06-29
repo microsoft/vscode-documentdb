@@ -25,6 +25,8 @@ export const PlaygroundCommandIds = {
     newWithContent: 'vscode-documentdb.command.playground.new.withContent',
     /** Show connection info for the active playground (info notification) */
     showConnectionInfo: 'vscode-documentdb.command.playground.showConnectionInfo',
+    /** Connect (or reconnect) the active playground to a cluster/database */
+    connect: 'vscode-documentdb.command.playground.connect',
     /** Run the entire query playground file */
     runAll: 'vscode-documentdb.command.playground.runAll',
     /** Run the selection or the statement at the cursor */

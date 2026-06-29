@@ -81,7 +81,7 @@ export type FetchOverheadKind = 'noMatches' | 'covered' | 'collectionScan' | 'mu
  * - Top-level `examinedToReturnedRatio: number` - Raw ratio for calculations (e.g., 50.5)
  *
  * Efficiency analysis metrics:
- * - `efficiencyAnalysis.selectivity: string | null` - Percentage of collection returned
+ * - `efficiencyAnalysis.selectivity: number | null` - Percentage of collection returned
  * - `efficiencyAnalysis.fetchOverhead: string` - Localized display label for fetch state
  * - `efficiencyAnalysis.fetchOverheadKind: FetchOverheadKind` - Stable key for UI branching
  */
@@ -102,8 +102,8 @@ export interface QueryInsightsStage2Response {
     /** Top-level query warnings (collection scan, in-memory sort, etc.) */
     concerns: string[];
     efficiencyAnalysis: {
-        /** Selectivity: percentage of collection returned (e.g., "33.2%"), or null if unknown */
-        selectivity: string | null;
+        /** Selectivity: raw percentage of collection returned (e.g., 33.2375), or null if unknown */
+        selectivity: number | null;
         indexUsed: string | null;
         /** Fetch overhead state label (e.g., "Direct fetch", "Covered query", "Collection scan") */
         fetchOverhead: string;

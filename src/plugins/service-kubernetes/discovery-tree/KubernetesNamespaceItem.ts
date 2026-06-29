@@ -10,6 +10,7 @@ import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
 import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
+import { containsRetryNode, createRetryNode } from '../../../tree/api/retryNode';
 import { getCountPrefix } from '../../../utils/countPrefix';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import {
@@ -20,7 +21,6 @@ import {
     type KubeServiceInfo,
 } from '../kubernetesClient';
 import { KubernetesResourceItem } from './documentdb/KubernetesResourceItem';
-import { hasRetryActionNode } from './retryNodeDetection';
 
 export class KubernetesNamespaceItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
@@ -137,7 +137,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
-        return hasRetryActionNode(children);
+        return containsRetryNode(children);
     }
 }
 
@@ -181,14 +181,5 @@ function createServiceErrorChildren(
         detail: `${summary}\n\n${hint}\n\n${vscode.l10n.t('Error: {0}', errorMessage)}`,
     });
 
-    return [
-        createGenericElementWithContext({
-            contextValue: 'error',
-            id: `${parentId}/retry`,
-            label: vscode.l10n.t('Click here to retry'),
-            iconPath: new vscode.ThemeIcon('refresh'),
-            commandId: 'vscode-documentdb.command.internal.retry',
-            commandArgs: [retryTarget],
-        }),
-    ];
+    return [createRetryNode(parentId, retryTarget)];
 }

@@ -11,6 +11,7 @@ import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
+import { CLUSTER_ITEM_CONTEXT_VALUE } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
@@ -82,15 +83,30 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                 async () => element.getChildren?.(),
                 {
                     contextValue: Views.ConnectionsView, // This enables automatic child processing
-                    createHelperNodes: (el) => [
-                        createGenericElementWithContext({
-                            contextValue: 'error',
-                            id: `${el.id}/updateCredentials`,
-                            label: vscode.l10n.t('Click here to update credentials'),
-                            iconPath: new vscode.ThemeIcon('key'),
-                            commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
-                            commandArgs: [el],
-                        }) as TreeElement,
+                    // View-specific error-recovery action added at the provider level. The element
+                    // layer (ClusterItemBase) already owns failure-type recovery nodes ("retry" and,
+                    // for post-auth failures, "open shell"); here we add the Connections-view action
+                    // for updating stored credentials.
+                    //
+                    // `forContextValues` is a whitelist matched against the FAILING element's
+                    // contextValue tags. "Update credentials" only makes sense for stored cluster
+                    // connections, so we gate it to CLUSTER_ITEM_CONTEXT_VALUE. Without this gate the
+                    // action would also appear when a non-cluster node (a database, collection, or
+                    // index) fails to load its children.
+                    errorRecoveryActions: [
+                        {
+                            forContextValues: [CLUSTER_ITEM_CONTEXT_VALUE],
+                            create: (el) => [
+                                createGenericElementWithContext({
+                                    contextValue: 'error',
+                                    id: `${el.id}/updateCredentials`,
+                                    label: vscode.l10n.t('Click here to update credentials'),
+                                    iconPath: new vscode.ThemeIcon('key'),
+                                    commandId: 'vscode-documentdb.command.connectionsView.updateCredentials',
+                                    commandArgs: [el],
+                                }) as TreeElement,
+                            ],
+                        },
                     ],
                 },
             );

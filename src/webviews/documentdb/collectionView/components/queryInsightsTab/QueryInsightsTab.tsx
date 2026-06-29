@@ -52,6 +52,7 @@ import {
 } from '../../queryInsightsReducer';
 import { createImprovementCardConfig } from '../../utils/createImprovementCard';
 import { extractErrorCode } from '../../utils/errorCodeExtractor';
+import { formatSelectivityForDisplay } from '../../utils/formatSelectivityForDisplay';
 import { CardStack, FeedbackCard, FeedbackDialog, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';
@@ -451,6 +452,11 @@ export const QueryInsightsMain = (): JSX.Element => {
     const docsReturned = getMetricValue(stage2Data?.documentsReturned);
     const keysExamined = getMetricValue(stage2Data?.totalKeysExamined);
     const docsExamined = getMetricValue(stage2Data?.totalDocsExamined);
+    const lowSelectivityLabel = `below ${(0.1).toLocaleString(navigator.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+    const selectivity = formatSelectivityForDisplay(
+        getCellValue((stage2) => stage2.efficiencyAnalysis.selectivity),
+        lowSelectivityLabel,
+    );
 
     /**
      * Documentation URL for the AI Performance Insights feature itself
@@ -1133,30 +1139,31 @@ export const QueryInsightsMain = (): JSX.Element => {
                     <SummaryCard title={l10n.t('Query Efficiency Analysis')}>
                         <GenericCell
                             label={l10n.t('Selectivity')}
-                            value={getCellValue((stage2) => stage2.efficiencyAnalysis.selectivity)}
+                            value={selectivity}
                             loadingPlaceholder="skeleton"
                             tooltipExplanation={(() => {
                                 const selectivity = stage2Data?.efficiencyAnalysis.selectivity;
-                                if (!selectivity) {
+                                if (selectivity === null || selectivity === undefined) {
                                     return l10n.t(
                                         'The percentage of your collection this query returns. Could not be determined for this query.',
                                     );
                                 }
-                                const pct = parseFloat(selectivity);
+                                const displayValue = formatSelectivityForDisplay(selectivity, lowSelectivityLabel);
+                                const pct = selectivity;
                                 if (pct < 1) {
                                     return l10n.t(
                                         'This query returns {0} of your collection.\n\nThis is highly selective: only a small fraction of documents pass the filter. The database does minimal work to produce results.',
-                                        selectivity,
+                                        displayValue,
                                     );
                                 } else if (pct < 20) {
                                     return l10n.t(
                                         'This query returns {0} of your collection.\n\nThis is a reasonable level of selectivity. The filter narrows results to a manageable portion of the data.',
-                                        selectivity,
+                                        displayValue,
                                     );
                                 } else {
                                     return l10n.t(
                                         'This query returns {0} of your collection.\n\nThis is a broad query that returns a large portion of the data. Consider adding more specific filters to narrow the results.',
-                                        selectivity,
+                                        displayValue,
                                     );
                                 }
                             })()}

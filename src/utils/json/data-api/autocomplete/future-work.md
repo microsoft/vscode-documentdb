@@ -15,7 +15,23 @@ Tests cover dashes, brackets, digits, embedded quotes, and backslashes.
 
 ---
 
-## 2. `referenceText` is invalid MQL for special field names
+## 2. ~~`referenceText` is invalid MQL for special field names~~ ✅ RESOLVED
+
+**Resolved in:** PR #717 (fixes #709)
+
+Implemented Option B (`$getField`) with full support for nested paths via the
+`{ $getField: { field, input } }` form, plus a stricter aggregation-safe segment
+check that also routes `$`-containing names through `$getField`:
+
+- top-level unsafe field → `{ $getField: "order-items" }`
+- nested unsafe segment → `{ $getField: { field: "order-items", input: "$a" } }`
+- `$`-prefixed name (e.g. `$price`) → `{ $getField: "$price" }` (would otherwise be misread as the variable `$$price`)
+
+Literal-dot field names remain a known limitation (see item 3) because `path` is
+a flattened string; dots are always interpreted as nesting.
+
+<details>
+<summary>Original description</summary>
 
 **Severity:** Medium — will generate broken aggregation expressions
 **File:** `toFieldCompletionItems.ts` — `referenceText` construction
@@ -50,6 +66,8 @@ referenceText: needsQuoting
 **Option C — Provide both forms:** Add a `referenceTextRaw` (always `$path`) and `referenceTextSafe` (uses `$getField` when needed). Let the completion provider choose based on context.
 
 **Recommendation:** Option B is pragmatic. Option C is more flexible if we later need to support both forms in different contexts (e.g., `$match` vs `$project`).
+
+</details>
 
 ---
 
