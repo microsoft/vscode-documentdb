@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openCollectionViewInternal } from './commands/openCollectionView/openCollectionView';
 import { DocumentDBConnectionString } from './documentdb/utils/DocumentDBConnectionString';
+import { canonicalizeTlsException, stripTlsBypassParams } from './documentdb/utils/tlsException';
 import { Views } from './documentdb/Views';
 import { API } from './DocumentDBExperiences';
 import { ext } from './extensionVariables';
@@ -119,7 +120,12 @@ async function handleConnectionStringRequest(
 
     // Determine if this is an emulator connection
     const isEmulator = isEmulatorConnection(parsedCS);
-    const disableEmulatorSecurity = parsedCS.searchParams.get('tlsAllowInvalidCertificates') === 'true';
+    // TLS exception (§7): only honor allow-invalid when EVERY host is local/private, and strip the
+    // bypass param from the parsed CS so every downstream use (storageId, stored secret, reveal)
+    // uses the canonical form — a public deep link can't silently disable certificate validation,
+    // and emulatorConfiguration is the single source of truth.
+    const disableEmulatorSecurity = canonicalizeTlsException(parsedCS.toString()).disableEmulatorSecurity;
+    stripTlsBypassParams(parsedCS);
 
     // Pick the storage zone for this (possibly emulator) connection. The dedicated
     // Emulators zone is being retired (design §4): once the one-time migration has run,
@@ -188,7 +194,12 @@ async function handleConnectionStringRequest(
             properties: {
                 type: ItemType.Connection,
                 api: API.DocumentDB,
-                emulatorConfiguration: { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity },
+                // Match the wizard's shape: only carry an emulatorConfiguration when at least one
+                // flag is set, otherwise leave it undefined (a public deep link is a plain Cluster).
+                emulatorConfiguration:
+                    isEmulator || disableEmulatorSecurity
+                        ? { isEmulator, disableEmulatorSecurity: !!disableEmulatorSecurity }
+                        : undefined,
                 availableAuthMethods: [],
             },
             secrets: { connectionString: parsedCS.toString() },

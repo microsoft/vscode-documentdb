@@ -15,6 +15,7 @@ import {
     type SerializableMongoClientOptions,
     type WorkerToMainMessage,
 } from '../playground/workerTypes';
+import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 
 /**
  * Connection parameters for a shell session.
@@ -172,7 +173,14 @@ export class ShellSessionManager implements vscode.Disposable {
         return {
             host: this.extractHost(initMsg.connectionString),
             authMechanism: initMsg.authMechanism,
-            isEmulator: initMsg.clientOptions.serverSelectionTimeoutMS === 4000,
+            // Derive emulator-ness from the authoritative credential flag, NOT from the
+            // fail-fast `serverSelectionTimeoutMS === 4000` proxy: that timeout now also fires
+            // for a regular local connection that opted into the TLS exception
+            // (`disableEmulatorSecurity` without `isEmulator`, design §7), which must not be
+            // mislabeled "(Emulator)" in the banner or inflate the emulator telemetry metric.
+            isEmulator:
+                CredentialCache.getCredentials(this._connectionInfo.clusterId)?.emulatorConfiguration?.isEmulator ??
+                false,
             username,
         };
     }
@@ -253,12 +261,23 @@ export class ShellSessionManager implements vscode.Disposable {
         }
 
         const clientOptions: SerializableMongoClientOptions = {
-            serverSelectionTimeoutMS: credentials.emulatorConfiguration?.isEmulator ? 4000 : undefined,
-            tlsAllowInvalidCertificates:
-                credentials.emulatorConfiguration?.isEmulator &&
-                credentials.emulatorConfiguration?.disableEmulatorSecurity
-                    ? true
+            // Fail-fast 4s timeout for emulators / local TLS-exception connections — host-gated the
+            // same way as the TLS option so an orphaned flag on a public host doesn't trigger it.
+            serverSelectionTimeoutMS:
+                credentials.emulatorConfiguration?.isEmulator ||
+                resolveAllowInvalidCertificates(
+                    credentials.emulatorConfiguration?.disableEmulatorSecurity,
+                    connectionString,
+                )
+                    ? 4000
                     : undefined,
+            // TLS-allow-invalid is keyed off `disableEmulatorSecurity` (design §7), honored ONLY for
+            // local/private hosts ("hybrid" runtime policy): an orphaned flag on a public host is not
+            // activated; an explicit URL param is still honored by the driver (we never force `false`).
+            tlsAllowInvalidCertificates: resolveAllowInvalidCertificates(
+                credentials.emulatorConfiguration?.disableEmulatorSecurity,
+                connectionString,
+            ),
         };
 
         return {

@@ -7,6 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { MongoClient, type MongoClientOptions } from 'mongodb';
 import { Links, wellKnownEmulatorPassword } from '../constants';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
+import { resolveAllowInvalidCertificates } from './utils/tlsException';
 
 export async function connectToClient(
     connectionString: string,
@@ -22,8 +23,12 @@ export async function connectToClient(
         useUnifiedTopology: true,
     };
 
-    if (emulatorConfiguration && emulatorConfiguration.isEmulator && emulatorConfiguration.disableEmulatorSecurity) {
-        // Prevents self signed certificate error for emulator https://github.com/microsoft/vscode-cosmosdb/issues/1241#issuecomment-614446198
+    // TLS-allow-invalid is driven by `disableEmulatorSecurity` (design §7), but the stored flag is
+    // honored ONLY for local/private hosts ("hybrid" runtime policy): an orphaned flag on a public
+    // host is not activated, while an explicit `tlsAllowInvalidCertificates` URL param a user put in
+    // the connection string is still honored by the driver (we never force the option to `false`).
+    if (resolveAllowInvalidCertificates(emulatorConfiguration?.disableEmulatorSecurity, connectionString)) {
+        // Prevents self signed certificate error https://github.com/microsoft/vscode-cosmosdb/issues/1241#issuecomment-614446198
         options.tlsAllowInvalidCertificates = true;
     }
 

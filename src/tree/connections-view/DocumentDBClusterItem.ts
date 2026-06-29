@@ -24,6 +24,7 @@ import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { resolveAllowInvalidCertificates } from '../../documentdb/utils/tlsException';
 import { Views } from '../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from '../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
@@ -395,9 +396,15 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      */
     getTreeItem(): vscode.TreeItem {
         let description: string | undefined = undefined;
+        // The TLS warning reflects the EFFECTIVE runtime TLS state (the `disableEmulatorSecurity`
+        // flag is honored only for local/private hosts — see resolveAllowInvalidCertificates), so an
+        // orphaned flag on a public host (which the runtime no longer honors) doesn't show a
+        // misleading "TLS Disabled" badge. The icon still distinguishes emulator vs. regular.
         if (
-            this.cluster.emulatorConfiguration?.isEmulator &&
-            this.cluster.emulatorConfiguration?.disableEmulatorSecurity
+            resolveAllowInvalidCertificates(
+                this.cluster.emulatorConfiguration?.disableEmulatorSecurity,
+                this.cluster.connectionString ?? '',
+            )
         ) {
             description = l10n.t('⚠ TLS/SSL Disabled');
         }
@@ -447,13 +454,18 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             }
         }
 
-        // Emulator security notice
-        if (this.cluster.emulatorConfiguration?.isEmulator) {
-            if (this.cluster.emulatorConfiguration.disableEmulatorSecurity) {
-                md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
-            } else {
-                md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
-            }
+        // Security notice: surface a TLS-disabled warning only when invalid certificates are actually
+        // allowed at runtime (emulator or a LOCAL connection that opted into the TLS exception — the
+        // flag is host-gated, so an orphaned flag on a public host shows the normal "enabled" state).
+        if (
+            resolveAllowInvalidCertificates(
+                this.cluster.emulatorConfiguration?.disableEmulatorSecurity,
+                this.cluster.connectionString ?? '',
+            )
+        ) {
+            md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
+        } else if (this.cluster.emulatorConfiguration?.isEmulator) {
+            md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
         }
 
         return md;

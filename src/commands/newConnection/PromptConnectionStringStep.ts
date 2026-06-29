@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { AzureDomains, hasDomainSuffix } from '../../documentdb/utils/connectionStringHelpers';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { canonicalizeTlsException } from '../../documentdb/utils/tlsException';
 import { type NewConnectionWizardContext } from './NewConnectionWizardContext';
 
 export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
@@ -45,6 +46,16 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
         }
 
         context.connectionString = parsedConnectionString.toString();
+
+        // TLS exception (§7): canonicalize any TLS-bypass URL param into the single source of
+        // truth (`context.disableEmulatorSecurity`) and strip it from the stored connection string.
+        // RESET the decision on every entry (so changing the connection string via Back-navigation
+        // re-evaluates it) — set true only for an all-local/private host that requested the bypass,
+        // otherwise clear it so the gated TLS step decides (or a public host validates).
+        const canonicalTls = canonicalizeTlsException(context.connectionString);
+        context.connectionString = canonicalTls.connectionString;
+        context.disableEmulatorSecurity = canonicalTls.disableEmulatorSecurity ? true : undefined;
+
         context.valuesToMask.push(context.connectionString);
 
         // 3. Detect and/or guess available authentication methods

@@ -41,8 +41,8 @@ instance.
 | - | --- | ------ | ------- | ------------- |
 | P2‑0 | **Decouple storage-zone from `isEmulator`** (prerequisite) | §7 | ✅ **Done** | Explicit `storageZone` on the model + `resolveStorageZone`; route all ops by it. Unblocks P2‑1/P2‑2. |
 | P2‑1 | **Legacy emulator migration** | §4 | ✅ **Done** | One-time copy of `Emulators` → "Local Connections (Legacy)" folder (creds/auth/`emulatorConfiguration` preserved), keep Emulators as rollback, toast, retire `LocalEmulatorsItem`. 3-round 5-agent review; create-if-missing + race reconciliation. |
-| P2‑2 | **TLS-exception step in the regular wizard** + connection edit dialog | §7, §7.3 | Not implemented (now unblocked by P2‑0) | The emulator wizard is being removed; this is its replacement. Gated host step defaulting to *Enable TLS*. |
-| P2‑3 | **Manual-wizard `10255`→`10260`** | §13.5 | Not done | Design: *"must be fixed before Quick Start ships."* (Nuance: `10255` is also the Cosmos Mongo‑RU emulator port.) |
+| P2‑2 | **TLS-exception step in the regular wizard** + connection edit dialog | §7, §7.3 | ✅ **Done** (step); §7.3 edit dialog deferred | The emulator wizard is being removed; this is its replacement. Gated host step defaulting to *Enable TLS*; TLS-allow-invalid now keyed off `disableEmulatorSecurity` alone and host-gated to local/private hosts only. |
+| P2‑3 | **Manual-wizard `10255`→`10260`** | §13.5 | ✅ **Done** | Design: *"must be fixed before Quick Start ships."* DocumentDB-local default is now `10260`; `10255` retained only for the Cosmos Mongo‑RU experience. |
 
 ## 🔵 P3 — Observability & robustness
 
@@ -154,3 +154,56 @@ instance.
     connection is still found and navigable. Fix = folder-aware reveal via `buildFullTreePath` +
     recursive `findNodeById` (tracked, not a regression).
   - Gates green throughout: build · lint · jest (2058/2058, +3 tests) · l10n · prettier.
+
+- _2026-06-26_: **P2‑3 manual-wizard default port `10255`→`10260` — DONE (committed `441d9bda`).**
+  - `newLocalConnection/PromptConnectionTypeStep.ts`: the **DocumentDB** local branch now defaults to
+    `10260`; the **Cosmos Mongo‑RU** branch legitimately keeps `10255` (its real emulator port).
+    `PromptPortStep.ts` default is now experience-aware. Resolves the §13.5 "must fix before ship".
+  - Gates green: build · lint · jest · l10n.
+
+- _2026-06-26_: **P2‑2 TLS-exception wizard (§7) — DONE (3-round 5-agent review, consensus on correctness).**
+  - **Decouple TLS from `isEmulator`:** TLS-allow-invalid is now keyed off
+    `emulatorConfiguration.disableEmulatorSecurity` **alone** at all five option-builder sites
+    (`connectToClient`, `NativeAuthHandler`, `MicrosoftEntraIDAuthHandler`, `PlaygroundEvaluator`,
+    `ShellSessionManager`); the fail-fast `serverSelectionTimeoutMS=4000` and the `ClustersClient`
+    friendly-error messages were broadened from `isEmulator` to `isEmulator || disableEmulatorSecurity`.
+    All 5 reviewers confirmed this weakens **no** existing connection (only emulator paths set the flag).
+    Tree UX (`DocumentDBClusterItem`) keys its TLS description/tooltip off `disableEmulatorSecurity`.
+  - **Single source of truth canonicalizer:** new `tlsException.ts` (`canonicalizeTlsException`,
+    `stripTlsBypassParams`, `areAllHostsLocal`, `resolveAllowInvalidCertificates`). At **write time** it
+    strips every TLS-bypass URL param (`tls/sslAllowInvalidCertificates`, `tlsInsecure`,
+    `tls/sslAllowInvalidHostnames`, **and** `rejectUnauthorized` — inverse semantics, case-insensitive)
+    from the **stored** string and host-gates the exception, so the wizard/deep-link/update can never
+    create an accidental allow-invalid exception for a public host. Applied at all four write paths
+    (PromptConnectionStringStep, newConnection/ExecuteStep, updateConnectionString/ExecuteStep,
+    vscodeUriHandler).
+  - **Host classifier hardening (§7.1):** `isLocalOrPrivateHost` now IDNA-normalizes the host
+    (`normalizeHostForClassification`: maps the Unicode full-stop homographs U+3002/U+FF0E/U+FF61 → `.`,
+    then `domainToASCII`) so a public domain (e.g. `example。com`, which DNS resolves as `example.com`)
+    can't masquerade as a single-word local host.
+  - **Hybrid runtime policy:** `resolveAllowInvalidCertificates(disableEmulatorSecurity, cs)` returns
+    `true` only when `disableEmulatorSecurity && areAllHostsLocal(cs)`, else `undefined` (**never**
+    `false`). The 5 builders honor the stored flag **only for local/private hosts**; for a public host a
+    bare orphaned flag is **not** activated (so an old connection whose `tlsAllowInvalidCertificates`
+    param was later edited out can't silently disable validation), while an explicit URL param is still
+    honored by the driver (a self-hosted DB on a public hostname keeps working).
+  - **7 review rounds (GPT‑5.4/5.5 xhigh, Opus 4.6/4.7/4.8 max):**
+    - R1 → confirmed the decoupling is safe; found a connection-string second-source-of-truth, a
+      mixed-seed-list `.some` gap, the EntraID handler missing the flag, and `ClustersClient`/timeouts
+      still keyed off `isEmulator`. Fixed via the shared canonicalizer + `.every` gating.
+    - R2/R3 → caught + fixed a **latching BLOCKER** (the flag only ever *upgraded*), the **hostname-bypass**
+      strip gap, and a shell **`isEmulator` mislabel**; both ExecuteSteps now authoritatively host-gate.
+    - R4/R5 → caught the **Unicode-dot homograph** classifier bypass (fixed via IDNA normalization) and a
+      `rejectUnauthorized` hygiene gap (now stripped). A runtime "force-validate public hosts" attempt was
+      explored, then **rejected by the product owner** (it broke self-hosted public-host DBs and blocked the
+      future §7.3 public-exception dialog).
+    - R6/R7 → caught the **orphaned-flag** edge (a pre-existing public connection whose bypass param was
+      edited out keeps an inert flag the decoupling would activate) → resolved with the **hybrid runtime
+      policy** above, which honors explicit params but not bare flags on public hosts.
+    - R8 → **consistency pass**: extended the same host-gate (`resolveAllowInvalidCertificates`) to every
+      remaining flag-driven runtime surface — the 4s fail-fast `serverSelectionTimeoutMS`
+      (NativeAuthHandler/PlaygroundEvaluator/ShellSessionManager), the `ClustersClient` "local instance"
+      friendly-error copy, and the `DocumentDBClusterItem` "⚠ TLS/SSL Disabled" tree badge/tooltip — so an
+      orphaned public-host flag is now **fully inert** (no allow-invalid, no fast-fail, no mislabel).
+  - **§7.3 connection edit dialog deferred** — the design itself tracks it as a separate issue.
+  - Gates green: build · lint · jest (2135/2135) · l10n · prettier · production webpack.

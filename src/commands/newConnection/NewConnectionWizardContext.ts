@@ -33,6 +33,14 @@ export interface NewConnectionWizardContext extends IActionContext {
     connectionMode?: ConnectionMode;
 
     /**
+     * Set by the TLS-exception step (design §7) when the user chooses to allow invalid TLS
+     * certificates for a local/private host. Persisted as
+     * `emulatorConfiguration.disableEmulatorSecurity` (with `isEmulator: false`) so the
+     * connection accepts a self-signed certificate without being treated as an emulator.
+     */
+    disableEmulatorSecurity?: boolean;
+
+    /**
      * The ID of the service discovery provider for service discovery connections.
      * Only used when connectionMode is ConnectionMode.ServiceDiscovery.
      *
