@@ -44,7 +44,7 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
     lines.push('### Summary Indicators (4 cells shown to user)');
     const formattedSelectivity =
         stage2.efficiencyAnalysis.selectivity !== null
-            ? `${stage2.efficiencyAnalysis.selectivity.toFixed(1)}%`
+            ? formatSelectivityForSummary(stage2.efficiencyAnalysis.selectivity)
             : 'Unknown';
     lines.push(`- **Selectivity**: ${formattedSelectivity}`);
     lines.push(`- **Index Used**: ${stage2.efficiencyAnalysis.indexUsed ?? 'None (collection scan)'}`);
@@ -74,4 +74,11 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
     }
 
     return lines.join('\n');
+}
+
+function formatSelectivityForSummary(selectivity: number): string {
+    if (selectivity > 0 && selectivity < 0.1) {
+        return 'below 0.1%';
+    }
+    return `${selectivity.toFixed(1)}%`;
 }

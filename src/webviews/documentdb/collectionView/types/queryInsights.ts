@@ -102,7 +102,7 @@ export interface QueryInsightsStage2Response {
     /** Top-level query warnings (collection scan, in-memory sort, etc.) */
     concerns: string[];
     efficiencyAnalysis: {
-        /** Selectivity: percentage of collection returned (e.g., 33.2), or null if unknown */
+        /** Selectivity: raw percentage of collection returned (e.g., 33.2375), or null if unknown */
         selectivity: number | null;
         indexUsed: string | null;
         /** Fetch overhead state label (e.g., "Direct fetch", "Covered query", "Collection scan") */

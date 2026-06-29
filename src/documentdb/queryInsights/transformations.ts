@@ -193,7 +193,7 @@ export function transformStage2Response(
  *
  * @param nReturned          - Number of documents returned
  * @param totalCollectionDocs - Estimated total documents in the collection
- * @returns Percentage value (e.g., 33.2) or null if unavailable
+ * @returns Raw percentage value (e.g., 33.2375) or null if unavailable
  */
 function computeSelectivity(nReturned: number, totalCollectionDocs: number | undefined): number | null {
     if (!totalCollectionDocs || totalCollectionDocs <= 0 || nReturned === undefined) {

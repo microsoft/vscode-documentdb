@@ -97,6 +97,13 @@ describe('buildStaticAnalysisSummary', () => {
         expect(summary).toContain('**Selectivity**: Unknown');
     });
 
+    it('should show threshold text when selectivity is non-zero and below 0.1%', () => {
+        const stage2 = makeStage2Response();
+        stage2.efficiencyAnalysis.selectivity = 0.008;
+        const summary = buildStaticAnalysisSummary(stage2);
+        expect(summary).toContain('**Selectivity**: below 0.1%');
+    });
+
     it('should show None when no index used', () => {
         const stage2 = makeStage2Response();
         stage2.efficiencyAnalysis.indexUsed = null;
