@@ -80,6 +80,10 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
  * Formats numeric selectivity for static analysis summary text.
  * Values between 0 and 0.1 are rendered as a threshold label.
  *
+ * Keep this formatting in sync with the webview selectivity formatter so Stage 3
+ * summary text and the UI display stay consistent for the same underlying values.
+ * We intentionally kept this duplicated for now to avoid a broader refactor.
+ *
  * @param selectivity - Raw selectivity percentage value
  * @returns Formatted selectivity string for summary output
  */

@@ -8,6 +8,10 @@
  *
  * For very low non-zero percentages (< 0.1%), we show a threshold label
  * instead of a rounded numeric value.
+ *
+ * Keep this logic in sync with the static analysis summary formatter so Stage 3
+ * output and the webview render the same values for the same input.
+ * We intentionally left this duplicated for now to keep the change simple.
  */
 export function formatSelectivityForDisplay(selectivity: number, belowThresholdLabel: string): string;
 export function formatSelectivityForDisplay(selectivity: null, belowThresholdLabel: string): null;
