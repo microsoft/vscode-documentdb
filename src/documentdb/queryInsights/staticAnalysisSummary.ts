@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
+
 import { type QueryInsightsStage2Response } from '../../webviews/documentdb/collectionView/types/queryInsights';
 
 /**
@@ -88,8 +90,9 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
  * @returns Formatted selectivity string for summary output
  */
 function formatSelectivityForSummary(selectivity: number): string {
+    const locale = vscode.env?.language || 'en-US';
     if (selectivity > 0 && selectivity < 0.1) {
-        return 'below 0.1%';
+        return `below ${(0.1).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
     }
-    return `${selectivity.toFixed(1)}%`;
+    return `${selectivity.toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }

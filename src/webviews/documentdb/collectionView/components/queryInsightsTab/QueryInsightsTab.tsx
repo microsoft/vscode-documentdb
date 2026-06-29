@@ -452,7 +452,7 @@ export const QueryInsightsMain = (): JSX.Element => {
     const docsReturned = getMetricValue(stage2Data?.documentsReturned);
     const keysExamined = getMetricValue(stage2Data?.totalKeysExamined);
     const docsExamined = getMetricValue(stage2Data?.totalDocsExamined);
-    const lowSelectivityLabel = l10n.t('below {0}%', '0.1');
+    const lowSelectivityLabel = `below ${(0.1).toLocaleString(navigator.language, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
     const selectivity = formatSelectivityForDisplay(
         getCellValue((stage2) => stage2.efficiencyAnalysis.selectivity),
         lowSelectivityLabel,

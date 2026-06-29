@@ -32,5 +32,5 @@ export function formatSelectivityForDisplay(
         return belowThresholdLabel;
     }
 
-    return `${selectivity.toFixed(1)}%`;
+    return `${selectivity.toLocaleString(undefined, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }
