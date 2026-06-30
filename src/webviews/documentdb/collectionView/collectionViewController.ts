@@ -8,7 +8,7 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { SettingsService } from '../../../services/SettingsService';
-import { WebviewControllerBase } from '../../_integration/WebviewControllerBase';
+import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './collectionViewRouter';
 
 export type CollectionViewWebviewConfigurationType = {
@@ -39,43 +39,44 @@ export type CollectionViewWebviewConfigurationType = {
     };
 };
 
-export class CollectionViewController extends WebviewControllerBase<CollectionViewWebviewConfigurationType> {
-    constructor(
-        initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
-    ) {
-        // ext.context here is the vscode.ExtensionContext required by the ReactWebviewPanelController's original implementation
-        // we're not modifying it here in order to be ready for future updates of the webview API.
+export function openCollectionViewPanel(
+    initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
+): AppWebviewController<CollectionViewWebviewConfigurationType> {
+    const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
 
-        const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
+    // Get the default page size from settings
+    const defaultPageSize = SettingsService.getSetting<number>(ext.settingsKeys.collectionViewDefaultPageSize) ?? 50;
 
-        // Get the default page size from settings
-        const defaultPageSize =
-            SettingsService.getSetting<number>(ext.settingsKeys.collectionViewDefaultPageSize) ?? 50;
+    // Get the experimental AI query generation setting
+    const enableAIQueryGeneration =
+        SettingsService.getSetting<boolean>(ext.settingsKeys.enableAIQueryGeneration) ?? false;
 
-        // Get the experimental AI query generation setting
-        const enableAIQueryGeneration =
-            SettingsService.getSetting<boolean>(ext.settingsKeys.enableAIQueryGeneration) ?? false;
+    const fullInitialData: CollectionViewWebviewConfigurationType = {
+        ...initialData,
+        defaultPageSize,
+        enableAIQueryGeneration,
+    };
 
-        const fullInitialData: CollectionViewWebviewConfigurationType = {
-            ...initialData,
-            defaultPageSize,
-            enableAIQueryGeneration,
-        };
+    const trpcContext: RouterContext = {
+        dbExperience: API.DocumentDB,
+        webviewName: 'collectionView',
+        sessionId: initialData.sessionId,
+        clusterId: initialData.clusterId,
+        clusterDisplayName: initialData.clusterDisplayName,
+        viewId: initialData.viewId,
+        databaseName: initialData.databaseName,
+        collectionName: initialData.collectionName,
+    };
 
-        const trpcContext: RouterContext = {
-            dbExperience: API.DocumentDB,
-            webviewName: 'collectionView',
-            sessionId: initialData.sessionId,
-            clusterId: initialData.clusterId,
-            clusterDisplayName: initialData.clusterDisplayName,
-            viewId: initialData.viewId,
-            databaseName: initialData.databaseName,
-            collectionName: initialData.collectionName,
-        };
-
-        super(ext.context, title, 'collectionView', fullInitialData, trpcContext, vscode.ViewColumn.One, {
+    return openAppWebview({
+        title,
+        webviewName: 'collectionView',
+        config: fullInitialData,
+        context: trpcContext,
+        viewColumn: vscode.ViewColumn.One,
+        icon: {
             light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
             dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-dark.svg'),
-        });
-    }
+        },
+    });
 }

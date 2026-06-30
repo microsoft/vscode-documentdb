@@ -1223,3 +1223,51 @@ entry in that work item's commit. On restart, this section plus
   changed files or this entry.
 - Deviations: none.
 - Subagent: none.
+
+### WI-E4 - Adopt the openWebview factory for panel controllers (2026-06-30)  [MILESTONE end E]
+
+- Status: done.
+- Summary: added `src/webviews/_integration/openAppWebview.ts`, the factory-style
+  counterpart to `WebviewControllerBase`. `openAppWebview` calls the framework
+  `openWebview(ext.context, ...)` pre-filling the DocumentDB root router
+  (`appRouter`), `createCallerFactory`, the bundle / dev-server layout
+  (`WEBVIEW_CONFIG.bundle` + `devServerHost`), and accepts per-view
+  `title` / `webviewName` (-> `viewType`) / `config` / `context` / `viewColumn` /
+  `icon`. It exports a `AppWebviewController<TConfiguration>` alias
+  (`WebviewController<AppRouter, TConfiguration, BaseRouterContext>`) so every
+  panel factory has a precise return type. The procedure-level telemetry runner
+  stays wired through `publicProcedureWithTelemetry` in the routers, exactly as
+  before, so the controller keeps the framework default procedure logger (no
+  behavior change from the retired `WebviewControllerBase`).
+- Both panel controllers were construction-only (a single constructor, no
+  instance state, and call sites that only touch the handle's `onDisposed` /
+  `revealToForeground`), so both were converted to factory functions:
+  - `CollectionViewController` -> `openCollectionViewPanel(...)`; call site in
+    `src/commands/openCollectionView/openCollectionView.ts` switched from
+    `new CollectionViewController(...)` to `openCollectionViewPanel(...)`
+    (still uses `view.onDisposed(...)` + `view.revealToForeground()`).
+  - `DocumentsViewController` -> `openDocumentViewPanel(...)`; call site in
+    `src/commands/openDocument/openDocument.ts` switched to
+    `openDocumentViewPanel(...)` (still uses `view.revealToForeground(...)`).
+    Its `viewPanelTitleSetter` closed over `this.panel`; replaced with a small
+    mutable holder object (`const handle: { controller?: ... } = {}`) whose
+    `controller` is assigned from the `openAppWebview(...)` result, so the setter
+    reads `handle.controller.panel.title` at runtime. A plain `let controller`
+    tripped `prefer-const` (single assignment), hence the holder.
+- Nothing else extended `WebviewControllerBase`, so
+  `src/webviews/_integration/WebviewControllerBase.ts` was deleted (`git rm`).
+  The lingering doc reference in `appRouter.ts` was updated to point at the
+  `openAppWebview` factory / `viewType` option instead.
+- Checks (full milestone, plan §1.4): whole-repo `npm run lint` clean (only the
+  pre-existing benign `webpack.config.views.js` node warning); whole-repo
+  `npx jest --no-coverage` 2606/2606 across 149 suites (5 projects);
+  `npm run build` green (all packages + extension `tsc`); `npm run prettier-fix`
+  leaves the tree clean. `grep "extends WebviewControllerBase" src/` returns
+  nothing; the only remaining `WebviewControllerBase` mentions are the doc-prose
+  references in `openAppWebview.ts` (describing what it replaces).
+  `npm run l10n` not run: no user-facing strings changed. No em/en dashes in the
+  changed files or this entry.
+- Deviations: both controllers converted to factories (rather than leaving one on
+  the class path); this was supported by the plan ("construction-only controllers
+  become factory calls") and let `WebviewControllerBase` be removed entirely.
+- Subagent: none.

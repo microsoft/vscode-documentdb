@@ -72,7 +72,8 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
      * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
      * the final event name, e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
      *
-     * This is **not** the same as the registry key passed to the `WebviewControllerBase` constructor.
+     * This is **not** the same as the registry key (`viewType`) passed to the
+     * `openAppWebview` factory / framework `openWebview` options.
      */
     webviewName: string;
 };

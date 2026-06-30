@@ -6,7 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { Views } from '../../documentdb/Views';
-import { DocumentsViewController } from '../../webviews/documentdb/documentView/documentsViewController';
+import { openDocumentViewPanel } from '../../webviews/documentdb/documentView/documentsViewController';
 
 export function openDocumentView(
     _context: IActionContext,
@@ -27,7 +27,7 @@ export function openDocumentView(
         mode: string;
     },
 ): void {
-    const view = new DocumentsViewController({
+    const view = openDocumentViewPanel({
         id: props.id,
 
         clusterId: props.clusterId,
