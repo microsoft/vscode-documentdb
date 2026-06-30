@@ -1,7 +1,7 @@
 # `src/webviews/_integration/`
 
 Local integration layer between the DocumentDB extension and
-[`@microsoft/vscode-ext-react-webview`](../../../packages/vscode-ext-react-webview/README.md).
+[`@microsoft/vscode-ext-webview`](../../../packages/vscode-ext-webview/README.md).
 
 > This folder is **not** the extension's public API. It is the
 > consumer-owned glue that wires the framework package (tRPC transport +

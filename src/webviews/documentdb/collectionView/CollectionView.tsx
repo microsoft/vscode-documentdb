@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, ProgressBar, Tab, TabList } from '@fluentui/react-components';
-import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
 import { type TableDataEntry } from '../../../documentdb/ClusterSession';
@@ -57,7 +57,7 @@ export const CollectionView = (): JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     /**
      * Please note: using the context and states inside of closures can lead to stale data.

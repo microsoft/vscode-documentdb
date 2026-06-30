@@ -1166,3 +1166,34 @@ entry in that work item's commit. On restart, this section plus
   changed; it is a direct consequence of the `_integration` migration, so it
   stays in this single commit.
 - Subagent: none.
+
+### WI-E2 - Point webview consumers at ./react and split hooks (2026-06-30)
+
+- Status: done.
+- Summary: repointed every extension-side webview import off the old
+  `@microsoft/vscode-ext-react-webview` main entry onto the new package's
+  `./react` subpath. `src/webviews/index.tsx` (`WebviewState`, `WithWebviewContext`)
+  and the five `useConfiguration` consumers (`CollectionView.tsx`,
+  `QueryInsightsTab.tsx`, `QueryEditor.tsx`, `ToolbarMainView.tsx`,
+  `documentView.tsx`) now import from `@microsoft/vscode-ext-webview/react`. The
+  local `src/webviews/_integration/useTrpcClient.ts` wrapper imports the new
+  `./react` `useTrpcClient` and adopts the client-first shape (returns the client
+  directly), so the nine consumer call sites changed from
+  `const { trpcClient } = useTrpcClient();` to `const trpcClient = useTrpcClient();`
+  (`CollectionView.tsx`, `ToolbarMainView.tsx` x2, `ToolbarViewNavigation.tsx`,
+  `ToolbarTableNavigation.tsx`, `QueryEditor.tsx`, `QueryInsightsTab.tsx`,
+  `documentView.tsx`, `QueryPlanSummary.tsx`). Two stale doc references
+  (`_integration/README.md` link, a `QueryInsightsTab.tsx` comment) were updated
+  to the new package.
+- useRpcEvents: not added. The local `useTrpcClient` wrapper never exposed the
+  old `onError` option and no consumer installed a central webview-side error
+  observer, so there was nothing to migrate to `useRpcEvents`.
+- Checks: `npm run build` green (all packages + extension `tsc`); whole-repo
+  `npm run lint` clean (only the pre-existing benign `webpack.config.views.js`
+  node warning); scoped `npx jest --no-coverage src/webviews` 313/313 across 12
+  suites. `grep -r "vscode-ext-react-webview" src/webviews` returns nothing (the
+  only remaining repo matches are inside the old package itself, removed in WI-F1).
+  `npm run l10n` not run: no user-facing strings changed. No em/en dashes in the
+  changed files or this entry.
+- Deviations: none.
+- Subagent: none.
