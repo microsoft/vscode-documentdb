@@ -835,3 +835,43 @@ entry in that work item's commit. On restart, this section plus
   considered: re-point `host/trpc.ts` now - rejected as WI-C2/C3 scope and it
   would entangle the (about-to-be-deleted) legacy telemetry middleware.
 - Subagent: none.
+
+### WI-C2 - Telemetry middleware bodies + adapters; retire old model  (2026-06-30)
+
+- Status: done
+- Summary: Added `src/host/middleware/` with `types.ts` (`ProcedureType`,
+  `MiddlewareResultLike`, `ProcedureErrorLike`, `ProcedureInvocation`,
+  `getInvocationSignal`), `loggingMiddleware.ts` (`ProcedureLogger`,
+  `ProcedureLogEntry`, `consoleProcedureLogger`, `loggingMiddlewareBody`),
+  `telemetryMiddleware.ts` (`ProcedureTelemetry`, `TelemetryRunner`,
+  `telemetryMiddlewareBody`), and an `index.ts` barrel. Removed the retired
+  telemetry model: deleted `host/trpc.ts` (split per the appendix into
+  `shared/initWebviewTrpc.ts` + `host/middleware/*`), dropped `createMiddleware`,
+  `publicProcedureWithTelemetry`, `defaultTrpcToTelemetry`, the package
+  `WithTelemetry` type, and the named `TelemetryContext` type (its shape is now
+  inline on `BaseRouterContext.telemetry`). Re-pointed `WebviewController` and
+  `host/index.ts` at the shared default tRPC instance (unifying the two default
+  instances from WI-C1). Added body tests wired onto a real `initWebviewTrpc`
+  instance.
+- Checks: build green; Jest 44/44 (6 new) green - the bodies are exercised via a
+  real `publicProcedure.use(...)` over success / error / aborted paths, proving
+  instance-agnosticism and structural type compatibility with tRPC; word-boundary
+  grep confirms no `createMiddleware` / `publicProcedureWithTelemetry` /
+  `TelemetryContext` / `WithTelemetry` symbols remain in `src/`; `npm run lint`
+  clean.
+- Deviations: (1) The telemetry/logging split keeps the reusable orchestration
+  (timing, abort detection, standard result properties) in the package bodies and
+  the integration-specific scope in the consumer's `TelemetryRunner` (which wraps
+  `callWithTelemetryAndErrorHandling`); the body injects the runner's bag as
+  `ctx.telemetry`. This realizes "middleware bodies + adapters" from the plan; the
+  exact runner signature (`run(invocation, execute)`) is an implementation choice
+  the plan left open. (2) `BaseRouterContext.telemetry` keeps an inline
+  `{ properties; measurements }` shape (no named `TelemetryContext` export) rather
+  than being removed, to preserve the documented field shape and minimize the
+  E1 migration delta; the consumer still re-types it. (3) Two doc comments
+  reference `callWithTelemetryAndErrorHandling` / `ITelemetryContext` (azext-utils
+  identifiers) which contain the substrings "WithTelemetry"/"TelemetryContext";
+  a word-boundary grep is required to audit retired symbols. Alternatives
+  considered: removing the `telemetry` field entirely - deferred since the
+  consumer overrides its type anyway and removal adds migration churn.
+- Subagent: none.

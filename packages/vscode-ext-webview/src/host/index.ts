@@ -7,17 +7,26 @@
  * Host surface of `@microsoft/vscode-ext-webview` (the `./host` subpath).
  *
  * Extension-host (Node.js) code imports from here. It pulls in `vscode` and
- * Node APIs and must not be bundled into the webview. Reshaped across Phase C
- * to add `attachTrpc`, `openWebview`, and the middleware bodies / adapters.
+ * Node APIs and must not be bundled into the webview.
+ *
+ * The tRPC builders (`initWebviewTrpc`, `router`, `publicProcedure`) live in the
+ * shared `.` entry; this entry owns the panel facade
+ * ({@link WebviewController}) and the instance-agnostic middleware bodies +
+ * adapters.
  */
 
+export { type AnyRouter } from '@trpc/server';
 export {
-    createCallerFactory,
-    createMiddleware,
-    publicProcedure,
-    publicProcedureWithTelemetry,
-    router,
-    type AnyRouter,
-    type WithTelemetry,
-} from './trpc';
+    consoleProcedureLogger,
+    loggingMiddlewareBody,
+    telemetryMiddlewareBody,
+    type MiddlewareResultLike,
+    type ProcedureErrorLike,
+    type ProcedureInvocation,
+    type ProcedureLogEntry,
+    type ProcedureLogger,
+    type ProcedureTelemetry,
+    type ProcedureType,
+    type TelemetryRunner,
+} from './middleware';
 export { WebviewController, type WebviewControllerOptions, type WebviewSourceLayout } from './WebviewController';

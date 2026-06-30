@@ -8,8 +8,8 @@ import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
+import { createCallerFactory } from '../shared/initWebviewTrpc';
 import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
-import { createCallerFactory } from './trpc';
 
 /**
  * Describes where the bundled webview JavaScript lives on disk relative to the
