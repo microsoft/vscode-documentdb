@@ -8,43 +8,74 @@ import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { attachTrpc } from './attachTrpc';
+import { attachTrpc, type WebviewCallerFactory } from './attachTrpc';
+import { consoleProcedureLogger, type ProcedureLogger } from './middleware/loggingMiddleware';
 
 /**
  * Describes where the bundled webview JavaScript lives on disk relative to the
  * extension root, both when the extension is shipped as a webpack bundle
  * (production) and when it is loaded from `tsc` output (development).
  *
- * The framework picks the appropriate entry based on
- * {@link WebviewControllerOptions.isBundled}. In development, if the
- * `DEVSERVER` environment variable is set, the controller serves the script
- * from {@link WebviewControllerOptions.devServerHost} instead of the on-disk
- * location.
+ * The framework picks the appropriate entry based on the extension's mode
+ * (`vscode.ExtensionMode.Production` selects `bundled`, otherwise `dev`). In
+ * development, if the `DEVSERVER` environment variable is set, the controller
+ * serves the script from {@link WebviewControllerOptions.devServerHost} instead
+ * of the on-disk location.
  */
 export interface WebviewSourceLayout {
-    /** Layout used when `isBundled` is true (production bundle on disk). */
+    /** Layout used in production (bundle on disk). */
     bundled: { dir: string; file: string };
 
-    /** Layout used when `isBundled` is false (loaded from `tsc` output). */
+    /** Layout used in development (loaded from `tsc` output). */
     dev: { dir: string; file: string };
 }
 
 /**
- * Configuration injected into every {@link WebviewController}.
+ * Options bag passed to the {@link WebviewController} constructor and (minus
+ * `extensionContext`) to the {@link openWebview} factory.
+ *
+ * @template TRouter        - The application's root tRPC router type.
+ * @template TConfiguration - The configuration object delivered to the webview
+ *                            at creation time (received via `useConfiguration`).
+ * @template TContext       - The router context shape (must extend
+ *                            {@link BaseRouterContext}).
  */
-export interface WebviewControllerOptions<TRouter extends AnyRouter> {
-    /**
-     * The root tRPC router for this application. The controller dispatches
-     * incoming webview messages against this router.
-     */
-    appRouter: TRouter;
+export interface WebviewControllerOptions<
+    TRouter extends AnyRouter,
+    TConfiguration = unknown,
+    TContext extends BaseRouterContext = BaseRouterContext,
+> {
+    /** The extension context (resource roots, extension mode, on-disk paths). */
+    extensionContext: vscode.ExtensionContext;
+
+    /** The title shown in the webview panel tab. */
+    title: string;
 
     /**
-     * True when the extension is running from its webpack bundle (production),
-     * false when running from the TypeScript dev output. Determines which
-     * entry from {@link sourceLayout} is used.
+     * Identifier for this webview. Used both as the panel `viewType` (prefixed
+     * with `react-webview-`) and as the key passed to the webview's `render()`
+     * entry so it can look up the matching component from its registry.
      */
-    isBundled: boolean;
+    viewType: string;
+
+    /**
+     * The root tRPC router for this application. The controller dispatches
+     * incoming webview messages against it.
+     */
+    router: TRouter;
+
+    /**
+     * tRPC `createCallerFactory` from your own `initWebviewTrpc(...)` result.
+     * Pass it when `router` is built with a typed context; defaults to the
+     * package's shared instance otherwise.
+     */
+    createCallerFactory?: WebviewCallerFactory;
+
+    /** The router context handed to every procedure call. */
+    context: TContext;
+
+    /** The initial configuration object the webview reads on startup. */
+    config: TConfiguration;
 
     /**
      * Where the webview JavaScript bundle is located. See {@link WebviewSourceLayout}.
@@ -52,12 +83,31 @@ export interface WebviewControllerOptions<TRouter extends AnyRouter> {
     sourceLayout: WebviewSourceLayout;
 
     /**
-     * Dev-server URL used when `isBundled` is false and `process.env.DEVSERVER`
-     * is truthy. Typically `'http://localhost:18080'`.
+     * Dev-server URL used in development when `process.env.DEVSERVER` is truthy.
+     * Typically `'http://localhost:18080'`.
      *
      * Defaults to `'http://localhost:18080'` when omitted.
      */
     devServerHost?: string;
+
+    /**
+     * Sink for the zero-config dispatch logger. One structured entry is logged
+     * per completed query, mutation, and subscription. Defaults to
+     * {@link consoleProcedureLogger} so the panel logs to the console out of the
+     * box; pass your own {@link ProcedureLogger} to route the entries elsewhere.
+     */
+    telemetry?: ProcedureLogger;
+
+    /** Optional icon shown in the webview tab. */
+    icon?:
+        | vscode.Uri
+        | {
+              readonly light: vscode.Uri;
+              readonly dark: vscode.Uri;
+          };
+
+    /** The view column to open the panel in. Defaults to {@link vscode.ViewColumn.One}. */
+    viewColumn?: vscode.ViewColumn;
 }
 
 const DEFAULT_DEV_SERVER_HOST = 'http://localhost:18080';
@@ -88,51 +138,30 @@ export class WebviewController<
     private _onDisposed: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
     public readonly onDisposed: vscode.Event<void> = this._onDisposed.event;
 
-    private readonly _options: WebviewControllerOptions<TRouter>;
+    private readonly _options: WebviewControllerOptions<TRouter, TConfiguration, TContext>;
 
     /**
      * Creates a new WebviewController instance.
      *
-     * @param extensionContext The extension context.
-     * @param title            The title of the webview panel.
-     * @param webviewName      The identifier/name for the webview resource.
-     *                         Used both as the `viewType` (prefixed with
-     *                         `react-webview-`) and as the key passed to the
-     *                         webview's `render()` entry point so it can look
-     *                         up the matching component from its registry.
-     * @param configuration    The initial state object that the webview will
-     *                         use on startup.
-     * @param options          Framework configuration (router, source layout,
-     *                         bundling mode).
-     * @param viewColumn       The view column in which to show the new webview
-     *                         panel.
-     * @param _iconPath        An optional icon to display in the tab of the
-     *                         webview.
+     * Opens the panel, renders its HTML, and wires the tRPC dispatch pump (via
+     * {@link attachTrpc}) against `options.router` using `options.context`. The
+     * dispatch logger defaults to {@link consoleProcedureLogger}.
+     *
+     * @param options - The controller options. See {@link WebviewControllerOptions}.
      */
-    constructor(
-        protected extensionContext: vscode.ExtensionContext,
-        title: string,
-        private _webviewName: string,
-        private configuration: TConfiguration,
-        options: WebviewControllerOptions<TRouter>,
-        viewColumn: vscode.ViewColumn = vscode.ViewColumn.One,
-        private _iconPath?:
-            | vscode.Uri
-            | {
-                  readonly light: vscode.Uri;
-                  readonly dark: vscode.Uri;
-              },
-    ) {
+    constructor(options: WebviewControllerOptions<TRouter, TConfiguration, TContext>) {
         this._options = options;
 
-        this._panel = vscode.window.createWebviewPanel('react-webview-' + _webviewName, title, viewColumn, {
+        const viewColumn = options.viewColumn ?? vscode.ViewColumn.One;
+
+        this._panel = vscode.window.createWebviewPanel('react-webview-' + options.viewType, options.title, viewColumn, {
             enableScripts: true,
             retainContextWhenHidden: true,
-            localResourceRoots: [vscode.Uri.file(this.extensionContext.extensionPath)],
+            localResourceRoots: [vscode.Uri.file(options.extensionContext.extensionPath)],
         });
 
         this._panel.webview.html = this.getDocumentTemplate(this._panel.webview);
-        this._panel.iconPath = this._iconPath;
+        this._panel.iconPath = options.icon;
 
         // Register the onDisposed emitter so dispose() releases its subscriber list.
         // It is intentionally not part of the disposables chain that fires _onDisposed
@@ -145,6 +174,8 @@ export class WebviewController<
                 this.dispose();
             }),
         );
+
+        this.setupTrpc(options.context);
     }
 
     /**
@@ -159,8 +190,15 @@ export class WebviewController<
         // The dispatch pump (message handling, abort / subscription lifecycle)
         // lives in the free `attachTrpc` primitive. The controller simply wires
         // it to its panel and registers the returned disposable so the listener
-        // and all in-flight operations are torn down on dispose.
-        const { disposable } = attachTrpc(this._panel, context, this._options.appRouter);
+        // and all in-flight operations are torn down on dispose. The dispatch
+        // logger defaults to the zero-config console sink.
+        const { disposable } = attachTrpc(
+            this._panel,
+            context,
+            this._options.router,
+            this._options.createCallerFactory,
+            this._options.telemetry ?? consoleProcedureLogger,
+        );
         this.registerDisposable(disposable);
     }
 
@@ -170,15 +208,17 @@ export class WebviewController<
      */
     private getDocumentTemplate(webview?: vscode.Webview): string {
         const devServer = !!process.env.DEVSERVER;
-        const isProduction = this.extensionContext.extensionMode === vscode.ExtensionMode.Production;
+        const isProduction = this._options.extensionContext.extensionMode === vscode.ExtensionMode.Production;
         const nonce = randomBytes(16).toString('base64');
 
-        const layout = this._options.isBundled ? this._options.sourceLayout.bundled : this._options.sourceLayout.dev;
+        const layout = isProduction ? this._options.sourceLayout.bundled : this._options.sourceLayout.dev;
         const devServerHost = this._options.devServerHost ?? DEFAULT_DEV_SERVER_HOST;
 
         const uri = (...parts: string[]) =>
             webview
-                ?.asWebviewUri(vscode.Uri.file(path.join(this.extensionContext.extensionPath, layout.dir, ...parts)))
+                ?.asWebviewUri(
+                    vscode.Uri.file(path.join(this._options.extensionContext.extensionPath, layout.dir, ...parts)),
+                )
                 .toString(true);
 
         const srcUri = isProduction || !devServer ? uri(layout.file) : `${devServerHost}/${layout.file}`;
@@ -229,11 +269,11 @@ export class WebviewController<
                             <script type="module" nonce="${nonce}">
                                 window.config = {
                                     ...window.config,
-                                    __initialData: '${encodeURIComponent(JSON.stringify(this.configuration))}'
+                                    __initialData: '${encodeURIComponent(JSON.stringify(this._options.config))}'
                                 };
 
                                 import { render } from "${srcUri}";
-                                render('${this._webviewName}', acquireVsCodeApi());
+                                render('${this._options.viewType}', acquireVsCodeApi());
                             </script>
 
                     </body>

@@ -9,6 +9,7 @@ import { initWebviewTrpc } from '../shared/initWebviewTrpc';
 import { TypedEventSink } from '../shared/TypedEventSink';
 import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
 import { attachTrpc } from './attachTrpc';
+import { type ProcedureLogEntry, type ProcedureLogger } from './middleware/loggingMiddleware';
 
 type PostedMessage = { id: string; result?: unknown; error?: { message: string }; complete?: boolean };
 
@@ -276,5 +277,84 @@ describe('attachTrpc', () => {
         await inflight;
         await flush();
         expect(observedAborted).toBe(true);
+    });
+
+    it('logs one entry per completed query when a logger is supplied', async () => {
+        const entries: ProcedureLogEntry[] = [];
+        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            greet: publicProcedure.query(() => 'hello'),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory, logger);
+
+        await stub.send(makeMessage('q1', 'query', 'greet'));
+
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ type: 'query', path: 'greet', ok: true, aborted: false });
+        expect(typeof entries[0].durationMs).toBe('number');
+    });
+
+    it('logs a failed entry (ok: false) when a procedure throws', async () => {
+        const entries: ProcedureLogEntry[] = [];
+        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            boom: publicProcedure.query(() => {
+                throw new Error('kaboom');
+            }),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory, logger);
+
+        await stub.send(makeMessage('e1', 'query', 'boom'));
+
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ type: 'query', path: 'boom', ok: false });
+        expect(entries[0].error?.message).toBe('kaboom');
+    });
+
+    it('logs one subscription entry on natural completion', async () => {
+        const entries: ProcedureLogEntry[] = [];
+        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            counter: publicProcedure.subscription(async function* () {
+                await Promise.resolve();
+                yield 1;
+            }),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory, logger);
+
+        await stub.send(makeMessage('s1', 'subscription', 'counter'));
+        await flush();
+        await flush();
+
+        expect(entries).toHaveLength(1);
+        expect(entries[0]).toMatchObject({ type: 'subscription', path: 'counter', ok: true });
+    });
+
+    it('does not log anything when no logger is supplied', async () => {
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            greet: publicProcedure.query(() => 'hello'),
+        });
+
+        const stub = createStubPanel();
+        // No logger argument: dispatch-level logging is disabled. The assertion is
+        // simply that dispatch still works (no throw) and the result is posted.
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory);
+
+        await stub.send(makeMessage('q1', 'query', 'greet'));
+
+        expect(stub.posted).toEqual([{ id: 'q1', result: 'hello' }]);
     });
 });

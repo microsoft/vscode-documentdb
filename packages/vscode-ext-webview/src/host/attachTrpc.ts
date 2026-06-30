@@ -23,6 +23,8 @@ import { type Disposable, type WebviewPanel } from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
 import { createCallerFactory as defaultCreateCallerFactory } from '../shared/initWebviewTrpc';
 import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
+import { type ProcedureLogger } from './middleware/loggingMiddleware';
+import { type ProcedureType } from './middleware/types';
 
 /**
  * A tracked subscription: its per-operation `AbortController` plus the live
@@ -122,12 +124,19 @@ function wrapInTrpcErrorMessage(error: unknown, operationId: string) {
  *                        shared default instance. Pass the one from your own
  *                        `initWebviewTrpc(...)` result when your router is built
  *                        with a typed context.
+ * @param logger        - optional {@link ProcedureLogger}. When provided, one
+ *                        structured entry is logged per completed query,
+ *                        mutation, and subscription (the zero-config console
+ *                        telemetry path; {@link WebviewController} defaults it to
+ *                        {@link consoleProcedureLogger}). Omit it to disable
+ *                        dispatch-level logging entirely.
  */
 export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRouterContext>(
     panel: WebviewPanel,
     context: TContext,
     router: TRouter,
     callerFactory: WebviewCallerFactory = defaultCreateCallerFactory,
+    logger?: ProcedureLogger,
 ): AttachTrpcResult {
     const activeOperations = new Map<string, AbortController>();
     const activeSubscriptions = new Map<string, ActiveSubscription>();
@@ -154,6 +163,7 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
     const handleSubscriptionMessage = async (message: VsCodeLinkRequestMessage): Promise<void> => {
         // In v12, tRPC will have better cancellation support. For now, we use AbortController.
         const abortController = new AbortController();
+        const start = Date.now();
 
         try {
             // Clone context so the signal is per-operation and does not mutate the shared context object
@@ -203,14 +213,37 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
                     // On natural completion (procedure returned, or our `return()` propagated
                     // through the generator), inform the client.
                     safePostMessage({ id: message.id, complete: true });
+                    logger?.log({
+                        type: 'subscription',
+                        path: message.op.path,
+                        durationMs: Date.now() - start,
+                        ok: true,
+                        aborted: abortController.signal.aborted,
+                    });
                 } catch (error) {
                     safePostMessage(wrapInTrpcErrorMessage(error, message.id));
+                    logger?.log({
+                        type: 'subscription',
+                        path: message.op.path,
+                        durationMs: Date.now() - start,
+                        ok: false,
+                        aborted: abortController.signal.aborted,
+                        error: getTRPCErrorFromUnknown(error),
+                    });
                 } finally {
                     activeSubscriptions.delete(message.id);
                 }
             })();
         } catch (error) {
             safePostMessage(wrapInTrpcErrorMessage(error, message.id));
+            logger?.log({
+                type: 'subscription',
+                path: message.op.path,
+                durationMs: Date.now() - start,
+                ok: false,
+                aborted: abortController.signal.aborted,
+                error: getTRPCErrorFromUnknown(error),
+            });
         }
     };
 
@@ -240,6 +273,7 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
         // In v12, tRPC will have better cancellation support. For now, we use AbortController.
         const abortController = new AbortController();
         activeOperations.set(message.id, abortController);
+        const start = Date.now();
 
         try {
             // Clone context so the signal is per-operation and does not mutate the shared context object
@@ -268,11 +302,27 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
                 const response = { id: message.id, result: result ?? null };
                 safePostMessage(response);
             }
+
+            logger?.log({
+                type: message.op.type as ProcedureType,
+                path: message.op.path,
+                durationMs: Date.now() - start,
+                ok: true,
+                aborted: abortController.signal.aborted,
+            });
         } catch (error) {
             // Only send error if the operation was not aborted (client already errored locally)
             if (!abortController.signal.aborted) {
                 safePostMessage(wrapInTrpcErrorMessage(error, message.id));
             }
+            logger?.log({
+                type: message.op.type as ProcedureType,
+                path: message.op.path,
+                durationMs: Date.now() - start,
+                ok: false,
+                aborted: abortController.signal.aborted,
+                error: getTRPCErrorFromUnknown(error),
+            });
         } finally {
             activeOperations.delete(message.id);
         }

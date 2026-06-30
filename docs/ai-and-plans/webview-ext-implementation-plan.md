@@ -1018,3 +1018,50 @@ entry in that work item's commit. On restart, this section plus
   `getWebviewConnection` helper the hooks delegate to. Each hook body is a thin
   `useContext` + delegate wrapper.
 - Subagent: none.
+
+### WI-C7 - Factory openWebview + options-bag WebviewController  (2026-06-30)
+
+- Status: done (Phase C milestone).
+- Summary: reshaped `WebviewController` to a single options-bag constructor
+  (`new WebviewController({ extensionContext, title, viewType, router,
+  createCallerFactory?, context, config, sourceLayout, devServerHost?,
+  telemetry?, icon?, viewColumn? })`) and added `host/openWebview.ts` -
+  `openWebview(extensionContext, options)` returns `new WebviewController({
+  extensionContext, ...options })`. The constructor now wires tRPC itself
+  (`setupTrpc(options.context)` calls `attachTrpc` with the injected
+  `createCallerFactory` and the dispatch logger). To deliver "console telemetry
+  for free", `attachTrpc` gained an optional `logger?: ProcedureLogger` that
+  logs one structured entry per completed query, mutation, and subscription;
+  the controller defaults it to `consoleProcedureLogger`. Exported `openWebview`
+  from the `./host` barrel. Added `host/openWebview.test.ts` (6 tests) and 4 new
+  `attachTrpc.test.ts` logging tests. Added a runtime `vscode` stub at
+  `src/testing/vscodeStub.ts` wired via the package jest `moduleNameMapper`
+  (type-checking still uses `@types/vscode`).
+- Checks: full milestone run green - package `tsc --noEmit` clean; package Jest
+  75/75 across 11 suites; whole-repo `npm run lint` clean; whole-repo
+  `npx jest --no-coverage` 2606/2606 across 149 suites; `npm run build` green.
+  `npm run l10n` not run: no user-facing localized strings were added or changed
+  (the controller HTML and dispatch logs are not localized).
+- Deviations:
+  (1) Telemetry wiring - chose active dispatch-level logging (extend
+  `attachTrpc` with an optional `ProcedureLogger`) over a store-only seam. Why:
+  the design doc's "console telemetry for free" / "wires the default console
+  logger" promise requires the controller to actually log; a defaulted
+  `telemetry` option that did nothing would be a dead option. The dispatch
+  logger is a separate sink from the middleware-body telemetry (Phase E analytics
+  via `telemetryMiddlewareBody`), so the two do not double-count. The plan's
+  WI-C7 steps did not enumerate touching `attachTrpc`; this is the minimal way to
+  honor the documented behavior, and the WI-C3 dispatch logic is otherwise
+  unchanged (logging is purely additive and gated on a provided logger).
+  (2) Dropped `isBundled` from the options bag (the plan's listed fields omit
+  it); the bundled-vs-dev layout is now derived from
+  `extensionContext.extensionMode === vscode.ExtensionMode.Production`, matching
+  the `isProduction` value the HTML template already computed.
+  (3) Testing the host facade needs a runtime `vscode`; added a stub under
+  `src/testing/` (NOT `src/__mocks__/`) deliberately - a `__mocks__/vscode`
+  file is registered as a global jest manual mock and collided with the
+  extension's own vscode mock in the root multi-project run (surfaced as
+  `vscode.l10n.t is not a function` across 37 extension suites). Keeping the stub
+  outside `__mocks__/` and resolving it only through the package-scoped
+  `moduleNameMapper` isolates it to this package's jest project.
+- Subagent: none.
