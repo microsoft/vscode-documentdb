@@ -1065,3 +1065,36 @@ entry in that work item's commit. On restart, this section plus
   outside `__mocks__/` and resolving it only through the package-scoped
   `moduleNameMapper` isolates it to this package's jest project.
 - Subagent: none.
+
+### WI-D1 - README: quick-start + behind-the-scenes signpost  (2026-06-30)
+
+- Status: done.
+- Summary: rewrote `packages/vscode-ext-webview/README.md` from the old
+  copied-over `vscode-ext-react-webview` README to the new package. Leads with a
+  factory-first four-file quick start (`initWebviewTrpc` router, `openWebview`
+  to open the panel, `WithWebviewContext` to render, `useTrpcClient` returning
+  the client directly). Updated the architecture diagram to ASCII and to the new
+  names (`openWebview` / `attachTrpc` / subpaths). Added a "Behind the scenes
+  (advanced, optional)" section that names the primitives for searchability
+  (`attachTrpc` bring-your-own-panel, `connectTrpc` + `createEventChannel`
+  framework-agnostic client, `errorLink` observer, `telemetryMiddlewareBody` +
+  `TelemetryRunner` / `loggingMiddlewareBody` + `ProcedureLogger` telemetry,
+  `TypedEventSink` push events, type-only `AppRouter` import) with prominent
+  links to `ADVANCED.md`. Added a four-row entry-points table for `.`, `./host`,
+  `./webview`, `./react` with side, imports, and key exports, plus an import
+  cheat-sheet. Refreshed "What's inside", peer-deps (React noted as only for
+  `./react`), scope, starter-kit, and status (`0.9.0-preview`). The deep Advanced
+  subsections and FAQ from the old README move to `ADVANCED.md` in WI-D2; the
+  README signposts them.
+- Deviations: forward-links to `ADVANCED.md` which is authored next in WI-D2
+  (same phase) - the link resolves once D2 lands. Diagram and tables use plain
+  ASCII (`+ - | < >`) rather than box-drawing characters to honor the "plain
+  ASCII punctuation only" documentation bar.
+- Checks: cross-checked every referenced symbol against the shipped barrels
+  (`shared/host/webview/react` index files) and §13.4 - all real; no retired
+  symbol (`createMiddleware`, `publicProcedureWithTelemetry`, `TelemetryContext`)
+  present; no `vscode-ext-react-webview` / `./server` references (only
+  `@trpc/server` the npm package); `grep -nP "[\x{2013}\x{2014}]"` finds no
+  em/en dashes; whole-repo `npm run lint` clean (docs-only change). Full milestone
+  build + jest deferred to the end of Phase D (after WI-D2).
+- Subagent: none.
