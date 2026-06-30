@@ -6,6 +6,7 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { API } from '../../DocumentDBExperiences';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBShellPty } from '../../documentdb/shell/DocumentDBShellPty';
 import { type ShellConnectionInfo } from '../../documentdb/shell/ShellSessionManager';
@@ -66,8 +67,9 @@ export async function openInteractiveShell(
 
     const pty = new DocumentDBShellPty({ connectionInfo });
 
+    const label = connectionInfo.shellLabel ?? 'DocumentDB';
     const terminal = vscode.window.createTerminal({
-        name: l10n.t('DocumentDB: {0}/{1}', connectionInfo.clusterDisplayName, connectionInfo.databaseName),
+        name: l10n.t('{0}: {1}/{2}', label, connectionInfo.clusterDisplayName, connectionInfo.databaseName),
         pty,
         iconPath: new vscode.ThemeIcon('terminal'),
     });
@@ -114,8 +116,9 @@ export async function openInteractiveShellWithInput(
         initialInput: params.initialInput,
     });
 
+    const label = connectionInfo.shellLabel ?? 'DocumentDB';
     const terminal = vscode.window.createTerminal({
-        name: l10n.t('DocumentDB: {0}/{1}', connectionInfo.clusterDisplayName, connectionInfo.databaseName),
+        name: l10n.t('{0}: {1}/{2}', label, connectionInfo.clusterDisplayName, connectionInfo.databaseName),
         pty,
         iconPath: new vscode.ThemeIcon('terminal'),
     });
@@ -132,12 +135,15 @@ export async function openInteractiveShellWithInput(
  * Uses `clusterId` (stable) for cache lookups, NOT `treeId` (changes on folder move).
  */
 function extractConnectionInfo(node: ClusterItemBase | DatabaseItem | CollectionItem): ShellConnectionInfo {
+    const shellLabel = node.experience.api === API.Atlas ? 'MongoDB Atlas' : 'DocumentDB';
+
     // Database and collection nodes have `databaseInfo`
     if ('databaseInfo' in node) {
         return {
             clusterId: node.cluster.clusterId,
             clusterDisplayName: node.cluster.name,
             databaseName: node.databaseInfo.name,
+            shellLabel,
         };
     }
 
@@ -146,6 +152,7 @@ function extractConnectionInfo(node: ClusterItemBase | DatabaseItem | Collection
         clusterId: node.cluster.clusterId,
         clusterDisplayName: node.cluster.name,
         databaseName: 'test',
+        shellLabel,
     };
 }
 
