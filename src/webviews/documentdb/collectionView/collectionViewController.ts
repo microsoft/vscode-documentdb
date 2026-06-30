@@ -62,11 +62,6 @@ export class CollectionViewController extends WebviewControllerBase<CollectionVi
             enableAIQueryGeneration,
         };
 
-        super(ext.context, title, 'collectionView', fullInitialData, vscode.ViewColumn.One, {
-            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
-            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-dark.svg'),
-        });
-
         const trpcContext: RouterContext = {
             dbExperience: API.DocumentDB,
             webviewName: 'collectionView',
@@ -78,6 +73,9 @@ export class CollectionViewController extends WebviewControllerBase<CollectionVi
             collectionName: initialData.collectionName,
         };
 
-        this.setupTrpc(trpcContext);
+        super(ext.context, title, 'collectionView', fullInitialData, trpcContext, vscode.ViewColumn.One, {
+            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-light.svg'),
+            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'collection-view-dark.svg'),
+        });
     }
 }

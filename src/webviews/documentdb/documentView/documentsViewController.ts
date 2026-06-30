@@ -40,11 +40,6 @@ export class DocumentsViewController extends WebviewControllerBase<DocumentsView
             }
         }
 
-        super(ext.context, title, 'documentView', initialData, vscode.ViewColumn.Active, {
-            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-light.svg'),
-            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-dark.svg'),
-        });
-
         const trpcContext: RouterContext = {
             dbExperience: API.DocumentDB,
             webviewName: 'documentView',
@@ -58,6 +53,9 @@ export class DocumentsViewController extends WebviewControllerBase<DocumentsView
             },
         };
 
-        this.setupTrpc(trpcContext);
+        super(ext.context, title, 'documentView', initialData, trpcContext, vscode.ViewColumn.Active, {
+            light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-light.svg'),
+            dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-dark.svg'),
+        });
     }
 }

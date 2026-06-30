@@ -1127,3 +1127,42 @@ entry in that work item's commit. On restart, this section plus
   package's own 75-test suite and `tsc` outcome are unchanged from that run.)
 - Deviations: none.
 - Subagent: none.
+
+### WI-E1 - Migrate `_integration` to `@microsoft/vscode-ext-webview` (2026-06-30)  [start E]
+
+- Status: done.
+- Summary: repointed the extension's `src/webviews/_integration/` layer from the
+  old `@microsoft/vscode-ext-react-webview/server` onto the new package. `trpc.ts`
+  now builds the single tRPC instance via `initWebviewTrpc<FrameworkBaseRouterContext>()`
+  (destructuring `publicProcedure` / `router` / `createCallerFactory`) and replaces
+  the retired `createMiddleware`-based `trpcToTelemetry` with a `TelemetryRunner`
+  (`documentDbTelemetryRunner`) consumed through `telemetryMiddlewareBody`. The
+  runner keeps the exact `documentDB.rpc.${type}.${path}` event names, sets
+  `suppressDisplay`, and adds DocumentDB-specific error enrichment after `execute`
+  (`parseError`-derived `error` / `errorMessage`, plus `errorStack` / `errorCause`)
+  that overwrites the body's plain name/message. `appRouter.ts` and
+  `WebviewControllerBase.ts` import `BaseRouterContext` / `WebviewController` from
+  the new package; the base class adopts the options-bag `super({...})` form
+  (deriving bundled-vs-dev from `extensionMode`, so `ext.isBundle` / the explicit
+  `isBundled` flag are gone) and now accepts the per-view router context, passing
+  `router: appRouter` and `createCallerFactory`. The two view controllers
+  (`collectionViewController.ts`, `documentsViewController.ts`) build their
+  `trpcContext` before `super(...)` and pass it as the new argument, dropping the
+  separate `this.setupTrpc(...)` call (the options-bag controller auto-wires tRPC).
+- Consumer ripple: `telemetryMiddlewareBody` injects `telemetry` into ctx at
+  runtime but, unlike the old `createMiddleware`, does not widen the static ctx
+  type, so `queryInsightsRouter.ts`'s direct `ctx.telemetry` accesses (Stage 1 and
+  Stage 2) now go through the already-declared `myCtx = ctx as WithTelemetry<RouterContext>`
+  narrowing. No behavior change; the same telemetry object is written at runtime.
+- Checks: `npm run build` green (all packages + extension `tsc`); whole-repo
+  `npm run lint` clean (only the pre-existing benign `webpack.config.views.js`
+  eslint-env node warning); scoped `npx jest --no-coverage src/webviews` 313/313
+  across 12 suites. `npm run l10n` not run: no user-facing strings changed.
+  `grep -nP "[\x{2013}\x{2014}]"` finds no em/en dashes in the changed files or
+  this entry. Old package still resolvable (both are workspace symlinks), so the
+  `.tsx` consumers still importing it compile until WI-E2/WI-E3.
+- Deviations: extending the touched set to `queryInsightsRouter.ts` was required
+  to keep the extension building after the telemetry-middleware type contract
+  changed; it is a direct consequence of the `_integration` migration, so it
+  stays in this single commit.
+- Subagent: none.
