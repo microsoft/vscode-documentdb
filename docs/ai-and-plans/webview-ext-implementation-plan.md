@@ -1311,3 +1311,39 @@ entry in that work item's commit. On restart, this section plus
   would not prune (mirrors a pre-existing `vscode-webview-api` extraneous entry
   the repo already shipped); validated with `npm ci --dry-run`.
 - Subagent: none.
+
+### WI-G1 - Add internal webview-ext migration manual (2026-06-30)  [MILESTONE final DoD]
+
+- Status: done.
+- Summary: created `docs/ai-and-plans/webview-ext-migration-manual.md`, an
+  internal, unlinked record of the migration and a template for the parallel
+  vscode-cosmosdb adoption PR. It covers: the old-to-new rename map (package,
+  folder, the 2-subpath to 4-subpath split, and a per-symbol table including the
+  retired `createMiddleware` / `TelemetryContext` / `UseTrpcClientOptions` and the
+  new `initWebviewTrpc` / `attachTrpc` / `connectTrpc` / `openWebview`); the
+  telemetry-model migration (bound middleware to a consumer `TelemetryRunner`
+  adapter, plus the `WithTelemetry` `myCtx` narrowing now required because
+  `telemetryMiddlewareBody` does not widen `ctx`); the hook split with before /
+  after call sites (`{ trpcClient }` tuple to client-first `useTrpcClient()`, plus
+  `useRpcEvents`); and both panel migration paths with before / after code -- Path
+  A (class extends the options-bag `WebviewController`) and Path B (factory via an
+  `openAppWebview` preset over `openWebview`), including the holder pattern for a
+  panel-dependent title setter, how to choose (construction-only to B, stateful
+  stays on A), and that A and B can be sequenced. An embedders section documents
+  the `attachTrpc` bring-your-own-panel path with the exact
+  `{ disposable, activeOperations, activeSubscriptions }` return.
+- Symbol names in the manual were verified against the shipped barrels
+  (`packages/vscode-ext-webview/src/{index,host/index,webview/index,react/index}.ts`)
+  and the real `attachTrpc` / `WebviewController` signatures, not from memory.
+- Unlinked: the only tracked mentions of the filename are in this plan (the WI-G1
+  step and DoD item 10), which is intrinsic specification, not an index / README /
+  design-doc link; no other file references it.
+- Checks (full milestone, final DoD, plan §1.4): whole-repo `npm run lint` clean
+  (only the pre-existing benign `webpack.config.views.js` node warning); whole-repo
+  `npx jest --no-coverage` 2571/2571 across 146 suites (4 projects);
+  `npm run build` green; `npm run prettier-fix` leaves the in-scope tree clean
+  (`docs/**/*.md` is outside the prettier glob, which is js/ts/jsx/tsx/json).
+  `npm run l10n` not run: no user-facing strings changed. No em/en dashes and no
+  bare "MongoDB" product usage in the manual or this entry.
+- Deviations: none.
+- Subagent: none.
