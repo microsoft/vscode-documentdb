@@ -701,3 +701,18 @@ entry in that work item's commit. On restart, this section plus
   one-WI-one-commit rule. WI-A2 still performs the rest of the rebrand
   (version, description, `repository.directory`).
 - Subagent: none.
+
+### WI-A2 - Rebrand package metadata  (2026-06-30)
+
+- Status: done
+- Summary: Set `version` to `0.9.0-preview`, updated `repository.directory` to
+  `packages/vscode-ext-webview`, and rewrote `description` to reflect the
+  layered "transport + optional panel facade + framework-agnostic webview
+  client + optional React hooks" shape (dropped the React-centric wording).
+  `name` was already finalized in WI-A1. `exports` left for WI-B4.
+- Checks: `npm install` ok; `npm ls @microsoft/vscode-ext-webview` resolves to
+  `0.9.0-preview`; new package `npm run build` green; new package Jest 35/35;
+  `npm run lint` clean; full repo `npm run build` green (old package and
+  extension still build).
+- Deviations: None.
+- Subagent: none.

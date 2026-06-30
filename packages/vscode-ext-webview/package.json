@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/vscode-ext-webview",
-  "version": "0.8.0-preview",
-  "description": "Webview infrastructure for VS Code extensions with type-safe tRPC RPC over postMessage, React hooks, and pluggable telemetry middleware",
+  "version": "0.9.0-preview",
+  "description": "Type-safe tRPC transport over postMessage for VS Code extension webviews, with an optional extension-host panel facade, a framework-agnostic webview client, and pluggable telemetry. React hooks are optional.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -34,7 +34,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/vscode-documentdb",
-    "directory": "packages/vscode-ext-react-webview"
+    "directory": "packages/vscode-ext-webview"
   },
   "license": "MIT",
   "publishConfig": {
