@@ -3,8 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { type BaseRouterContext, type TelemetryContext } from '../shared/BaseRouterContext';
-export { TypedEventSink, type DiscriminatedEvent, type EventOfType, type UntypedEventEmitter } from '../shared/TypedEventSink';
+/**
+ * Host surface of `@microsoft/vscode-ext-webview` (the `./host` subpath).
+ *
+ * Extension-host (Node.js) code imports from here. It pulls in `vscode` and
+ * Node APIs and must not be bundled into the webview. Reshaped across Phase C
+ * to add `attachTrpc`, `openWebview`, and the middleware bodies / adapters.
+ */
+
 export {
     createCallerFactory,
     createMiddleware,

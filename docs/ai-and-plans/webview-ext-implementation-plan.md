@@ -743,3 +743,24 @@ entry in that work item's commit. On restart, this section plus
   reverse import - rejected as architecturally backwards even temporarily.
   `TelemetryContext` is still slated for retirement in WI-C2.
 - Subagent: none.
+### WI-B2 - Create the host entry and move host code  (2026-06-30)
+
+- Status: done
+- Summary: Created `src/host/` and moved `WebviewController.ts` and `trpc.ts`
+  there (via `git mv`; their `../shared/...` and `./trpc` imports stayed valid
+  since `host/` sits at the same depth as the old `extension-server/`). Added
+  `src/host/index.ts` (host barrel) and `src/host.ts` (the `./host` entry).
+  Fully dissolved `src/extension-server/` (its `index.ts` removed; the folder is
+  gone). Converted `src/server.ts` into a transitional shim re-exporting
+  `./host` + `./shared` so the legacy `./server` export keeps resolving until
+  WI-B4 rewires the exports map.
+- Checks: new package `npm run build` green (`dist/host.js` + `dist/host.d.ts`
+  emitted, so the `./host` entry compiles and resolves at the file level); new
+  package Jest 35/35 green; `npm run lint` clean.
+- Deviations: Kept `src/server.ts` as a temporary compatibility shim rather than
+  deleting it now. Why: the package.json `exports` map still points `./server`
+  at `dist/server.js` until WI-B4; deleting `server.ts` in this WI would leave a
+  dangling export target. The shim is removed in WI-B4 with the exports rewire.
+  Alternative considered: rewire `exports` early here - rejected because the plan
+  explicitly reserves the exports map for WI-B4.
+- Subagent: none.

@@ -4,13 +4,15 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Entry point for the extension-host (server) surface of
- * `@microsoft/vscode-ext-react-webview`.
+ * Transitional compatibility shim for the legacy `./server` subpath.
  *
- * Imported as `@microsoft/vscode-ext-react-webview/server` from the extension's
- * Node.js code (controllers, routers, telemetry middleware). Pulls in
- * Node / VS Code APIs (`fs`, `path`, `vscode`) and must not be bundled into
- * the webview's browser-side code.
+ * The host code now lives under `./host` and the side-agnostic code under `.`.
+ * This file re-exports both so the historical `./server` entry keeps resolving
+ * during the restructure. It is removed in WI-B4 when the package's `exports`
+ * map is rewired to the four-subpath layout (`.`, `./host`, `./webview`,
+ * `./react`).
  */
 
-export * from './extension-server';
+export * from './host';
+export * from './shared';
+
