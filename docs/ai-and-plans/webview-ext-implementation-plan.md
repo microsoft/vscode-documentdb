@@ -1098,3 +1098,32 @@ entry in that work item's commit. On restart, this section plus
   em/en dashes; whole-repo `npm run lint` clean (docs-only change). Full milestone
   build + jest deferred to the end of Phase D (after WI-D2).
 - Subagent: none.
+
+### WI-D2 - ADVANCED.md: the behind-the-scenes manual  (2026-06-30)  [MILESTONE end D]
+
+- Status: done (Phase D milestone).
+- Summary: added `packages/vscode-ext-webview/ADVANCED.md`, the deep manual the
+  README signposts. Sections: the three tiers and when to use each (front door /
+  panel primitive / transport primitive); bring-your-own-panel with `attachTrpc`
+  (return shape `disposable` / `activeOperations` / `activeSubscriptions`); the
+  consumer-owned tRPC instance and `createCallerFactory`; telemetry adapters
+  (worked `ProcedureLogger` + `loggingMiddlewareBody` and a `TelemetryRunner` +
+  `telemetryMiddlewareBody` Application-Insights example, noting the two sinks do
+  not double-count); the webview event channel (`useRpcEvents` /
+  `createEventChannel` with `onSuccess` / `onError` / `onAborted`), which replaces
+  the old `useTrpcClient({ onError })` observer; the framework-agnostic
+  `connectTrpc` path; push events with `TypedEventSink` (emit overloads, single
+  consumer, `close()` semantics, `iterator.return()` cleanup); the type-only
+  `AppRouter` import rule; and an FAQ (why tRPC, why four entry points, multiple
+  panels, cancellation, non-React frameworks). Every old-README Advanced topic is
+  preserved at equal or greater depth, updated to the new names.
+- Checks: every referenced symbol verified against the shipped barrels and
+  §13.4; no retired symbol present; `grep -nP "[\x{2013}\x{2014}]"` finds no
+  em/en dashes in `ADVANCED.md`; `npm run prettier-fix` leaves both docs
+  unchanged (already compliant). Phase D milestone re-run green: whole-repo
+  `npm run lint` clean; whole-repo `npx jest --no-coverage` 2606/2606 across 149
+  suites; `npm run build` green. `npm run l10n` not run: docs-only phase, no
+  localized strings touched. (No code changed since the WI-C7 milestone, so the
+  package's own 75-test suite and `tsc` outcome are unchanged from that run.)
+- Deviations: none.
+- Subagent: none.
