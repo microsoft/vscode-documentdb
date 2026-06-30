@@ -781,3 +781,30 @@ entry in that work item's commit. On restart, this section plus
   `npm run lint` clean.
 - Deviations: None.
 - Subagent: none.
+
+### WI-B4 - Wire the exports map and optional React peer  (2026-06-30)
+
+- Status: done
+- Summary: Rewrote `exports` for the four subpaths (`.`, `./host`, `./webview`,
+  `./react`), each with `types` + `default` pointing at `dist/*.{d.ts,js}`.
+  Updated `typesVersions` for `host`/`webview`/`react`. Marked `react` as an
+  optional peer in `peerDependenciesMeta` (kept `@trpc/*` peers and the optional
+  `vscode-webview` peer). Removed the legacy `./server` export and deleted the
+  `src/server.ts` shim.
+- Checks: clean `npm run build` emits all four entry `.js` + `.d.ts`; a scratch
+  type-only import of each subpath compiles under `module commonjs` /
+  `moduleResolution node` (the resolution the extension uses); new package Jest
+  35/35 green; `npm run lint` clean; full repo `npm run build` green (old
+  package and extension still build).
+- Deviations: Changed the four entry files to re-export `./<folder>/index`
+  explicitly (e.g. `export * from './host/index'`) instead of `./<folder>`. Why:
+  the emitted `dist/host.d.ts` (entry) is a sibling of the `dist/host/` folder,
+  and node10 resolution resolves a bare `./host` to the sibling FILE
+  (`host.d.ts`, i.e. itself) rather than the directory's `index.d.ts`, so every
+  subpath re-export resolved to an empty self-reference and exposed no members
+  (caught by the scratch-import check). The explicit `/index` disambiguates to
+  the folder barrel. Alternative considered: rename the impl folders to avoid the
+  file/dir name clash - rejected because the plan fixes the folder names
+  (`host/`, `webview/`, `react/`). This is part of WI-B4's "subpaths resolve"
+  goal, so it is not a separate follow-up commit.
+- Subagent: none.

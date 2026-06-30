@@ -14,4 +14,4 @@
  * from `./webview` (framework-agnostic) or `./react` (React hooks).
  */
 
-export * from './shared';
+export * from './shared/index';

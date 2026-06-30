@@ -12,4 +12,4 @@
  * be bundled into the webview's browser-side code.
  */
 
-export * from './host';
+export * from './host/index';

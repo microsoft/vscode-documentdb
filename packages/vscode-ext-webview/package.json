@@ -9,15 +9,29 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "default": "./dist/server.js"
+    "./host": {
+      "types": "./dist/host.d.ts",
+      "default": "./dist/host.js"
+    },
+    "./webview": {
+      "types": "./dist/webview.d.ts",
+      "default": "./dist/webview.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
     }
   },
   "typesVersions": {
     "*": {
-      "server": [
-        "./dist/server.d.ts"
+      "host": [
+        "./dist/host.d.ts"
+      ],
+      "webview": [
+        "./dist/webview.d.ts"
+      ],
+      "react": [
+        "./dist/react.d.ts"
       ]
     }
   },
@@ -47,6 +61,9 @@
     "vscode-webview": "^1.0.0"
   },
   "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
     "vscode-webview": {
       "optional": true
     }

@@ -12,4 +12,4 @@
  * are built on top of this entry.
  */
 
-export * from './webview';
+export * from './webview/index';

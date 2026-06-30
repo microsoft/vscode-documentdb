@@ -12,4 +12,4 @@
  * framework-agnostic `./webview` transport.
  */
 
-export * from './react';
+export * from './react/index';
