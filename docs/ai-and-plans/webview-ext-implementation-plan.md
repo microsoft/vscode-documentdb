@@ -808,3 +808,30 @@ entry in that work item's commit. On restart, this section plus
   (`host/`, `webview/`, `react/`). This is part of WI-B4's "subpaths resolve"
   goal, so it is not a separate follow-up commit.
 - Subagent: none.
+
+### WI-C1 - initWebviewTrpc typed-init helper  (2026-06-30)
+
+- Status: done
+- Summary: Added `src/shared/initWebviewTrpc.ts`: a generic
+  `initWebviewTrpc<TContext extends BaseRouterContext>()` returning
+  `{ router, publicProcedure, createCallerFactory, middleware }` bound to the
+  consumer's context type (via `initTRPC.context<TContext>().create()`), plus a
+  default `BaseRouterContext` instance backing convenience `router` /
+  `publicProcedure` / `createCallerFactory` re-exports. Exported
+  `initWebviewTrpc`, `router`, `publicProcedure` (and the `WebviewTrpc` type)
+  from the shared `.` barrel. Added `initWebviewTrpc.test.ts`.
+- Checks: new package `npm run build` green; Jest 38/38 (3 new) green - the
+  typed-init test reads `ctx.workspaceRoot` / `ctx.requestCount` with NO cast
+  and compiles under ts-jest, proving context inference; grep confirms shared
+  stays side-agnostic; `npm run lint` clean.
+- Deviations: Left `host/trpc.ts` untouched, so the package transitionally holds
+  two default tRPC instances (the new shared default and the legacy one in
+  `host/trpc.ts`). Why: WI-C1's scope is strictly "add initWebviewTrpc + re-export
+  router/publicProcedure + tests"; the legacy `host/trpc.ts` is retired/reshaped
+  in WI-C2 (telemetry) and WI-C3 (attachTrpc default caller factory), at which
+  point the host re-points to the single shared default instance and drops its
+  duplicate `router`/`publicProcedure`. No consumer uses the new package's
+  router builders yet, so the transient duplication is inert. Alternative
+  considered: re-point `host/trpc.ts` now - rejected as WI-C2/C3 scope and it
+  would entangle the (about-to-be-deleted) legacy telemetry middleware.
+- Subagent: none.
