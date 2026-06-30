@@ -764,3 +764,20 @@ entry in that work item's commit. On restart, this section plus
   Alternative considered: rewire `exports` early here - rejected because the plan
   explicitly reserves the exports map for WI-B4.
 - Subagent: none.
+
+### WI-B3 - Split framework-agnostic webview entry from react entry  (2026-06-30)
+
+- Status: done
+- Summary: Created `src/webview/` (moved `vscodeLink.ts`/`errorLink.ts` and their
+  tests) and `src/react/` (moved `WebviewContext.tsx`, `useConfiguration.ts`,
+  `useTrpcClient.ts`) via `git mv`. Dissolved `src/webview-client/`. Added
+  `src/webview/index.ts` + `src/react/index.ts` barrels and the `src/webview.ts`
+  + `src/react.ts` entries. Repointed `react/useTrpcClient.ts` at
+  `../webview/errorLink`, `../webview/vscodeLink`, and the wire types from
+  `../shared/wireProtocol`.
+- Checks: new package `npm run build` green (all four entry `.js` emitted:
+  `index`, `host`, `webview`, `react`); grep confirms no `react`/`react-dom`/
+  `vscode-webview` imports in `src/webview/`; new package Jest 35/35 green;
+  `npm run lint` clean.
+- Deviations: None.
+- Subagent: none.

@@ -3,13 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { errorLink, type ErrorHandler } from './errorLink';
+/**
+ * React surface (the `./react` subpath).
+ *
+ * The only entry that imports React. Provides the hooks and context wiring a
+ * React webview needs (`useTrpcClient`, `useConfiguration`, `WithWebviewContext`)
+ * on top of the framework-agnostic `./webview` transport. Reshaped in Phase C to
+ * split `useRpcEvents` out of `useTrpcClient`.
+ */
+
 export { useConfiguration } from './useConfiguration';
 export { useTrpcClient, type TrpcClient, type UseTrpcClientOptions } from './useTrpcClient';
-export {
-    vscodeLink,
-    type VSCodeLinkOptions,
-    type VsCodeLinkRequestMessage,
-    type VsCodeLinkResponseMessage,
-} from './vscodeLink';
 export { WebviewContext, WithWebviewContext, type WebviewContextValue, type WebviewState } from './WebviewContext';

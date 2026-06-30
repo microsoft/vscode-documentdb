@@ -6,8 +6,9 @@
 import { createTRPCClient, loggerLink, type CreateTRPCClient } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
 import { useContext, useMemo } from 'react';
-import { errorLink, type ErrorHandler } from './errorLink';
-import { vscodeLink, type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from './vscodeLink';
+import { errorLink, type ErrorHandler } from '../webview/errorLink';
+import { vscodeLink } from '../webview/vscodeLink';
+import { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
 import { WebviewContext } from './WebviewContext';
 
 /**
