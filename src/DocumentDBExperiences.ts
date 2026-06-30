@@ -6,6 +6,7 @@
 export enum API {
     CosmosDBMongoRU = 'mongoRU',
     DocumentDB = 'documentDB',
+    Atlas = 'mongoDBAtlas',
 }
 
 export function getExperienceFromApi(api: API): Experience {
@@ -49,7 +50,15 @@ export const DocumentDBExperience: Experience = {
     tag: 'DocumentDB',
 } as const;
 
-const experiencesArray: Experience[] = [DocumentDBExperience, CosmosDBMongoRUExperience];
+export const AtlasExperience: Experience = {
+    api: API.Atlas,
+    longName: 'MongoDB Atlas',
+    shortName: 'Atlas',
+    telemetryName: 'atlas',
+    tag: 'MongoDB Atlas',
+} as const;
+
+const experiencesArray: Experience[] = [DocumentDBExperience, CosmosDBMongoRUExperience, AtlasExperience];
 const experiencesMap = new Map<API, Experience>(
     experiencesArray.map((info: Experience): [API, Experience] => [info.api, info]),
 );

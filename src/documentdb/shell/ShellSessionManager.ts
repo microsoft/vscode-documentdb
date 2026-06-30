@@ -26,6 +26,8 @@ export interface ShellConnectionInfo {
     readonly clusterDisplayName: string;
     /** Initial database name for the session. */
     readonly databaseName: string;
+    /** Label prefix for the terminal title (e.g. "DocumentDB", "MongoDB Atlas"). Defaults to "DocumentDB". */
+    readonly shellLabel?: string;
 }
 
 /**
