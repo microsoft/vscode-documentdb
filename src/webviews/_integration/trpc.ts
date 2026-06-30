@@ -44,7 +44,11 @@
 
 import { callWithTelemetryAndErrorHandling, parseError, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { initWebviewTrpc, type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
-import { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
+import {
+    telemetryMiddlewareBody,
+    type ProcedureTelemetry,
+    type TelemetryRunner,
+} from '@microsoft/vscode-ext-webview/host';
 import { WEBVIEW_CONFIG } from './configuration';
 
 /**
