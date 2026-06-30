@@ -955,3 +955,35 @@ entry in that work item's commit. On restart, this section plus
   preserved inside `eventLink`, consistent with the design framing that the channel
   observes query/mutation outcomes.
 - Subagent: none.
+
+### WI-C5 - connectTrpc webview client factory (2026-06-30)
+
+- Status: done
+- Summary: Added `src/webview/connectTrpc.ts`.
+  `connectTrpc<TRouter>(vscodeApi, options?)` creates an event channel, wires the
+  default transport (`send` via `vscodeApi.postMessage`; `onReceive` via
+  `window.addEventListener('message', ...)` with the `id` type-guard, lifted from
+  the React hook), assembles a tRPC client with
+  `[loggerLink(), eventLink(channel), vscodeLink({ send, onReceive })]`, and returns
+  `{ client, events }` where `events` is the observe-only `RpcEventChannel`.
+  `options.onError` subscribes to `channel.onError`. Added the supporting types
+  `VsCodeApiLike` (structural `{ postMessage }`), `ConnectTrpcOptions`, and
+  `ConnectTrpcResult`. Exported `connectTrpc` + its types from the `./webview`
+  barrel. Added `connectTrpc.test.ts`.
+- Checks: Jest 63/63 (4 new) green - a query is driven end-to-end through
+  `connectTrpc` and observed via `events.onSuccess`; the error path surfaces
+  `events.onError` and the `onError` option; an already-aborted signal surfaces
+  `events.onAborted` (and not `onError`); package `tsc --noEmit` clean;
+  `npm run lint` clean.
+- Deviations: (1) `connectTrpc` composes `eventLink(channel)` (the full publisher
+  from WI-C4), not `errorLink`, so the returned channel surfaces success / error /
+  aborted (`errorLink` only bridges errors). The plan named "errorLink" loosely;
+  `eventLink` is what realizes `{ client, events }` per §13. (2) The package jest env
+  is `node` (no DOM) and `jest-environment-jsdom` is not installed at the repo root,
+  so `connectTrpc.test.ts` installs a minimal `window` stub
+  (`addEventListener` / `removeEventListener` for `'message'`) plus an echoing fake
+  `vscodeApi` that replies with the request's own id; this exercises the real
+  `vscodeLink` round-trip without jsdom. (3) `loggerLink` stays in the default link
+  chain to preserve the prior React-hook behavior; it logs the error/abort cases to
+  the console during those tests (expected, non-failing).
+- Subagent: none.

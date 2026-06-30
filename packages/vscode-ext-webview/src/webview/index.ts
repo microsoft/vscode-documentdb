@@ -12,6 +12,12 @@
  * `connectTrpc` and `createEventChannel`.
  */
 
+export {
+    connectTrpc,
+    type ConnectTrpcOptions,
+    type ConnectTrpcResult,
+    type VsCodeApiLike,
+} from './connectTrpc';
 export { errorLink, type ErrorHandler } from './errorLink';
 export {
     type AbortedHandler,
