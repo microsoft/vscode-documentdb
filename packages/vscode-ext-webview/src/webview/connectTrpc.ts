@@ -18,8 +18,8 @@
 import { createTRPCClient, type CreateTRPCClient, loggerLink } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
 import { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
-import { createEventChannel, type RpcEventChannel } from './events';
 import { type ErrorHandler, eventLink } from './errorLink';
+import { createEventChannel, type RpcEventChannel } from './events';
 import { vscodeLink } from './vscodeLink';
 
 /**

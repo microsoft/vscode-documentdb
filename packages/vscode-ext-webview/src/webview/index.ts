@@ -12,17 +12,13 @@
  * `connectTrpc` and `createEventChannel`.
  */
 
-export {
-    connectTrpc,
-    type ConnectTrpcOptions,
-    type ConnectTrpcResult,
-    type VsCodeApiLike,
-} from './connectTrpc';
+export { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
+export { connectTrpc, type ConnectTrpcOptions, type ConnectTrpcResult, type VsCodeApiLike } from './connectTrpc';
 export { errorLink, type ErrorHandler } from './errorLink';
 export {
+    createEventChannel,
     type AbortedHandler,
     type CallInfo,
-    createEventChannel,
     type ErrorEventHandler,
     type EventChannel,
     type RpcEventChannel,
@@ -31,4 +27,3 @@ export {
     type Unsubscribe,
 } from './events';
 export { vscodeLink, type VSCodeLinkOptions } from './vscodeLink';
-export { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';

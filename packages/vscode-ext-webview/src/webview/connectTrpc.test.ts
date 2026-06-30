@@ -92,10 +92,7 @@ describe('connectTrpc', () => {
         expect(result).toBe('pong');
         expect(sent).toHaveLength(1);
         expect(onSuccess).toHaveBeenCalledTimes(1);
-        expect(onSuccess).toHaveBeenCalledWith(
-            expect.objectContaining({ type: 'query', path: 'greet' }),
-            'pong',
-        );
+        expect(onSuccess).toHaveBeenCalledWith(expect.objectContaining({ type: 'query', path: 'greet' }), 'pong');
     });
 
     it('surfaces an error event and forwards it to the onError option', async () => {
