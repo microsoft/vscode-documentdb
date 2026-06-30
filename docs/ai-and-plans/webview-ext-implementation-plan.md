@@ -1197,3 +1197,29 @@ entry in that work item's commit. On restart, this section plus
   changed files or this entry.
 - Deviations: none.
 - Subagent: none.
+
+### WI-E3 - Flip the dependency to @microsoft/vscode-ext-webview (2026-06-30)
+
+- Status: done.
+- Summary: in the root `package.json`, replaced the
+  `@microsoft/vscode-ext-react-webview` dependency with
+  `@microsoft/vscode-ext-webview` (both `"*"` workspace links); ran `npm install`.
+  The lockfile delta is exactly the renamed root dependency plus the new
+  package's `peerDependenciesMeta.react.optional` entry (the new package marks
+  React as an optional peer). `npm` was 10.9.3, matching CI, so `npm ci` stays
+  valid.
+- Prep commit: the milestone `npm run prettier-fix` reformatted one WI-E1 file
+  (`trpc.ts` host import wrapped across lines); committed separately as
+  `style(documentdb): wrap trpc.ts host import per prettier` (c73aa4d6) to keep
+  this dependency-flip commit focused, matching the WI-C7 precedent.
+- Checks (full milestone, plan §1.4): whole-repo `npm run lint` clean (only the
+  pre-existing benign `webpack.config.views.js` node warning); whole-repo
+  `npx jest --no-coverage` 2606/2606 across 149 suites (5 projects);
+  `npm run build` green (all packages + extension `tsc`); `npm run prettier-fix`
+  leaves the tree clean after the style commit above. `grep -r "vscode-ext-react-webview" src/`
+  returns nothing (extension source no longer references the old package; only
+  the old package's own files under `packages/` still do, removed in WI-F1).
+  `npm run l10n` not run: no user-facing strings changed. No em/en dashes in the
+  changed files or this entry.
+- Deviations: none.
+- Subagent: none.
