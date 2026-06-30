@@ -1271,3 +1271,43 @@ entry in that work item's commit. On restart, this section plus
   the class path); this was supported by the plan ("construction-only controllers
   become factory calls") and let `WebviewControllerBase` be removed entirely.
 - Subagent: none.
+
+### WI-F1 - Remove deprecated @microsoft/vscode-ext-react-webview package (2026-06-30)  [MILESTONE]
+
+- Status: done.
+- Summary: deleted `packages/vscode-ext-react-webview/` (`git rm -r`, then `rm -rf`
+  to clear the gitignored `dist/` that survived `git rm` and kept the directory on
+  disk). Removed the two explicit path references: the tsconfig project reference
+  (`tsconfig.json` `references[]`) and the root jest project entry
+  (`jest.config.js` `projects[]`). Ran `npm install`; the lockfile dropped the
+  package's `node_modules` symlink entry, but npm left a stale extraneous
+  `packages/vscode-ext-react-webview` workspace block (npm does not auto-prune
+  these; the repo already carried a similar pre-existing `vscode-webview-api`
+  extraneous block). Removed the dead block by hand and re-ran `npm install`;
+  `npm ci --dry-run` then validates the lockfile cleanly.
+- Doc reference cleanup: `.github/skills/webview-trpc-messaging/SKILL.md` still
+  taught the old two-subpath API. Updated it to the new package: the key-files
+  table now points at `@microsoft/vscode-ext-webview` (shared),
+  `/host` (telemetry + `WebviewController` + `openWebview`), and `/webview`
+  (`vscodeLink`); the "create the controller" section now shows the
+  `openAppWebview` factory function instead of the deleted `WebviewControllerBase`
+  subclass + `this.setupTrpc()`; the registry note, the `useConfiguration` import
+  (`/react`), and the client-first `useTrpcClient()` call (no tuple) were all
+  corrected. `.github` markdown is outside the repo `prettier` glob
+  (`(src|test|l10n|grammar|docs|packages)/**/*.{js,ts,jsx,tsx,json}` + root), and
+  the file was already not prettier-formatted at HEAD, so its tables were left in
+  the file's existing hand-aligned style.
+- Checks (full milestone, plan §1.4): whole-repo `npm run lint` clean (only the
+  pre-existing benign `webpack.config.views.js` node warning); whole-repo
+  `npx jest --no-coverage` 2571/2571 across 146 suites (4 projects) -- down from
+  2606/149/5 by exactly the removed package's 35 tests / 3 suites / 1 project;
+  `npm run build` green; `npm run prettier-fix` leaves the in-scope tree clean.
+  `git grep "vscode-ext-react-webview" -- ':!docs/ai-and-plans/'` returns nothing
+  (the only remaining mentions are the historical plan + design doc under
+  `docs/ai-and-plans/`, and gitignored build output under `out/` / `dist/`).
+  `npm run l10n` not run: no user-facing strings changed. No em/en dashes in the
+  changed files or this entry.
+- Deviations: hand-removed one stale extraneous lockfile block that `npm install`
+  would not prune (mirrors a pre-existing `vscode-webview-api` extraneous entry
+  the repo already shipped); validated with `npm ci --dry-run`.
+- Subagent: none.

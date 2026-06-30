@@ -23,13 +23,15 @@ useTrpcClient() hook                      WebviewController
 
 | File                                                             | Purpose                                                                                                                |
 | ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `@microsoft/vscode-ext-react-webview/server` (trpc)              | tRPC init, `publicProcedure`, `createMiddleware`, `router`, `BaseRouterContext`                                        |
-| `src/webviews/_integration/appRouter.ts`                   | Root router + telemetry middleware + `publicProcedureWithTelemetry` + `WithTelemetry` + DocumentDB `BaseRouterContext` |
+| `@microsoft/vscode-ext-webview` (shared)                         | tRPC init via `initWebviewTrpc`, `publicProcedure`, `router`, `BaseRouterContext`                                      |
+| `@microsoft/vscode-ext-webview/host` (telemetry)                 | `telemetryMiddlewareBody`, `ProcedureLogger`, `TelemetryRunner` (consumer builds `publicProcedureWithTelemetry`)       |
+| `src/webviews/_integration/trpc.ts`                        | Consumer tRPC instance: `publicProcedureWithTelemetry`, the DocumentDB `TelemetryRunner`, `WithTelemetry`              |
+| `src/webviews/_integration/appRouter.ts`                   | Root router + `publicProcedureWithTelemetry` wiring + DocumentDB `BaseRouterContext`                                   |
 | `src/webviews/_integration/configuration.ts`               | Consumer-owned knobs (telemetry namespace, bundle layout, dev-server host)                                             |
-| `@microsoft/vscode-ext-react-webview/server` (WebviewController) | WebviewPanel lifecycle, tRPC message dispatcher (queries, mutations, subscriptions, abort)                             |
-| `src/webviews/_integration/WebviewControllerBase.ts`       | DocumentDB-tuned base class that pre-fills router + bundle layout                                                      |
+| `@microsoft/vscode-ext-webview/host` (WebviewController)         | `WebviewController` + `openWebview` factory: WebviewPanel lifecycle, tRPC dispatcher (queries, mutations, subscriptions, abort) |
+| `src/webviews/_integration/openAppWebview.ts`              | DocumentDB factory preset that pre-fills router + bundle layout (`openAppWebview`)                                     |
 | `src/webviews/_integration/useTrpcClient.ts`               | React hook providing the tRPC client (pre-typed against `AppRouter`)                                                   |
-| `@microsoft/vscode-ext-react-webview` (vscodeLink)               | Custom tRPC link bridging `postMessage` transport                                                                      |
+| `@microsoft/vscode-ext-webview/webview` (vscodeLink)             | Custom tRPC link bridging `postMessage` transport                                                                      |
 
 ## Creating a New Router
 
@@ -91,33 +93,53 @@ export const appRouter = router({
 
 ### 4. Create the controller
 
+Construction-only panels are opened with a factory function that builds the
+config + router context and calls the `openAppWebview` preset (which pre-fills
+the app router, caller factory, and bundle layout):
+
 ```typescript
 // src/webviews/documentdb/myView/myViewController.ts
-import { WebviewControllerBase } from '../../_integration/WebviewControllerBase';
+import * as vscode from 'vscode';
+import { API } from '../../../DocumentDBExperiences';
+import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './myViewRouter';
 
-export class MyViewController extends WebviewControllerBase<MyViewConfig> {
-  constructor(initialData: MyViewConfig) {
-    super(ext.context, title, 'myViewName', initialData);
+export function openMyViewPanel(initialData: MyViewConfig): AppWebviewController<MyViewConfig> {
+  const title = `${initialData.databaseName}`;
 
-    const trpcContext: RouterContext = {
-      dbExperience: API.DocumentDB,
-      webviewName: 'myView',
-      clusterId: initialData.clusterId,
-      viewId: initialData.viewId,
-      databaseName: initialData.databaseName,
-    };
+  const trpcContext: RouterContext = {
+    dbExperience: API.DocumentDB,
+    webviewName: 'myView',
+    clusterId: initialData.clusterId,
+    viewId: initialData.viewId,
+    databaseName: initialData.databaseName,
+  };
 
-    this.setupTrpc(trpcContext);
-  }
+  return openAppWebview({
+    title,
+    webviewName: 'myView',
+    config: initialData,
+    context: trpcContext,
+  });
 }
 ```
 
-> **Important:** The `webviewName` in the `WebviewControllerBase` constructor is the **registry key** (must match a key in `WebviewRegistry`, e.g. `collectionView`). The `webviewName` in the tRPC context is a **telemetry label** used in telemetry event names (e.g. `collectionView`). These may be the same string but serve different purposes — do not confuse them.
+The returned `AppWebviewController` handle exposes `panel`, `onDisposed`,
+`revealToForeground`, `isDisposed`, and `dispose`. Genuinely stateful panels may
+still extend `WebviewController` from `@microsoft/vscode-ext-webview/host`
+directly instead of using the factory.
+
+> **Important:** The `webviewName` field passed to `openAppWebview` is the
+> **registry key** (`viewType`, must match a key in `WebviewRegistry`, e.g.
+> `collectionView`). The `webviewName` in the tRPC context is a **telemetry
+> label** used in telemetry event names. These may be the same string but serve
+> different purposes -- do not confuse them.
 
 ### 5. Register in WebviewRegistry
 
-Add your React component to the registry. The key must match the `webviewName` passed to `WebviewControllerBase`'s constructor. The `WebviewName` type (exported from the same file) ensures compile-time validation of webview names.
+Add your React component to the registry. The key must match the `webviewName`
+passed to `openAppWebview` (`viewType`). The `WebviewName` type (exported from
+the same file) ensures compile-time validation of webview names.
 
 ```typescript
 // src/webviews/_integration/WebviewRegistry.ts
@@ -191,7 +213,7 @@ getData: publicProcedureWithTelemetry
 ### Client-side abort
 
 ```tsx
-const { trpcClient } = useTrpcClient();
+const trpcClient = useTrpcClient();
 const abortControllerRef = useRef<AbortController>();
 
 const runQuery = async () => {
@@ -241,10 +263,10 @@ sub.unsubscribe();
 
 ```tsx
 import { useTrpcClient } from '../_integration/useTrpcClient';
-import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 
 export const MyComponent = () => {
-  const { trpcClient } = useTrpcClient();
+  const trpcClient = useTrpcClient();
   const config = useConfiguration<MyViewConfig>();
 
   useEffect(() => {
