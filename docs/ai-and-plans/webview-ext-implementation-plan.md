@@ -667,7 +667,7 @@ entry in that work item's commit. On restart, this section plus
 
 <!-- WI-A0 onward -->
 
-### WI-A0 - Preflight: start from the latest `main`  (2026-06-30)
+### WI-A0 - Preflight: start from the latest `main` (2026-06-30)
 
 - Status: done
 - Summary: Fetched origin and merged `origin/main` into the working branch
@@ -682,7 +682,7 @@ entry in that work item's commit. On restart, this section plus
   the plan's exception.)
 - Subagent: none.
 
-### WI-A1 - Copy the package into the new folder  (2026-06-30)
+### WI-A1 - Copy the package into the new folder (2026-06-30)
 
 - Status: done
 - Summary: Copied `packages/vscode-ext-react-webview/` to
@@ -702,7 +702,7 @@ entry in that work item's commit. On restart, this section plus
   (version, description, `repository.directory`).
 - Subagent: none.
 
-### WI-A2 - Rebrand package metadata  (2026-06-30)
+### WI-A2 - Rebrand package metadata (2026-06-30)
 
 - Status: done
 - Summary: Set `version` to `0.9.0-preview`, updated `repository.directory` to
@@ -717,7 +717,7 @@ entry in that work item's commit. On restart, this section plus
 - Deviations: None.
 - Subagent: none.
 
-### WI-B1 - Create the shared entry and move shared code  (2026-06-30)
+### WI-B1 - Create the shared entry and move shared code (2026-06-30)
 
 - Status: done
 - Summary: Created `src/shared/` and moved `BaseRouterContext.ts`,
@@ -743,7 +743,8 @@ entry in that work item's commit. On restart, this section plus
   reverse import - rejected as architecturally backwards even temporarily.
   `TelemetryContext` is still slated for retirement in WI-C2.
 - Subagent: none.
-### WI-B2 - Create the host entry and move host code  (2026-06-30)
+
+### WI-B2 - Create the host entry and move host code (2026-06-30)
 
 - Status: done
 - Summary: Created `src/host/` and moved `WebviewController.ts` and `trpc.ts`
@@ -765,16 +766,16 @@ entry in that work item's commit. On restart, this section plus
   explicitly reserves the exports map for WI-B4.
 - Subagent: none.
 
-### WI-B3 - Split framework-agnostic webview entry from react entry  (2026-06-30)
+### WI-B3 - Split framework-agnostic webview entry from react entry (2026-06-30)
 
 - Status: done
 - Summary: Created `src/webview/` (moved `vscodeLink.ts`/`errorLink.ts` and their
   tests) and `src/react/` (moved `WebviewContext.tsx`, `useConfiguration.ts`,
   `useTrpcClient.ts`) via `git mv`. Dissolved `src/webview-client/`. Added
   `src/webview/index.ts` + `src/react/index.ts` barrels and the `src/webview.ts`
-  + `src/react.ts` entries. Repointed `react/useTrpcClient.ts` at
-  `../webview/errorLink`, `../webview/vscodeLink`, and the wire types from
-  `../shared/wireProtocol`.
+  - `src/react.ts` entries. Repointed `react/useTrpcClient.ts` at
+    `../webview/errorLink`, `../webview/vscodeLink`, and the wire types from
+    `../shared/wireProtocol`.
 - Checks: new package `npm run build` green (all four entry `.js` emitted:
   `index`, `host`, `webview`, `react`); grep confirms no `react`/`react-dom`/
   `vscode-webview` imports in `src/webview/`; new package Jest 35/35 green;
@@ -782,7 +783,7 @@ entry in that work item's commit. On restart, this section plus
 - Deviations: None.
 - Subagent: none.
 
-### WI-B4 - Wire the exports map and optional React peer  (2026-06-30)
+### WI-B4 - Wire the exports map and optional React peer (2026-06-30)
 
 - Status: done
 - Summary: Rewrote `exports` for the four subpaths (`.`, `./host`, `./webview`,
@@ -809,7 +810,7 @@ entry in that work item's commit. On restart, this section plus
   goal, so it is not a separate follow-up commit.
 - Subagent: none.
 
-### WI-C1 - initWebviewTrpc typed-init helper  (2026-06-30)
+### WI-C1 - initWebviewTrpc typed-init helper (2026-06-30)
 
 - Status: done
 - Summary: Added `src/shared/initWebviewTrpc.ts`: a generic
@@ -836,7 +837,7 @@ entry in that work item's commit. On restart, this section plus
   would entangle the (about-to-be-deleted) legacy telemetry middleware.
 - Subagent: none.
 
-### WI-C2 - Telemetry middleware bodies + adapters; retire old model  (2026-06-30)
+### WI-C2 - Telemetry middleware bodies + adapters; retire old model (2026-06-30)
 
 - Status: done
 - Summary: Added `src/host/middleware/` with `types.ts` (`ProcedureType`,
@@ -874,4 +875,48 @@ entry in that work item's commit. On restart, this section plus
   a word-boundary grep is required to audit retired symbols. Alternatives
   considered: removing the `telemetry` field entirely - deferred since the
   consumer overrides its type anyway and removal adds migration churn.
+- Subagent: none.
+
+### WI-C3 - Extract attachTrpc dispatcher from WebviewController (2026-06-30)
+
+- Status: done
+- Summary: Added `src/host/attachTrpc.ts` exporting
+  `attachTrpc(panel, context, router, callerFactory = defaultCreateCallerFactory)`
+  which returns `{ disposable, activeOperations, activeSubscriptions }`. It owns
+  the full webview message dispatch that previously lived inside
+  `WebviewController`: `handleDefaultMessage` (query/mutation), the per-operation
+  `AbortController` tracking in `activeOperations`, subscription streaming via
+  `handleSubscriptionMessage` + module-level `toAsyncIterator`, `subscription.stop`
+  via `handleSubscriptionStopMessage`, `abort` via `handleAbortMessage`, the
+  disposed-guarded `safePostMessage`, and `wrapInTrpcErrorMessage`. It also exports
+  `ActiveSubscription`, `WebviewCallerFactory`, and `AttachTrpcResult`. The module
+  imports `Disposable` / `WebviewPanel` from `vscode` as TYPE-only, so it carries
+  no runtime `vscode` dependency and runs under the node/jsdom jest env. Slimmed
+  `WebviewController`: `setupTrpc(context)` now just calls
+  `attachTrpc(this._panel, context, this._options.appRouter)` and registers the
+  returned disposable; removed the `_activeOperations` / `_activeSubscriptions`
+  fields and all per-message handler methods; `dispose()` fires `onDisposed` and
+  disposes registered disposables (attachTrpc's disposable aborts in-flight ops and
+  aborts/returns subscriptions). `host/index.ts` now re-exports `attachTrpc` + its
+  types and `AnyRouter` (from `@trpc/server`). Added `src/host/attachTrpc.test.ts`
+  (9 tests) driving a stub `WebviewPanel`.
+- Checks: `npm run lint` clean (added the missing
+  `@typescript-eslint/no-unsafe-assignment` to the two dispatcher procedure-lookup
+  disable comments that were carried over verbatim from the original controller);
+  Jest 53/53 (9 new) green; package `tsc --noEmit` clean; retired-symbol
+  word-boundary grep (`createMiddleware` / `publicProcedureWithTelemetry` /
+  `TelemetryContext`) clean; `npm run build` previously green for this refactor.
+- Deviations: (1) The `subscription.stop` test asserts the reliable synchronous
+  facts (the `activeSubscriptions` entry is removed and the per-operation
+  `AbortController` is aborted) rather than asserting that `iterator.return()`
+  releases a consumer parked in `for await`. An empirical Node probe confirmed that
+  an async generator's `return()` does NOT propagate into a generator parked at its
+  inner `await sink.next()`; the parked consumer is actually released when the
+  producer calls `sink.close()`. That reliable path is covered by the separate
+  "completes a subscription when its event sink closes" test. This matches the
+  pre-existing `WebviewController` behavior, so there is no behavior change.
+  (2) The two leaf test resolvers that read `ctx.signal` annotate their opts as
+  `{ ctx: BaseRouterContext }` to keep typed-linting stable across the per-file and
+  whole-repo ESLint programs (the `vscode` type-only import in the test can degrade
+  cross-file inference); this does not affect production routers.
 - Subagent: none.

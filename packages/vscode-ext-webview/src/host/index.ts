@@ -17,6 +17,12 @@
 
 export { type AnyRouter } from '@trpc/server';
 export {
+    attachTrpc,
+    type ActiveSubscription,
+    type AttachTrpcResult,
+    type WebviewCallerFactory,
+} from './attachTrpc';
+export {
     consoleProcedureLogger,
     loggingMiddlewareBody,
     telemetryMiddlewareBody,

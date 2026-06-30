@@ -3,13 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { getTRPCErrorFromUnknown, type AnyRouter } from '@trpc/server';
+import { type AnyRouter } from '@trpc/server';
 import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
-import { createCallerFactory } from '../shared/initWebviewTrpc';
-import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
+import { attachTrpc } from './attachTrpc';
 
 /**
  * Describes where the bundled webview JavaScript lives on disk relative to the
@@ -89,37 +88,6 @@ export class WebviewController<
     private _onDisposed: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
     public readonly onDisposed: vscode.Event<void> = this._onDisposed.event;
 
-    /**
-     * Tracks active subscriptions by their operation ID.
-     *
-     * Each entry carries both:
-     *
-     * - an `AbortController` used to surface cooperative cancellation through
-     *   `ctx.signal.aborted` to procedure bodies that poll the signal, and
-     * - the procedure's live `AsyncIterator`, so the framework can call
-     *   `iterator.return()` on `subscription.stop` and on panel disposal.
-     *   That second half is what releases consumers parked on the next
-     *   `next()` call (e.g. `TypedEventSink` waiting for the next `emit`):
-     *   abort signals on their own cannot unblock a parked `next()`, so
-     *   without iterator-protocol cleanup a subscription that has not
-     *   recently emitted would stay parked until the panel was disposed
-     *   *and* the producer happened to close its sink.
-     */
-    private _activeSubscriptions = new Map<
-        string,
-        {
-            abortController: AbortController;
-            iterator: AsyncIterator<unknown>;
-        }
-    >();
-
-    /**
-     * A map tracking active queries and mutations by their operation ID.
-     * Each operation is associated with an AbortController, allowing the server
-     * side to cancel the operation if the client sends an abort message.
-     */
-    private _activeOperations = new Map<string, AbortController>();
-
     private readonly _options: WebviewControllerOptions<TRouter>;
 
     /**
@@ -188,270 +156,12 @@ export class WebviewController<
      * @param context - The router context for procedure calls.
      */
     protected setupTrpc(context: TContext): void {
-        this.registerDisposable(
-            this._panel.webview.onDidReceiveMessage(async (message: VsCodeLinkRequestMessage) => {
-                switch (message.op.type) {
-                    case 'subscription':
-                        await this.handleSubscriptionMessage(message, context);
-                        break;
-
-                    case 'subscription.stop':
-                        this.handleSubscriptionStopMessage(message);
-                        break;
-
-                    case 'abort':
-                        this.handleAbortMessage(message);
-                        break;
-
-                    default:
-                        await this.handleDefaultMessage(message, context);
-                        break;
-                }
-            }),
-        );
-    }
-
-    /**
-     * Handles the 'subscription' message type.
-     *
-     * Sets up an async iterator for the subscription procedure and streams results back
-     * to the webview. Also handles cancellation via AbortController.
-     *
-     * @param message - The original message from the webview.
-     * @param context - The router context, to which we add an abort signal.
-     */
-    private async handleSubscriptionMessage(message: VsCodeLinkRequestMessage, context: TContext) {
-        // In v12, tRPC will have better cancellation support. For now, we use AbortController.
-        const abortController = new AbortController();
-
-        try {
-            // Clone context so the signal is per-operation and does not mutate the shared context object
-            const opContext: TContext = { ...context, signal: abortController.signal };
-
-            const callerFactory = createCallerFactory(this._options.appRouter);
-            const caller = callerFactory(opContext);
-
-            // eslint-disable-next-line
-            const procedure = caller[message.op.path];
-
-            if (typeof procedure !== 'function') {
-                // Framework-internal protocol error; not localized — consumers cannot translate it
-                // and this code path indicates a programming error in the caller (wrong path).
-                throw new Error(`Procedure not found: ${message.op.path}`);
-            }
-
-            // Await the procedure call to get the async iterable (the procedure's `async function*`
-            // result, which is an AsyncGenerator and therefore both iterable and an iterator).
-            // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
-            const asyncIterable = await procedure(message.op.input);
-
-            // Normalize to a live AsyncIterator and store it. We deliberately do *not* use
-            // `for await (const value of asyncIterable)` because that would obtain the iterator
-            // internally and give us no handle to call `iterator.return()` on `subscription.stop`
-            // or panel dispose. Driving `next()`/`return()` ourselves is what lets us release
-            // consumers parked on a pending next (e.g. an event sink with no recent emit).
-            const iterator: AsyncIterator<unknown> = this.toAsyncIterator(asyncIterable);
-
-            // Only track the subscription once we actually have an iterator. If procedure
-            // lookup or the initial `await procedure(...)` throws, we fall through to the
-            // outer catch without ever inserting an entry — so an early failure cannot
-            // leave a stale (id, AbortController) pair behind for the lifetime of the panel.
-            this._activeSubscriptions.set(message.id, { abortController, iterator });
-
-            void (async () => {
-                try {
-                    while (true) {
-                        // eslint-disable-next-line @typescript-eslint/no-unsafe-assignment
-                        const { value, done } = await iterator.next();
-                        if (done) {
-                            break;
-                        }
-                        // Each yielded value is sent to the webview
-                        this.safePostMessage({ id: message.id, result: value });
-                    }
-
-                    // On natural completion (procedure returned, or our `return()` propagated
-                    // through the generator), inform the client.
-                    this.safePostMessage({ id: message.id, complete: true });
-                } catch (error) {
-                    const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
-                    this.safePostMessage(trpcErrorMessage);
-                } finally {
-                    this._activeSubscriptions.delete(message.id);
-                }
-            })();
-        } catch (error) {
-            const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
-            this.safePostMessage(trpcErrorMessage);
-        }
-    }
-
-    /**
-     * Normalizes a procedure's subscription return value (which may be an
-     * `AsyncIterable`, an `AsyncIterator`, or both — async generators are
-     * both) to a single live `AsyncIterator`.
-     *
-     * Calling `[Symbol.asyncIterator]()` once is required for iterables like
-     * {@link TypedEventSink} (which enforce single-consumer semantics);
-     * direct iterators are returned as-is.
-     */
-    private toAsyncIterator(value: unknown): AsyncIterator<unknown> {
-        if (
-            value !== null &&
-            typeof value === 'object' &&
-            typeof (value as AsyncIterable<unknown>)[Symbol.asyncIterator] === 'function'
-        ) {
-            return (value as AsyncIterable<unknown>)[Symbol.asyncIterator]();
-        }
-        return value as AsyncIterator<unknown>;
-    }
-
-    /**
-     * Handles the 'subscription.stop' message type.
-     *
-     * Aborts the per-operation `AbortController` (for procedure bodies that
-     * poll `ctx.signal.aborted` between yields) and calls the iterator's
-     * `return()` (for procedure bodies parked on a `for await` over an event
-     * sink with no recent emit). Either path will end the streaming task
-     * and run its `finally`, which deletes the map entry.
-     *
-     * @param message - The original message from the webview.
-     */
-    private handleSubscriptionStopMessage(message: VsCodeLinkRequestMessage) {
-        const record = this._activeSubscriptions.get(message.id);
-        if (record) {
-            record.abortController.abort();
-            // Cooperative abort cannot unblock a parked `iterator.next()`. Calling `return()`
-            // here propagates through the procedure's async generator into any inner
-            // `for await` (including `TypedEventSink` consumers), which lets parked
-            // promises settle with `{ done: true }` and the streaming task exit cleanly.
-            // We swallow rejection from `return()` because we have no useful reaction.
-            void Promise.resolve(record.iterator.return?.({ value: undefined, done: true })).catch(() => void 0);
-            this._activeSubscriptions.delete(message.id);
-        }
-    }
-
-    /**
-     * Handles the 'abort' message type for queries and mutations.
-     *
-     * Looks up the active operation by ID and aborts it, allowing the server-side
-     * procedure to detect cancellation via `ctx.signal.aborted`.
-     *
-     * @param message - The original message from the webview.
-     */
-    private handleAbortMessage(message: VsCodeLinkRequestMessage) {
-        const abortController = this._activeOperations.get(message.id);
-        if (abortController) {
-            abortController.abort();
-            this._activeOperations.delete(message.id);
-        }
-    }
-
-    /**
-     * Handles the default case for messages (i.e., queries and mutations).
-     *
-     * Calls the specified tRPC procedure and returns a single result.
-     * If the procedure is not found or throws, returns an error message.
-     *
-     * @param message - The original message from the webview.
-     * @param context - The router context.
-     */
-    private async handleDefaultMessage(message: VsCodeLinkRequestMessage, context: TContext) {
-        // In v12, tRPC will have better cancellation support. For now, we use AbortController.
-        const abortController = new AbortController();
-        this._activeOperations.set(message.id, abortController);
-
-        try {
-            // Clone context so the signal is per-operation and does not mutate the shared context object
-            const opContext: TContext = { ...context, signal: abortController.signal };
-
-            const callerFactory = createCallerFactory(this._options.appRouter);
-            const caller = callerFactory(opContext);
-
-            // eslint-disable-next-line
-            const procedure = caller[message.op.path];
-
-            if (typeof procedure !== 'function') {
-                // Framework-internal protocol error; not localized — see handleSubscriptionMessage().
-                throw new Error(`Procedure not found: ${message.op.path}`);
-            }
-
-            // eslint-disable-next-line , @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-assignment
-            const result = await procedure(message.op.input);
-
-            // Only send the result if the operation was not aborted
-            if (!abortController.signal.aborted) {
-                // Coalesce undefined → null so the `result` key survives structured-clone
-                // serialization over postMessage (undefined values are stripped by the
-                // structured-clone algorithm, which would cause the client-side observable
-                // to never complete for void mutations).
-                // eslint-disable-next-line
-                const response = { id: message.id, result: result ?? null };
-                this.safePostMessage(response);
-            }
-        } catch (error) {
-            // Only send error if the operation was not aborted (client already errored locally)
-            if (!abortController.signal.aborted) {
-                const trpcErrorMessage = this.wrapInTrpcErrorMessage(error, message.id);
-                this.safePostMessage(trpcErrorMessage);
-            }
-        } finally {
-            this._activeOperations.delete(message.id);
-        }
-    }
-
-    /**
-     * Converts an unknown error into a tRPC-compatible error response.
-     *
-     * By constructing a plain object with enumerable properties, we ensure the client
-     * receives a properly serialized error object over postMessage.
-     *
-     * @param error - The caught error.
-     * @param operationId - The operation ID associated with the error.
-     */
-    private wrapInTrpcErrorMessage(error: unknown, operationId: string) {
-        const errorEntry = getTRPCErrorFromUnknown(error);
-
-        return {
-            id: operationId,
-            error: {
-                code: errorEntry.code,
-                name: errorEntry.name,
-                message: errorEntry.message,
-                stack: errorEntry.stack,
-                cause: errorEntry.cause,
-            },
-        };
-    }
-
-    /**
-     * Safely posts a message to the webview.
-     *
-     * Calling {@link vscode.Webview.postMessage} after the panel has been
-     * disposed can throw synchronously or reject the returned `Thenable`
-     * depending on the VS Code version. This wrapper guards both shapes so
-     * that natural races (a subscription generator yielding one more value
-     * after the panel was closed, an in-flight query resolving after dispose,
-     * etc.) do not surface as uncaught exceptions in the extension host.
-     *
-     * Returns `false` if the message could not be delivered (panel disposed
-     * or `postMessage` threw); `true` otherwise. The boolean is informational;
-     * callers do not need to react to it.
-     */
-    private safePostMessage(message: unknown): boolean {
-        if (this._isDisposed) {
-            return false;
-        }
-        try {
-            // The Thenable returned by `postMessage` resolves with a delivery
-            // boolean and rejects if the webview is gone. We attach a no-op
-            // catch so a late rejection does not surface as an unhandled
-            // promise rejection.
-            void Promise.resolve(this._panel.webview.postMessage(message)).catch(() => void 0);
-            return true;
-        } catch {
-            return false;
-        }
+        // The dispatch pump (message handling, abort / subscription lifecycle)
+        // lives in the free `attachTrpc` primitive. The controller simply wires
+        // it to its panel and registers the returned disposable so the listener
+        // and all in-flight operations are torn down on dispose.
+        const { disposable } = attachTrpc(this._panel, context, this._options.appRouter);
+        this.registerDisposable(disposable);
     }
 
     /**
@@ -578,24 +288,10 @@ export class WebviewController<
 
         this._onDisposed.fire();
 
-        // Abort all active queries/mutations so server-side procedures can stop early
-        for (const controller of this._activeOperations.values()) {
-            controller.abort();
-        }
-        this._activeOperations.clear();
-
-        // Abort all active subscriptions and call `return()` on each iterator so async
-        // generators terminate even when parked on `next()`. The abort signal alone
-        // cannot unblock a parked `next()`; `return()` propagates through the
-        // procedure's `for await` into any inner event sink and settles its pending
-        // promise. Rejections from `return()` are swallowed because we have no useful
-        // reaction during shutdown.
-        for (const { abortController, iterator } of this._activeSubscriptions.values()) {
-            abortController.abort();
-            void Promise.resolve(iterator.return?.({ value: undefined, done: true })).catch(() => void 0);
-        }
-        this._activeSubscriptions.clear();
-
+        // The tRPC dispatch disposable returned by `attachTrpc` is in this list;
+        // disposing it removes the message listener and aborts every in-flight
+        // operation and subscription (calling `return()` on each iterator so async
+        // generators parked on `next()` terminate cleanly).
         this._disposables.forEach((d) => {
             d.dispose();
         });
