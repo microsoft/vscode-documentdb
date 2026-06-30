@@ -13,5 +13,6 @@
  */
 
 export { useConfiguration } from './useConfiguration';
-export { useTrpcClient, type TrpcClient, type UseTrpcClientOptions } from './useTrpcClient';
+export { useRpcEvents } from './useRpcEvents';
+export { useTrpcClient, type TrpcClient } from './useTrpcClient';
 export { WebviewContext, WithWebviewContext, type WebviewContextValue, type WebviewState } from './WebviewContext';

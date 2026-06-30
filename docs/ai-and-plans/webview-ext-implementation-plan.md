@@ -987,3 +987,34 @@ entry in that work item's commit. On restart, this section plus
   chain to preserve the prior React-hook behavior; it logs the error/abort cases to
   the console during those tests (expected, non-failing).
 - Subagent: none.
+
+### WI-C6 split useTrpcClient (client) and useRpcEvents (channel)
+
+- Commit: `feat(webview-ext)!: split useTrpcClient (client) and useRpcEvents (channel)`.
+- What: split the single React hook into two, both backed by one memoised
+  connection per webview. Added `react/connection.ts` (React-free) exporting
+  `getWebviewConnection(vscodeApi)`, which lazily builds and caches a
+  `connectTrpc(vscodeApi)` result in a module-level `WeakMap` keyed by the
+  `vscodeApi` object. Rewrote `react/useTrpcClient.ts` so `useTrpcClient()` now
+  returns the client directly (was `{ trpcClient }`); dropped the `onError`
+  option and the `UseTrpcClientOptions` type. Added `react/useRpcEvents.ts`
+  exporting `useRpcEvents()`, returning the shared channel
+  (`onSuccess` / `onError` / `onAborted`). Updated the `./react` barrel to export
+  `useRpcEvents` and to stop exporting `UseTrpcClientOptions`. Added
+  `react/connection.test.ts`.
+- Breaking: `useTrpcClient()` return shape changed (client, not `{ trpcClient }`)
+  and its `onError` option is gone; per-call error observation moves to
+  `useRpcEvents().onError`. The two hooks now share one connection per webview
+  rather than each component holding its own client (§13.4).
+- Verification: both hooks resolve through `getWebviewConnection`, so the new
+  test asserts identity stability - two calls with the same `vscodeApi` return
+  the same `{ client, events }` (and the same `.client` / `.events`), while
+  distinct `vscodeApi` objects get independent connections. Package suite 65
+  tests across 10 suites green; package `tsc --noEmit` clean; whole-repo
+  `npm run lint` clean.
+- Deviations: the hooks themselves are not unit-tested directly - they cannot
+  run outside React in the package's `node` jest env (no RTL/jsdom), so the
+  identity-stability contract is verified against the React-free
+  `getWebviewConnection` helper the hooks delegate to. Each hook body is a thin
+  `useContext` + delegate wrapper.
+- Subagent: none.
