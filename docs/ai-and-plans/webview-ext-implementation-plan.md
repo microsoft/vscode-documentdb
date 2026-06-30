@@ -920,3 +920,38 @@ entry in that work item's commit. On restart, this section plus
   whole-repo ESLint programs (the `vscode` type-only import in the test can degrade
   cross-file inference); this does not affect production routers.
 - Subagent: none.
+
+### WI-C4 - Event channel + errorLink shim (2026-06-30)
+
+- Status: done
+- Summary: Added `src/webview/events.ts`. `createEventChannel()` returns an
+  `EventChannel` that implements both the observe side (`RpcEventChannel`:
+  `onSuccess` / `onError` / `onAborted`) and the publish side (`RpcEventEmitter`:
+  `emitSuccess` / `emitError` / `emitAborted`), plus `CallInfo`, the handler types
+  (`SuccessHandler` / `ErrorEventHandler` / `AbortedHandler`), and `Unsubscribe`.
+  Dispatch is snapshot-safe: each `emit*` iterates over a copy of its handler set,
+  so subscribing or unsubscribing during dispatch never corrupts the in-flight
+  iteration. Refit `errorLink`: factored out a general publishing link
+  `eventLink(emitter)` that publishes query/mutation outcomes
+  (`emitSuccess` on next; `emitAborted` when `op.signal.aborted`, else `emitError`
+  on error), skips subscriptions, and re-emits value/error/complete down the chain
+  unchanged. `errorLink(onError)` is now a thin shim: it owns a private channel,
+  bridges that channel's `onError` to the callback, and returns `eventLink(channel)`.
+  Exported the channel primitive from the `./webview` barrel. Added
+  `events.test.ts`.
+- Checks: Jest 59/59 (7 new in `events.test.ts`) green; `errorLink`'s 7 existing
+  tests unchanged and green (the refit preserves query/mutation error forwarding,
+  subscription skipping, non-`Error` normalization, and success/complete
+  pass-through); package `tsc --noEmit` clean; `npm run lint` clean.
+- Deviations: (1) §13 lists only `vscodeLink` / `errorLink` / `createEventChannel`
+  on `./webview`, so the general publisher `eventLink(emitter)` is exported from the
+  `errorLink` module but NOT re-exported from the `./webview` barrel; `connectTrpc`
+  (WI-C5) consumes it directly. This keeps the public subpath surface equal to the
+  design's set. (2) Abort vs error classification uses `op.signal?.aborted` (true at
+  error time means a cancel) rather than sniffing the tRPC error shape; this
+  realizes the design's "aborts separated from errors" while keeping `errorLink`'s
+  existing tests green (their ops use `signal: null`, so they classify as errors).
+  (3) `errorLink`'s pre-existing "does not surface subscription errors" behavior is
+  preserved inside `eventLink`, consistent with the design framing that the channel
+  observes query/mutation outcomes.
+- Subagent: none.

@@ -13,5 +13,16 @@
  */
 
 export { errorLink, type ErrorHandler } from './errorLink';
+export {
+    type AbortedHandler,
+    type CallInfo,
+    createEventChannel,
+    type ErrorEventHandler,
+    type EventChannel,
+    type RpcEventChannel,
+    type RpcEventEmitter,
+    type SuccessHandler,
+    type Unsubscribe,
+} from './events';
 export { vscodeLink, type VSCodeLinkOptions } from './vscodeLink';
 export { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
