@@ -3,7 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type TelemetryContext } from './trpc';
+/**
+ * Telemetry context interface.
+ *
+ * The shared, side-agnostic shape of the per-call telemetry bag that the
+ * telemetry middleware attaches to the router context. Replace or re-type this
+ * with your telemetry library's context when implementing a custom telemetry
+ * adapter. For example, if you use `@microsoft/vscode-azext-utils` with
+ * Application Insights, `ITelemetryContext` from that package is the structural
+ * equivalent: both expose `properties` and `measurements` records.
+ */
+export interface TelemetryContext {
+    properties: Record<string, string>;
+    measurements: Record<string, number>;
+}
 
 /**
  * Base router context shared by every tRPC procedure invocation. Consumers

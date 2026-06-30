@@ -4,18 +4,14 @@
  *--------------------------------------------------------------------------------------------*/
 
 /**
- * Public entry point for `@microsoft/vscode-ext-react-webview` — the webview-client
- * (browser) surface.
+ * Shared entry point (`.`) for `@microsoft/vscode-ext-webview`.
  *
- * The webview side never needs the extension-server APIs, and pulling them in
- * would drag Node / VS Code imports (`fs`, `path`, `vscode`) into the webview
- * bundle. Keep this entry browser-only.
+ * This is the side-agnostic surface: wire-protocol message types,
+ * `TypedEventSink`, and `BaseRouterContext`. It imports neither `vscode` nor
+ * React, so it is safe to import from either side of the transport.
  *
- * Extension-host code imports the server surface from the `/server` subpath:
- *
- * ```ts
- * import { WebviewController, router } from '@microsoft/vscode-ext-react-webview/server';
- * ```
+ * Extension-host code imports from the `./host` subpath; webview code imports
+ * from `./webview` (framework-agnostic) or `./react` (React hooks).
  */
 
-export * from './webview-client';
+export * from './shared';

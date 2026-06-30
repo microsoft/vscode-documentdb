@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-export { type BaseRouterContext } from './BaseRouterContext';
+export { type BaseRouterContext, type TelemetryContext } from '../shared/BaseRouterContext';
+export { TypedEventSink, type DiscriminatedEvent, type EventOfType, type UntypedEventEmitter } from '../shared/TypedEventSink';
 export {
     createCallerFactory,
     createMiddleware,
@@ -11,8 +12,6 @@ export {
     publicProcedureWithTelemetry,
     router,
     type AnyRouter,
-    type TelemetryContext,
     type WithTelemetry,
 } from './trpc';
-export { TypedEventSink, type DiscriminatedEvent, type EventOfType, type UntypedEventEmitter } from './TypedEventSink';
 export { WebviewController, type WebviewControllerOptions, type WebviewSourceLayout } from './WebviewController';

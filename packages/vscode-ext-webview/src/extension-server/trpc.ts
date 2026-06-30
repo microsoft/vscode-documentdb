@@ -15,21 +15,7 @@
  */
 
 import { initTRPC, type AnyRouter } from '@trpc/server';
-import { type BaseRouterContext } from './BaseRouterContext';
-
-/**
- * Telemetry context interface.
- *
- * Replace this with your telemetry library's context type when implementing a
- * custom middleware. For example, if you use `@microsoft/vscode-azext-utils`
- * with Application Insights, you can use `ITelemetryContext` from that package
- * as the structural equivalent — both expose `properties` and `measurements`
- * records.
- */
-export interface TelemetryContext {
-    properties: Record<string, string>;
-    measurements: Record<string, number>;
-}
+import { type BaseRouterContext, type TelemetryContext } from '../shared/BaseRouterContext';
 
 /**
  * Helper type: transforms a context type to have required (non-optional)

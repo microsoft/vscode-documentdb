@@ -716,3 +716,30 @@ entry in that work item's commit. On restart, this section plus
   extension still build).
 - Deviations: None.
 - Subagent: none.
+
+### WI-B1 - Create the shared entry and move shared code  (2026-06-30)
+
+- Status: done
+- Summary: Created `src/shared/` and moved `BaseRouterContext.ts`,
+  `TypedEventSink.ts`, and `TypedEventSink.test.ts` there (via `git mv`).
+  Extracted the wire-protocol types (`StopOperation`,
+  `VsCodeLinkRequestMessage`, `VsCodeLinkResponseMessage`) from `vscodeLink.ts`
+  into `src/shared/wireProtocol.ts`. Added `src/shared/index.ts` and repointed
+  `src/index.ts` (the `.` entry) at the shared surface. Fixed imports in
+  `vscodeLink.ts` (imports + re-exports the wire types from shared),
+  `WebviewController.ts`, `extension-server/trpc.ts`, and
+  `extension-server/index.ts`.
+- Checks: new package `npm run build` green; new package Jest 35/35 green;
+  `npm run lint` clean; grep confirms no `vscode`/`react`/host imports in the
+  `src/shared/` subtree and `src/index.ts` only re-exports `./shared`.
+- Deviations: Relocated the `TelemetryContext` type definition from
+  `extension-server/trpc.ts` into `shared/BaseRouterContext.ts` (its only shared
+  consumer), so `trpc.ts` now imports it from shared. Why: `BaseRouterContext`
+  (shared) carries a `telemetry?: TelemetryContext` field; keeping the type in
+  `trpc.ts` would force a shared->host import once `trpc.ts` moves to `host/` in
+  WI-B2. Co-locating it in shared keeps the dependency direction correct
+  (host -> shared) and is consistent with the plan's "move shared code" intent.
+  Alternative considered: leave the type in `trpc.ts` and accept a transitional
+  reverse import - rejected as architecturally backwards even temporarily.
+  `TelemetryContext` is still slated for retirement in WI-C2.
+- Subagent: none.

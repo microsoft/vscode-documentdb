@@ -7,8 +7,8 @@ import { getTRPCErrorFromUnknown, type AnyRouter } from '@trpc/server';
 import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { type VsCodeLinkRequestMessage } from '../webview-client/vscodeLink';
-import { type BaseRouterContext } from './BaseRouterContext';
+import { type BaseRouterContext } from '../shared/BaseRouterContext';
+import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
 import { createCallerFactory } from './trpc';
 
 /**
