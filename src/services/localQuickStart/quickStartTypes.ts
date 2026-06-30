@@ -11,7 +11,41 @@
  */
 
 /** Official DocumentDB local image (github.com/microsoft/documentdb README). */
-export const QUICK_START_IMAGE = 'ghcr.io/documentdb/documentdb/documentdb-local:latest';
+export const QUICK_START_IMAGE_REPOSITORY = 'ghcr.io/documentdb/documentdb/documentdb-local';
+export const QUICK_START_DEFAULT_TAG = 'latest';
+export const QUICK_START_IMAGE = `${QUICK_START_IMAGE_REPOSITORY}:${QUICK_START_DEFAULT_TAG}`;
+
+/**
+ * Resolve the image reference to pull/run. An Advanced image-tag override
+ * (e.g. `1.2.0`) swaps only the tag on the canonical repository; an empty/omitted
+ * tag falls back to {@link QUICK_START_IMAGE}. The repository is never user-supplied
+ * (we only ever pull the official DocumentDB local image), so a tag override can't
+ * redirect to an arbitrary registry/image.
+ */
+export function resolveQuickStartImage(imageTag?: string): string {
+    const tag = imageTag?.trim();
+    return tag ? `${QUICK_START_IMAGE_REPOSITORY}:${tag}` : QUICK_START_IMAGE;
+}
+
+/**
+ * Optional Advanced provisioning overrides (design §5.2 Advanced panel, P1-4).
+ * Every field is optional; omitted fields keep the zero-decision defaults
+ * (auto port with fallback, auto-generated credentials, default image tag, sample
+ * data seeded). Custom credentials are ignored when recreating a `Missing` instance
+ * onto an existing data volume — the stored credentials must be reused there.
+ */
+export interface AdvancedQuickStartOptions {
+    /** Explicit host port. Unlike the default, a conflict ERRORS (never auto-relocated). */
+    port?: number;
+    /** Custom username (requires a password). Ignored on a Missing-recreate. */
+    username?: string;
+    /** Custom password (requires a username). Ignored on a Missing-recreate. */
+    password?: string;
+    /** Image tag override, e.g. `1.2.0`; defaults to the canonical tag. */
+    imageTag?: string;
+    /** Seed the image's built-in sample data (default `true`). */
+    loadSampleData?: boolean;
+}
 
 /** Fixed container name for the single managed instance (POC). */
 export const QUICK_START_CONTAINER_NAME = 'vscode-documentdb-local';
@@ -74,6 +108,8 @@ export interface StageEvent {
     readonly status: 'active' | 'done' | 'error';
     readonly message?: string;
     readonly error?: string;
+    /** The actual bound host port — set on the terminal `done` event (for success guidance). */
+    readonly boundPort?: number;
 }
 
 /** Metadata describing the currently-managed instance. */
@@ -86,6 +122,13 @@ export interface InstanceMetadata {
     /** Full connection string including credentials (kept in SecretStorage). */
     readonly connectionString: string;
     readonly username: string;
+    /**
+     * The image reference the instance's data volume was created with (e.g.
+     * `…/documentdb-local:latest`). Reused on a recreate so the persisted cluster is
+     * not silently moved to a different image version. May be undefined for instances
+     * recovered without a readable image (then a recreate falls back to the default).
+     */
+    readonly imageRef?: string;
 }
 
 /** Result of the Docker readiness pre-check (design §9, prereq cards). */
@@ -116,4 +159,12 @@ export interface DockerStatusResult {
     readonly readiness: DockerReadiness;
     readonly status: QuickStartStatus;
     readonly busy: boolean;
+    /**
+     * True when a provision would REUSE an existing instance (stored credentials are
+     * present, so the data volume is kept and custom credentials / image tag are ignored)
+     * rather than create a fresh one. Drives the webview's recreate UI independently of the
+     * in-memory `Missing` badge, so an already-provisioned or post-reload instance never
+     * shows credential/image inputs the service would silently ignore.
+     */
+    readonly willReuse: boolean;
 }

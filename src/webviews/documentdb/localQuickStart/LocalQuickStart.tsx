@@ -3,7 +3,24 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, Card, Divider, Link, makeStyles, Spinner, Text, tokens } from '@fluentui/react-components';
+import {
+    Accordion,
+    AccordionHeader,
+    AccordionItem,
+    AccordionPanel,
+    Badge,
+    Button,
+    Card,
+    Divider,
+    Field,
+    Input,
+    Link,
+    makeStyles,
+    Spinner,
+    Switch,
+    Text,
+    tokens,
+} from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
     CheckmarkCircleFilled,
@@ -14,10 +31,13 @@ import {
 import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import {
+    type AdvancedQuickStartOptions,
     type DockerStatusResult,
     PROVISION_STAGES,
     type ProvisionStage,
+    QUICK_START_DEFAULT_TAG,
     QUICK_START_IMAGE,
+    QUICK_START_IMAGE_REPOSITORY,
     QUICK_START_PORT,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -62,6 +82,9 @@ const useStyles = makeStyles({
         color: tokens.colorStatusSuccessForeground1,
     },
     nextSteps: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' },
+    advancedPanel: { display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' },
+    advancedGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' },
+    advancedError: { color: tokens.colorStatusDangerForeground1 },
     muted: { color: tokens.colorNeutralForeground3 },
 });
 
@@ -111,11 +134,79 @@ export const LocalQuickStart = (): JSX.Element => {
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
+    const [boundPort, setBoundPort] = useState<number | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
     const [startingDocker, setStartingDocker] = useState(false);
 
+    // Advanced overrides (P1-4). Empty fields fall back to the zero-decision defaults.
+    const [advPort, setAdvPort] = useState('');
+    const [advUser, setAdvUser] = useState('');
+    const [advPass, setAdvPass] = useState('');
+    const [advTag, setAdvTag] = useState('');
+    const [advLoadSampleData, setAdvLoadSampleData] = useState(true);
+
+    // The service reuses an existing instance (keeping its data volume) whenever stored
+    // credentials exist, ignoring any custom credentials / image tag. `willReuse` reflects
+    // that exact decision (the same predicate the service uses), so we hide those fields and
+    // relabel the summary whenever — and only when — the service will actually reuse. (A
+    // Missing badge always implies stored creds, so `willReuse` already subsumes it.)
+    const isRecreate = docker?.willReuse === true;
+
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+    // Current Advanced options, synced from the fields below so handleStart (and Retry)
+    // always read the latest without re-binding the provisioning subscription.
+    const advancedRef = useRef<AdvancedQuickStartOptions | undefined>(undefined);
+
+    // Validate the Advanced fields client-side, mirroring the router's zod schema so a valid
+    // form never dead-ends on a server rejection. A non-empty result disables Start + shows help.
+    // eslint-disable-next-line no-control-regex
+    const credForbidden = /[\u0000-\u001f\u007f]/;
+    const advError = ((): string | undefined => {
+        const port = advPort.trim();
+        if (port && (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535)) {
+            return l10n.t('Port must be a whole number between 1024 and 65535.');
+        }
+        const user = advUser.trim();
+        const pass = advPass.trim();
+        const hasUser = user.length > 0;
+        const hasPass = pass.length > 0;
+        if (hasUser !== hasPass) {
+            return l10n.t('Enter both a username and a password, or leave both blank to auto-generate.');
+        }
+        if (user.length > 128 || pass.length > 256) {
+            return l10n.t('Username (max 128) or password (max 256) is too long.');
+        }
+        if ((hasUser && credForbidden.test(user)) || (hasPass && credForbidden.test(pass))) {
+            return l10n.t('Username and password must not contain control characters.');
+        }
+        const tag = advTag.trim();
+        if (tag && (tag.length > 128 || !/^[\w][\w.-]*$/.test(tag))) {
+            return l10n.t('Image tag may contain only letters, numbers, dots, dashes, and underscores.');
+        }
+        return undefined;
+    })();
+
+    useEffect(() => {
+        // Sync the Advanced fields into a ref (repo stale-closure pattern) so the provisioning
+        // subscription reads current values. Skip building options while invalid.
+        if (advError) {
+            advancedRef.current = undefined;
+            return;
+        }
+        const opts: AdvancedQuickStartOptions = {};
+        if (advPort.trim()) opts.port = Number(advPort.trim());
+        // Credentials and image tag are ignored by the service when reusing an existing
+        // instance, so don't send them (the fields are hidden in that case anyway). Send the
+        // trimmed credentials so what we transmit is exactly what the service stores/encodes.
+        if (!isRecreate) {
+            if (advUser.trim()) opts.username = advUser.trim();
+            if (advPass.trim()) opts.password = advPass.trim();
+            if (advTag.trim()) opts.imageTag = advTag.trim();
+        }
+        if (!advLoadSampleData) opts.loadSampleData = false;
+        advancedRef.current = Object.keys(opts).length > 0 ? opts : undefined;
+    }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate]);
 
     const loadDockerStatus = useCallback((): void => {
         setPhase('loading');
@@ -178,13 +269,14 @@ export const LocalQuickStart = (): JSX.Element => {
         timerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
 
         let settled = false;
-        const subscription = trpcClient.localQuickStart.startQuickStart.subscribe(undefined, {
+        const subscription = trpcClient.localQuickStart.startQuickStart.subscribe(advancedRef.current, {
             onData(event: StageEvent) {
                 setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
                 if (event.stage === 'done' && event.status === 'done') {
                     settled = true;
                     stopTimer();
                     setSuccessMessage(event.message);
+                    setBoundPort(event.boundPort);
                     setPhase('success');
                 } else if (event.status === 'error') {
                     settled = true;
@@ -229,6 +321,13 @@ export const LocalQuickStart = (): JSX.Element => {
         setPhase('review');
     }, [stopTimer]);
 
+    // From the failed phase, return to the review form (Advanced field state is preserved) so
+    // the user can correct a bad option (e.g. a busy explicit port) and retry — design feedback.
+    const handleBackToReview = useCallback((): void => {
+        setErrorMessage(undefined);
+        setPhase('review');
+    }, []);
+
     const handleViewOutput = useCallback((): void => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
     }, [trpcClient]);
@@ -245,6 +344,7 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const renderReviewCards = (): JSX.Element => {
         const ready = !!docker && docker.readiness.cliInstalled && docker.readiness.daemonReachable;
+        const effectivePort = advPort.trim() && !advError ? advPort.trim() : String(QUICK_START_PORT);
         return (
             <div className={styles.cardGrid}>
                 <MetricCard
@@ -256,34 +356,126 @@ export const LocalQuickStart = (): JSX.Element => {
                         </Badge>
                     }
                 />
-                <MetricCard label={l10n.t('Port')} value={String(QUICK_START_PORT)} />
+                <MetricCard label={l10n.t('Port')} value={effectivePort} />
                 <MetricCard label={l10n.t('Data')} value={l10n.t('Persistent volume')} />
                 <MetricCard label={l10n.t('Security')} value={l10n.t('TLS · self-signed')} />
             </div>
         );
     };
 
-    const renderSummary = (): JSX.Element => (
-        <Card className={styles.summaryCard}>
-            <Text weight="semibold">{l10n.t("What we'll do")}</Text>
-            <Divider />
-            <div className={styles.summaryRow}>
-                <Text className={styles.muted}>{l10n.t('Image')}</Text>
-                <Text>{QUICK_START_IMAGE}</Text>
-            </div>
-            <div className={styles.summaryRow}>
-                <Text className={styles.muted}>{l10n.t('Runs on')}</Text>
-                <Text>{l10n.t('This machine (Docker)')}</Text>
-            </div>
-            <div className={styles.summaryRow}>
-                <Text className={styles.muted}>{l10n.t('Credentials')}</Text>
-                <Text>{l10n.t('Auto-generated, stored securely')}</Text>
-            </div>
-            <div className={styles.summaryRow}>
-                <Text className={styles.muted}>{l10n.t('Lifetime')}</Text>
-                <Text>{l10n.t('Keeps running after VS Code closes')}</Text>
-            </div>
-        </Card>
+    const renderSummary = (): JSX.Element => {
+        const effectiveImage =
+            !isRecreate && advTag.trim() ? `${QUICK_START_IMAGE_REPOSITORY}:${advTag.trim()}` : QUICK_START_IMAGE;
+        const customCreds = !isRecreate && advUser.trim().length > 0 && advPass.trim().length > 0;
+        const customPort = advPort.trim().length > 0 && !advError;
+        return (
+            <Card className={styles.summaryCard}>
+                <Text weight="semibold">{l10n.t("What we'll do")}</Text>
+                <Divider />
+                <div className={styles.summaryRow}>
+                    <Text className={styles.muted}>{l10n.t('Image')}</Text>
+                    <Text>{isRecreate ? l10n.t('Kept from the existing instance') : effectiveImage}</Text>
+                </div>
+                <div className={styles.summaryRow}>
+                    <Text className={styles.muted}>{l10n.t('Port')}</Text>
+                    <Text>{customPort ? advPort.trim() : l10n.t('{0} (auto)', String(QUICK_START_PORT))}</Text>
+                </div>
+                <div className={styles.summaryRow}>
+                    <Text className={styles.muted}>{l10n.t('Runs on')}</Text>
+                    <Text>{l10n.t('This machine (Docker)')}</Text>
+                </div>
+                <div className={styles.summaryRow}>
+                    <Text className={styles.muted}>{l10n.t('Credentials')}</Text>
+                    <Text>
+                        {isRecreate
+                            ? l10n.t('Reused from the existing instance')
+                            : customCreds
+                              ? l10n.t('Custom, stored securely')
+                              : l10n.t('Auto-generated, stored securely')}
+                    </Text>
+                </div>
+                <div className={styles.summaryRow}>
+                    <Text className={styles.muted}>{l10n.t('Lifetime')}</Text>
+                    <Text>{l10n.t('Keeps running after VS Code closes')}</Text>
+                </div>
+            </Card>
+        );
+    };
+
+    const renderAdvanced = (): JSX.Element => (
+        <Accordion collapsible>
+            <AccordionItem value="advanced">
+                <AccordionHeader>{l10n.t('Advanced (optional)')}</AccordionHeader>
+                <AccordionPanel>
+                    <div className={styles.advancedPanel}>
+                        <Text size={200} className={styles.muted}>
+                            {l10n.t('Leave any field blank to keep the automatic default.')}
+                        </Text>
+                        <div className={styles.advancedGrid}>
+                            <Field label={l10n.t('Port')} hint={l10n.t('Default {0}', String(QUICK_START_PORT))}>
+                                <Input
+                                    type="number"
+                                    value={advPort}
+                                    placeholder={String(QUICK_START_PORT)}
+                                    onChange={(_e, d) => setAdvPort(d.value)}
+                                />
+                            </Field>
+                            {!isRecreate && (
+                                <Field
+                                    label={l10n.t('Image tag')}
+                                    hint={l10n.t('Default “{0}”', QUICK_START_DEFAULT_TAG)}
+                                >
+                                    <Input
+                                        value={advTag}
+                                        maxLength={128}
+                                        placeholder={QUICK_START_DEFAULT_TAG}
+                                        onChange={(_e, d) => setAdvTag(d.value)}
+                                    />
+                                </Field>
+                            )}
+                            {!isRecreate && (
+                                <Field label={l10n.t('Username')} hint={l10n.t('Default: auto-generated')}>
+                                    <Input
+                                        value={advUser}
+                                        maxLength={128}
+                                        placeholder={l10n.t('auto')}
+                                        onChange={(_e, d) => setAdvUser(d.value)}
+                                    />
+                                </Field>
+                            )}
+                            {!isRecreate && (
+                                <Field label={l10n.t('Password')} hint={l10n.t('Default: auto-generated')}>
+                                    <Input
+                                        type="password"
+                                        value={advPass}
+                                        maxLength={256}
+                                        placeholder={l10n.t('auto')}
+                                        onChange={(_e, d) => setAdvPass(d.value)}
+                                    />
+                                </Field>
+                            )}
+                        </div>
+                        {isRecreate && (
+                            <Text size={200} className={styles.muted}>
+                                {l10n.t(
+                                    'Recreating reuses the existing data volume, so the original credentials and image are kept.',
+                                )}
+                            </Text>
+                        )}
+                        <Switch
+                            checked={advLoadSampleData}
+                            label={l10n.t('Load sample data')}
+                            onChange={(_e, d) => setAdvLoadSampleData(d.checked)}
+                        />
+                        {advError && (
+                            <Text size={200} role="alert" className={styles.advancedError}>
+                                {advError}
+                            </Text>
+                        )}
+                    </div>
+                </AccordionPanel>
+            </AccordionItem>
+        </Accordion>
     );
 
     const renderStageRow = (stage: ProvisionStage): JSX.Element => {
@@ -434,7 +626,7 @@ export const LocalQuickStart = (): JSX.Element => {
                             <Text size={200}>
                                 {l10n.t(
                                     '• Copy Connection String — use it from a Query Playground, your app, or mongosh (localhost:{0}).',
-                                    String(QUICK_START_PORT),
+                                    String(boundPort ?? QUICK_START_PORT),
                                 )}
                             </Text>
                             <Text size={200}>
@@ -478,9 +670,14 @@ export const LocalQuickStart = (): JSX.Element => {
                         </>
                     )}
                     {phase === 'failed' && (
-                        <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={handleStart}>
-                            {l10n.t('Retry')}
-                        </Button>
+                        <>
+                            <Button appearance="secondary" onClick={handleBackToReview}>
+                                {l10n.t('Edit settings')}
+                            </Button>
+                            <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={handleStart}>
+                                {l10n.t('Retry')}
+                            </Button>
+                        </>
                     )}
                 </div>
             </div>
@@ -496,11 +693,12 @@ export const LocalQuickStart = (): JSX.Element => {
             )}
             {renderReviewCards()}
             {renderSummary()}
+            {renderAdvanced()}
             <div className={styles.actions}>
                 <Button appearance="secondary" onClick={handleClose}>
                     {l10n.t('Cancel')}
                 </Button>
-                <Button appearance="primary" icon={<RocketRegular />} onClick={handleStart}>
+                <Button appearance="primary" icon={<RocketRegular />} disabled={!!advError} onClick={handleStart}>
                     {l10n.t('Start DocumentDB Local')}
                 </Button>
             </div>

@@ -26,7 +26,7 @@ import {
     type ListContainersItem,
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
-import { Bash, Cmd, type Shell } from '@microsoft/vscode-processutils';
+import { Bash, Cmd, type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vscode-processutils';
 import { spawn } from 'child_process';
 import * as fs from 'fs';
 import * as net from 'net';
@@ -280,16 +280,24 @@ class ContainerRuntimeImpl {
     }
 
     /**
-     * Run a one-off command inside a running container (`docker exec`). Used to
-     * seed the image's built-in sample data via its native init script — see
-     * {@link QuickStartService} — instead of baking `--init-data true` into the
-     * run args (which re-runs on every restart and crashes the container).
-     * `secrets` are masked in the echoed command line and streamed output (D14).
-     * Rejects on a non-zero exit so the caller can treat it as best-effort.
+     * Run a `/bin/sh -c <script>` command inside a running container (`docker exec`).
+     * Used to seed the image's built-in sample data via its native init script — see
+     * {@link QuickStartService} — instead of baking `--init-data true` into the run args
+     * (which re-runs on every restart and crashes the container).
+     *
+     * The script is passed as a single STRONG-quoted argument (single quotes on bash,
+     * double quotes on cmd) so the host shell the command runner spawns through does NOT
+     * parse or expand it. Any `$VAR` in the script therefore reaches the CONTAINER's own
+     * shell verbatim and is expanded there from the container's environment — never the
+     * host's. This is what lets the seed reference the container's `$USERNAME`/`$PASSWORD`
+     * without ever placing the credentials on the host command line / process list.
+     *
+     * `secrets` are masked in the echoed command line and streamed output (D14). Rejects on
+     * a non-zero exit so the caller can treat it as best-effort.
      */
-    public async execInContainer(
+    public async execShellInContainer(
         id: string,
-        command: ReadonlyArray<string>,
+        script: string,
         secrets: ReadonlyArray<string>,
         token?: vscode.CancellationToken,
     ): Promise<void> {
@@ -304,10 +312,13 @@ class ContainerRuntimeImpl {
             cancellationToken: token,
         });
         const streamingRunner = factory.getStreamingCommandRunner();
+        const command: Array<string | ShellQuotedString> = [
+            'sh',
+            '-c',
+            { value: script, quoting: ShellQuoting.Strong },
+        ];
         try {
-            for await (const chunk of streamingRunner(
-                this.client.execContainer({ container: id, command: [...command] }),
-            )) {
+            for await (const chunk of streamingRunner(this.client.execContainer({ container: id, command }))) {
                 lineBuffer.push(String(chunk));
             }
         } finally {

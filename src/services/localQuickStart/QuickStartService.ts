@@ -35,6 +35,7 @@ import { ext } from '../../extensionVariables';
 import { ContainerRuntime, getQuickStartOutputChannel } from './ContainerRuntime';
 import { composeConnectionString, generateCredentials, type GeneratedCredentials } from './quickStartCredentials';
 import {
+    type AdvancedQuickStartOptions,
     type InstanceMetadata,
     InstanceState,
     type ProvisionStage,
@@ -48,6 +49,7 @@ import {
     QUICK_START_PORT_BAND_END,
     QUICK_START_VOLUME_NAME,
     type QuickStartStatus,
+    resolveQuickStartImage,
     type StageEvent,
 } from './quickStartTypes';
 
@@ -55,6 +57,12 @@ import {
 export const QUICK_START_CLUSTER_ID = 'quickstart-local-documentdb';
 
 const SECRET_KEY = 'documentdb.quickstart.connectionString';
+/**
+ * Durable (non-secret) record of the image reference the managed instance's data volume
+ * was created with, kept in globalState so a recreate AFTER a window reload (when the
+ * in-memory metadata is gone) still reuses the original image instead of forcing `latest`.
+ */
+const IMAGE_REF_STATE_KEY = 'documentdb.quickstart.imageRef';
 const READINESS_TIMEOUT_MS = 180_000;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
@@ -84,8 +92,29 @@ function errMessage(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
-function stageEvent(stage: ProvisionStage, status: StageEvent['status'], message?: string, error?: string): StageEvent {
-    return { stage, status, message, error };
+/**
+ * Resolve the credentials for a fresh provision: honor custom Advanced credentials
+ * when BOTH a username and password are supplied (whitespace-only is treated as not
+ * supplied), otherwise auto-generate. (Callers only use this on a non-reusing provision;
+ * a Missing-recreate reuses stored creds.)
+ */
+function resolveProvisionCredentials(options?: AdvancedQuickStartOptions): GeneratedCredentials {
+    const username = options?.username?.trim();
+    const password = options?.password?.trim();
+    if (username && password) {
+        return { username, password };
+    }
+    return generateCredentials();
+}
+
+function stageEvent(
+    stage: ProvisionStage,
+    status: StageEvent['status'],
+    message?: string,
+    error?: string,
+    boundPort?: number,
+): StageEvent {
+    return { stage, status, message, error, boundPort };
 }
 
 /** Cancellable delay that rejects if the signal aborts. */
@@ -155,7 +184,7 @@ class QuickStartServiceImpl {
      * container by id (decision D12). All cleanup runs in `finally` so it also
      * fires when the consumer unsubscribes (iterator `return()`).
      */
-    public async *provision(signal: AbortSignal): AsyncGenerator<StageEvent> {
+    public async *provision(signal: AbortSignal, options?: AdvancedQuickStartOptions): AsyncGenerator<StageEvent> {
         if (this.provisioning) {
             yield stageEvent('error', 'error', 'Setup is already in progress.', 'Setup is already in progress.');
             return;
@@ -163,14 +192,33 @@ class QuickStartServiceImpl {
         this.provisioning = true;
 
         const channel = getQuickStartOutputChannel();
-        // Reuse stored credentials + the existing data volume when recreating a
-        // Missing instance (§6.1): the volume holds a PostgreSQL cluster bound to
-        // those credentials, so fresh credentials would fail against existing data.
-        // Otherwise generate fresh credentials and start from a clean volume.
-        const reusable = this.missing && this.metadata ? await this.getReusableCredentials() : undefined;
-        const credentials = reusable ?? generateCredentials();
+        // Decide reuse from LIVE durable state, not the in-memory Missing flag: whenever we
+        // still hold the instance's stored credentials (SecretStorage), a data volume bound to
+        // them may exist on disk — even after the container was removed externally or across a
+        // window reload that cleared in-memory state (§6.1, §12). Adopt those credentials and
+        // KEEP the volume rather than wiping it; the stored credentials are what opens the
+        // volume's cluster, so freshly generated ones would fail against existing data. Only
+        // when NO credentials are recoverable is a clean wipe safe (the volume could not be
+        // opened anyway). This makes a true fresh provision the explicit Delete-then-recreate
+        // path, so running setup again can never silently destroy an existing data volume.
+        const reusable = await this.getReusableCredentials();
         const reusing = reusable !== undefined;
+        const credentials = reusable ?? resolveProvisionCredentials(options);
         const secrets: string[] = [credentials.password];
+
+        // Advanced overrides (P1-4). When reusing an existing instance we keep its data volume,
+        // so custom credentials AND a custom image tag are intentionally IGNORED: the stored
+        // credentials are required to open the volume's cluster, and recreating onto it with a
+        // different (especially older) image version could leave the on-disk cluster unusable.
+        // The original image is reused — from in-memory metadata, falling back to the durable
+        // globalState record (survives a window reload), then the default if neither is known.
+        const usedCustomCreds = !reusing && !!(options?.username?.trim() && options?.password?.trim());
+        const imageRef = reusing
+            ? (this.metadata?.imageRef ?? ext.context.globalState.get<string>(IMAGE_REF_STATE_KEY) ?? QUICK_START_IMAGE)
+            : resolveQuickStartImage(options?.imageTag);
+        const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
+        const explicitPort = typeof options?.port === 'number' ? options.port : undefined;
+        const sampleDataRequested = options?.loadSampleData !== false;
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
         signal.addEventListener('abort', onAbort, { once: true });
@@ -203,8 +251,9 @@ class QuickStartServiceImpl {
             }
 
             // Remove a pre-existing managed container so the run starts clean (it is
-            // labelled as ours, D9). On a fresh (non-recreate) provision also drop any
-            // stale data volume, so the new credentials initialize a clean cluster.
+            // labelled as ours, D9). When NOT reusing (no recoverable credentials) also drop
+            // any stale data volume, so the new credentials initialize a clean cluster. When
+            // reusing, the volume is intentionally KEPT so existing data survives the recreate.
             const existing = await this.findManagedContainer();
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
@@ -214,27 +263,41 @@ class QuickStartServiceImpl {
                 await ContainerRuntime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
             }
 
-            // Pick a host port (design §8.3): prefer the canonical port, else fall back
-            // to a random free port in the band and note the substitution for the user.
-            const chosenPort = await ContainerRuntime.findAvailablePort(QUICK_START_PORT);
-            this.throwIfAborted(signal);
-            if (chosenPort === undefined) {
-                const message = `Ports ${QUICK_START_PORT}-${QUICK_START_PORT_BAND_END - 1} are all in use. Free one and retry.`;
-                this.setStatus(InstanceState.Error, undefined, message);
-                yield stageEvent('checking', 'error', message, message);
-                return;
-            }
+            // Pick a host port (design §8.3). An explicit Advanced port is honored exactly:
+            // a conflict ERRORS (never auto-relocated, P0-2). Otherwise prefer the canonical
+            // port and fall back to a random free port in the band, noting the substitution.
+            let chosenPort: number;
             let portFallbackNote: string | undefined;
-            if (chosenPort !== QUICK_START_PORT) {
-                portFallback = true;
-                portFallbackNote = `Port ${QUICK_START_PORT} was busy — using ${chosenPort} instead.`;
-                channel.appendLine(portFallbackNote);
+            if (explicitPort !== undefined) {
+                if (!(await ContainerRuntime.isPortFree(explicitPort))) {
+                    const message = `Port ${explicitPort} is already in use. Choose a different port or free it, then retry.`;
+                    this.setStatus(InstanceState.Error, undefined, message);
+                    yield stageEvent('checking', 'error', message, message);
+                    return;
+                }
+                this.throwIfAborted(signal);
+                chosenPort = explicitPort;
+            } else {
+                const available = await ContainerRuntime.findAvailablePort(QUICK_START_PORT);
+                this.throwIfAborted(signal);
+                if (available === undefined) {
+                    const message = `Ports ${QUICK_START_PORT}-${QUICK_START_PORT_BAND_END - 1} are all in use. Free one and retry.`;
+                    this.setStatus(InstanceState.Error, undefined, message);
+                    yield stageEvent('checking', 'error', message, message);
+                    return;
+                }
+                chosenPort = available;
+                if (chosenPort !== QUICK_START_PORT) {
+                    portFallback = true;
+                    portFallbackNote = `Port ${QUICK_START_PORT} was busy — using ${chosenPort} instead.`;
+                    channel.appendLine(portFallbackNote);
+                }
             }
             yield stageEvent('checking', 'done', portFallbackNote);
 
             // --- pulling ---
             yield stageEvent('pulling', 'active', 'Pulling the official image…');
-            await ContainerRuntime.pullImage(QUICK_START_IMAGE, cts.token);
+            await ContainerRuntime.pullImage(imageRef, cts.token);
             this.throwIfAborted(signal);
             yield stageEvent('pulling', 'done');
 
@@ -247,7 +310,7 @@ class QuickStartServiceImpl {
             envFilePath = await this.writeEnvFile(credentials.username, credentials.password);
             containerId = await ContainerRuntime.createAndRunContainer(
                 {
-                    imageRef: QUICK_START_IMAGE,
+                    imageRef: imageRef,
                     name: QUICK_START_CONTAINER_NAME,
                     labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: QUICK_START_ALIAS },
                     hostPort: chosenPort,
@@ -275,7 +338,10 @@ class QuickStartServiceImpl {
             // --- starting (confirm running, read bound port, follow logs) ---
             yield stageEvent('starting', 'active', 'Starting container…');
             const inspected = await ContainerRuntime.inspectContainer(containerId);
-            const boundPort = (inspected && ContainerRuntime.getBoundHostPort(inspected)) || QUICK_START_PORT;
+            // Fall back to the port we actually requested (not the canonical default) if the
+            // inspect can't report the binding, so a custom port stays correct in the success
+            // message + stored connection string.
+            const boundPort = (inspected && ContainerRuntime.getBoundHostPort(inspected)) || chosenPort;
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
             void ContainerRuntime.followLogs(containerId, secrets, cts.token);
             yield stageEvent('starting', 'done');
@@ -286,17 +352,20 @@ class QuickStartServiceImpl {
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
-            // Seed the image's built-in sample data ONCE — only when it isn't already
-            // present (idempotent, so recreating onto an existing volume doesn't
-            // re-run the init and hit duplicate keys). Runs the image's native init
-            // script via `docker exec`; best-effort, non-fatal.
-            if (!(await this.sampleDataExists(connectionString))) {
-                await this.seedSampleData(containerId, credentials.username, credentials.password, secrets, cts.token);
+            // Seed the image's built-in sample data ONCE — only when requested (Advanced
+            // "Load sample data", default on) and not already present (idempotent, so
+            // recreating onto an existing volume doesn't re-run the init and hit duplicate
+            // keys). Runs the image's native init script via `docker exec`; best-effort.
+            if (sampleDataRequested && !(await this.sampleDataExists(connectionString))) {
+                await this.seedSampleData(containerId, secrets, cts.token);
             }
             this.throwIfAborted(signal);
 
             // --- success ---
             await ext.secretStorage.store(SECRET_KEY, connectionString);
+            // Durably remember the image this instance's volume was created with, so a
+            // recreate after a window reload (in-memory metadata gone) keeps the same image.
+            await ext.context.globalState.update(IMAGE_REF_STATE_KEY, imageRef);
             // Drop any stale client cached under this id (e.g. from a prior run with
             // different credentials) so the next browse uses the fresh credentials.
             await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
@@ -308,11 +377,18 @@ class QuickStartServiceImpl {
                 clusterId: QUICK_START_CLUSTER_ID,
                 connectionString,
                 username: credentials.username,
+                imageRef,
             };
             this.setStatus(InstanceState.Running, metadata, undefined);
             success = true;
             yield stageEvent('waiting', 'done');
-            yield stageEvent('done', 'done', `DocumentDB Local is running on localhost:${boundPort}.`);
+            yield stageEvent(
+                'done',
+                'done',
+                `DocumentDB Local is running on localhost:${boundPort}.`,
+                undefined,
+                boundPort,
+            );
         } catch (error) {
             const aborted = signal.aborted;
             const message = aborted ? 'Setup was cancelled.' : errMessage(error);
@@ -354,14 +430,18 @@ class QuickStartServiceImpl {
                 await fs.rm(envFilePath, { force: true }).catch(() => undefined);
             }
             // Provisioning outcome telemetry (design §14): result + whether we reused a
-            // prior volume/creds + whether a port fallback was used + total duration.
-            // Never includes names/ports/credentials.
+            // prior volume/creds + whether a port fallback was used + total duration, plus
+            // which Advanced overrides were exercised (booleans only — never names/ports/creds).
             const provisionResult = success ? 'success' : signal.aborted ? 'cancelled' : 'error';
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.provision', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
                 telemetryContext.telemetry.properties.provisionResult = provisionResult;
                 telemetryContext.telemetry.properties.reused = String(reusing);
                 telemetryContext.telemetry.properties.portFallback = String(portFallback);
+                telemetryContext.telemetry.properties.customPort = String(explicitPort !== undefined);
+                telemetryContext.telemetry.properties.customCreds = String(usedCustomCreds);
+                telemetryContext.telemetry.properties.customImage = String(usedCustomImage);
+                telemetryContext.telemetry.properties.sampleData = String(sampleDataRequested);
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
             this.provisioning = false;
@@ -404,33 +484,24 @@ class QuickStartServiceImpl {
      * script inside the container (`docker exec`). Best-effort and non-fatal: the
      * instance is fully usable without sample data, so any failure is logged to the
      * Quick Start channel and swallowed rather than failing provisioning.
+     *
+     * The credentials are referenced from the CONTAINER's own environment
+     * (`$USERNAME`/`$PASSWORD`, set via the `--env-file` at run) inside the `sh -c`
+     * script, so they never appear on the HOST docker CLI argv / process list (§8.2) and
+     * are never subject to host-shell quoting or expansion (e.g. Windows `cmd.exe`
+     * `%VAR%`). {@link ContainerRuntime.execShellInContainer} strong-quotes the script so
+     * the host shell passes the `$VAR` references through verbatim and the container's own
+     * shell performs the expansion. The interpolated values are all constants — no user
+     * input reaches the script.
      */
     private async seedSampleData(
         containerId: string,
-        username: string,
-        password: string,
         secrets: ReadonlyArray<string>,
         token: vscode.CancellationToken,
     ): Promise<void> {
         try {
-            await ContainerRuntime.execInContainer(
-                containerId,
-                [
-                    SAMPLE_DATA_INIT_SCRIPT,
-                    '-H',
-                    'localhost',
-                    '-P',
-                    String(QUICK_START_PORT),
-                    '-u',
-                    username,
-                    '-p',
-                    password,
-                    '-d',
-                    SAMPLE_DATA_DIR,
-                ],
-                secrets,
-                token,
-            );
+            const script = `${SAMPLE_DATA_INIT_SCRIPT} -H localhost -P ${QUICK_START_PORT} -u "$USERNAME" -p "$PASSWORD" -d ${SAMPLE_DATA_DIR}`;
+            await ContainerRuntime.execShellInContainer(containerId, script, secrets, token);
         } catch (error) {
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
         }
@@ -454,6 +525,18 @@ class QuickStartServiceImpl {
         } finally {
             await client.close().catch(() => undefined);
         }
+    }
+
+    /**
+     * True when a provision would REUSE an existing instance rather than create a fresh one:
+     * i.e. usable stored credentials exist (so the data volume is kept and any custom
+     * credentials / image tag would be ignored). Mirrors the `reusing` decision in
+     * {@link provision} so the webview can hide the credential/image inputs and show the
+     * recreate summary whenever — and only when — the service will actually reuse, regardless
+     * of the in-memory `Missing` badge. Public so the `getDockerStatus` query can surface it.
+     */
+    public async willReuseExistingInstance(): Promise<boolean> {
+        return (await this.getReusableCredentials()) !== undefined;
     }
 
     /**
@@ -482,10 +565,18 @@ class QuickStartServiceImpl {
     /**
      * Write credentials to a temp `--env-file` (mode 600) so they are passed to the
      * container off the command line / process list (§8.2). The caller deletes it in
-     * a `finally`. Values use the URL-safe credential alphabet, so no quoting/escaping
-     * is required in the `KEY=VALUE` env-file format.
+     * a `finally`. The `--env-file` format is line-based `KEY=VALUE` with no quoting,
+     * so a newline (or other control char) in a value would inject extra environment
+     * variables. Auto-generated credentials use the URL-safe alphabet; custom Advanced
+     * credentials are control-char-validated at the router boundary, and this guard is
+     * the defense-in-depth backstop.
      */
     private async writeEnvFile(username: string, password: string): Promise<string> {
+        // eslint-disable-next-line no-control-regex
+        const hasControlChar = /[\u0000-\u001f\u007f]/;
+        if (hasControlChar.test(username) || hasControlChar.test(password)) {
+            throw new Error('Credentials must not contain control characters.');
+        }
         const filePath = path.join(os.tmpdir(), `documentdb-quickstart-${crypto.randomBytes(8).toString('hex')}.env`);
         await fs.writeFile(filePath, `USERNAME=${username}\nPASSWORD=${password}\n`, { mode: 0o600 });
         return filePath;
@@ -644,6 +735,7 @@ class QuickStartServiceImpl {
             } catch {
                 // ignore — best-effort cleanup
             }
+            await ext.context.globalState.update(IMAGE_REF_STATE_KEY, undefined);
             await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
             CredentialCache.deleteCredentials(QUICK_START_CLUSTER_ID);
             this.metadata = undefined;
@@ -730,6 +822,14 @@ class QuickStartServiceImpl {
             if (running) {
                 this.populateCredentialCache(stored, username, password);
             }
+            const adoptedImageRef = inspected?.image?.originalName;
+            // Backfill the durable image record from the adopted container, so a recreate AFTER
+            // this container is later removed + the window reloads still reuses the original image
+            // — even for an instance we only adopted (never provisioned in-process). Never clear an
+            // existing value when the image can't be read.
+            if (adoptedImageRef) {
+                await ext.context.globalState.update(IMAGE_REF_STATE_KEY, adoptedImageRef);
+            }
             this.setStatus(running ? InstanceState.Running : InstanceState.Stopped, {
                 containerId: container.id,
                 alias: QUICK_START_ALIAS,
@@ -737,6 +837,9 @@ class QuickStartServiceImpl {
                 clusterId: QUICK_START_CLUSTER_ID,
                 connectionString: stored,
                 username,
+                // Recover the image the volume's cluster was created with, so a later
+                // recreate (after the container is removed) reuses it instead of forcing latest.
+                imageRef: adoptedImageRef,
             });
         } catch {
             // Reconciliation is best-effort; never block activation.

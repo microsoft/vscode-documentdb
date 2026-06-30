@@ -33,6 +33,23 @@ This ratifies the design doc's existing position (§15: "Single managed instance
 decision log: "Single instance in v1; labels keep the model forward-compatible;
 multi-instance + multi-version are v1.2") and records the reasoning below.
 
+### Re-affirmed 2026-06-30 (manual-testing review)
+
+Revisited during hands-on manual testing, framed by user personas, and **held**:
+
+- **Newbie / trial** and **typical app dev** want *one* decision-free instance; a second
+  instance only re-introduces the "which one / alias / port" choices Quick Start removes.
+- The **advanced "validate before deploying to k8s / on-prem"** persona is the strongest case
+  *for* multi-version — but their genuine need is met more cheaply and correctly by
+  **(a) image-tag / version selection on the single managed instance (the Advanced panel, P1-4)**
+  and **(b) attaching their own side-by-side `docker run` containers via the regular wizard** —
+  not by Quick Start managing N containers.
+- Known papercut accepted for v1: switching versions today = **Delete (loses data) → re-provision**.
+  P1-4 (pick image tag → recreate) smooths this *without* going multi-instance.
+
+Net: single-instance stays the v1 model; multi-instance / multi-version remain the additive
+v1.2 features the label model already makes free to add.
+
 ## Rationale
 
 1. **The value proposition is "zero decisions."** Quick Start exists to go from an empty

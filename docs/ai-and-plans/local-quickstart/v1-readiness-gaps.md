@@ -33,7 +33,7 @@ instance.
 | P1‑1 | **Docker-not-ready diagnosis** | §5.3, §9 | One-line message + Retry | Per-check cards (CLI / daemon / platform), a **"Start Docker Desktop"** action (§13.2), and a Troubleshooting link. Docker-stopped is the most common first-run failure — a dead-end one-liner loses users. |
 | P1‑2 | **Platform-supported check** | §9 | Not implemented | Detect unsupported CPU arch (amd64/arm64 ok); warn otherwise. |
 | P1‑3 | **Success → tree handoff** | §5.5 | Auto-closes, no card buttons | Brief success card with **Open Connection** (reveal + expand the tree node) so the instance doesn't just "disappear". |
-| P1‑4 | **Advanced panel** | §5.2 | Happy-path only | Custom port (drives the explicit-port branch of P0‑2), custom creds, image tag, seed toggle. (Breadth can phase into v1.1.) |
+| P1‑4 | **Advanced panel** | §5.2 | ✅ **Done** | Collapsible Advanced panel: custom port (explicit-port branch of P0‑2), custom credentials, image tag, sample-data toggle. On reuse the creds/image fields hide (volume kept). 4-round 5-agent review (security + data-safety). |
 
 ## 🟡 P2 — Ecosystem integration (upgrade trust)
 
@@ -58,7 +58,7 @@ instance.
 
 - **Must-have:** P0‑1, P0‑2, P0‑3 · P1‑1, P1‑2 · P2‑1, P2‑3.
 - **Strongly-want:** P1‑3 · P3‑1 · P3‑2 · P2‑2.
-- **Can slip to v1.1:** P1‑4 breadth · P3‑3 (if OutputChannel accepted) · P3‑4 polish · P3‑5.
+- **Can slip to v1.1:** P3‑3 (if OutputChannel accepted) · P3‑4 polish · P3‑5.
 
 ## Implementation log
 
@@ -207,3 +207,43 @@ instance.
       orphaned public-host flag is now **fully inert** (no allow-invalid, no fast-fail, no mislabel).
   - **§7.3 connection edit dialog deferred** — the design itself tracks it as a separate issue.
   - Gates green: build · lint · jest (2135/2135) · l10n · prettier · production webpack.
+
+- _2026-06-30_: **P1‑4 Advanced panel (§5.2) — DONE (4-round 5-agent review, unanimous consensus).**
+  - **Feature:** collapsible FluentUI Advanced accordion on the review screen — custom **host port**
+    (feeds the explicit-port branch of P0‑2: a conflict errors, never auto-relocates), custom
+    **username/password**, **image tag**, and a **Load sample data** toggle. A new
+    `advancedOptionsSchema` (zod) validates on the wire; the summary + review cards reflect the
+    effective port/image/credentials; a failed provision gets an **Edit settings** button back to the
+    form. New `AdvancedQuickStartOptions`, `resolveQuickStartImage(tag)`, `StageEvent.boundPort`.
+  - **Security (creds off the host shell, §8.2):** sample-data seeding runs the image's init script via
+    `ContainerRuntime.execShellInContainer`, which references `"$USERNAME"`/`"$PASSWORD"` from the
+    **container's own** env (set by the `--env-file` at run) inside a **`ShellQuoting.Strong`**-quoted
+    `sh -c`. Verified end-to-end (WSL bash + lib trace + 5 agents): the host shell never expands the
+    refs (single-quoted on bash, escaped-double-quoted on cmd; cmd ignores `$`), so credentials never
+    hit the host argv/process list on **either** platform. This let the earlier `%`-in-password band-aid
+    be removed (creds are validated control-char-only now — the env-file newline-injection vector stays
+    blocked at zod + `writeEnvFile`; `%` round-trips safely via the env-file + percent-encoded conn
+    string). _A first cut used the default array-arg quoting (`Escape`), which leaks/empties the refs on
+    POSIX and word-splits on Windows — caught by the review and fixed to `Strong`._
+  - **Data safety:** the reuse decision is now keyed on **stored credentials existing** (live
+    SecretStorage), not the in-memory `Missing` flag, so re-running setup can **never** silently wipe a
+    reusable data volume (e.g. after a window reload + external container removal). A fresh,
+    volume-wiping provision is strictly the explicit **Delete**-then-recreate path.
+  - **Recreate fidelity:** `InstanceMetadata.imageRef` + a durable `globalState` record
+    (`documentdb.quickstart.imageRef`, written on provision, **backfilled on reconcile/adopt**, cleared
+    on Delete) so a recreate — even across a reload — reuses the **original** image, not `latest`
+    (the "image is kept" promise is now true). `getDockerStatus` surfaces a `willReuse` flag computed
+    from the **same** predicate `provision()` uses, and the webview derives `isRecreate` strictly from
+    it — so the credential/image inputs are hidden (and the summary relabels "Reused/Kept from the
+    existing instance") whenever, and only when, the service will actually reuse.
+  - **Also:** server-side both-or-neither credential `.refine()` (parity with the client); whitespace
+    trim consistent client↔zod↔service; custom port preserved in the success message/conn string via a
+    `chosenPort` inspect fallback; telemetry stays booleans-only (`customPort/customCreds/customImage/
+    sampleData`).
+  - **Review (GPT‑5.4/5.5 xhigh, Opus 4.6/4.7/4.8 max):** R1 → env-file newline + client/server
+    validation gaps. R2 → recreate image-tag loss + whitespace divergence + hardcoded review-card port.
+    R3 → **the `Escape`→`Strong` seed-quoting fix** (independently reproduced by 3 agents) + durable
+    reuse/UI-divergence blockers (GPT‑5.4/5.5/Opus‑4.8). R4 → durable `imageRef` + `willReuse` parity
+    landed; GPT‑5.4's last two refinements (reconcile backfill, `isRecreate` strictly `= willReuse`)
+    applied and re-confirmed → **unanimous APPROVE**.
+  - Gates green: build · lint · jest (2139/2139) · l10n · prettier.

@@ -19,6 +19,7 @@
  */
 
 import * as vscode from 'vscode';
+import { z } from 'zod';
 import {
     ContainerRuntime,
     getQuickStartOutputChannel,
@@ -26,12 +27,63 @@ import {
 } from '../../../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import {
+    type AdvancedQuickStartOptions,
     type DockerStatusResult,
     type QuickStartStatus,
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+
+/**
+ * Advanced provisioning overrides (P1-4). All optional; the webview only sends the
+ * fields the user filled in. `port` is validated to a sane TCP range and credentials
+ * are length-bounded — the service applies the host-gating / reuse rules.
+ */
+const advancedOptionsSchema = z
+    .object({
+        port: z.number().int().min(1024).max(65535).optional(),
+        // Disallow control characters (newlines/tabs/NUL): credentials are written to a
+        // line-based docker `--env-file` (KEY=VALUE), where a newline would inject extra
+        // environment variables. Other printable specials (including `%`, for strong
+        // passwords) are safe: creds reach the container only via the env-file and the
+        // percent-encoded connection string, never the host shell argv (sample-data
+        // seeding references `$USERNAME`/`$PASSWORD` from the container's own environment).
+        // `.trim()` normalizes surrounding whitespace identically to the service, so a
+        // whitespace-only value collapses to empty (rejected here / auto-generated there)
+        // and the webview's "Custom" indication can never disagree with what is applied.
+        username: z
+            .string()
+            .trim()
+            .min(1)
+            .max(128)
+            // eslint-disable-next-line no-control-regex
+            .regex(/^[^\u0000-\u001f\u007f]+$/, 'Username must not contain control characters')
+            .optional(),
+        password: z
+            .string()
+            .trim()
+            .min(1)
+            .max(256)
+            // eslint-disable-next-line no-control-regex
+            .regex(/^[^\u0000-\u001f\u007f]+$/, 'Password must not contain control characters')
+            .optional(),
+        imageTag: z
+            .string()
+            .min(1)
+            .max(128)
+            .regex(/^[\w][\w.-]*$/, 'Invalid image tag')
+            .optional(),
+        loadSampleData: z.boolean().optional(),
+    })
+    // Mirror the webview's both-or-neither rule server-side: a username without a password
+    // (or vice versa) is rejected rather than silently auto-generating, so a direct tRPC
+    // caller gets the same contract the UI enforces.
+    .refine((v) => (v.username === undefined) === (v.password === undefined), {
+        message: 'Provide both a username and a password, or neither.',
+        path: ['password'],
+    })
+    .optional();
 
 export type RouterContext = BaseRouterContext & {
     /** Disposes the webview panel (explicit Close button). Wired by the controller. */
@@ -42,6 +94,10 @@ export const localQuickStartRouter = router({
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
     getDockerStatus: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<DockerStatusResult> => {
         const readiness = await ContainerRuntime.isDockerReady();
+        // Refresh the live container state so the panel opens with an accurate badge
+        // (e.g. Missing when the container was removed in another window), which drives
+        // whether the Advanced credential/image fields are shown (§12).
+        await QuickStartService.refreshLiveState();
         const tctx = ctx as WithTelemetry<BaseRouterContext>;
         // Design §14 quickstart.docker_readiness — never includes names/ports/creds.
         tctx.telemetry.properties.dockerReadiness = !readiness.cliInstalled
@@ -50,7 +106,8 @@ export const localQuickStartRouter = router({
               ? 'daemonStopped'
               : 'ok';
         tctx.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
-        return { readiness, status: QuickStartService.getStatus(), busy: QuickStartService.isBusy };
+        const willReuse = await QuickStartService.willReuseExistingInstance();
+        return { readiness, status: QuickStartService.getStatus(), busy: QuickStartService.isBusy, willReuse };
     }),
 
     /** Lightweight status poll (no docker call). */
@@ -84,9 +141,12 @@ export const localQuickStartRouter = router({
 
     /**
      * Provision the managed instance, streaming stage transitions to the webview.
+     * Optional Advanced overrides (port / credentials / image tag / sample-data) are
+     * validated by {@link advancedOptionsSchema} and threaded into the service.
      */
-    startQuickStart: publicProcedureWithTelemetry.subscription(async function* ({
+    startQuickStart: publicProcedureWithTelemetry.input(advancedOptionsSchema).subscription(async function* ({
         ctx,
+        input,
     }): AsyncGenerator<StageEvent, void, void> {
         const myCtx = ctx as BaseRouterContext;
 
@@ -102,7 +162,8 @@ export const localQuickStartRouter = router({
         }
 
         try {
-            for await (const event of QuickStartService.provision(abortController.signal)) {
+            const advanced: AdvancedQuickStartOptions | undefined = input ?? undefined;
+            for await (const event of QuickStartService.provision(abortController.signal, advanced)) {
                 yield event;
             }
         } finally {
