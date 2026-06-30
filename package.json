@@ -782,7 +782,7 @@
         },
         {
           "command": "vscode-documentdb.command.localQuickStart.delete",
-          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(stopped|error|missing)\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(running|stopped|error|missing)\\b/i",
           "group": "3_quickstart@1"
         },
         {

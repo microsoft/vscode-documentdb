@@ -22,6 +22,7 @@ import {
     type StageEvent,
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
+import { Announcer } from '../../components/accessibility/Announcer';
 
 type Phase = 'loading' | 'review' | 'dockerNotReady' | 'provisioning' | 'success' | 'failed';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
@@ -60,6 +61,7 @@ const useStyles = makeStyles({
         backgroundColor: tokens.colorStatusSuccessBackground1,
         color: tokens.colorStatusSuccessForeground1,
     },
+    nextSteps: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' },
     muted: { color: tokens.colorNeutralForeground3 },
 });
 
@@ -114,7 +116,6 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
     const loadDockerStatus = useCallback((): void => {
         setPhase('loading');
@@ -158,7 +159,6 @@ export const LocalQuickStart = (): JSX.Element => {
         return () => {
             subscriptionRef.current?.unsubscribe();
             if (timerRef.current) clearInterval(timerRef.current);
-            if (closeTimerRef.current) clearTimeout(closeTimerRef.current);
         };
     }, [loadDockerStatus]);
 
@@ -186,9 +186,6 @@ export const LocalQuickStart = (): JSX.Element => {
                     stopTimer();
                     setSuccessMessage(event.message);
                     setPhase('success');
-                    closeTimerRef.current = setTimeout(() => {
-                        void trpcClient.localQuickStart.closePanel.mutate().catch(() => undefined);
-                    }, 4000);
                 } else if (event.status === 'error') {
                     settled = true;
                     stopTimer();
@@ -237,12 +234,9 @@ export const LocalQuickStart = (): JSX.Element => {
     }, [trpcClient]);
 
     const handleOpenConnection = useCallback((): void => {
-        if (closeTimerRef.current) {
-            clearTimeout(closeTimerRef.current);
-            closeTimerRef.current = null;
-        }
+        // Reveal the connection in the Connections view but KEEP this panel open —
+        // only the explicit Close button dismisses the page (user feedback).
         void trpcClient.localQuickStart.openConnection.mutate().catch(() => undefined);
-        void trpcClient.localQuickStart.closePanel.mutate().catch(() => undefined);
     }, [trpcClient]);
 
     const handleCopyConnString = useCallback((): void => {
@@ -419,13 +413,35 @@ export const LocalQuickStart = (): JSX.Element => {
     if (phase === 'provisioning' || phase === 'success' || phase === 'failed') {
         return (
             <div className={styles.root}>
+                <Announcer
+                    when={phase === 'success'}
+                    message={l10n.t('DocumentDB Local is ready. Next steps are shown below.')}
+                />
                 {hero(l10n.t('Setting up DocumentDB Local…'), phase === 'provisioning' ? elapsedLabel() : '')}
 
                 {phase === 'success' && (
                     <div className={styles.successBox}>
                         <Text weight="semibold">{successMessage ?? l10n.t('DocumentDB Local is running.')}</Text>
-                        <div>
-                            <Text size={200}>{l10n.t('Opening it in the Connections view…')}</Text>
+                        <div className={styles.nextSteps}>
+                            <Text size={200} weight="semibold">
+                                {l10n.t('Next steps')}
+                            </Text>
+                            <Text size={200}>
+                                {l10n.t(
+                                    '• Open Connection — browse your databases in the Connections view, under “DocumentDB Local”.',
+                                )}
+                            </Text>
+                            <Text size={200}>
+                                {l10n.t(
+                                    '• Copy Connection String — use it from a Query Playground, your app, or mongosh (localhost:{0}).',
+                                    String(QUICK_START_PORT),
+                                )}
+                            </Text>
+                            <Text size={200}>
+                                {l10n.t(
+                                    '• The container keeps running after VS Code closes. Manage it with Stop / Restart / Delete in the Connections view.',
+                                )}
+                            </Text>
                         </div>
                     </div>
                 )}
@@ -450,6 +466,9 @@ export const LocalQuickStart = (): JSX.Element => {
                     )}
                     {phase === 'success' && (
                         <>
+                            <Button appearance="secondary" onClick={handleClose}>
+                                {l10n.t('Close')}
+                            </Button>
                             <Button appearance="secondary" onClick={handleCopyConnString}>
                                 {l10n.t('Copy Connection String')}
                             </Button>

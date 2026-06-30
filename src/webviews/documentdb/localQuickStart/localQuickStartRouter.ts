@@ -12,7 +12,7 @@
  *   subscription's `ctx.signal` (aborted on unsubscribe) into a mirrored
  *   `AbortController` passed to the service — so a Cancel/close also cancels the
  *   in-flight docker command (via the runtime's cancellation token).
- * - `closePanel` (mutation): success auto-close hand-off to the tree.
+ * - `closePanel` (mutation): dispose the panel — only the explicit Close button.
  *
  * Per the circular-import rule, tRPC primitives are imported from
  * `../../_integration/trpc`, never from `appRouter.ts`.
@@ -34,7 +34,7 @@ import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 export type RouterContext = BaseRouterContext & {
-    /** Disposes the webview panel (success auto-close). Wired by the controller. */
+    /** Disposes the webview panel (explicit Close button). Wired by the controller. */
     closePanel: () => void;
 };
 
@@ -56,7 +56,7 @@ export const localQuickStartRouter = router({
     /** Lightweight status poll (no docker call). */
     getStatus: publicProcedure.query((): QuickStartStatus => QuickStartService.getStatus()),
 
-    /** Disposes the panel (success auto-close → tree takes over). */
+    /** Disposes the panel when the user explicitly clicks Close. */
     closePanel: publicProcedure.mutation(({ ctx }) => {
         (ctx as RouterContext).closePanel();
     }),
