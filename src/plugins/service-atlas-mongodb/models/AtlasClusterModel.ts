@@ -5,6 +5,7 @@
 
 import { type Experience } from '../../../DocumentDBExperiences';
 import { type BaseClusterModel } from '../../../tree/models/BaseClusterModel';
+import { type AtlasClusterState } from './AtlasProjectModel';
 
 /**
  * Cluster model for MongoDB Atlas clusters discovered via the Atlas Admin API.
@@ -18,7 +19,7 @@ export interface AtlasClusterModel extends BaseClusterModel {
     readonly projectName: string;
 
     /** Cluster state (IDLE, CREATING, UPDATING, etc.) */
-    readonly stateName: string;
+    readonly stateName: AtlasClusterState;
 
     /** Cluster type (REPLICASET, SHARDED, GEOSHARDED) */
     readonly clusterType: string;
@@ -47,7 +48,7 @@ export function createAtlasClusterModel(
         name: string;
         mongoDBVersion: string;
         connectionStrings: { standardSrv?: string; standard?: string };
-        stateName: string;
+        stateName: AtlasClusterState;
         clusterType: string;
         providerSettings?: { providerName: string; regionName: string; instanceSizeName: string };
         replicationSpecs?: {
