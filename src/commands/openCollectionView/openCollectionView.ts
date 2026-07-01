@@ -11,7 +11,7 @@ import { ClusterSession } from '../../documentdb/ClusterSession';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
-import { openCollectionViewPanel } from '../../webviews/documentdb/collectionView/collectionViewController';
+import { openCollectionWebview } from '../../webviews/documentdb/collectionView/collectionViewController';
 
 export async function openCollectionView(context: IActionContext, node: CollectionItem) {
     // added manually here as this function can by called bypassing our general command registration
@@ -70,7 +70,7 @@ export async function openCollectionViewInternal(
         feedbackSignalsEnabled = false;
     }
 
-    const view = openCollectionViewPanel({
+    const view = openCollectionWebview({
         sessionId: sessionId,
         clusterId: props.clusterId,
         clusterDisplayName: props.clusterDisplayName,

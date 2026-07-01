@@ -6,16 +6,30 @@
 /**
  * DocumentDB preset for the framework's `openWebview` factory.
  *
- * `openAppWebview` is the factory-style counterpart to `WebviewControllerBase`:
- * it pre-fills the framework's
- * {@link import('@microsoft/vscode-ext-webview/host').WebviewControllerOptions}
- * with this extension's root tRPC router, caller factory, bundle layout, and
- * dev-server host, then returns the `WebviewController` handle.
+ * ## Why this helper exists
+ *
+ * Opening any DocumentDB webview needs the exact same fixed wiring every time:
+ * this extension's root tRPC router (`appRouter`), its `createCallerFactory`,
+ * the bundle / dev-server layout from `WEBVIEW_CONFIG`, and `ext.context`. Only
+ * a handful of values actually change from one view to the next (the title, the
+ * `viewType`, the initial config, the router context, and an optional icon or
+ * view column).
+ *
+ * Without this helper every panel factory would repeat that same boilerplate on
+ * its own `openWebview(...)` call, and any change to the shared wiring (a new
+ * telemetry logger, a different dev-server host, a renamed bundle file) would
+ * have to be found and edited in each of them. `openAppWebview` is the single
+ * place that owns the fixed wiring, so each panel factory stays a few lines long
+ * and states only what is unique to its view. It is the function-shaped
+ * replacement for the former `WebviewControllerBase` class: same idea, without
+ * the inheritance.
+ *
+ * ## How it is used
  *
  * Construction-only panels (no instance state, no externally-called methods
  * beyond the handle's `panel` / `onDisposed` / `revealToForeground` / `dispose`
  * / `isDisposed`) are opened with a thin factory function (e.g.
- * `openCollectionViewPanel`) that derives config + context and calls this.
+ * `openCollectionWebview`) that derives config + context and calls this.
  */
 
 import { openWebview, type WebviewController } from '@microsoft/vscode-ext-webview/host';

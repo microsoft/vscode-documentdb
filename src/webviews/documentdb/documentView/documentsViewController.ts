@@ -26,7 +26,7 @@ export type DocumentsViewWebviewConfigurationType = {
     mode: string; // 'add', 'view', 'edit'
 };
 
-export function openDocumentViewPanel(
+export function openDocumentWebview(
     initialData: DocumentsViewWebviewConfigurationType,
 ): AppWebviewController<DocumentsViewWebviewConfigurationType> {
     let title: string = `${initialData.databaseName}/${initialData.collectionName}/*new*`;

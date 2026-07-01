@@ -39,7 +39,7 @@ export type CollectionViewWebviewConfigurationType = {
     };
 };
 
-export function openCollectionViewPanel(
+export function openCollectionWebview(
     initialData: Omit<CollectionViewWebviewConfigurationType, 'defaultPageSize' | 'enableAIQueryGeneration'>,
 ): AppWebviewController<CollectionViewWebviewConfigurationType> {
     const title: string = `${initialData.databaseName}/${initialData.collectionName}`;
