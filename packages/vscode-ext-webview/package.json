@@ -1,7 +1,7 @@
 {
   "name": "@microsoft/vscode-ext-webview",
   "version": "0.9.0-preview",
-  "description": "Type-safe tRPC transport over postMessage for VS Code extension webviews, with an optional extension-host panel facade, a framework-agnostic webview client, and pluggable telemetry. React hooks are optional.",
+  "description": "Webview infrastructure for VS Code extensions: type-safe tRPC over postMessage with pluggable telemetry middleware, plus an optional extension-host panel facade, a framework-agnostic webview client, and optional React hooks.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {

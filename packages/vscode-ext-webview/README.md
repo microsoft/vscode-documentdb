@@ -4,18 +4,37 @@
 > surface stabilises. Breaking changes may land between minor versions until
 > a `1.0.0` release.
 
-Webview infrastructure for VS Code extensions: type-safe tRPC RPC over
+Webview infrastructure for VS Code extensions: type-safe tRPC over
 `postMessage`, a one-call front door that opens a panel and wires the
-transport, React hooks for the webview side, and pluggable telemetry.
+transport, optional React hooks for the webview side, and pluggable telemetry.
 
-The package was extracted from the webview stack powering the
-[DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb) and
-[Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb)
-extensions, then refined against the public
-[vscode-webview-starter-kit](https://github.com/tnaum-ms/vscode-webview-starter-kit)
-reference repository.
+The transport was extracted from the webview stack that ships in the
+battle-tested [DocumentDB for VS Code](https://github.com/microsoft/vscode-documentdb)
+and [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb)
+extensions, where it powers the production collection, document, and query
+experiences that people use every day.
+
+A companion [vscode-webview-starter-kit](https://github.com/tnaum-ms/vscode-webview-starter-kit)
+repository was built to make onboarding easy: it is a ready-to-run reference you
+can use as a template for a brand-new extension, or read alongside this package
+to see every moving part wired together.
 
 ---
+
+## Crossing the webview boundary
+
+A VS Code webview runs in its own isolated context: a sandboxed iframe with no
+direct access to the extension host, the file system, or the VS Code API. The
+only way in or out is asynchronous `postMessage`. That isolation is good for
+security, but it means every feature has to cross a process-like boundary by
+hand. You serialize a message, correlate responses with requests, track
+cancellation, and keep both sides' types in sync as the code changes.
+
+This package turns that boundary into a typed function call. You define a tRPC
+router once on the extension host, and the webview calls it like a local API
+with full type inference, autocompletion, and refactor-safety. The transport,
+request and response correlation, cancellation, and lifecycle wiring are handled
+for you, so feature code never touches `postMessage` directly.
 
 ## Architecture
 
