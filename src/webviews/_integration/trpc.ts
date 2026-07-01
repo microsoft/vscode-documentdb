@@ -28,27 +28,38 @@
  * back from `appRouter.ts`.
  *
  * What lives here:
- *   - `trpcToTelemetry`: middleware that forwards each call to the VS Code
- *     Azure telemetry pipeline using the `documentDB.rpc.*` event-name
- *     namespace.
- *   - `publicProcedureWithTelemetry`: `publicProcedure.use(trpcToTelemetry)`.
+ *   - `documentDbTelemetryRunner`: the `TelemetryRunner` adapter that wraps the
+ *     framework's `telemetryMiddlewareBody`, forwarding each call to the VS Code
+ *     Azure telemetry pipeline using the `documentDB.rpc.*` event-name namespace.
+ *   - `publicProcedureWithTelemetry`:
+ *     `publicProcedure.use((opts) => telemetryMiddlewareBody(opts, documentDbTelemetryRunner))`.
  *     Use this instead of `publicProcedure` when you want the call to be
  *     tracked automatically.
  *   - `WithTelemetry<T>`: re-types the `telemetry` slot on `ctx` to the
  *     richer `ITelemetryContext` so procedure code can access
  *     `suppressAll`, `suppressIfSuccessful`, etc. without ad-hoc casts.
- *   - Re-exports of `publicProcedure` and `router` so per-view routers
- *     have a single import location for everything they need.
+ *   - Re-exports of `publicProcedure`, `router`, and `createCallerFactory` so
+ *     per-view routers and the controller share a single import location.
  */
 
 import { callWithTelemetryAndErrorHandling, parseError, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import { initWebviewTrpc, type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import {
-    createMiddleware,
-    publicProcedure,
-    router,
-    type BaseRouterContext as FrameworkBaseRouterContext,
-} from '@microsoft/vscode-ext-react-webview/server';
+    telemetryMiddlewareBody,
+    type ProcedureTelemetry,
+    type TelemetryRunner,
+} from '@microsoft/vscode-ext-webview/host';
 import { WEBVIEW_CONFIG } from './configuration';
+
+/**
+ * The single tRPC instance for this extension, bound to the framework's
+ * `BaseRouterContext`. Every per-view router builds its procedures from the
+ * `publicProcedure` / `router` exported below (procedures cast `ctx` to their
+ * richer DocumentDB context as needed), and the host dispatcher invokes them
+ * through this instance's `createCallerFactory`.
+ */
+const trpc = initWebviewTrpc<FrameworkBaseRouterContext>();
+const { publicProcedure, router, createCallerFactory } = trpc;
 
 /**
  * DocumentDB-flavoured replacement for the package's `WithTelemetry<T>` helper.
@@ -64,64 +75,54 @@ export type WithTelemetry<T extends { telemetry?: unknown }> = Omit<T, 'telemetr
 };
 
 /**
- * Telemetry middleware that forwards every tRPC call to the VS Code Azure
- * telemetry pipeline. Event names follow the `documentDB.rpc.${type}.${path}`
- * convention.
+ * DocumentDB telemetry adapter for the framework's `telemetryMiddlewareBody`.
+ *
+ * The body owns the generic timing / `Canceled` / `Failed` / error-name +
+ * error-message recording; this runner establishes the VS Code Azure telemetry
+ * scope (event names follow the `documentDB.rpc.${type}.${path}` convention) and
+ * adds the DocumentDB-specific error enrichment the body does not: `parseError`
+ * is used so non-enumerable Error fields are read correctly and the telemetry
+ * path never throws (e.g. on circular `cause` chains), and `errorStack` /
+ * `errorCause` are recorded. The enrichment runs after `execute`, so its
+ * `parseError`-derived `error` / `errorMessage` values overwrite the body's
+ * plain name / message.
  */
-const trpcToTelemetry = createMiddleware(async (opts) => {
-    const result = await callWithTelemetryAndErrorHandling(
-        `${WEBVIEW_CONFIG.telemetry.rpcEventPrefix}.${opts.type}.${opts.path}`,
-        async (context) => {
-            context.errorHandling.suppressDisplay = true;
+const documentDbTelemetryRunner: TelemetryRunner = {
+    async run(invocation, execute) {
+        const result = await callWithTelemetryAndErrorHandling(
+            `${WEBVIEW_CONFIG.telemetry.rpcEventPrefix}.${invocation.type}.${invocation.path}`,
+            async (context) => {
+                context.errorHandling.suppressDisplay = true;
 
-            const result = await opts.next({
-                ctx: {
-                    ...opts.ctx,
-                    telemetry: context.telemetry,
-                },
-            });
+                // `ITelemetryContext` is the runtime telemetry object; its
+                // `properties` / `measurements` index signatures are wider than
+                // the framework's `ProcedureTelemetry` (they also admit
+                // `undefined` / `TelemetryTrustedValue`). The framework body only
+                // ever writes plain strings / numbers, so the bridge is sound.
+                const result = await execute(context.telemetry as unknown as ProcedureTelemetry);
 
-            // Check if the operation was aborted via AbortSignal
-            const signal = (opts.ctx as FrameworkBaseRouterContext).signal;
-            if (signal?.aborted) {
-                context.telemetry.properties.aborted = 'true';
-                context.telemetry.properties.result = 'Canceled';
-            }
-
-            if (!result.ok) {
-                /**
-                 * we're not handling any error here as we just want to log it here and let the
-                 * caller of the RPC call handle the error there.
-                 */
-
-                if (!signal?.aborted) {
-                    context.telemetry.properties.result = 'Failed';
+                if (!result.ok && result.error) {
+                    const parsed = parseError(result.error);
+                    context.telemetry.properties.error = parsed.errorType;
+                    context.telemetry.properties.errorMessage = parsed.message;
+                    context.telemetry.properties.errorStack = (result.error as { stack?: string }).stack ?? '';
+                    if (result.error.cause) {
+                        context.telemetry.properties.errorCause = parseError(result.error.cause).message;
+                    }
                 }
 
-                // Use the same `parseError` helper the rest of the codebase uses so that
-                // non-enumerable Error fields (message/name/stack) are read correctly and
-                // we never throw from the telemetry path (e.g. on circular `cause` chains,
-                // which JSON.stringify would have thrown on).
-                const parsed = parseError(result.error);
-                context.telemetry.properties.error = parsed.errorType;
-                context.telemetry.properties.errorMessage = parsed.message;
-                context.telemetry.properties.errorStack = result.error.stack ?? '';
-                if (result.error.cause) {
-                    context.telemetry.properties.errorCause = parseError(result.error.cause).message;
-                }
-            }
+                return result;
+            },
+        );
 
-            return result;
-        },
-    );
+        if (!result) {
+            // This should never happen, but TypeScript requires us to handle the case where result is undefined.
+            throw new Error(`No result returned from tRPC call for ${invocation.type} ${invocation.path}`);
+        }
 
-    if (!result) {
-        // This should never happen, but TypeScript requires us to handle the case where result is undefined.
-        throw new Error(`No result returned from tRPC call for ${opts.type} ${opts.path}`);
-    }
-
-    return result;
-});
+        return result;
+    },
+};
 
 /**
  * Base procedure that automatically attaches DocumentDB Azure telemetry context.
@@ -130,9 +131,12 @@ const trpcToTelemetry = createMiddleware(async (opts) => {
  * tracked. The `telemetry` object is available on `ctx` inside your procedure
  * handlers (cast with `WithTelemetry<YourContext>`).
  */
-export const publicProcedureWithTelemetry = publicProcedure.use(trpcToTelemetry);
+export const publicProcedureWithTelemetry = publicProcedure.use((opts) =>
+    telemetryMiddlewareBody(opts, documentDbTelemetryRunner),
+);
 
-// Re-export the unprotected procedure builder and router factory so per-view
-// routers have a single import location for everything they need to declare
-// tRPC procedures.
-export { publicProcedure, router };
+// Re-export the unprotected procedure builder, the router factory, and the
+// caller factory so per-view routers have a single import location for
+// everything they need, and the controller can invoke procedures against the
+// same tRPC instance the router was built with.
+export { createCallerFactory, publicProcedure, router };

@@ -23,7 +23,7 @@
  */
 
 import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
-import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-react-webview/server';
+import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
@@ -42,7 +42,7 @@ export type { WithTelemetry };
 
 /**
  * DocumentDB-flavoured router context. Extends the framework's
- * `BaseRouterContext` (from `@microsoft/vscode-ext-react-webview`, which
+ * `BaseRouterContext` (from `@microsoft/vscode-ext-webview`, which
  * already declares `telemetry?` and `signal?`) with the DocumentDB-specific
  * fields every procedure needs. Inheriting `telemetry?` / `signal?` keeps
  * the context shape in lock step with the framework: if the framework adds
@@ -72,7 +72,8 @@ export type BaseRouterContext = FrameworkBaseRouterContext & {
      * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
      * the final event name, e.g. `documentDB.webview.event.${webviewName}.${eventName}`).
      *
-     * This is **not** the same as the registry key passed to the `WebviewControllerBase` constructor.
+     * This is **not** the same as the registry key (`viewType`) passed to the
+     * `openAppWebview` factory / framework `openWebview` options.
      */
     webviewName: string;
 };

@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { WebviewControllerBase } from '../../_integration/WebviewControllerBase';
+import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './documentsViewRouter';
 
 export type DocumentsViewWebviewConfigurationType = {
@@ -26,38 +26,49 @@ export type DocumentsViewWebviewConfigurationType = {
     mode: string; // 'add', 'view', 'edit'
 };
 
-export class DocumentsViewController extends WebviewControllerBase<DocumentsViewWebviewConfigurationType> {
-    constructor(initialData: DocumentsViewWebviewConfigurationType) {
-        // ext.context here is the vscode.ExtensionContext required by the ReactWebviewPanelController's original implementation
-        // we're not modifying it here in order to be ready for future updates of the webview API.
-
-        let title: string = `${initialData.databaseName}/${initialData.collectionName}/*new*`;
-        switch (initialData.mode) {
-            case 'view':
-            case 'edit': {
-                title = `${initialData.databaseName}/${initialData.collectionName}/${initialData.documentId}`;
-                break;
-            }
+export function openDocumentWebview(
+    initialData: DocumentsViewWebviewConfigurationType,
+): AppWebviewController<DocumentsViewWebviewConfigurationType> {
+    let title: string = `${initialData.databaseName}/${initialData.collectionName}/*new*`;
+    switch (initialData.mode) {
+        case 'view':
+        case 'edit': {
+            title = `${initialData.databaseName}/${initialData.collectionName}/${initialData.documentId}`;
+            break;
         }
+    }
 
-        super(ext.context, title, 'documentView', initialData, vscode.ViewColumn.Active, {
+    // The router context's title setter needs the controller handle, which only
+    // exists after openAppWebview returns. The setter is only invoked at runtime
+    // (in response to a tRPC call), well after the handle is assigned below.
+    const handle: { controller?: AppWebviewController<DocumentsViewWebviewConfigurationType> } = {};
+
+    const trpcContext: RouterContext = {
+        dbExperience: API.DocumentDB,
+        webviewName: 'documentView',
+        clusterId: initialData.clusterId,
+        viewId: initialData.viewId,
+        databaseName: initialData.databaseName,
+        collectionName: initialData.collectionName,
+        documentId: initialData.documentId,
+        viewPanelTitleSetter: (title: string) => {
+            if (handle.controller) {
+                handle.controller.panel.title = title;
+            }
+        },
+    };
+
+    handle.controller = openAppWebview({
+        title,
+        webviewName: 'documentView',
+        config: initialData,
+        context: trpcContext,
+        viewColumn: vscode.ViewColumn.Active,
+        icon: {
             light: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-light.svg'),
             dark: vscode.Uri.joinPath(ext.context.extensionUri, 'resources', 'icons', 'document-view-dark.svg'),
-        });
+        },
+    });
 
-        const trpcContext: RouterContext = {
-            dbExperience: API.DocumentDB,
-            webviewName: 'documentView',
-            clusterId: initialData.clusterId,
-            viewId: initialData.viewId,
-            databaseName: initialData.databaseName,
-            collectionName: initialData.collectionName,
-            documentId: initialData.documentId,
-            viewPanelTitleSetter: (title: string) => {
-                this.panel.title = title;
-            },
-        };
-
-        this.setupTrpc(trpcContext);
-    }
+    return handle.controller;
 }

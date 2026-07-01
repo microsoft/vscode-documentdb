@@ -7,42 +7,11 @@ import { TRPCClientError, type Operation, type TRPCLink } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
 // eslint-disable-next-line import/no-internal-modules -- Their example uses a reference from /server/ and so do we: https://trpc.io/docs/client/links#example
 import { observable } from '@trpc/server/observable';
+import { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
 
-type StopOperation<TInput = unknown> = Omit<Operation<TInput>, 'type'> & {
-    type: 'subscription.stop' | 'abort';
-};
-
-/**
- * Messages sent from the webview/client to the extension/server.
- * @id - A unique identifier for the message/
- */
-export interface VsCodeLinkRequestMessage {
-    id: string;
-    // TODO, when tRPC v12 is released, 'subscription.stop' should be supported natively, until then, we're adding it manually.
-    // 'abort' is used to cancel in-flight queries and mutations.
-    op: Operation<unknown> | StopOperation<unknown>;
-}
-
-/**
- * Messages sent back from the extension/server to the webview/client.
- * Each message sent back is a **response** to a previous message VsCodeLinkRequestMessage
- *
- * @id - The unique identifier of the message from the original request
- */
-export interface VsCodeLinkResponseMessage {
-    id: string;
-    result?: unknown;
-    error?: {
-        name: string;
-        message: string;
-
-        code?: number;
-        stack?: string;
-        cause?: unknown;
-        data?: unknown;
-    };
-    complete?: boolean;
-}
+// Re-export the wire-protocol message types from their shared home so existing
+// importers of `vscodeLink` keep resolving them here.
+export { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
 
 export interface VSCodeLinkOptions {
     //   Function to send a message to the server / extension

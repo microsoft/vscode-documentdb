@@ -1,7 +1,7 @@
 {
-  "name": "@microsoft/vscode-ext-react-webview",
-  "version": "0.8.0-preview",
-  "description": "Webview infrastructure for VS Code extensions with type-safe tRPC RPC over postMessage, React hooks, and pluggable telemetry middleware",
+  "name": "@microsoft/vscode-ext-webview",
+  "version": "0.9.0-preview",
+  "description": "Webview infrastructure for VS Code extensions: type-safe tRPC over postMessage with pluggable telemetry middleware, plus an optional extension-host panel facade, a framework-agnostic webview client, and optional React hooks.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
   "exports": {
@@ -9,15 +9,29 @@
       "types": "./dist/index.d.ts",
       "default": "./dist/index.js"
     },
-    "./server": {
-      "types": "./dist/server.d.ts",
-      "default": "./dist/server.js"
+    "./host": {
+      "types": "./dist/host.d.ts",
+      "default": "./dist/host.js"
+    },
+    "./webview": {
+      "types": "./dist/webview.d.ts",
+      "default": "./dist/webview.js"
+    },
+    "./react": {
+      "types": "./dist/react.d.ts",
+      "default": "./dist/react.js"
     }
   },
   "typesVersions": {
     "*": {
-      "server": [
-        "./dist/server.d.ts"
+      "host": [
+        "./dist/host.d.ts"
+      ],
+      "webview": [
+        "./dist/webview.d.ts"
+      ],
+      "react": [
+        "./dist/react.d.ts"
       ]
     }
   },
@@ -34,7 +48,7 @@
   "repository": {
     "type": "git",
     "url": "https://github.com/microsoft/vscode-documentdb",
-    "directory": "packages/vscode-ext-react-webview"
+    "directory": "packages/vscode-ext-webview"
   },
   "license": "MIT",
   "publishConfig": {
@@ -47,6 +61,9 @@
     "vscode-webview": "^1.0.0"
   },
   "peerDependenciesMeta": {
+    "react": {
+      "optional": true
+    },
     "vscode-webview": {
       "optional": true
     }

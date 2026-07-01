@@ -21,5 +21,5 @@
     "types": ["node", "vscode", "vscode-webview", "jest"]
   },
   "include": ["src/**/*"],
-  "exclude": ["node_modules", "dist", "src/**/*.test.ts", "src/**/*.test.tsx"]
+  "exclude": ["node_modules", "dist", "src/testing/**", "src/**/*.test.ts", "src/**/*.test.tsx"]
 }
