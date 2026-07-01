@@ -110,6 +110,11 @@ export interface StageEvent {
     readonly error?: string;
     /** The actual bound host port — set on the terminal `done` event (for success guidance). */
     readonly boundPort?: number;
+    /**
+     * Set on a readiness-timeout error event (§9.1): the container was left running, so the
+     * webview offers "Wait longer" / "View logs" / "Start over" instead of a hard failure.
+     */
+    readonly timedOut?: boolean;
 }
 
 /** Metadata describing the currently-managed instance. */
@@ -152,6 +157,12 @@ export interface QuickStartStatus {
      * no matching container (e.g. the user removed it outside the extension).
      */
     readonly missing?: boolean;
+    /**
+     * True while a container kept running after a readiness timeout is still resumable, so the
+     * webview can rehydrate the "Wait longer / Start over" actions (§9.1) after it is reopened
+     * rather than dropping to the fresh setup form.
+     */
+    readonly canResumeReadiness?: boolean;
 }
 
 /** Result of the `getDockerStatus` query (powers the webview review cards). */

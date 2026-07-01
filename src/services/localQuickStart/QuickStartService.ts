@@ -93,6 +93,36 @@ function errMessage(error: unknown): string {
 }
 
 /**
+ * Thrown by {@link QuickStartServiceImpl.waitForReadiness} when the wire-protocol probe
+ * exhausts its window. Distinguished from other failures so a readiness timeout can KEEP
+ * the running container (it may just need more time) and offer "Wait longer" (§9.1), rather
+ * than tearing everything down like a pull/create/start failure.
+ */
+class ReadinessTimeoutError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'ReadinessTimeoutError';
+    }
+}
+
+/**
+ * Everything a "Wait longer" resume needs to finish adopting a container whose database was
+ * still initializing when the initial readiness window elapsed. Retained across the timeout
+ * (the container is kept running) and cleared on success / discard / a new provision.
+ */
+interface PendingReadiness {
+    readonly containerId: string;
+    readonly connectionString: string;
+    readonly boundPort: number;
+    readonly username: string;
+    readonly password: string;
+    readonly imageRef: string;
+    readonly sampleDataRequested: boolean;
+    /** A fresh (non-reusing) attempt owns its half-initialized volume, so a discard may wipe it. */
+    readonly reusing: boolean;
+}
+
+/**
  * Resolve the credentials for a fresh provision: honor custom Advanced credentials
  * when BOTH a username and password are supplied (whitespace-only is treated as not
  * supplied), otherwise auto-generate. (Callers only use this on a non-reusing provision;
@@ -113,8 +143,9 @@ function stageEvent(
     message?: string,
     error?: string,
     boundPort?: number,
+    timedOut?: boolean,
 ): StageEvent {
-    return { stage, status, message, error, boundPort };
+    return { stage, status, message, error, boundPort, timedOut };
 }
 
 /** Cancellable delay that rejects if the signal aborts. */
@@ -142,6 +173,11 @@ class QuickStartServiceImpl {
     private errorMessage: string | undefined;
     private missing = false;
     private provisioning = false;
+    /**
+     * Set when a readiness probe timed out but the container was left running (§9.1). Holds
+     * what a "Wait longer" resume needs to finish adoption; cleared on success/discard/new run.
+     */
+    private pendingReadiness: PendingReadiness | undefined;
     /** Serializes lifecycle ops (start/stop/restart/delete) so they don't overlap. */
     private lifecycleBusy = false;
 
@@ -150,7 +186,16 @@ class QuickStartServiceImpl {
     public readonly onDidChangeStatus = this.statusEmitter.event;
 
     public getStatus(): QuickStartStatus {
-        return { state: this.state, metadata: this.metadata, errorMessage: this.errorMessage, missing: this.missing };
+        return {
+            state: this.state,
+            metadata: this.metadata,
+            errorMessage: this.errorMessage,
+            missing: this.missing,
+            // Only "resumable" once the provision/resume has settled (not mid-wait): pendingReadiness
+            // is set BEFORE the probe, so gating on the busy flags keeps a reopened panel from
+            // offering "Wait longer" while setup is still actively running (gpt-5.5).
+            canResumeReadiness: !this.provisioning && !this.lifecycleBusy && this.pendingReadiness !== undefined,
+        };
     }
 
     public get isBusy(): boolean {
@@ -185,12 +230,14 @@ class QuickStartServiceImpl {
      * fires when the consumer unsubscribes (iterator `return()`).
      */
     public async *provision(signal: AbortSignal, options?: AdvancedQuickStartOptions): AsyncGenerator<StageEvent> {
-        if (this.provisioning) {
+        if (this.provisioning || this.lifecycleBusy) {
             yield stageEvent('error', 'error', 'Setup is already in progress.', 'Setup is already in progress.');
             return;
         }
         this.provisioning = true;
-
+        // Starting a fresh run supersedes any container left running by a prior readiness
+        // timeout — drop its retained "Wait longer" state (the run below removes the container).
+        this.pendingReadiness = undefined;
         const channel = getQuickStartOutputChannel();
         // Decide reuse from LIVE durable state, not the in-memory Missing flag: whenever we
         // still hold the instance's stored credentials (SecretStorage), a data volume bound to
@@ -232,6 +279,12 @@ class QuickStartServiceImpl {
         let envFilePath: string | undefined;
         let success = false;
         let portFallback = false;
+        let readinessTimedOut = false;
+        // The terminal StageEvent (timeout OR hard error) is buffered and yielded AFTER `finally`
+        // runs, so by the time the webview shows "Wait longer" / "Retry" the service flags
+        // (provisioning/lifecycleBusy) are already clean — otherwise a fast click could hit the
+        // "already in progress" guard (opus-4.7).
+        let terminalEvent: StageEvent | undefined;
         const provisionStartedAt = Date.now();
 
         try {
@@ -349,37 +402,24 @@ class QuickStartServiceImpl {
             // --- waiting (wire-protocol readiness, D7) ---
             yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
             const connectionString = composeConnectionString(credentials.username, credentials.password, boundPort);
+            // Retain everything a "Wait longer" resume needs BEFORE probing, so a readiness
+            // timeout can keep this running container and finish adoption later (§9.1).
+            const pending: PendingReadiness = {
+                containerId,
+                connectionString,
+                boundPort,
+                username: credentials.username,
+                password: credentials.password,
+                imageRef,
+                sampleDataRequested,
+                reusing,
+            };
+            this.pendingReadiness = pending;
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
-            // Seed the image's built-in sample data ONCE — only when requested (Advanced
-            // "Load sample data", default on) and not already present (idempotent, so
-            // recreating onto an existing volume doesn't re-run the init and hit duplicate
-            // keys). Runs the image's native init script via `docker exec`; best-effort.
-            if (sampleDataRequested && !(await this.sampleDataExists(connectionString))) {
-                await this.seedSampleData(containerId, secrets, cts.token);
-            }
-            this.throwIfAborted(signal);
-
-            // --- success ---
-            await ext.secretStorage.store(SECRET_KEY, connectionString);
-            // Durably remember the image this instance's volume was created with, so a
-            // recreate after a window reload (in-memory metadata gone) keeps the same image.
-            await ext.context.globalState.update(IMAGE_REF_STATE_KEY, imageRef);
-            // Drop any stale client cached under this id (e.g. from a prior run with
-            // different credentials) so the next browse uses the fresh credentials.
-            await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
-            this.populateCredentialCache(connectionString, credentials.username, credentials.password);
-            const metadata: InstanceMetadata = {
-                containerId,
-                alias: QUICK_START_ALIAS,
-                boundPort,
-                clusterId: QUICK_START_CLUSTER_ID,
-                connectionString,
-                username: credentials.username,
-                imageRef,
-            };
-            this.setStatus(InstanceState.Running, metadata, undefined);
+            // --- success (seed sample data, store creds, adopt as Running) ---
+            await this.finalizeReadyInstance(pending, cts.token, signal);
             success = true;
             yield stageEvent('waiting', 'done');
             yield stageEvent(
@@ -392,17 +432,32 @@ class QuickStartServiceImpl {
         } catch (error) {
             const aborted = signal.aborted;
             const message = aborted ? 'Setup was cancelled.' : errMessage(error);
-            if (!aborted) {
+            if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
+                // The container is running but the database did not accept connections within the
+                // window — it may still be initializing. KEEP it running (finally skips teardown)
+                // and surface the on-timeout actions (§9.1); the retained pendingReadiness lets a
+                // "Wait longer" resume finish adoption. The instance sits in Error until then. The
+                // event is buffered and emitted after `finally` (see below) so the flags are clean.
+                readinessTimedOut = true;
                 this.setStatus(InstanceState.Error, undefined, message);
+                terminalEvent = stageEvent('waiting', 'error', message, message, undefined, /* timedOut */ true);
+            } else {
+                // Any other failure (or cancel) discards the attempt — drop the retained state so a
+                // stale timeout can't offer "Wait longer" against a container we're about to remove.
+                this.pendingReadiness = undefined;
+                if (!aborted) {
+                    this.setStatus(InstanceState.Error, undefined, message);
+                }
+                // Buffered and emitted after `finally` (like the timeout event) so a Retry click
+                // driven by this event can't race the still-set `provisioning` guard either
+                // (opus-4.7). On unsubscribe/return() the post-finally yield is simply skipped.
+                terminalEvent = stageEvent('error', 'error', message, aborted ? undefined : message);
             }
-            // This yield is delivered on the error path; on unsubscribe (return())
-            // the generator skips straight to `finally`.
-            yield stageEvent('error', 'error', message, aborted ? undefined : message);
         } finally {
             // Stop the followLogs stream (started with cts.token). Disposing alone
             // does NOT signal cancellation — only cancel() stops `docker logs -f`.
             cts.cancel();
-            if (!success) {
+            if (!success && !readinessTimedOut) {
                 // Cleanup (D12): when a container exists, stop+remove it.
                 if (containerCreated && containerId) {
                     channel.appendLine(`Cleaning up container ${containerId}…`);
@@ -432,7 +487,13 @@ class QuickStartServiceImpl {
             // Provisioning outcome telemetry (design §14): result + whether we reused a
             // prior volume/creds + whether a port fallback was used + total duration, plus
             // which Advanced overrides were exercised (booleans only — never names/ports/creds).
-            const provisionResult = success ? 'success' : signal.aborted ? 'cancelled' : 'error';
+            const provisionResult = success
+                ? 'success'
+                : signal.aborted
+                  ? 'cancelled'
+                  : readinessTimedOut
+                    ? 'timeout'
+                    : 'error';
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.provision', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
                 telemetryContext.telemetry.properties.provisionResult = provisionResult;
@@ -445,6 +506,185 @@ class QuickStartServiceImpl {
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
             this.provisioning = false;
+        }
+        // Emitted only now — after `finally` cleared `provisioning` — so a "Wait longer" / "Start
+        // over" / "Retry" click triggered by this event never races the still-running guard.
+        if (terminalEvent) {
+            yield terminalEvent;
+        }
+    }
+
+    /**
+     * Finish adopting a container whose database has accepted connections: seed sample data
+     * (best-effort, once), persist credentials + the durable image record, refresh the client
+     * cache, and mark the instance Running. Shared by {@link provision} and
+     * {@link resumeReadiness} so both settle a ready instance identically. Clears
+     * {@link pendingReadiness}. Does NOT yield — callers own the terminal StageEvents and the
+     * `success` flag so their `finally` teardown ordering is preserved.
+     */
+    private async finalizeReadyInstance(
+        pending: PendingReadiness,
+        token: vscode.CancellationToken,
+        signal: AbortSignal,
+    ): Promise<void> {
+        // Seed the image's built-in sample data ONCE — only when requested (Advanced "Load
+        // sample data", default on) and not already present (idempotent, so recreating onto an
+        // existing volume doesn't re-run the init and hit duplicate keys). Best-effort.
+        if (pending.sampleDataRequested && !(await this.sampleDataExists(pending.connectionString))) {
+            await this.seedSampleData(pending.containerId, [pending.password], token);
+        }
+        this.throwIfAborted(signal);
+        await ext.secretStorage.store(SECRET_KEY, pending.connectionString);
+        // Durably remember the image this instance's volume was created with, so a recreate
+        // after a window reload (in-memory metadata gone) keeps the same image.
+        await ext.context.globalState.update(IMAGE_REF_STATE_KEY, pending.imageRef);
+        // Drop any stale client cached under this id (e.g. from a prior run with different
+        // credentials) so the next browse uses the fresh credentials.
+        await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
+        this.populateCredentialCache(pending.connectionString, pending.username, pending.password);
+        this.setStatus(
+            InstanceState.Running,
+            {
+                containerId: pending.containerId,
+                alias: QUICK_START_ALIAS,
+                boundPort: pending.boundPort,
+                clusterId: QUICK_START_CLUSTER_ID,
+                connectionString: pending.connectionString,
+                username: pending.username,
+                imageRef: pending.imageRef,
+            },
+            undefined,
+        );
+        this.pendingReadiness = undefined;
+    }
+
+    /**
+     * "Wait longer" (§9.1): re-probe the container retained from a readiness timeout for another
+     * window and finish adoption if it becomes ready — WITHOUT tearing it down and re-pulling.
+     * On another timeout the container is kept and the on-timeout actions are surfaced again; on
+     * a hard error the container is still kept so the user can retry or Start over.
+     */
+    public async *resumeReadiness(signal: AbortSignal): AsyncGenerator<StageEvent> {
+        const pending = this.pendingReadiness;
+        if (!pending) {
+            yield stageEvent('error', 'error', 'There is nothing to resume.', 'There is nothing to resume.');
+            return;
+        }
+        if (this.provisioning || this.lifecycleBusy) {
+            // A prior resume/provision may still be unwinding (its abort can take a few seconds to
+            // observe). Carry the timed-out affordance so the webview keeps the Wait longer / Start
+            // over view instead of flipping to the generic error (opus-4.8) — the container and
+            // `pendingReadiness` are still retained.
+            yield stageEvent(
+                'error',
+                'error',
+                'A setup operation is already in progress.',
+                'in progress',
+                undefined,
+                true,
+            );
+            return;
+        }
+        this.provisioning = true;
+        const cts = new vscode.CancellationTokenSource();
+        const onAbort = (): void => cts.cancel();
+        signal.addEventListener('abort', onAbort, { once: true });
+        if (signal.aborted) {
+            cts.cancel();
+        }
+        const resumeStartedAt = Date.now();
+        let finalized = false;
+        let terminalEvent: StageEvent | undefined;
+        let resumeResult: 'success' | 'timeout' | 'cancelled' | 'error' = 'error';
+        try {
+            this.setStatus(InstanceState.Provisioning, undefined, undefined);
+            yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
+            // Stream the container's logs during THIS wait so "View Docker output" shows the live
+            // startup rather than only the stale first-attempt output (opus-4.8).
+            void ContainerRuntime.followLogs(pending.containerId, [pending.password], cts.token);
+            await this.waitForReadiness(pending.connectionString, signal);
+            this.throwIfAborted(signal);
+            await this.finalizeReadyInstance(pending, cts.token, signal);
+            finalized = true;
+            resumeResult = 'success';
+            yield stageEvent('waiting', 'done');
+            terminalEvent = stageEvent(
+                'done',
+                'done',
+                `DocumentDB Local is running on localhost:${pending.boundPort}.`,
+                undefined,
+                pending.boundPort,
+            );
+        } catch (error) {
+            // Keep offering the on-timeout actions only when the container is genuinely still just
+            // initializing (another timeout) or the user cancelled the wait. A hard failure inside
+            // finalize (e.g. secretStorage) is a real error — surface it instead of a misleading
+            // "keep waiting" loop (opus-4.6 / gpt-5.5). `finalized` defensively guards the
+            // (transport-impossible) case of a throw after adoption already succeeded.
+            const aborted = signal.aborted;
+            const isTimeout = error instanceof ReadinessTimeoutError;
+            const timedOut = !finalized && (isTimeout || aborted);
+            resumeResult = aborted ? 'cancelled' : isTimeout ? 'timeout' : 'error';
+            const message = aborted
+                ? 'Still initializing. Keep waiting, view the logs, or start over.'
+                : errMessage(error);
+            if (!finalized) {
+                this.setStatus(InstanceState.Error, undefined, aborted ? undefined : message);
+            }
+            // A hard finalize error is NOT a timeout — drop the retained state so reopening the
+            // panel shows the real error (via a fresh setup) rather than a misleading "Wait longer"
+            // (gpt-5.5). Timeout/cancel keep pendingReadiness so the container stays resumable.
+            if (!timedOut) {
+                this.pendingReadiness = undefined;
+            }
+            terminalEvent = stageEvent('waiting', 'error', message, aborted ? undefined : message, undefined, timedOut);
+        } finally {
+            signal.removeEventListener('abort', onAbort);
+            // Stop the followLogs stream (started with cts.token) before disposing.
+            cts.cancel();
+            cts.dispose();
+            this.provisioning = false;
+            // §14: resume outcome — booleans/enum + duration only, never names/ports/creds.
+            void callWithTelemetryAndErrorHandling('documentDB.quickstart.resumeReadiness', (telemetryContext) => {
+                telemetryContext.errorHandling.suppressDisplay = true;
+                telemetryContext.telemetry.properties.resumeResult = resumeResult;
+                telemetryContext.telemetry.measurements.resumeMs = Date.now() - resumeStartedAt;
+            });
+        }
+        // Emitted after `finally` cleared `provisioning`, so a follow-up Wait longer / Start over
+        // click triggered by this event never races the still-running guard (opus-4.7).
+        if (terminalEvent) {
+            yield terminalEvent;
+        }
+    }
+
+    /**
+     * "Start over" from a readiness timeout (§9.1): remove the container retained by the timeout
+     * and, for a fresh (non-reusing) attempt, wipe its half-initialized data volume for a clean
+     * slate. A reusing attempt's volume holds the user's existing data, so it is kept. Returns to
+     * NotInstalled so the user can run setup again. Returns `false` (a no-op) when nothing is
+     * discardable yet — e.g. a just-cancelled resume is still unwinding — so the webview can keep
+     * the timed-out actions instead of dropping to review with the container still running.
+     */
+    public async discardTimedOutInstance(): Promise<boolean> {
+        // Guard BEFORE mutating: if a provision/lifecycle op is running, leave the retained
+        // state untouched (clearing it here would orphan the still-running container).
+        if (this.provisioning || this.lifecycleBusy || !this.pendingReadiness) {
+            return false;
+        }
+        const pending = this.pendingReadiness;
+        this.pendingReadiness = undefined;
+        this.lifecycleBusy = true;
+        try {
+            await ContainerRuntime.stopContainer(pending.containerId).catch(() => undefined);
+            await ContainerRuntime.removeContainer(pending.containerId).catch(() => undefined);
+            if (!pending.reusing) {
+                await ContainerRuntime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
+            }
+            this.setStatus(InstanceState.NotInstalled, undefined, undefined);
+            return true;
+        } finally {
+            this.lifecycleBusy = false;
         }
     }
 
@@ -474,7 +714,7 @@ class QuickStartServiceImpl {
             const backoff = Math.min(3000, 500 + attempt * 250);
             await delay(backoff, signal);
         }
-        throw new Error(
+        throw new ReadinessTimeoutError(
             `Timed out waiting for DocumentDB to accept connections.${lastError ? ` (${errMessage(lastError)})` : ''}`,
         );
     }
@@ -804,6 +1044,11 @@ class QuickStartServiceImpl {
                     'Removing an orphaned Quick Start container (no stored credentials) for a clean slate…',
                 );
                 await ContainerRuntime.removeContainer(container.id).catch(() => undefined);
+                // NOTE: only the container is removed — never the volume. A missing secret does
+                // NOT prove the volume is disposable (a previously successful instance whose secret
+                // was lost/reset externally would also land here), and deleting it would be
+                // irreversible data loss. A fresh timed-out attempt's orphan volume is instead
+                // wiped by the next fresh provision (`if (!reusing) removeVolume`), which is safe.
                 this.setStatus(InstanceState.NotInstalled);
                 return;
             }

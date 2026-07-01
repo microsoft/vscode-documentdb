@@ -140,6 +140,13 @@ export const localQuickStartRouter = router({
     }),
 
     /**
+     * "Start over" from a readiness timeout (§9.1): remove the container retained by the
+     * timeout (and wipe a fresh attempt's half-initialized volume) so the user can run setup
+     * again from a clean slate.
+     */
+    discardTimedOut: publicProcedure.mutation(() => QuickStartService.discardTimedOutInstance()),
+
+    /**
      * Provision the managed instance, streaming stage transitions to the webview.
      * Optional Advanced overrides (port / credentials / image tag / sample-data) are
      * validated by {@link advancedOptionsSchema} and threaded into the service.
@@ -169,6 +176,31 @@ export const localQuickStartRouter = router({
         } finally {
             myCtx.signal?.removeEventListener('abort', onCtxAbort);
             // Guarantee provisioning is cancelled if the consumer stopped iterating.
+            abortController.abort();
+        }
+    }),
+
+    /**
+     * "Wait longer" (§9.1): re-probe the container retained from a readiness timeout, streaming
+     * the same stage events. Cancelling the subscription (its Cancel button / panel close) aborts
+     * the probe but leaves the container running so the user can retry or Start over.
+     */
+    waitLonger: publicProcedure.subscription(async function* ({ ctx }): AsyncGenerator<StageEvent, void, void> {
+        const myCtx = ctx as BaseRouterContext;
+        const abortController = new AbortController();
+        const onCtxAbort = (): void => abortController.abort();
+        if (myCtx.signal?.aborted) {
+            abortController.abort();
+        } else {
+            myCtx.signal?.addEventListener('abort', onCtxAbort);
+        }
+
+        try {
+            for await (const event of QuickStartService.resumeReadiness(abortController.signal)) {
+                yield event;
+            }
+        } finally {
+            myCtx.signal?.removeEventListener('abort', onCtxAbort);
             abortController.abort();
         }
     }),

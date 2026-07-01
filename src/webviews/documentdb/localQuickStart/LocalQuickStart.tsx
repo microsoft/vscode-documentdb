@@ -147,6 +147,9 @@ export const LocalQuickStart = (): JSX.Element => {
     const [boundPort, setBoundPort] = useState<number | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
     const [startingDocker, setStartingDocker] = useState(false);
+    // True when the terminal failure was a readiness timeout (the container was left running),
+    // so the failed view offers Wait longer / View logs / Start over instead of just Retry (§9.1).
+    const [timedOut, setTimedOut] = useState(false);
 
     // Advanced overrides (P1-4). Empty fields fall back to the zero-decision defaults.
     const [advPort, setAdvPort] = useState('');
@@ -170,6 +173,16 @@ export const LocalQuickStart = (): JSX.Element => {
     // Focused when provisioning ends so keyboard/screen-reader users land on the primary
     // result action instead of being stranded on the now-unmounted Cancel button (WCAG 2.4.3).
     const resultActionRef = useRef<HTMLButtonElement>(null);
+    // Focused while provisioning so a keyboard user isn't stranded on <body> after Start/Retry/
+    // Wait longer unmounts the button they clicked (WCAG 2.4.3).
+    const cancelButtonRef = useRef<HTMLButtonElement>(null);
+    // True while the in-flight stream is a "Wait longer" resume, so Cancel returns to the
+    // timed-out actions view (container is kept) rather than the fresh setup form.
+    const isWaitLongerRef = useRef(false);
+    // Monotonic id for the current provisioning/resume stream. Callbacks capture it and ignore
+    // any invocation from a superseded/cancelled stream, so a late/flushed event can't overwrite
+    // state after Cancel / Start over / a new Start (gpt-5.5 defense-in-depth).
+    const streamGenerationRef = useRef(0);
 
     // Validate the Advanced fields client-side, mirroring the router's zod schema so a valid
     // form never dead-ends on a server rejection. Returns the offending field (for a per-field
@@ -239,11 +252,13 @@ export const LocalQuickStart = (): JSX.Element => {
     }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate]);
 
     useEffect(() => {
-        // When provisioning settles, move focus to the primary result action so keyboard and
-        // screen-reader users are carried into the new content (WCAG 2.4.3) rather than losing
-        // focus to <body> when the Cancel button unmounts.
+        // Keep keyboard/screen-reader focus in the current content across phase changes (WCAG
+        // 2.4.3): on a terminal phase focus the primary result action; while provisioning focus
+        // Cancel — otherwise focus would fall to <body> when the button the user clicked unmounts.
         if (phase === 'success' || phase === 'failed') {
             resultActionRef.current?.focus();
+        } else if (phase === 'provisioning') {
+            cancelButtonRef.current?.focus();
         }
     }, [phase]);
 
@@ -261,7 +276,25 @@ export const LocalQuickStart = (): JSX.Element => {
             .then((result) => {
                 setDocker(result);
                 const ready = result.readiness.cliInstalled && result.readiness.daemonReachable;
-                setPhase(ready ? 'review' : 'dockerNotReady');
+                if (ready && result.status.canResumeReadiness) {
+                    // A container from a prior readiness timeout is still running and resumable —
+                    // rehydrate the timed-out actions (Wait longer / Start over) instead of dropping
+                    // to the fresh setup form, which would strand that container (§9.1). Seed the
+                    // checklist to reflect that everything up to readiness completed.
+                    setStageStatus({
+                        checking: 'done',
+                        pulling: 'done',
+                        creating: 'done',
+                        starting: 'done',
+                        waiting: 'error',
+                        done: 'pending',
+                        error: 'pending',
+                    });
+                    setTimedOut(true);
+                    setPhase('failed');
+                } else {
+                    setPhase(ready ? 'review' : 'dockerNotReady');
+                }
             })
             .catch((error: unknown) => {
                 setErrorMessage(error instanceof Error ? error.message : String(error));
@@ -299,72 +332,138 @@ export const LocalQuickStart = (): JSX.Element => {
         };
     }, [loadDockerStatus]);
 
+    const runStream = useCallback(
+        (
+            subscribe: (handlers: {
+                onData: (event: StageEvent) => void;
+                onError: (error: unknown) => void;
+                onComplete: () => void;
+            }) => { unsubscribe: () => void },
+            options?: { resetStages?: boolean },
+        ): void => {
+            // Cancel any prior in-flight subscription so a fast double-click can't leak
+            // an uncancellable stream (mirrors the Query Insights pattern).
+            subscriptionRef.current?.unsubscribe();
+            subscriptionRef.current = null;
+            // Supersede any prior stream: its in-flight callbacks will see a newer generation and no-op.
+            const myGeneration = ++streamGenerationRef.current;
+
+            // "Wait longer" resumes at the waiting stage, so keep the earlier stages' done state
+            // rather than resetting the whole list to pending.
+            if (options?.resetStages !== false) {
+                setStageStatus(emptyStageStatus());
+            }
+            setErrorMessage(undefined);
+            setSuccessMessage(undefined);
+            setTimedOut(false);
+            setElapsedMs(0);
+            setPhase('provisioning');
+
+            const startedAt = Date.now();
+            timerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
+
+            let settled = false;
+            const subscription = subscribe({
+                onData(event: StageEvent) {
+                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    if (event.stage === 'done' && event.status === 'done') {
+                        settled = true;
+                        stopTimer();
+                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                        setSuccessMessage(event.message);
+                        setBoundPort(event.boundPort);
+                        setPhase('success');
+                    } else if (event.status === 'error') {
+                        settled = true;
+                        stopTimer();
+                        // Also flip the still-active real stage to 'error' so its row shows the error
+                        // icon + "failed" status instead of a stuck spinner / "in progress" that would
+                        // contradict the failure message for sighted and screen-reader users alike.
+                        setStageStatus((prev) => {
+                            const next = { ...prev, [event.stage]: event.status };
+                            const active = PROVISION_STAGES.find((s) => prev[s] === 'active');
+                            if (active) next[active] = 'error';
+                            return next;
+                        });
+                        setErrorMessage(event.error ?? event.message ?? l10n.t('Setup failed.'));
+                        setTimedOut(event.timedOut === true);
+                        setPhase('failed');
+                    } else {
+                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                    }
+                },
+                onError(error: unknown) {
+                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    settled = true;
+                    stopTimer();
+                    setErrorMessage(error instanceof Error ? error.message : String(error));
+                    setTimedOut(false);
+                    setPhase('failed');
+                    if (subscriptionRef.current === subscription) {
+                        subscriptionRef.current = null;
+                    }
+                },
+                onComplete() {
+                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    // The stream ended without a terminal stage event (e.g. the service
+                    // was already busy and returned early) — recover to review rather
+                    // than hang on 'provisioning' with a runaway timer.
+                    if (!settled) {
+                        stopTimer();
+                        setPhase('review');
+                    }
+                    if (subscriptionRef.current === subscription) {
+                        subscriptionRef.current = null;
+                    }
+                },
+            });
+            subscriptionRef.current = subscription;
+        },
+        [stopTimer],
+    );
+
     const handleStart = useCallback((): void => {
-        // Cancel any prior in-flight subscription so a fast double-click can't leak
-        // an uncancellable stream (mirrors the Query Insights pattern).
+        isWaitLongerRef.current = false;
+        runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(advancedRef.current, handlers));
+    }, [trpcClient, runStream]);
+
+    // "Wait longer" (§9.1): re-probe the container the service kept running after a readiness
+    // timeout, keeping the already-completed stages visible. Optimistically flip the waiting row
+    // back to active so it doesn't flash the error icon before the first server event arrives.
+    const handleWaitLonger = useCallback((): void => {
+        isWaitLongerRef.current = true;
+        setStageStatus((prev) => ({ ...prev, waiting: 'active' }));
+        runStream((handlers) => trpcClient.localQuickStart.waitLonger.subscribe(undefined, handlers), {
+            resetStages: false,
+        });
+    }, [trpcClient, runStream]);
+
+    // "Start over" (§9.1): discard the timed-out container (a fresh attempt's volume is wiped) and
+    // return to the review form. If the discard no-ops because a just-cancelled resume is still
+    // unwinding, keep the timed-out actions (the container is intact) so nothing is stranded.
+    const handleStartOver = useCallback((): void => {
         subscriptionRef.current?.unsubscribe();
         subscriptionRef.current = null;
-
-        setStageStatus(emptyStageStatus());
-        setErrorMessage(undefined);
-        setSuccessMessage(undefined);
-        setElapsedMs(0);
-        setPhase('provisioning');
-
-        const startedAt = Date.now();
-        timerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
-
-        let settled = false;
-        const subscription = trpcClient.localQuickStart.startQuickStart.subscribe(advancedRef.current, {
-            onData(event: StageEvent) {
-                if (event.stage === 'done' && event.status === 'done') {
-                    settled = true;
-                    stopTimer();
-                    setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
-                    setSuccessMessage(event.message);
-                    setBoundPort(event.boundPort);
-                    setPhase('success');
-                } else if (event.status === 'error') {
-                    settled = true;
-                    stopTimer();
-                    // Also flip the still-active real stage to 'error' so its row shows the error
-                    // icon + "failed" status instead of a stuck spinner / "in progress" that would
-                    // contradict the failure message for sighted and screen-reader users alike.
-                    setStageStatus((prev) => {
-                        const next = { ...prev, [event.stage]: event.status };
-                        const active = PROVISION_STAGES.find((s) => prev[s] === 'active');
-                        if (active) next[active] = 'error';
-                        return next;
-                    });
-                    setErrorMessage(event.error ?? event.message ?? l10n.t('Setup failed.'));
-                    setPhase('failed');
-                } else {
-                    setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
-                }
-            },
-            onError(error: unknown) {
-                settled = true;
-                stopTimer();
-                setErrorMessage(error instanceof Error ? error.message : String(error));
-                setPhase('failed');
-                if (subscriptionRef.current === subscription) {
-                    subscriptionRef.current = null;
-                }
-            },
-            onComplete() {
-                // The stream ended without a terminal stage event (e.g. the service
-                // was already busy and returned early) — recover to review rather
-                // than hang on 'provisioning' with a runaway timer.
-                if (!settled) {
-                    stopTimer();
+        streamGenerationRef.current++; // ignore any trailing callbacks from the cancelled stream
+        isWaitLongerRef.current = false;
+        stopTimer();
+        void trpcClient.localQuickStart.discardTimedOut
+            .mutate()
+            .then((discarded) => {
+                if (discarded) {
+                    setTimedOut(false);
+                    setErrorMessage(undefined);
+                    setStageStatus(emptyStageStatus());
                     setPhase('review');
+                } else {
+                    setTimedOut(true);
+                    setPhase('failed');
                 }
-                if (subscriptionRef.current === subscription) {
-                    subscriptionRef.current = null;
-                }
-            },
-        });
-        subscriptionRef.current = subscription;
+            })
+            .catch(() => {
+                setTimedOut(true);
+                setPhase('failed');
+            });
     }, [trpcClient, stopTimer]);
 
     const handleClose = useCallback((): void => {
@@ -374,14 +473,26 @@ export const LocalQuickStart = (): JSX.Element => {
     const handleCancel = useCallback((): void => {
         subscriptionRef.current?.unsubscribe();
         subscriptionRef.current = null;
+        streamGenerationRef.current++; // ignore any trailing callbacks from the cancelled stream
         stopTimer();
-        setPhase('review');
+        if (isWaitLongerRef.current) {
+            // Cancelling a "Wait longer" resume leaves the container running, so return to the
+            // timed-out actions (Wait longer / Start over) rather than the fresh setup form.
+            isWaitLongerRef.current = false;
+            setTimedOut(true);
+            setPhase('failed');
+        } else {
+            setTimedOut(false);
+            setPhase('review');
+        }
     }, [stopTimer]);
 
     // From the failed phase, return to the review form (Advanced field state is preserved) so
     // the user can correct a bad option (e.g. a busy explicit port) and retry — design feedback.
     const handleBackToReview = useCallback((): void => {
+        isWaitLongerRef.current = false;
         setErrorMessage(undefined);
+        setTimedOut(false);
         setPhase('review');
     }, []);
 
@@ -705,7 +816,11 @@ export const LocalQuickStart = (): JSX.Element => {
                 />
                 <Announcer
                     when={phase === 'failed'}
-                    message={l10n.t('Setup failed. {0}', errorMessage ?? l10n.t('See the details below.'))}
+                    message={
+                        timedOut
+                            ? l10n.t('DocumentDB is still initializing. Keep waiting, view the logs, or start over.')
+                            : l10n.t('Setup failed. {0}', errorMessage ?? l10n.t('See the details below.'))
+                    }
                     politeness="polite"
                 />
                 {/* Streams the current provisioning stage to screen readers (WCAG 4.1.3). */}
@@ -747,7 +862,15 @@ export const LocalQuickStart = (): JSX.Element => {
 
                 {phase === 'failed' && (
                     <div className={styles.errorBox}>
-                        <Text>{errorMessage ?? l10n.t('Setup failed.')}</Text>
+                        {timedOut ? (
+                            <Text>
+                                {l10n.t(
+                                    'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing — keep waiting, view the logs, or start over.',
+                                )}
+                            </Text>
+                        ) : (
+                            <Text>{errorMessage ?? l10n.t('Setup failed.')}</Text>
+                        )}
                     </div>
                 )}
 
@@ -757,7 +880,7 @@ export const LocalQuickStart = (): JSX.Element => {
 
                 <div className={styles.actions}>
                     {phase === 'provisioning' && (
-                        <Button appearance="secondary" onClick={handleCancel}>
+                        <Button appearance="secondary" ref={cancelButtonRef} onClick={handleCancel}>
                             {l10n.t('Cancel')}
                         </Button>
                     )}
@@ -774,7 +897,22 @@ export const LocalQuickStart = (): JSX.Element => {
                             </Button>
                         </>
                     )}
-                    {phase === 'failed' && (
+                    {phase === 'failed' && timedOut && (
+                        <>
+                            <Button appearance="secondary" onClick={handleStartOver}>
+                                {l10n.t('Start over')}
+                            </Button>
+                            <Button
+                                appearance="primary"
+                                ref={resultActionRef}
+                                icon={<ArrowClockwiseRegular />}
+                                onClick={handleWaitLonger}
+                            >
+                                {l10n.t('Wait longer')}
+                            </Button>
+                        </>
+                    )}
+                    {phase === 'failed' && !timedOut && (
                         <>
                             <Button appearance="secondary" onClick={handleBackToReview}>
                                 {l10n.t('Edit settings')}
