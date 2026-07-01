@@ -164,6 +164,9 @@
     "@azure/arm-resources": "~7.0.0",
     "@azure/cosmos": "~4.7.0",
     "@azure/identity": "~4.13.0",
+    "@documentdb-js/operator-registry": "*",
+    "@documentdb-js/schema-analyzer": "*",
+    "@documentdb-js/shell-runtime": "*",
     "@fluentui/react-components": "~9.73.3",
     "@fluentui/react-icons": "~2.0.320",
     "@kubernetes/client-node": "1.4.0",
@@ -171,6 +174,9 @@
     "@microsoft/vscode-azext-azureutils": "~4.2.0",
     "@microsoft/vscode-azext-utils": "~4.1.0",
     "@microsoft/vscode-azureresources-api": "~2.5.0",
+    "@microsoft/vscode-container-client": "^0.5.4",
+    "@microsoft/vscode-ext-react-webview": "*",
+    "@microsoft/vscode-processutils": "^0.2.2",
     "@monaco-editor/react": "~4.7.0",
     "@mongodb-js/explain-plan-helper": "1.4.24",
     "@mongodb-js/shell-bson-parser": "^1.5.6",
@@ -181,10 +187,6 @@
     "@mongosh/shell-evaluator": "^5.1.4",
     "@trpc/client": "~11.10.0",
     "@trpc/server": "~11.10.0",
-    "@documentdb-js/operator-registry": "*",
-    "@documentdb-js/shell-runtime": "*",
-    "@documentdb-js/schema-analyzer": "*",
-    "@microsoft/vscode-ext-react-webview": "*",
     "@vscode/l10n": "~0.0.18",
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
@@ -354,6 +356,62 @@
         "command": "vscode-documentdb.command.connectionsView.newEmulatorConnection",
         "title": "New Local Connection…",
         "icon": "$(add)"
+      },
+      {
+        "//": "[Local Quick Start] Open the Quick Start webview",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.open",
+        "title": "Local Quick Start",
+        "icon": "$(rocket)"
+      },
+      {
+        "//": "[Local Quick Start] Start the managed instance",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.start",
+        "title": "Start",
+        "icon": "$(play)"
+      },
+      {
+        "//": "[Local Quick Start] Stop the managed instance",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.stop",
+        "title": "Stop",
+        "icon": "$(debug-stop)"
+      },
+      {
+        "//": "[Local Quick Start] Restart the managed instance",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.restart",
+        "title": "Restart",
+        "icon": "$(debug-restart)"
+      },
+      {
+        "//": "[Local Quick Start] Delete the managed container",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.delete",
+        "title": "Delete Container…",
+        "icon": "$(trash)"
+      },
+      {
+        "//": "[Local Quick Start] Copy connection string",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.copyConnectionString",
+        "title": "Copy Connection String",
+        "icon": "$(link)"
+      },
+      {
+        "//": "[Local Quick Start] Copy password",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.copyPassword",
+        "title": "Copy Password",
+        "icon": "$(key)"
+      },
+      {
+        "//": "[Local Quick Start] View container logs",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.localQuickStart.viewLogs",
+        "title": "View Logs",
+        "icon": "$(output)"
       },
       {
         "//": "[ConnectionsView] Delete Connection",
@@ -745,6 +803,51 @@
       "editor/context": [],
       "editor/title": [],
       "view/item/context": [
+        {
+          "command": "vscode-documentdb.command.localQuickStart.start",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_stopped\\b/i",
+          "group": "inline@1"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.stop",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i",
+          "group": "inline@1"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.start",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_stopped\\b/i",
+          "group": "1_quickstart@1"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.stop",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_running\\b/i",
+          "group": "1_quickstart@1"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.restart",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(running|error)\\b/i",
+          "group": "1_quickstart@2"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.viewLogs",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i",
+          "group": "1_quickstart@3"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.copyConnectionString",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(running|stopped)\\b/i",
+          "group": "2_quickstart@1"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.copyPassword",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(running|stopped)\\b/i",
+          "group": "2_quickstart@2"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.delete",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(running|stopped|error|missing)\\b/i",
+          "group": "3_quickstart@1"
+        },
         {
           "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
           "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",

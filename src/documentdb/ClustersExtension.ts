@@ -47,6 +47,16 @@ import { dropIndex } from '../commands/index.dropIndex/dropIndex';
 import { hideIndex } from '../commands/index.hideIndex/hideIndex';
 import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
+import {
+    copyQuickStartConnectionString,
+    copyQuickStartPassword,
+    deleteQuickStartInstance,
+    restartQuickStartInstance,
+    startQuickStartInstance,
+    stopQuickStartInstance,
+    viewQuickStartLogs,
+} from '../commands/localQuickStart/localQuickStartCommands';
+import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
@@ -85,6 +95,9 @@ import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/Kuber
 import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
+import { migrateLegacyEmulatorConnections } from '../services/legacyEmulatorMigration';
+import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
+import { QuickStartService } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
@@ -247,6 +260,21 @@ export class ClustersExtension implements vscode.Disposable {
                 // Initialize PlaygroundService (connection state + StatusBarItem)
                 const playgroundService = PlaygroundService.getInstance();
                 ext.context.subscriptions.push(playgroundService);
+
+                // Initialize Local Quick Start (managed local DocumentDB container).
+                // Reconcile detects a still-running container after a window reload.
+                ext.context.subscriptions.push(QuickStartService);
+                ext.context.subscriptions.push({ dispose: disposeQuickStartOutputChannel });
+                ext.context.subscriptions.push(
+                    QuickStartService.onDidChangeStatus(() => {
+                        ext.connectionsBranchDataProvider?.refresh();
+                    }),
+                );
+                void QuickStartService.reconcile();
+
+                // One-time migration of legacy emulator connections into a regular
+                // "Local Connections (Legacy)" folder (design §4). Non-blocking.
+                void migrateLegacyEmulatorConnections();
 
                 // Register evaluator disposal for clean worker shutdown on deactivation
                 ext.context.subscriptions.push({ dispose: disposeEvaluators });
@@ -598,6 +626,39 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.connectionsView.newEmulatorConnection',
                     withTreeNodeCommandCorrelation(newLocalConnection),
+                );
+
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.open',
+                    withCommandCorrelation(openLocalQuickStart),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.start',
+                    withCommandCorrelation(startQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.stop',
+                    withCommandCorrelation(stopQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.restart',
+                    withCommandCorrelation(restartQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.delete',
+                    withCommandCorrelation(deleteQuickStartInstance),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.copyConnectionString',
+                    withCommandCorrelation(copyQuickStartConnectionString),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.copyPassword',
+                    withCommandCorrelation(copyQuickStartPassword),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.viewLogs',
+                    withCommandCorrelation(viewQuickStartLogs),
                 );
 
                 registerCommand(

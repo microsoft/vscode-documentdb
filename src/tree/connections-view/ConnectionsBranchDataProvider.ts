@@ -9,6 +9,7 @@ import { Views } from '../../documentdb/Views';
 import { DocumentDBExperience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
+import { isLegacyEmulatorMigrationComplete } from '../../services/legacyEmulatorMigration';
 import { createGenericElementWithContext } from '../api/createGenericElementWithContext';
 import { BaseExtendedTreeDataProvider } from '../BaseExtendedTreeDataProvider';
 import { CLUSTER_ITEM_CONTEXT_VALUE } from '../documentdb/ClusterItemBase';
@@ -17,6 +18,7 @@ import { type TreeElement } from '../TreeElement';
 import { isTreeElementWithContextValue } from '../TreeElementWithContextValue';
 import { DocumentDBClusterItem } from './DocumentDBClusterItem';
 import { LocalEmulatorsItem } from './LocalEmulators/LocalEmulatorsItem';
+import { LocalQuickStartItem } from './LocalQuickStart/LocalQuickStartItem';
 import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
 import { NewConnectionItemCV } from './NewConnectionItemCV';
 
@@ -59,7 +61,15 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                     return null;
                 }
 
-                context.telemetry.measurements.savedConnections = rootItems.length - 2; // count - 'DocumentDB Local' and 'New Connection'
+                // Count only real saved connections/folders, excluding the synthetic
+                // structural nodes (Quick Start, Local emulators, New Connection).
+                context.telemetry.measurements.savedConnections = rootItems.filter((item) => {
+                    if (!isTreeElementWithContextValue(item)) {
+                        return false;
+                    }
+                    const contextValue = item.contextValue.toLowerCase();
+                    return contextValue.includes('documentdbcluster') || contextValue.includes('treeitem_folder');
+                }).length;
 
                 // Now process and add each root item to the cache
                 for (const item of rootItems) {
@@ -126,9 +136,16 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
 
         if (allConnections.length === 0 && allEmulators.length === 0) {
             /**
-             * we have a special case here as we want to show a "welcome screen" in the case when no connections were found.
+             * Even with no saved connections, the Quick Start node must render — its
+             * managed instance is service-owned/in-memory (not a stored connection),
+             * so it cannot depend on the stored-connection count. Returning it here
+             * (instead of `null`) replaces the bare welcome screen with the Quick
+             * Start entry point on a fresh machine.
              */
-            return null;
+            const quickStartOnly = new LocalQuickStartItem(parentId);
+            return [
+                ext.state.wrapItemInStateHandling(quickStartOnly, () => this.refresh(quickStartOnly)) as TreeElement,
+            ];
         }
 
         // Import FolderItem and ItemType
@@ -162,6 +179,7 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
                 // Connection cluster data
                 clusterId: connection.id, // Stable storageId for cache lookups
                 storageId: connection.id,
+                storageZone: ConnectionType.Clusters,
                 name: connection.name,
                 dbExperience: DocumentDBExperience,
                 connectionString: connection.secrets.connectionString,
@@ -189,7 +207,11 @@ export class ConnectionsBranchDataProvider extends BaseExtendedTreeDataProvider<
         const newConnectionItem = hasClusterItems ? [] : [new NewConnectionItemCV(parentId)];
 
         const rootItems = [
-            new LocalEmulatorsItem(parentId),
+            new LocalQuickStartItem(parentId),
+            // The legacy emulator node is retired once its connections have been migrated
+            // into a regular "Local Connections (Legacy)" folder (design §4). Until the
+            // one-time migration succeeds it stays visible so nothing is hidden un-migrated.
+            ...(isLegacyEmulatorMigrationComplete() ? [] : [new LocalEmulatorsItem(parentId)]),
             ...clusterFolderItems,
             ...clusterItems,
             ...newConnectionItem,

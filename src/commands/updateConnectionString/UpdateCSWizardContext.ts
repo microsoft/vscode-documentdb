@@ -4,10 +4,13 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { type StorageZone } from '../../services/connectionStorageService';
 
 export interface UpdateCSWizardContext extends IActionContext {
     // target item details
     isEmulator: boolean;
+    /** Explicit storage zone of the target connection (preferred over isEmulator inference). */
+    storageZone?: StorageZone;
     storageId: string;
 
     originalConnectionString: string;

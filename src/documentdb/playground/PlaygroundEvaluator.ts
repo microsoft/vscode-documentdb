@@ -11,6 +11,7 @@ import { ext } from '../../extensionVariables';
 import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
+import { resolveAllowInvalidCertificates } from '../utils/tlsException';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
 import { WorkerSessionManager } from './WorkerSessionManager';
 import { type MainToWorkerMessage, type SerializableMongoClientOptions, type WorkerToMainMessage } from './workerTypes';
@@ -258,12 +259,23 @@ export class PlaygroundEvaluator implements vscode.Disposable {
 
         // Build serializable MongoClientOptions
         const clientOptions: SerializableMongoClientOptions = {
-            serverSelectionTimeoutMS: credentials.emulatorConfiguration?.isEmulator ? 4000 : undefined,
-            tlsAllowInvalidCertificates:
-                credentials.emulatorConfiguration?.isEmulator &&
-                credentials.emulatorConfiguration?.disableEmulatorSecurity
-                    ? true
+            // Fail-fast 4s timeout for emulators / local TLS-exception connections — host-gated the
+            // same way as the TLS option so an orphaned flag on a public host doesn't trigger it.
+            serverSelectionTimeoutMS:
+                credentials.emulatorConfiguration?.isEmulator ||
+                resolveAllowInvalidCertificates(
+                    credentials.emulatorConfiguration?.disableEmulatorSecurity,
+                    connectionString,
+                )
+                    ? 4000
                     : undefined,
+            // TLS-allow-invalid is keyed off `disableEmulatorSecurity` (design §7), honored ONLY for
+            // local/private hosts ("hybrid" runtime policy): an orphaned flag on a public host is not
+            // activated; an explicit URL param is still honored by the driver (we never force `false`).
+            tlsAllowInvalidCertificates: resolveAllowInvalidCertificates(
+                credentials.emulatorConfiguration?.disableEmulatorSecurity,
+                connectionString,
+            ),
         };
 
         return {

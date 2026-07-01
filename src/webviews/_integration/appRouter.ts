@@ -32,6 +32,7 @@ import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
+import { localQuickStartRouter } from '../documentdb/localQuickStart/localQuickStartRouter';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from './trpc';
 
@@ -189,6 +190,7 @@ export const appRouter = router({
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,
     },
+    localQuickStart: localQuickStartRouter,
 });
 
 // Export type router type signature, this is used by the client.

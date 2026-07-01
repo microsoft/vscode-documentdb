@@ -61,6 +61,7 @@ import { getHostsFromConnectionString, hasAzureDomain } from './utils/connection
 import { fixupDocumentDbExplain } from './utils/fixupDocumentDbExplain';
 import { getClusterMetadata, type ClusterMetadata } from './utils/getClusterMetadata';
 import { parseDocumentId } from './utils/parseDocumentId';
+import { resolveAllowInvalidCertificates } from './utils/tlsException';
 import { toFilterQueryObj } from './utils/toFilterQuery';
 
 export interface DatabaseItemModel {
@@ -341,13 +342,20 @@ export class ClustersClient {
             }
 
             const message = parseError(error).message;
-            if (emulatorConfiguration?.isEmulator && message.includes('ECONNREFUSED')) {
+            // Surface the friendly local-connection tips only for a genuinely local-ish connection
+            // (emulator, OR a local connection that opted into the TLS exception — host-gated the
+            // same way as the TLS option). An orphaned flag on a PUBLIC host must NOT make a public
+            // ECONNREFUSED/self-signed failure show "local instance" troubleshooting copy.
+            const isLocalish =
+                !!emulatorConfiguration?.isEmulator ||
+                !!resolveAllowInvalidCertificates(emulatorConfiguration?.disableEmulatorSecurity, connectionString);
+            if (isLocalish && message.includes('ECONNREFUSED')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'Unable to connect to the local instance. Make sure it is started correctly. See {link} for tips.',
                     { link: Links.LocalConnectionDebuggingTips },
                 );
-            } else if (emulatorConfiguration?.isEmulator && message.includes('self-signed certificate')) {
+            } else if (isLocalish && message.includes('self-signed certificate')) {
                 // eslint-disable-next-line @typescript-eslint/no-unsafe-member-access
                 error.message = l10n.t(
                     'The local instance is using a self-signed certificate. To connect, you must import the appropriate TLS/SSL certificate. See {link} for tips.',

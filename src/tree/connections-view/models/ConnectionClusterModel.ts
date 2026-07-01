@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { StorageZone } from '../../../services/connectionStorageService';
 import { type EmulatorConfiguration } from '../../../utils/emulatorConfiguration';
 import { type BaseClusterModel } from '../../models/BaseClusterModel';
 
@@ -23,6 +24,16 @@ export interface ConnectionClusterModel extends BaseClusterModel {
     storageId: string;
 
     /**
+     * The storage zone this connection physically lives in (`Clusters` or `Emulators`).
+     *
+     * Decouples zone routing from {@link emulatorConfiguration}: a local/emulator
+     * connection can live in the `Clusters` zone (e.g. a migrated legacy connection) and
+     * still keep its emulator TLS behaviour. Optional for back-compat — when absent,
+     * callers fall back to the `isEmulator` inference via {@link resolveStorageZone}.
+     */
+    storageZone?: StorageZone;
+
+    /**
      * Emulator configuration (optional).
      * Present when this connection represents a local emulator instance.
      */
@@ -40,4 +51,23 @@ export interface ConnectionClusterModel extends BaseClusterModel {
      * Never contains a password.
      */
     connectionUser?: string;
+}
+
+/**
+ * Resolve the storage zone a connection lives in. Prefers the explicit
+ * {@link ConnectionClusterModel.storageZone}; falls back to inferring it from
+ * `emulatorConfiguration.isEmulator` for connections built before the field existed.
+ *
+ * Use this everywhere a connection operation must pick a storage zone, instead of the
+ * legacy `emulatorConfiguration?.isEmulator ? Emulators : Clusters` inference — that
+ * inference breaks for an emulator connection that has been moved into the `Clusters`
+ * zone (it would be looked up in the wrong zone).
+ */
+export function resolveStorageZone(
+    cluster: Pick<ConnectionClusterModel, 'storageZone' | 'emulatorConfiguration'>,
+): StorageZone {
+    if (cluster.storageZone) {
+        return cluster.storageZone;
+    }
+    return cluster.emulatorConfiguration?.isEmulator ? StorageZone.Emulators : StorageZone.Clusters;
 }

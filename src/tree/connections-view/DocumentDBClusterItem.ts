@@ -24,6 +24,7 @@ import { showConnectionFailedAndMaybeOfferDecodedRetry } from '../../documentdb/
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
+import { resolveAllowInvalidCertificates } from '../../documentdb/utils/tlsException';
 import { Views } from '../../documentdb/Views';
 import { type AuthenticateWizardContext } from '../../documentdb/wizards/authenticate/AuthenticateWizardContext';
 import { ChooseAuthMethodStep } from '../../documentdb/wizards/authenticate/ChooseAuthMethodStep';
@@ -36,7 +37,7 @@ import { ConnectionStorageService, ConnectionType, isConnection } from '../../se
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElementWithStorageId } from '../TreeElementWithStorageId';
-import { type ConnectionClusterModel } from './models/ConnectionClusterModel';
+import { resolveStorageZone, type ConnectionClusterModel } from './models/ConnectionClusterModel';
 
 /**
  * Escapes markdown special characters so user-provided text is always rendered
@@ -59,9 +60,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
     }
 
     public async getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
-        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-            ? ConnectionType.Emulators
-            : ConnectionType.Clusters;
+        const connectionType = resolveStorageZone(this.cluster);
         const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
 
         if (!connectionCredentials || !isConnection(connectionCredentials)) {
@@ -102,9 +101,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 }),
             );
 
-            const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-                ? ConnectionType.Emulators
-                : ConnectionType.Clusters;
+            const connectionType = resolveStorageZone(this.cluster);
 
             context.telemetry.properties.connectionType = connectionType;
 
@@ -179,9 +176,7 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                         }),
                     );
 
-                    const connectionType = this.cluster.emulatorConfiguration?.isEmulator
-                        ? ConnectionType.Emulators
-                        : ConnectionType.Clusters;
+                    const connectionType = resolveStorageZone(this.cluster);
 
                     const connection = await ConnectionStorageService.get(this.storageId, connectionType);
                     if (connection && isConnection(connection)) {
@@ -437,9 +432,15 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
      */
     getTreeItem(): vscode.TreeItem {
         let description: string | undefined = undefined;
+        // The TLS warning reflects the EFFECTIVE runtime TLS state (the `disableEmulatorSecurity`
+        // flag is honored only for local/private hosts — see resolveAllowInvalidCertificates), so an
+        // orphaned flag on a public host (which the runtime no longer honors) doesn't show a
+        // misleading "TLS Disabled" badge. The icon still distinguishes emulator vs. regular.
         if (
-            this.cluster.emulatorConfiguration?.isEmulator &&
-            this.cluster.emulatorConfiguration?.disableEmulatorSecurity
+            resolveAllowInvalidCertificates(
+                this.cluster.emulatorConfiguration?.disableEmulatorSecurity,
+                this.cluster.connectionString ?? '',
+            )
         ) {
             description = l10n.t('⚠ TLS/SSL Disabled');
         } else if (!this.cluster.emulatorConfiguration?.isEmulator && this.isTlsDisabled()) {
@@ -493,16 +494,20 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             }
         }
 
-        // Emulator security notice
-        if (this.cluster.emulatorConfiguration?.isEmulator) {
-            if (this.cluster.emulatorConfiguration.disableEmulatorSecurity) {
-                md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
-            } else {
-                md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
-            }
+        // Security notice: surface a TLS-disabled warning when invalid certificates are actually
+        // allowed at runtime (host-gated — an orphaned bypass flag on a public host shows the
+        // normal "enabled" state); show enabled for a secure emulator; and also warn on a
+        // non-emulator connection string that explicitly disables TLS/SSL (main's behavior).
+        if (
+            resolveAllowInvalidCertificates(
+                this.cluster.emulatorConfiguration?.disableEmulatorSecurity,
+                this.cluster.connectionString ?? '',
+            )
+        ) {
+            md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
+        } else if (this.cluster.emulatorConfiguration?.isEmulator) {
+            md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
         } else if (this.isTlsDisabled()) {
-            // For non-emulator connections, only add a line when the connection string
-            // explicitly disables TLS/SSL; otherwise show no security entry.
             md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
         }
 
