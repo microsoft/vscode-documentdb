@@ -84,8 +84,18 @@ const useStyles = makeStyles({
     nextSteps: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' },
     advancedPanel: { display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' },
     advancedGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' },
-    advancedError: { color: tokens.colorStatusDangerForeground1 },
     muted: { color: tokens.colorNeutralForeground3 },
+    // Visually hidden but exposed to assistive tech (WCAG 4.1.3 status text).
+    srOnly: {
+        position: 'absolute',
+        width: '1px',
+        height: '1px',
+        padding: 0,
+        margin: '-1px',
+        overflow: 'hidden',
+        clip: 'rect(0, 0, 0, 0)',
+        whiteSpace: 'nowrap',
+    },
 });
 
 const STAGE_LABELS: Record<ProvisionStage, string> = {
@@ -157,35 +167,55 @@ export const LocalQuickStart = (): JSX.Element => {
     // Current Advanced options, synced from the fields below so handleStart (and Retry)
     // always read the latest without re-binding the provisioning subscription.
     const advancedRef = useRef<AdvancedQuickStartOptions | undefined>(undefined);
+    // Focused when provisioning ends so keyboard/screen-reader users land on the primary
+    // result action instead of being stranded on the now-unmounted Cancel button (WCAG 2.4.3).
+    const resultActionRef = useRef<HTMLButtonElement>(null);
 
     // Validate the Advanced fields client-side, mirroring the router's zod schema so a valid
-    // form never dead-ends on a server rejection. A non-empty result disables Start + shows help.
+    // form never dead-ends on a server rejection. Returns the offending field (for a per-field
+    // error state, a11y §3.3.1) plus the message. Credential/image checks are skipped while
+    // reusing an existing instance, since those inputs are hidden and their values are ignored.
     // eslint-disable-next-line no-control-regex
     const credForbidden = /[\u0000-\u001f\u007f]/;
-    const advError = ((): string | undefined => {
+    const advValidation = ((): { field: 'port' | 'username' | 'password' | 'tag'; message: string } | undefined => {
         const port = advPort.trim();
         if (port && (!/^\d+$/.test(port) || Number(port) < 1024 || Number(port) > 65535)) {
-            return l10n.t('Port must be a whole number between 1024 and 65535.');
+            return { field: 'port', message: l10n.t('Port must be a whole number between 1024 and 65535.') };
         }
-        const user = advUser.trim();
-        const pass = advPass.trim();
-        const hasUser = user.length > 0;
-        const hasPass = pass.length > 0;
-        if (hasUser !== hasPass) {
-            return l10n.t('Enter both a username and a password, or leave both blank to auto-generate.');
-        }
-        if (user.length > 128 || pass.length > 256) {
-            return l10n.t('Username (max 128) or password (max 256) is too long.');
-        }
-        if ((hasUser && credForbidden.test(user)) || (hasPass && credForbidden.test(pass))) {
-            return l10n.t('Username and password must not contain control characters.');
-        }
-        const tag = advTag.trim();
-        if (tag && (tag.length > 128 || !/^[\w][\w.-]*$/.test(tag))) {
-            return l10n.t('Image tag may contain only letters, numbers, dots, dashes, and underscores.');
+        if (!isRecreate) {
+            const user = advUser.trim();
+            const pass = advPass.trim();
+            const hasUser = user.length > 0;
+            const hasPass = pass.length > 0;
+            if (hasUser !== hasPass) {
+                return {
+                    field: hasUser ? 'password' : 'username',
+                    message: l10n.t('Enter both a username and a password, or leave both blank to auto-generate.'),
+                };
+            }
+            if (user.length > 128) {
+                return { field: 'username', message: l10n.t('Username must be 128 characters or fewer.') };
+            }
+            if (pass.length > 256) {
+                return { field: 'password', message: l10n.t('Password must be 256 characters or fewer.') };
+            }
+            if (hasUser && credForbidden.test(user)) {
+                return { field: 'username', message: l10n.t('Username must not contain control characters.') };
+            }
+            if (hasPass && credForbidden.test(pass)) {
+                return { field: 'password', message: l10n.t('Password must not contain control characters.') };
+            }
+            const tag = advTag.trim();
+            if (tag && (tag.length > 128 || !/^[\w][\w.-]*$/.test(tag))) {
+                return {
+                    field: 'tag',
+                    message: l10n.t('Image tag may contain only letters, numbers, dots, dashes, and underscores.'),
+                };
+            }
         }
         return undefined;
     })();
+    const advError = advValidation?.message;
 
     useEffect(() => {
         // Sync the Advanced fields into a ref (repo stale-closure pattern) so the provisioning
@@ -207,6 +237,22 @@ export const LocalQuickStart = (): JSX.Element => {
         if (!advLoadSampleData) opts.loadSampleData = false;
         advancedRef.current = Object.keys(opts).length > 0 ? opts : undefined;
     }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate]);
+
+    useEffect(() => {
+        // When provisioning settles, move focus to the primary result action so keyboard and
+        // screen-reader users are carried into the new content (WCAG 2.4.3) rather than losing
+        // focus to <body> when the Cancel button unmounts.
+        if (phase === 'success' || phase === 'failed') {
+            resultActionRef.current?.focus();
+        }
+    }, [phase]);
+
+    // Human-readable message for the current in-flight stage, mirrored into a polite live
+    // region so screen-reader users hear provisioning progress (WCAG 4.1.3). Suppressed once
+    // any stage has errored so a stale "…" utterance can't precede the failure announcement.
+    const activeStage = PROVISION_STAGES.find((s) => stageStatus[s] === 'active');
+    const anyStageErrored = PROVISION_STAGES.some((s) => stageStatus[s] === 'error');
+    const provisioningStatusMessage = activeStage && !anyStageErrored ? l10n.t('{0}…', STAGE_LABELS[activeStage]) : '';
 
     const loadDockerStatus = useCallback((): void => {
         setPhase('loading');
@@ -271,18 +317,29 @@ export const LocalQuickStart = (): JSX.Element => {
         let settled = false;
         const subscription = trpcClient.localQuickStart.startQuickStart.subscribe(advancedRef.current, {
             onData(event: StageEvent) {
-                setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
                 if (event.stage === 'done' && event.status === 'done') {
                     settled = true;
                     stopTimer();
+                    setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
                     setSuccessMessage(event.message);
                     setBoundPort(event.boundPort);
                     setPhase('success');
                 } else if (event.status === 'error') {
                     settled = true;
                     stopTimer();
+                    // Also flip the still-active real stage to 'error' so its row shows the error
+                    // icon + "failed" status instead of a stuck spinner / "in progress" that would
+                    // contradict the failure message for sighted and screen-reader users alike.
+                    setStageStatus((prev) => {
+                        const next = { ...prev, [event.stage]: event.status };
+                        const active = PROVISION_STAGES.find((s) => prev[s] === 'active');
+                        if (active) next[active] = 'error';
+                        return next;
+                    });
                     setErrorMessage(event.error ?? event.message ?? l10n.t('Setup failed.'));
                     setPhase('failed');
+                } else {
+                    setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
                 }
             },
             onError(error: unknown) {
@@ -412,7 +469,12 @@ export const LocalQuickStart = (): JSX.Element => {
                             {l10n.t('Leave any field blank to keep the automatic default.')}
                         </Text>
                         <div className={styles.advancedGrid}>
-                            <Field label={l10n.t('Port')} hint={l10n.t('Default {0}', String(QUICK_START_PORT))}>
+                            <Field
+                                label={l10n.t('Port')}
+                                hint={l10n.t('Default {0}', String(QUICK_START_PORT))}
+                                validationState={advValidation?.field === 'port' ? 'error' : 'none'}
+                                validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
+                            >
                                 <Input
                                     type="number"
                                     value={advPort}
@@ -424,6 +486,10 @@ export const LocalQuickStart = (): JSX.Element => {
                                 <Field
                                     label={l10n.t('Image tag')}
                                     hint={l10n.t('Default “{0}”', QUICK_START_DEFAULT_TAG)}
+                                    validationState={advValidation?.field === 'tag' ? 'error' : 'none'}
+                                    validationMessage={
+                                        advValidation?.field === 'tag' ? advValidation.message : undefined
+                                    }
                                 >
                                     <Input
                                         value={advTag}
@@ -434,7 +500,14 @@ export const LocalQuickStart = (): JSX.Element => {
                                 </Field>
                             )}
                             {!isRecreate && (
-                                <Field label={l10n.t('Username')} hint={l10n.t('Default: auto-generated')}>
+                                <Field
+                                    label={l10n.t('Username')}
+                                    hint={l10n.t('Default: auto-generated')}
+                                    validationState={advValidation?.field === 'username' ? 'error' : 'none'}
+                                    validationMessage={
+                                        advValidation?.field === 'username' ? advValidation.message : undefined
+                                    }
+                                >
                                     <Input
                                         value={advUser}
                                         maxLength={128}
@@ -444,7 +517,14 @@ export const LocalQuickStart = (): JSX.Element => {
                                 </Field>
                             )}
                             {!isRecreate && (
-                                <Field label={l10n.t('Password')} hint={l10n.t('Default: auto-generated')}>
+                                <Field
+                                    label={l10n.t('Password')}
+                                    hint={l10n.t('Default: auto-generated')}
+                                    validationState={advValidation?.field === 'password' ? 'error' : 'none'}
+                                    validationMessage={
+                                        advValidation?.field === 'password' ? advValidation.message : undefined
+                                    }
+                                >
                                     <Input
                                         type="password"
                                         value={advPass}
@@ -467,11 +547,6 @@ export const LocalQuickStart = (): JSX.Element => {
                             label={l10n.t('Load sample data')}
                             onChange={(_e, d) => setAdvLoadSampleData(d.checked)}
                         />
-                        {advError && (
-                            <Text size={200} role="alert" className={styles.advancedError}>
-                                {advError}
-                            </Text>
-                        )}
                     </div>
                 </AccordionPanel>
             </AccordionItem>
@@ -481,19 +556,33 @@ export const LocalQuickStart = (): JSX.Element => {
     const renderStageRow = (stage: ProvisionStage): JSX.Element => {
         const status = stageStatus[stage];
         let icon: JSX.Element;
+        let statusText: string;
         if (status === 'done') {
-            icon = <CheckmarkCircleFilled className={styles.stageIconDone} />;
+            icon = <CheckmarkCircleFilled aria-hidden className={styles.stageIconDone} />;
+            statusText = l10n.t('done');
         } else if (status === 'error') {
-            icon = <ErrorCircleFilled className={styles.stageIconError} />;
+            icon = <ErrorCircleFilled aria-hidden className={styles.stageIconError} />;
+            statusText = l10n.t('failed');
         } else if (status === 'active') {
-            icon = <Spinner size="tiny" />;
+            icon = <Spinner size="tiny" aria-hidden />;
+            statusText = l10n.t('in progress');
         } else {
-            icon = <CircleRegular className={styles.stageIconPending} />;
+            icon = <CircleRegular aria-hidden className={styles.stageIconPending} />;
+            statusText = l10n.t('pending');
         }
         return (
-            <div key={stage} className={styles.stageRow}>
+            <div
+                key={stage}
+                role="listitem"
+                className={styles.stageRow}
+                // Row-level label reads naturally on every screen reader (e.g. "Pulling official
+                // image, done"); the icon and visible text are decorative duplicates (WCAG 1.1.1).
+                aria-label={`${STAGE_LABELS[stage]}, ${statusText}`}
+            >
                 {icon}
-                <Text className={status === 'pending' ? styles.muted : undefined}>{STAGE_LABELS[stage]}</Text>
+                <Text aria-hidden className={status === 'pending' ? styles.muted : undefined}>
+                    {STAGE_LABELS[stage]}
+                </Text>
             </div>
         );
     };
@@ -507,7 +596,7 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const hero = (title: string, subtitle: string): JSX.Element => (
         <div className={styles.hero}>
-            <RocketRegular className={styles.heroIcon} />
+            <RocketRegular aria-hidden className={styles.heroIcon} />
             <div>
                 <Text as="h2" size={600} weight="semibold">
                     {title}
@@ -541,6 +630,11 @@ export const LocalQuickStart = (): JSX.Element => {
         );
         return (
             <div className={styles.root}>
+                <Announcer
+                    when={phase === 'dockerNotReady'}
+                    message={l10n.t('Docker is required and is not ready. Review the checks below.')}
+                    politeness="assertive"
+                />
                 {hero(
                     l10n.t('Docker is required'),
                     l10n.t(
@@ -609,6 +703,15 @@ export const LocalQuickStart = (): JSX.Element => {
                     when={phase === 'success'}
                     message={l10n.t('DocumentDB Local is ready. Next steps are shown below.')}
                 />
+                <Announcer
+                    when={phase === 'failed'}
+                    message={l10n.t('Setup failed. {0}', errorMessage ?? l10n.t('See the details below.'))}
+                    politeness="polite"
+                />
+                {/* Streams the current provisioning stage to screen readers (WCAG 4.1.3). */}
+                <div role="status" aria-live="polite" aria-atomic="true" className={styles.srOnly}>
+                    {phase === 'provisioning' ? provisioningStatusMessage : ''}
+                </div>
                 {hero(l10n.t('Setting up DocumentDB Local…'), phase === 'provisioning' ? elapsedLabel() : '')}
 
                 {phase === 'success' && (
@@ -638,7 +741,9 @@ export const LocalQuickStart = (): JSX.Element => {
                     </div>
                 )}
 
-                <Card className={styles.stageList}>{PROVISION_STAGES.map(renderStageRow)}</Card>
+                <Card className={styles.stageList} role="list" aria-label={l10n.t('Setup progress')}>
+                    {PROVISION_STAGES.map(renderStageRow)}
+                </Card>
 
                 {phase === 'failed' && (
                     <div className={styles.errorBox}>
@@ -664,7 +769,7 @@ export const LocalQuickStart = (): JSX.Element => {
                             <Button appearance="secondary" onClick={handleCopyConnString}>
                                 {l10n.t('Copy Connection String')}
                             </Button>
-                            <Button appearance="primary" onClick={handleOpenConnection}>
+                            <Button appearance="primary" ref={resultActionRef} onClick={handleOpenConnection}>
                                 {l10n.t('Open Connection')}
                             </Button>
                         </>
@@ -674,7 +779,12 @@ export const LocalQuickStart = (): JSX.Element => {
                             <Button appearance="secondary" onClick={handleBackToReview}>
                                 {l10n.t('Edit settings')}
                             </Button>
-                            <Button appearance="primary" icon={<ArrowClockwiseRegular />} onClick={handleStart}>
+                            <Button
+                                appearance="primary"
+                                ref={resultActionRef}
+                                icon={<ArrowClockwiseRegular />}
+                                onClick={handleStart}
+                            >
                                 {l10n.t('Retry')}
                             </Button>
                         </>
