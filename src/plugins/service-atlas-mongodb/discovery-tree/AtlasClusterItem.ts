@@ -11,6 +11,7 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
@@ -23,9 +24,11 @@ import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/Pr
 import { ext } from '../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
+import { getResourcesPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { type AtlasClusterModel } from '../models/AtlasClusterModel';
+import { type AtlasClusterState } from '../models/AtlasProjectModel';
 
 /** Resource type identifier for telemetry */
 const RESOURCE_TYPE = 'atlas-mongodb-cluster';
@@ -216,18 +219,26 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
     /**
      * Returns the tree item representation with Atlas-specific display.
-     * Shows state icon, tier/provider/region description, and cluster metadata tooltip.
+     * Uses a stable provider-identity icon (the DocumentDB cluster brand mark, matching
+     * sibling discovery plugins); transient cluster state is surfaced through the
+     * description and tooltip rather than the icon so the tree stays visually stable
+     * across refreshes.
      */
     getTreeItem(): vscode.TreeItem {
-        const stateIcon = this.getStateIcon();
-
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.cluster.name,
             description: this.buildDescription(),
             tooltip: this.buildTooltip(),
-            iconPath: stateIcon,
+            iconPath: {
+                light: vscode.Uri.file(
+                    path.join(getResourcesPath(), 'icons', 'vscode-documentdb-cluster-light-themes.svg'),
+                ),
+                dark: vscode.Uri.file(
+                    path.join(getResourcesPath(), 'icons', 'vscode-documentdb-cluster-dark-themes.svg'),
+                ),
+            },
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
@@ -265,17 +276,24 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
     private buildDescription(): string {
         const parts: string[] = [];
 
+        // The tier (e.g. "M10") should show. When the tier is unavailable (e.g. serverless clusters), fall back to the provider/region pair.
         if (this.cluster.instanceSizeName) {
             parts.push(this.cluster.instanceSizeName);
-        }
-        if (this.cluster.providerName) {
-            parts.push(this.cluster.providerName);
-        }
-        if (this.cluster.regionName) {
-            parts.push(this.formatRegion(this.cluster.regionName));
+        } else {
+            if (this.cluster.providerName) {
+                parts.push(this.cluster.providerName);
+            }
+            if (this.cluster.regionName) {
+                parts.push(this.formatRegion(this.cluster.regionName));
+            }
         }
 
-        return parts.length > 0 ? parts.join(', ') : this.cluster.stateName;
+        const stateLabel = this.getStateLabel();
+        if (stateLabel) {
+            parts.push(stateLabel);
+        }
+
+        return parts.join(' · ');
     }
 
     private buildTooltip(): vscode.MarkdownString {
@@ -299,6 +317,13 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
         md.appendMarkdown(`- **Project:** ${escapeMarkdown(this.cluster.projectName)}\n`);
 
+        const stateExplanation = this.getStateExplanation();
+        if (stateExplanation) {
+            md.appendMarkdown(`\n---\n`);
+            md.appendMarkdown(escapeMarkdown(stateExplanation));
+            return md;
+        }
+
         if (this.cluster.connectionString) {
             md.appendMarkdown(`\n---\n`);
             md.appendMarkdown(`Connection string available — expand to connect and browse databases.`);
@@ -307,18 +332,43 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
         return md;
     }
 
-    private getStateIcon(): vscode.ThemeIcon {
+    /**
+     * Returns a short, localized label for the current cluster state, or `undefined` for the
+     * normal IDLE state (which needs no annotation). Shown in the tree item description.
+     */
+    private getStateLabel(): string | undefined {
+        const labels: Record<AtlasClusterState, string | undefined> = {
+            IDLE: undefined,
+            CREATING: l10n.t('Creating…'),
+            UPDATING: l10n.t('Updating…'),
+            REPAIRING: l10n.t('Repairing…'),
+            DELETING: l10n.t('Deleting…'),
+            UNKNOWN: l10n.t('Unknown state'),
+        };
+        return labels[this.cluster.stateName];
+    }
+
+    /**
+     * Returns a localized, human-readable explanation of a non-IDLE cluster state for the
+     * tooltip, or `undefined` when the cluster is IDLE.
+     */
+    private getStateExplanation(): string | undefined {
         switch (this.cluster.stateName) {
-            case 'IDLE':
-                return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('testing.iconPassed'));
             case 'CREATING':
+                return l10n.t(
+                    'This cluster is being created. It will be available to connect once creation is complete.',
+                );
             case 'UPDATING':
+                return l10n.t('This cluster is being updated. It may be temporarily unavailable.');
             case 'REPAIRING':
-                return new vscode.ThemeIcon('loading~spin');
+                return l10n.t('This cluster is being repaired. It may be temporarily unavailable.');
             case 'DELETING':
-                return new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('testing.iconFailed'));
+                return l10n.t('This cluster is being deleted and will no longer be available.');
+            case 'UNKNOWN':
+                return l10n.t('This cluster is in an unknown state. Try refreshing to update its status.');
+            case 'IDLE':
             default:
-                return new vscode.ThemeIcon('circle-outline');
+                return undefined;
         }
     }
 

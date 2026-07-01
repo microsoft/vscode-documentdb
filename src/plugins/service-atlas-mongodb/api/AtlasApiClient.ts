@@ -195,11 +195,20 @@ export class AtlasApiClient {
 
         switch (response.status) {
             case 401:
-                throw new AtlasApiError(vscode.l10n.t('Authentication failed. Please sign in again.'), response.status);
+                throw new AtlasApiError(
+                    detail
+                        ? vscode.l10n.t('Authentication failed: {0}', detail)
+                        : vscode.l10n.t('Authentication failed. Please sign in again.'),
+                    response.status,
+                    detail,
+                );
             case 403:
                 throw new AtlasApiError(
-                    vscode.l10n.t('Access denied. Verify your API key has the required permissions.'),
+                    detail
+                        ? vscode.l10n.t('Access denied: {0}', detail)
+                        : vscode.l10n.t('Access denied. Verify your API key has the required permissions.'),
                     response.status,
+                    detail,
                 );
             case 404:
                 throw new AtlasApiError(vscode.l10n.t('Resource not found.'), response.status);
@@ -212,6 +221,7 @@ export class AtlasApiClient {
                 throw new AtlasApiError(
                     vscode.l10n.t('Atlas API error ({0}): {1}', String(response.status), detail),
                     response.status,
+                    detail,
                 );
         }
     }
@@ -224,6 +234,7 @@ export class AtlasApiError extends Error {
     constructor(
         message: string,
         public readonly statusCode: number,
+        public readonly detail?: string,
     ) {
         super(message);
         this.name = 'AtlasApiError';
