@@ -1019,15 +1019,15 @@ entry in that work item's commit. On restart, this section plus
   `useContext` + delegate wrapper.
 - Subagent: none.
 
-### WI-C7 - Factory openWebview + options-bag WebviewController  (2026-06-30)
+### WI-C7 - Factory openWebview + options-bag WebviewController (2026-06-30)
 
 - Status: done (Phase C milestone).
 - Summary: reshaped `WebviewController` to a single options-bag constructor
   (`new WebviewController({ extensionContext, title, viewType, router,
-  createCallerFactory?, context, config, sourceLayout, devServerHost?,
-  telemetry?, icon?, viewColumn? })`) and added `host/openWebview.ts` -
+createCallerFactory?, context, config, sourceLayout, devServerHost?,
+telemetry?, icon?, viewColumn? })`) and added `host/openWebview.ts` -
   `openWebview(extensionContext, options)` returns `new WebviewController({
-  extensionContext, ...options })`. The constructor now wires tRPC itself
+extensionContext, ...options })`. The constructor now wires tRPC itself
   (`setupTrpc(options.context)` calls `attachTrpc` with the injected
   `createCallerFactory` and the dispatch logger). To deliver "console telemetry
   for free", `attachTrpc` gained an optional `logger?: ProcedureLogger` that
@@ -1066,7 +1066,7 @@ entry in that work item's commit. On restart, this section plus
   `moduleNameMapper` isolates it to this package's jest project.
 - Subagent: none.
 
-### WI-D1 - README: quick-start + behind-the-scenes signpost  (2026-06-30)
+### WI-D1 - README: quick-start + behind-the-scenes signpost (2026-06-30)
 
 - Status: done.
 - Summary: rewrote `packages/vscode-ext-webview/README.md` from the old
@@ -1099,7 +1099,7 @@ entry in that work item's commit. On restart, this section plus
   build + jest deferred to the end of Phase D (after WI-D2).
 - Subagent: none.
 
-### WI-D2 - ADVANCED.md: the behind-the-scenes manual  (2026-06-30)  [MILESTONE end D]
+### WI-D2 - ADVANCED.md: the behind-the-scenes manual (2026-06-30) [MILESTONE end D]
 
 - Status: done (Phase D milestone).
 - Summary: added `packages/vscode-ext-webview/ADVANCED.md`, the deep manual the
@@ -1128,7 +1128,7 @@ entry in that work item's commit. On restart, this section plus
 - Deviations: none.
 - Subagent: none.
 
-### WI-E1 - Migrate `_integration` to `@microsoft/vscode-ext-webview` (2026-06-30)  [start E]
+### WI-E1 - Migrate `_integration` to `@microsoft/vscode-ext-webview` (2026-06-30) [start E]
 
 - Status: done.
 - Summary: repointed the extension's `src/webviews/_integration/` layer from the
@@ -1224,7 +1224,7 @@ entry in that work item's commit. On restart, this section plus
 - Deviations: none.
 - Subagent: none.
 
-### WI-E4 - Adopt the openWebview factory for panel controllers (2026-06-30)  [MILESTONE end E]
+### WI-E4 - Adopt the openWebview factory for panel controllers (2026-06-30) [MILESTONE end E]
 
 - Status: done.
 - Summary: added `src/webviews/_integration/openAppWebview.ts`, the factory-style
@@ -1272,7 +1272,7 @@ entry in that work item's commit. On restart, this section plus
   become factory calls") and let `WebviewControllerBase` be removed entirely.
 - Subagent: none.
 
-### WI-F1 - Remove deprecated @microsoft/vscode-ext-react-webview package (2026-06-30)  [MILESTONE]
+### WI-F1 - Remove deprecated @microsoft/vscode-ext-react-webview package (2026-06-30) [MILESTONE]
 
 - Status: done.
 - Summary: deleted `packages/vscode-ext-react-webview/` (`git rm -r`, then `rm -rf`
@@ -1312,7 +1312,7 @@ entry in that work item's commit. On restart, this section plus
   the repo already shipped); validated with `npm ci --dry-run`.
 - Subagent: none.
 
-### WI-G1 - Add internal webview-ext migration manual (2026-06-30)  [MILESTONE final DoD]
+### WI-G1 - Add internal webview-ext migration manual (2026-06-30) [MILESTONE final DoD]
 
 - Status: done.
 - Summary: created `docs/ai-and-plans/webview-ext-migration-manual.md`, an
@@ -1347,3 +1347,68 @@ entry in that work item's commit. On restart, this section plus
   bare "MongoDB" product usage in the manual or this entry.
 - Deviations: none.
 - Subagent: none.
+
+---
+
+## 9. Post-implementation refinements (2026-07-02)
+
+Small changes made after the work items above completed, during review of PR
+#766. Recorded here so a future reviewer can see what moved after the migration
+and why. None of these change the public API locked in the design doc section 13;
+the one rename below keeps every exported symbol name identical.
+
+### 9.1 Planning docs relocated
+
+The three planning docs (the design doc, this plan, and the migration manual)
+were moved from the flat `docs/ai-and-plans/` into
+`docs/ai-and-plans/PRs/766-webview-ext-package-redesign/`, matching the existing
+per-PR convention in that folder. Earlier progress-log entries (for example
+WI-G1) still cite the old flat path; those are historical and were left as-is.
+
+### 9.2 Middleware filenames de-stuttered
+
+`host/middleware/loggingMiddleware.ts` became `logging.ts` and
+`telemetryMiddleware.ts` became `telemetry.ts` (with their `.test.ts` siblings),
+via `git mv`. Every exported symbol (`loggingMiddlewareBody`,
+`telemetryMiddlewareBody`, `ProcedureLogger`, `TelemetryRunner`, and so on) is
+unchanged. Why: inside a folder already named `middleware/`, the `Middleware`
+filename suffix stuttered; the shorter names read cleaner while the explicit
+`*Body` symbol names keep call sites self-documenting. All five path imports were
+updated and the package rebuilt clean (Jest 75/75).
+
+### 9.3 Per-folder READMEs added to the package
+
+A short README was added to each `packages/vscode-ext-webview/src/` folder
+(`src`, `shared`, `host`, `host/middleware`, `webview`, `react`, `testing`). Each
+states the folder's side (host / webview / shared), its import path, its
+contents, and the import rules it enforces (for example: `.` imports no `vscode`
+or `react`; `./webview` imports no `react`). The audience is humans and coding
+agents. These files are not published (only `dist` and the root README ship), so
+the npm artifact is unaffected. Why: give a reader or agent an at-a-glance map of
+the four-subpath layout without tracing the exports.
+
+### 9.4 Naming reviewed and deliberately kept
+
+Three names were re-examined and kept, recorded here so reviewers know they were
+considered rather than overlooked:
+
+- `openAppWebview` (the consumer preset) was kept over `openWebviewHelper` /
+  `openDocumentDbWebview`. The `App` prefix mirrors `appRouter` / `AppRouter` /
+  `AppWebviewController`; a `Helper` suffix would carry no domain meaning.
+- The thin `_integration/useTrpcClient` wrapper was kept: it pins the
+  `<AppRouter>` type argument (one binding point) and gives an import seam for
+  future cross-cutting changes.
+- `WebviewRegistry` was kept: it is the required viewType-to-component dispatch
+  table for a single bundle serving multiple panels, and the source of the
+  `WebviewName` cross-side safety type. Removing it would only relocate the map
+  or drop the type check.
+
+### 9.5 Consumer docs refreshed
+
+`src/webviews/_integration/README.md` was brought up to date: it dropped the
+deleted `WebviewControllerBase.ts`, added `trpc.ts`, moved telemetry ownership to
+`trpc.ts`, refreshed the data-flow and closing notes, and expanded the file table
+with a `Side` column and fuller per-file purpose. `WebviewRegistry.ts` gained a
+doc comment explaining why it exists and a four-step "how to add a webview", and
+its stale `WebviewName` comment (which referenced the removed `WebviewController`)
+was corrected.

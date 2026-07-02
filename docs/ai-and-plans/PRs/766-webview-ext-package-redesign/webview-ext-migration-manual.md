@@ -5,6 +5,11 @@ It records the before/after of moving `@microsoft/vscode-ext-react-webview` to
 `@microsoft/vscode-ext-webview`, both as a record for our team and as a template
 for the parallel vscode-cosmosdb adoption PR.
 
+Reviewed and current as of 2026-07-02, after the post-implementation refinements
+recorded in the implementation plan (section 9). The refinements did not change
+any exported symbol or import path, so the rename map and code samples below
+still hold verbatim.
+
 This is a DocumentDB extension that speaks the MongoDB-compatible wire protocol;
 references below to "DocumentDB" mean the database service, and "MongoDB API"
 means the wire protocol / query language.
@@ -28,18 +33,18 @@ a client hook (`useTrpcClient`) and an events hook (`useRpcEvents`).
 
 ### Package and folder
 
-| Old                                       | New                                  |
-| ----------------------------------------- | ------------------------------------ |
-| `@microsoft/vscode-ext-react-webview`     | `@microsoft/vscode-ext-webview`      |
-| version `0.8.0-preview`                   | version `0.9.0-preview`              |
-| `packages/vscode-ext-react-webview/`      | `packages/vscode-ext-webview/`       |
+| Old                                   | New                             |
+| ------------------------------------- | ------------------------------- |
+| `@microsoft/vscode-ext-react-webview` | `@microsoft/vscode-ext-webview` |
+| version `0.8.0-preview`               | version `0.9.0-preview`         |
+| `packages/vscode-ext-react-webview/`  | `packages/vscode-ext-webview/`  |
 
 ### Subpaths (2 to 4)
 
-| Old subpath                                      | New subpath(s)                                                                 |
-| ------------------------------------------------ | ------------------------------------------------------------------------------ |
-| `.` (webview client + React, mixed)              | `.` (shared, no `vscode` / no `react`), `./webview` (client), `./react` (hooks) |
-| `./server` (host)                                | `./host`                                                                        |
+| Old subpath                         | New subpath(s)                                                                  |
+| ----------------------------------- | ------------------------------------------------------------------------------- |
+| `.` (webview client + React, mixed) | `.` (shared, no `vscode` / no `react`), `./webview` (client), `./react` (hooks) |
+| `./server` (host)                   | `./host`                                                                        |
 
 Import-side rules the split enforces:
 
@@ -50,17 +55,17 @@ Import-side rules the split enforces:
 
 ### Symbols
 
-| Old (`@microsoft/vscode-ext-react-webview...`)            | New                                                                 |
-| -------------------------------------------------------- | ------------------------------------------------------------------- |
-| `/server`: `publicProcedure`, `router`                   | `.`: `initWebviewTrpc()` returns `{ router, publicProcedure, createCallerFactory, middleware }`; `publicProcedure`, `router` also re-exported from `.` |
-| `/server`: `BaseRouterContext`                           | `.`: `BaseRouterContext`                                            |
-| `/server`: `createMiddleware`                            | RETIRED. Use `telemetryMiddlewareBody` / `loggingMiddlewareBody` from `./host` via `publicProcedure.use(...)` |
-| `/server`: `TelemetryContext`                            | RETIRED. Use `ProcedureTelemetry` + `TelemetryRunner` + `ProcedureLogger` from `./host` |
-| `/server`: `WebviewController` (bespoke constructor)     | `./host`: `WebviewController` (single options-bag constructor) and the `openWebview(extensionContext, options)` factory |
-| `.`: `vscodeLink`, `errorLink`, `createEventChannel`     | `./webview`: `vscodeLink`, `errorLink`, `createEventChannel` / `RpcEventChannel`; plus new `connectTrpc` |
-| `.`: `useTrpcClient` (tuple return)                      | `./react`: `useTrpcClient()` returns the client directly; new `useRpcEvents()` returns the event channel |
-| `.`: `UseTrpcClientOptions`                              | RETIRED                                                             |
-| `.`: `useConfiguration`, `WebviewContext`, `WithWebviewContext` | `./react`: same names                                       |
+| Old (`@microsoft/vscode-ext-react-webview...`)                  | New                                                                                                                                                    |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `/server`: `publicProcedure`, `router`                          | `.`: `initWebviewTrpc()` returns `{ router, publicProcedure, createCallerFactory, middleware }`; `publicProcedure`, `router` also re-exported from `.` |
+| `/server`: `BaseRouterContext`                                  | `.`: `BaseRouterContext`                                                                                                                               |
+| `/server`: `createMiddleware`                                   | RETIRED. Use `telemetryMiddlewareBody` / `loggingMiddlewareBody` from `./host` via `publicProcedure.use(...)`                                          |
+| `/server`: `TelemetryContext`                                   | RETIRED. Use `ProcedureTelemetry` + `TelemetryRunner` + `ProcedureLogger` from `./host`                                                                |
+| `/server`: `WebviewController` (bespoke constructor)            | `./host`: `WebviewController` (single options-bag constructor) and the `openWebview(extensionContext, options)` factory                                |
+| `.`: `vscodeLink`, `errorLink`, `createEventChannel`            | `./webview`: `vscodeLink`, `errorLink`, `createEventChannel` / `RpcEventChannel`; plus new `connectTrpc`                                               |
+| `.`: `useTrpcClient` (tuple return)                             | `./react`: `useTrpcClient()` returns the client directly; new `useRpcEvents()` returns the event channel                                               |
+| `.`: `UseTrpcClientOptions`                                     | RETIRED                                                                                                                                                |
+| `.`: `useConfiguration`, `WebviewContext`, `WithWebviewContext` | `./react`: same names                                                                                                                                  |
 
 New primitives that had no old equivalent:
 
@@ -87,7 +92,11 @@ the event-name semantics stay entirely in consumer hands.
 DocumentDB's adapter lives in `src/webviews/_integration/trpc.ts`:
 
 ```typescript
-import { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
+import {
+  telemetryMiddlewareBody,
+  type ProcedureTelemetry,
+  type TelemetryRunner,
+} from '@microsoft/vscode-ext-webview/host';
 import { callWithTelemetryAndErrorHandling, parseError, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 
 export type WithTelemetry<T extends { telemetry?: unknown }> = Omit<T, 'telemetry'> & { telemetry: ITelemetryContext };
@@ -110,7 +119,9 @@ const documentDbTelemetryRunner: TelemetryRunner = {
   },
 };
 
-export const publicProcedureWithTelemetry = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, documentDbTelemetryRunner));
+export const publicProcedureWithTelemetry = publicProcedure.use((opts) =>
+  telemetryMiddlewareBody(opts, documentDbTelemetryRunner),
+);
 ```
 
 Two consequences worth calling out:
@@ -195,7 +206,7 @@ import { WebviewController } from '@microsoft/vscode-ext-react-webview/server';
 export class MyViewController extends WebviewController {
   constructor(initialData: MyConfig) {
     super(ext.context, title, 'myView', initialData);
-    this.setupTrpc({ dbExperience: API.DocumentDB, webviewName: 'myView', /* ... */ });
+    this.setupTrpc({ dbExperience: API.DocumentDB, webviewName: 'myView' /* ... */ });
   }
 }
 ```
@@ -210,7 +221,7 @@ import { WEBVIEW_CONFIG } from '../../_integration/configuration';
 
 export class MyViewController extends WebviewController<AppRouter, MyConfig, BaseRouterContext> {
   constructor(initialData: MyConfig) {
-    const context: BaseRouterContext = { dbExperience: API.DocumentDB, webviewName: 'myView', /* ... */ };
+    const context: BaseRouterContext = { dbExperience: API.DocumentDB, webviewName: 'myView' /* ... */ };
     super({
       extensionContext: ext.context,
       title,
@@ -269,7 +280,7 @@ Then each panel becomes a factory function:
 
 ```typescript
 export function openMyViewPanel(initialData: MyConfig): AppWebviewController<MyConfig> {
-  const context: BaseRouterContext = { dbExperience: API.DocumentDB, webviewName: 'myView', /* ... */ };
+  const context: BaseRouterContext = { dbExperience: API.DocumentDB, webviewName: 'myView' /* ... */ };
   return openAppWebview({ title, webviewName: 'myView', config: initialData, context });
 }
 ```
@@ -346,6 +357,11 @@ context.subscriptions.push(disposable);
 live maps of in-flight operations and subscriptions (useful for diagnostics or
 custom cancellation). The webview side connects with `connectTrpc(vscodeApi)`
 from `./webview`, which returns `{ client, events }` with no React dependency.
+
+When navigating the package itself, each folder under
+`packages/vscode-ext-webview/src/` (`shared`, `host`, `host/middleware`,
+`webview`, `react`) carries a short README describing its side, import path, and
+contents. Start there for an at-a-glance map.
 
 ---
 
