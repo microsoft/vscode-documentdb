@@ -5,7 +5,7 @@
 
 import { type BaseRouterContext } from '../../shared/BaseRouterContext';
 import { initWebviewTrpc } from '../../shared/initWebviewTrpc';
-import { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from './telemetryMiddleware';
+import { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from './telemetry';
 
 function createCapturingRunner(): {
     runner: TelemetryRunner;

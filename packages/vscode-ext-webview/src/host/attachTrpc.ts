@@ -23,7 +23,7 @@ import { type Disposable, type WebviewPanel } from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
 import { createCallerFactory as defaultCreateCallerFactory } from '../shared/initWebviewTrpc';
 import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
-import { type ProcedureLogger } from './middleware/loggingMiddleware';
+import { type ProcedureLogger } from './middleware/logging';
 import { type ProcedureType } from './middleware/types';
 
 /**

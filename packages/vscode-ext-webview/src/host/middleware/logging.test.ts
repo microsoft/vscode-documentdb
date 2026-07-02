@@ -5,7 +5,7 @@
 
 import { type BaseRouterContext } from '../../shared/BaseRouterContext';
 import { initWebviewTrpc } from '../../shared/initWebviewTrpc';
-import { loggingMiddlewareBody, type ProcedureLogEntry, type ProcedureLogger } from './loggingMiddleware';
+import { loggingMiddlewareBody, type ProcedureLogEntry, type ProcedureLogger } from './logging';
 
 function createCapturingLogger(): { logger: ProcedureLogger; entries: ProcedureLogEntry[] } {
     const entries: ProcedureLogEntry[] = [];

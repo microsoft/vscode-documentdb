@@ -9,7 +9,7 @@ import { initWebviewTrpc } from '../shared/initWebviewTrpc';
 import { TypedEventSink } from '../shared/TypedEventSink';
 import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
 import { attachTrpc } from './attachTrpc';
-import { type ProcedureLogEntry, type ProcedureLogger } from './middleware/loggingMiddleware';
+import { type ProcedureLogEntry, type ProcedureLogger } from './middleware/logging';
 
 type PostedMessage = { id: string; result?: unknown; error?: { message: string }; complete?: boolean };
 

@@ -10,13 +10,8 @@
  * `publicProcedure.use((opts) => body(opts, adapter))`.
  */
 
-export {
-    consoleProcedureLogger,
-    loggingMiddlewareBody,
-    type ProcedureLogEntry,
-    type ProcedureLogger,
-} from './loggingMiddleware';
-export { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from './telemetryMiddleware';
+export { consoleProcedureLogger, loggingMiddlewareBody, type ProcedureLogEntry, type ProcedureLogger } from './logging';
+export { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from './telemetry';
 export {
     type MiddlewareResultLike,
     type ProcedureErrorLike,

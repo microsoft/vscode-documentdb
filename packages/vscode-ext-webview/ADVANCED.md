@@ -25,11 +25,11 @@ across four entry points; see [Tiers](#tiers-and-when-to-use-each) below.
 The package is three tiers stacked on a shared base. Pick the lowest tier that
 solves your problem; each lower tier is more flexible and more verbose.
 
-| Tier              | Subpath                                       | Use it when                                                                                     |
-| ----------------- | --------------------------------------------- | ----------------------------------------------------------------------------------------------- |
-| Front door        | `openWebview` (`./host`) + `./react` hooks    | You want a panel, a router, and React hooks with the least ceremony. This is the README path.    |
-| Panel primitive   | `WebviewController` / `attachTrpc` (`./host`)  | You own the `vscode.WebviewPanel` lifecycle, or you need controller subclass hooks.              |
-| Transport primitive | `connectTrpc` / `vscodeLink` (`./webview`)   | You use a UI framework other than React, or you need a bespoke client with custom links.         |
+| Tier                | Subpath                                       | Use it when                                                                                   |
+| ------------------- | --------------------------------------------- | --------------------------------------------------------------------------------------------- |
+| Front door          | `openWebview` (`./host`) + `./react` hooks    | You want a panel, a router, and React hooks with the least ceremony. This is the README path. |
+| Panel primitive     | `WebviewController` / `attachTrpc` (`./host`) | You own the `vscode.WebviewPanel` lifecycle, or you need controller subclass hooks.           |
+| Transport primitive | `connectTrpc` / `vscodeLink` (`./webview`)    | You use a UI framework other than React, or you need a bespoke client with custom links.      |
 
 The shared `.` entry (router builders, `TypedEventSink`, wire types) sits under
 all three and imports neither `vscode` nor React.
@@ -73,8 +73,7 @@ it logs one structured entry per completed call (see
 type. Destructure what you need:
 
 ```ts
-const { router, publicProcedure, createCallerFactory, middleware } =
-  initWebviewTrpc<RouterContext>();
+const { router, publicProcedure, createCallerFactory, middleware } = initWebviewTrpc<RouterContext>();
 ```
 
 - `router` builds (sub)routers.
@@ -247,9 +246,7 @@ Define the event union and the events router:
 // _integration/myViewEventsRouter.ts
 import { initWebviewTrpc, type BaseRouterContext, type TypedEventSink } from '@microsoft/vscode-ext-webview';
 
-export type MyViewEvent =
-  | { type: 'progress'; percent: number }
-  | { type: 'completed'; durationMs: number };
+export type MyViewEvent = { type: 'progress'; percent: number } | { type: 'completed'; durationMs: number };
 
 type MyViewRouterContext = BaseRouterContext & {
   eventSink: TypedEventSink<MyViewEvent>;

@@ -9,7 +9,7 @@ import * as path from 'path';
 import * as vscode from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
 import { attachTrpc, type WebviewCallerFactory } from './attachTrpc';
-import { consoleProcedureLogger, type ProcedureLogger } from './middleware/loggingMiddleware';
+import { consoleProcedureLogger, type ProcedureLogger } from './middleware/logging';
 
 /**
  * Describes where the bundled webview JavaScript lives on disk relative to the
