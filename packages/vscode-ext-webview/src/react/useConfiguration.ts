@@ -22,8 +22,17 @@ declare global {
  */
 export function useConfiguration<T>(): T {
     const [configuration] = useState<T>(() => {
-        const configString = decodeURIComponent(window.config?.__initialData ?? '{}');
-        return JSON.parse(configString) as T;
+        try {
+            const configString = decodeURIComponent(window.config?.__initialData ?? '{}');
+            return JSON.parse(configString) as T;
+        } catch (error) {
+            // A malformed or missing `__initialData` payload must not crash the
+            // webview on first render (which would white-screen the view). Fall back
+            // to an empty config and log so the problem is diagnosable in the webview
+            // devtools console.
+            console.error('[vscode-ext-webview] Failed to parse webview configuration; using empty config.', error);
+            return {} as T;
+        }
     });
 
     return configuration;
