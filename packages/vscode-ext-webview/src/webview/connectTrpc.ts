@@ -99,9 +99,13 @@ export function connectTrpc<TRouter extends AnyRouter>(
     // response has been consumed, so the listener is per-operation.
     const onReceive = (callback: (message: VsCodeLinkResponseMessage) => void): (() => void) => {
         const handler = (event: MessageEvent): void => {
-            // Basic type guard: only forward tRPC response messages.
-            if ((event.data as VsCodeLinkResponseMessage).id) {
-                callback(event.data as VsCodeLinkResponseMessage);
+            // Structural guard (R766-N01): the webview `window` bus may also carry
+            // non-tRPC messages (VS Code internals, other libraries, or a legacy
+            // `postMessage` protocol). Only forward objects shaped like a response;
+            // reading `.id` off a `null` or primitive `event.data` would throw.
+            const data: unknown = event.data;
+            if (data !== null && typeof data === 'object' && 'id' in data) {
+                callback(data as VsCodeLinkResponseMessage);
             }
         };
 

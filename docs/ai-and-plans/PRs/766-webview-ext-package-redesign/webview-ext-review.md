@@ -716,8 +716,8 @@ follow-up pass.
 
 | ID | Title | Why it is here |
 | --- | --- | --- |
-| R766-01 | `attachTrpc` foreign-message guard | Deliberately skipped; no cost to current consumers (analysis below). |
-| R766-N01 | Webview inbound `event.data` guard | Bundled with R766-01 (both transport edges together). |
+| R766-01 | `attachTrpc` foreign-message guard | ✅ Implemented in Iteration 2 (structural guard + throw-safe listener + foreign-message test). |
+| R766-N01 | Webview inbound `event.data` guard | ✅ Implemented in Iteration 2 (structural `onReceive` guard + test). |
 | R766-N02 | `createCallerFactory` ergonomics | **Decided: option A** (pass `WebviewTrpc`); rationale + tRPC-only analysis below. |
 | R766-N03 | Inline-script hardening | Pursuing **option B** (JSON data block); side effects below. |
 | R766-N05 | Observer exceptions → telemetry | Options only, per request; not implemented. |
@@ -725,6 +725,15 @@ follow-up pass.
 | R766-S04 | Per-operation listener design | Doc reword shipped; Iteration 2 asks for a concurrency telemetry signal (peak/avg in-flight ops) to decide on evidence. |
 
 ## R766-01 — side effects on existing projects, and A/B/C re-analysis
+
+> ✅ **Implemented in Iteration 2** [R766-01]. Shipped **A + B** together in
+> `attachTrpc`: a structural `isTransportRequestMessage` guard drops any inbound
+> payload that is not a well-formed transport request (a non-null object with an
+> `id` string and an `op` object whose `type` is a string), and the top-level
+> `async` listener now wraps dispatch in `try/catch` so no handler throw can
+> escape as an unhandled rejection. Added a foreign-message unit test (send junk /
+> `null` → ignored and nothing posted; a later query still resolves). The analysis
+> below is retained as the rationale.
 
 **Does skipping this hurt existing projects? No.** R766-01 is entirely inside
 `attachTrpc`, the *bring-your-own-panel* primitive. Today the only consumer
@@ -773,6 +782,13 @@ when the first bring-your-own-panel embedder is on the horizon, or proactively
 before `attachTrpc` is advertised widely — whichever comes first.
 
 ## R766-N01 — bundle with R766-01
+
+> ✅ **Implemented in Iteration 2** [R766-N01]. `connectTrpc`'s `onReceive` now
+> guards `event.data` (`data !== null && typeof data === 'object' && 'id' in
+> data`) before forwarding, so a `null` / primitive / foreign `window` message can
+> no longer throw. Covered by a new test that delivers `null` / a string / an
+> `id`-less object mid-flight and asserts no throw and that the real response
+> still resolves.
 
 Same shape on the webview side: `connectTrpc`'s `onReceive` reads
 `(event.data as …).id` and throws if `event.data` is `null`/`undefined`. Same

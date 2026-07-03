@@ -120,6 +120,31 @@ function wrapInTrpcErrorMessage(error: unknown, operationId: string) {
 }
 
 /**
+ * Runtime guard: is this inbound `postMessage` payload a well-formed tRPC
+ * transport request, as opposed to unrelated traffic on a shared panel?
+ *
+ * `attachTrpc` behaves as a guest on `panel.webview`: a bring-your-own-panel
+ * embedder may route its own `postMessage` protocol over the same bus. Foreign
+ * messages have no `op`, so touching `message.op.type` would throw. This guard
+ * lets the dispatcher ignore anything that is not shaped like a
+ * {@link VsCodeLinkRequestMessage}. It intentionally checks structure only (an
+ * `id` string plus an `op` object with a string `type`) rather than a fixed set
+ * of op types, so forward-compatible tRPC operations still dispatch.
+ */
+function isTransportRequestMessage(message: unknown): message is VsCodeLinkRequestMessage {
+    if (message === null || typeof message !== 'object') {
+        return false;
+    }
+    const op = (message as { op?: unknown }).op;
+    return (
+        typeof (message as { id?: unknown }).id === 'string' &&
+        op !== null &&
+        typeof op === 'object' &&
+        typeof (op as { type?: unknown }).type === 'string'
+    );
+}
+
+/**
  * Attaches a tRPC dispatch pump to a webview panel.
  *
  * Listens for {@link VsCodeLinkRequestMessage}s on `panel.webview`, routes each
@@ -341,23 +366,43 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
         }
     };
 
-    const listener = panel.webview.onDidReceiveMessage(async (message: VsCodeLinkRequestMessage) => {
-        switch (message.op.type) {
-            case 'subscription':
-                await handleSubscriptionMessage(message);
-                break;
+    const listener = panel.webview.onDidReceiveMessage(async (message: unknown) => {
+        // R766-01: `attachTrpc` may be attached to a panel that also carries a
+        // consumer's own (non-tRPC) `postMessage` traffic. Such a message has no
+        // `op`, so dispatching it would throw; because this listener is `async`
+        // that throw would surface as an *unhandled promise rejection*. Ignore
+        // anything that is not shaped like a transport request, exactly as a guest
+        // on a shared bus should.
+        if (!isTransportRequestMessage(message)) {
+            return;
+        }
 
-            case 'subscription.stop':
-                handleSubscriptionStopMessage(message);
-                break;
+        // R766-01 (defence in depth): keep any handler throw from escaping this
+        // async listener as an unhandled rejection. The per-operation handlers
+        // already post tRPC error responses to the client for procedure failures;
+        // this guards the dispatch/control path itself (and the whole class of
+        // future bugs), so one malformed operation can never take down the pump.
+        try {
+            switch (message.op.type) {
+                case 'subscription':
+                    await handleSubscriptionMessage(message);
+                    break;
 
-            case 'abort':
-                handleAbortMessage(message);
-                break;
+                case 'subscription.stop':
+                    handleSubscriptionStopMessage(message);
+                    break;
 
-            default:
-                await handleDefaultMessage(message);
-                break;
+                case 'abort':
+                    handleAbortMessage(message);
+                    break;
+
+                default:
+                    await handleDefaultMessage(message);
+                    break;
+            }
+        } catch {
+            // Swallow: a throw here would otherwise become an unhandled rejection.
+            // Per-operation handlers own client-facing error reporting.
         }
     });
 

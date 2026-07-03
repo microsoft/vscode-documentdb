@@ -357,4 +357,29 @@ describe('attachTrpc', () => {
 
         expect(stub.posted).toEqual([{ id: 'q1', result: 'hello' }]);
     });
+
+    it('ignores foreign (non-tRPC) messages and still serves later queries [R766-01]', async () => {
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            greet: publicProcedure.query(() => 'hello'),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory);
+
+        // Traffic a bring-your-own-panel embedder might route over the same bus.
+        // None is a well-formed transport request, so each must be ignored without
+        // throwing (the listener is async, so a throw would become an unhandled
+        // rejection) and none may produce a response.
+        await expect(
+            stub.send({ command: 'somethingElse', value: 42 } as unknown as VsCodeLinkRequestMessage),
+        ).resolves.toBeUndefined();
+        await expect(stub.send(null as unknown as VsCodeLinkRequestMessage)).resolves.toBeUndefined();
+        await expect(stub.send({ id: 'x' } as unknown as VsCodeLinkRequestMessage)).resolves.toBeUndefined();
+        expect(stub.posted).toHaveLength(0);
+
+        // A real tRPC query still dispatches normally afterwards.
+        await stub.send(makeMessage('q1', 'query', 'greet'));
+        expect(stub.posted).toEqual([{ id: 'q1', result: 'hello' }]);
+    });
 });

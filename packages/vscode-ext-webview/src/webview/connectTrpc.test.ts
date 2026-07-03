@@ -128,4 +128,31 @@ describe('connectTrpc', () => {
         expect(onAborted).toHaveBeenCalledWith(expect.objectContaining({ type: 'query', path: 'greet' }));
         expect(onError).not.toHaveBeenCalled();
     });
+
+    it('ignores foreign / null window messages and still resolves queries [R766-N01]', async () => {
+        const sent: { id: string }[] = [];
+        const api: VsCodeApiLike = {
+            postMessage(message: unknown) {
+                sent.push(message as { id: string });
+            },
+        };
+        const { client } = connectTrpc<AppRouter>(api);
+
+        // Start a query so the per-operation response listener is registered on
+        // `window`, then let all microtasks settle so the link has subscribed.
+        const pending = client.greet.query();
+        await new Promise((resolve) => setTimeout(resolve, 0));
+        expect(sent).toHaveLength(1);
+
+        // Foreign traffic on the shared window bus must be ignored without throwing
+        // (reading `.id` off `null` threw before R766-N01) and must not resolve the
+        // pending query.
+        expect(() => deliver(null)).not.toThrow();
+        expect(() => deliver('a string')).not.toThrow();
+        expect(() => deliver({ notAResponse: true })).not.toThrow();
+
+        // The matching response still flows through and resolves the query.
+        deliver({ id: sent[0].id, result: 'pong' });
+        await expect(pending).resolves.toBe('pong');
+    });
 });
