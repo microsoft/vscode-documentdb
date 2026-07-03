@@ -37,7 +37,7 @@ import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { appRouter, type AppRouter, type BaseRouterContext } from './appRouter';
 import { WEBVIEW_CONFIG } from './configuration';
-import { createCallerFactory } from './trpc';
+import { trpc } from './trpc';
 import { type WebviewName } from './WebviewRegistry';
 
 /**
@@ -76,7 +76,7 @@ export function openAppWebview<TConfiguration>(
         title: options.title,
         viewType: options.webviewName,
         router: appRouter,
-        createCallerFactory,
+        trpc,
         context: options.context,
         config: options.config,
         sourceLayout: WEBVIEW_CONFIG.bundle,

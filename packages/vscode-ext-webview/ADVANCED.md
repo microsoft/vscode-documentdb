@@ -42,13 +42,13 @@ created it, or you need custom panel options), wire tRPC onto it directly.
 
 ```ts
 import { attachTrpc } from '@microsoft/vscode-ext-webview/host';
-import { appRouter, createCallerFactory } from './webviews/_integration/appRouter';
+import { appRouter, trpc } from './webviews/_integration/appRouter';
 
 const { disposable, activeOperations, activeSubscriptions } = attachTrpc(
   panel, // your vscode.WebviewPanel
   { workspaceRoot: '/path' }, // the router context
   appRouter,
-  createCallerFactory, // from your initWebviewTrpc(...) result; optional
+  trpc.createCallerFactory, // from your initWebviewTrpc(...) result; optional
   consoleProcedureLogger, // optional dispatch logger; omit for none
 );
 
@@ -79,17 +79,34 @@ const { router, publicProcedure, createCallerFactory, middleware } = initWebview
 - `router` builds (sub)routers.
 - `publicProcedure` is the base procedure; its `ctx` is typed as `TContext`.
 - `createCallerFactory` builds a server-side caller for a router. The host
-  dispatcher (`attachTrpc` / `WebviewController` / `openWebview`) needs it to
-  invoke procedures with full type inference. Pass it via the `createCallerFactory`
-  option / argument.
+  dispatcher needs it to invoke procedures with full type inference.
 - `middleware` builds reusable middleware bound to this instance (used by the
   telemetry adapters below).
 
-If you do not pass your own `createCallerFactory`, the host falls back to the
-package's shared default instance, which works only when your router is built
-with the package's default `router` / `publicProcedure` (the ones exported from
-`.`). When you call `initWebviewTrpc<RouterContext>()` to get a typed context,
-always re-export and pass its `createCallerFactory`.
+**With `openWebview` / `WebviewController` (recommended): pass the whole
+instance.** Export your `initWebviewTrpc<RouterContext>()` result as `trpc` and
+hand it to the `trpc` option; the dispatcher reads `trpc.createCallerFactory`
+off it. Because the factory travels with the instance that built your router it
+can never be mismatched, and there is no separate `createCallerFactory` to
+re-export:
+
+```ts
+export const trpc = initWebviewTrpc<RouterContext>();
+export const appRouter = trpc.router({ /* … */ });
+
+openWebview(ctx, { router: appRouter, trpc, context, config, sourceLayout });
+```
+
+**With `attachTrpc` (bring-your-own-panel): pass the factory explicitly.** The
+low-level primitive takes `createCallerFactory` as its (optional) fourth
+argument, as shown above, so embedders that construct tRPC their own way stay in
+full control.
+
+If you provide neither, the host falls back to the package's shared default
+instance, which works only when your router is built with the package's default
+`router` / `publicProcedure` (the ones exported from `.`). The old pattern of
+re-exporting and passing a standalone `createCallerFactory` to `openWebview` is
+deprecated in favour of the `trpc` option, but still honored.
 
 ## Telemetry adapters
 

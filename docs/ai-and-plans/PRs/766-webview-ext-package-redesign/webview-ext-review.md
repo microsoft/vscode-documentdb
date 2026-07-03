@@ -718,7 +718,7 @@ follow-up pass.
 | --- | --- | --- |
 | R766-01 | `attachTrpc` foreign-message guard | ✅ Implemented in Iteration 2 (structural guard + throw-safe listener + foreign-message test). |
 | R766-N01 | Webview inbound `event.data` guard | ✅ Implemented in Iteration 2 (structural `onReceive` guard + test). |
-| R766-N02 | `createCallerFactory` ergonomics | **Decided: option A** (pass `WebviewTrpc`); rationale + tRPC-only analysis below. |
+| R766-N02 | `createCallerFactory` ergonomics | ✅ Implemented in Iteration 2 (option A: `trpc` instance option; consumer adopted; `createCallerFactory` deprecated). |
 | R766-N03 | Inline-script hardening | Pursuing **option B** (JSON data block); side effects below. |
 | R766-N05 | Observer exceptions → telemetry | Options only, per request; not implemented. |
 | R766-N06 | Create-or-reveal helper | Unchanged: document the pattern, don't build it yet. |
@@ -798,6 +798,23 @@ guard (`data && typeof data === 'object' && 'id' in data`) **in the same pass as
 R766-01** so both transport edges reject foreign traffic consistently.
 
 ## R766-N02 — consumer code: today vs option A vs option B
+
+> ✅ **Implemented in Iteration 2** [R766-N02]. `openWebview` / `WebviewController`
+> gained a `trpc` option; the dispatcher reads `trpc.createCallerFactory` off it.
+> The standalone `createCallerFactory` option is now `@deprecated` (still honored),
+> and the low-level `attachTrpc` primitive keeps its explicit `callerFactory`
+> argument for embedders. DocumentDB's `openAppWebview` now passes `trpc` instead
+> of re-exporting `createCallerFactory`. Added an `openWebview` test that wires the
+> factory purely from the `trpc` option; README + ADVANCED.md updated.
+>
+> **Minor deviation from the literal `trpc: WebviewTrpc<Ctx>` plan** (confidence
+> > 80%, verified by a clean consumer typecheck): the option is typed
+> `Pick<WebviewTrpc<TContext>, 'createCallerFactory'>`. The reference consumer
+> builds procedures on a *base-context* instance and narrows `ctx` per call, so
+> its instance context is a base of the controller `TContext`; a strict
+> `WebviewTrpc<TContext>` would reject it. The controller only ever reads
+> `createCallerFactory`, and the `Pick` accepts that instance by parameter
+> contravariance — no cast, and the mismatch-proofing is unchanged.
 
 **Decision: option A** (accept the `WebviewTrpc` instance). Rationale below,
 including why A and B look identical at the call site but are not, and what each

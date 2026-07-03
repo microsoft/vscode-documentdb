@@ -8,6 +8,7 @@ import { randomBytes } from 'crypto';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
+import { type WebviewTrpc } from '../shared/initWebviewTrpc';
 import { attachTrpc, type WebviewCallerFactory } from './attachTrpc';
 import { consoleProcedureLogger, type ProcedureLogger } from './middleware/logging';
 
@@ -65,9 +66,31 @@ export interface WebviewControllerOptions<
     router: TRouter;
 
     /**
+     * Your tRPC instance from `initWebviewTrpc<TContext>()`.
+     *
+     * When provided, the dispatcher reads `trpc.createCallerFactory` off it, so
+     * the caller factory always belongs to the same instance that built `router`
+     * and can never be mismatched — and there is no separate factory to export or
+     * pass. This is the recommended way to wire a typed-context router.
+     *
+     * Only `createCallerFactory` is read, so any `initWebviewTrpc(...)` result is
+     * accepted even when its instance context is a base of `TContext` (e.g. when
+     * procedures build on a base-context instance and narrow `ctx` per call). If
+     * both `trpc` and {@link WebviewControllerOptions.createCallerFactory} are
+     * given, `trpc` wins. When omitted, the package's shared default instance is
+     * used — correct only for routers built from the package's default
+     * `router` / `publicProcedure`.
+     */
+    trpc?: Pick<WebviewTrpc<TContext>, 'createCallerFactory'>;
+
+    /**
      * tRPC `createCallerFactory` from your own `initWebviewTrpc(...)` result.
-     * Pass it when `router` is built with a typed context; defaults to the
-     * package's shared instance otherwise.
+     *
+     * @deprecated Prefer {@link WebviewControllerOptions.trpc}: pass the whole
+     * `initWebviewTrpc<TContext>()` result and the caller factory is read from it,
+     * which cannot be mismatched with `router`. This standalone option is still
+     * honored (and the low-level {@link attachTrpc} primitive still takes an
+     * explicit `callerFactory`) for embedders who bring their own tRPC instance.
      */
     createCallerFactory?: WebviewCallerFactory;
 
@@ -209,11 +232,22 @@ export class WebviewController<
         // it to its panel and registers the returned disposable so the listener
         // and all in-flight operations are torn down on dispose. The dispatch
         // logger defaults to the zero-config console sink.
+        // The dispatch pump (message handling, abort / subscription lifecycle)
+        // lives in the free `attachTrpc` primitive. The controller simply wires
+        // it to its panel and registers the returned disposable so the listener
+        // and all in-flight operations are torn down on dispose. The dispatch
+        // logger defaults to the zero-config console sink.
+        //
+        // R766-N02: prefer the caller factory carried by the `trpc` instance (it
+        // cannot be mismatched with `router`); fall back to the deprecated
+        // standalone `createCallerFactory`, then to `attachTrpc`'s own default.
+        const callerFactory: WebviewCallerFactory | undefined =
+            this._options.trpc?.createCallerFactory ?? this._options.createCallerFactory;
         const { disposable } = attachTrpc(
             this._panel,
             context,
             this._options.router,
-            this._options.createCallerFactory,
+            callerFactory,
             this._options.logger ?? consoleProcedureLogger,
         );
         this.registerDisposable(disposable);

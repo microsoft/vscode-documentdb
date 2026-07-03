@@ -33,7 +33,7 @@ import { WebviewController, type WebviewControllerOptions } from './WebviewContr
  *   title: 'My View',
  *   viewType: 'myView',
  *   router: appRouter,
- *   createCallerFactory,
+ *   trpc,
  *   context: { ...myContext },
  *   config: { ...initialConfig },
  *   sourceLayout: { bundled: { dir: 'dist', file: 'views.js' }, dev: { dir: 'out', file: 'views.js' } },

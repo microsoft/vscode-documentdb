@@ -95,22 +95,23 @@ export type RouterContext = BaseRouterContext & {
   workspaceRoot: string;
 };
 
-const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<RouterContext>();
+export const trpc = initWebviewTrpc<RouterContext>();
 
-export const appRouter = router({
-  hello: publicProcedure
+export const appRouter = trpc.router({
+  hello: trpc.publicProcedure
     .input(z.object({ name: z.string() }))
     .query(({ input }) => ({ greeting: `Hello, ${input.name}!` })),
 });
 
 export type AppRouter = typeof appRouter;
-export { createCallerFactory };
 ```
 
 `initWebviewTrpc<TContext>()` returns the tRPC builders bound to your context
 type: `router`, `publicProcedure` (whose `ctx` is typed as `TContext`),
-`createCallerFactory` (used by the host dispatcher), and `middleware`. Re-export
-`createCallerFactory` so the host can hand it to the factory below.
+`createCallerFactory` (used by the host dispatcher), and `middleware`. Export the
+whole instance as `trpc` and pass it to `openWebview` (below): the dispatcher
+reads `trpc.createCallerFactory` off it, so the caller factory can never be
+mismatched with your router and there is nothing extra to re-export.
 
 **3. Open the panel (extension host)**
 
@@ -118,7 +119,7 @@ type: `router`, `publicProcedure` (whose `ctx` is typed as `TContext`),
 // src/extension.ts
 import * as vscode from 'vscode';
 import { openWebview } from '@microsoft/vscode-ext-webview/host';
-import { appRouter, createCallerFactory, type AppRouter, type RouterContext } from './webviews/_integration/appRouter';
+import { appRouter, trpc, type AppRouter, type RouterContext } from './webviews/_integration/appRouter';
 
 type MyViewConfig = { initialMessage: string };
 
@@ -129,7 +130,7 @@ export function activate(ctx: vscode.ExtensionContext) {
         title: 'My View',
         viewType: 'myView', // matches the React component registration
         router: appRouter,
-        createCallerFactory,
+        trpc,
         context: { workspaceRoot: vscode.workspace.workspaceFolders?.[0].uri.fsPath ?? '' },
         config: { initialMessage: 'ready' } satisfies MyViewConfig,
         sourceLayout: {

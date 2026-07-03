@@ -141,6 +141,35 @@ describe('openWebview', () => {
 
         expect(webview.posted).toContainEqual({ id: 'q1', result: 'hi' });
     });
+
+    it('wires the caller factory from the `trpc` instance option (R766-N02)', async () => {
+        // Pass the whole `initWebviewTrpc()` result via `trpc` and NO standalone
+        // `createCallerFactory`. The controller must read `trpc.createCallerFactory`
+        // off it, so the query dispatches against the same instance the router was
+        // built from.
+        const trpc = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = trpc.router({
+            greet: trpc.publicProcedure.query(() => 'hi from trpc'),
+        });
+        const controller = openWebview(makeContext(), {
+            title: 'My View',
+            viewType: 'myView',
+            router: appRouter,
+            trpc,
+            context: {} as BaseRouterContext,
+            config: { hello: 'world' },
+            sourceLayout,
+        });
+        const webview = mockWebview(controller);
+
+        webview.receive({
+            id: 'q1',
+            op: { id: 0, type: 'query', path: 'greet', input: undefined, context: {} },
+        } as VsCodeLinkRequestMessage);
+        await flush();
+
+        expect(webview.posted).toContainEqual({ id: 'q1', result: 'hi from trpc' });
+    });
 });
 
 describe('new WebviewController(options)', () => {

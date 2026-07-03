@@ -136,8 +136,10 @@ export const publicProcedureWithTelemetry = publicProcedure.use((opts) =>
     telemetryMiddlewareBody(opts, documentDbTelemetryRunner),
 );
 
-// Re-export the unprotected procedure builder, the router factory, and the
-// caller factory so per-view routers have a single import location for
-// everything they need, and the controller can invoke procedures against the
-// same tRPC instance the router was built with.
-export { createCallerFactory, publicProcedure, router };
+// Re-export the tRPC instance, the unprotected procedure builder, the router
+// factory, and the caller factory so per-view routers have a single import
+// location for everything they need, and the controller can invoke procedures
+// against the same tRPC instance the router was built with. Panel factories pass
+// `trpc` to `openAppWebview` (R766-N02) so the caller factory rides along with
+// the instance and cannot be mismatched with the router.
+export { createCallerFactory, publicProcedure, router, trpc };
