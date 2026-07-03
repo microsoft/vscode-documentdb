@@ -206,9 +206,9 @@ That is the complete data path: the React component calls
 `r.greeting`.
 
 `useTrpcClient<AppRouter>()` returns the client directly. The client (and the
-event channel from `useRpcEvents()`) is shared per webview: every component
-that calls the hook receives the same instance and the same single `message`
-listener, so there is no provider tree to wire up.
+event channel from `useRpcEvents()`) is shared per webview: every component that
+calls the hook receives the same instance, so there is no provider tree to wire
+up and cross-cutting observers see every call.
 
 ## Behind the scenes (advanced, optional)
 
