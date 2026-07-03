@@ -28,8 +28,15 @@
  *   - `dist_auto_duration_ms_*` — per-op latency, recorded for free.
  */
 
-import { consoleProcedureLogger, type ProcedureLogEntry, type ProcedureLogger } from '@microsoft/vscode-ext-webview/host';
-import { callWithAccumulatingTelemetry, type TelemetryWithDistributions } from '../../utils/callWithAccumulatingTelemetry';
+import {
+    consoleProcedureLogger,
+    type ProcedureLogEntry,
+    type ProcedureLogger,
+} from '@microsoft/vscode-ext-webview/host';
+import {
+    callWithAccumulatingTelemetry,
+    type TelemetryWithDistributions,
+} from '../../utils/callWithAccumulatingTelemetry';
 import { WEBVIEW_CONFIG } from './configuration';
 
 /**

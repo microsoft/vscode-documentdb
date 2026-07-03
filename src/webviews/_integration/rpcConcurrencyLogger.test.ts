@@ -43,7 +43,11 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
 
         // Run the callback against a telemetry stub to assert what it writes.
         const callback = (callWithAccumulatingTelemetry as jest.Mock).mock.calls[0][1] as (ctx: unknown) => void;
-        const telemetry = { properties: {}, measurements: {} as Record<string, number>, distributions: {} as Record<string, number> };
+        const telemetry = {
+            properties: {},
+            measurements: {} as Record<string, number>,
+            distributions: {} as Record<string, number>,
+        };
         callback({ telemetry });
 
         expect(telemetry.distributions).toEqual({ concurrentRpcOps: 3 });
