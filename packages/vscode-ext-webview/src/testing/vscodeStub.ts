@@ -75,6 +75,8 @@ export class MockWebviewPanel {
     public readonly webview = new MockWebview();
     public iconPath: unknown;
     public revealCount = 0;
+    /** `true` once `dispose()` has been called, for test assertions. */
+    public disposed = false;
     private readonly didDispose = new EventEmitter<void>();
 
     public readonly onDidDispose = (listener: Listener<void>): MockDisposable => this.didDispose.event(listener);
@@ -84,6 +86,12 @@ export class MockWebviewPanel {
     }
 
     public dispose(): void {
+        // Mirror the real panel: disposing is idempotent and fires `onDidDispose`
+        // exactly once.
+        if (this.disposed) {
+            return;
+        }
+        this.disposed = true;
         this.didDispose.fire();
     }
 }

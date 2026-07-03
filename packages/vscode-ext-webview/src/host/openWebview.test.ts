@@ -92,6 +92,36 @@ describe('openWebview', () => {
         expect(fired).toBe(true);
     });
 
+    it('closes the panel when dispose() is called (R766-02)', () => {
+        const controller = openWebview(makeContext(), makeOptions());
+        const panel = controller.panel as unknown as { disposed: boolean };
+
+        controller.dispose();
+
+        // A public handle whose dispose() left the tab open would be surprising;
+        // dispose() must close the panel.
+        expect(panel.disposed).toBe(true);
+        expect(controller.isDisposed).toBe(true);
+    });
+
+    it('disposes the controller exactly once when the user closes the tab (R766-02)', () => {
+        const controller = openWebview(makeContext(), makeOptions());
+        const panel = controller.panel as unknown as { disposed: boolean };
+        let firedCount = 0;
+        controller.onDisposed(() => {
+            firedCount += 1;
+        });
+
+        // Simulate the user closing the tab: VS Code disposes the panel, firing
+        // onDidDispose. The controller must dispose exactly once and must not
+        // recurse back into panel.dispose().
+        controller.panel.dispose();
+
+        expect(controller.isDisposed).toBe(true);
+        expect(panel.disposed).toBe(true);
+        expect(firedCount).toBe(1);
+    });
+
     it('auto-wires tRPC so the panel answers a query', async () => {
         const controller = openWebview(makeContext(), makeOptions());
         const webview = mockWebview(controller);

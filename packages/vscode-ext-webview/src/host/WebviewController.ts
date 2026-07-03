@@ -135,6 +135,12 @@ export class WebviewController<
     private _panel: vscode.WebviewPanel;
     private _disposables: vscode.Disposable[] = [];
     private _isDisposed: boolean = false;
+    /**
+     * `true` once VS Code is tearing the panel down on its own (the user closed
+     * the tab). Set by the `onDidDispose` handler before it calls `dispose()`, so
+     * `dispose()` knows not to close an already-closing panel a second time.
+     */
+    private _panelDisposed: boolean = false;
     private _onDisposed: vscode.EventEmitter<void> = new vscode.EventEmitter<void>();
     public readonly onDisposed: vscode.Event<void> = this._onDisposed.event;
 
@@ -171,6 +177,10 @@ export class WebviewController<
 
         this.registerDisposable(
             this._panel.onDidDispose(() => {
+                // VS Code is disposing the panel (the user closed the tab). Record that
+                // so dispose() does not try to close an already-closing panel, then run
+                // the normal teardown.
+                this._panelDisposed = true;
                 this.dispose();
             }),
         );
@@ -309,16 +319,20 @@ export class WebviewController<
     }
 
     /**
-     * Disposes the controller and all registered disposables.
-     * Aborts all in-flight operations and subscriptions to prevent orphaned work.
+     * Disposes the controller: notifies `onDisposed` subscribers, tears down the
+     * tRPC dispatch pump (aborting in-flight operations and subscriptions), and
+     * closes the webview panel/tab.
      *
-     * **Panel ownership architecture:** The panel owns the controller, not the
-     * other way around. When the user closes the tab, VS Code disposes the panel,
-     * which fires `onDidDispose`, which calls `this.dispose()`. We intentionally
-     * do NOT dispose the panel from within this method — doing so would create a
-     * circular call chain (`dispose → panel.dispose → onDidDispose → dispose`).
-     * No code path in the codebase disposes the controller independently of the
-     * panel, so the panel is always already disposed (or disposing) when we get here.
+     * **Two entry points, one outcome.** Either the consumer calls `dispose()`
+     * directly (to close the view), or the user closes the tab and VS Code fires
+     * `onDidDispose`, whose handler calls `dispose()`. Both paths must end with the
+     * panel closed and every resource released, so this method does both. A public
+     * handle whose `dispose()` left the tab open would be a surprising API.
+     *
+     * **No recursion.** `_isDisposed` is set before anything else, so the
+     * re-entrant `dispose → panel.dispose → onDidDispose → dispose` call returns at
+     * the guard. On the `onDidDispose` path `_panelDisposed` is already `true`, so
+     * the redundant `this._panel.dispose()` is skipped.
      */
     public dispose(): void {
         if (this._isDisposed) {
@@ -326,14 +340,24 @@ export class WebviewController<
         }
         this._isDisposed = true;
 
+        // Notify subscribers before tearing anything down, so they observe the
+        // disposal while the object graph is still intact.
         this._onDisposed.fire();
 
-        // The tRPC dispatch disposable returned by `attachTrpc` is in this list;
-        // disposing it removes the message listener and aborts every in-flight
-        // operation and subscription (calling `return()` on each iterator so async
-        // generators parked on `next()` terminate cleanly).
+        // Dispose registered resources: the tRPC dispatch disposable returned by
+        // `attachTrpc` (removes the message listener and aborts every in-flight
+        // operation and subscription, calling `return()` on each iterator so async
+        // generators parked on `next()` terminate cleanly), the `onDidDispose`
+        // listener, and the `onDisposed` emitter.
         this._disposables.forEach((d) => {
             d.dispose();
         });
+
+        // Close the panel/tab unless VS Code is already doing so (the `onDidDispose`
+        // path set `_panelDisposed`). Disposing the listeners above already removed
+        // our `onDidDispose` subscription, so this call cannot re-enter `dispose()`.
+        if (!this._panelDisposed) {
+            this._panel.dispose();
+        }
     }
 }
