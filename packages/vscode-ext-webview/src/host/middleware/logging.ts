@@ -35,6 +35,16 @@ export interface ProcedureLogEntry {
     aborted: boolean;
     /** The error carried by a failed result, when `ok` is false. */
     error?: ProcedureErrorLike;
+    /**
+     * Number of concurrent in-flight operations (queries + mutations +
+     * subscriptions) at the moment this entry was logged, including the one being
+     * logged. Set by `attachTrpc`'s dispatch pump (R766-S04); omitted by the
+     * standalone {@link loggingMiddlewareBody}, which has no view of the
+     * transport's in-flight set. Route it to a telemetry distribution to observe
+     * peak / average concurrency and decide whether the per-operation `window`
+     * `message` listener ever needs a single-listener multiplexer.
+     */
+    concurrent?: number;
 }
 
 /**

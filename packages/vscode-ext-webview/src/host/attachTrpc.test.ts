@@ -298,6 +298,26 @@ describe('attachTrpc', () => {
         expect(typeof entries[0].durationMs).toBe('number');
     });
 
+    it('stamps each log entry with the concurrent in-flight count (R766-S04)', async () => {
+        const entries: ProcedureLogEntry[] = [];
+        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            greet: publicProcedure.query(() => 'hello'),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory, logger);
+
+        await stub.send(makeMessage('q1', 'query', 'greet'));
+
+        // The completing operation is still tracked when it is logged, so the
+        // concurrency gauge includes it (exactly one op in flight here).
+        expect(entries).toHaveLength(1);
+        expect(entries[0].concurrent).toBe(1);
+    });
+
     it('logs a failed entry (ok: false) when a procedure throws', async () => {
         const entries: ProcedureLogEntry[] = [];
         const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };

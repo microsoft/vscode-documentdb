@@ -722,7 +722,7 @@ follow-up pass.
 | R766-N03 | Inline-script hardening | ✅ Implemented in Iteration 2 (option B: inert `application/json` data block + nonce'd boot parser). |
 | R766-N05 | Observer exceptions → telemetry | Options only, per request; not implemented. |
 | R766-N06 | Create-or-reveal helper | ✅ Documented in Iteration 2 (ADVANCED.md pattern; no package code). |
-| R766-S04 | Per-operation listener design | Doc reword shipped; Iteration 2 asks for a concurrency telemetry signal (peak/avg in-flight ops) to decide on evidence. |
+| R766-S04 | Per-operation listener design | ✅ Instrumented in Iteration 2 (concurrency gauge: `ProcedureLogger.concurrent` + accumulating telemetry). |
 
 ## R766-01 — side effects on existing projects, and A/B/C re-analysis
 
@@ -1042,6 +1042,16 @@ combined with **Option 5** as the always-on default so a throw is at least
 visible without wiring. Decide in iteration 2.
 
 ## R766-S04 — pros & cons of the per-operation `message` listener (shipped: doc reword only)
+
+> ✅ **Instrumented in Iteration 2** [R766-S04]. The design is unchanged (still the
+> per-operation listener), but it is now measured. `attachTrpc` stamps every
+> dispatch log entry with `concurrent` (in-flight ops at completion), and
+> DocumentDB's `rpcConcurrencyLogger` feeds it into
+> `callWithAccumulatingTelemetry('documentDB.webview.rpcConcurrency', …)` as a
+> `concurrentRpcOps` distribution plus a `dispatch` counter (batched, so volume is
+> negligible). The revisit thresholds are in the “Instrument it” subsection below.
+> This turns “revisit only on evidence” into an actual signal — and, if peak `N`
+> stays tiny, the evidence to *retire* S04.
 
 The transport (`vscodeLink` → `connectTrpc`'s `onReceive`) registers a **new
 `window` `message` listener per in-flight operation**, each filtering by

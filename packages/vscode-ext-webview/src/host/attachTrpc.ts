@@ -23,7 +23,7 @@ import { type Disposable, type WebviewPanel } from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
 import { createCallerFactory as defaultCreateCallerFactory } from '../shared/initWebviewTrpc';
 import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
-import { type ProcedureLogger } from './middleware/logging';
+import { type ProcedureLogEntry, type ProcedureLogger } from './middleware/logging';
 import { type ProcedureType } from './middleware/types';
 
 /**
@@ -196,6 +196,16 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
         }
     };
 
+    /**
+     * Logs a completed procedure through the optional {@link ProcedureLogger},
+     * stamping it with the number of concurrent in-flight operations (R766-S04).
+     * Every log site fires while the operation is still tracked, so the count
+     * includes the operation being logged.
+     */
+    const logProcedure = (entry: ProcedureLogEntry): void => {
+        logger?.log({ ...entry, concurrent: activeOperations.size + activeSubscriptions.size });
+    };
+
     const handleSubscriptionMessage = async (message: VsCodeLinkRequestMessage): Promise<void> => {
         // In v12, tRPC will have better cancellation support. For now, we use AbortController.
         const abortController = new AbortController();
@@ -249,7 +259,7 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
                     // On natural completion (procedure returned, or our `return()` propagated
                     // through the generator), inform the client.
                     safePostMessage({ id: message.id, complete: true });
-                    logger?.log({
+                    logProcedure({
                         type: 'subscription',
                         path: message.op.path,
                         durationMs: Date.now() - start,
@@ -258,7 +268,7 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
                     });
                 } catch (error) {
                     safePostMessage(wrapInTrpcErrorMessage(error, message.id));
-                    logger?.log({
+                    logProcedure({
                         type: 'subscription',
                         path: message.op.path,
                         durationMs: Date.now() - start,
@@ -272,7 +282,7 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
             })();
         } catch (error) {
             safePostMessage(wrapInTrpcErrorMessage(error, message.id));
-            logger?.log({
+            logProcedure({
                 type: 'subscription',
                 path: message.op.path,
                 durationMs: Date.now() - start,
@@ -341,7 +351,7 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
                 safePostMessage(response);
             }
 
-            logger?.log({
+            logProcedure({
                 type: message.op.type as ProcedureType,
                 path: message.op.path,
                 durationMs: Date.now() - start,
@@ -353,7 +363,7 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
             if (!abortController.signal.aborted) {
                 safePostMessage(wrapInTrpcErrorMessage(error, message.id));
             }
-            logger?.log({
+            logProcedure({
                 type: message.op.type as ProcedureType,
                 path: message.op.path,
                 durationMs: Date.now() - start,

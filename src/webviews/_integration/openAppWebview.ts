@@ -37,6 +37,7 @@ import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { appRouter, type AppRouter, type BaseRouterContext } from './appRouter';
 import { WEBVIEW_CONFIG } from './configuration';
+import { rpcConcurrencyLogger } from './rpcConcurrencyLogger';
 import { trpc } from './trpc';
 import { type WebviewName } from './WebviewRegistry';
 
@@ -81,6 +82,9 @@ export function openAppWebview<TConfiguration>(
         config: options.config,
         sourceLayout: WEBVIEW_CONFIG.bundle,
         devServerHost: WEBVIEW_CONFIG.devServerHost,
+        // R766-S04: record RPC concurrency (peak / average in-flight operations)
+        // so the per-operation listener design can be judged on evidence.
+        logger: rpcConcurrencyLogger,
         icon: options.icon,
         viewColumn: options.viewColumn,
     });
