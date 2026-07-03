@@ -668,26 +668,26 @@ Severity legend: **Med** = fix before preview goes wider; **Low** = cheap
 follow-up; **Info** = judgment call. **Status** column added after Iteration 1
 (commit for shipped fixes; see the [change protocol](#iteration-1--change-protocol-2026-07-03)).
 
-| ID | Severity | Area | Recommended option | Iteration 1 status |
+| ID | Severity | Area | Recommended option | Status |
 | --- | --- | --- | --- | --- |
-| R766-01 | Med | host transport | A (guard) + B (throw-safe) | ⏭ Iteration 2 (no consumer cost today) |
-| R766-N02 | Med | happy-path API | A (pass `WebviewTrpc` instance) | ⏭ Iteration 2 (decided: A) |
+| R766-01 | Med | host transport | A (guard) + B (throw-safe) | ✅ `ade2ce61` (Iteration 2) |
+| R766-N02 | Med | happy-path API | A (pass `WebviewTrpc` instance) | ✅ `21b0a2f7` (Iteration 2) |
 | R766-02 | Med | host lifecycle | A (`dispose()` closes panel + guard) | ✅ `76172cd2` |
 | R766-03 | Med | packaging | A (ship `ADVANCED.md` + `LICENSE`) | ✅ `46296ce4` |
-| R766-N01 | Med | webview transport | A (structural guard) | ⏭ Iteration 2 (bundle with R766-01) |
+| R766-N01 | Med | webview transport | A (structural guard) | ✅ `ade2ce61` (Iteration 2) |
 | R766-S02 | Low | webview logging | A (opt-in logger, off by default) | ✅ `6363a6f2` |
 | R766-N04 | Low | host primitive | A (`ReadonlyMap`) | ✅ `0bd16afa` |
-| R766-N05 | Low | event channel | isolate throws + telemetry hook | ⏭ Iteration 2 (options only) |
-| R766-N03 | Low | security hardening | B (JSON data block, per request) | ⏭ Iteration 2 |
+| R766-N05 | Low | event channel | isolate throws + telemetry hook | ⏭ Iteration 3 (options only) |
+| R766-N03 | Low | security hardening | B (JSON data block, per request) | ✅ `d5748abe` (Iteration 2) |
 | R766-N08 | Low | naming | A (rename `telemetry` → `logger`) | ✅ `76f99484` |
 | R766-04 | Low | docs | A (fix ADVANCED.md) | ✅ `61a01033` |
 | R766-05 | Low | consumer code | A (local const) | ✅ `c5662718` |
 | R766-06 | Low | host transport | A (`return()` no arg) | ✅ `0292780` |
 | R766-S03 | Low | docs + helper | A (document + ship generic) | ✅ `32859afc` |
-| R766-S04 | Low | docs | A (reword README) | ✅ `de27b507` |
+| R766-S04 | Low | docs + instrument | A (reword) + concurrency signal | ✅ `de27b507` + `dbbf9969` (Iteration 2) |
 | R766-N07 | Low | webview config | A (defensive parse) | ✅ `9a758cc5` |
 | R766-S01 | Info | architecture | keep three tiers | ✅ Agreed (no change) |
-| R766-N06 | Info | front-door scope | B (document, don't build yet) | ⏭ Iteration 2 |
+| R766-N06 | Info | front-door scope | B (document, don't build yet) | ✅ `b603affd` (Iteration 2) |
 
 ### Suggested batching
 
@@ -720,9 +720,34 @@ follow-up pass.
 | R766-N01 | Webview inbound `event.data` guard | ✅ Implemented in Iteration 2 (structural `onReceive` guard + test). |
 | R766-N02 | `createCallerFactory` ergonomics | ✅ Implemented in Iteration 2 (option A: `trpc` instance option; consumer adopted; `createCallerFactory` deprecated). |
 | R766-N03 | Inline-script hardening | ✅ Implemented in Iteration 2 (option B: inert `application/json` data block + nonce'd boot parser). |
-| R766-N05 | Observer exceptions → telemetry | Options only, per request; not implemented. |
+| R766-N05 | Observer exceptions → telemetry | ⏭ Deferred to Iteration 3 (options only, per request; correctness fix held to ship with the hook). |
 | R766-N06 | Create-or-reveal helper | ✅ Documented in Iteration 2 (ADVANCED.md pattern; no package code). |
 | R766-S04 | Per-operation listener design | ✅ Instrumented in Iteration 2 (concurrency gauge: `ProcedureLogger.concurrent` + accumulating telemetry). |
+
+## Iteration 2 — change protocol (2026-07-03)
+
+> Protocol of changes for iteration 2: what shipped, why, and the commit that
+> carries it. Each fix is an individual commit on `dev/tnaum/webview-api-refinements`,
+> pushed and acknowledged with a PR comment. No Copilot review threads applied to
+> these items (the two that had threads, R766-05 / R766-06, were resolved in
+> Iteration 1).
+
+**Post-change validation (all green):** `npm run l10n` (no drift) · `prettier`
+(applied) · `eslint --quiet` (clean) · `jest` (2655 passed / 158 suites) · `tsc`
+build across all workspaces (clean).
+
+| ID | Commit | What changed | Why (motivation) |
+| --- | --- | --- | --- |
+| R766-01 | `ade2ce61` | `attachTrpc` guards inbound messages (`isTransportRequestMessage`) and wraps dispatch in `try/catch` | As the bring-your-own-panel primitive it may share a bus with non-tRPC traffic; a foreign message (no `op`) threw as an unhandled rejection. Ships options A + B. |
+| R766-N01 | `ade2ce61` | `connectTrpc` `onReceive` guards `event.data` before reading `.id` | Webview mirror of R766-01: a `null` / foreign `window` message threw. Shipped in the same commit so both transport edges reject foreign traffic together. |
+| R766-N02 | `21b0a2f7` | `openWebview` / `WebviewController` accept a `trpc` option; standalone `createCallerFactory` deprecated; consumer + README + ADVANCED updated | Removes the re-export + silent-fallback footgun on the happy path (option A). `attachTrpc` keeps its explicit factory for embedders. |
+| R766-N03 | `d5748abe` | Initial data delivered in an inert `application/json` block + nonce'd boot parser; `serializeInertJson` escapes `<` | Removes the inline-script break-out class by construction (option B). `__initialData` stays encoded, so `useConfiguration` is unchanged. |
+| R766-N06 | `b603affd` | ADVANCED.md documents the create-or-reveal pattern (consumer-side `Map` + `revealToForeground` + `onDisposed`) | Keeps the panel registry in consumer space; the package stays a transport library. Documented, not built. |
+| R766-S04 | `dbbf9969` | `ProcedureLogEntry.concurrent` stamped by `attachTrpc`; DocumentDB `rpcConcurrencyLogger` → accumulating-telemetry `concurrentRpcOps` distribution + `dispatch` counter | Turns “revisit only on evidence” into a real concurrency signal (peak / average in-flight ops) to judge the per-operation listener. |
+
+**Deferred to Iteration 3:** R766-N05 (observer-exception isolation + telemetry
+hook — options only per request; the cheap correctness fix is held so it ships
+with the chosen hook).
 
 ## R766-01 — side effects on existing projects, and A/B/C re-analysis
 
@@ -1014,6 +1039,21 @@ consumers and the standard path is untouched, B is cleaner than option A's
 manual escaping and removes the vulnerability class rather than patching it.
 
 ## R766-N05 — options to make observer exceptions visible to telemetry
+
+> ⏭ **Deferred to Iteration 3** [R766-N05] (not implemented this pass, per the
+> standing “options only” decision). Two things are bundled here and both wait on
+> one design decision:
+>
+> 1. the **correctness fix** — isolate a throwing event-channel observer so it
+>    cannot break the tRPC call it only observes (finding option A: try/catch →
+>    `console.error`). Cheap and low-risk, but held intentionally so it ships
+>    *together with* the hook rather than being touched twice.
+> 2. the **telemetry-visibility hook** — which of options 1–5 below to adopt
+>    (leaning: option 1, an opt-in `onObserverError` sink defaulting to
+>    `console.error`, optionally plus option 5 `reportError`).
+>
+> **Iteration 3 action:** pick the hook shape, then ship isolation + hook in one
+> change with a “a throwing observer does not break dispatch” test.
 
 Goal: when a consumer's event-channel handler throws, it must (a) not corrupt tRPC
 dispatch and (b) be *observable* — ideally routable to telemetry, not just
