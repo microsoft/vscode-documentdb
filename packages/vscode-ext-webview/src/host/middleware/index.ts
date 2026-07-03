@@ -11,7 +11,12 @@
  */
 
 export { consoleProcedureLogger, loggingMiddlewareBody, type ProcedureLogEntry, type ProcedureLogger } from './logging';
-export { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from './telemetry';
+export {
+    telemetryMiddlewareBody,
+    type ProcedureTelemetry,
+    type TelemetryRunner,
+    type WithTelemetry,
+} from './telemetry';
 export {
     type MiddlewareResultLike,
     type ProcedureErrorLike,

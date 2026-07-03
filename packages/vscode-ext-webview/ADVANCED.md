@@ -162,6 +162,42 @@ The dispatch logger and the middleware body are independent sinks: the logger
 reports at the transport boundary, the middleware reports inside each procedure
 scope. Using both does not double-count a single call into one analytics event.
 
+### Reading `ctx.telemetry` without casts: `WithTelemetry`
+
+`telemetryMiddlewareBody` injects the bag your `TelemetryRunner` supplies into
+`ctx.telemetry`. The package types that slot minimally (`{ properties,
+measurements }`) so it stays library-agnostic, but your runner usually hands over
+a richer type — for example `ITelemetryContext` from
+`@microsoft/vscode-azext-utils`. Rather than casting `ctx.telemetry` at every
+procedure, re-type the context once with the exported `WithTelemetry` helper:
+
+```ts
+import type { ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import type { BaseRouterContext } from '@microsoft/vscode-ext-webview';
+import { type WithTelemetry } from '@microsoft/vscode-ext-webview/host';
+
+type RouterContext = BaseRouterContext & { db: Db };
+
+// The context as procedures see it once the telemetry middleware has run:
+export type TrackedContext = WithTelemetry<RouterContext, ITelemetryContext>;
+
+export const stats = trackedProcedure.query(({ ctx }: { ctx: TrackedContext }) => {
+  ctx.telemetry.properties.result = 'ok'; // typed
+  ctx.telemetry.suppressIfSuccessful = true; // azext-specific field, also typed
+  return ctx.db.stats();
+});
+```
+
+`WithTelemetry<TContext, TTelemetry>` is `Omit<TContext, 'telemetry'> &
+{ telemetry: TTelemetry }`: it swaps the minimal slot for your concrete type and
+makes it required. Consumers commonly alias it once so procedure code just writes
+`WithTelemetry<Ctx>`:
+
+```ts
+import { type WithTelemetry as FrameworkWithTelemetry } from '@microsoft/vscode-ext-webview/host';
+export type WithTelemetry<T extends { telemetry?: unknown }> = FrameworkWithTelemetry<T, ITelemetryContext>;
+```
+
 ## The webview event channel
 
 By default a query or mutation that throws on the host propagates to the

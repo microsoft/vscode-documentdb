@@ -31,6 +31,42 @@ export interface ProcedureTelemetry {
 }
 
 /**
+ * Re-types the `telemetry` slot on a router context `TContext` from the package's
+ * minimal shape to a richer telemetry-library context `TTelemetry` (for example
+ * `ITelemetryContext` from `@microsoft/vscode-azext-utils`), and makes it
+ * required.
+ *
+ * The telemetry middleware injects whatever bag your {@link TelemetryRunner}
+ * hands it into `ctx.telemetry`. When that bag is richer than the package default
+ * `{ properties, measurements }`, annotate the procedure's `ctx` with
+ * `WithTelemetry<...>` so procedure code reads the extra fields (for example
+ * `suppressAll`) without an ad-hoc cast.
+ *
+ * @template TContext   - the router context (must have an optional `telemetry`).
+ * @template TTelemetry - the concrete telemetry context type the runner supplies;
+ *                        defaults to the package's {@link ProcedureTelemetry}.
+ *
+ * @example
+ * ```ts
+ * import type { ITelemetryContext } from '@microsoft/vscode-azext-utils';
+ * import type { WithTelemetry } from '@microsoft/vscode-ext-webview/host';
+ *
+ * type Ctx = BaseRouterContext & { db: Db };
+ * export type TrackedCtx = WithTelemetry<Ctx, ITelemetryContext>;
+ *
+ * publicProcedure.query(({ ctx }: { ctx: TrackedCtx }) => {
+ *   ctx.telemetry.properties.result = 'ok'; // fully typed, no cast
+ * });
+ * ```
+ */
+export type WithTelemetry<TContext extends { telemetry?: unknown }, TTelemetry = ProcedureTelemetry> = Omit<
+    TContext,
+    'telemetry'
+> & {
+    telemetry: TTelemetry;
+};
+
+/**
  * Consumer-supplied adapter that runs a procedure inside an integration-specific
  * telemetry scope.
  *

@@ -46,6 +46,7 @@ import { callWithTelemetryAndErrorHandling, parseError, type ITelemetryContext }
 import { initWebviewTrpc, type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import {
     telemetryMiddlewareBody,
+    type WithTelemetry as FrameworkWithTelemetry,
     type ProcedureTelemetry,
     type TelemetryRunner,
 } from '@microsoft/vscode-ext-webview/host';
@@ -62,17 +63,17 @@ const trpc = initWebviewTrpc<FrameworkBaseRouterContext>();
 const { publicProcedure, router, createCallerFactory } = trpc;
 
 /**
- * DocumentDB-flavoured replacement for the package's `WithTelemetry<T>` helper.
+ * DocumentDB specialization of the package's generic `WithTelemetry` helper.
  *
- * The package types `telemetry` as its generic `TelemetryContext`
- * (`{ properties; measurements }`). In this extension, the runtime value is
+ * The package types `ctx.telemetry` minimally (`{ properties; measurements }`)
+ * so it stays telemetry-library-agnostic. In this extension the runtime value is
  * always the richer `ITelemetryContext` from `@microsoft/vscode-azext-utils`
- * (provides `suppressAll`, `suppressIfSuccessful`, etc.). Re-typing the helper
- * here lets procedure code access those fields without ad-hoc casts.
+ * (`suppressAll`, `suppressIfSuccessful`, etc.). This one-line alias binds the
+ * package helper's telemetry type to `ITelemetryContext`, so procedure code can
+ * annotate `ctx` as `WithTelemetry<SomeContext>` and read those fields without
+ * ad-hoc casts.
  */
-export type WithTelemetry<T extends { telemetry?: unknown }> = Omit<T, 'telemetry'> & {
-    telemetry: ITelemetryContext;
-};
+export type WithTelemetry<T extends { telemetry?: unknown }> = FrameworkWithTelemetry<T, ITelemetryContext>;
 
 /**
  * DocumentDB telemetry adapter for the framework's `telemetryMiddlewareBody`.
