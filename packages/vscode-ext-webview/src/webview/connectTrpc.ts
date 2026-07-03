@@ -15,7 +15,7 @@
  * can use it directly. The React hooks in `./react` are thin wrappers over it.
  */
 
-import { createTRPCClient, type CreateTRPCClient, loggerLink } from '@trpc/client';
+import { createTRPCClient, type CreateTRPCClient, loggerLink, type TRPCLink } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
 import { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
 import { type ErrorHandler, eventLink } from './errorLink';
@@ -40,6 +40,15 @@ export interface ConnectTrpcOptions {
      * calls are reported via `onAborted`, not here.
      */
     onError?: ErrorHandler;
+
+    /**
+     * When `true`, prepends tRPC's `loggerLink()` so every query / mutation /
+     * subscription is logged to the **webview devtools console**. Off by default
+     * so production webviews stay quiet unless observability is explicitly
+     * requested. See the package's Observability docs for how to open the webview
+     * console from VS Code.
+     */
+    logger?: boolean;
 }
 
 /** The pair returned by {@link connectTrpc}. */
@@ -102,9 +111,15 @@ export function connectTrpc<TRouter extends AnyRouter>(
         };
     };
 
-    const client = createTRPCClient<TRouter>({
-        links: [loggerLink(), eventLink<TRouter>(channel), vscodeLink<TRouter>({ send, onReceive })],
-    });
+    // Logging is opt-in: only prepend tRPC's loggerLink when the consumer asks
+    // for it, so a production webview does not log every RPC to the console.
+    const links: TRPCLink<TRouter>[] = [];
+    if (options?.logger) {
+        links.push(loggerLink<TRouter>());
+    }
+    links.push(eventLink<TRouter>(channel), vscodeLink<TRouter>({ send, onReceive }));
+
+    const client = createTRPCClient<TRouter>({ links });
 
     return { client, events: channel };
 }

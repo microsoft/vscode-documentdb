@@ -18,7 +18,12 @@
  */
 
 import { type AnyRouter } from '@trpc/server';
-import { connectTrpc, type ConnectTrpcResult, type VsCodeApiLike } from '../webview/connectTrpc';
+import {
+    connectTrpc,
+    type ConnectTrpcOptions,
+    type ConnectTrpcResult,
+    type VsCodeApiLike,
+} from '../webview/connectTrpc';
 
 const connections = new WeakMap<VsCodeApiLike, ConnectTrpcResult<AnyRouter>>();
 
@@ -27,12 +32,18 @@ const connections = new WeakMap<VsCodeApiLike, ConnectTrpcResult<AnyRouter>>();
  * first use. Repeated calls with the same `vscodeApi` return the identical
  * `{ client, events }` instance.
  *
+ * `options` are applied only on first creation (the connection is memoized per
+ * `vscodeApi`); later calls ignore them and return the cached pair.
+ *
  * @template TRouter - The application's root tRPC router type.
  */
-export function getWebviewConnection<TRouter extends AnyRouter>(vscodeApi: VsCodeApiLike): ConnectTrpcResult<TRouter> {
+export function getWebviewConnection<TRouter extends AnyRouter>(
+    vscodeApi: VsCodeApiLike,
+    options?: ConnectTrpcOptions,
+): ConnectTrpcResult<TRouter> {
     let connection = connections.get(vscodeApi);
     if (!connection) {
-        connection = connectTrpc<AnyRouter>(vscodeApi);
+        connection = connectTrpc<AnyRouter>(vscodeApi, options);
         connections.set(vscodeApi, connection);
     }
     return connection as ConnectTrpcResult<TRouter>;

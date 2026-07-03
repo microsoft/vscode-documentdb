@@ -241,10 +241,41 @@ host/browser import boundary.
 
 ## Observability
 
-Two independent layers report what the transport is doing: **logging** (console
-/ output, for humans) and **telemetry** (structured analytics, for dashboards).
-They are separate on purpose — logging is plumbing, telemetry is policy — so you
-can enable either, both, or neither.
+The transport reports what it is doing through **logging** (console / output, for
+humans) and **telemetry** (structured analytics, for dashboards). Logging comes
+in two flavours — one on the webview side, one on the extension-host side — and
+telemetry is a separate, policy-driven layer. Everything except the host
+dispatch logger's console default is opt-in, so you enable exactly what you need.
+
+### Webview-side request logging
+
+The shared webview client can log every query / mutation / subscription to the
+**webview devtools console** using tRPC's `loggerLink` — a rich, grouped,
+color-coded view of each call's input and result. It is **off by default** so a
+production webview stays quiet.
+
+Enable it once, at the React root, via `WithWebviewContext`:
+
+```tsx
+import { WithWebviewContext } from '@microsoft/vscode-ext-webview/react';
+
+<WithWebviewContext vscodeApi={vscodeApi} enableRpcLogging>
+  <App />
+</WithWebviewContext>;
+```
+
+For the framework-agnostic client, pass the flag directly:
+
+```ts
+const { client } = connectTrpc<AppRouter>(vscodeApi, { logger: true });
+```
+
+**Opening the webview console from VS Code:** run **Developer: Open Webview
+Developer Tools** from the Command Palette (with the webview focused) to open the
+Chromium devtools for that webview; the tRPC log appears on the **Console** tab.
+When you launch the extension with a debugger attached this is the webview's own
+console — distinct from the extension-host Debug Console, where the dispatch
+logger below writes.
 
 ### Extension-host dispatch logging
 
