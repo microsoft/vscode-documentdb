@@ -58,7 +58,7 @@ export function openDocumentWebview(
         },
     };
 
-    handle.controller = openAppWebview({
+    const controller = openAppWebview({
         title,
         webviewName: 'documentView',
         config: initialData,
@@ -70,5 +70,10 @@ export function openDocumentWebview(
         },
     });
 
-    return handle.controller;
+    // Assign into the deferred handle so the title-setter closure above can reach
+    // the controller, then return the local `const` (never the optional
+    // `handle.controller`), so the return path is obviously non-nullable.
+    handle.controller = controller;
+
+    return controller;
 }
