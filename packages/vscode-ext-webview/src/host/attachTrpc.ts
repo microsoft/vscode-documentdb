@@ -61,11 +61,22 @@ export interface AttachTrpcResult {
      */
     disposable: Disposable;
 
-    /** Live map of in-flight queries / mutations by operation id. */
-    activeOperations: Map<string, AbortController>;
+    /**
+     * Read-only view of the in-flight queries / mutations by operation id.
+     *
+     * Exposed for observation (counts, ids, live inspection); it is the same map
+     * the dispatcher mutates, so it updates as operations start and finish. It is
+     * typed `ReadonlyMap` on purpose: mutating it would corrupt the dispatcher's
+     * cancellation bookkeeping. Cancel work through the client's `AbortSignal` or
+     * dispose the whole transport via {@link AttachTrpcResult.disposable}.
+     */
+    activeOperations: ReadonlyMap<string, AbortController>;
 
-    /** Live map of in-flight subscriptions by operation id. */
-    activeSubscriptions: Map<string, ActiveSubscription>;
+    /**
+     * Read-only view of the open subscriptions by operation id. See
+     * {@link AttachTrpcResult.activeOperations} for why it is `ReadonlyMap`.
+     */
+    activeSubscriptions: ReadonlyMap<string, ActiveSubscription>;
 }
 
 /**
