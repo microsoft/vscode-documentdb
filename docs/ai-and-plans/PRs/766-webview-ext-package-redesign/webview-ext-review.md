@@ -482,10 +482,13 @@ coordinated steps, one of them easy to drop, failure mode non-obvious.
   - Pros: keeps the API; surfaces the footgun.
   - Cons: instance identity is not cleanly exposed by tRPC; heuristic.
 
-**Recommendation: B if feasible, else A**, and layer C's fail-fast as a safety
-net for the non-default case. This is the single highest-leverage simplification
-in the PR for humans and agents: it removes an entire coordinated step from the
-documented quick start.
+**Recommendation: A** (decided in Iteration 2 — see the
+[R766-N02 discussion](#r766-n02--consumer-code-today-vs-option-a-vs-option-b)).
+B's zero-argument magic was rejected because its hidden router property is least
+reliable for the tRPC-only, bring-your-own-router consumers the package also
+serves; C's fail-fast can still be layered as a safety net for the non-default
+case. This is the single highest-leverage simplification in the PR for humans and
+agents: it removes an entire coordinated step from the documented quick start.
 
 ### R766-N03: Low - Inline-script interpolation in the panel HTML is not escaped for script-context breakout
 
@@ -668,7 +671,7 @@ follow-up; **Info** = judgment call. **Status** column added after Iteration 1
 | ID | Severity | Area | Recommended option | Iteration 1 status |
 | --- | --- | --- | --- | --- |
 | R766-01 | Med | host transport | A (guard) + B (throw-safe) | ⏭ Iteration 2 (no consumer cost today) |
-| R766-N02 | Med | happy-path API | B (stamp factory on router) or A (pass `WebviewTrpc`) | ⏭ Iteration 2 (needs API decision) |
+| R766-N02 | Med | happy-path API | A (pass `WebviewTrpc` instance) | ⏭ Iteration 2 (decided: A) |
 | R766-02 | Med | host lifecycle | A (`dispose()` closes panel + guard) | ✅ `76172cd2` |
 | R766-03 | Med | packaging | A (ship `ADVANCED.md` + `LICENSE`) | ✅ `46296ce4` |
 | R766-N01 | Med | webview transport | A (structural guard) | ⏭ Iteration 2 (bundle with R766-01) |
@@ -715,11 +718,11 @@ follow-up pass.
 | --- | --- | --- |
 | R766-01 | `attachTrpc` foreign-message guard | Deliberately skipped; no cost to current consumers (analysis below). |
 | R766-N01 | Webview inbound `event.data` guard | Bundled with R766-01 (both transport edges together). |
-| R766-N02 | `createCallerFactory` ergonomics | Needs an API-shape decision; code sketches below. |
+| R766-N02 | `createCallerFactory` ergonomics | **Decided: option A** (pass `WebviewTrpc`); rationale + tRPC-only analysis below. |
 | R766-N03 | Inline-script hardening | Pursuing **option B** (JSON data block); side effects below. |
 | R766-N05 | Observer exceptions → telemetry | Options only, per request; not implemented. |
 | R766-N06 | Create-or-reveal helper | Unchanged: document the pattern, don't build it yet. |
-| R766-S04 | Per-operation listener design | Shipped the doc reword; the design pros/cons are recorded below. |
+| R766-S04 | Per-operation listener design | Doc reword shipped; Iteration 2 asks for a concurrency telemetry signal (peak/avg in-flight ops) to decide on evidence. |
 
 ## R766-01 — side effects on existing projects, and A/B/C re-analysis
 
@@ -780,9 +783,23 @@ R766-01** so both transport edges reject foreign traffic consistently.
 
 ## R766-N02 — consumer code: today vs option A vs option B
 
-The friction today is that a *typed-context* consumer must thread
-`createCallerFactory` as a third, separate thing, and forgetting it silently
-falls back to the wrong tRPC instance.
+**Decision: option A** (accept the `WebviewTrpc` instance). Rationale below,
+including why A and B look identical at the call site but are not, and what each
+means for consumers who want the tRPC transport only, without the package's
+webview scaffolding.
+
+### What N02 is actually solving
+
+The host dispatcher needs **two** things from the consumer, not one: the
+`router` (what procedures exist) and a `createCallerFactory` (how to invoke a
+procedure against a context). In tRPC, `createCallerFactory` is bound to the
+*instance* returned by `initTRPC.context<T>().create()` — the router object does
+**not** carry a reference back to its own factory. So today the consumer has to
+route that factory by hand, and if they don't, `attachTrpc` silently falls back
+to `defaultCreateCallerFactory` (the factory of a *different*, bare
+`BaseRouterContext` instance). That "works" for vanilla configs but is
+type-unsound and misbehaves the moment the two instances differ (transformers,
+error formatters). **That silent fallback is the footgun — not the verbosity.**
 
 **Today** (three coordinated steps; the footgun is forgetting step 2/3):
 
@@ -847,13 +864,75 @@ openWebview(ctx, {
 });
 ```
 
-Trade-off: **B** is the best DX (least ceremony, mismatch structurally
-impossible) at the cost of a little "magic" (a hidden property on the router);
-**A** is fully explicit and only slightly more verbose. Both delete the
-re-export step and the silent-fallback footgun. `attachTrpc` keeps accepting an
-explicit `callerFactory` for embedders who bring their own tRPC instance.
-**Recommendation: B, with A as the fallback if the stamped property is judged too
-implicit.**
+### Why A and B look similar — and where they diverge
+
+Both delete the re-export and the separate `createCallerFactory` argument, so at
+the `openWebview` call site they read almost identically. The real difference is
+the **source of truth** for the factory and **what mismatch remains possible**:
+
+| | Where the factory lives | Passed to `openWebview` | Can it still be mismatched? | Cost |
+| --- | --- | --- | --- | --- |
+| **Today** | free-floating value | `router` + `createCallerFactory` | Yes — forget it / pass the wrong one → silent wrong default | ceremony + footgun |
+| **A** | on the **instance** (`trpc`) | `router` + `trpc` | Only if you pass a `router` built from a *different* instance than `trpc` (unlikely, but still two things kept in sync) | one meaningful import; explicit; no magic |
+| **B** | on the **router** (hidden symbol) | `router` only | No — the router *is* the source of truth; impossible for a simple router | zero ceremony; relies on a non-enumerable property |
+
+So A is a *modest* step past today (you still hand over two coordinated things —
+`trpc` and `router` — you have just swapped a loose function for the instance it
+came from and dropped the dedicated re-export). B is a *qualitative* step (one
+thing, mismatch structurally impossible) at the cost of "magic": a non-enumerable
+symbol stamped on the router by `initWebviewTrpc().router(...)`.
+
+### What each means for tRPC-only consumers (bring-your-own webview)
+
+This is the deciding lens. Consider a consumer who uses only the transport
+primitives (`attachTrpc` on the host, `connectTrpc` in the webview) and brings
+their own UI / bundling / React — not `openWebview` / `WebviewController` / the
+React `render` scaffold. They split further on whether they build their tRPC root
+with the package's `initWebviewTrpc()` or with raw `@trpc/server` `initTRPC()`.
+
+- **Option A does essentially nothing for them.** A is sugar on the `openWebview`
+  front door they are not using. They call
+  `attachTrpc(panel, ctx, router, callerFactory)` directly, and `attachTrpc`
+  keeps its explicit `callerFactory` parameter. The factory stays a visible
+  argument; nothing regresses, nothing is hidden.
+- **Option B helps them only if they adopt `initWebviewTrpc().router`.** If they
+  build with the stamped `.router`, the factory rides on the router into
+  `attachTrpc` and the low-level call needs no factory argument. But if they use
+  **raw `initTRPC()`** — a perfectly reasonable stance for a "just the transport,
+  no dependency on your wrapper" consumer — the router has no stamp and they must
+  pass `callerFactory` explicitly (identical to today). Worse, B introduces a
+  **hidden-property convention**, and this cohort (advanced tRPC users) is the
+  most likely to hit the cases that *drop* it: `mergeRouters`, object
+  spreads/clones, or wrapping the router through their own machinery can strip a
+  non-enumerable symbol, silently reinstating the default factory — the exact
+  footgun, now invisible. B's "impossible to mismatch" guarantee holds for the
+  greenfield router but **weakens precisely for the compose-your-own-router power
+  user.**
+
+For the bring-your-own-UI audience, then, B's implicit magic is a liability and
+A's explicitness is a *feature*: composition-proof, nothing to lose, visible at
+the call site.
+
+### Recommendation: A
+
+Choose **A** — accept the `WebviewTrpc<Ctx>` instance on `openWebview` /
+`WebviewController`, read `trpc.createCallerFactory` internally, and **keep
+`attachTrpc`'s explicit `callerFactory` parameter** for embedders. This removes
+the re-export and the silent-fallback footgun for the greenfield path without
+introducing a hidden property that can be silently dropped by router
+composition. B is rejected not because its call site is worse — it is marginally
+nicer — but because its one advantage (zero-argument magic) is bought with an
+implicit convention that is least reliable for exactly the tRPC-only,
+bring-your-own-router consumers this package also serves. `attachTrpc` continues
+to accept an explicit `callerFactory` for embedders who bring their own tRPC
+instance.
+
+Concretely, A means: `openWebview` / `WebviewController` gain an optional
+`trpc: WebviewTrpc<Ctx>` option; when present the dispatcher uses
+`trpc.createCallerFactory`; the standalone `createCallerFactory` option is
+deprecated on the happy path, while `attachTrpc` still accepts an explicit
+`callerFactory` positional for raw-tRPC embedders. No wire change, no hidden
+state.
 
 ## R766-N03 — option B (JSON data block): consumer side effects
 
@@ -948,9 +1027,75 @@ internal; here is why the design itself is reasonable and when to revisit it.
 handful of concurrent RPCs — the per-operation listener is a sound
 simplicity-over-throughput trade, and the source comment already says as much. A
 single multiplexing listener + `Map<id, observer>` is the O(1)-per-message
-"textbook" alternative and would be worth adopting **only** if profiling shows
-listener fan-out cost under heavy concurrent streaming. **Recommendation: keep as
-is; revisit only on evidence.** (This is why S04 was a doc-only change.)
+"textbook" alternative and would be worth adopting **only** if the fan-out is
+shown to matter under real concurrency. **Recommendation: keep as is, but
+instrument it so the "revisit" trigger is data, not a hunch.** The README reword
+already shipped; the concurrency signal below is the Iteration 2 ask.
+
+### Instrument it — a concurrency signal to decide on evidence
+
+The fan-out cost is `O(N)` per message, where `N` is the number of **concurrent
+in-flight operations** (each one owns a `window` `message` listener). `N` is the
+single variable that decides whether the per-operation design ever matters, so
+that is what we measure: its **peak** and **average**, plus the dispatch volume
+that multiplies it.
+
+**Where to sample it (for free).** The host already tracks every in-flight
+operation in [`AttachTrpcResult.activeOperations` + `.activeSubscriptions`](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L55-L78)
+(exposed read-only in R766-N04). Their combined size *is* `N`. Because each
+in-flight operation is exactly one host map entry **and** one webview listener,
+the host-side count is a faithful, zero-cost proxy for the webview fan-out — no
+webview→host round-trip needed.
+
+**How to emit it — reuse the accumulating telemetry.**
+[`callWithAccumulatingTelemetry`](../../../../src/utils/callWithAccumulatingTelemetry.ts#L96-L134)
+already reduces a `distributions` gauge to `min / max / sum / count` across a
+batch and sums plain `measurements`, so one call per dispatched operation gives
+us the whole picture without per-op event spam:
+
+```ts
+// host side, once per dispatched operation — given the AttachTrpcResult handle
+// (or, cleaner, the ProcedureLogger `concurrent` field proposed below)
+void callWithAccumulatingTelemetry('documentDB.webview.rpcConcurrency', (ctx) => {
+    const n = handle.activeOperations.size + handle.activeSubscriptions.size;
+    (ctx.telemetry as TelemetryWithDistributions).distributions.concurrentRpcOps = n; // gauge → min/max/sum/count
+    ctx.telemetry.measurements.dispatch = 1; // summed → total ops per flush window
+});
+```
+
+Optional tiny package hook to make this first-class instead of reaching into the
+maps: add a `concurrent` field to the `ProcedureLogger` log record (=
+`activeOperations.size + activeSubscriptions.size` at log time) — a natural
+extension of R766-N04's "expose for observation." Any consumer's logger can then
+forward it into their own telemetry.
+
+**Fields emitted** (batched — default 20 calls / 30 s):
+
+- `dist_concurrentRpcOps_max` — **peak concurrency; the number that matters** (the
+  high-water mark of simultaneous listeners).
+- `dist_concurrentRpcOps_sum` / `_count` — average concurrency = `sum / count`.
+- `dispatch` — total operations per flush window (volume / a rough rate over ~30 s).
+- `dist_auto_duration_ms_*` — per-op latency, recorded for free by the wrapper.
+
+**Guidelines — what reading sends us back to this.** The thresholds follow
+directly from the `O(N)` model: at small `N` the per-message work is a few
+id-string comparisons; the multiplexer's extra complexity — a shared routing
+table with the very corruption surface R766-N04 guards against — only pays off
+once `N` is routinely large or sustained-high **and** the message rate is high
+(the `O(N·M)` term bites).
+
+| Reading | Interpretation | Verdict |
+| --- | --- | --- |
+| `dist_concurrentRpcOps_max` ≤ 8 in ~all sessions | fan-out is a handful of comparisons per message | **Keep — and consider _retiring_ S04**: the concern is disproven |
+| occasional `_max` in 8–32 | spikes, not sustained | keep as is; leave the signal on |
+| `_max` ≥ 32 in ≳ 1 % of webview sessions, **or** average (`_sum / _count`) ≥ 8 sustained — especially if `dispatch`/window is also high (heavy streaming) | genuine, sustained fan-out | **Revisit**: build the single-listener + `Map<id, observer>` multiplexer |
+
+The signal is designed as much to **retire** S04 as to trigger work: if peak `N`
+stays tiny across the fleet (the expected outcome for interactive webviews), we
+close S04 permanently instead of carrying it as a perennial "maybe." Keep the
+event cheap — it is a gauge sample, so do **not** `suppressIfSuccessful` (we need
+the successful samples), and let the 20-call / 30-second batching keep the volume
+negligible.
 
 ## R766-N06 — create-or-reveal (unchanged)
 
