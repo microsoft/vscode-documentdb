@@ -255,8 +255,10 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
             // here propagates through the procedure's async generator into any inner
             // `for await` (including `TypedEventSink` consumers), which lets parked
             // promises settle with `{ done: true }` and the streaming task exit cleanly.
-            // We swallow rejection from `return()` because we have no useful reaction.
-            void Promise.resolve(record.iterator.return?.({ value: undefined, done: true })).catch(() => void 0);
+            // `AsyncIterator.return(value?)` takes an optional *return value*, not an
+            // `IteratorResult`; we have no domain value to return, so we call it with no
+            // argument. We swallow rejection from `return()` because we have no useful reaction.
+            void Promise.resolve(record.iterator.return?.()).catch(() => void 0);
             activeSubscriptions.delete(message.id);
         }
     };
@@ -367,11 +369,13 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
             // generators terminate even when parked on `next()`. The abort signal alone
             // cannot unblock a parked `next()`; `return()` propagates through the procedure's
             // `for await` into any inner event sink and settles its pending promise.
-            // Rejections from `return()` are swallowed because we have no useful reaction
-            // during shutdown.
+            // `AsyncIterator.return(value?)` takes an optional *return value*, not an
+            // `IteratorResult`; there is no domain value to return during shutdown, so it is
+            // called with no argument. Rejections from `return()` are swallowed because we
+            // have no useful reaction during shutdown.
             for (const { abortController, iterator } of activeSubscriptions.values()) {
                 abortController.abort();
-                void Promise.resolve(iterator.return?.({ value: undefined, done: true })).catch(() => void 0);
+                void Promise.resolve(iterator.return?.()).catch(() => void 0);
             }
             activeSubscriptions.clear();
         },
