@@ -66,8 +66,25 @@ describe('openWebview', () => {
         const controller = openWebview(makeContext(), makeOptions());
 
         const html = controller.panel.webview.html;
-        expect(html).toContain("render('myView'");
+        // R766-N03: initial data (including viewType) is delivered in an inert
+        // application/json block; the boot script parses it and calls render(...).
+        expect(html).toContain('id="vscode-ext-webview-initial-data"');
+        expect(html).toContain('"viewType":"myView"');
+        expect(html).toContain('render(__data.viewType');
         expect(html).toContain(encodeURIComponent(JSON.stringify({ hello: 'world' })));
+    });
+
+    it('escapes `</script>` in the serialized initial-data block so it cannot break out (R766-N03)', () => {
+        const controller = openWebview(makeContext(), {
+            ...makeOptions(),
+            viewType: '</script><script>alert(1)</script>',
+        });
+        const html = controller.panel.webview.html;
+
+        // The injected `<` must be escaped as \u003c inside the inert JSON block,
+        // so the raw break-out sequence never appears in the document.
+        expect(html).not.toContain('<script>alert(1)');
+        expect(html).toContain('\\u003c/script');
     });
 
     it('reveals the panel via revealToForeground', () => {
@@ -178,6 +195,7 @@ describe('new WebviewController(options)', () => {
 
         expect(controller).toBeInstanceOf(WebviewController);
         expect(controller.isDisposed).toBe(false);
-        expect(controller.panel.webview.html).toContain("render('myView'");
+        expect(controller.panel.webview.html).toContain('id="vscode-ext-webview-initial-data"');
+        expect(controller.panel.webview.html).toContain('"viewType":"myView"');
     });
 });

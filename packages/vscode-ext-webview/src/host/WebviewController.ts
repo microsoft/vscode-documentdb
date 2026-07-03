@@ -143,6 +143,22 @@ export interface WebviewControllerOptions<
 const DEFAULT_DEV_SERVER_HOST = 'http://localhost:18080';
 
 /**
+ * Serializes a value as JSON for embedding in an inert
+ * `<script type="application/json">` data block. Escapes `<` (and the JS line
+ * separators U+2028 / U+2029) so the text can never close the surrounding
+ * `</script>` element or open an HTML comment, which removes the
+ * script-context break-out class entirely (R766-N03). Every escape it emits is
+ * valid JSON, so `JSON.parse(element.textContent)` on the webview side restores
+ * the original value exactly.
+ */
+function serializeInertJson(value: unknown): string {
+    return JSON.stringify(value)
+        .replace(/</g, '\\u003c')
+        .replace(/\u2028/g, '\\u2028')
+        .replace(/\u2029/g, '\\u2029');
+}
+
+/**
  * WebviewController manages a `vscode.WebviewPanel` and provides tRPC-based
  * communication with the React webview. It handles incoming requests (queries,
  * mutations, and subscriptions) from the webview, routing them to server-side
@@ -232,11 +248,6 @@ export class WebviewController<
         // it to its panel and registers the returned disposable so the listener
         // and all in-flight operations are torn down on dispose. The dispatch
         // logger defaults to the zero-config console sink.
-        // The dispatch pump (message handling, abort / subscription lifecycle)
-        // lives in the free `attachTrpc` primitive. The controller simply wires
-        // it to its panel and registers the returned disposable so the listener
-        // and all in-flight operations are torn down on dispose. The dispatch
-        // logger defaults to the zero-config console sink.
         //
         // R766-N02: prefer the caller factory carried by the `trpc` instance (it
         // cannot be mismatched with `router`); fall back to the deprecated
@@ -299,10 +310,20 @@ export class WebviewController<
         ).join(' ');
 
         /**
-         * Note to code maintainers:
-         * encodeURIComponent(JSON.stringify(this.configuration)) below is crucial
-         * We want to avoid the webview from crashing when the configuration object contains 'unsupported' bytes
+         * R766-N03: the initial data (encoded config, l10n bundle, viewType) is
+         * delivered in an **inert** `application/json` data block and read by a
+         * nonce'd boot script, instead of being interpolated into executable
+         * inline scripts. `serializeInertJson` escapes `<`, so the block can never
+         * break out of its `</script>`. `initialData` stays
+         * `encodeURIComponent(JSON.stringify(config))` — this both avoids crashing
+         * the webview on "unsupported" bytes and keeps `useConfiguration`
+         * (which does `decodeURIComponent` + `JSON.parse`) unchanged.
          */
+        const initialDataJson = serializeInertJson({
+            initialData: encodeURIComponent(JSON.stringify(this._options.config)),
+            l10n: vscode.l10n.bundle ?? {},
+            viewType: this._options.viewType,
+        });
 
         return `<!DOCTYPE html>
                 <html lang="en">
@@ -314,17 +335,15 @@ export class WebviewController<
                 </head>
                     <body>
                         <div id="root"></div>
-                            <script nonce="${nonce}">
-                                globalThis.l10n_bundle = ${JSON.stringify(vscode.l10n.bundle ?? {})};
-                            </script>
+                            <script type="application/json" id="vscode-ext-webview-initial-data" nonce="${nonce}">${initialDataJson}</script>
                             <script type="module" nonce="${nonce}">
-                                window.config = {
-                                    ...window.config,
-                                    __initialData: '${encodeURIComponent(JSON.stringify(this._options.config))}'
-                                };
+                                const __el = document.getElementById('vscode-ext-webview-initial-data');
+                                const __data = JSON.parse(__el.textContent);
+                                globalThis.l10n_bundle = __data.l10n;
+                                window.config = { ...window.config, __initialData: __data.initialData };
 
                                 import { render } from "${srcUri}";
-                                render('${this._options.viewType}', acquireVsCodeApi());
+                                render(__data.viewType, acquireVsCodeApi());
                             </script>
 
                     </body>

@@ -719,7 +719,7 @@ follow-up pass.
 | R766-01 | `attachTrpc` foreign-message guard | ✅ Implemented in Iteration 2 (structural guard + throw-safe listener + foreign-message test). |
 | R766-N01 | Webview inbound `event.data` guard | ✅ Implemented in Iteration 2 (structural `onReceive` guard + test). |
 | R766-N02 | `createCallerFactory` ergonomics | ✅ Implemented in Iteration 2 (option A: `trpc` instance option; consumer adopted; `createCallerFactory` deprecated). |
-| R766-N03 | Inline-script hardening | Pursuing **option B** (JSON data block); side effects below. |
+| R766-N03 | Inline-script hardening | ✅ Implemented in Iteration 2 (option B: inert `application/json` data block + nonce'd boot parser). |
 | R766-N05 | Observer exceptions → telemetry | Options only, per request; not implemented. |
 | R766-N06 | Create-or-reveal helper | Unchanged: document the pattern, don't build it yet. |
 | R766-S04 | Per-operation listener design | Doc reword shipped; Iteration 2 asks for a concurrency telemetry signal (peak/avg in-flight ops) to decide on evidence. |
@@ -968,6 +968,18 @@ deprecated on the happy path, while `attachTrpc` still accepts an explicit
 state.
 
 ## R766-N03 — option B (JSON data block): consumer side effects
+
+> ✅ **Implemented in Iteration 2** [R766-N03]. `WebviewController.getDocumentTemplate`
+> now emits the initial data (encoded config, l10n bundle, viewType) in an inert
+> `<script type="application/json" id="vscode-ext-webview-initial-data">` block and
+> reads it from a nonce'd module boot script (`JSON.parse(el.textContent)` →
+> `globalThis.l10n_bundle` / `window.config.__initialData` / `render(viewType)`).
+> A `serializeInertJson` helper escapes `<` (plus U+2028 / U+2029) so the block
+> cannot break out of its `</script>`. `__initialData` stays
+> `encodeURIComponent`'d, so `useConfiguration` is unchanged. Added a regression
+> test asserting an injected `</script>` in `viewType` is escaped to `\u003c`.
+> Standard-template consumers (all of them, via `WebviewController`) are
+> unaffected.
 
 **Option B** replaces the executable inline-script injection with a non-executed
 data block:
