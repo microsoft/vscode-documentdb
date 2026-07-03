@@ -230,9 +230,10 @@ The channel exposes three observe methods, each returning an unsubscribe:
 
 `info` is a `CallInfo` (`{ type, path }`). The channel observes; it does not
 swallow. Your call-site handlers still run and still receive the error.
-Subscription errors are surfaced through `onError` as well, alongside the
-subscription's own `.subscribe({ onError })` hook; deduplicate at the call site
-if you observe both.
+**Subscriptions are intentionally _not_ published to the channel** — observe a
+subscription's outcome through its own `.subscribe({ onError, onComplete })`
+callbacks. Only query and mutation outcomes flow through `onSuccess` / `onError`
+/ `onAborted`, so a subscription's events are never surfaced twice.
 
 The channel and the tRPC client are created together and shared per webview, so
 `useTrpcClient()` and `useRpcEvents()` always see the same instance.
