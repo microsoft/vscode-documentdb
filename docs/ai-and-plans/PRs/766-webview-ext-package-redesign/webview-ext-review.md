@@ -721,7 +721,7 @@ follow-up pass.
 | R766-N02 | `createCallerFactory` ergonomics | ✅ Implemented in Iteration 2 (option A: `trpc` instance option; consumer adopted; `createCallerFactory` deprecated). |
 | R766-N03 | Inline-script hardening | ✅ Implemented in Iteration 2 (option B: inert `application/json` data block + nonce'd boot parser). |
 | R766-N05 | Observer exceptions → telemetry | Options only, per request; not implemented. |
-| R766-N06 | Create-or-reveal helper | Unchanged: document the pattern, don't build it yet. |
+| R766-N06 | Create-or-reveal helper | ✅ Documented in Iteration 2 (ADVANCED.md pattern; no package code). |
 | R766-S04 | Per-operation listener design | Doc reword shipped; Iteration 2 asks for a concurrency telemetry signal (peak/avg in-flight ops) to decide on evidence. |
 
 ## R766-01 — side effects on existing projects, and A/B/C re-analysis
@@ -1143,6 +1143,12 @@ the successful samples), and let the 20-call / 30-second batching keep the volum
 negligible.
 
 ## R766-N06 — create-or-reveal (unchanged)
+
+> ✅ **Documented in Iteration 2** [R766-N06]. Added a "Create-or-reveal
+> (single-instance panels)" section to ADVANCED.md showing the consumer-side
+> `Map<key, controller>` + `revealToForeground()` + `onDisposed()` eviction
+> pattern. No package code — the registry stays in consumer space, per the
+> recommendation below.
 
 No change from the first pass: **document** the create-or-reveal pattern in
 ADVANCED.md rather than building a panel registry into the package. Revisit only

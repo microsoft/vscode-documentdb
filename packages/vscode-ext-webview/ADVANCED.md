@@ -13,6 +13,7 @@ across four entry points; see [Tiers](#tiers-and-when-to-use-each) below.
 - [Tiers and when to use each](#tiers-and-when-to-use-each)
 - [Bring your own panel: `attachTrpc`](#bring-your-own-panel-attachtrpc)
 - [Your own tRPC instance and `createCallerFactory`](#your-own-trpc-instance-and-createcallerfactory)
+- [Create-or-reveal (single-instance panels)](#create-or-reveal-single-instance-panels)
 - [Telemetry adapters](#telemetry-adapters)
 - [The webview event channel](#the-webview-event-channel)
 - [Framework-agnostic client: `connectTrpc`](#framework-agnostic-client-connecttrpc)
@@ -107,6 +108,55 @@ instance, which works only when your router is built with the package's default
 `router` / `publicProcedure` (the ones exported from `.`). The old pattern of
 re-exporting and passing a standalone `createCallerFactory` to `openWebview` is
 deprecated in favour of the `trpc` option, but still honored.
+
+## Create-or-reveal (single-instance panels)
+
+`openWebview` creates a **new** panel on every call, so opening the same logical
+view twice yields two tabs. Many extensions instead want *create-or-reveal*: the
+first call opens the panel, later calls for the same key just bring the existing
+tab to the foreground. The package deliberately does **not** own this — a panel
+registry is consumer state, not transport state — but the returned controller
+handle gives you everything needed to implement it in a few lines.
+
+Keep a `Map` from your own key to the live controller, reveal on a hit, and clear
+the entry when the panel is disposed:
+
+```ts
+import { openWebview, type WebviewController } from '@microsoft/vscode-ext-webview/host';
+
+const openPanels = new Map<string, WebviewController<AppRouter, MyConfig, RouterContext>>();
+
+function openOrReveal(ctx: vscode.ExtensionContext, key: string, config: MyConfig) {
+  const existing = openPanels.get(key);
+  if (existing && !existing.isDisposed) {
+    existing.revealToForeground(); // already open — just focus it
+    return existing;
+  }
+
+  const controller = openWebview<AppRouter, MyConfig, RouterContext>(ctx, {
+    title: `My View — ${key}`,
+    viewType: 'myView',
+    router: appRouter,
+    trpc,
+    context: {
+      /* … */
+    },
+    config,
+    sourceLayout,
+  });
+
+  openPanels.set(key, controller);
+  controller.onDisposed(() => openPanels.delete(key)); // evict so a later call re-creates
+  return controller;
+}
+```
+
+The key is yours to choose: a document id, a connection id, or `viewType` alone
+for a true singleton. `revealToForeground()` and `onDisposed()` are the only
+handle members this needs, and evicting on dispose keeps the map from leaking or
+revealing a disposed controller. If several consumers converge on exactly this,
+it becomes a candidate to promote into the package later; until then, keeping it
+in consumer code keeps the package lean.
 
 ## Telemetry adapters
 
