@@ -146,8 +146,9 @@ export function activate(ctx: vscode.ExtensionContext) {
 `openWebview` returns a `WebviewController` handle exposing `panel`,
 `onDisposed`, `revealToForeground`, `dispose`, and `isDisposed`. It opens the
 panel, renders the HTML, and wires the tRPC dispatch pump. Procedure activity
-is logged to the console out of the box; pass a `telemetry` option to route the
-entries elsewhere.
+is logged to the extension-host console out of the box; pass a `logger` option
+to route the entries elsewhere. See [Observability](#observability) for logging
+and Application Insights-style telemetry.
 
 **4. Render the view (webview / browser)**
 
@@ -237,6 +238,77 @@ is covered in depth in [ADVANCED.md](./ADVANCED.md).
 See [ADVANCED.md](./ADVANCED.md) for the full manual, including a single shared
 client, worked telemetry adapters, the event channel, push events, and the
 host/browser import boundary.
+
+## Observability
+
+Two independent layers report what the transport is doing: **logging** (console
+/ output, for humans) and **telemetry** (structured analytics, for dashboards).
+They are separate on purpose — logging is plumbing, telemetry is policy — so you
+can enable either, both, or neither.
+
+### Extension-host dispatch logging
+
+The host dispatcher logs one structured entry per completed query, mutation, and
+subscription (`[tRPC] <type> <path> (<ms>) <status>`). It is on by default via
+`consoleProcedureLogger`, writing to the **extension-host console** — the
+`Extension Host` output channel, or your debugger's Debug Console when you run
+the extension under a debugger.
+
+Route those entries elsewhere by passing your own `ProcedureLogger` as the
+`logger` option. The option is named `logger`, not `telemetry`, because it is log
+plumbing; for analytics see the next section.
+
+```ts
+import { openWebview, type ProcedureLogger } from '@microsoft/vscode-ext-webview/host';
+
+const channel = vscode.window.createOutputChannel('My View');
+const logger: ProcedureLogger = {
+  log: (e) => channel.appendLine(`${e.type} ${e.path} ${e.durationMs}ms ${e.ok ? 'ok' : 'FAIL'}`),
+};
+
+openWebview(ctx, {
+  /* …title, viewType, router, context, config, sourceLayout… */
+  logger,
+});
+```
+
+### Telemetry (Application Insights via `@microsoft/vscode-azext-utils`)
+
+For structured analytics, wire the instance-agnostic `telemetryMiddlewareBody`
+onto your procedures with a `TelemetryRunner` adapter. The runner establishes the
+telemetry scope; the body times each call, records `Canceled` / `Failed`, and
+injects a telemetry bag into `ctx.telemetry`. Most VS Code extensions route this
+through `callWithTelemetryAndErrorHandling`:
+
+```ts
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { initWebviewTrpc } from '@microsoft/vscode-ext-webview';
+import { telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
+
+const runner: TelemetryRunner = {
+  async run(invocation, execute) {
+    const result = await callWithTelemetryAndErrorHandling(
+      `myExt.rpc.${invocation.type}.${invocation.path}`,
+      async (context) => {
+        context.errorHandling.suppressDisplay = true;
+        return execute(context.telemetry); // hands the azext telemetry bag to the body
+      },
+    );
+    if (!result) throw new Error(`no telemetry result for ${invocation.path}`);
+    return result;
+  },
+};
+
+const { publicProcedure } = initWebviewTrpc<RouterContext>();
+// Build your router from `tracked` instead of the bare `publicProcedure`:
+export const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
+```
+
+Inside a procedure, read `ctx.telemetry` to add properties/measurements. The
+package types that slot minimally, so azext consumers usually re-type it to
+`ITelemetryContext` with a one-line `WithTelemetry<T>` helper — see
+[ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full worked adapter and a
+copyable helper.
 
 ## Entry points
 

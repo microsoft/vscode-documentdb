@@ -14,7 +14,7 @@ import { WebviewController, type WebviewControllerOptions } from './WebviewContr
  *
  * This is sugar over `new WebviewController({ extensionContext, ...options })`.
  * The returned controller owns the panel, renders the HTML, and wires the tRPC
- * dispatch pump (with the default console logger unless `options.telemetry` is
+ * dispatch pump (with the default console logger unless `options.logger` is
  * supplied). Use it directly for the common case; subclass
  * {@link WebviewController} when you need lifecycle hooks or extra methods.
  *

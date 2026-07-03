@@ -91,12 +91,19 @@ export interface WebviewControllerOptions<
     devServerHost?: string;
 
     /**
-     * Sink for the zero-config dispatch logger. One structured entry is logged
-     * per completed query, mutation, and subscription. Defaults to
-     * {@link consoleProcedureLogger} so the panel logs to the console out of the
-     * box; pass your own {@link ProcedureLogger} to route the entries elsewhere.
+     * Sink for the zero-config **dispatch logger**: one structured entry per
+     * completed query, mutation, and subscription, logged at the transport
+     * boundary. Defaults to {@link consoleProcedureLogger} so the panel logs to
+     * the extension-host console out of the box; pass your own
+     * {@link ProcedureLogger} to route the entries elsewhere (an output channel, a
+     * file), or an inert logger to silence it.
+     *
+     * This is deliberately named `logger`, not `telemetry`: it is console/log
+     * plumbing, not analytics. For Application Insights-style reporting, wire
+     * {@link telemetryMiddlewareBody} + a `TelemetryRunner` onto your procedures
+     * (see the package's Observability docs).
      */
-    telemetry?: ProcedureLogger;
+    logger?: ProcedureLogger;
 
     /** Optional icon shown in the webview tab. */
     icon?:
@@ -207,7 +214,7 @@ export class WebviewController<
             context,
             this._options.router,
             this._options.createCallerFactory,
-            this._options.telemetry ?? consoleProcedureLogger,
+            this._options.logger ?? consoleProcedureLogger,
         );
         this.registerDisposable(disposable);
     }
