@@ -436,4 +436,5 @@ extensions are working examples of that layout against this package.
 
 ## License
 
-MIT. See [LICENSE.md](../../LICENSE.md) at the repository root.
+MIT. See [LICENSE](./LICENSE) (shipped with the package); the repository-wide
+copy lives at the [repository root](../../LICENSE.md).

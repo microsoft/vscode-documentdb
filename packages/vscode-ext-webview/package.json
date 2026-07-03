@@ -37,7 +37,9 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "ADVANCED.md",
+    "LICENSE"
   ],
   "scripts": {
     "build": "tsc -p .",
