@@ -115,4 +115,63 @@ describe('createEventChannel', () => {
         channel.emitAborted(queryInfo);
         expect(late).toHaveBeenCalledTimes(1);
     });
+
+    describe('observer isolation (R766-N05)', () => {
+        it('isolates a throwing handler: later handlers still run and emit does not throw', () => {
+            const channel = createEventChannel({ onObserverError: jest.fn() });
+            const order: string[] = [];
+            channel.onSuccess(() => {
+                order.push('first');
+                throw new Error('observer boom');
+            });
+            channel.onSuccess(() => {
+                order.push('second');
+            });
+
+            expect(() => channel.emitSuccess(queryInfo, null)).not.toThrow();
+            // The throw from 'first' did not skip 'second' nor escape emit.
+            expect(order).toEqual(['first', 'second']);
+        });
+
+        it('routes a thrown observer error to onObserverError with the call info and phase', () => {
+            const onObserverError = jest.fn();
+            const channel = createEventChannel({ onObserverError });
+            const boom = new Error('observer boom');
+            channel.onError(() => {
+                throw boom;
+            });
+
+            channel.emitError(new Error('call failed'), queryInfo);
+
+            expect(onObserverError).toHaveBeenCalledTimes(1);
+            expect(onObserverError).toHaveBeenCalledWith(boom, { info: queryInfo, phase: 'error' });
+        });
+
+        it('defaults the sink to console.error when none is provided', () => {
+            const spy = jest.spyOn(console, 'error').mockImplementation(() => {});
+            try {
+                const channel = createEventChannel();
+                channel.onAborted(() => {
+                    throw new Error('observer boom');
+                });
+                expect(() => channel.emitAborted(queryInfo)).not.toThrow();
+                expect(spy).toHaveBeenCalledTimes(1);
+            } finally {
+                spy.mockRestore();
+            }
+        });
+
+        it('never lets a throw from the sink itself escape dispatch', () => {
+            const channel = createEventChannel({
+                onObserverError: () => {
+                    throw new Error('sink boom');
+                },
+            });
+            channel.onSuccess(() => {
+                throw new Error('observer boom');
+            });
+
+            expect(() => channel.emitSuccess(queryInfo, null)).not.toThrow();
+        });
+    });
 });

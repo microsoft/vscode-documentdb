@@ -302,6 +302,32 @@ subscription's outcome through its own `.subscribe({ onError, onComplete })`
 callbacks. Only query and mutation outcomes flow through `onSuccess` / `onError`
 / `onAborted`, so a subscription's events are never surfaced twice.
 
+### When an observer throws: `onObserverError`
+
+The channel **isolates** a throwing observer: if one of your `onSuccess` /
+`onError` / `onAborted` handlers throws, the channel catches it so the throw
+cannot break the tRPC call the handler was only observing (the observer-only
+contract). The isolated error is routed to an `onObserverError` sink that
+defaults to `console.error`. Pass your own via `connectTrpc(vscodeApi, {
+onObserverError })` — or the `onObserverError` prop of `WithWebviewContext` — to
+route observer failures to telemetry:
+
+```ts
+const { client, events } = connectTrpc<AppRouter>(vscodeApi, {
+  onObserverError: (error, { info, phase }) => {
+    // Structured: you know exactly which call and phase produced the throw.
+    reportEvent('webview.observerError', { path: info.path, phase, message: String(error) });
+  },
+});
+```
+
+`phase` is `'success' | 'error' | 'aborted'` and `info` is the same `CallInfo`
+the observers receive. A throw from the sink itself is also swallowed — nothing
+an observer (or its error sink) does can affect dispatch. The default is
+deliberately quiet (`console.error`, no telemetry) so a generic consumer is not
+opted into events it may not want; wire the sink when you want observer failures
+in your telemetry.
+
 The channel and the tRPC client are created together and shared per webview, so
 `useTrpcClient()` and `useRpcEvents()` always see the same instance.
 

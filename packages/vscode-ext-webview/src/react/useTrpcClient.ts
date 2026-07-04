@@ -56,6 +56,6 @@ export type TrpcClient<TRouter extends AnyRouter> = CreateTRPCClient<TRouter>;
  * ```
  */
 export function useTrpcClient<TRouter extends AnyRouter>(): TrpcClient<TRouter> {
-    const { vscodeApi, enableRpcLogging } = useContext(WebviewContext);
-    return getWebviewConnection<TRouter>(vscodeApi, { logger: enableRpcLogging }).client;
+    const { vscodeApi, enableRpcLogging, onObserverError } = useContext(WebviewContext);
+    return getWebviewConnection<TRouter>(vscodeApi, { logger: enableRpcLogging, onObserverError }).client;
 }

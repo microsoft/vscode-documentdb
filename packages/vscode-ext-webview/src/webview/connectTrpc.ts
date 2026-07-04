@@ -19,7 +19,7 @@ import { createTRPCClient, type CreateTRPCClient, loggerLink, type TRPCLink } fr
 import { type AnyRouter } from '@trpc/server';
 import { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
 import { type ErrorHandler, eventLink } from './errorLink';
-import { createEventChannel, type RpcEventChannel } from './events';
+import { createEventChannel, type ObserverErrorHandler, type RpcEventChannel } from './events';
 import { vscodeLink } from './vscodeLink';
 
 /**
@@ -49,6 +49,15 @@ export interface ConnectTrpcOptions {
      * console from VS Code.
      */
     logger?: boolean;
+
+    /**
+     * Called when one of your event-channel observers (`events.onSuccess` /
+     * `onError` / `onAborted`) throws. The channel always isolates the throw so a
+     * broken observer cannot break the tRPC call it was only observing; this hook
+     * only decides where the isolated error goes. Defaults to `console.error`.
+     * Provide your own to route observer failures to telemetry.
+     */
+    onObserverError?: ObserverErrorHandler;
 }
 
 /** The pair returned by {@link connectTrpc}. */
@@ -82,7 +91,7 @@ export function connectTrpc<TRouter extends AnyRouter>(
     vscodeApi: VsCodeApiLike,
     options?: ConnectTrpcOptions,
 ): ConnectTrpcResult<TRouter> {
-    const channel = createEventChannel();
+    const channel = createEventChannel({ onObserverError: options?.onObserverError });
 
     if (options?.onError) {
         const onError = options.onError;

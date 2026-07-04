@@ -278,6 +278,27 @@ When you launch the extension with a debugger attached this is the webview's own
 console — distinct from the extension-host Debug Console, where the dispatch
 logger below writes.
 
+### Webview-side observer errors
+
+Cross-cutting observers on the event channel (`useRpcEvents()` / `connectTrpc`'s
+`events`) are **isolated**: if one of your `onSuccess` / `onError` / `onAborted`
+handlers throws, the channel catches it so a broken observer can never break the
+RPC it was only watching. The isolated error goes to an `onObserverError` sink
+that defaults to `console.error`. Route it to telemetry when you want observer
+failures tracked — **off by default** so you are not opted into events you may
+not want:
+
+```tsx
+<WithWebviewContext
+  vscodeApi={vscodeApi}
+  onObserverError={(error, { info, phase }) => report(info.path, phase, error)}
+>
+  <App />
+</WithWebviewContext>
+```
+
+See [ADVANCED.md](./ADVANCED.md#the-webview-event-channel) for the full contract.
+
 ### Extension-host dispatch logging
 
 The host dispatcher logs one structured entry per completed query, mutation, and

@@ -51,6 +51,24 @@ export type ErrorEventHandler = (error: Error, info: CallInfo) => void;
 /** Handler invoked when a call is aborted (canceled). */
 export type AbortedHandler = (info: CallInfo) => void;
 
+/** The emit phase whose observer threw. */
+export type ObserverErrorPhase = 'success' | 'error' | 'aborted';
+
+/** Context handed to an {@link ObserverErrorHandler} alongside the thrown value. */
+export interface ObserverErrorContext {
+    /** The call whose outcome was being observed when the handler threw. */
+    readonly info: CallInfo;
+    /** The emit phase whose handler threw. */
+    readonly phase: ObserverErrorPhase;
+}
+
+/**
+ * Invoked when one of the channel's own `on*` handlers throws. The channel
+ * always isolates the throw so an observer cannot break the tRPC call it is only
+ * observing; this hook decides where the isolated error goes (e.g. telemetry).
+ */
+export type ObserverErrorHandler = (error: unknown, context: ObserverErrorContext) => void;
+
 /**
  * The observe side of an event channel. Each `on*` method registers a handler
  * and returns an {@link Unsubscribe} to remove it. Registering or removing a
@@ -86,17 +104,60 @@ function subscribe<THandler>(handlers: Set<THandler>, handler: THandler): Unsubs
     };
 }
 
+/** Options for {@link createEventChannel}. */
+export interface EventChannelOptions {
+    /**
+     * Called when one of the channel's own `on*` handlers throws. The channel
+     * **always** isolates the throw so an observer cannot break the tRPC call it
+     * is only observing (upholding the observer-only contract above); this hook
+     * only decides where the isolated error goes. Defaults to `console.error`.
+     * Provide your own to route observer failures to telemetry.
+     */
+    onObserverError?: ObserverErrorHandler;
+}
+
 /**
  * Create a fresh {@link EventChannel}.
  *
  * Dispatch is snapshot-safe: each `emit*` iterates over a copy of the handler
  * set, so a handler that subscribes or unsubscribes another handler during
  * dispatch never corrupts the in-flight iteration.
+ *
+ * Dispatch is also throw-safe: a handler that throws is isolated and routed to
+ * `options.onObserverError` (default `console.error`) rather than propagating
+ * into the tRPC link chain and breaking the call it was only observing.
  */
-export function createEventChannel(): EventChannel {
+export function createEventChannel(options?: EventChannelOptions): EventChannel {
     const successHandlers = new Set<SuccessHandler>();
     const errorHandlers = new Set<ErrorEventHandler>();
     const abortedHandlers = new Set<AbortedHandler>();
+
+    const onObserverError: ObserverErrorHandler =
+        options?.onObserverError ??
+        ((error, context) =>
+            // eslint-disable-next-line no-console -- default zero-config observer-error sink
+            console.error(
+                `[vscode-ext-webview] an event observer threw during '${context.phase}' of '${context.info.path}'`,
+                error,
+            ));
+
+    /**
+     * Runs one observer in isolation: a throw is routed to `onObserverError`
+     * instead of propagating into the tRPC link chain. A throw from the sink
+     * itself is swallowed - it must never affect dispatch.
+     */
+    const runObserver = (phase: ObserverErrorPhase, info: CallInfo, call: () => void): void => {
+        try {
+            call();
+        } catch (error) {
+            try {
+                onObserverError(error, { info, phase });
+            } catch {
+                // The sink itself threw; there is nothing useful to do and it
+                // must not break dispatch.
+            }
+        }
+    };
 
     return {
         onSuccess(handler) {
@@ -110,17 +171,17 @@ export function createEventChannel(): EventChannel {
         },
         emitSuccess(info, data) {
             for (const handler of [...successHandlers]) {
-                handler(info, data);
+                runObserver('success', info, () => handler(info, data));
             }
         },
         emitError(error, info) {
             for (const handler of [...errorHandlers]) {
-                handler(error, info);
+                runObserver('error', info, () => handler(error, info));
             }
         },
         emitAborted(info) {
             for (const handler of [...abortedHandlers]) {
-                handler(info);
+                runObserver('aborted', info, () => handler(info));
             }
         },
     };

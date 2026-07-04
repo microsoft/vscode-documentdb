@@ -9,6 +9,7 @@ import { type l10nJsonFormat } from '@vscode/l10n';
 import type * as React from 'react';
 import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { type WebviewApi } from 'vscode-webview';
+import { reportObserverError } from './_integration/reportObserverError';
 import { type WebviewName, WebviewRegistry } from './_integration/WebviewRegistry';
 import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
 
@@ -29,7 +30,7 @@ export function render<V extends ViewKey>(key: V, vscodeApi: WebviewApi<WebviewS
 
     root.render(
         <DynamicThemeProvider useAdaptive={true}>
-            <WithWebviewContext vscodeApi={vscodeApi}>
+            <WithWebviewContext vscodeApi={vscodeApi} onObserverError={reportObserverError}>
                 <Component />
             </WithWebviewContext>
         </DynamicThemeProvider>,

@@ -37,6 +37,6 @@ import { WebviewContext } from './WebviewContext';
  * ```
  */
 export function useRpcEvents(): RpcEventChannel {
-    const { vscodeApi, enableRpcLogging } = useContext(WebviewContext);
-    return getWebviewConnection(vscodeApi, { logger: enableRpcLogging }).events;
+    const { vscodeApi, enableRpcLogging, onObserverError } = useContext(WebviewContext);
+    return getWebviewConnection(vscodeApi, { logger: enableRpcLogging, onObserverError }).events;
 }
