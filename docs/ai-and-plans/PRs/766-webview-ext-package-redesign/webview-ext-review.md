@@ -677,7 +677,7 @@ follow-up; **Info** = judgment call. **Status** column added after Iteration 1
 | R766-N01 | Med | webview transport | A (structural guard) | ✅ `ade2ce61` (Iteration 2) |
 | R766-S02 | Low | webview logging | A (opt-in logger, off by default) | ✅ `6363a6f2` |
 | R766-N04 | Low | host primitive | A (`ReadonlyMap`) | ✅ `0bd16afa` |
-| R766-N05 | Low | event channel | isolate throws + telemetry hook | ⏭ Iteration 3 (options only) |
+| R766-N05 | Low | event channel | isolate throws + `onObserverError` (option 1) | ✅ `76227034` (Iteration 2) |
 | R766-N03 | Low | security hardening | B (JSON data block, per request) | ✅ `d5748abe` (Iteration 2) |
 | R766-N08 | Low | naming | A (rename `telemetry` → `logger`) | ✅ `76f99484` |
 | R766-04 | Low | docs | A (fix ADVANCED.md) | ✅ `61a01033` |
@@ -720,7 +720,19 @@ follow-up pass.
 | R766-N01 | Webview inbound `event.data` guard | ✅ Implemented in Iteration 2 (structural `onReceive` guard + test). |
 | R766-N02 | `createCallerFactory` ergonomics | ✅ Implemented in Iteration 2 (option A: `trpc` instance option; consumer adopted; `createCallerFactory` deprecated). |
 | R766-N03 | Inline-script hardening | ✅ Implemented in Iteration 2 (option B: inert `application/json` data block + nonce'd boot parser). |
-| R766-N05 | Observer exceptions → telemetry | ⏭ Deferred to Iteration 3 (options only, per request; correctness fix held to ship with the hook). |
+> ✅ **Implemented in Iteration 2** [R766-N05] (`76227034`). Shipped **option 1**:
+> `createEventChannel` now always **isolates** a throwing `onSuccess` / `onError`
+> / `onAborted` observer (upholding the observer-only contract — a broken observer
+> can no longer break the tRPC call it watches) and routes the isolated error to
+> an `onObserverError` sink that defaults to `console.error`. The hook is threaded
+> through `connectTrpc` and `WithWebviewContext` / the hooks. It is **off by
+> default in the happy path** (console-only, no telemetry — a generic consumer is
+> not opted into events it may not want). **DocumentDB opts in for itself** via
+> `reportObserverError`, which keeps the structured `console.error` and elevates
+> to the browser `reportError()` global (the “general observability” of option 5)
+> without re-entering the tRPC channel. Tests cover isolation, sink routing, the
+> default, a throwing sink, and the DocumentDB sink. The option analysis below is
+> retained as the rationale.
 | R766-N06 | Create-or-reveal helper | ✅ Documented in Iteration 2 (ADVANCED.md pattern; no package code). |
 | R766-S04 | Per-operation listener design | ✅ Instrumented in Iteration 2 (concurrency gauge: `ProcedureLogger.concurrent` + accumulating telemetry). |
 
@@ -744,10 +756,11 @@ build across all workspaces (clean).
 | R766-N03 | `d5748abe` | Initial data delivered in an inert `application/json` block + nonce'd boot parser; `serializeInertJson` escapes `<` | Removes the inline-script break-out class by construction (option B). `__initialData` stays encoded, so `useConfiguration` is unchanged. |
 | R766-N06 | `b603affd` | ADVANCED.md documents the create-or-reveal pattern (consumer-side `Map` + `revealToForeground` + `onDisposed`) | Keeps the panel registry in consumer space; the package stays a transport library. Documented, not built. |
 | R766-S04 | `dbbf9969` | `ProcedureLogEntry.concurrent` stamped by `attachTrpc`; DocumentDB `rpcConcurrencyLogger` → accumulating-telemetry `concurrentRpcOps` distribution + `dispatch` counter | Turns “revisit only on evidence” into a real concurrency signal (peak / average in-flight ops) to judge the per-operation listener. |
+| R766-N05 | `76227034` | `createEventChannel` isolates throwing observers and routes them to an `onObserverError` sink (default `console.error`); threaded through `connectTrpc` / `WithWebviewContext`; DocumentDB opts in via `reportObserverError` (console + `reportError()`) | A throwing observer previously broke the tRPC call it observed. Option 1: correctness fix (always-on isolation) + opt-in structured sink; off by default in the happy path so consumers are not opted into unwanted events. |
 
-**Deferred to Iteration 3:** R766-N05 (observer-exception isolation + telemetry
-hook — options only per request; the cheap correctness fix is held so it ships
-with the chosen hook).
+**Iteration 2 wrap-up:** all deferred review items are now addressed. R766-N05
+was subsequently implemented (option 1) at consumer request, so nothing remains
+open for a later iteration.
 
 ## R766-01 — side effects on existing projects, and A/B/C re-analysis
 
