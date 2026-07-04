@@ -33,11 +33,10 @@ export const reportObserverError: ObserverErrorHandler = (error, { info, phase }
     // Structured, always-visible context in the webview devtools console.
     console.error(`[DocumentDB] an RPC event observer threw during '${phase}' of '${info.path}'`, err);
 
-    // Elevate to the webview's global error stream (the "reportError" mechanism)
-    // so global error monitoring picks it up too. Feature-detected because not
-    // every runtime exposes `reportError`; the console line above is the floor.
-    const globalReportError = (globalThis as { reportError?: (value: unknown) => void }).reportError;
-    if (typeof globalReportError === 'function') {
-        globalReportError(err);
+    // Elevate to the webview's global error stream via the DOM `reportError()`
+    // global so global error monitoring picks it up too. Guarded because not
+    // every runtime exposes it (e.g. tests); the console line above is the floor.
+    if (typeof globalThis.reportError === 'function') {
+        globalThis.reportError(err);
     }
 };
