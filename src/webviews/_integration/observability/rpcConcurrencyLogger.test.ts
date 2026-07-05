@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type ProcedureLogEntry } from '@microsoft/vscode-ext-webview/host';
-import { callWithAccumulatingTelemetry } from '../../utils/callWithAccumulatingTelemetry';
-import { WEBVIEW_CONFIG } from './configuration';
+import { callWithAccumulatingTelemetry } from '../../../utils/callWithAccumulatingTelemetry';
+import { WEBVIEW_CONFIG } from '../configuration';
 import { rpcConcurrencyLogger } from './rpcConcurrencyLogger';
 
 // Mock the two runtime dependencies so the logger can be exercised without
@@ -14,7 +14,7 @@ const consoleLog = jest.fn();
 jest.mock('@microsoft/vscode-ext-webview/host', () => ({
     consoleProcedureLogger: { log: (entry: unknown) => consoleLog(entry) },
 }));
-jest.mock('../../utils/callWithAccumulatingTelemetry', () => ({
+jest.mock('../../../utils/callWithAccumulatingTelemetry', () => ({
     callWithAccumulatingTelemetry: jest.fn(),
 }));
 

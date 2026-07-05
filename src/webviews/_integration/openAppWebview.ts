@@ -37,7 +37,7 @@ import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { appRouter, type AppRouter, type BaseRouterContext } from './appRouter';
 import { WEBVIEW_CONFIG } from './configuration';
-import { rpcConcurrencyLogger } from './rpcConcurrencyLogger';
+import { rpcConcurrencyLogger } from './observability/rpcConcurrencyLogger';
 import { trpc } from './trpc';
 import { type WebviewName } from './WebviewRegistry';
 

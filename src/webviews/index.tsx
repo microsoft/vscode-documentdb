@@ -9,7 +9,7 @@ import { type l10nJsonFormat } from '@vscode/l10n';
 import type * as React from 'react';
 import { createRoot } from 'react-dom/client'; // eslint-disable-line import/no-internal-modules
 import { type WebviewApi } from 'vscode-webview';
-import { reportObserverError } from './_integration/reportObserverError';
+import { reportObserverError } from './_integration/observability/reportObserverError';
 import { type WebviewName, WebviewRegistry } from './_integration/WebviewRegistry';
 import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
 

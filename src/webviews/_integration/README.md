@@ -18,6 +18,7 @@ Local integration layer between the DocumentDB extension and
 | `openAppWebview.ts`  | host                      | DocumentDB preset over the package `openWebview` factory. Pre-fills `appRouter`, `createCallerFactory`, the telemetry logger, and the `configuration.ts` layout, so each per-view factory only passes what is unique to its view. This is the function-shaped replacement for the former `WebviewControllerBase` class.                                                                   |
 | `useTrpcClient.ts`   | webview                   | React hook pre-typed to `AppRouter`, so components call `useTrpcClient()` without repeating the router type argument.                                                                                                                                                                                                                                                                     |
 | `WebviewRegistry.ts` | webview value + host type | Maps each webview name to its React root component (read by `render()` in `src/webviews/index.tsx`) and is the source of the `WebviewName` union (used host-side by `openAppWebview`). See the file's own comment for how to add an entry.                                                                                                                                                |
+| `observability/`     | host + webview            | DocumentDB's opt-in observability sinks that specialize the framework's generic defaults into this extension's telemetry and error pipelines: `rpcConcurrencyLogger.ts` (host) and `reportObserverError.ts` (webview). See [`observability/README.md`](./observability/README.md).                                                                                                        |
 
 Per-view router files (`collectionViewRouter.ts`, `documentsViewRouter.ts`)
 live next to their views, not here. See "Per-view router convention" below.
@@ -32,6 +33,8 @@ live next to their views, not here. See "Per-view router convention" below.
 | Change the telemetry sink or RPC event namespace      | `configuration.ts` (event prefixes) + `trpc.ts` (the `TelemetryRunner` sink)               |
 | Add a field to the per-procedure context              | `BaseRouterContext` in `appRouter.ts`                                                      |
 | Change the bundle layout or dev-server host           | `configuration.ts`                                                                         |
+| Change how RPC concurrency is logged / sampled        | `observability/rpcConcurrencyLogger.ts`                                                    |
+| Change how webview event-observer errors are reported | `observability/reportObserverError.ts`                                                     |
 
 ## Data flow
 
@@ -64,5 +67,8 @@ Each per-view router:
 
 This folder was reshaped for the `@microsoft/vscode-ext-webview` redesign: the
 former `WebviewControllerBase` class became the `openAppWebview` factory, and
-the telemetry sink moved into `trpc.ts`. Keep this README in lock step whenever
-the surface changes again.
+the telemetry sink moved into `trpc.ts`. The DocumentDB observability adapters
+(`rpcConcurrencyLogger`, `reportObserverError`) then moved into the
+`observability/` subfolder to keep this top level focused on the router and
+transport wiring. Keep this README in lock step whenever the surface changes
+again.

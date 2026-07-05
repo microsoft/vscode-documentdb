@@ -36,8 +36,8 @@ import {
 import {
     callWithAccumulatingTelemetry,
     type TelemetryWithDistributions,
-} from '../../utils/callWithAccumulatingTelemetry';
-import { WEBVIEW_CONFIG } from './configuration';
+} from '../../../utils/callWithAccumulatingTelemetry';
+import { WEBVIEW_CONFIG } from '../configuration';
 
 /**
  * The dispatch logger DocumentDB passes to `openAppWebview`. Delegates to the
