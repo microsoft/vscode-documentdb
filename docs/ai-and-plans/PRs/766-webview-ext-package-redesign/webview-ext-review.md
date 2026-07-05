@@ -19,7 +19,9 @@ Deferred items and answers to open questions are in
 [Iteration 2](#iteration-2--open-items--answers). **Iteration 3 (2026-07-05)**
 implemented the one item Iteration 2 held back (R766-N05, event-observer
 isolation). **Iteration 4 (2026-07-05)** triages the GitHub Copilot reviewer's
-second automated pass and analyzes each comment.
+second automated pass and analyzes each comment. **Iteration 5 (2026-07-05)**
+steps back from correctness and looks at package consumer ergonomics and
+onboarding friction.
 
 ## Summary
 
@@ -1569,3 +1571,165 @@ implemented, verified, and acknowledged on the PR. Steps performed:
 ✅ **Iteration 4 is complete.** The three inline Copilot threads (C01 / C02 / C03)
 are resolved, C04 (suppressed) is addressed, and the PR branch is green — nothing
 from the 2026-07-05 review remains open.
+
+# Iteration 5 — consumer ergonomics & onboarding (2026-07-05)
+
+Added 2026-07-05. Iterations 1–4 focused mostly on correctness, guardrails, and
+review-thread cleanup. This pass steps back and asks a different question: once
+this package works, how easy is it for a first-time consumer or a coding agent to
+adopt it correctly with the least possible boilerplate?
+
+## Overview
+
+| ID       | Severity | Title                                                           | Why it matters                                                                                                                                |
+| -------- | -------- | --------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| R766-E01 | Medium   | Greenfield adoption still requires too many moving parts        | New consumers must connect router, context, config, and render bootstrap by hand, even though the package's pitch is “make webview RPC easy.” |
+| R766-E02 | Low      | `viewType` is duplicated across host and webview registration   | The same string must be kept in sync in two places, which is easy to get wrong and hard to debug when it drifts.                              |
+| R766-E03 | Low      | The common bootstrap still feels more ceremonial than it should | The happy path is correct, but it still asks the consumer to thread `vscodeApi` and the render entrypoint together by hand.                   |
+
+## R766-E01 — the greenfield path still feels “wiring-heavy” for a first-time consumer
+
+> ✅ **Decision (2026-07-05): Option B — document the pattern, do not add a helper
+> to the library.** The pattern E01 asks for already exists in consumer space as
+> DocumentDB's [`openAppWebview`](../../../../src/webviews/_integration/openAppWebview.ts)
+> (a ~15-line preset that binds the fixed wiring — `router`, `trpc`,
+> `sourceLayout`, `logger` — so each per-view factory states only what is unique
+> to its view). It is a proven reference implementation of E01 Option A, but kept
+> where it belongs: in the consumer, not the transport package. **Action:**
+> document the `openAppWebview`-style "integration preset" pattern in ADVANCED.md
+> (alongside the create-or-reveal pattern from R766-N06) so new consumers can copy
+> it, and **do not** ship a `createWebviewApp` / `createWebviewController` helper
+> in the package. This keeps the package a lean transport library, consistent with
+> the R766-N06 decision to keep panel-registry state in consumer space. The
+> `trpc`/`router` mismatch footgun — the only _sharp_ edge on this path — was
+> already removed in R766-N02.
+
+The package already has a good one-call front door, but the current happy path
+still asks a consumer to connect several concepts that are logically part of a
+single feature:
+
+1. define the router and the typed `trpc` instance;
+2. pass `router` + `trpc` (plus context, config, and source layout) into
+   `openWebview`;
+3. register the same `viewType` in the webview render registry;
+4. wrap the webview root with `WithWebviewContext` and then call
+   `useTrpcClient` / `useConfiguration`.
+
+That is not a bug, but it is still a noticeable amount of “framework plumbing”
+for a package whose pitch is to make webview RPC easy. The cost is not in the
+API shape itself; it is in the number of steps a new consumer or coding agent
+has to remember in order to make the package work end to end.
+
+**Options**
+
+- **A — add a small higher-level helper** such as `createWebviewApp`,
+  `createWebviewController`, or `createWebviewBootstrap` that takes the router,
+  context, config, and component registry and wires the host-side panel plus the
+  webview bootstrap in one place.
+- **B — keep the current primitives and add a single copy-paste “minimal full
+  example”** to the README / ADVANCED.md with the host and webview side in one
+  file.
+- **C — leave the current shape and rely on the starter kit.**
+
+**Recommendation:** Option A if the goal is to make the preview package feel
+truly beginner-friendly; Option B is the low-risk immediate step. The package
+already has the right primitives, but the “glue” between them is still too
+manual for a first-time consumer.
+
+## R766-E02 — `viewType` is a shared key, but the package does not help keep it in sync
+
+> ✅ **Decision (2026-07-05): non-issue — no action.** DocumentDB already solves
+> this at compile time: [`WebviewRegistry`](../../../../src/webviews/_integration/WebviewRegistry.ts)
+> derives `type WebviewName = keyof typeof WebviewRegistry`, and both the host
+> (`openAppWebview` / `OpenAppWebviewOptions.webviewName`) and the webview
+> (`render(key, …)` in [index.tsx](../../../../src/webviews/index.tsx)) are typed
+> to that union — so a drifted / mistyped `viewType` is a **compile error**, not a
+> blank panel. The coupling E02 worries about is already enforced by the type
+> system in the reference consumer. Nothing to do in the package; the
+> registry-as-single-source-of-truth pattern is covered by the E01 documentation
+> action above.
+
+The host-side `openWebview` call and the webview-side `render(viewType, vscodeApi)`
+registry both depend on the same `viewType` string. That is the right design (the
+string is the feature’s identity), but it is also one of the easiest things for a
+new consumer to get wrong. A drift between the two means the wrong component
+renders or nothing renders at all, and the debugging cost is high because the
+failure is indirect.
+
+**Options**
+
+- **A — provide a tiny helper** that registers a component and binds a local
+  `viewType` in one place, rather than leaving the string as an external
+  convention.
+- **B — document a single-source-of-truth pattern** in the README and the
+  starter kit (for example, centralize the map in one module and import it from
+  both sides).
+- **C — leave it as-is.**
+
+**Recommendation:** Option B right away, Option A if the package wants to make
+this path feel more guided. The issue is not the concept of `viewType`; it is
+that the package currently makes the consumer remember the coupling rather than
+helping them preserve it.
+
+## R766-E03 — the common bootstrap still feels more ceremonial than it should
+
+> ✅ **Decision (2026-07-05): no work to be done.** The webview bootstrap is
+> already a single shared `render(key, vscodeApi)` entrypoint
+> ([index.tsx](../../../../src/webviews/index.tsx)) that looks up the component in
+> `WebviewRegistry` and wraps it in `WithWebviewContext` once; per-view code adds
+> nothing to the bootstrap. Making `WithWebviewContext` default to
+> `acquireVsCodeApi()` was considered and rejected: passing `vscodeApi` explicitly
+> keeps the singleton `acquireVsCodeApi()` call in the consumer's control (it can
+> only be called once per webview) and keeps the provider testable. The residual
+> ceremony is minimal and intentional. No change.
+
+The webview side is already straightforward, but the current bootstrap still asks
+the consumer to thread `vscodeApi` through `WithWebviewContext` explicitly and to
+keep the `render(viewType, vscodeApi)` entrypoint and the React root in sync.
+That is not a blocker, but it is the sort of ceremony that makes a package feel
+less “just works” than the README promises.
+
+**Options**
+
+- **A — provide a small helper** such as `bootstrapWebviewApp({ registry,
+getVscodeApi })` or an overload of `WithWebviewContext` that defaults to
+  `acquireVsCodeApi()` when no prop is provided.
+- **B — keep the explicit API and document the common bootstrap pattern more
+  fully.**
+- **C — leave it as-is and rely on the starter kit.**
+
+**Recommendation:** Option A or B depending on how much the package wants to own
+the webview bootstrap. The current API is flexible, but the happy path still has
+a little more glue than a new consumer would expect.
+
+## Decisions summary
+
+| ID       | Severity | Decision (2026-07-05)                                                       | Action                                                                                         |
+| -------- | -------- | --------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| R766-E01 | Medium   | **Option B** — document the pattern; do **not** add a helper to the library | Document the `openAppWebview`-style integration-preset pattern in ADVANCED.md; no package code |
+| R766-E02 | Low      | **Non-issue** — already enforced at compile time by `WebviewRegistry`       | No action (covered by the E01 registry-pattern documentation)                                  |
+| R766-E03 | Low      | **No work** — the shared `render(...)` bootstrap is already minimal         | No change                                                                                      |
+
+The common thread: the DocumentDB consumer already implements every ergonomics
+win E01–E03 reach for (`openAppWebview` as the integration preset, `WebviewRegistry`
+as the typed `viewType` source of truth, a single `render` bootstrap), so the
+correct move is to **document those consumer-side patterns**, not to grow the
+transport package's API surface. This keeps the package lean and is consistent
+with the R766-N06 decision to keep panel-registry state in consumer space.
+
+## Iteration 5 — done
+
+The review has a second pass focused on adoption rather than correctness, and all
+three findings are decided:
+
+- **R766-E01 — Option B (docs only).** The `openAppWebview` integration-preset
+  pattern is the reference implementation; document it in ADVANCED.md rather than
+  shipping a `createWebviewApp` helper. The only sharp edge on this path (the
+  `trpc`/`router` mismatch) was already removed in R766-N02.
+- **R766-E02 — non-issue.** `WebviewRegistry` + the `WebviewName` union already
+  make a drifted `viewType` a compile error in the reference consumer.
+- **R766-E03 — no work.** The shared `render(key, vscodeApi)` bootstrap is already
+  minimal; the explicit `vscodeApi` hand-off is intentional.
+
+Net: **one documentation action** (the E01 integration-preset pattern in
+ADVANCED.md, which also covers E02's registry pattern) and **no new package API**.
