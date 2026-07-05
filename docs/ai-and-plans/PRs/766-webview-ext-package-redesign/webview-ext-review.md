@@ -1286,8 +1286,8 @@ Added 2026-07-05. On this date the GitHub Copilot PR reviewer ran a second
 automated pass (review `4630986353`): it reviewed 92 of 99 changed files and left
 **3 inline comments** plus **1 low-confidence comment it self-suppressed**. This
 chapter captures each, assigns a tracking ID (`R766-Cnn`, `C` for Copilot-sourced),
-and analyzes the options. **Nothing here is implemented yet** — these are decisions
-to act on in a follow-up pass, in the same spirit as the Iteration 2 open items.
+and analyzes the options. **All four items were implemented in this iteration**
+(change protocol below); the per-finding analyses are retained as the rationale.
 
 ## Overview
 
@@ -1303,6 +1303,24 @@ tagged with error fields — and must be fixed together (C02 would otherwise und
 C01). C03 tightens a guard shipped in Iteration 2 (R766-N01) so the webview edge
 matches the host. C04 is a typing nicety that aligns with this repo's own "always
 specify return types" rule.
+
+## Iteration 4 — change protocol (2026-07-05)
+
+> Each fix is an individual commit on `dev/tnaum/webview-api-refinements`, pushed
+> and acknowledged on the PR — a reply on the originating Copilot review thread
+> (C01–C03, all resolved) or a general comment (C04, which had no thread). C01 and
+> C02 shipped in one commit because C02's enrichment would otherwise undo C01.
+
+**Post-change validation (all green):** `npm run l10n` (no drift) · `prettier`
+(clean) · `eslint --quiet` (clean) · `jest` (2662 passed / 159 suites) · `tsc`
+build across all workspaces (clean).
+
+| ID       | Commit     | What changed                                                                                                                                          | Why (motivation)                                                                                                                                                                     |
+| -------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R766-C01 | `553bf4e8` | `telemetryMiddlewareBody` gates the whole error-recording block on `!aborted`; `getInvocationSignal` is exported from `./host`; regression test added | An aborted call that surfaced as a rejected result was tagged `Canceled` yet still stamped `error` / `errorMessage`, so a cancellation looked like a failure on the error dimension. |
+| R766-C02 | `553bf4e8` | `documentDbTelemetryRunner` reads `getInvocationSignal` and skips its `parseError` enrichment when the call was aborted                               | The enrichment ran after the body on the same telemetry bag and re-stamped `error*` for canceled ops, undoing C01. Shipped in the same commit.                                       |
+| R766-C03 | `3301a709` | Shared `isTransportResponseMessage` guard (own string `id`) in `wireProtocol.ts`, used by `connectTrpc`'s `onReceive`; the R766-N01 test was extended | The webview guard forwarded any object with an `id` (inherited or non-string) — looser than the host guard; tightened for host/webview symmetry.                                     |
+| R766-C04 | `19b99cbf` | `useTrpcClient` wrapper return type annotated as `TrpcClient<AppRouter>`                                                                              | Locks the public surface / avoids type widening and matches the repo's explicit-return-type rule (Copilot's suppressed low-confidence note).                                         |
 
 ## R766-C01 — telemetry middleware records error details for aborted calls
 
