@@ -1540,6 +1540,32 @@ webview area) or take standalone.
 - **Batch 3 — typing nicety (C04), optional / low priority.** Explicit return type
   on `useTrpcClient`.
 
-Each batch follows the established protocol: one commit on
-`dev/tnaum/webview-api-refinements`, pushed, with a PR comment referencing the SHA
-(and, for C03, resolving the Copilot thread).
+Each batch was shipped under the established protocol: one commit on
+`dev/tnaum/webview-api-refinements`, pushed, with a PR acknowledgment referencing
+the SHA (and, for C01–C03, resolving the Copilot thread).
+
+## Iteration 4 — done
+
+All four Copilot findings from the 2026-07-05 review (`4630986353`) are
+implemented, verified, and acknowledged on the PR. Steps performed:
+
+1. **Triaged** the review into R766-C01–C04 with options and recommendations (this
+   chapter).
+2. **Batch 1 — C01 + C02** (`553bf4e8`): gated the telemetry body's error recording
+   on `!aborted`, exported `getInvocationSignal`, and made `documentDbTelemetryRunner`
+   skip its enrichment when aborted; added a package regression test. Replied to and
+   resolved the C01 and C02 Copilot threads.
+3. **Batch 2 — C03** (`3301a709`): added the shared `isTransportResponseMessage` guard
+   (own string `id`) and wired it into `connectTrpc`'s `onReceive`; extended the
+   R766-N01 test with numeric-`id` / inherited-`id` cases. Replied to and resolved the
+   C03 Copilot thread.
+4. **Batch 3 — C04** (`19b99cbf`): annotated the `useTrpcClient` wrapper return type as
+   `TrpcClient<AppRouter>`. No thread (self-suppressed); covered by the wrap-up PR
+   comment.
+5. **Finalized** the doc (`cb9cd3b2`): the change protocol above plus statuses.
+6. **Validated — all green:** `npm run l10n` (no drift) · `prettier` · `eslint --quiet`
+   · `jest` (2662 passed / 159 suites) · `tsc` build across all workspaces.
+
+✅ **Iteration 4 is complete.** The three inline Copilot threads (C01 / C02 / C03)
+are resolved, C04 (suppressed) is addressed, and the PR branch is green — nothing
+from the 2026-07-05 review remains open.
