@@ -17,7 +17,11 @@
 
 import { createTRPCClient, type CreateTRPCClient, loggerLink, type TRPCLink } from '@trpc/client';
 import { type AnyRouter } from '@trpc/server';
-import { type VsCodeLinkRequestMessage, type VsCodeLinkResponseMessage } from '../shared/wireProtocol';
+import {
+    isTransportResponseMessage,
+    type VsCodeLinkRequestMessage,
+    type VsCodeLinkResponseMessage,
+} from '../shared/wireProtocol';
 import { type ErrorHandler, eventLink } from './errorLink';
 import { createEventChannel, type ObserverErrorHandler, type RpcEventChannel } from './events';
 import { vscodeLink } from './vscodeLink';
@@ -108,13 +112,14 @@ export function connectTrpc<TRouter extends AnyRouter>(
     // response has been consumed, so the listener is per-operation.
     const onReceive = (callback: (message: VsCodeLinkResponseMessage) => void): (() => void) => {
         const handler = (event: MessageEvent): void => {
-            // Structural guard (R766-N01): the webview `window` bus may also carry
-            // non-tRPC messages (VS Code internals, other libraries, or a legacy
-            // `postMessage` protocol). Only forward objects shaped like a response;
-            // reading `.id` off a `null` or primitive `event.data` would throw.
-            const data: unknown = event.data;
-            if (data !== null && typeof data === 'object' && 'id' in data) {
-                callback(data as VsCodeLinkResponseMessage);
+            // Structural guard (R766-N01 / R766-C03): the webview `window` bus may
+            // also carry non-tRPC messages (VS Code internals, other libraries, or
+            // a legacy `postMessage` protocol). Only forward payloads shaped like a
+            // response — a non-null object with its own string `id` — so a `null`,
+            // primitive, inherited-`id`, or non-string-`id` message is ignored
+            // (reading `.id` off a `null` / primitive would also throw).
+            if (isTransportResponseMessage(event.data)) {
+                callback(event.data);
             }
         };
 

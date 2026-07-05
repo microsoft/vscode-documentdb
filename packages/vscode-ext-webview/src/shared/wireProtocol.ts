@@ -62,3 +62,23 @@ export interface VsCodeLinkResponseMessage {
     };
     complete?: boolean;
 }
+
+/**
+ * Structural guard for inbound transport responses (R766-C03).
+ *
+ * The webview `window` bus may also carry non-tRPC messages (VS Code internals,
+ * other libraries, or a legacy `postMessage` protocol). Only payloads shaped like
+ * a {@link VsCodeLinkResponseMessage} — a non-null object with its **own** string
+ * `id` — should be forwarded into the tRPC response path. Requiring an own string
+ * `id` (rather than a bare `'id' in data`) rejects a `null` / primitive payload,
+ * an inherited `id`, and a non-string `id`, mirroring the host-side
+ * `isTransportRequestMessage` guard.
+ */
+export function isTransportResponseMessage(data: unknown): data is VsCodeLinkResponseMessage {
+    return (
+        data !== null &&
+        typeof data === 'object' &&
+        Object.hasOwn(data, 'id') &&
+        typeof (data as { id: unknown }).id === 'string'
+    );
+}

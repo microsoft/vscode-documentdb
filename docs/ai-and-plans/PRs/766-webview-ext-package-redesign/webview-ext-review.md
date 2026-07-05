@@ -1420,6 +1420,15 @@ aborted call records `result=Canceled` and **no** `error*` fields.
 
 ## R766-C03 — tighten the webview `onReceive` guard to an own, string `id`
 
+> ✅ **Implemented in Iteration 4** [R766-C03] (option C). Added a shared
+> `isTransportResponseMessage` guard to `shared/wireProtocol.ts` (non-null object
+> with its **own** string `id`, via `Object.hasOwn` + `typeof`), mirroring the
+> host-side `isTransportRequestMessage`, and `connectTrpc`'s `onReceive` now uses
+> it. The R766-N01 test was extended with a numeric-`id` case and an
+> inherited-`id` case (whose `id` equals the pending request id, so the old
+> `'id' in data` guard would have wrongly resolved the query with `undefined`).
+> The analysis below is retained as the rationale.
+
 **Copilot:** the `onReceive` window-message guard forwards any object with an `id`
 property (including prototype properties) into the tRPC response path; require an
 **own** `id` field with a **string** value.

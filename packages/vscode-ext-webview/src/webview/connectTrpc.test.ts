@@ -150,6 +150,13 @@ describe('connectTrpc', () => {
         expect(() => deliver(null)).not.toThrow();
         expect(() => deliver('a string')).not.toThrow();
         expect(() => deliver({ notAResponse: true })).not.toThrow();
+        // R766-C03: a non-string `id` and an inherited (non-own) `id` are also
+        // ignored — the guard requires an own, string `id`. The inherited case is
+        // the sharp one: its `id` equals the pending request id, so a bare
+        // `'id' in data` guard would forward it and resolve the query with
+        // `undefined` before the real response arrives.
+        expect(() => deliver({ id: 123 })).not.toThrow();
+        expect(() => deliver(Object.create({ id: sent[0].id }))).not.toThrow();
 
         // The matching response still flows through and resolves the query.
         deliver({ id: sent[0].id, result: 'pong' });
