@@ -137,6 +137,7 @@ export function activate(ctx: vscode.ExtensionContext) {
           bundled: { dir: '', file: 'views.js' },
           dev: { dir: 'out/src/webviews', file: 'index.js' },
         },
+        isBundled: !!process.env.IS_BUNDLE,
         devServerHost: 'http://localhost:18080',
       });
     }),

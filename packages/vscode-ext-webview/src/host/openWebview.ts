@@ -37,6 +37,7 @@ import { WebviewController, type WebviewControllerOptions } from './WebviewContr
  *   context: { ...myContext },
  *   config: { ...initialConfig },
  *   sourceLayout: { bundled: { dir: 'dist', file: 'views.js' }, dev: { dir: 'out', file: 'views.js' } },
+ *   isBundled: !!process.env.IS_BUNDLE,
  * });
  * ```
  */

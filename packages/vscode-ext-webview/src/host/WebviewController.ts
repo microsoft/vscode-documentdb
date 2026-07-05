@@ -114,6 +114,25 @@ export interface WebviewControllerOptions<
     devServerHost?: string;
 
     /**
+     * Whether the running extension is a **webpack bundle** rather than raw
+     * `tsc` output. This selects which {@link WebviewSourceLayout} entry is used
+     * (`bundled` when `true`, `dev` when `false`) and therefore which script the
+     * webview loads.
+     *
+     * This is deliberately separate from the extension **mode** (the package can
+     * derive the mode from `extensionContext`, but it cannot know how the
+     * consumer built its code). The dev server (`webpack serve`) emits the
+     * *bundled* asset name (e.g. `views.js`), so a bundled extension running in
+     * development (mode `Development`, dev server on) must still pick the
+     * `bundled` layout; keying the layout off the mode alone would ask the dev
+     * server for the `dev` (tsc) file name and 404.
+     *
+     * Consumers pass a flag baked in by their bundler, e.g. an `IS_BUNDLE`
+     * define (`isBundled: !!process.env.IS_BUNDLE`).
+     */
+    isBundled: boolean;
+
+    /**
      * Sink for the zero-config **dispatch logger**: one structured entry per
      * completed query, mutation, and subscription, logged at the transport
      * boundary. Defaults to {@link consoleProcedureLogger} so the panel logs to
@@ -273,7 +292,12 @@ export class WebviewController<
         const isProduction = this._options.extensionContext.extensionMode === vscode.ExtensionMode.Production;
         const nonce = randomBytes(16).toString('base64');
 
-        const layout = isProduction ? this._options.sourceLayout.bundled : this._options.sourceLayout.dev;
+        // The layout (which script the webview loads) is chosen by whether the
+        // running extension is a webpack bundle, not by the extension mode: the
+        // dev server serves the bundled asset name, so a bundled extension in
+        // development must still resolve the `bundled` layout. `isProduction` is
+        // used only for CSP hardening and the disk-vs-dev-server choice below.
+        const layout = this._options.isBundled ? this._options.sourceLayout.bundled : this._options.sourceLayout.dev;
         const devServerHost = this._options.devServerHost ?? DEFAULT_DEV_SERVER_HOST;
 
         const uri = (...parts: string[]) =>

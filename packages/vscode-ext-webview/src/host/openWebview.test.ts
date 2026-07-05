@@ -39,6 +39,7 @@ function makeOptions() {
         context: {} as BaseRouterContext,
         config: { hello: 'world' },
         sourceLayout,
+        isBundled: true,
     };
 }
 
@@ -176,6 +177,7 @@ describe('openWebview', () => {
             context: {} as BaseRouterContext,
             config: { hello: 'world' },
             sourceLayout,
+            isBundled: true,
         });
         const webview = mockWebview(controller);
 
@@ -197,5 +199,62 @@ describe('new WebviewController(options)', () => {
         expect(controller.isDisposed).toBe(false);
         expect(controller.panel.webview.html).toContain('id="vscode-ext-webview-initial-data"');
         expect(controller.panel.webview.html).toContain('"viewType":"myView"');
+    });
+});
+
+describe('script source layout selection', () => {
+    // Distinct file names so the selected layout is unambiguous in the HTML.
+    const splitLayout = {
+        bundled: { dir: 'dist', file: 'views.js' },
+        dev: { dir: 'out', file: 'index.js' },
+    };
+    const devServerHost = 'http://localhost:18080';
+
+    function makeContextWithMode(mode: number): vscode.ExtensionContext {
+        return {
+            extensionPath: '/ext',
+            extensionMode: mode,
+        } as unknown as vscode.ExtensionContext;
+    }
+
+    function htmlFor(overrides: { mode: number; isBundled: boolean; devServer: boolean }): string {
+        const previous = process.env.DEVSERVER;
+        if (overrides.devServer) {
+            process.env.DEVSERVER = 'true';
+        } else {
+            delete process.env.DEVSERVER;
+        }
+        try {
+            const controller = openWebview(makeContextWithMode(overrides.mode), {
+                ...makeOptions(),
+                sourceLayout: splitLayout,
+                devServerHost,
+                isBundled: overrides.isBundled,
+            });
+            return controller.panel.webview.html;
+        } finally {
+            if (previous === undefined) {
+                delete process.env.DEVSERVER;
+            } else {
+                process.env.DEVSERVER = previous;
+            }
+        }
+    }
+
+    it('loads the bundled file from the dev server when bundled in development (regression: index.js 404)', () => {
+        // A webpack-bundled extension running in Development with the dev server
+        // on must ask the dev server for the *bundled* asset name (views.js),
+        // because `webpack serve` emits that name. Keying the layout off the mode
+        // alone would request the tsc `index.js` and 404.
+        const html = htmlFor({ mode: vscode.ExtensionMode.Development, isBundled: true, devServer: true });
+
+        expect(html).toContain(`import { render } from "${devServerHost}/views.js"`);
+        expect(html).not.toContain(`${devServerHost}/index.js`);
+    });
+
+    it('loads the dev (tsc) file from the dev server when not bundled', () => {
+        const html = htmlFor({ mode: vscode.ExtensionMode.Development, isBundled: false, devServer: true });
+
+        expect(html).toContain(`import { render } from "${devServerHost}/index.js"`);
     });
 });
