@@ -91,4 +91,28 @@ describe('telemetryMiddlewareBody', () => {
         expect(bags[0].properties.aborted).toBe('true');
         expect(bags[0].properties.result).toBe('Canceled');
     });
+
+    it('does not stamp error name/message when an aborted invocation also fails [R766-C01]', async () => {
+        const { runner, bags } = createCapturingRunner();
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+
+        const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
+        const appRouter = router({
+            boom: tracked.mutation(() => {
+                throw new Error('work cancelled');
+            }),
+        });
+
+        const controller = new AbortController();
+        controller.abort();
+        const caller = createCallerFactory(appRouter)({ signal: controller.signal });
+        await expect(caller.boom()).rejects.toThrow('work cancelled');
+
+        // An aborted call is recorded only as Canceled — no error* fields, so a
+        // cancellation is never mistaken for a failure on the error dimension.
+        expect(bags[0].properties.aborted).toBe('true');
+        expect(bags[0].properties.result).toBe('Canceled');
+        expect(bags[0].properties.error).toBeUndefined();
+        expect(bags[0].properties.errorMessage).toBeUndefined();
+    });
 });

@@ -1306,6 +1306,13 @@ specify return types" rule.
 
 ## R766-C01 — telemetry middleware records error details for aborted calls
 
+> ✅ **Implemented in Iteration 4** [R766-C01] (option A). `telemetryMiddlewareBody`
+> now gates the whole error-recording block on `!aborted`, so an aborted call is
+> recorded only as `Canceled` (with `aborted='true'`) and never carries `error` /
+> `errorMessage`. A regression test drives an aborted invocation that also throws
+> and asserts no `error*` fields are stamped. The analysis below is retained as the
+> rationale.
+
 **Copilot:** `telemetryMiddlewareBody` records `error` / `errorMessage` even when
 the invocation was aborted, which makes canceled operations look like failures and
 contradicts the nearby "recorded as `Canceled`" comment. Only record error details
@@ -1358,6 +1365,13 @@ heuristics (Option C is really consumer policy). Ship it in the **same commit as
 C02**.
 
 ## R766-C02 — DocumentDB runner overwrites error fields for canceled ops
+
+> ✅ **Implemented in Iteration 4** [R766-C02] (option B). `getInvocationSignal` is
+> now exported from `@microsoft/vscode-ext-webview/host`, and
+> `documentDbTelemetryRunner` reads it to skip its `parseError` enrichment (`error`
+> / `errorMessage` / `errorStack` / `errorCause`) when the call was aborted — so it
+> no longer undoes R766-C01. Shipped in the same commit as C01. The analysis below
+> is retained as the rationale.
 
 **Copilot:** `documentDbTelemetryRunner` enriches and **overwrites** telemetry
 error fields for any `!result.ok`, even when canceled; guard the enrichment when

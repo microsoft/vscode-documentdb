@@ -133,13 +133,13 @@ export async function telemetryMiddlewareBody<TResult extends MiddlewareResultLi
             telemetry.properties.result = 'Canceled';
         }
 
-        if (!result.ok) {
-            // We do not handle the error here; we only record it and let the
-            // RPC caller handle it. An aborted operation is already recorded
-            // as 'Canceled' above and is not additionally marked 'Failed'.
-            if (!aborted) {
-                telemetry.properties.result = 'Failed';
-            }
+        if (!result.ok && !aborted) {
+            // Record the failure and let the RPC caller handle the error. This
+            // block is skipped entirely for an aborted call: it is already
+            // recorded as 'Canceled' above, and stamping `error` /
+            // `errorMessage` on a cancellation would make it look like a
+            // failure in telemetry (R766-C01).
+            telemetry.properties.result = 'Failed';
             if (result.error?.name) {
                 telemetry.properties.error = result.error.name;
             }

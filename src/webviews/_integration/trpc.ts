@@ -45,6 +45,7 @@
 import { callWithTelemetryAndErrorHandling, parseError, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 import { initWebviewTrpc, type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import {
+    getInvocationSignal,
     telemetryMiddlewareBody,
     type WithTelemetry as FrameworkWithTelemetry,
     type ProcedureTelemetry,
@@ -86,7 +87,8 @@ export type WithTelemetry<T extends { telemetry?: unknown }> = FrameworkWithTele
  * path never throws (e.g. on circular `cause` chains), and `errorStack` /
  * `errorCause` are recorded. The enrichment runs after `execute`, so its
  * `parseError`-derived `error` / `errorMessage` values overwrite the body's
- * plain name / message.
+ * plain name / message — except for aborted calls, which are left as the body's
+ * `Canceled` classification with no error fields (R766-C02, matching R766-C01).
  */
 const documentDbTelemetryRunner: TelemetryRunner = {
     async run(invocation, execute) {
@@ -102,7 +104,12 @@ const documentDbTelemetryRunner: TelemetryRunner = {
                 // ever writes plain strings / numbers, so the bridge is sound.
                 const result = await execute(context.telemetry as unknown as ProcedureTelemetry);
 
-                if (!result.ok && result.error) {
+                // Skip the DocumentDB error enrichment for an aborted call. The
+                // framework body already recorded it as 'Canceled' without error
+                // details (R766-C01); re-stamping `error*` here would undo that
+                // and make a cancellation look like a failure (R766-C02).
+                const aborted = getInvocationSignal(invocation.ctx)?.aborted ?? false;
+                if (!result.ok && result.error && !aborted) {
                     const parsed = parseError(result.error);
                     context.telemetry.properties.error = parsed.errorType;
                     context.telemetry.properties.errorMessage = parsed.message;

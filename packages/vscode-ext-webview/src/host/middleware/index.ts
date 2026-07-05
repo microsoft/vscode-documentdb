@@ -18,6 +18,7 @@ export {
     type WithTelemetry,
 } from './telemetry';
 export {
+    getInvocationSignal,
     type MiddlewareResultLike,
     type ProcedureErrorLike,
     type ProcedureInvocation,
