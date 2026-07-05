@@ -13,9 +13,9 @@
  * this wrapper does too; call it as `const trpcClient = useTrpcClient();`.
  */
 
-import { useTrpcClient as useFrameworkTrpcClient } from '@microsoft/vscode-ext-webview/react';
+import { useTrpcClient as useFrameworkTrpcClient, type TrpcClient } from '@microsoft/vscode-ext-webview/react';
 import { type AppRouter } from './appRouter';
 
-export function useTrpcClient() {
+export function useTrpcClient(): TrpcClient<AppRouter> {
     return useFrameworkTrpcClient<AppRouter>();
 }

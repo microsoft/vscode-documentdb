@@ -1477,6 +1477,12 @@ inherited-`id` and numeric-`id` cases. Resolves the Copilot thread on
 
 ## R766-C04 — explicit return type on the `useTrpcClient` wrapper (suppressed)
 
+> ✅ **Implemented in Iteration 4** [R766-C04] (option A). The DocumentDB wrapper
+> now declares its return type as `TrpcClient<AppRouter>` (imported from
+> `@microsoft/vscode-ext-webview/react`), locking the public surface and matching
+> the repo's "always specify return types" rule. The analysis below is retained as
+> the rationale.
+
 **Copilot (self-suppressed, low confidence):** giving the shared `useTrpcClient`
 helper an explicit return type makes the public surface clearer and avoids
 accidental type widening if the framework hook signature changes.
