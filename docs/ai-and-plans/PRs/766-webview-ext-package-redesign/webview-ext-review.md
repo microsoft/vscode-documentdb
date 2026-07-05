@@ -21,7 +21,12 @@ implemented the one item Iteration 2 held back (R766-N05, event-observer
 isolation). **Iteration 4 (2026-07-05)** triages the GitHub Copilot reviewer's
 second automated pass and analyzes each comment. **Iteration 5 (2026-07-05)**
 steps back from correctness and looks at package consumer ergonomics and
-onboarding friction.
+onboarding friction. **Iteration 6 (2026-07-05)** fixes a runtime regression
+(R766-07): the webview failed to load in the standard bundled-development flow
+because the source layout was keyed off the extension mode instead of the bundle
+flag. **Iteration 7 (2026-07-05)** tidies the reference `_integration` folder:
+groups the observability sinks into a subfolder and brings the folder README
+back in sync.
 
 ## Summary
 
@@ -1234,7 +1239,7 @@ shipped them together, adopting **option 1** from the
   quiet — a generic consumer is not opted into telemetry or events it may not
   want.
 - **DocumentDB opts in for itself.**
-  [`reportObserverError`](../../../../src/webviews/_integration/reportObserverError.ts)
+  [`reportObserverError`](../../../../src/webviews/_integration/observability/reportObserverError.ts)
   keeps the structured `console.error` (path + phase) and additionally elevates
   the error to the webview's browser `reportError()` global — the "general
   observability" of option 5 — without re-entering the tRPC channel, so a throwing
@@ -1733,3 +1738,67 @@ three findings are decided:
 
 Net: **one documentation action** (the E01 integration-preset pattern in
 ADVANCED.md, which also covers E02's registry pattern) and **no new package API**.
+
+## Iteration 6 — change protocol (2026-07-05)
+
+> This iteration fixes a **runtime regression** found while dogfooding the
+> migrated extension: opening a webview (e.g. the collection view) rendered the
+> panel chrome but never loaded the web app. The extension host reported the RPC
+> command succeeding, but the webview devtools showed
+> `localhost:18080/index.js` returning **404**.
+
+**Root cause (R766-07).** The redesigned `WebviewController` chose the
+bundled-vs-dev source layout from `extensionContext.extensionMode === Production`.
+The old package chose it from a dedicated `isBundled` option that the consumer
+fed from `ext.isBundle` (the webpack `IS_BUNDLE` define). Those are different
+axes: the normal F5 dev flow runs a **webpack bundle** (`IS_BUNDLE=true`) in
+**Development** mode with `DEVSERVER=true`. The webpack dev server (`webpack
+serve`) emits the *bundled* asset name (`views.js`, from `entry: { views }`), so
+keying the layout off the mode picked the `dev` (tsc) file `index.js` and
+requested `http://localhost:18080/index.js`, which the dev server does not serve
+(confirmed: `/views.js` → 200, `/index.js` → 404). The result was a blank
+webview with no extension-host output.
+
+**Post-change validation (all green):** `prettier` (no drift) · `eslint --quiet`
+(clean) · `jest` (full suite, 2664 passed / 159 suites) · `tsc` build across all
+workspaces (clean). No user-facing strings changed, so `l10n` was skipped.
+
+| ID       | Commit     | What changed                                                                                                                                             | Why (motivation)                                                                                                                                                                                                            |
+| -------- | ---------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R766-07  | `2c2e4f30` | `WebviewController` selects the source layout from a **required** `isBundled` option (restored from the old package); `extensionMode` stays CSP-only. The DocumentDB consumer passes `isBundled: !!ext.isBundle`. Docs + 3 regression tests added. | Keying the layout off `extensionMode` 404'd the dev-server script in the standard bundled-development flow. Bundle-ness (which asset name) and production-ness (CSP hardening) are independent; conflating them broke local dev. |
+
+## Iteration 7 — reference-implementation tidy-up (2026-07-05)
+
+> Iteration 5 declared the `_integration` folder the **reference implementation**
+> for adopting the package. Iteration 7 acts on that: the folder had grown to a
+> flat list where the newer observability adapters were easy to miss and the
+> folder README had fallen behind. This is documentation-and-layout only; no
+> package API and no runtime behavior change.
+
+**Findings and actions:**
+
+- **R766-I01 — group the observability sinks.** The flat folder mixed the
+  router/transport wiring (`configuration`, `trpc`, `appRouter`,
+  `openAppWebview`, `WebviewRegistry`, `useTrpcClient`) with two cross-cutting
+  observability adapters (`rpcConcurrencyLogger`, host; `reportObserverError`,
+  webview) and their tests. Moved the two adapters and their tests into a new
+  `observability/` subfolder (via `git mv`, history preserved) and fixed the
+  relative imports and the two external importers (`openAppWebview.ts`,
+  `src/webviews/index.tsx`).
+- **R766-I02 — README lagged the surface.** The `_integration/README.md` file
+  table pre-dated the observability adapters and never listed them. Added the
+  `observability/` row to the file table and two rows to the "When you want to X"
+  map, refreshed the closing note, and added a dedicated
+  `observability/README.md` describing each file, its side (host/webview), and
+  where it is wired.
+- **R766-I03 — comments.** Confirmed the moved files keep their thorough
+  header comments (the R766-S04 / R766-N05 rationale) and that the reorg did not
+  strand any doc cross-reference.
+
+**Post-change validation (all green):** `prettier` · `eslint --quiet` · `jest`
+(full suite) · `tsc` build. No user-facing strings, so `l10n` skipped.
+
+| ID       | What changed                                                                                                                                  | Why (motivation)                                                                                                                          |
+| -------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| R766-I01 | New `_integration/observability/` subfolder holds `rpcConcurrencyLogger` + `reportObserverError` (and tests); imports/importers updated       | A flat folder buried the two cross-cutting sinks among the router/transport wiring; grouping them makes the reference layout easier to scan. |
+| R766-I02 | `_integration/README.md` now lists every file including the observability subfolder; added `observability/README.md`                          | The folder README is the on-ramp for adopters and coding agents; it must describe what each file does, and the newer sinks were missing.   |
