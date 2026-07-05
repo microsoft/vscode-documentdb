@@ -16,7 +16,10 @@ The original review and second pass (below) made no code changes. **Iteration 1
 (2026-07-03) then implemented most findings** as individual commits on the PR
 branch — see the [change protocol](#iteration-1--change-protocol-2026-07-03).
 Deferred items and answers to open questions are in
-[Iteration 2](#iteration-2--open-items--answers).
+[Iteration 2](#iteration-2--open-items--answers). **Iteration 3 (2026-07-05)**
+implemented the one item Iteration 2 held back (R766-N05, event-observer
+isolation). **Iteration 4 (2026-07-05)** triages the GitHub Copilot reviewer's
+second automated pass and analyzes each comment.
 
 ## Summary
 
@@ -40,19 +43,19 @@ Copilot reviewer left three unresolved GitHub review threads. I agree with the t
 drift) · `eslint --quiet` (clean) · `jest` (2648 passed / 157 suites) · `tsc`
 build across all workspaces (clean).
 
-| ID | Commit | What changed | Why (motivation) |
-| --- | --- | --- | --- |
-| R766-06 | `0292780` | `attachTrpc` calls `iterator.return?.()` with **no argument** at both sites | The parameter is a *return value*, not an `IteratorResult`; `{ value, done }` was misleading and could leak as a custom iterator's final value. Copilot threads answered + resolved. |
-| R766-N04 | `0bd16afa` | `AttachTrpcResult` exposes `activeOperations` / `activeSubscriptions` as `ReadonlyMap` | Returning the live mutable `Map`s let a consumer corrupt the dispatcher's in-flight/cancellation bookkeeping; observation preserved, mutation removed. |
-| R766-05 | `c5662718` | `openDocumentWebview` returns a local `const controller` | The return no longer flows through the optional `handle.controller?` slot, so it can't read as nullable. Copilot thread answered + resolved. |
-| R766-02 | `76172cd2` | `WebviewController.dispose()` now closes the panel (`_panelDisposed` guard) + 2 tests | A public handle whose `dispose()` leaves the tab open is surprising; the old "recursion" rationale was already neutralised by the `_isDisposed` guard. |
-| R766-N07 | `9a758cc5` | `useConfiguration` parses `__initialData` in `try/catch`, falls back to `{}` + logs | A malformed payload threw during render and white-screened the webview; degrade gracefully instead. |
-| R766-N08 | `76f99484` | Renamed the host dispatch-logger option `telemetry` → `logger`; added README **Observability** chapter | `telemetry` (a `ProcedureLogger`) collided with the analytics path and misled readers. No deprecated alias kept (preview). |
-| R766-S02 | `6363a6f2` | Webview `loggerLink` is now **opt-in** (`connectTrpc({ logger })` / `<WithWebviewContext enableRpcLogging>`) | Always-on logging is noise for production consumers; defaults should be quiet. README documents the rich console experience and how to open the webview devtools console. |
-| R766-S03 | `32859afc` | Shipped generic `WithTelemetry<TContext, TTelemetry>` from `./host`; ADVANCED.md pattern; DocumentDB now specializes it; README telemetry recipe | Reading `ctx.telemetry` needed ad-hoc casts, and the DocumentDB comment referenced a package helper that didn't exist. Telemetry is now discoverable from the README (azext). |
-| R766-S04 | `de27b507` | Reworded README shared-client note; dropped the "single `message` listener" claim | The client is shared per webview (true), but the transport registers one listener *per in-flight op*; the claim described a wrong, changeable internal. (Design pros/cons in Iteration 2.) |
-| R766-04 | `61a01033` | ADVANCED.md: subscriptions are **not** on the event channel | The doc contradicted `eventLink` (which excludes subscriptions) and the `useRpcEvents` doc. |
-| R766-03 | `46296ce4` | Ship `ADVANCED.md` + a package-local `LICENSE` in `files` | README linked ADVANCED.md ~10× but it wasn't in the tarball, and no license text shipped. Verified with `npm pack --dry-run`. |
+| ID       | Commit     | What changed                                                                                                                                     | Why (motivation)                                                                                                                                                                           |
+| -------- | ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| R766-06  | `0292780`  | `attachTrpc` calls `iterator.return?.()` with **no argument** at both sites                                                                      | The parameter is a _return value_, not an `IteratorResult`; `{ value, done }` was misleading and could leak as a custom iterator's final value. Copilot threads answered + resolved.       |
+| R766-N04 | `0bd16afa` | `AttachTrpcResult` exposes `activeOperations` / `activeSubscriptions` as `ReadonlyMap`                                                           | Returning the live mutable `Map`s let a consumer corrupt the dispatcher's in-flight/cancellation bookkeeping; observation preserved, mutation removed.                                     |
+| R766-05  | `c5662718` | `openDocumentWebview` returns a local `const controller`                                                                                         | The return no longer flows through the optional `handle.controller?` slot, so it can't read as nullable. Copilot thread answered + resolved.                                               |
+| R766-02  | `76172cd2` | `WebviewController.dispose()` now closes the panel (`_panelDisposed` guard) + 2 tests                                                            | A public handle whose `dispose()` leaves the tab open is surprising; the old "recursion" rationale was already neutralised by the `_isDisposed` guard.                                     |
+| R766-N07 | `9a758cc5` | `useConfiguration` parses `__initialData` in `try/catch`, falls back to `{}` + logs                                                              | A malformed payload threw during render and white-screened the webview; degrade gracefully instead.                                                                                        |
+| R766-N08 | `76f99484` | Renamed the host dispatch-logger option `telemetry` → `logger`; added README **Observability** chapter                                           | `telemetry` (a `ProcedureLogger`) collided with the analytics path and misled readers. No deprecated alias kept (preview).                                                                 |
+| R766-S02 | `6363a6f2` | Webview `loggerLink` is now **opt-in** (`connectTrpc({ logger })` / `<WithWebviewContext enableRpcLogging>`)                                     | Always-on logging is noise for production consumers; defaults should be quiet. README documents the rich console experience and how to open the webview devtools console.                  |
+| R766-S03 | `32859afc` | Shipped generic `WithTelemetry<TContext, TTelemetry>` from `./host`; ADVANCED.md pattern; DocumentDB now specializes it; README telemetry recipe | Reading `ctx.telemetry` needed ad-hoc casts, and the DocumentDB comment referenced a package helper that didn't exist. Telemetry is now discoverable from the README (azext).              |
+| R766-S04 | `de27b507` | Reworded README shared-client note; dropped the "single `message` listener" claim                                                                | The client is shared per webview (true), but the transport registers one listener _per in-flight op_; the claim described a wrong, changeable internal. (Design pros/cons in Iteration 2.) |
+| R766-04  | `61a01033` | ADVANCED.md: subscriptions are **not** on the event channel                                                                                      | The doc contradicted `eventLink` (which excludes subscriptions) and the `useRpcEvents` doc.                                                                                                |
+| R766-03  | `46296ce4` | Ship `ADVANCED.md` + a package-local `LICENSE` in `files`                                                                                        | README linked ADVANCED.md ~10× but it wasn't in the tarball, and no license text shipped. Verified with `npm pack --dry-run`.                                                              |
 
 **Deferred to Iteration 2 (no code this pass):** R766-01 (foreign-message guard),
 R766-N01 (webview inbound guard — depends on R766-01), R766-N02 (caller-factory
@@ -148,7 +151,7 @@ This is not a correctness bug, but it is worth second-guessing before the previe
 
 The decision to ship middleware bodies instead of a package-owned telemetry procedure is sound. It keeps the package instance-agnostic and avoids baking in Azure telemetry policy.
 
-The cost is that consumers need a local `WithTelemetry<T>` helper or a similar narrowing pattern when procedure code reads `ctx.telemetry`. DocumentDB already has that helper in [src/webviews/_integration/trpc.ts](../../../../src/webviews/_integration/trpc.ts#L58-L64). Add that pattern to `ADVANCED.md` so agents have a copyable way to do the right thing instead of inventing ad hoc casts at every procedure.
+The cost is that consumers need a local `WithTelemetry<T>` helper or a similar narrowing pattern when procedure code reads `ctx.telemetry`. DocumentDB already has that helper in [src/webviews/\_integration/trpc.ts](../../../../src/webviews/_integration/trpc.ts#L58-L64). Add that pattern to `ADVANCED.md` so agents have a copyable way to do the right thing instead of inventing ad hoc casts at every procedure.
 
 ### R766-S04: The README should avoid promising a single message listener
 
@@ -187,18 +190,18 @@ the effort.
 
 ## Verification of the existing findings
 
-| ID | 1st-pass severity | Verified in code? | My severity | Verdict |
-| --- | --- | --- | --- | --- |
-| R766-01 | High | ✅ Yes | **Medium** | Real defect, but I downgrade High → Medium. See reasoning below. Still the highest-priority functional fix. |
-| R766-02 | Medium | ✅ Yes | Medium | Confirmed. The doc-comment's "circular call chain" justification is itself partly wrong (the `_isDisposed` guard already prevents recursion). |
-| R766-03 | Medium | ✅ Yes | Medium | Confirmed. Broaden it: no `LICENSE` file ships either. |
-| R766-04 | Low | ✅ Yes | Low | Confirmed doc/impl contradiction. |
-| R766-05 | Low | ✅ Yes | Low | Confirmed. Compiles only because TS narrows the property after direct assignment; not a runtime bug. |
-| R766-06 | Low | ✅ Yes | Low | Confirmed at both sites. |
-| R766-S01 | note | n/a | Info | Agree — three tiers are implemented as designed. |
-| R766-S02 | note | ✅ Yes | Low | Confirmed `loggerLink()` is unconditional. |
-| R766-S03 | note | ✅ Yes | Low | Confirmed; and the DocumentDB comment references a package `WithTelemetry` helper that does **not** exist. |
-| R766-S04 | note | ✅ Yes | Low | Confirmed — the transport registers a `window` `message` listener per in-flight operation. |
+| ID       | 1st-pass severity | Verified in code? | My severity | Verdict                                                                                                                                       |
+| -------- | ----------------- | ----------------- | ----------- | --------------------------------------------------------------------------------------------------------------------------------------------- |
+| R766-01  | High              | ✅ Yes            | **Medium**  | Real defect, but I downgrade High → Medium. See reasoning below. Still the highest-priority functional fix.                                   |
+| R766-02  | Medium            | ✅ Yes            | Medium      | Confirmed. The doc-comment's "circular call chain" justification is itself partly wrong (the `_isDisposed` guard already prevents recursion). |
+| R766-03  | Medium            | ✅ Yes            | Medium      | Confirmed. Broaden it: no `LICENSE` file ships either.                                                                                        |
+| R766-04  | Low               | ✅ Yes            | Low         | Confirmed doc/impl contradiction.                                                                                                             |
+| R766-05  | Low               | ✅ Yes            | Low         | Confirmed. Compiles only because TS narrows the property after direct assignment; not a runtime bug.                                          |
+| R766-06  | Low               | ✅ Yes            | Low         | Confirmed at both sites.                                                                                                                      |
+| R766-S01 | note              | n/a               | Info        | Agree — three tiers are implemented as designed.                                                                                              |
+| R766-S02 | note              | ✅ Yes            | Low         | Confirmed `loggerLink()` is unconditional.                                                                                                    |
+| R766-S03 | note              | ✅ Yes            | Low         | Confirmed; and the DocumentDB comment references a package `WithTelemetry` helper that does **not** exist.                                    |
+| R766-S04 | note              | ✅ Yes            | Low         | Confirmed — the transport registers a `window` `message` listener per in-flight operation.                                                    |
 
 No finding in the first pass was a false alarm. The only correction is the
 severity of R766-01 and two rationale/scope refinements (R766-02, R766-03).
@@ -214,16 +217,16 @@ The defect is real and verified: the listener callback is `async` and its first
 act is `switch (message.op.type)`, with no guard. A foreign `postMessage` whose
 payload has no `op` (or is `null`) throws a `TypeError`.
 
-What tempers the severity is the *blast radius*:
+What tempers the severity is the _blast radius_:
 
-- The throw happens **inside an `async` listener**, so it becomes an *unhandled
-  promise rejection*, not a synchronous throw. VS Code's event emitter does not
+- The throw happens **inside an `async` listener**, so it becomes an _unhandled
+  promise rejection_, not a synchronous throw. VS Code's event emitter does not
   catch it (nothing is thrown synchronously), and the extension host does not
   abort on unhandled rejections by default — it logs. So the observable effect
   is log/telemetry noise plus a dropped foreign message, **not** a crash.
 - It does **not** corrupt the tRPC channel: each message is a fresh listener
   invocation, so subsequent tRPC calls still dispatch correctly.
-- It does **not** break the embedder's *own* `onDidReceiveMessage` listener —
+- It does **not** break the embedder's _own_ `onDidReceiveMessage` listener —
   VS Code fans a message out to every registered listener independently, so the
   consumer's own protocol handler still receives the message.
 
@@ -268,7 +271,7 @@ Reference: [packages/vscode-ext-webview/src/host/WebviewController.ts](../../../
 Confirmed. One correction to the code's own reasoning: the doc comment says the
 panel is not closed to avoid a "circular call chain
 (`dispose → panel.dispose → onDidDispose → dispose`)", but `dispose()` sets
-`_isDisposed = true` *before* doing anything else, so a re-entrant call already
+`_isDisposed = true` _before_ doing anything else, so a re-entrant call already
 returns immediately. The recursion the comment fears cannot happen — which means
 the stated reason for the current behavior does not hold, and closing the panel
 is safe.
@@ -294,7 +297,7 @@ gap survived.
   only).**
   - Pros: explicit about intent.
   - Cons: two things to learn; fights the README, which already advertises
-    `dispose` as *the* cleanup method; more surface for the "simple" audience.
+    `dispose` as _the_ cleanup method; more surface for the "simple" audience.
 - **C — Keep behavior, document it, add a `closePanel` option.**
   - Pros: zero behavior change.
   - Cons: least intuitive; directly contradicts the north star.
@@ -335,7 +338,7 @@ References: [ADVANCED.md](../../../../packages/vscode-ext-webview/ADVANCED.md#L1
 Confirmed contradiction. `eventLink` guards `if (op.type !== 'subscription')` on
 both `next` and `error`, and the `useRpcEvents` doc comment says subscriptions
 are intentionally excluded — but ADVANCED.md L197-199 says subscription errors
-*are* surfaced on `onError`.
+_are_ surfaced on `onError`.
 
 **Options**
 
@@ -375,7 +378,7 @@ runtime bug. It is purely a readability/robustness nit.
 
 References: [attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L259), [attachTrpc.ts](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L374)
 
-Confirmed at both sites. `AsyncIterator.return(value?)` takes the *return value*,
+Confirmed at both sites. `AsyncIterator.return(value?)` takes the _return value_,
 not an `IteratorResult`; passing `{ value: undefined, done: true }` sets that
 object as the generator's final return value. Harmless today (nobody reads it),
 but wrong modelling for a reusable transport.
@@ -451,7 +454,7 @@ consumer must:
 3. pass **both** `router` and `createCallerFactory` to `openWebview`.
 
 If step 2/3 is forgotten, `attachTrpc` silently falls back to
-`defaultCreateCallerFactory` (bound to a *different* tRPC instance). ADVANCED.md
+`defaultCreateCallerFactory` (bound to a _different_ tRPC instance). ADVANCED.md
 warns this "works only when your router is built with the package's default
 `router`/`publicProcedure`" — i.e. the mismatch is **silent** and only sometimes
 correct. That is exactly the class of footgun a coding agent hits: three
@@ -504,11 +507,11 @@ References: [WebviewController.ts](../../../../packages/vscode-ext-webview/src/h
   which can break out of an inline script context.
 - `render('${this._options.viewType}', …)` — `viewType` is interpolated raw
   inside single quotes; a quote or `');…` in it breaks the statement.
-- `__initialData` is the one field that *is* protected (via `encodeURIComponent`).
+- `__initialData` is the one field that _is_ protected (via `encodeURIComponent`).
 
 All inputs here are developer-controlled (the extension's own l10n bundle and its
 own `viewType`), and a CSP nonce is applied, so real-world risk is low — hence
-Low. But this is a *reusable, published* package: a coding agent may feed a
+Low. But this is a _reusable, published_ package: a coding agent may feed a
 dynamic `viewType`, and l10n bundles can contain arbitrary translated text. A
 transport library should not have a latent HTML-injection edge.
 
@@ -526,7 +529,7 @@ transport library should not have a latent HTML-injection edge.
   - Cons: touches the webview boot contract (`window.config`, `l10n_bundle`).
 - **C — Push initial data over `postMessage` after load** (Cosmos's convention).
   - Pros: no inline data injection at all.
-  - Cons: adds a round-trip and a "loading" state to the *simple* path; a
+  - Cons: adds a round-trip and a "loading" state to the _simple_ path; a
     regression for the north-star audience.
 
 **Recommendation: A now** (removes the edge with no contract change); note **B**
@@ -554,7 +557,7 @@ mutation.
   - Cons: drops the ability to inspect ids; more API churn.
 - **C — Leave as-is** (documented "live").
   - Pros: no change.
-  - Cons: keeps the footgun in a *primitive* meant for embedders.
+  - Cons: keeps the footgun in a _primitive_ meant for embedders.
 
 **Recommendation: A.**
 
@@ -568,7 +571,7 @@ Reference: [packages/vscode-ext-webview/src/webview/events.ts](../../../../packa
 
 `emitSuccess`/`emitError`/`emitAborted` invoke handlers synchronously inside the
 `eventLink` `next`/`error` callbacks. The channel's own contract says it is
-"observer-only" and cannot affect the value — but if an observer *throws*, the
+"observer-only" and cannot affect the value — but if an observer _throws_, the
 exception propagates into the link chain and disrupts the very call it was only
 supposed to observe. Snapshotting the handler set (already done) protects
 iteration, not the caller.
@@ -621,7 +624,7 @@ Reference: [packages/vscode-ext-webview/src/react/useConfiguration.ts](../../../
 
 `JSON.parse(decodeURIComponent(window.config?.__initialData ?? '{}'))` runs in a
 `useState` initializer. If `__initialData` is malformed (a consumer hand-rolling
-the HTML, or the R766-N03 escaping edge), the parse throws *during render* and
+the HTML, or the R766-N03 escaping edge), the parse throws _during render_ and
 the webview white-screens with no guidance. The host normally controls the
 encoding, so risk is low.
 
@@ -637,12 +640,12 @@ encoding, so risk is low.
 
 **Recommendation: A.**
 
-### R766-N08: Low - The `telemetry` controller option is actually a dispatch *logger*, overloading the word
+### R766-N08: Low - The `telemetry` controller option is actually a dispatch _logger_, overloading the word
 
 Reference: [packages/vscode-ext-webview/src/host/WebviewController.ts](../../../../packages/vscode-ext-webview/src/host/WebviewController.ts#L92-L99)
 
 `WebviewControllerOptions.telemetry?: ProcedureLogger` is the zero-config console
-*logging* sink. But ADVANCED.md uses "telemetry" for the *analytics* path
+_logging_ sink. But ADVANCED.md uses "telemetry" for the _analytics_ path
 (`telemetryMiddlewareBody` + `TelemetryRunner`), which is a different mechanism
 wired onto procedures. Naming the logger option `telemetry` collides with the
 analytics vocabulary and will mislead agents into thinking they wire Application
@@ -668,26 +671,26 @@ Severity legend: **Med** = fix before preview goes wider; **Low** = cheap
 follow-up; **Info** = judgment call. **Status** column added after Iteration 1
 (commit for shipped fixes; see the [change protocol](#iteration-1--change-protocol-2026-07-03)).
 
-| ID | Severity | Area | Recommended option | Status |
-| --- | --- | --- | --- | --- |
-| R766-01 | Med | host transport | A (guard) + B (throw-safe) | ✅ `ade2ce61` (Iteration 2) |
-| R766-N02 | Med | happy-path API | A (pass `WebviewTrpc` instance) | ✅ `21b0a2f7` (Iteration 2) |
-| R766-02 | Med | host lifecycle | A (`dispose()` closes panel + guard) | ✅ `76172cd2` |
-| R766-03 | Med | packaging | A (ship `ADVANCED.md` + `LICENSE`) | ✅ `46296ce4` |
-| R766-N01 | Med | webview transport | A (structural guard) | ✅ `ade2ce61` (Iteration 2) |
-| R766-S02 | Low | webview logging | A (opt-in logger, off by default) | ✅ `6363a6f2` |
-| R766-N04 | Low | host primitive | A (`ReadonlyMap`) | ✅ `0bd16afa` |
-| R766-N05 | Low | event channel | isolate throws + `onObserverError` (option 1) | ✅ `76227034` (Iteration 2) |
-| R766-N03 | Low | security hardening | B (JSON data block, per request) | ✅ `d5748abe` (Iteration 2) |
-| R766-N08 | Low | naming | A (rename `telemetry` → `logger`) | ✅ `76f99484` |
-| R766-04 | Low | docs | A (fix ADVANCED.md) | ✅ `61a01033` |
-| R766-05 | Low | consumer code | A (local const) | ✅ `c5662718` |
-| R766-06 | Low | host transport | A (`return()` no arg) | ✅ `0292780` |
-| R766-S03 | Low | docs + helper | A (document + ship generic) | ✅ `32859afc` |
-| R766-S04 | Low | docs + instrument | A (reword) + concurrency signal | ✅ `de27b507` + `dbbf9969` (Iteration 2) |
-| R766-N07 | Low | webview config | A (defensive parse) | ✅ `9a758cc5` |
-| R766-S01 | Info | architecture | keep three tiers | ✅ Agreed (no change) |
-| R766-N06 | Info | front-door scope | B (document, don't build yet) | ✅ `b603affd` (Iteration 2) |
+| ID       | Severity | Area               | Recommended option                            | Status                                   |
+| -------- | -------- | ------------------ | --------------------------------------------- | ---------------------------------------- |
+| R766-01  | Med      | host transport     | A (guard) + B (throw-safe)                    | ✅ `ade2ce61` (Iteration 2)              |
+| R766-N02 | Med      | happy-path API     | A (pass `WebviewTrpc` instance)               | ✅ `21b0a2f7` (Iteration 2)              |
+| R766-02  | Med      | host lifecycle     | A (`dispose()` closes panel + guard)          | ✅ `76172cd2`                            |
+| R766-03  | Med      | packaging          | A (ship `ADVANCED.md` + `LICENSE`)            | ✅ `46296ce4`                            |
+| R766-N01 | Med      | webview transport  | A (structural guard)                          | ✅ `ade2ce61` (Iteration 2)              |
+| R766-S02 | Low      | webview logging    | A (opt-in logger, off by default)             | ✅ `6363a6f2`                            |
+| R766-N04 | Low      | host primitive     | A (`ReadonlyMap`)                             | ✅ `0bd16afa`                            |
+| R766-N05 | Low      | event channel      | isolate throws + `onObserverError` (option 1) | ✅ `76227034` (Iteration 2)              |
+| R766-N03 | Low      | security hardening | B (JSON data block, per request)              | ✅ `d5748abe` (Iteration 2)              |
+| R766-N08 | Low      | naming             | A (rename `telemetry` → `logger`)             | ✅ `76f99484`                            |
+| R766-04  | Low      | docs               | A (fix ADVANCED.md)                           | ✅ `61a01033`                            |
+| R766-05  | Low      | consumer code      | A (local const)                               | ✅ `c5662718`                            |
+| R766-06  | Low      | host transport     | A (`return()` no arg)                         | ✅ `0292780`                             |
+| R766-S03 | Low      | docs + helper      | A (document + ship generic)                   | ✅ `32859afc`                            |
+| R766-S04 | Low      | docs + instrument  | A (reword) + concurrency signal               | ✅ `de27b507` + `dbbf9969` (Iteration 2) |
+| R766-N07 | Low      | webview config     | A (defensive parse)                           | ✅ `9a758cc5`                            |
+| R766-S01 | Info     | architecture       | keep three tiers                              | ✅ Agreed (no change)                    |
+| R766-N06 | Info     | front-door scope   | B (document, don't build yet)                 | ✅ `b603affd` (Iteration 2)              |
 
 ### Suggested batching
 
@@ -714,27 +717,15 @@ follow-up pass.
 
 ## Still open
 
-| ID | Title | Why it is here |
-| --- | --- | --- |
-| R766-01 | `attachTrpc` foreign-message guard | ✅ Implemented in Iteration 2 (structural guard + throw-safe listener + foreign-message test). |
-| R766-N01 | Webview inbound `event.data` guard | ✅ Implemented in Iteration 2 (structural `onReceive` guard + test). |
-| R766-N02 | `createCallerFactory` ergonomics | ✅ Implemented in Iteration 2 (option A: `trpc` instance option; consumer adopted; `createCallerFactory` deprecated). |
-| R766-N03 | Inline-script hardening | ✅ Implemented in Iteration 2 (option B: inert `application/json` data block + nonce'd boot parser). |
-> ✅ **Implemented in Iteration 2** [R766-N05] (`76227034`). Shipped **option 1**:
-> `createEventChannel` now always **isolates** a throwing `onSuccess` / `onError`
-> / `onAborted` observer (upholding the observer-only contract — a broken observer
-> can no longer break the tRPC call it watches) and routes the isolated error to
-> an `onObserverError` sink that defaults to `console.error`. The hook is threaded
-> through `connectTrpc` and `WithWebviewContext` / the hooks. It is **off by
-> default in the happy path** (console-only, no telemetry — a generic consumer is
-> not opted into events it may not want). **DocumentDB opts in for itself** via
-> `reportObserverError`, which keeps the structured `console.error` and elevates
-> to the browser `reportError()` global (the “general observability” of option 5)
-> without re-entering the tRPC channel. Tests cover isolation, sink routing, the
-> default, a throwing sink, and the DocumentDB sink. The option analysis below is
-> retained as the rationale.
-| R766-N06 | Create-or-reveal helper | ✅ Documented in Iteration 2 (ADVANCED.md pattern; no package code). |
-| R766-S04 | Per-operation listener design | ✅ Instrumented in Iteration 2 (concurrency gauge: `ProcedureLogger.concurrent` + accumulating telemetry). |
+| ID       | Title                                 | Why it is here                                                                                                                                                                                                                            |
+| -------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R766-01  | `attachTrpc` foreign-message guard    | ✅ Implemented in Iteration 2 (structural guard + throw-safe listener + foreign-message test).                                                                                                                                            |
+| R766-N01 | Webview inbound `event.data` guard    | ✅ Implemented in Iteration 2 (structural `onReceive` guard + test).                                                                                                                                                                      |
+| R766-N02 | `createCallerFactory` ergonomics      | ✅ Implemented in Iteration 2 (option A: `trpc` instance option; consumer adopted; `createCallerFactory` deprecated).                                                                                                                     |
+| R766-N03 | Inline-script hardening               | ✅ Implemented in Iteration 2 (option B: inert `application/json` data block + nonce'd boot parser).                                                                                                                                      |
+| R766-N05 | Event-observer isolation & visibility | ✅ Implemented in **Iteration 3** (option 1: always-on observer isolation + opt-in `onObserverError` sink; DocumentDB opts in via `reportObserverError`). See the [Iteration 3](#iteration-3--event-observer-isolation-r766-n05) chapter. |
+| R766-N06 | Create-or-reveal helper               | ✅ Documented in Iteration 2 (ADVANCED.md pattern; no package code).                                                                                                                                                                      |
+| R766-S04 | Per-operation listener design         | ✅ Instrumented in Iteration 2 (concurrency gauge: `ProcedureLogger.concurrent` + accumulating telemetry).                                                                                                                                |
 
 ## Iteration 2 — change protocol (2026-07-03)
 
@@ -748,19 +739,20 @@ follow-up pass.
 (applied) · `eslint --quiet` (clean) · `jest` (2655 passed / 158 suites) · `tsc`
 build across all workspaces (clean).
 
-| ID | Commit | What changed | Why (motivation) |
-| --- | --- | --- | --- |
-| R766-01 | `ade2ce61` | `attachTrpc` guards inbound messages (`isTransportRequestMessage`) and wraps dispatch in `try/catch` | As the bring-your-own-panel primitive it may share a bus with non-tRPC traffic; a foreign message (no `op`) threw as an unhandled rejection. Ships options A + B. |
-| R766-N01 | `ade2ce61` | `connectTrpc` `onReceive` guards `event.data` before reading `.id` | Webview mirror of R766-01: a `null` / foreign `window` message threw. Shipped in the same commit so both transport edges reject foreign traffic together. |
-| R766-N02 | `21b0a2f7` | `openWebview` / `WebviewController` accept a `trpc` option; standalone `createCallerFactory` deprecated; consumer + README + ADVANCED updated | Removes the re-export + silent-fallback footgun on the happy path (option A). `attachTrpc` keeps its explicit factory for embedders. |
-| R766-N03 | `d5748abe` | Initial data delivered in an inert `application/json` block + nonce'd boot parser; `serializeInertJson` escapes `<` | Removes the inline-script break-out class by construction (option B). `__initialData` stays encoded, so `useConfiguration` is unchanged. |
-| R766-N06 | `b603affd` | ADVANCED.md documents the create-or-reveal pattern (consumer-side `Map` + `revealToForeground` + `onDisposed`) | Keeps the panel registry in consumer space; the package stays a transport library. Documented, not built. |
-| R766-S04 | `dbbf9969` | `ProcedureLogEntry.concurrent` stamped by `attachTrpc`; DocumentDB `rpcConcurrencyLogger` → accumulating-telemetry `concurrentRpcOps` distribution + `dispatch` counter | Turns “revisit only on evidence” into a real concurrency signal (peak / average in-flight ops) to judge the per-operation listener. |
-| R766-N05 | `76227034` | `createEventChannel` isolates throwing observers and routes them to an `onObserverError` sink (default `console.error`); threaded through `connectTrpc` / `WithWebviewContext`; DocumentDB opts in via `reportObserverError` (console + `reportError()`) | A throwing observer previously broke the tRPC call it observed. Option 1: correctness fix (always-on isolation) + opt-in structured sink; off by default in the happy path so consumers are not opted into unwanted events. |
+| ID       | Commit     | What changed                                                                                                                                                            | Why (motivation)                                                                                                                                                  |
+| -------- | ---------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| R766-01  | `ade2ce61` | `attachTrpc` guards inbound messages (`isTransportRequestMessage`) and wraps dispatch in `try/catch`                                                                    | As the bring-your-own-panel primitive it may share a bus with non-tRPC traffic; a foreign message (no `op`) threw as an unhandled rejection. Ships options A + B. |
+| R766-N01 | `ade2ce61` | `connectTrpc` `onReceive` guards `event.data` before reading `.id`                                                                                                      | Webview mirror of R766-01: a `null` / foreign `window` message threw. Shipped in the same commit so both transport edges reject foreign traffic together.         |
+| R766-N02 | `21b0a2f7` | `openWebview` / `WebviewController` accept a `trpc` option; standalone `createCallerFactory` deprecated; consumer + README + ADVANCED updated                           | Removes the re-export + silent-fallback footgun on the happy path (option A). `attachTrpc` keeps its explicit factory for embedders.                              |
+| R766-N03 | `d5748abe` | Initial data delivered in an inert `application/json` block + nonce'd boot parser; `serializeInertJson` escapes `<`                                                     | Removes the inline-script break-out class by construction (option B). `__initialData` stays encoded, so `useConfiguration` is unchanged.                          |
+| R766-N06 | `b603affd` | ADVANCED.md documents the create-or-reveal pattern (consumer-side `Map` + `revealToForeground` + `onDisposed`)                                                          | Keeps the panel registry in consumer space; the package stays a transport library. Documented, not built.                                                         |
+| R766-S04 | `dbbf9969` | `ProcedureLogEntry.concurrent` stamped by `attachTrpc`; DocumentDB `rpcConcurrencyLogger` → accumulating-telemetry `concurrentRpcOps` distribution + `dispatch` counter | Turns “revisit only on evidence” into a real concurrency signal (peak / average in-flight ops) to judge the per-operation listener.                               |
 
-**Iteration 2 wrap-up:** all deferred review items are now addressed. R766-N05
-was subsequently implemented (option 1) at consumer request, so nothing remains
-open for a later iteration.
+**Iteration 2 wrap-up:** every item batched for Iteration 2 is addressed. The one
+remaining deferral, R766-N05, was implemented separately as
+[Iteration 3](#iteration-3--event-observer-isolation-r766-n05); the Copilot
+reviewer's 2026-07-05 pass is triaged in
+[Iteration 4](#iteration-4--copilot-reviewer-feedback-2026-07-05).
 
 ## R766-01 — side effects on existing projects, and A/B/C re-analysis
 
@@ -774,17 +766,17 @@ open for a later iteration.
 > below is retained as the rationale.
 
 **Does skipping this hurt existing projects? No.** R766-01 is entirely inside
-`attachTrpc`, the *bring-your-own-panel* primitive. Today the only consumer
+`attachTrpc`, the _bring-your-own-panel_ primitive. Today the only consumer
 (DocumentDB) never calls `attachTrpc` directly — it goes through `openWebview` /
 `WebviewController`, which **create and own** the panel. A framework-owned panel
 carries **only** tRPC traffic, so `message.op` is always present and the missing
 guard is never reached. The defect is latent until someone attaches tRPC to a
-panel that *also* carries their own `postMessage` protocol (a legacy-migration
+panel that _also_ carries their own `postMessage` protocol (a legacy-migration
 embedder such as Cosmos). So your read is correct: it is hidden behind the API,
 and there is **no real cost to current consumers** — which is exactly why it is
 safe to defer.
 
-When it *is* reached, the blast radius is still bounded: the throw happens inside
+When it _is_ reached, the blast radius is still bounded: the throw happens inside
 an `async` listener, so it becomes an unhandled rejection (log noise) rather than
 a crash, it does not corrupt the tRPC channel, and it does not break the
 embedder's own separate listener (VS Code fans each message out independently).
@@ -823,7 +815,7 @@ before `attachTrpc` is advertised widely — whichever comes first.
 
 > ✅ **Implemented in Iteration 2** [R766-N01]. `connectTrpc`'s `onReceive` now
 > guards `event.data` (`data !== null && typeof data === 'object' && 'id' in
-> data`) before forwarding, so a `null` / primitive / foreign `window` message can
+data`) before forwarding, so a `null` / primitive / foreign `window` message can
 > no longer throw. Covered by a new test that delivers `null` / a string / an
 > `id`-less object mid-flight and asserts no throw and that the real response
 > still resolves.
@@ -846,13 +838,14 @@ R766-01** so both transport edges reject foreign traffic consistently.
 > factory purely from the `trpc` option; README + ADVANCED.md updated.
 >
 > **Minor deviation from the literal `trpc: WebviewTrpc<Ctx>` plan** (confidence
+>
 > > 80%, verified by a clean consumer typecheck): the option is typed
-> `Pick<WebviewTrpc<TContext>, 'createCallerFactory'>`. The reference consumer
-> builds procedures on a *base-context* instance and narrows `ctx` per call, so
-> its instance context is a base of the controller `TContext`; a strict
-> `WebviewTrpc<TContext>` would reject it. The controller only ever reads
-> `createCallerFactory`, and the `Pick` accepts that instance by parameter
-> contravariance — no cast, and the mismatch-proofing is unchanged.
+> > `Pick<WebviewTrpc<TContext>, 'createCallerFactory'>`. The reference consumer
+> > builds procedures on a _base-context_ instance and narrows `ctx` per call, so
+> > its instance context is a base of the controller `TContext`; a strict
+> > `WebviewTrpc<TContext>` would reject it. The controller only ever reads
+> > `createCallerFactory`, and the `Pick` accepts that instance by parameter
+> > contravariance — no cast, and the mismatch-proofing is unchanged.
 
 **Decision: option A** (accept the `WebviewTrpc` instance). Rationale below,
 including why A and B look identical at the call site but are not, and what each
@@ -864,10 +857,10 @@ webview scaffolding.
 The host dispatcher needs **two** things from the consumer, not one: the
 `router` (what procedures exist) and a `createCallerFactory` (how to invoke a
 procedure against a context). In tRPC, `createCallerFactory` is bound to the
-*instance* returned by `initTRPC.context<T>().create()` — the router object does
+_instance_ returned by `initTRPC.context<T>().create()` — the router object does
 **not** carry a reference back to its own factory. So today the consumer has to
 route that factory by hand, and if they don't, `attachTrpc` silently falls back
-to `defaultCreateCallerFactory` (the factory of a *different*, bare
+to `defaultCreateCallerFactory` (the factory of a _different_, bare
 `BaseRouterContext` instance). That "works" for vanilla configs but is
 type-unsound and misbehaves the moment the two instances differ (transformers,
 error formatters). **That silent fallback is the footgun — not the verbosity.**
@@ -941,15 +934,15 @@ Both delete the re-export and the separate `createCallerFactory` argument, so at
 the `openWebview` call site they read almost identically. The real difference is
 the **source of truth** for the factory and **what mismatch remains possible**:
 
-| | Where the factory lives | Passed to `openWebview` | Can it still be mismatched? | Cost |
-| --- | --- | --- | --- | --- |
-| **Today** | free-floating value | `router` + `createCallerFactory` | Yes — forget it / pass the wrong one → silent wrong default | ceremony + footgun |
-| **A** | on the **instance** (`trpc`) | `router` + `trpc` | Only if you pass a `router` built from a *different* instance than `trpc` (unlikely, but still two things kept in sync) | one meaningful import; explicit; no magic |
-| **B** | on the **router** (hidden symbol) | `router` only | No — the router *is* the source of truth; impossible for a simple router | zero ceremony; relies on a non-enumerable property |
+|           | Where the factory lives           | Passed to `openWebview`          | Can it still be mismatched?                                                                                             | Cost                                               |
+| --------- | --------------------------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------- |
+| **Today** | free-floating value               | `router` + `createCallerFactory` | Yes — forget it / pass the wrong one → silent wrong default                                                             | ceremony + footgun                                 |
+| **A**     | on the **instance** (`trpc`)      | `router` + `trpc`                | Only if you pass a `router` built from a _different_ instance than `trpc` (unlikely, but still two things kept in sync) | one meaningful import; explicit; no magic          |
+| **B**     | on the **router** (hidden symbol) | `router` only                    | No — the router _is_ the source of truth; impossible for a simple router                                                | zero ceremony; relies on a non-enumerable property |
 
-So A is a *modest* step past today (you still hand over two coordinated things —
+So A is a _modest_ step past today (you still hand over two coordinated things —
 `trpc` and `router` — you have just swapped a loose function for the instance it
-came from and dropped the dedicated re-export). B is a *qualitative* step (one
+came from and dropped the dedicated re-export). B is a _qualitative_ step (one
 thing, mismatch structurally impossible) at the cost of "magic": a non-enumerable
 symbol stamped on the router by `initWebviewTrpc().router(...)`.
 
@@ -973,7 +966,7 @@ with the package's `initWebviewTrpc()` or with raw `@trpc/server` `initTRPC()`.
   no dependency on your wrapper" consumer — the router has no stamp and they must
   pass `callerFactory` explicitly (identical to today). Worse, B introduces a
   **hidden-property convention**, and this cohort (advanced tRPC users) is the
-  most likely to hit the cases that *drop* it: `mergeRouters`, object
+  most likely to hit the cases that _drop_ it: `mergeRouters`, object
   spreads/clones, or wrapping the router through their own machinery can strip a
   non-enumerable symbol, silently reinstating the default factory — the exact
   footgun, now invisible. B's "impossible to mismatch" guarantee holds for the
@@ -981,7 +974,7 @@ with the package's `initWebviewTrpc()` or with raw `@trpc/server` `initTRPC()`.
   user.**
 
 For the bring-your-own-UI audience, then, B's implicit magic is a liability and
-A's explicitness is a *feature*: composition-proof, nothing to lose, visible at
+A's explicitness is a _feature_: composition-proof, nothing to lose, visible at
 the call site.
 
 ### Recommendation: A
@@ -1024,7 +1017,9 @@ data block:
 
 ```html
 <!-- instead of: <script>window.config = { __initialData: '…' }; l10n_bundle = {…}</script> -->
-<script type="application/json" id="vscode-ext-webview-initial-data">{ "config": …, "l10n": … }</script>
+<script type="application/json" id="vscode-ext-webview-initial-data">
+  { "config": …, "l10n": … }
+</script>
 ```
 
 …and a tiny nonce'd boot script that `JSON.parse`s that element into
@@ -1053,40 +1048,36 @@ manual escaping and removes the vulnerability class rather than patching it.
 
 ## R766-N05 — options to make observer exceptions visible to telemetry
 
-> ⏭ **Deferred to Iteration 3** [R766-N05] (not implemented this pass, per the
-> standing “options only” decision). Two things are bundled here and both wait on
-> one design decision:
->
-> 1. the **correctness fix** — isolate a throwing event-channel observer so it
->    cannot break the tRPC call it only observes (finding option A: try/catch →
->    `console.error`). Cheap and low-risk, but held intentionally so it ships
->    *together with* the hook rather than being touched twice.
-> 2. the **telemetry-visibility hook** — which of options 1–5 below to adopt
->    (leaning: option 1, an opt-in `onObserverError` sink defaulting to
->    `console.error`, optionally plus option 5 `reportError`).
->
-> **Iteration 3 action:** pick the hook shape, then ship isolation + hook in one
-> change with a “a throwing observer does not break dispatch” test.
+> ✅ **Implemented in Iteration 3** [R766-N05]. Both parts shipped together: the
+> **correctness fix** (a throwing observer is now isolated so it can no longer
+> break the tRPC call it only observes) and the **visibility hook** — **option 1**,
+> an opt-in `onObserverError` sink defaulting to `console.error`. It stays off
+> beyond that console default in the happy path; DocumentDB opts in via
+> `reportObserverError`, which also elevates to the browser `reportError()` global
+> (**option 5**). See the
+> [Iteration 3](#iteration-3--event-observer-isolation-r766-n05) chapter for the
+> change protocol and rationale; the option analysis below is retained as the
+> record of why option 1 was chosen.
 
 Goal: when a consumer's event-channel handler throws, it must (a) not corrupt tRPC
-dispatch and (b) be *observable* — ideally routable to telemetry, not just
+dispatch and (b) be _observable_ — ideally routable to telemetry, not just
 `console.error`. Options (not implemented; for discussion):
 
 - **Option 1 — an `onObserverError` sink.** `createEventChannel({ onError })` /
   `connectTrpc(api, { onObserverError })`; the channel try/catches each handler
   and calls the sink with `(error, info)`. Consumers forward it to their
-  telemetry. *Pros:* explicit, structured (keeps `CallInfo`), testable, isolates
-  the throw. *Cons:* one more option.
+  telemetry. _Pros:_ explicit, structured (keeps `CallInfo`), testable, isolates
+  the throw. _Cons:_ one more option.
 - **Option 2 — a channel `onInternalError` event.** Add it to `RpcEventChannel`.
-  *Cons:* its own handlers can throw (recursion) — needs a hard guard; muddies the
+  _Cons:_ its own handlers can throw (recursion) — needs a hard guard; muddies the
   "observe query/mutation outcomes" contract.
 - **Option 3 — synthesize an `emitError` with a marker path** (e.g. `$observer`).
-  *Cons:* pollutes the normal error stream; confusing to consumers.
+  _Cons:_ pollutes the normal error stream; confusing to consumers.
 - **Option 4 — round-trip to the host** so host-side telemetry records it.
-  *Cons:* heavy; couples webview observer bugs to host telemetry; lossy/ordered.
+  _Cons:_ heavy; couples webview observer bugs to host telemetry; lossy/ordered.
 - **Option 5 — `reportError(err)` (the browser global).** Wrap handler calls so a
   throw is reported; surfaces in devtools and is catchable by a consumer's global
-  handler. *Pros:* zero API surface; standard mechanism. *Cons:* unstructured (no
+  handler. _Pros:_ zero API surface; standard mechanism. _Cons:_ unstructured (no
   `CallInfo`).
 
 **Leaning:** **Option 1** as the structured, opt-in hook (default it to
@@ -1104,12 +1095,12 @@ visible without wiring. Decide in iteration 2.
 > `concurrentRpcOps` distribution plus a `dispatch` counter (batched, so volume is
 > negligible). The revisit thresholds are in the “Instrument it” subsection below.
 > This turns “revisit only on evidence” into an actual signal — and, if peak `N`
-> stays tiny, the evidence to *retire* S04.
+> stays tiny, the evidence to _retire_ S04.
 
 The transport (`vscodeLink` → `connectTrpc`'s `onReceive`) registers a **new
 `window` `message` listener per in-flight operation**, each filtering by
 `operationId` and removed on completion, rather than one central listener with an
-`id → observer` map. The README reword (R766-S04) stopped *advertising* this
+`id → observer` map. The README reword (R766-S04) stopped _advertising_ this
 internal; here is why the design itself is reasonable and when to revisit it.
 
 **Pros**
@@ -1150,7 +1141,7 @@ that multiplies it.
 
 **Where to sample it (for free).** The host already tracks every in-flight
 operation in [`AttachTrpcResult.activeOperations` + `.activeSubscriptions`](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L55-L78)
-(exposed read-only in R766-N04). Their combined size *is* `N`. Because each
+(exposed read-only in R766-N04). Their combined size _is_ `N`. Because each
 in-flight operation is exactly one host map entry **and** one webview listener,
 the host-side count is a faithful, zero-cost proxy for the webview fan-out — no
 webview→host round-trip needed.
@@ -1165,9 +1156,9 @@ us the whole picture without per-op event spam:
 // host side, once per dispatched operation — given the AttachTrpcResult handle
 // (or, cleaner, the ProcedureLogger `concurrent` field proposed below)
 void callWithAccumulatingTelemetry('documentDB.webview.rpcConcurrency', (ctx) => {
-    const n = handle.activeOperations.size + handle.activeSubscriptions.size;
-    (ctx.telemetry as TelemetryWithDistributions).distributions.concurrentRpcOps = n; // gauge → min/max/sum/count
-    ctx.telemetry.measurements.dispatch = 1; // summed → total ops per flush window
+  const n = handle.activeOperations.size + handle.activeSubscriptions.size;
+  (ctx.telemetry as TelemetryWithDistributions).distributions.concurrentRpcOps = n; // gauge → min/max/sum/count
+  ctx.telemetry.measurements.dispatch = 1; // summed → total ops per flush window
 });
 ```
 
@@ -1192,11 +1183,11 @@ table with the very corruption surface R766-N04 guards against — only pays off
 once `N` is routinely large or sustained-high **and** the message rate is high
 (the `O(N·M)` term bites).
 
-| Reading | Interpretation | Verdict |
-| --- | --- | --- |
-| `dist_concurrentRpcOps_max` ≤ 8 in ~all sessions | fan-out is a handful of comparisons per message | **Keep — and consider _retiring_ S04**: the concern is disproven |
-| occasional `_max` in 8–32 | spikes, not sustained | keep as is; leave the signal on |
-| `_max` ≥ 32 in ≳ 1 % of webview sessions, **or** average (`_sum / _count`) ≥ 8 sustained — especially if `dispatch`/window is also high (heavy streaming) | genuine, sustained fan-out | **Revisit**: build the single-listener + `Map<id, observer>` multiplexer |
+| Reading                                                                                                                                                   | Interpretation                                  | Verdict                                                                  |
+| --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------- | ------------------------------------------------------------------------ |
+| `dist_concurrentRpcOps_max` ≤ 8 in ~all sessions                                                                                                          | fan-out is a handful of comparisons per message | **Keep — and consider _retiring_ S04**: the concern is disproven         |
+| occasional `_max` in 8–32                                                                                                                                 | spikes, not sustained                           | keep as is; leave the signal on                                          |
+| `_max` ≥ 32 in ≳ 1 % of webview sessions, **or** average (`_sum / _count`) ≥ 8 sustained — especially if `dispatch`/window is also high (heavy streaming) | genuine, sustained fan-out                      | **Revisit**: build the single-listener + `Map<id, observer>` multiplexer |
 
 The signal is designed as much to **retire** S04 as to trigger work: if peak `N`
 stays tiny across the fleet (the expected outcome for interactive webviews), we
@@ -1217,3 +1208,291 @@ No change from the first pass: **document** the create-or-reveal pattern in
 ADVANCED.md rather than building a panel registry into the package. Revisit only
 if multiple consumers reimplement it. Keeping the package lean is more aligned
 with its stated scope than owning panel-lifecycle state.
+
+# Iteration 3 — event-observer isolation (R766-N05)
+
+Added 2026-07-05. This chapter records the one item Iteration 2 deferred: the
+implementation of **R766-N05**. Interim edits had folded it into the Iteration 2
+protocol; it is a distinct pass and is documented here as its own iteration.
+
+## What shipped
+
+R766-N05 bundled a **correctness fix** and a **visibility hook**; Iteration 3
+shipped them together, adopting **option 1** from the
+[R766-N05 option analysis](#r766-n05--options-to-make-observer-exceptions-visible-to-telemetry).
+
+- **Always-on isolation (correctness).** `createEventChannel` now wraps every
+  `onSuccess` / `onError` / `onAborted` observer so a throwing observer can no
+  longer break the tRPC call it was only _observing_. This upholds the
+  observer-only contract regardless of consumer configuration — it is not opt-in.
+- **Opt-in `onObserverError` sink (visibility).** The isolated error is routed to
+  an `onObserverError(error, { info, phase })` sink that **defaults to
+  `console.error`**, threaded through `connectTrpc` and the React
+  `WithWebviewContext` / hooks. Beyond that console default the happy path stays
+  quiet — a generic consumer is not opted into telemetry or events it may not
+  want.
+- **DocumentDB opts in for itself.**
+  [`reportObserverError`](../../../../src/webviews/_integration/reportObserverError.ts)
+  keeps the structured `console.error` (path + phase) and additionally elevates
+  the error to the webview's browser `reportError()` global — the "general
+  observability" of option 5 — without re-entering the tRPC channel, so a throwing
+  observer cannot cause a report loop.
+
+## Change protocol (2026-07-05)
+
+> Each change is an individual commit on `dev/tnaum/webview-api-refinements`,
+> pushed and acknowledged with a PR comment. No Copilot review thread applied
+> (R766-N05 was a Reviewer-2 finding, not a Copilot one).
+
+**Post-change validation (all green):** `prettier` (applied) · `eslint --quiet`
+(clean) · `jest` (2661 passed / 159 suites) · `tsc` build across all workspaces
+(clean).
+
+| Commit     | What changed                                                                                                                                                                                                                                                                    | Why (motivation)                                                                                                                       |
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `76227034` | `createEventChannel` isolates throwing observers and routes them to an `onObserverError` sink (default `console.error`); threaded through `connectTrpc` and `WithWebviewContext` / the hooks; adds `ObserverErrorPhase` / `ObserverErrorContext` / `ObserverErrorHandler` types | A throwing observer previously broke the tRPC call it observed. Option 1: an always-on correctness fix plus an opt-in structured sink. |
+| `559a9af1` | Recorded the R766-N05 implementation in this review doc                                                                                                                                                                                                                         | Traceability.                                                                                                                          |
+| `f7c96564` | `reportObserverError` calls the typed `globalThis.reportError` behind a `typeof` guard instead of a `(globalThis as { reportError?: … })` cast                                                                                                                                  | `reportError` is declared in `lib.dom` (the webview tsconfig includes `dom`), so the cast was unnecessary. No behavior change.         |
+
+## `reportError` naming: the DOM global, not the app-router mutation
+
+DocumentDB's app router also exposes a `reportError` **tRPC mutation** (webview →
+host telemetry). The sink's `globalThis.reportError` is the unrelated **browser
+DOM global** ([`reportError()`](https://developer.mozilla.org/docs/Web/API/reportError),
+which dispatches an `ErrorEvent` on `window`). The shared name is a coincidence:
+the sink never calls the tRPC mutation, which is exactly why it is loop-safe —
+elevating an observer error to the DOM error stream cannot re-enter the tRPC event
+channel that produced it.
+
+## Deferred: routing observer errors to host telemetry
+
+If DocumentDB later wants observer errors in **host** telemetry (not just the DOM
+error stream), the route is the app router's `reportEvent` / `reportError`
+mutation, but it needs two guards:
+
+- **Path-guard against recursion.** Sending an observer error through a tRPC
+  mutation re-enters the same event channel; if that mutation's own observer
+  throws, it loops. Skip the `reportEvent` / `reportError` paths, or use a
+  separate, un-observed client whose links are `vscodeLink` only (no `eventLink`).
+- **Dedupe / throttle.** Key on `path|phase|message` so a hot, repeatedly-throwing
+  observer cannot flood telemetry.
+
+This is intentionally **not** implemented; the console + `reportError()` sink is
+the current floor.
+
+# Iteration 4 — Copilot reviewer feedback (2026-07-05)
+
+Added 2026-07-05. On this date the GitHub Copilot PR reviewer ran a second
+automated pass (review `4630986353`): it reviewed 92 of 99 changed files and left
+**3 inline comments** plus **1 low-confidence comment it self-suppressed**. This
+chapter captures each, assigns a tracking ID (`R766-Cnn`, `C` for Copilot-sourced),
+and analyzes the options. **Nothing here is implemented yet** — these are decisions
+to act on in a follow-up pass, in the same spirit as the Iteration 2 open items.
+
+## Overview
+
+| ID       | Source                                                                                                          | Sev. | Title                                                               |
+| -------- | --------------------------------------------------------------------------------------------------------------- | ---- | ------------------------------------------------------------------- |
+| R766-C01 | [`telemetryMiddlewareBody`](../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts#L119-L153) | Low  | Telemetry middleware records error details for aborted calls        |
+| R766-C02 | [`documentDbTelemetryRunner`](../../../../src/webviews/_integration/trpc.ts#L90-L118)                           | Low  | DocumentDB runner overwrites error fields for canceled ops          |
+| R766-C03 | [`connectTrpc.onReceive`](../../../../packages/vscode-ext-webview/src/webview/connectTrpc.ts#L109-L123)         | Low  | Webview `onReceive` guard accepts any `id` (prototype / non-string) |
+| R766-C04 | [`useTrpcClient`](../../../../src/webviews/_integration/useTrpcClient.ts#L18-L20)                               | Info | `useTrpcClient` wrapper lacks an explicit return type (suppressed)  |
+
+**Themes.** C01 + C02 are the same defect on two layers — canceled operations get
+tagged with error fields — and must be fixed together (C02 would otherwise undo
+C01). C03 tightens a guard shipped in Iteration 2 (R766-N01) so the webview edge
+matches the host. C04 is a typing nicety that aligns with this repo's own "always
+specify return types" rule.
+
+## R766-C01 — telemetry middleware records error details for aborted calls
+
+**Copilot:** `telemetryMiddlewareBody` records `error` / `errorMessage` even when
+the invocation was aborted, which makes canceled operations look like failures and
+contradicts the nearby "recorded as `Canceled`" comment. Only record error details
+when `!aborted`.
+
+**Current state — the classification is already correct; the error _fields_ are
+not.**
+[`telemetryMiddlewareBody`](../../../../packages/vscode-ext-webview/src/host/middleware/telemetry.ts#L119-L153)
+sets `result = 'Failed'` only when `!aborted`, so an aborted call is already
+labeled `Canceled`. What still leaks is the error **name and message**, because
+that block sits under `if (!result.ok)` but not under `if (!aborted)`:
+
+```ts
+if (aborted) {
+  telemetry.properties.aborted = 'true';
+  telemetry.properties.result = 'Canceled';
+}
+if (!result.ok) {
+  if (!aborted) {
+    telemetry.properties.result = 'Failed';
+  }
+  if (result.error?.name) telemetry.properties.error = result.error.name; // ← still runs when aborted
+  if (result.error?.message) telemetry.properties.errorMessage = result.error.message; // ← still runs when aborted
+}
+```
+
+A cancellation that surfaces as a rejected result (the awaited work throws an
+`AbortError` when the signal fires) is therefore tagged `result=Canceled` **and**
+`error=AbortError` — indistinguishable from a real failure on the error dimension.
+
+**Options.**
+
+- **Option A — move the two `error*` writes under `!aborted`.** Aborted calls then
+  record only `result=Canceled` + `aborted=true`. Minimal, matches Copilot, and
+  matches the existing `result` handling. _Con:_ if an operation is aborted **and**
+  fails for an unrelated reason (a genuine bug racing with cancellation), the error
+  name is dropped.
+- **Option B — record the aborted error under a distinct key** (e.g.
+  `properties.abortError`), keeping a breadcrumb without polluting the primary
+  `error` dimension used for failure analytics. _Con:_ one more property to define
+  and document.
+- **Option C — suppress only the cancellation error itself** — record error details
+  unless the error _is_ the abort (`error.name === 'AbortError'` / matches the abort
+  cause). Most precise, but the generic middleware would have to recognize a
+  cancellation error shape, which varies by producer.
+
+**Recommendation: Option A in the package.** Smallest change, restores the
+`Canceled` contract, and keeps the generic middleware free of error-shape
+heuristics (Option C is really consumer policy). Ship it in the **same commit as
+C02**.
+
+## R766-C02 — DocumentDB runner overwrites error fields for canceled ops
+
+**Copilot:** `documentDbTelemetryRunner` enriches and **overwrites** telemetry
+error fields for any `!result.ok`, even when canceled; guard the enrichment when
+`invocation.ctx.signal?.aborted` is true.
+
+**Why this pairs with C01 (and why C01 alone is not enough).** The runner's
+enrichment runs _after_ the middleware body, on the **same** telemetry bag
+([`documentDbTelemetryRunner`](../../../../src/webviews/_integration/trpc.ts#L90-L118)):
+
+```ts
+const result = await execute(context.telemetry as …); // the body runs here (C01)
+if (!result.ok && result.error) {
+    // ← no abort check
+    const parsed = parseError(result.error);
+    context.telemetry.properties.error = parsed.errorType; // re-stamps, overwriting C01
+    context.telemetry.properties.errorMessage = parsed.message;
+    context.telemetry.properties.errorStack = (result.error as { stack?: string }).stack ?? '';
+    if (result.error.cause) context.telemetry.properties.errorCause = parseError(result.error.cause).message;
+}
+```
+
+Even after C01 stops the body from writing `error*` on an aborted call, this block
+**re-stamps** `error`, `errorMessage`, `errorStack`, and `errorCause`. A C01-only
+fix is silently undone for DocumentDB, so the two must land together.
+
+**Options for reading the abort state.**
+
+- **Option A — inline read.**
+  `const aborted = (invocation.ctx as { signal?: AbortSignal }).signal?.aborted ?? false;`
+  then gate the block with `&& !aborted`. Zero new public surface. _Con:_
+  duplicates the abort-reading logic the package already has, so the two can drift.
+- **Option B — export and reuse `getInvocationSignal`.** The package has
+  [`getInvocationSignal(ctx)`](../../../../packages/vscode-ext-webview/src/host/middleware/types.ts#L68-L70)
+  but does not export it from `./host`. Export it and call
+  `getInvocationSignal(invocation.ctx)?.aborted`, so body and runner share one
+  abort check. _Con:_ a small public-API addition.
+- **Option C — reuse the body's decision.** The body already wrote
+  `result === 'Canceled'`; the runner could skip enrichment when that is set.
+  _Con:_ couples the consumer to a magic string and to ordering; brittle.
+
+**Recommendation: Option B** — export `getInvocationSignal` and gate the whole
+enrichment block (including `errorStack` / `errorCause`) on `!aborted`, so both
+telemetry layers read the abort state from one helper and cannot drift. Option A
+is an acceptable zero-surface fallback. Land with C01, with a test asserting an
+aborted call records `result=Canceled` and **no** `error*` fields.
+
+## R766-C03 — tighten the webview `onReceive` guard to an own, string `id`
+
+**Copilot:** the `onReceive` window-message guard forwards any object with an `id`
+property (including prototype properties) into the tRPC response path; require an
+**own** `id` field with a **string** value.
+
+**Context — this refines R766-N01.** Iteration 2 added the webview-side guard;
+Copilot notes it is looser than its host-side sibling:
+
+```ts
+// webview — connectTrpc.onReceive (R766-N01, shipped)
+if (data !== null && typeof data === 'object' && 'id' in data) {
+  /* … */
+}
+// host — isTransportRequestMessage (R766-01) already checks the TYPE
+typeof (message as { id?: unknown }).id === 'string'; /* …plus op shape… */
+```
+
+[`VsCodeLinkResponseMessage.id`](../../../../packages/vscode-ext-webview/src/shared/wireProtocol.ts#L51-L64)
+is typed `string`, yet `'id' in data` is true for an **inherited** `id` and never
+checks the **value type** — so the webview edge is weaker than both the wire type
+and the
+[host guard](../../../../packages/vscode-ext-webview/src/host/attachTrpc.ts#L134-L149).
+
+**Options.**
+
+- **Option A — minimal type tightening.** Replace `'id' in data` with
+  `typeof (data as { id?: unknown }).id === 'string'`. Rejects non-string and
+  missing ids (a missing prop reads `undefined`), matches the host guard's rigor,
+  one line. _Con:_ an inherited **string** `id` would still pass — contrived for
+  structured-clone'd `postMessage` data.
+- **Option B — own + string (Copilot verbatim).**
+  `Object.hasOwn(data, 'id') && typeof (data as { id: unknown }).id === 'string'`.
+  `Object.hasOwn` is available (tsconfig `lib` is ES2023). Most defensive; handles
+  the prototype case explicitly.
+- **Option C — a shared `isTransportResponseMessage` guard** in
+  `shared/wireProtocol.ts`, mirroring `isTransportRequestMessage`, called from
+  `onReceive`. Best symmetry and a single source of truth for the response shape.
+  Keep it to "own string `id`"; do **not** also require `result` / `error` /
+  `complete` (a bare `{ id, complete }` ack is valid), which would over-tighten.
+
+**Recommendation: Option C** using Option B's "own string `id`" predicate — it
+restores host/webview symmetry (each edge validates through one structural guard)
+and gives the response shape a home. If minimizing churn is preferred, **Option B
+inline** is a faithful one-liner. Either way, extend the R766-N01 test with
+inherited-`id` and numeric-`id` cases. Resolves the Copilot thread on
+`connectTrpc.ts`.
+
+## R766-C04 — explicit return type on the `useTrpcClient` wrapper (suppressed)
+
+**Copilot (self-suppressed, low confidence):** giving the shared `useTrpcClient`
+helper an explicit return type makes the public surface clearer and avoids
+accidental type widening if the framework hook signature changes.
+
+Copilot suppressed this itself, but it matches this repo's TypeScript guideline
+("**Always specify return types** for functions"). The wrapper
+([`useTrpcClient`](../../../../src/webviews/_integration/useTrpcClient.ts#L18-L20))
+is a one-line pass-through with an inferred return.
+
+**Options.**
+
+- **Option A — name the concrete type.** Annotate the return as the framework
+  client type (e.g. `TRPCClient<AppRouter>` / whatever the framework hook returns).
+  Explicit, locks the public surface, honors the repo rule. _Con:_ couples to the
+  framework client type name; needs an import.
+- **Option B — `ReturnType<typeof useFrameworkTrpcClient<AppRouter>>`.** Always
+  tracks the source, but reads awkwardly and still depends on the generic-call
+  syntax.
+- **Option C — leave inferred.** Accept the self-suppression: a one-line
+  pass-through has a stable inferred type. _Con:_ diverges from the repo's
+  explicit-return-type convention.
+
+**Recommendation: Option A** — a one-line annotation that satisfies the repo
+convention and the reviewer's intent. **Low priority**; batch with C03 (same
+webview area) or take standalone.
+
+## Suggested batching
+
+- **Batch 1 — cancellation telemetry (C01 + C02), one commit.** Gate error
+  recording on `!aborted` in the package body _and_ the DocumentDB runner (export
+  `getInvocationSignal` for a shared check); add a test asserting an aborted call
+  records `result=Canceled` with no `error*` fields. Resolves both telemetry
+  comments.
+- **Batch 2 — transport-guard symmetry (C03).** Own string `id` (ideally a shared
+  `isTransportResponseMessage`); extend the R766-N01 test. Resolves the
+  `connectTrpc.ts` comment.
+- **Batch 3 — typing nicety (C04), optional / low priority.** Explicit return type
+  on `useTrpcClient`.
+
+Each batch follows the established protocol: one commit on
+`dev/tnaum/webview-api-refinements`, pushed, with a PR comment referencing the SHA
+(and, for C03, resolving the Copilot thread).
