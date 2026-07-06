@@ -446,3 +446,115 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ).toHaveLength(1);
     });
 });
+
+// WI-2e-1 (from the 3-agent data-safety review): provision must NEVER silently wipe a
+// credential-unavailable instance's data volume (RR4 / plan §5.2). Only a truly-fresh alias — no
+// managed container AND no durable `ready` record — may reach the clean-slate wipe.
+describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
+    beforeAll(() => {
+        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+            name: 'test',
+            append: jest.fn(),
+            appendLine: jest.fn(),
+            replace: jest.fn(),
+            clear: jest.fn(),
+            show: jest.fn(),
+            hide: jest.fn(),
+            dispose: jest.fn(),
+        } as unknown as vscode.LogOutputChannel);
+        disposeQuickStartOutputChannel();
+    });
+
+    afterAll(() => {
+        disposeQuickStartOutputChannel();
+        jest.restoreAllMocks();
+    });
+
+    let originalSecretStorage: vscode.SecretStorage;
+    let originalContext: vscode.ExtensionContext;
+
+    beforeEach(() => {
+        originalSecretStorage = ext.secretStorage;
+        originalContext = ext.context;
+    });
+
+    afterEach(() => {
+        ext.secretStorage = originalSecretStorage;
+        ext.context = originalContext;
+    });
+
+    function provisionRuntime(opts: {
+        containers?: Array<{ id: string; alias?: string }>;
+        findAvailablePort?: number;
+        removeContainer?: jest.Mock;
+        removeVolume?: jest.Mock;
+    }): IContainerRuntime {
+        return mockRuntime({
+            isDockerReady: jest.fn().mockResolvedValue({ cliInstalled: true, daemonReachable: true }),
+            listByLabel: jest.fn().mockResolvedValue(
+                (opts.containers ?? []).map((container) => ({
+                    id: container.id,
+                    labels: container.alias === undefined ? {} : { [QUICK_START_ALIAS_LABEL_KEY]: container.alias },
+                })),
+            ),
+            findAvailablePort: jest.fn().mockResolvedValue(opts.findAvailablePort),
+            removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
+            removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
+        } as unknown as Partial<IContainerRuntime>);
+    }
+
+    async function drain(gen: AsyncGenerator<unknown>): Promise<void> {
+        for await (const event of gen) {
+            void event; // consume the stage events
+        }
+    }
+
+    it('aborts (never removes/wipes) when a managed container exists but no secret is recoverable', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [{ id: 'c1', alias: DEFAULT_ALIAS }], removeContainer, removeVolume }),
+        );
+
+        await drain(service.provision(new AbortController().signal));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(removeContainer).not.toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.Error);
+    });
+
+    it('aborts (never wipes) when a durable ready record exists but no secret (container already gone)', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        const globalState = fakeMemento();
+        await upsertInstanceRecord(globalState, {
+            alias: DEFAULT_ALIAS,
+            displayName: 'DocumentDB Local',
+            port: 10260,
+            phase: 'ready',
+        });
+        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(provisionRuntime({ containers: [], removeVolume }));
+
+        await drain(service.provision(new AbortController().signal));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.Error);
+    });
+
+    it('proceeds to the clean-slate wipe for a truly-fresh alias (no container, no ready record)', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        // findAvailablePort → undefined so provision performs the (safe) wipe then aborts at port pick.
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({ containers: [], findAvailablePort: undefined, removeVolume }),
+        );
+
+        await drain(service.provision(new AbortController().signal));
+
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+});

@@ -404,11 +404,33 @@ export class QuickStartServiceImpl {
                 return;
             }
 
-            // Remove a pre-existing managed container so the run starts clean (it is
-            // labelled as ours, D9). When NOT reusing (no recoverable credentials) also drop
-            // any stale data volume, so the new credentials initialize a clean cluster. When
-            // reusing, the volume is intentionally KEPT so existing data survives the recreate.
+            // Remove a pre-existing managed container so the run starts clean (it is labelled as
+            // ours, D9). When NOT reusing (no recoverable credentials) also drop any stale data
+            // volume, so the new credentials initialize a clean cluster. When reusing, the volume is
+            // intentionally KEPT so existing data survives the recreate.
             const existing = await this.findManagedContainer(alias);
+            // RR4 / §5.2 volume-wipe gate: NEVER silently destroy an existing instance's data when we
+            // can't recover its credentials. A credential-unavailable instance (a managed container
+            // and/or a durable `ready` record, but no readable secret) must be explicitly Deleted —
+            // not wiped by a Set-up/recreate click. Only a truly-fresh alias (no managed container AND
+            // no `ready` record) may reach the wipe below (where it is a safe no-op / clean slate). A
+            // dead failed-attempt orphan has NO managed container (provision's `finally` removed it)
+            // and no `ready` record, so retrying it still works.
+            if (!reusing) {
+                const hasReadyRecord = readRegistry(ext.context.globalState).instances.some(
+                    (record) => record.alias === alias && record.phase === 'ready',
+                );
+                if (existing || hasReadyRecord) {
+                    this.setStatus(alias, InstanceState.Error, undefined, CREDENTIAL_UNAVAILABLE_MESSAGE);
+                    yield stageEvent(
+                        'checking',
+                        'error',
+                        CREDENTIAL_UNAVAILABLE_MESSAGE,
+                        CREDENTIAL_UNAVAILABLE_MESSAGE,
+                    );
+                    return;
+                }
+            }
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await this.runtime.removeContainer(existing.id).catch(() => undefined);
@@ -1158,7 +1180,13 @@ export class QuickStartServiceImpl {
                 continue;
             }
             try {
-                const inspected = await this.runtime.inspectContainer(entry.metadata.containerId);
+                const containerId = entry.metadata.containerId;
+                const inspected = await this.runtime.inspectContainer(containerId);
+                // A concurrent deleteContainer/re-adopt may have cleared or replaced this alias's
+                // metadata while we awaited — bail rather than write a stale result onto it.
+                if (entry.metadata?.containerId !== containerId) {
+                    continue;
+                }
                 if (!inspected) {
                     // Container is gone — keep metadata so the user can recreate.
                     entry.missing = true;
@@ -1239,10 +1267,20 @@ export class QuickStartServiceImpl {
 
             // Drop stale pre-create reservations in one locked write. Scavenge fires ONLY here
             // (activation), never in the per-render refreshLiveState. (Adopted instances promote their
-            // own record to `ready` inside adoptContainer.)
+            // own record to `ready` inside adoptContainer.) Re-validate staleness INSIDE the lock so a
+            // record that a concurrent finalize/adopt just promoted to `ready` (or refreshed the lease
+            // on) is never dropped — only remove one that is still a stale `provisioning` reservation.
             if (scavenge.size > 0) {
                 await updateRegistry(ext.context.globalState, (reg) => {
-                    reg.instances = reg.instances.filter((record) => !scavenge.has(record.alias));
+                    const scavengeNow = Date.now();
+                    reg.instances = reg.instances.filter(
+                        (record) =>
+                            !(
+                                scavenge.has(record.alias) &&
+                                record.phase === 'provisioning' &&
+                                !isProvisioningLeaseFresh(record, scavengeNow)
+                            ),
+                    );
                 });
             }
         } catch {
