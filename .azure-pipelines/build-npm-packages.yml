@@ -8,9 +8,17 @@
 # so the monorepo stays healthy, but they are NOT packed - they are local-
 # only deps and not released through this pipeline.
 
-trigger:
-    - next
-    - main
+# Manual-only build. The build/test work here is already covered on every push
+# by the GitHub Actions CI (.github/workflows/main.yml) and the main extension
+# ADO pipeline (.azure-pipelines/build.yml, which also runs Component Governance
+# / CredScan / PoliCheck over the same monorepo). The ONLY unique output of this
+# pipeline is the packed .tgz release artifact, which is only ever consumed by
+# release-npm-packages.yml. So there is no reason to run it continuously.
+#
+# Release procedure: queue this pipeline manually, wait for it to succeed, then
+# queue release-npm-packages.yml (which picks up the latest successful run of
+# this pipeline via its 'npmBuild' pipeline resource).
+trigger: none
 
 # Disable PR trigger
 pr: none
