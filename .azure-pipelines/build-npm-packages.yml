@@ -10,7 +10,7 @@
 
 # Run name shown in ADO (e.g. npm-build-2026-07-06.1). Keeps the run list
 # readable and stops the commit subject being appended to the run name.
-name: npm-build-$(Date:yyyy-MM-dd).$(Rev:r)
+name: vscode-documentdb-npm-build-$(Date:yyyy-MM-dd).$(Rev:r)
 appendCommitMessageToRunName: false
 
 # Manual-only build. The build/test work here is already covered on every push
@@ -95,18 +95,18 @@ extends:
                           displayName: 'Component Governance - Component Detection'
 
                         - task: NodeTool@0
-                          displayName: "Use Node.js"
+                          displayName: 'Use Node.js'
                           inputs:
                               versionSource: fromFile
                               versionFilePath: .nvmrc
 
                         - task: npmAuthenticate@0
-                          displayName: "Authenticate to npm registry"
+                          displayName: 'Authenticate to npm registry'
                           inputs:
                               workingFile: '$(Build.SourcesDirectory)/.azure-pipelines/.npmrc'
 
                         - task: Npm@1
-                          displayName: "Install Dependencies"
+                          displayName: 'Install Dependencies'
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -114,7 +114,7 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: Npm@1
-                          displayName: "Build Workspace Packages"
+                          displayName: 'Build Workspace Packages'
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -122,7 +122,7 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: Npm@1
-                          displayName: "Test Workspace Packages"
+                          displayName: 'Test Workspace Packages'
                           condition: succeeded()
                           inputs:
                               command: custom
@@ -130,7 +130,7 @@ extends:
                               workingDir: $(Build.SourcesDirectory)
 
                         - task: PowerShell@2
-                          displayName: "Pack npm packages"
+                          displayName: 'Pack npm packages'
                           condition: succeeded()
                           inputs:
                               targetType: 'filePath'
@@ -141,7 +141,7 @@ extends:
                                   -SummaryPath '$(Build.ArtifactStagingDirectory)\pack-summary.md'
 
                         - task: CopyFiles@2
-                          displayName: "Copy package metadata to staging"
+                          displayName: 'Copy package metadata to staging'
                           condition: succeeded()
                           inputs:
                               Contents: |

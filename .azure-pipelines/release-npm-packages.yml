@@ -36,7 +36,7 @@
 # runtime to npm-<package>-<version>-<mode>-<buildId>; this is just the value
 # used before that step runs. appendCommitMessageToRunName keeps the run name
 # clean (no commit subject appended).
-name: npm-release-$(Date:yyyy-MM-dd).$(Rev:r)
+name: vscode-documentdb-npm-release-$(Date:yyyy-MM-dd).$(Rev:r)
 appendCommitMessageToRunName: false
 
 trigger: none
@@ -175,7 +175,7 @@ extends:
                         value: Test
               jobs:
                   - job: ReleaseValidation
-                    displayName: "Validate Artifacts"
+                    displayName: 'Validate Artifacts'
                     templateContext:
                         inputs:
                             - input: pipelineArtifact
@@ -190,7 +190,7 @@ extends:
                         # Show which build run we are about to release from. The operator should
                         # confirm this matches the intended source commit/branch before approving.
                         - task: PowerShell@2
-                          displayName: "Show source build metadata"
+                          displayName: 'Show source build metadata'
                           inputs:
                               targetType: 'filePath'
                               filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/show-source-build-metadata.ps1'
@@ -204,7 +204,7 @@ extends:
 
                         # Set a descriptive build number
                         - task: PowerShell@2
-                          displayName: "Set build number"
+                          displayName: 'Set build number'
                           inputs:
                               targetType: 'filePath'
                               filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/set-release-build-number.ps1'
@@ -216,7 +216,7 @@ extends:
 
                         # Verify the version in package.json matches the intended publish version
                         - task: PowerShell@2
-                          displayName: "Verify package version"
+                          displayName: 'Verify package version'
                           inputs:
                               targetType: 'filePath'
                               filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/verify-package-version.ps1'
@@ -227,7 +227,7 @@ extends:
 
                         # Find the .tgz file for the selected package
                         - task: PowerShell@2
-                          displayName: "Find .tgz file"
+                          displayName: 'Find .tgz file'
                           name: findTgzStep
                           inputs:
                               targetType: 'filePath'
@@ -240,7 +240,7 @@ extends:
                         # release intent - package, version, mode, and source build - is
                         # visible to approvers without digging through step logs.
                         - task: PowerShell@2
-                          displayName: "Publish run summary"
+                          displayName: 'Publish run summary'
                           condition: succeeded()
                           inputs:
                               targetType: 'filePath'
@@ -261,129 +261,129 @@ extends:
                   # runtime condition: even a future regression that drops the condition
                   # cannot accidentally publish in validate-only mode.
                   - ${{ if or(eq(parameters.mode, 'publish'), eq(parameters.mode, 'test-esrp-auth')) }}:
-                      - job: PublishPackage
-                        displayName: ${{ format('Publish ({0})', parameters.mode) }}
-                        dependsOn: ReleaseValidation
-                        # EsrpRelease runs with waitforreleasecompletion: true, which blocks
-                        # on the ESRP submission. Cap the job so a stalled ESRP approval or
-                        # submission cannot pin a release agent indefinitely.
-                        timeoutInMinutes: 120
-                        pool:
-                            type: release
-                        variables:
-                            tgzFileName: $[ dependencies.ReleaseValidation.outputs['findTgzStep.tgzFileName'] ]
-                            ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
-                        templateContext:
-                            inputs:
-                                - input: pipelineArtifact
-                                  pipeline: npmBuild
-                                  targetPath: $(System.DefaultWorkingDirectory)
-                                  artifactName: drop_BuildStage_Main
-                        steps:
-                            # Loud banner for the smoke-test mode so logs are unambiguous
-                            - ${{ if eq(parameters.mode, 'test-esrp-auth') }}:
-                                  - task: PowerShell@2
-                                    displayName: "SMOKE TEST MODE - not publishing"
-                                    inputs:
-                                        targetType: 'inline'
-                                        script: |
-                                            Write-Host "##[warning]Running in 'test-esrp-auth' mode."
-                                            Write-Host "##[warning]Submitting to ESRP with contenttype='Maven' to validate auth + cert + KV wiring."
-                                            Write-Host "##[warning]ESRP is EXPECTED TO FAIL at the final content-validation step."
-                                            Write-Host "##[warning]Nothing will be published to npmjs.org."
-                                            Write-Host "##[warning]After the run, inspect the ESRP task logs to confirm the failure"
-                                            Write-Host "##[warning]is the expected Maven content-type rejection, NOT an auth/cert error."
-
-                            # Loud banner for the REAL publish mode so the log is unambiguous
-                            # about the fact that this run WILL push to npmjs.org.
-                            - ${{ if eq(parameters.mode, 'publish') }}:
-                                  - task: PowerShell@2
-                                    displayName: "REAL PUBLISH MODE - will push to npmjs.org"
-                                    inputs:
-                                        targetType: 'inline'
-                                        script: |
-                                            Write-Host "##[warning]Running in 'publish' mode - this is a REAL RELEASE."
-                                            Write-Host "##[warning]Publishing ${{ parameters.packageName }}@${{ parameters.publishVersion }} to npmjs.org via ESRP."
-                                            Write-Host "##[warning]This action is PUBLIC and cannot be undone (npm unpublish is heavily restricted)."
-
-                            # Copy only the selected .tgz to an isolated folder for ESRP
-                            - task: PowerShell@2
-                              displayName: "Prepare package for publishing"
+                        - job: PublishPackage
+                          displayName: ${{ format('Publish ({0})', parameters.mode) }}
+                          dependsOn: ReleaseValidation
+                          # EsrpRelease runs with waitforreleasecompletion: true, which blocks
+                          # on the ESRP submission. Cap the job so a stalled ESRP approval or
+                          # submission cannot pin a release agent indefinitely.
+                          timeoutInMinutes: 120
+                          pool:
+                              type: release
+                          variables:
+                              tgzFileName: $[ dependencies.ReleaseValidation.outputs['findTgzStep.tgzFileName'] ]
+                              ob_outputDirectory: '$(Build.ArtifactStagingDirectory)'
+                          templateContext:
                               inputs:
-                                  targetType: 'filePath'
-                                  filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/prepare-package.ps1'
-                                  arguments: >-
-                                      -TgzFileName '$(tgzFileName)'
-                                      -WorkingDirectory '$(System.DefaultWorkingDirectory)'
-                                      -PublishDir '$(Build.ArtifactStagingDirectory)\npm-publish'
+                                  - input: pipelineArtifact
+                                    pipeline: npmBuild
+                                    targetPath: $(System.DefaultWorkingDirectory)
+                                    artifactName: drop_BuildStage_Main
+                          steps:
+                              # Loud banner for the smoke-test mode so logs are unambiguous
+                              - ${{ if eq(parameters.mode, 'test-esrp-auth') }}:
+                                    - task: PowerShell@2
+                                      displayName: 'SMOKE TEST MODE - not publishing'
+                                      inputs:
+                                          targetType: 'inline'
+                                          script: |
+                                              Write-Host "##[warning]Running in 'test-esrp-auth' mode."
+                                              Write-Host "##[warning]Submitting to ESRP with contenttype='Maven' to validate auth + cert + KV wiring."
+                                              Write-Host "##[warning]ESRP is EXPECTED TO FAIL at the final content-validation step."
+                                              Write-Host "##[warning]Nothing will be published to npmjs.org."
+                                              Write-Host "##[warning]After the run, inspect the ESRP task logs to confirm the failure"
+                                              Write-Host "##[warning]is the expected Maven content-type rejection, NOT an auth/cert error."
 
-                            # Inspect the .tgz contents and fail on obviously sensitive files.
-                            # This is a safety net (CredScan runs earlier, but the .tgz is the
-                            # actual public artifact - worth double-checking right before upload).
-                            - task: PowerShell@2
-                              displayName: "Inspect .tgz contents"
-                              inputs:
-                                  targetType: 'filePath'
-                                  filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/inspect-tgz.ps1'
-                                  arguments: >-
-                                      -PublishDir '$(Build.ArtifactStagingDirectory)\npm-publish'
+                              # Loud banner for the REAL publish mode so the log is unambiguous
+                              # about the fact that this run WILL push to npmjs.org.
+                              - ${{ if eq(parameters.mode, 'publish') }}:
+                                    - task: PowerShell@2
+                                      displayName: 'REAL PUBLISH MODE - will push to npmjs.org'
+                                      inputs:
+                                          targetType: 'inline'
+                                          script: |
+                                              Write-Host "##[warning]Running in 'publish' mode - this is a REAL RELEASE."
+                                              Write-Host "##[warning]Publishing ${{ parameters.packageName }}@${{ parameters.publishVersion }} to npmjs.org via ESRP."
+                                              Write-Host "##[warning]This action is PUBLIC and cannot be undone (npm unpublish is heavily restricted)."
 
-                            # Publish to npmjs.org via ESRP Release
-                            # Docs: https://eng.ms/docs/microsoft-security/identity/trust-and-security-services/tss-release-distribute/tss-release-esrp-parent/release-onboarding
-                            #
-                            # Authentication: the Azure RM service connection 'DOCDBEXT_ESRP_RELEASE'
-                            # uses Workload Identity Federation, which handles auth to Azure / Key
-                            # Vault (so no separate auth cert is needed). Its managed identity is
-                            # granted 'Key Vault Certificate User' on the Key Vault that holds the
-                            # ESRP signing cert. The task reads that signing cert from the vault and
-                            # uses it to sign the release request to ESRP.
-                            #
-                            # See the file header for the pipeline variables required.
-                            #
-                            # When 'mode == test-esrp-auth', contenttype is overridden to 'Maven'
-                            # so ESRP exercises the full auth/cert/KV path then rejects the
-                            # payload at content validation. NOTHING is published in that mode.
-                            - task: EsrpRelease@11
-                              displayName: ${{ format('ESRP Release ({0})', parameters.mode) }}
-                              inputs:
-                                  connectedservicename: 'DOCDBEXT_ESRP_RELEASE'
-                                  usemanagedidentity: true
-                                  keyvaultname: '$(EsrpKeyVaultName)'
-                                  signcertname: '$(EsrpSignCertName)'
-                                  clientid: '$(EsrpClientId)'
-                                  intent: 'PackageDistribution'
-                                  ${{ if eq(parameters.mode, 'test-esrp-auth') }}:
-                                      contenttype: 'Maven'
-                                  ${{ else }}:
-                                      contenttype: 'npm'
-                                  contentsource: 'Folder'
-                                  folderlocation: '$(Build.ArtifactStagingDirectory)/npm-publish'
-                                  waitforreleasecompletion: true
-                                  owners: '$(EsrpReleaseOwners)'
-                                  approvers: '$(EsrpReleaseApprovers)'
-                                  serviceendpointurl: 'https://api.esrp.microsoft.com'
-                                  mainpublisher: 'ESRPRELPACMAN'
-                                  # domaintenantid for the ESRPRELPACMAN OSS publisher.
-                                  # ESRP OSS docs (npm/PyPI/Maven/Crates/MCP/WinGet) all use
-                                  # the PME tenant 975f013f for this shared publisher. The
-                                  # ErrorCode 2252 "Tenant does not have access to the given
-                                  # Main Publisher" is resolved by ESRP mapping our client id
-                                  # to ESRPRELPACMAN (done) combined with using the publisher's
-                                  # tenant id here.
-                                  domaintenantid: '975f013f-7f24-47e8-a7d3-abc4752bf346'
+                              # Copy only the selected .tgz to an isolated folder for ESRP
+                              - task: PowerShell@2
+                                displayName: 'Prepare package for publishing'
+                                inputs:
+                                    targetType: 'filePath'
+                                    filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/prepare-package.ps1'
+                                    arguments: >-
+                                        -TgzFileName '$(tgzFileName)'
+                                        -WorkingDirectory '$(System.DefaultWorkingDirectory)'
+                                        -PublishDir '$(Build.ArtifactStagingDirectory)\npm-publish'
 
-                            # Emit a run summary box describing the outcome. Runs with always()
-                            # so the summary is present whether the ESRP task succeeded or failed
-                            # (a failure in test-esrp-auth mode is the EXPECTED result).
-                            - task: PowerShell@2
-                              displayName: "Publish outcome summary"
-                              condition: always()
-                              inputs:
-                                  targetType: 'filePath'
-                                  filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/write-publish-outcome-summary.ps1'
-                                  arguments: >-
-                                      -PackageName '${{ parameters.packageName }}'
-                                      -PublishVersion '${{ parameters.publishVersion }}'
-                                      -Mode '${{ parameters.mode }}'
-                                      -JobStatus '$(Agent.JobStatus)'
-                                      -SummaryPath '$(Build.ArtifactStagingDirectory)\publish-outcome-summary.md'
+                              # Inspect the .tgz contents and fail on obviously sensitive files.
+                              # This is a safety net (CredScan runs earlier, but the .tgz is the
+                              # actual public artifact - worth double-checking right before upload).
+                              - task: PowerShell@2
+                                displayName: 'Inspect .tgz contents'
+                                inputs:
+                                    targetType: 'filePath'
+                                    filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/inspect-tgz.ps1'
+                                    arguments: >-
+                                        -PublishDir '$(Build.ArtifactStagingDirectory)\npm-publish'
+
+                              # Publish to npmjs.org via ESRP Release
+                              # Docs: https://eng.ms/docs/microsoft-security/identity/trust-and-security-services/tss-release-distribute/tss-release-esrp-parent/release-onboarding
+                              #
+                              # Authentication: the Azure RM service connection 'DOCDBEXT_ESRP_RELEASE'
+                              # uses Workload Identity Federation, which handles auth to Azure / Key
+                              # Vault (so no separate auth cert is needed). Its managed identity is
+                              # granted 'Key Vault Certificate User' on the Key Vault that holds the
+                              # ESRP signing cert. The task reads that signing cert from the vault and
+                              # uses it to sign the release request to ESRP.
+                              #
+                              # See the file header for the pipeline variables required.
+                              #
+                              # When 'mode == test-esrp-auth', contenttype is overridden to 'Maven'
+                              # so ESRP exercises the full auth/cert/KV path then rejects the
+                              # payload at content validation. NOTHING is published in that mode.
+                              - task: EsrpRelease@11
+                                displayName: ${{ format('ESRP Release ({0})', parameters.mode) }}
+                                inputs:
+                                    connectedservicename: 'DOCDBEXT_ESRP_RELEASE'
+                                    usemanagedidentity: true
+                                    keyvaultname: '$(EsrpKeyVaultName)'
+                                    signcertname: '$(EsrpSignCertName)'
+                                    clientid: '$(EsrpClientId)'
+                                    intent: 'PackageDistribution'
+                                    ${{ if eq(parameters.mode, 'test-esrp-auth') }}:
+                                        contenttype: 'Maven'
+                                    ${{ else }}:
+                                        contenttype: 'npm'
+                                    contentsource: 'Folder'
+                                    folderlocation: '$(Build.ArtifactStagingDirectory)/npm-publish'
+                                    waitforreleasecompletion: true
+                                    owners: '$(EsrpReleaseOwners)'
+                                    approvers: '$(EsrpReleaseApprovers)'
+                                    serviceendpointurl: 'https://api.esrp.microsoft.com'
+                                    mainpublisher: 'ESRPRELPACMAN'
+                                    # domaintenantid for the ESRPRELPACMAN OSS publisher.
+                                    # ESRP OSS docs (npm/PyPI/Maven/Crates/MCP/WinGet) all use
+                                    # the PME tenant 975f013f for this shared publisher. The
+                                    # ErrorCode 2252 "Tenant does not have access to the given
+                                    # Main Publisher" is resolved by ESRP mapping our client id
+                                    # to ESRPRELPACMAN (done) combined with using the publisher's
+                                    # tenant id here.
+                                    domaintenantid: '975f013f-7f24-47e8-a7d3-abc4752bf346'
+
+                              # Emit a run summary box describing the outcome. Runs with always()
+                              # so the summary is present whether the ESRP task succeeded or failed
+                              # (a failure in test-esrp-auth mode is the EXPECTED result).
+                              - task: PowerShell@2
+                                displayName: 'Publish outcome summary'
+                                condition: always()
+                                inputs:
+                                    targetType: 'filePath'
+                                    filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/write-publish-outcome-summary.ps1'
+                                    arguments: >-
+                                        -PackageName '${{ parameters.packageName }}'
+                                        -PublishVersion '${{ parameters.publishVersion }}'
+                                        -Mode '${{ parameters.mode }}'
+                                        -JobStatus '$(Agent.JobStatus)'
+                                        -SummaryPath '$(Build.ArtifactStagingDirectory)\publish-outcome-summary.md'
