@@ -10,7 +10,7 @@ import { COLLECTION_COUNT_LIMIT } from '../../constants';
 import { ClustersClient, type DatabaseItemModel } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { getCountPrefix } from '../../utils/countPrefix';
 import { escapeMarkdown } from '../../webviews/utils/escapeMarkdown';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
