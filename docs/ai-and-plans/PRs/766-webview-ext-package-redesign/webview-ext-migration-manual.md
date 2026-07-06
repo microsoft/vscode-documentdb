@@ -5,10 +5,13 @@ It records the before/after of moving `@microsoft/vscode-ext-react-webview` to
 `@microsoft/vscode-ext-webview`, both as a record for our team and as a template
 for the parallel vscode-cosmosdb adoption PR.
 
-Reviewed and current as of 2026-07-02, after the post-implementation refinements
-recorded in the implementation plan (section 9). The refinements did not change
-any exported symbol or import path, so the rename map and code samples below
-still hold verbatim.
+Reviewed and current as of 2026-07-06, verified against the merged code. Two
+host-wiring details settled after the first draft and are reflected below: the
+options bag now takes the whole `trpc` instance (from `initWebviewTrpc<...>()`)
+instead of a standalone `createCallerFactory` (which is retained but
+`@deprecated`), and it requires an `isBundled: boolean` flag to pick the bundle
+vs tsc source layout. `WithTelemetry` is now a generic helper exported by the
+package rather than a locally-defined type.
 
 This is a DocumentDB extension that speaks the MongoDB-compatible wire protocol;
 references below to "DocumentDB" mean the database service, and "MongoDB API"
@@ -55,20 +58,25 @@ Import-side rules the split enforces:
 
 ### Symbols
 
-| Old (`@microsoft/vscode-ext-react-webview...`)                  | New                                                                                                                                                    |
-| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `/server`: `publicProcedure`, `router`                          | `.`: `initWebviewTrpc()` returns `{ router, publicProcedure, createCallerFactory, middleware }`; `publicProcedure`, `router` also re-exported from `.` |
-| `/server`: `BaseRouterContext`                                  | `.`: `BaseRouterContext`                                                                                                                               |
-| `/server`: `createMiddleware`                                   | RETIRED. Use `telemetryMiddlewareBody` / `loggingMiddlewareBody` from `./host` via `publicProcedure.use(...)`                                          |
-| `/server`: `TelemetryContext`                                   | RETIRED. Use `ProcedureTelemetry` + `TelemetryRunner` + `ProcedureLogger` from `./host`                                                                |
-| `/server`: `WebviewController` (bespoke constructor)            | `./host`: `WebviewController` (single options-bag constructor) and the `openWebview(extensionContext, options)` factory                                |
-| `.`: `vscodeLink`, `errorLink`, `createEventChannel`            | `./webview`: `vscodeLink`, `errorLink`, `createEventChannel` / `RpcEventChannel`; plus new `connectTrpc`                                               |
-| `.`: `useTrpcClient` (tuple return)                             | `./react`: `useTrpcClient()` returns the client directly; new `useRpcEvents()` returns the event channel                                               |
-| `.`: `UseTrpcClientOptions`                                     | RETIRED                                                                                                                                                |
-| `.`: `useConfiguration`, `WebviewContext`, `WithWebviewContext` | `./react`: same names                                                                                                                                  |
+| Old (`@microsoft/vscode-ext-react-webview...`)                  | New                                                                                                                                                                                                                                                                                         |
+| --------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `/server`: `publicProcedure`, `router`                          | `.`: `initWebviewTrpc()` returns `{ router, publicProcedure, createCallerFactory, middleware }`; `publicProcedure`, `router` also re-exported from `.`                                                                                                                                      |
+| `/server`: `BaseRouterContext`                                  | `.`: `BaseRouterContext`                                                                                                                                                                                                                                                                    |
+| `/server`: `createMiddleware`                                   | RETIRED. Use `telemetryMiddlewareBody` / `loggingMiddlewareBody` from `./host` via `publicProcedure.use(...)`                                                                                                                                                                               |
+| `/server`: `TelemetryContext`                                   | RETIRED. Use `ProcedureTelemetry` + `TelemetryRunner` + `ProcedureLogger` from `./host`                                                                                                                                                                                                     |
+| `/server`: `WebviewController` (bespoke constructor)            | `./host`: `WebviewController` (single options-bag constructor) and the `openWebview(extensionContext, options)` factory. The options bag takes `trpc` (the `initWebviewTrpc<...>()` result) and a required `isBundled: boolean`; `createCallerFactory` is still accepted but `@deprecated`. |
+| `.`: `vscodeLink`, `errorLink`, `createEventChannel`            | `./webview`: `vscodeLink`, `errorLink`, `createEventChannel` / `RpcEventChannel`; plus new `connectTrpc`                                                                                                                                                                                    |
+| `.`: `useTrpcClient` (tuple return)                             | `./react`: `useTrpcClient()` returns the client directly; new `useRpcEvents()` returns the event channel                                                                                                                                                                                    |
+| `.`: `UseTrpcClientOptions`                                     | RETIRED                                                                                                                                                                                                                                                                                     |
+| `.`: `useConfiguration`, `WebviewContext`, `WithWebviewContext` | `./react`: same names                                                                                                                                                                                                                                                                       |
 
 New primitives that had no old equivalent:
 
+- `.`: `WithTelemetry<T, TTelemetry>` — a generic helper that re-types the
+  `telemetry` slot on a context to a richer telemetry type (consumers alias it,
+  e.g. `WithTelemetry<T, ITelemetryContext>`).
+- `./host`: `getInvocationSignal(ctx)` — reads the per-operation `AbortSignal`
+  off a router context (used to leave aborted calls classified as `Canceled`).
 - `./host`: `attachTrpc(panel, context, router, callerFactory?, logger?)` returns
   `{ disposable, activeOperations, activeSubscriptions }` (bring-your-own-panel).
 - `./host`: `consoleProcedureLogger`, `ProcedureLogger`, `TelemetryRunner`,
@@ -89,17 +97,28 @@ The new model inverts this: the package ships only the middleware body
 consumer supplies the adapter that wraps `callWithTelemetryAndErrorHandling`, so
 the event-name semantics stay entirely in consumer hands.
 
-DocumentDB's adapter lives in `src/webviews/_integration/trpc.ts`:
+DocumentDB's adapter lives in `src/webviews/_integration/trpc.ts`. `WithTelemetry`
+is the package's generic helper aliased to `ITelemetryContext`, and the runner
+adds DocumentDB-specific error enrichment on top of the body's generic timing /
+`Canceled` / `Failed` recording:
 
 ```typescript
+import { initWebviewTrpc, type BaseRouterContext } from '@microsoft/vscode-ext-webview';
 import {
+  getInvocationSignal,
   telemetryMiddlewareBody,
+  type WithTelemetry as FrameworkWithTelemetry,
   type ProcedureTelemetry,
   type TelemetryRunner,
 } from '@microsoft/vscode-ext-webview/host';
 import { callWithTelemetryAndErrorHandling, parseError, type ITelemetryContext } from '@microsoft/vscode-azext-utils';
 
-export type WithTelemetry<T extends { telemetry?: unknown }> = Omit<T, 'telemetry'> & { telemetry: ITelemetryContext };
+const trpc = initWebviewTrpc<BaseRouterContext>();
+const { publicProcedure, router, createCallerFactory } = trpc;
+
+// The package types `ctx.telemetry` minimally; alias its generic helper to the
+// richer ITelemetryContext so procedures can read suppressAll / suppressIfSuccessful.
+export type WithTelemetry<T extends { telemetry?: unknown }> = FrameworkWithTelemetry<T, ITelemetryContext>;
 
 const documentDbTelemetryRunner: TelemetryRunner = {
   async run(invocation, execute) {
@@ -109,11 +128,25 @@ const documentDbTelemetryRunner: TelemetryRunner = {
         context.errorHandling.suppressDisplay = true;
         // ITelemetryContext is structurally wider than ProcedureTelemetry; the
         // runtime value is the real ITelemetryContext, so this round-trips.
-        return execute(context.telemetry as unknown as ProcedureTelemetry);
+        const result = await execute(context.telemetry as unknown as ProcedureTelemetry);
+
+        // Leave aborted calls as the body's 'Canceled' classification; only
+        // enrich real failures with parseError-derived fields (R766-C02).
+        const aborted = getInvocationSignal(invocation.ctx)?.aborted ?? false;
+        if (!result.ok && result.error && !aborted) {
+          const parsed = parseError(result.error);
+          context.telemetry.properties.error = parsed.errorType;
+          context.telemetry.properties.errorMessage = parsed.message;
+          context.telemetry.properties.errorStack = (result.error as { stack?: string }).stack ?? '';
+          if (result.error.cause) {
+            context.telemetry.properties.errorCause = parseError(result.error.cause).message;
+          }
+        }
+        return result;
       },
     );
     if (!result) {
-      throw new Error('telemetry runner returned no result');
+      throw new Error(`No result returned from tRPC call for ${invocation.type} ${invocation.path}`);
     }
     return result;
   },
@@ -122,6 +155,10 @@ const documentDbTelemetryRunner: TelemetryRunner = {
 export const publicProcedureWithTelemetry = publicProcedure.use((opts) =>
   telemetryMiddlewareBody(opts, documentDbTelemetryRunner),
 );
+
+// The tRPC instance is re-exported so panel factories can hand `trpc` to the
+// controller (the caller factory rides along and cannot be mismatched, R766-N02).
+export { createCallerFactory, publicProcedure, router, trpc };
 ```
 
 Two consequences worth calling out:
@@ -177,10 +214,10 @@ DocumentDB kept a thin `src/webviews/_integration/useTrpcClient.ts` wrapper that
 pins the generic to `AppRouter`:
 
 ```typescript
-import { useTrpcClient as useFrameworkTrpcClient } from '@microsoft/vscode-ext-webview/react';
+import { useTrpcClient as useFrameworkTrpcClient, type TrpcClient } from '@microsoft/vscode-ext-webview/react';
 import { type AppRouter } from './appRouter';
 
-export function useTrpcClient() {
+export function useTrpcClient(): TrpcClient<AppRouter> {
   return useFrameworkTrpcClient<AppRouter>();
 }
 ```
@@ -189,9 +226,10 @@ export function useTrpcClient() {
 
 ## 5. Two migration paths for a panel-owning consumer
 
-Both paths assume the consumer has a tRPC root router (`appRouter`), a
-`createCallerFactory`, a `BaseRouterContext`-derived context type, and a bundle /
-dev-server layout (`sourceLayout`, `devServerHost`).
+Both paths assume the consumer has a tRPC root router (`appRouter`), its `trpc`
+instance (from `initWebviewTrpc<...>()`), a `BaseRouterContext`-derived context
+type, and a bundle / dev-server layout (`sourceLayout`, `devServerHost`,
+`isBundled`).
 
 ### Path A (class): extend the new `WebviewController`
 
@@ -216,8 +254,9 @@ After (new package, options-bag):
 ```typescript
 import { WebviewController } from '@microsoft/vscode-ext-webview/host';
 import { appRouter, type AppRouter, type BaseRouterContext } from '../../_integration/appRouter';
-import { createCallerFactory } from '../../_integration/trpc';
+import { trpc } from '../../_integration/trpc';
 import { WEBVIEW_CONFIG } from '../../_integration/configuration';
+import { ext } from '../../../extensionVariables';
 
 export class MyViewController extends WebviewController<AppRouter, MyConfig, BaseRouterContext> {
   constructor(initialData: MyConfig) {
@@ -227,11 +266,12 @@ export class MyViewController extends WebviewController<AppRouter, MyConfig, Bas
       title,
       viewType: 'myView',
       router: appRouter,
-      createCallerFactory,
+      trpc, // the caller factory is read off the instance, so it can never be mismatched
       context,
       config: initialData,
       sourceLayout: WEBVIEW_CONFIG.bundle,
       devServerHost: WEBVIEW_CONFIG.devServerHost,
+      isBundled: !!ext.isBundle, // required: selects the bundle vs tsc layout
       icon,
     });
   }
@@ -265,11 +305,13 @@ export function openAppWebview<TConfiguration>(options: {
     title: options.title,
     viewType: options.webviewName,
     router: appRouter,
-    createCallerFactory,
+    trpc,
     context: options.context,
     config: options.config,
     sourceLayout: WEBVIEW_CONFIG.bundle,
     devServerHost: WEBVIEW_CONFIG.devServerHost,
+    isBundled: !!ext.isBundle,
+    logger: rpcConcurrencyLogger, // optional dispatch-level logger
     icon: options.icon,
     viewColumn: options.viewColumn,
   });
@@ -373,6 +415,8 @@ contents. Start there for an at-a-glance map.
    `publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner))` export.
 3. Narrow telemetry reads in procedures with a `WithTelemetry<...>` cast.
 4. Change `const { trpcClient } = useTrpcClient()` to `const trpcClient = useTrpcClient()`.
-5. Pick Path A or Path B per panel (construction-only goes to B).
+5. Pick Path A or Path B per panel (construction-only goes to B). Wire the options
+   bag with `trpc` (not the deprecated `createCallerFactory`) and pass the required
+   `isBundled` flag.
 6. Run the full gate: lint, tests, build, and a manual webview smoke (open each
    view and round-trip one tRPC call).
