@@ -688,8 +688,8 @@ export const collectionsViewRouter = router({
                     `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
                 );
             }
-            void callWithAccumulatingTelemetry('completion.accepted.cv', (accCtx) => {
-                accCtx.telemetry.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
+            callWithAccumulatingTelemetry('completion.accepted.cv', (sample) => {
+                sample.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
             });
         }),
 });

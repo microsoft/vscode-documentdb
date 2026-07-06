@@ -54,17 +54,17 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
             expect.any(Function),
         );
 
-        // Run the callback against a telemetry stub to assert what it writes.
-        const callback = (callWithAccumulatingTelemetry as jest.Mock).mock.calls[0][1] as (ctx: unknown) => void;
-        const telemetry = {
+        // Run the callback against a sample-bag stub to assert what it writes.
+        const callback = (callWithAccumulatingTelemetry as jest.Mock).mock.calls[0][1] as (sample: unknown) => void;
+        const sample = {
             properties: {},
             measurements: {} as Record<string, number>,
             distributions: {} as Record<string, number>,
         };
-        callback({ telemetry });
+        callback(sample);
 
-        expect(telemetry.distributions).toEqual({ concurrentRpcOps: 3 });
-        expect(telemetry.measurements).toEqual({ dispatch: 1 });
+        expect(sample.distributions).toEqual({ concurrentRpcOps: 3 });
+        expect(sample.measurements).toEqual({ dispatch: 1 });
     });
 
     it('records no telemetry when the entry carries no concurrent count', () => {
@@ -112,14 +112,14 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
             WEBVIEW_CONFIG.telemetry.rpcConcurrencyEvent,
             expect.any(Function),
         );
-        const callback = (callWithAccumulatingTelemetry as jest.Mock).mock.calls[0][1] as (ctx: unknown) => void;
-        const telemetry = {
+        const callback = (callWithAccumulatingTelemetry as jest.Mock).mock.calls[0][1] as (sample: unknown) => void;
+        const sample = {
             properties: {},
             measurements: {} as Record<string, number>,
             distributions: {} as Record<string, number>,
         };
-        callback({ telemetry });
-        expect(telemetry.distributions).toEqual({ concurrentRpcOps: 7 });
-        expect(telemetry.measurements).toEqual({ dispatch: 1 });
+        callback(sample);
+        expect(sample.distributions).toEqual({ concurrentRpcOps: 7 });
+        expect(sample.measurements).toEqual({ dispatch: 1 });
     });
 });

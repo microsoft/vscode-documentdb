@@ -3,28 +3,44 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 
 /**
- * Bag attached to `ctx.telemetry.distributions` during an accumulating
- * telemetry callback. Each key records a numeric value that will be reduced
- * to min / max / sum / count across the batch.
+ * The lightweight bag a caller populates on each accumulating-telemetry call.
+ *
+ * This is a plain object — **not** an `IActionContext`. The per-call path no
+ * longer opens a telemetry/error-handling scope (that only happens once per
+ * flush), so the populator writes into these three records directly and returns.
+ * Everything is folded into the running batch totals in memory:
+ *
+ * - `measurements` — **summed** across the batch. Use for counters
+ *   (`sample.measurements.hits = 1`).
+ * - `properties` — **last-wins** across the batch (overwritten each call). Use
+ *   for stable metadata only (e.g. a session id or version), never to bucket
+ *   data — encode buckets into a measurement key instead.
+ * - `distributions` — reduced to **min / max / sum / count** across the batch.
+ *   Use for gauges (candidate counts, latencies, sizes).
  *
  * ```ts
- * callWithAccumulatingTelemetry('myEvent', (ctx) => {
- *     const t = ctx.telemetry as TelemetryWithDistributions;
- *     t.distributions.candidateCount = candidates.length;
+ * callWithAccumulatingTelemetry('myEvent', (sample) => {
+ *     sample.measurements.hits = 1;                    // counter  → summed
+ *     sample.distributions.candidateCount = candidates.length; // gauge → min/max/sum/count
  * });
  * ```
  *
- * Note: on flush each distribution key `foo` is written to
- * `ctx.telemetry.measurements` as `dist_foo_min/max/sum/count`. The `dist_`
- * measurement-key prefix is therefore reserved; do not set measurements with
- * that shape manually or they will be overwritten by the distribution rollup.
+ * Note: on flush each distribution key `foo` is written to the flushed event's
+ * measurements as `dist_foo_min/max/sum/count`. The `dist_` measurement-key
+ * prefix is therefore reserved; do not set measurements with that shape manually
+ * or they will be overwritten by the distribution rollup.
  */
-export type TelemetryWithDistributions = IActionContext['telemetry'] & {
+export interface TelemetrySample {
+    /** Counters — summed across the batch. */
+    measurements: Record<string, number>;
+    /** Stable metadata — last value wins across the batch. */
+    properties: Record<string, string>;
+    /** Gauges — reduced to min / max / sum / count across the batch. */
     distributions: Record<string, number>;
-};
+}
 
 /**
  * Accumulated stats for a single distribution key across a batch.
@@ -37,11 +53,15 @@ interface DistributionAccumulator {
 }
 
 /**
- * Reserved distribution key under which every successful call automatically
- * records its own wall-clock duration (in milliseconds). This is collected by
- * the wrapper itself, so every call site gets latency min / max / sum / count
+ * Reserved distribution key under which every call automatically records the
+ * wall-clock duration (in milliseconds) of the **populator callback**. Collected
+ * by the helper itself, so every call site gets a latency min / max / sum / count
  * for free without any caller bookkeeping. On flush it surfaces as
  * `dist_auto_duration_ms_min`, `_max`, `_sum`, `_count`.
+ *
+ * Note: the populator is synchronous and normally just sets a few keys, so this
+ * duration is tiny by design. To time real (e.g. async) work, measure it in the
+ * caller and write the result into `sample.distributions` under your own key.
  */
 export const AUTO_DURATION_DISTRIBUTION_KEY = 'auto_duration_ms';
 
@@ -95,130 +115,106 @@ function getOrCreateState(callbackId: string, options: AccumulatingTelemetryOpti
 }
 
 /**
- * Like `callWithTelemetryAndErrorHandling`, but accumulates successful events
- * under the same `callbackId` and flushes them as a single telemetry event.
+ * Accumulate a telemetry sample under `callbackId` and flush the running totals
+ * as a single event once a batch fills.
+ *
+ * **Cheap per call, heavy only on flush.** The populator runs synchronously
+ * against a plain {@link TelemetrySample} bag — there is **no** `IActionContext`,
+ * **no** `await`, and **no** `callWithTelemetryAndErrorHandling` on the per-call
+ * path. Its values are folded into in-memory batch totals. The Azure telemetry
+ * pipeline is entered exactly once, on flush, with the rolled-up event. This is
+ * what makes the helper safe to call on hot paths (e.g. per webview RPC, per
+ * keystroke) where the old per-call wrapper cost added up.
  *
  * Mental model: each call contributes to a running total.
- * - Numeric values on `context.telemetry.measurements` are **summed** across
- *   calls. Use this for counters (`measurements.myCounter = 1`).
- * - Numeric values on `context.telemetry.distributions` are tracked as
- *   **distribution metrics** (min / max / sum / count) across the batch.
- *   Use this for gauges like candidate counts, latencies, or sizes.
- *   On flush each key is emitted as four measurement fields:
- *   `dist_{key}_min`, `dist_{key}_max`, `dist_{key}_sum`, `dist_{key}_count`.
- * - Every successful call automatically contributes its own wall-clock
- *   duration to the `auto_duration_ms` distribution, with no caller code.
- *   This surfaces as `dist_auto_duration_ms_min/max/sum/count` on flush,
- *   giving per-event latency for free at every call site.
- * - String values on `context.telemetry.properties` are **last-wins**
- *   (overwritten on each call). Use this for stable metadata only
- *   (e.g., session id, version). Do NOT use properties to bucket data —
- *   encode the bucket into a measurement key instead:
- *     `ctx.telemetry.measurements[`cat_${category}`] = 1`
+ * - `sample.measurements` values are **summed** across calls. Use for counters
+ *   (`sample.measurements.myCounter = 1`).
+ * - `sample.distributions` values are tracked as **distribution metrics**
+ *   (min / max / sum / count) across the batch. Use for gauges like candidate
+ *   counts, latencies, or sizes. On flush each key is emitted as four measurement
+ *   fields: `dist_{key}_min`, `dist_{key}_max`, `dist_{key}_sum`, `dist_{key}_count`.
+ * - Every call automatically contributes the populator's own wall-clock duration
+ *   to the `auto_duration_ms` distribution (see {@link AUTO_DURATION_DISTRIBUTION_KEY}).
+ * - `sample.properties` values are **last-wins** (overwritten on each call). Use
+ *   for stable metadata only (e.g. session id, version). Do NOT use properties to
+ *   bucket data — encode the bucket into a measurement key instead:
+ *   `sample.measurements[`cat_${category}`] = 1`.
  *
  * Behavior:
  * - Flushes every `batchSize` calls with a `minFlushIntervalMs` throttle.
  * - Flushed event name is exactly `callbackId` (same as the non-accumulating
  *   variant — no `.batch` suffix, no schema split).
- * - Errors NEVER accumulate: if the callback throws, the error flows through
- *   the standard `callWithTelemetryAndErrorHandling` pipeline and the
- *   accumulator state is untouched.
- * - The callback's return value passes through.
+ * - Errors NEVER accumulate: if the populator throws, the sample is discarded
+ *   (not folded into the batch) and the throw is reported once through the
+ *   standard `callWithTelemetryAndErrorHandling` pipeline under `callbackId`. The
+ *   accumulator state is untouched. This heavy path runs only on the (rare)
+ *   throw, so it does not affect the cheap happy path.
+ * - Fire-and-forget: returns `void`. There is no per-call promise to await
+ *   because the per-call path does no async work.
  */
-export async function callWithAccumulatingTelemetry<T>(
+export function callWithAccumulatingTelemetry(
     callbackId: string,
-    callback: (context: IActionContext) => T | PromiseLike<T>,
+    populate: (sample: TelemetrySample) => void,
     options?: AccumulatingTelemetryOptions,
-): Promise<T | undefined> {
+): void {
     const state = getOrCreateState(callbackId, options);
 
-    let capturedMeasurements: Record<string, number> | undefined;
-    let capturedProperties: Record<string, string> | undefined;
-    let capturedDistributions: Record<string, number> | undefined;
+    // Cheap per-call path: run the populator against a plain bag, synchronously.
+    const sample: TelemetrySample = { measurements: {}, properties: {}, distributions: {} };
+    const startTime = performance.now();
+    try {
+        populate(sample);
+    } catch (error) {
+        // The populator threw — a programming error, and rare. Discard the
+        // (partial) sample so a failed call never corrupts the batch, and surface
+        // the error through the standard telemetry/error pipeline exactly as the
+        // former per-call implementation did (same event name). Only this rare
+        // error path pays the heavy wrapper cost.
+        void callWithTelemetryAndErrorHandling(callbackId, () => {
+            throw error;
+        });
+        return;
+    }
+    const durationMs = performance.now() - startTime;
 
-    const result = await callWithTelemetryAndErrorHandling(callbackId, async (ctx) => {
-        ctx.errorHandling.suppressDisplay = true;
-
-        // Attach the distributions bag to ctx.telemetry so callers can write
-        // gauges that will be reduced across the batch.
-        (ctx.telemetry as TelemetryWithDistributions).distributions = {};
-
-        // Run the user callback first. If it throws, suppressAll stays false
-        // and the error flows through the standard pipeline (errors never batch).
-        // Time the call so we can record its duration automatically below.
-        const startTime = performance.now();
-        const value = await callback(ctx);
-        const durationMs = performance.now() - startTime;
-
-        // Success path: capture measurements/properties and suppress per-call emit.
-        const m: Record<string, number> = {};
-        for (const [k, v] of Object.entries(ctx.telemetry.measurements)) {
-            if (typeof v === 'number' && Number.isFinite(v)) {
-                m[k] = v;
-            }
-        }
-        capturedMeasurements = m;
-
-        const p: Record<string, string> = {};
-        for (const [k, v] of Object.entries(ctx.telemetry.properties)) {
-            if (typeof v === 'string') {
-                p[k] = v;
-            }
-        }
-        capturedProperties = p;
-
-        const d: Record<string, number> = {};
-        const dist = (ctx.telemetry as TelemetryWithDistributions).distributions;
-        if (dist && typeof dist === 'object') {
-            for (const [k, v] of Object.entries(dist)) {
-                if (typeof v === 'number' && Number.isFinite(v)) {
-                    d[k] = v;
-                }
-            }
-        }
-        // Always record the call's own duration as a distribution. A caller
-        // value under the reserved key (if any) does not override this; the
-        // wrapper's measured duration wins.
-        if (Number.isFinite(durationMs)) {
-            d[AUTO_DURATION_DISTRIBUTION_KEY] = durationMs;
-        }
-        capturedDistributions = Object.keys(d).length ? d : undefined;
-
-        ctx.telemetry.suppressAll = true;
-        return value;
-    });
-
-    if (capturedMeasurements || capturedProperties || capturedDistributions) {
-        accumulate(callbackId, state, capturedMeasurements ?? {}, capturedProperties ?? {}, capturedDistributions);
+    // Always record the populator's own duration as a distribution. A caller
+    // value under the reserved key (if any) does not override this; the helper's
+    // measured duration wins.
+    if (Number.isFinite(durationMs)) {
+        sample.distributions[AUTO_DURATION_DISTRIBUTION_KEY] = durationMs;
     }
 
-    return result;
+    accumulate(callbackId, state, sample);
 }
 
-function accumulate(
-    callbackId: string,
-    state: AccumulatorState,
-    measurements: Record<string, number>,
-    properties: Record<string, string>,
-    distributions?: Record<string, number>,
-): void {
-    for (const [k, v] of Object.entries(measurements)) {
-        state.measurements[k] = (state.measurements[k] ?? 0) + v;
+/**
+ * Fold one {@link TelemetrySample} into the running batch `state`: measurements
+ * are summed, properties are last-wins, and distributions are reduced to
+ * min / max / sum / count. Non-finite numbers are skipped defensively so a stray
+ * `NaN` / `Infinity` from a caller cannot poison a sum or a min/max reduction.
+ * Bumps the batch counter and flushes when both the size and interval gates pass.
+ */
+function accumulate(callbackId: string, state: AccumulatorState, sample: TelemetrySample): void {
+    for (const [k, v] of Object.entries(sample.measurements)) {
+        if (Number.isFinite(v)) {
+            state.measurements[k] = (state.measurements[k] ?? 0) + v;
+        }
     }
-    for (const [k, v] of Object.entries(properties)) {
+    for (const [k, v] of Object.entries(sample.properties)) {
         state.properties[k] = v; // last-wins
     }
-    if (distributions) {
-        for (const [k, v] of Object.entries(distributions)) {
-            const acc = state.distributions[k];
-            if (acc) {
-                acc.min = Math.min(acc.min, v);
-                acc.max = Math.max(acc.max, v);
-                acc.sum += v;
-                acc.count++;
-            } else {
-                state.distributions[k] = { min: v, max: v, sum: v, count: 1 };
-            }
+    for (const [k, v] of Object.entries(sample.distributions)) {
+        if (!Number.isFinite(v)) {
+            continue;
+        }
+        const acc = state.distributions[k];
+        if (acc) {
+            acc.min = Math.min(acc.min, v);
+            acc.max = Math.max(acc.max, v);
+            acc.sum += v;
+            acc.count++;
+        } else {
+            state.distributions[k] = { min: v, max: v, sum: v, count: 1 };
         }
     }
     state.sinceLastFlush++;
@@ -309,7 +305,7 @@ export function flushAccumulatingTelemetry(callbackId?: string): void {
  * ```
  */
 export function meterSilentCatch(locationKey: string): void {
-    void callWithAccumulatingTelemetry('silentCatch', (ctx) => {
-        ctx.telemetry.measurements[`accumulated_${locationKey}`] = 1;
+    callWithAccumulatingTelemetry('silentCatch', (sample) => {
+        sample.measurements[`accumulated_${locationKey}`] = 1;
     });
 }

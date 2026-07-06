@@ -548,8 +548,8 @@ export class ClustersExtension implements vscode.Disposable {
                                 `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
                             );
                         }
-                        void callWithAccumulatingTelemetry('completion.accepted', (accCtx) => {
-                            accCtx.telemetry.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
+                        callWithAccumulatingTelemetry('completion.accepted', (sample) => {
+                            sample.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
                         });
                     },
                 );

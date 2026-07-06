@@ -38,10 +38,7 @@ import {
 } from '@microsoft/vscode-ext-webview/host';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import {
-    callWithAccumulatingTelemetry,
-    type TelemetryWithDistributions,
-} from '../../../utils/callWithAccumulatingTelemetry';
+import { callWithAccumulatingTelemetry } from '../../../utils/callWithAccumulatingTelemetry';
 import { WEBVIEW_CONFIG } from '../configuration';
 
 /**
@@ -70,11 +67,11 @@ export const rpcConcurrencyLogger: ProcedureLogger = {
         }
         const concurrent = entry.concurrent;
 
-        void callWithAccumulatingTelemetry(WEBVIEW_CONFIG.telemetry.rpcConcurrencyEvent, (context) => {
+        callWithAccumulatingTelemetry(WEBVIEW_CONFIG.telemetry.rpcConcurrencyEvent, (sample) => {
             // Gauge: reduced to min / max / sum / count across the batch.
-            (context.telemetry as TelemetryWithDistributions).distributions.concurrentRpcOps = concurrent;
+            sample.distributions.concurrentRpcOps = concurrent;
             // Counter: total operations observed per flush window.
-            context.telemetry.measurements.dispatch = 1;
+            sample.measurements.dispatch = 1;
         });
     },
 };

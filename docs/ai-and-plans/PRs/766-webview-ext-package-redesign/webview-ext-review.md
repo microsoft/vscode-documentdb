@@ -32,8 +32,10 @@ load-time degradation and finds the load path neutral-to-better, with one
 recurring per-RPC host-side cost (the dispatch logger) flagged as a follow-up.
 **Iteration 9 (2026-07-06)** implements R766-P05 part 1: gates the per-op host
 `console.log` behind `extensionMode !== Production` so shipped builds never pay
-for it. **Iteration 10 (planned, not started)** stages R766-P05 part 2: the
-`callWithAccumulatingTelemetry` accumulate/flush redesign (Option 1).
+for it. **Iteration 10 (2026-07-06)** implements R766-P05 part 2: the
+`callWithAccumulatingTelemetry` accumulate/flush redesign (Option 1) — the
+per-call path is now cheap in-memory work and the telemetry pipeline is entered
+only on flush, with all callers migrated to the new sample-bag callback.
 
 ## Summary
 
@@ -1923,14 +1925,14 @@ in-chat discussion accompanying this iteration for full option analysis):
 
 ### Decisions (2026-07-06)
 
-- **Follow-up 2 — Option 1 selected.** The chosen direction is to split the
-  helper's cheap _accumulate_ path (pure in-memory arithmetic, no
-  `IActionContext`, no `await`) from the heavy _flush_ path (the single
-  `callWithTelemetryAndErrorHandling` that emits the rolled-up `dist_*` fields),
-  migrating existing callers in the same change. This is the only option that
-  makes the helper's per-call path match its "accumulating" promise, fixes the
+- **Follow-up 2 — Option 1 selected, implemented in Iteration 10.** The chosen
+  direction was to split the helper's cheap _accumulate_ path (pure in-memory
+  arithmetic, no `IActionContext`, no `await`) from the heavy _flush_ path (the
+  single `callWithTelemetryAndErrorHandling` that emits the rolled-up `dist_*`
+  fields), migrating existing callers in the same change. This is the only option
+  that makes the helper's per-call path match its "accumulating" promise, fixes the
   cost for every consumer, and keeps the concurrency gauge accurate (no sampling
-  bias). **Sequenced to Iteration 10** (see the [Iteration 10 plan](#iteration-10--accumulating-telemetry-per-call-cost-planned)); not started yet.
+  bias). Shipped as R766-P05b — see the [Iteration 10](#iteration-10--accumulating-telemetry-per-call-cost-2026-07-06) change protocol.
 - **Follow-up 1 — resolved, implemented in Iteration 9.** Decided to gate the
   per-op console line on `extensionMode !== Production` inside the DocumentDB
   adapter (`rpcConcurrencyLogger`), leaving the framework's `consoleProcedureLogger`
@@ -1947,7 +1949,7 @@ in-chat discussion accompanying this iteration for full option analysis):
 | R766-P02 | `loggerLink` now opt-in (was always-on)                                    | Improvement  | Shipped by PR; no action                        |
 | R766-P03 | Inert JSON block: 3 regex passes + 1 `JSON.parse` at boot                  | Info         | One-time, sub-ms; no action                     |
 | R766-P04 | Controllers class→factory                                                  | Info         | No cost change; no action                       |
-| R766-P05 | Per-op host dispatch logger (`console.log` + `callWithAccumulatingTelemetry`) | Watch     | Part 1 (console) ✅ Iteration 9; Part 2 (accumulate/flush) → Option 1, planned for Iteration 10 |
+| R766-P05 | Per-op host dispatch logger (`console.log` + `callWithAccumulatingTelemetry`) | Watch     | Part 1 (console) ✅ Iteration 9; Part 2 (accumulate/flush) ✅ Iteration 10 |
 | R766-P06 | Caller factory per op                                                      | Not a regression | Pre-existing; no action                     |
 | R766-P07 | O(N) `window` listener fan-out per message                                 | Not a regression | Pre-existing; measured via R766-S04         |
 | R766-P08 | New structural transport guards                                            | Not a regression | O(1) per message; no action                 |
@@ -2004,53 +2006,94 @@ user-facing strings, so `l10n` not required.
 
 ---
 
-# Iteration 10 — accumulating-telemetry per-call cost (planned)
+# Iteration 10 — accumulating-telemetry per-call cost (2026-07-06)
 
-> **Not started.** This chapter stages the R766-P05 **part 2** work (Follow-up 2,
-> Option 1 selected in Iteration 8) so the next session can pick it up with full
-> context. No code has been written for it yet.
+> Implements the second half of the R766-P05 follow-up (Follow-up 2, Option 1
+> selected in Iteration 8): the `callWithAccumulatingTelemetry` accumulate/flush
+> split, so the per-call path is cheap in-memory work and the Azure telemetry
+> pipeline is entered only on flush. This is the cost that ran in production (the
+> concurrency gauge is meant to keep recording), so unlike the Iteration 9 console
+> gate it is a real per-op saving on shipped builds.
 
 ## Problem restated
 
-`callWithAccumulatingTelemetry` batches the telemetry **emit** (default 20 calls /
-30 s) but still runs the full `callWithTelemetryAndErrorHandling` wrapper —
+`callWithAccumulatingTelemetry` batched the telemetry **emit** (default 20 calls /
+30 s) but still ran the full `callWithTelemetryAndErrorHandling` wrapper —
 `IActionContext` allocation, error-handling wiring, `performance.now()`, three
 `Object.entries` copy loops, an `await` — on **every** call. For a per-RPC caller
-like `rpcConcurrencyLogger` (and any other high-frequency consumer) that is the
-cost that adds up, and it runs in production (the gauge is meant to). The Iteration 9
-console gate does **not** touch this; part 2 does.
+like `rpcConcurrencyLogger` (and every other high-frequency consumer) that per-call
+machinery was the cost that adds up.
 
-## Chosen direction (Option 1): split accumulate (cheap) from flush (heavy)
+## What changed
 
-- Per-call path becomes pure in-memory arithmetic against the module-level
-  accumulator state — **no** `IActionContext`, **no** `await`.
-- `callWithTelemetryAndErrorHandling` is entered **only on flush** (batch size or
-  interval reached), emitting the rolled-up `dist_*_min/max/sum/count`.
-- The callback contract changes: replace `(context: IActionContext) => T` with a
-  synchronous **sample bag** the caller populates
-  (e.g. `accumulate('event', (s) => { s.distributions.concurrentRpcOps = n; s.measurements.dispatch = 1; })`),
-  where `s` is a plain object — no Azext context.
+- **R766-P05b — accumulate (cheap) / flush (heavy) split.** The per-call path now
+  runs the populator synchronously against a plain `TelemetrySample` bag and folds
+  the values into module-level batch totals. **No** `IActionContext`, **no**
+  `await`, **no** `callWithTelemetryAndErrorHandling` on the happy path. The Azure
+  pipeline is entered exactly once, on flush, with the rolled-up event.
+- **Callback contract changed** from `(context: IActionContext) => T | PromiseLike<T>`
+  (returning the value, `Promise<T | undefined>`) to
+  `(sample: TelemetrySample) => void` (synchronous, `void` return). `TelemetrySample`
+  is a plain `{ measurements; properties; distributions }` bag — this also retires
+  the `TelemetryWithDistributions` cast (`distributions` is now a first-class field,
+  no `ctx.telemetry as …`). Every existing call site already `void`-ed the result
+  and used a synchronous callback, so no caller relied on the promise or the return
+  value.
+- **Populator-throw semantics preserved.** "Errors never accumulate": if the
+  populator throws, the (partial) sample is discarded and the error is reported once
+  through `callWithTelemetryAndErrorHandling` under the same `callbackId` — the only
+  path that still pays the heavy wrapper cost, and it is rare.
+- **Defensive finite guard added.** `accumulate` now skips non-finite numbers so a
+  stray `NaN` / `Infinity` from a caller cannot poison a sum or a min/max reduction
+  (the old code filtered on capture; the new bag is written directly, so the guard
+  moved into `accumulate`).
+- **Unchanged behavior:** auto-duration distribution (`auto_duration_ms`, now the
+  populator's synchronous duration), `dist_*_min/max/sum/count` rollup keys,
+  batch-size / `minFlushIntervalMs` throttle, `flushAccumulatingTelemetry`, flushed
+  event name equals `callbackId`.
 
-## Scope / checklist for the implementation session
+## Callers migrated (all direct `callWithAccumulatingTelemetry` sites + shorthand)
 
-- [ ] Redesign `src/utils/callWithAccumulatingTelemetry.ts` per Option 1 (cheap
-      accumulate, heavy flush).
-- [ ] Preserve behavior that must survive: auto-duration distribution
-      (`AUTO_DURATION_DISTRIBUTION_KEY`), `dist_*` rollup keys, batch-size /
-      `minFlushIntervalMs` throttle, "errors never accumulate" semantics, flushed
-      event name equals `callbackId`.
-- [ ] Migrate **all** callers — grep `callWithAccumulatingTelemetry` across the
-      repo (not just `rpcConcurrencyLogger`) and port each to the sample-bag
-      callback.
-- [ ] Decide how the callback surfaces a throw now that there is no per-call
-      Azext pipeline (a cheap try/catch around the synchronous bag-populator is
-      likely enough).
-- [ ] Update `callWithAccumulatingTelemetry` tests + each migrated caller's tests.
-- [ ] Full PR checklist: `l10n` (if strings) · `prettier-fix` · `lint` · `jest` ·
-      `build`.
+- `src/utils/callWithAccumulatingTelemetry.ts` — `meterSilentCatch` shorthand.
+- `src/documentdb/ClustersExtension.ts` — `completion.accepted`.
+- `src/documentdb/shell/DocumentDBShellPty.ts` — six completion / closing-bracket
+  trackers.
+- `src/webviews/documentdb/collectionView/collectionViewRouter.ts` — `completion.accepted.cv`.
+- `src/webviews/_integration/observability/rpcConcurrencyLogger.ts` — the
+  concurrency gauge (also drops the `TelemetryWithDistributions` cast).
+- `meterSilentCatch` callers (schema store, mongo connection strings, playground
+  evaluator, tree items, etc.) needed **no** change — they use the shorthand, whose
+  signature is unchanged.
 
-## Explicitly out of scope for Iteration 10
+## Tests
 
-- The console gate (done in Iteration 9).
-- Any change to the framework package (`@microsoft/vscode-ext-webview`); this is a
-  DocumentDB `src/utils` refactor plus caller migration.
+- `callWithAccumulatingTelemetry.test.ts` — rewritten for the synchronous
+  sample-bag API; added a **finite-guard** case and a **"per-call path never enters
+  the telemetry pipeline, only flush does"** case (the redesign's core guarantee),
+  and the error case now also asserts the throw is reported exactly once under the
+  event id.
+- `rpcConcurrencyLogger.test.ts` — the captured callback is now invoked with a
+  sample bag directly instead of a `{ telemetry }` context stub.
+
+## Docs / skills
+
+- All doc comments in `callWithAccumulatingTelemetry.ts` updated to the sample-bag
+  model (module type doc, `AUTO_DURATION_DISTRIBUTION_KEY`, the main function's
+  "cheap per call, heavy only on flush" contract, `accumulate`).
+- The `telemetry-instrumentation` skill was reviewed: it documents
+  `callWithTelemetryAndErrorHandling` and `publicProcedureWithTelemetry` but does
+  **not** describe `callWithAccumulatingTelemetry`'s callback shape, so no skill
+  edit was required. (If a future task adds an accumulating-telemetry section to the
+  skill, it should show the `(sample) => { sample.measurements.x = 1 }` form.)
+
+## Post-change validation (all green)
+
+`jest` (full suite, 2668/2668) · `eslint` (touched files, 0 errors; 2 pre-existing
+unrelated `require-await` warnings in `DocumentDBShellPty.ts` at lines 226/462) ·
+`tsc` (project-wide `--noEmit`, clean) · `npm run build` (all packages + extension)
+· `prettier` (unchanged — already formatted). No user-facing strings, so `l10n` not
+required.
+
+| ID        | What changed                                                                                                                            | Why (motivation)                                                                                                                    |
+| --------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| R766-P05b | `callWithAccumulatingTelemetry` split into cheap synchronous accumulate + heavy flush; callback takes a `TelemetrySample` bag (was `IActionContext`); all callers migrated | The per-call `callWithTelemetryAndErrorHandling` wrapper ran on every call and added up on hot paths (per-RPC); now it runs once per flush. |
