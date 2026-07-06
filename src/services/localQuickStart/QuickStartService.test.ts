@@ -6,6 +6,7 @@
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
+import { readRegistry, upsertInstanceRecord } from './quickStartRegistry';
 import { QuickStartServiceImpl } from './QuickStartService';
 import {
     DEFAULT_ALIAS,
@@ -168,6 +169,12 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         const globalState = fakeMemento();
         await globalState.update(imageRefKey(DEFAULT_ALIAS), 'ghcr.io/documentdb/documentdb-local:1.0.0');
         await globalState.update(LEGACY_IMAGE_REF_KEY, 'ghcr.io/documentdb/documentdb-local:1.0.0');
+        await upsertInstanceRecord(globalState, {
+            alias: DEFAULT_ALIAS,
+            displayName: 'DocumentDB Local',
+            port: 10273,
+            phase: 'ready',
+        });
         ext.context = { globalState } as unknown as vscode.ExtensionContext;
 
         const service = new QuickStartServiceImpl(mockRuntime({}));
@@ -180,5 +187,7 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         expect(await ext.secretStorage.get(LEGACY_SECRET_KEY)).toBeUndefined();
         expect(globalState.get(imageRefKey(DEFAULT_ALIAS))).toBeUndefined();
         expect(globalState.get(LEGACY_IMAGE_REF_KEY)).toBeUndefined();
+        // ...and the registry record is gone, so the instance won't linger as a ghost tree row (WI-2).
+        expect(readRegistry(globalState).instances).toHaveLength(0);
     });
 });

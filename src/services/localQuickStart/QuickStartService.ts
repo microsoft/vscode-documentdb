@@ -40,6 +40,7 @@ import {
     isRunning,
 } from './ContainerRuntime';
 import { composeConnectionString, generateCredentials, type GeneratedCredentials } from './quickStartCredentials';
+import { DEFAULT_INSTANCE_DISPLAY_NAME, removeInstanceRecord, upsertInstanceRecord } from './quickStartRegistry';
 import {
     type AdvancedQuickStartOptions,
     clusterId,
@@ -559,6 +560,14 @@ export class QuickStartServiceImpl {
         // Durably remember the image this instance's volume was created with, so a recreate
         // after a window reload (in-memory metadata gone) keeps the same image.
         await ext.context.globalState.update(IMAGE_REF_STATE_KEY, pending.imageRef);
+        // Make the registry authoritative: the default instance is now ready on its bound port.
+        // (WI-2 reads the registry to enumerate instances; single-instance behavior is unchanged.)
+        await upsertInstanceRecord(ext.context.globalState, {
+            alias: DEFAULT_ALIAS,
+            displayName: DEFAULT_INSTANCE_DISPLAY_NAME,
+            port: pending.boundPort,
+            phase: 'ready',
+        });
         // Drop any stale client cached under this id (e.g. from a prior run with different
         // credentials) so the next browse uses the fresh credentials.
         await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
@@ -1008,6 +1017,9 @@ export class QuickStartServiceImpl {
             }
             await ext.context.globalState.update(IMAGE_REF_STATE_KEY, undefined);
             await ext.context.globalState.update(LEGACY_IMAGE_REF_KEY, undefined);
+            // Drop the registry record too — an explicit Delete is a full clean slate, so the
+            // instance no longer appears when the tree enumerates the registry (WI-2).
+            await removeInstanceRecord(ext.context.globalState, DEFAULT_ALIAS);
             await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
             CredentialCache.deleteCredentials(QUICK_START_CLUSTER_ID);
             this.metadata = undefined;

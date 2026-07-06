@@ -10,7 +10,9 @@ import {
     migrateLegacyQuickStartKeys,
     portFromConnectionString,
     readRegistry,
+    removeInstanceRecord,
     updateRegistry,
+    upsertInstanceRecord,
 } from './quickStartRegistry';
 import {
     containerName,
@@ -133,6 +135,42 @@ describe('quickStartRegistry.readRegistry / updateRegistry', () => {
             ),
         );
         expect(readRegistry(memento).instances).toHaveLength(3);
+    });
+});
+
+describe('quickStartRegistry.upsertInstanceRecord / removeInstanceRecord', () => {
+    it('inserts a new record', async () => {
+        const { memento } = fakeMemento();
+        await upsertInstanceRecord(memento, { alias: 'a', displayName: 'A', port: 10261, phase: 'ready' });
+        expect(readRegistry(memento).instances).toEqual([
+            { alias: 'a', displayName: 'A', port: 10261, phase: 'ready' },
+        ]);
+    });
+
+    it('replaces an existing record matched by alias (clearing a stale provisioning lease)', async () => {
+        const { memento } = fakeMemento();
+        await upsertInstanceRecord(memento, {
+            alias: 'a',
+            displayName: 'A',
+            port: 10261,
+            phase: 'provisioning',
+            operationId: 'op1',
+            leaseAt: 1,
+        });
+        await upsertInstanceRecord(memento, { alias: 'a', displayName: 'A', port: 10275, phase: 'ready' });
+        const instances = readRegistry(memento).instances;
+        expect(instances).toHaveLength(1);
+        expect(instances[0]).toEqual({ alias: 'a', displayName: 'A', port: 10275, phase: 'ready' });
+    });
+
+    it('removes a record by alias (no-op if absent)', async () => {
+        const { memento } = fakeMemento();
+        await upsertInstanceRecord(memento, { alias: 'a', displayName: 'A', port: 10261, phase: 'ready' });
+        await upsertInstanceRecord(memento, { alias: 'b', displayName: 'B', port: 10262, phase: 'ready' });
+        await removeInstanceRecord(memento, 'a');
+        expect(readRegistry(memento).instances.map((record) => record.alias)).toEqual(['b']);
+        await removeInstanceRecord(memento, 'nonexistent');
+        expect(readRegistry(memento).instances.map((record) => record.alias)).toEqual(['b']);
     });
 });
 

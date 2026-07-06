@@ -182,3 +182,22 @@ export async function migrateLegacyQuickStartKeys(
     await secretStorage.delete(LEGACY_SECRET_KEY);
     await globalState.update(LEGACY_IMAGE_REF_KEY, undefined);
 }
+
+/** Insert or replace an instance record (matched by alias). Used when an instance becomes ready. */
+export function upsertInstanceRecord(globalState: vscode.Memento, record: QuickStartInstanceRecord): Promise<void> {
+    return updateRegistry(globalState, (registry) => {
+        const index = registry.instances.findIndex((existing) => existing.alias === record.alias);
+        if (index >= 0) {
+            registry.instances[index] = { ...record };
+        } else {
+            registry.instances.push({ ...record });
+        }
+    });
+}
+
+/** Remove an instance record by alias (no-op if absent). Used on an explicit Delete. */
+export function removeInstanceRecord(globalState: vscode.Memento, alias: string): Promise<void> {
+    return updateRegistry(globalState, (registry) => {
+        registry.instances = registry.instances.filter((existing) => existing.alias !== alias);
+    });
+}
