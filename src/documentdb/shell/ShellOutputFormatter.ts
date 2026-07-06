@@ -6,7 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import * as vscode from 'vscode';
-import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { type SerializableExecutionResult } from '../playground/workerTypes';
 
 /**

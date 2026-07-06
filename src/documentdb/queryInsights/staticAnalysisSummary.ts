@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as vscode from 'vscode';
+
 import { type QueryInsightsStage2Response } from '../../webviews/documentdb/collectionView/types/queryInsights';
 
 /**
@@ -42,7 +44,11 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
 
     // Summary indicators
     lines.push('### Summary Indicators (4 cells shown to user)');
-    lines.push(`- **Selectivity**: ${stage2.efficiencyAnalysis.selectivity ?? 'Unknown'}`);
+    const formattedSelectivity =
+        stage2.efficiencyAnalysis.selectivity !== null
+            ? formatSelectivityForSummary(stage2.efficiencyAnalysis.selectivity)
+            : 'Unknown';
+    lines.push(`- **Selectivity**: ${formattedSelectivity}`);
     lines.push(`- **Index Used**: ${stage2.efficiencyAnalysis.indexUsed ?? 'None (collection scan)'}`);
     lines.push(
         `- **Fetch Overhead**: ${stage2.efficiencyAnalysis.fetchOverhead} (${stage2.efficiencyAnalysis.fetchOverheadKind})`,
@@ -70,4 +76,23 @@ export function buildStaticAnalysisSummary(stage2: QueryInsightsStage2Response, 
     }
 
     return lines.join('\n');
+}
+
+/**
+ * Formats numeric selectivity for static analysis summary text.
+ * Values between 0 and 0.1 are rendered as a threshold label.
+ *
+ * Keep this formatting in sync with the webview selectivity formatter so Stage 3
+ * summary text and the UI display stay consistent for the same underlying values.
+ * We intentionally kept this duplicated for now to avoid a broader refactor.
+ *
+ * @param selectivity - Raw selectivity percentage value
+ * @returns Formatted selectivity string for summary output
+ */
+function formatSelectivityForSummary(selectivity: number): string {
+    const locale = vscode.env?.language || 'en-US';
+    if (selectivity > 0 && selectivity < 0.1) {
+        return `below ${(0.1).toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
+    }
+    return `${selectivity.toLocaleString(locale, { minimumFractionDigits: 1, maximumFractionDigits: 1 })}%`;
 }

@@ -224,6 +224,28 @@ describe('DocumentDBShellPty', () => {
             expect(written).toContain('Syntax error');
         });
 
+        it('should normalize bare \\n in multi-line error messages to \\r\\n', async () => {
+            // Many driver / server error messages embed bare LFs to delimit
+            // a multi-line explanation. Without normalization the terminal
+            // moves the cursor down but not to column 0, producing a staircase.
+            // The terminating \r\n that writeLine appends should be the ONLY
+            // CR-LF pair followed by no further characters in the captured
+            // output for this error.
+            mockEvaluate.mockRejectedValue(new Error('first line\nsecond line\nthird line'));
+
+            pty.handleInput('db.cmd()');
+            pty.handleInput('\r');
+            await new Promise((resolve) => setTimeout(resolve, 10));
+
+            expect(written).toContain('first line\r\nsecond line\r\nthird line');
+            // Scope the "no bare LF" assertion to the error block itself so the
+            // test doesn't accidentally start failing if some future, unrelated
+            // output later in the captured buffer happens to contain a bare LF.
+            const errorBlock = written.slice(written.indexOf('first line'));
+            const bareLfCount = (errorBlock.match(/(?<!\r)\n/g) ?? []).length;
+            expect(bareLfCount).toBe(0);
+        });
+
         it('should show prompt after evaluation completes', async () => {
             mockEvaluate.mockResolvedValue({
                 type: null,

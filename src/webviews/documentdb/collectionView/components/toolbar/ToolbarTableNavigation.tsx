@@ -25,7 +25,7 @@ export const ToolbarTableNavigation = (): React.JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
 

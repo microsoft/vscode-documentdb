@@ -6,7 +6,6 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
-import { PlaygroundService } from '../../documentdb/playground/PlaygroundService';
 import { PLAYGROUND_LANGUAGE_ID } from '../../documentdb/playground/constants';
 import { ext } from '../../extensionVariables';
 import { executePlaygroundCode } from './executePlaygroundCode';
@@ -17,14 +16,6 @@ import { executePlaygroundCode } from './executePlaygroundCode';
 export async function runAll(_context: IActionContext): Promise<void> {
     const editor = vscode.window.activeTextEditor;
     if (!editor || editor.document.languageId !== PLAYGROUND_LANGUAGE_ID) {
-        return;
-    }
-
-    const service = PlaygroundService.getInstance();
-    if (!service.isConnected(editor.document.uri)) {
-        void vscode.window.showWarningMessage(
-            l10n.t('This playground has no connection. Create a new playground from the DocumentDB panel.'),
-        );
         return;
     }
 

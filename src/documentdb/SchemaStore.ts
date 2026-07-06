@@ -46,12 +46,21 @@ export interface SchemaStoreStats {
  *
  * Schema change notifications are debounced per key (1 second) to avoid
  * excessive churn when pages are navigated rapidly.
+ *
+ * The cache enforces a soft entry limit (default 50 collections) with LRU
+ * eviction to prevent unbounded memory growth in long-running sessions.
  */
 export class SchemaStore implements vscode.Disposable {
+    private static readonly DEFAULT_MAX_ENTRIES = 50;
+
     private static _instance: SchemaStore | undefined;
     private readonly _analyzers = new Map<string, SchemaAnalyzer>();
     private readonly _onDidChangeSchema = new vscode.EventEmitter<SchemaChangeEvent>();
     private readonly _pendingNotifications = new Map<string, ReturnType<typeof setTimeout>>();
+    private readonly _accessOrder = new Map<string, number>();
+
+    private _maxEntries: number = SchemaStore.DEFAULT_MAX_ENTRIES;
+    private _evictionCount = 0;
 
     /** High-water marks for telemetry — tracks peak usage across the session. */
     private _maxCollectionCount = 0;
@@ -77,29 +86,90 @@ export class SchemaStore implements vscode.Disposable {
         return `${clusterId}::${db}::${coll}`;
     }
 
+    // ── LRU tracking ──
+
+    /** Mark a key as recently accessed (moves to end of insertion order). */
+    private _touchKey(key: string): void {
+        this._accessOrder.delete(key);
+        this._accessOrder.set(key, 0);
+    }
+
+    /** Evict least-recently-used entries until the store is at or below capacity. */
+    private _evictIfNeeded(): void {
+        while (this._analyzers.size > this._maxEntries) {
+            const oldestKey = this._accessOrder.keys().next().value as string | undefined;
+            if (oldestKey !== undefined) {
+                this._analyzers.delete(oldestKey);
+                this._accessOrder.delete(oldestKey);
+                this._evictionCount++;
+                // Flag a stats change so the eviction is reported to telemetry
+                // promptly (eviction lowers the cache size, so the high-water
+                // mark check in _updateMaxStats would otherwise not flush it).
+                this._statsChanged = true;
+                const pending = this._pendingNotifications.get(oldestKey);
+                if (pending !== undefined) {
+                    clearTimeout(pending);
+                    this._pendingNotifications.delete(oldestKey);
+                }
+                continue;
+            }
+
+            // Fallback: _accessOrder may be out of sync with _analyzers.
+            // Pick any entry from _analyzers and register it for future LRU.
+            const fallbackKey = this._analyzers.keys().next().value as string | undefined;
+            if (fallbackKey !== undefined) {
+                this._touchKey(fallbackKey);
+                continue;
+            }
+
+            return;
+        }
+    }
+
     // ── Read operations ──
 
     /** Check if schema data exists for a collection. */
     public hasSchema(clusterId: string, db: string, coll: string): boolean {
-        const analyzer = this._analyzers.get(SchemaStore.key(clusterId, db, coll));
-        return analyzer !== undefined && analyzer.getDocumentCount() > 0;
+        const key = SchemaStore.key(clusterId, db, coll);
+        const analyzer = this._analyzers.get(key);
+        if (analyzer && analyzer.getDocumentCount() > 0) {
+            this._touchKey(key);
+            return true;
+        }
+        return false;
     }
 
     /** Get known fields for a collection (empty array if no schema). */
     public getKnownFields(clusterId: string, db: string, coll: string): FieldEntry[] {
-        const analyzer = this._analyzers.get(SchemaStore.key(clusterId, db, coll));
-        return analyzer?.getKnownFields() ?? [];
+        const key = SchemaStore.key(clusterId, db, coll);
+        const analyzer = this._analyzers.get(key);
+        if (analyzer) {
+            this._touchKey(key);
+            return analyzer.getKnownFields();
+        }
+        return [];
     }
 
     /** Get the raw JSON Schema for a collection (empty schema if none). */
     public getSchema(clusterId: string, db: string, coll: string): JSONSchema {
-        const analyzer = this._analyzers.get(SchemaStore.key(clusterId, db, coll));
-        return analyzer?.getSchema() ?? { type: 'object' };
+        const key = SchemaStore.key(clusterId, db, coll);
+        const analyzer = this._analyzers.get(key);
+        if (analyzer) {
+            this._touchKey(key);
+            return analyzer.getSchema();
+        }
+        return { type: 'object' };
     }
 
     /** Get schema document count for a collection. */
     public getDocumentCount(clusterId: string, db: string, coll: string): number {
-        return this._analyzers.get(SchemaStore.key(clusterId, db, coll))?.getDocumentCount() ?? 0;
+        const key = SchemaStore.key(clusterId, db, coll);
+        const analyzer = this._analyzers.get(key);
+        if (analyzer) {
+            this._touchKey(key);
+            return analyzer.getDocumentCount();
+        }
+        return 0;
     }
 
     /** Get property names at a given schema path (for table headers). */
@@ -176,6 +246,8 @@ export class SchemaStore implements vscode.Disposable {
                 }
             }
             ctx.telemetry.measurements.distinctClusterCount = clusterIds.size;
+            ctx.telemetry.measurements.evictionCount = this._evictionCount;
+            ctx.telemetry.measurements.maxEntries = this._maxEntries;
         });
     }
 
@@ -205,8 +277,10 @@ export class SchemaStore implements vscode.Disposable {
         if (!analyzer) {
             analyzer = new SchemaAnalyzer();
             this._analyzers.set(key, analyzer);
+            this._evictIfNeeded();
         }
 
+        this._touchKey(key);
         analyzer.addDocuments(documents);
         this._updateMaxStats();
         this._fireSchemaChanged(key, { clusterId, databaseName: db, collectionName: coll });
@@ -224,6 +298,7 @@ export class SchemaStore implements vscode.Disposable {
     public clearSchema(clusterId: string, db: string, coll: string): void {
         const key = SchemaStore.key(clusterId, db, coll);
         if (this._analyzers.delete(key)) {
+            this._accessOrder.delete(key);
             // Cancel any pending debounced notification for this key
             const pending = this._pendingNotifications.get(key);
             if (pending !== undefined) {
@@ -240,6 +315,7 @@ export class SchemaStore implements vscode.Disposable {
         for (const key of this._analyzers.keys()) {
             if (key.startsWith(prefix)) {
                 this._analyzers.delete(key);
+                this._accessOrder.delete(key);
                 const pending = this._pendingNotifications.get(key);
                 if (pending !== undefined) {
                     clearTimeout(pending);
@@ -255,6 +331,7 @@ export class SchemaStore implements vscode.Disposable {
         for (const key of this._analyzers.keys()) {
             if (key.startsWith(prefix)) {
                 this._analyzers.delete(key);
+                this._accessOrder.delete(key);
                 const pending = this._pendingNotifications.get(key);
                 if (pending !== undefined) {
                     clearTimeout(pending);
@@ -267,6 +344,8 @@ export class SchemaStore implements vscode.Disposable {
     /** Clear all schemas (e.g., for testing). */
     public reset(): void {
         this._analyzers.clear();
+        this._accessOrder.clear();
+        this._evictionCount = 0;
         for (const timer of this._pendingNotifications.values()) {
             clearTimeout(timer);
         }
@@ -282,6 +361,7 @@ export class SchemaStore implements vscode.Disposable {
             clearTimeout(timer);
         }
         this._pendingNotifications.clear();
+        this._accessOrder.clear();
         this._onDidChangeSchema.dispose();
         this._analyzers.clear();
         SchemaStore._instance = undefined;

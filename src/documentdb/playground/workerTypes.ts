@@ -66,7 +66,7 @@ export type MainToWorkerMessage =
           readonly connectionString: string;
           readonly clientOptions: SerializableMongoClientOptions;
           readonly databaseName: string;
-          readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
+          readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth';
           /** Tenant ID for Entra ID clusters */
           readonly tenantId?: string;
           /**

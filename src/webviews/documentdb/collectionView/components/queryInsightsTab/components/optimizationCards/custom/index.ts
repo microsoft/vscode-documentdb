@@ -4,3 +4,4 @@
  *--------------------------------------------------------------------------------------------*/
 
 export * from './GetPerformanceInsightsCard';
+export * from './Stage3AnalyzingCard';

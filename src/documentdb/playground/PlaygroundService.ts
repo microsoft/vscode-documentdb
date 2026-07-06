@@ -6,8 +6,37 @@
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { CredentialCache } from '../CredentialCache';
 import { PLAYGROUND_LANGUAGE_ID, PlaygroundCommandIds } from './constants';
 import { type PlaygroundConnection } from './types';
+
+/**
+ * Normalize playground text for content correlation across an untitled→file save.
+ * Trailing whitespace/newlines are ignored so that save-time transforms (e.g.
+ * `files.insertFinalNewline`, `files.trimTrailingWhitespace`) don't break the match.
+ */
+function normalizePlaygroundText(text: string): string {
+    return text.replace(/\s+$/, '');
+}
+
+/**
+ * Character length of a document, computed via `offsetAt` so it does NOT
+ * materialize the full text the way `getText().length` would. `offsetAt` walks
+ * the document's internal line-offset model, so it stays cheap even for very
+ * large files (including a single huge line). Used to gate content correlation
+ * before any `getText()` call.
+ */
+function getDocumentCharLength(doc: vscode.TextDocument): number {
+    return doc.offsetAt(new vscode.Position(doc.lineCount, 0));
+}
+
+/**
+ * Upper bound (in characters) on documents eligible for save-time content
+ * correlation. Playgrounds are small query scripts; anything larger is skipped
+ * to avoid unnecessary string work — such a file simply won't auto-reconnect
+ * (no worse than before this feature existed).
+ */
+const MAX_TRANSFER_TEXT_LENGTH = 1_000_000; // ~1 MB of text
 
 /**
  * Singleton service managing per-document query playground connections and execution state.
@@ -20,12 +49,17 @@ export class PlaygroundService implements vscode.Disposable {
 
     /** Per-document connections keyed by `uri.toString()`. */
     private readonly _connections = new Map<string, PlaygroundConnection>();
+
     /**
-     * Temporarily stashed connections for untitled→file URI migration.
-     * When an untitled playground is saved, VS Code closes the untitled doc and opens a file doc.
-     * We stash the connection keyed by fsPath so it can be migrated to the new URI.
+     * Last-known binding per document URI, kept in memory only (never persisted).
+     *
+     * Unlike `_connections`, an entry here is NOT removed when the document is
+     * closed, so that closing and reopening a playground *within the same session*
+     * can silently restore its binding — provided the target cluster still has
+     * live credentials. This does nothing across a VS Code restart (the map is
+     * gone); that case falls back to the explicit Connect affordance.
      */
-    private readonly _pendingMigrations = new Map<string, PlaygroundConnection>();
+    private readonly _lastBindingByPath = new Map<string, PlaygroundConnection>();
 
     /** Cluster IDs that currently have a running evaluation. */
     private readonly _executingClusterIds = new Set<string>();
@@ -57,35 +91,49 @@ export class PlaygroundService implements vscode.Disposable {
         );
 
         // Clean up connection when a playground document is closed.
-        // For untitled documents, stash the connection briefly so it can be
-        // migrated if the document is being saved (untitled → file transition).
         this._disposables.push(
             vscode.workspace.onDidCloseTextDocument((doc) => {
                 if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
-                    const connection = this._connections.get(doc.uri.toString());
-                    if (connection && doc.uri.scheme === 'untitled') {
-                        this._pendingMigrations.set(doc.uri.fsPath, connection);
-                        // Clear the stash after a short delay if no file doc claims it
-                        setTimeout(() => {
-                            this._pendingMigrations.delete(doc.uri.fsPath);
-                        }, 2000);
+                    if (this._connections.delete(doc.uri.toString())) {
+                        this._onDidChangeState.fire();
                     }
-                    this._connections.delete(doc.uri.toString());
-                    this._onDidChangeState.fire();
                 }
             }),
         );
 
-        // Migrate connection when a playground file document opens after an untitled save
+        // Transfer the connection when a playground is saved under a new URI.
+        //
+        // Two save flows change a playground's URI and would otherwise drop its
+        // connection:
+        //   • untitled → file: a scratch playground saved to disk for the first time.
+        //   • file → file: an already-saved playground re-saved under a new name
+        //     ("Save As…").
+        // In both cases VS Code opens the new `file:` document, fires the save event
+        // while the source document is still open, and then closes the source. We
+        // correlate the two by content and re-key the connection onto the new URI.
+        //
+        // We trigger on `onDidSaveTextDocument` rather than `onDidOpenTextDocument`
+        // because a brand-new file's document model is still empty when it opens; by
+        // the time the save event fires the text is populated and the source is still
+        // open, so the match is reliable. Running before the source closes also keeps
+        // the cluster from looking "orphaned" during the transition.
+        this._disposables.push(
+            vscode.workspace.onDidSaveTextDocument((doc) => {
+                if (doc.languageId === PLAYGROUND_LANGUAGE_ID && doc.uri.scheme === 'file') {
+                    this.transferConnectionToSavedFile(doc);
+                }
+            }),
+        );
+
+        // Silently restore a binding when a playground is reopened within the same
+        // session. Safe against the empty-model open race because it never reads the
+        // document body — it only matches the URI and checks that credentials still
+        // exist. If they don't (or there is no remembered binding), the playground
+        // stays disconnected and the Connect affordance takes over.
         this._disposables.push(
             vscode.workspace.onDidOpenTextDocument((doc) => {
-                if (doc.languageId === PLAYGROUND_LANGUAGE_ID && doc.uri.scheme === 'file') {
-                    const stashed = this._pendingMigrations.get(doc.uri.fsPath);
-                    if (stashed) {
-                        this._pendingMigrations.delete(doc.uri.fsPath);
-                        this._connections.set(doc.uri.toString(), stashed);
-                        this._onDidChangeState.fire();
-                    }
+                if (doc.languageId === PLAYGROUND_LANGUAGE_ID) {
+                    this.tryRestoreBinding(doc);
                 }
             }),
         );
@@ -108,21 +156,121 @@ export class PlaygroundService implements vscode.Disposable {
             `[PlaygroundService] setConnection: ${uri.toString()} → cluster=${connection.clusterId}, db=${connection.databaseName}`,
         );
         this._connections.set(uri.toString(), connection);
+        this._lastBindingByPath.set(uri.toString(), connection);
         this._onDidChangeState.fire();
     }
 
     removeConnection(uri: vscode.Uri): void {
         ext.outputChannel?.trace(`[PlaygroundService] removeConnection: ${uri.toString()}`);
         this._connections.delete(uri.toString());
+        // Explicit removal also forgets the remembered binding so a later reopen
+        // does not silently restore a connection the user intentionally dropped.
+        this._lastBindingByPath.delete(uri.toString());
+        this._onDidChangeState.fire();
+    }
+
+    /**
+     * Re-key a connection onto a freshly saved `file:` playground.
+     *
+     * Triggered on save, this covers both URI-changing save flows:
+     *   • untitled → file: a scratch playground saved to disk for the first time.
+     *   • file → file: an already-saved playground re-saved as a new file ("Save As…").
+     * In both, the source document is still open when the save event fires, so we
+     * find it by content and move its connection onto the new URI.
+     *
+     * Correlation is by content (URI and filename are unreliable: Save As changes
+     * both). To stay unambiguous we only transfer when exactly one *other* open
+     * playground holds a connection and matches — e.g. "Save All" of two identical
+     * fresh playgrounds is left alone rather than risk binding the wrong connection.
+     * A regular save of an already-connected playground is a no-op (its URI is
+     * unchanged, so it is already bound).
+     */
+    private transferConnectionToSavedFile(fileDoc: vscode.TextDocument): void {
+        const fileKey = fileDoc.uri.toString();
+        if (this._connections.has(fileKey)) {
+            return; // already bound (regular save of a connected playground)
+        }
+
+        // Size-gate before reading: `getDocumentCharLength` uses `offsetAt` and
+        // does not pull the whole file into memory the way `getText()` does.
+        if (getDocumentCharLength(fileDoc) > MAX_TRANSFER_TEXT_LENGTH) {
+            return; // too large to correlate cheaply — skip the transfer
+        }
+        const fileText = normalizePlaygroundText(fileDoc.getText());
+
+        // The source is any *other* open playground (untitled from a first save, or a
+        // file from "Save As") that still holds a connection and whose content matches.
+        // Cheap filters (identity → language → has-connection → size) run before
+        // `getText()`, so it is not called on unrelated or large documents.
+        const matches = vscode.workspace.textDocuments.filter((doc) => {
+            const key = doc.uri.toString();
+            if (key === fileKey || doc.languageId !== PLAYGROUND_LANGUAGE_ID) {
+                return false;
+            }
+            if (!this._connections.has(key)) {
+                return false;
+            }
+            if (getDocumentCharLength(doc) > MAX_TRANSFER_TEXT_LENGTH) {
+                return false;
+            }
+            return normalizePlaygroundText(doc.getText()) === fileText;
+        });
+
+        if (matches.length !== 1) {
+            return; // no match, or ambiguous — leave connections untouched
+        }
+
+        const sourceKey = matches[0].uri.toString();
+        const connection = this._connections.get(sourceKey);
+        if (!connection) {
+            return;
+        }
+
+        this._connections.delete(sourceKey);
+        this._connections.set(fileKey, connection);
+        // Move the remembered binding onto the saved file too, so a later in-session
+        // reopen of that file can be restored silently.
+        this._lastBindingByPath.delete(sourceKey);
+        this._lastBindingByPath.set(fileKey, connection);
+        ext.outputChannel?.trace(
+            `[PlaygroundService] transferred connection on save: ${sourceKey} → ${fileKey} ` +
+                `(cluster=${connection.clusterId}, db=${connection.databaseName})`,
+        );
         this._onDidChangeState.fire();
     }
 
     isConnected(uri: vscode.Uri): boolean {
         return this._connections.has(uri.toString());
     }
-
     getConnection(uri: vscode.Uri): PlaygroundConnection | undefined {
         return this._connections.get(uri.toString());
+    }
+
+    /**
+     * Attempt a silent, in-session restore of a previously remembered binding for
+     * a reopened playground. No-ops unless: the document is currently unbound,
+     * a binding was remembered for this exact URI, and the target cluster still
+     * has live credentials in this session.
+     */
+    private tryRestoreBinding(doc: vscode.TextDocument): void {
+        const key = doc.uri.toString();
+        if (this._connections.has(key)) {
+            return; // already bound (e.g. just created and bound)
+        }
+        const remembered = this._lastBindingByPath.get(key);
+        if (!remembered) {
+            return; // nothing to restore
+        }
+        if (!CredentialCache.hasCredentials(remembered.clusterId)) {
+            // Cluster is not available this session — leave it to the Connect affordance.
+            return;
+        }
+        this._connections.set(key, remembered);
+        ext.outputChannel?.trace(
+            `[PlaygroundService] restored connection on open: ${key} ` +
+                `(cluster=${remembered.clusterId}, db=${remembered.databaseName})`,
+        );
+        this._onDidChangeState.fire();
     }
 
     /**
@@ -204,12 +352,14 @@ export class PlaygroundService implements vscode.Disposable {
 
         const displayName = this.getDisplayName(editor.document.uri);
         if (displayName) {
+            this._statusBarItem.command = PlaygroundCommandIds.showConnectionInfo;
             this._statusBarItem.text = `$(plug) ${displayName}`;
             this._statusBarItem.tooltip = l10n.t('Query Playground connected to {0}', displayName);
         } else {
-            this._statusBarItem.text = `$(warning) ${l10n.t('No database connected')}`;
+            this._statusBarItem.command = PlaygroundCommandIds.connect;
+            this._statusBarItem.text = `$(warning) ${l10n.t('Connect database')}`;
             this._statusBarItem.tooltip = l10n.t(
-                'This playground has no connection. Create a new playground from the DocumentDB panel.',
+                'This playground has no connection. Click to connect it to a database.',
             );
         }
 
@@ -224,6 +374,7 @@ export class PlaygroundService implements vscode.Disposable {
         }
         this._onDidChangeState.dispose();
         this._connections.clear();
+        this._lastBindingByPath.clear();
         PlaygroundService._instance = undefined;
     }
 }

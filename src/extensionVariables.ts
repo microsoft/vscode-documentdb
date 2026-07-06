@@ -59,6 +59,7 @@ export namespace ext {
     export let connectionsTreeView: vscode.TreeView<TreeElement>;
 
     export let discoveryBranchDataProvider: DiscoveryBranchDataProvider;
+    export let discoveryTreeView: vscode.TreeView<TreeElement>;
 
     export let helpAndFeedbackBranchDataProvider: HelpAndFeedbackBranchDataProvider;
 

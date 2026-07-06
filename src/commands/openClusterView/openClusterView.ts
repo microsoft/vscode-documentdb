@@ -9,7 +9,7 @@ import * as l10n from '@vscode/l10n';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
-import { ClusterViewController } from '../../webviews/documentdb/clusterView/clusterViewController';
+import { openClusterWebview } from '../../webviews/documentdb/clusterView/clusterViewController';
 
 /**
  * Opens the cluster dashboard / home page from a cluster tree node (context
@@ -51,7 +51,7 @@ export async function openClusterViewInternal(
         clusterTreeId: string;
     },
 ): Promise<void> {
-    const view = new ClusterViewController({
+    const view = openClusterWebview({
         clusterId: props.clusterId,
         clusterDisplayName: props.clusterDisplayName,
         viewId: props.viewId,

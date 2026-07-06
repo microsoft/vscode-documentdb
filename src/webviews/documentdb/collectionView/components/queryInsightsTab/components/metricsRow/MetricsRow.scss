@@ -40,6 +40,12 @@
 
     .dataValue {
         @extend .baseDataValue;
+
+        // Reserve a fixed-height slot so skeleton ↔ value swap doesn't shift layout.
+        // Height matches .baseDataValue line-height (32px).
+        min-height: 32px;
+        display: flex;
+        align-items: center;
     }
 }
 
