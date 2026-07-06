@@ -32,6 +32,13 @@
 # @documentdb-js. Packages outside the allow-list will fail to publish
 # until ESRP is configured to support that scope (contact esrprelpm@).
 
+# Initial run name shown in ADO. The "Set build number" step refines this at
+# runtime to npm-<package>-<version>-<mode>-<buildId>; this is just the value
+# used before that step runs. appendCommitMessageToRunName keeps the run name
+# clean (no commit subject appended).
+name: npm-release-$(Date:yyyy-MM-dd).$(Rev:r)
+appendCommitMessageToRunName: false
+
 trigger: none
 pr: none
 

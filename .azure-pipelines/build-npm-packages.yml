@@ -8,6 +8,11 @@
 # so the monorepo stays healthy, but they are NOT packed - they are local-
 # only deps and not released through this pipeline.
 
+# Run name shown in ADO (e.g. npm-build-2026-07-06.1). Keeps the run list
+# readable and stops the commit subject being appended to the run name.
+name: npm-build-$(Date:yyyy-MM-dd).$(Rev:r)
+appendCommitMessageToRunName: false
+
 # Manual-only build. The build/test work here is already covered on every push
 # by the GitHub Actions CI (.github/workflows/main.yml) and the main extension
 # ADO pipeline (.azure-pipelines/build.yml, which also runs Component Governance
