@@ -26,7 +26,14 @@ onboarding friction. **Iteration 6 (2026-07-05)** fixes a runtime regression
 because the source layout was keyed off the extension mode instead of the bundle
 flag. **Iteration 7 (2026-07-05)** tidies the reference `_integration` folder:
 groups the observability sinks into a subfolder and brings the folder README
-back in sync.
+back in sync. **Iteration 8 (2026-07-06)** is an analysis pass (no code): it
+traces the webview open/load and message-processing paths for latency and
+load-time degradation and finds the load path neutral-to-better, with one
+recurring per-RPC host-side cost (the dispatch logger) flagged as a follow-up.
+**Iteration 9 (2026-07-06)** implements R766-P05 part 1: gates the per-op host
+`console.log` behind `extensionMode !== Production` so shipped builds never pay
+for it. **Iteration 10 (planned, not started)** stages R766-P05 part 2: the
+`callWithAccumulatingTelemetry` accumulate/flush redesign (Option 1).
 
 ## Summary
 
@@ -1802,3 +1809,248 @@ workspaces (clean). No user-facing strings changed, so `l10n` was skipped.
 | -------- | --------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | R766-I01 | New `_integration/observability/` subfolder holds `rpcConcurrencyLogger` + `reportObserverError` (and tests); imports/importers updated       | A flat folder buried the two cross-cutting sinks among the router/transport wiring; grouping them makes the reference layout easier to scan. |
 | R766-I02 | `_integration/README.md` now lists every file including the observability subfolder; added `observability/README.md`                          | The folder README is the on-ramp for adopters and coding agents; it must describe what each file does, and the newer sinks were missing.   |
+
+---
+
+# Iteration 8 — latency & load-time analysis (2026-07-06)
+
+> This iteration is an **analysis pass**, not a code change. The question posed:
+> does this PR introduce any latency or load-time degradation in webview
+> rendering and message processing — especially the time to open a webview —
+> through new loops, extra steps, or lookup abstractions that individually look
+> cheap but add up? Findings below; no files were modified in this iteration.
+
+## Method
+
+Traced the full webview lifecycle end to end and diffed each stage against
+`main`:
+
+- **Open/load path:** panel creation → `getDocumentTemplate` HTML →
+  webview boot script → React mount → client bootstrap.
+- **Message path:** webview `client.*` call → link chain → `postMessage` →
+  host dispatch pump (`attachTrpc`) → procedure → response → per-op logging.
+
+Compared against the pre-PR implementations: `WebviewController.ts` and
+`useTrpcClient.ts` from `packages/vscode-ext-react-webview` (both removed by this
+PR).
+
+## Findings
+
+### Load time (opening a webview) — neutral to slightly *better*
+
+- **R766-P01 (improvement) — client is now a per-webview singleton.** The old
+  `useTrpcClient` built a **separate** tRPC client per React component (`useMemo`
+  per component, each with its own link chain and its own per-operation `window`
+  `message` listeners). The new `getWebviewConnection`
+  (`react/connection.ts`) memoizes one `{ client, events }` per `vscodeApi` in a
+  `WeakMap`, so every component shares one client. Fewer clients, fewer link
+  chains, fewer listeners established at mount. Net reduction in load-time setup.
+- **R766-P02 (improvement) — `loggerLink` dropped from the default chain.** The
+  old client unconditionally prepended tRPC's `loggerLink()` (per-op console
+  logging + an extra observable wrapper on every call). The new `connectTrpc`
+  makes it opt-in (`options.logger`) and substitutes the lighter `eventLink`.
+- **R766-P03 (info, one-time) — inert JSON block adds a bounded boot cost.**
+  `getDocumentTemplate` → `serializeInertJson` makes 3 linear regex passes over
+  the serialized `{ config + l10n bundle + viewType }`, and the boot script does
+  one extra `JSON.parse` of that wrapper (R766-N03 hardening). The l10n bundle
+  can be tens of KB, but this is sub-millisecond and runs **once per open**. Not
+  a concern.
+- **R766-P04 (info) — controllers refactored class→factory with no added work.**
+  `openCollectionWebview` / `openDocumentWebview` do the same settings reads and
+  config assembly as the former `WebviewControllerBase` subclasses.
+
+The panel-creation core (`createWebviewPanel` → set `html` → attach one message
+listener) is unchanged in cost.
+
+### Message processing — one genuine new per-RPC cost (host side)
+
+- **R766-P05 (watch) — new host-side dispatch logger fires on every completed
+  op.** The old `WebviewController.setupTrpc` had **no** per-operation logging.
+  The new `attachTrpc` calls `logProcedure` on every completed query / mutation /
+  subscription, and in production that logger is `rpcConcurrencyLogger`, which per
+  op does:
+  1. `consoleProcedureLogger.log(entry)` → a **`console.log` on every completed
+     RPC** on the extension host (string-format cost + console noise);
+  2. `callWithAccumulatingTelemetry(...)` → and although the telemetry **emit**
+     is batched (20 calls / 30 s), `callWithAccumulatingTelemetry` invokes
+     `callWithTelemetryAndErrorHandling` **on every call** — allocating an
+     `IActionContext`, an async wrapper, error-handling setup, and `Object.entries`
+     loops over measurements / properties / distributions. Batching suppresses the
+     _emit_, not the wrapper machinery.
+
+  Because procedures declared with `publicProcedureWithTelemetry` already run
+  `callWithTelemetryAndErrorHandling` once via `telemetryMiddlewareBody`, a tracked
+  RPC now pays **two** `callWithTelemetryAndErrorHandling` invocations per call
+  (procedure middleware + dispatch logger) — roughly doubling the telemetry-wrapper
+  overhead per RPC.
+
+  **Mitigating facts:** the logger runs **after** `safePostMessage` posts the
+  result (so it does not delay the response), and it is `void`-ed
+  (fire-and-forget, does not block the handler's return). But its synchronous
+  portion still runs on the host event loop per RPC, so under high-frequency RPC
+  (grid paging, rapid scroll, many parallel queries) it competes with subsequent
+  message processing. This is exactly the "individually cheap, adds up" case.
+
+### Confirmed NOT regressions
+
+- **R766-P06 — caller factory per operation.** `callerFactory(router)(opContext)`
+  in `attachTrpc` existed identically in the old `WebviewController`. Not new.
+- **R766-P07 — O(N) `window` listener fan-out per message** on the webview client
+  (`vscodeLink`) is a **pre-existing** design, not introduced here. The R766-S04
+  concurrency gauge exists precisely to decide (on evidence) whether it ever needs
+  a single-listener multiplexer.
+- **R766-P08 — structural transport guards** (`isTransportRequestMessage` /
+  `isTransportResponseMessage`) are new but O(1) per message. Trivial.
+- **R766-P09 — `eventLink` always in the chain** replaces the previously
+  always-on `loggerLink`; net neutral (and `eventLink` is lighter).
+
+## Recommendation
+
+The **load path is not degraded** — no new loops or heavy lookups when a webview
+opens, and two changes (R766-P01, R766-P02) make it slightly cheaper. The single
+recurring new cost is the **per-RPC dispatch logger** (R766-P05), which matters
+only under high message volume. Two follow-ups worth considering (see the
+in-chat discussion accompanying this iteration for full option analysis):
+
+1. **Gate the per-op `console.log`** so it is dev/`ExtensionMode`-only; the
+   concurrency telemetry is the real goal and does not need the console line in
+   production.
+2. **Cheaper concurrency sampling** that avoids running the full
+   `callWithTelemetryAndErrorHandling` wrapper on every op (e.g. sample 1/N, or
+   accumulate into a plain module-level counter and only enter the telemetry
+   wrapper on flush) — a small redesign of `callWithAccumulatingTelemetry`'s
+   per-call path.
+
+### Decisions (2026-07-06)
+
+- **Follow-up 2 — Option 1 selected.** The chosen direction is to split the
+  helper's cheap _accumulate_ path (pure in-memory arithmetic, no
+  `IActionContext`, no `await`) from the heavy _flush_ path (the single
+  `callWithTelemetryAndErrorHandling` that emits the rolled-up `dist_*` fields),
+  migrating existing callers in the same change. This is the only option that
+  makes the helper's per-call path match its "accumulating" promise, fixes the
+  cost for every consumer, and keeps the concurrency gauge accurate (no sampling
+  bias). **Sequenced to Iteration 10** (see the [Iteration 10 plan](#iteration-10--accumulating-telemetry-per-call-cost-planned)); not started yet.
+- **Follow-up 1 — resolved, implemented in Iteration 9.** Decided to gate the
+  per-op console line on `extensionMode !== Production` inside the DocumentDB
+  adapter (`rpcConcurrencyLogger`), leaving the framework's `consoleProcedureLogger`
+  untouched as the neutral, opt-in sink. The rejected in-chat alternative
+  (make `rpcConcurrencyLogger` a pure telemetry sink and rely purely on the
+  opt-in `ProcedureLogger` seam for console output) was cleaner in the abstract,
+  but the console line is a DocumentDB area of concern: keeping it automatic in
+  dev/F5 (no manual wiring while debugging) and dead-code on a shipped build is
+  the pragmatic fit. See the [Iteration 9](#iteration-9--console-gate-r766-p05-part-1-2026-07-06) change protocol.
+
+| ID       | Finding                                                                    | Severity     | Disposition                                     |
+| -------- | -------------------------------------------------------------------------- | ------------ | ----------------------------------------------- |
+| R766-P01 | Per-webview singleton client (was per-component)                           | Improvement  | Shipped by PR; no action                        |
+| R766-P02 | `loggerLink` now opt-in (was always-on)                                    | Improvement  | Shipped by PR; no action                        |
+| R766-P03 | Inert JSON block: 3 regex passes + 1 `JSON.parse` at boot                  | Info         | One-time, sub-ms; no action                     |
+| R766-P04 | Controllers class→factory                                                  | Info         | No cost change; no action                       |
+| R766-P05 | Per-op host dispatch logger (`console.log` + `callWithAccumulatingTelemetry`) | Watch     | Part 1 (console) ✅ Iteration 9; Part 2 (accumulate/flush) → Option 1, planned for Iteration 10 |
+| R766-P06 | Caller factory per op                                                      | Not a regression | Pre-existing; no action                     |
+| R766-P07 | O(N) `window` listener fan-out per message                                 | Not a regression | Pre-existing; measured via R766-S04         |
+| R766-P08 | New structural transport guards                                            | Not a regression | O(1) per message; no action                 |
+| R766-P09 | `eventLink` always-on (replaces always-on `loggerLink`)                    | Not a regression | Net neutral; no action                      |
+
+---
+
+# Iteration 9 — console gate (R766-P05 part 1) (2026-07-06)
+
+> Implements the first half of the R766-P05 follow-up from Iteration 8: stop the
+> per-op `console.log` on the extension host from executing on shipped, installed
+> builds, while keeping it automatic when debugging. The concurrency **telemetry**
+> gauge is untouched and still records in every mode (production included). The
+> heavier per-op telemetry-wrapper cost (part 2) is deferred to Iteration 10.
+
+## What changed
+
+- **R766-P05a — gate the console line on `extensionMode`.** In
+  `rpcConcurrencyLogger.log`, the delegation to the framework's
+  `consoleProcedureLogger.log(entry)` is now wrapped in
+  `if (ext.context.extensionMode !== vscode.ExtensionMode.Production)`. Non-production
+  modes (`Development` from F5 / "Run Extension", and `Test`) still emit the line;
+  a packaged extension in `Production` never executes it (no string formatting, no
+  host-console I/O). The mode is read **per call** — `ext.context` is always
+  populated by the time an RPC fires (the webview is open ⇒ the extension has
+  activated), and the comparison is O(1), so no module-load ordering risk and no
+  measurable added cost.
+- **Framework untouched.** `consoleProcedureLogger` in
+  `@microsoft/vscode-ext-webview` stays the neutral, always-available opt-in sink.
+  The gating decision lives entirely in the DocumentDB adapter, preserving the
+  package/consumer boundary.
+- **Tests.** `rpcConcurrencyLogger.test.ts` now stubs `ext.context.extensionMode`
+  per case: existing "delegates to console + records gauge" and "no telemetry
+  without a concurrent count" cases run under `Development`; added a `Test`-mode
+  case (console still logs) and a **`Production`** case asserting the console line
+  is **not** emitted while the concurrency gauge **is** still recorded.
+
+## Why this shape
+
+The console line is a DocumentDB area of concern (the adapter chose to include it),
+so DocumentDB owns when it fires. Tying it to the local/production mode means the
+maintainer keeps zero-friction console visibility while debugging and shipped users
+never pay for it — matching how telemetry is already an opt-in, separate path.
+
+## Post-change validation (all green)
+
+`jest` (rpcConcurrencyLogger suite, 4/4) · `eslint` (both files, clean) ·
+`tsc`/type-check (no errors) · `prettier` (unchanged — already formatted). No
+user-facing strings, so `l10n` not required.
+
+| ID        | What changed                                                                                          | Why (motivation)                                                                                                       |
+| --------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
+| R766-P05a | `rpcConcurrencyLogger` gates `consoleProcedureLogger.log` behind `extensionMode !== Production`; tests cover both paths | The per-op host `console.log` is useful when debugging but dead weight on a shipped build; telemetry gauge stays on everywhere. |
+
+---
+
+# Iteration 10 — accumulating-telemetry per-call cost (planned)
+
+> **Not started.** This chapter stages the R766-P05 **part 2** work (Follow-up 2,
+> Option 1 selected in Iteration 8) so the next session can pick it up with full
+> context. No code has been written for it yet.
+
+## Problem restated
+
+`callWithAccumulatingTelemetry` batches the telemetry **emit** (default 20 calls /
+30 s) but still runs the full `callWithTelemetryAndErrorHandling` wrapper —
+`IActionContext` allocation, error-handling wiring, `performance.now()`, three
+`Object.entries` copy loops, an `await` — on **every** call. For a per-RPC caller
+like `rpcConcurrencyLogger` (and any other high-frequency consumer) that is the
+cost that adds up, and it runs in production (the gauge is meant to). The Iteration 9
+console gate does **not** touch this; part 2 does.
+
+## Chosen direction (Option 1): split accumulate (cheap) from flush (heavy)
+
+- Per-call path becomes pure in-memory arithmetic against the module-level
+  accumulator state — **no** `IActionContext`, **no** `await`.
+- `callWithTelemetryAndErrorHandling` is entered **only on flush** (batch size or
+  interval reached), emitting the rolled-up `dist_*_min/max/sum/count`.
+- The callback contract changes: replace `(context: IActionContext) => T` with a
+  synchronous **sample bag** the caller populates
+  (e.g. `accumulate('event', (s) => { s.distributions.concurrentRpcOps = n; s.measurements.dispatch = 1; })`),
+  where `s` is a plain object — no Azext context.
+
+## Scope / checklist for the implementation session
+
+- [ ] Redesign `src/utils/callWithAccumulatingTelemetry.ts` per Option 1 (cheap
+      accumulate, heavy flush).
+- [ ] Preserve behavior that must survive: auto-duration distribution
+      (`AUTO_DURATION_DISTRIBUTION_KEY`), `dist_*` rollup keys, batch-size /
+      `minFlushIntervalMs` throttle, "errors never accumulate" semantics, flushed
+      event name equals `callbackId`.
+- [ ] Migrate **all** callers — grep `callWithAccumulatingTelemetry` across the
+      repo (not just `rpcConcurrencyLogger`) and port each to the sample-bag
+      callback.
+- [ ] Decide how the callback surfaces a throw now that there is no per-call
+      Azext pipeline (a cheap try/catch around the synchronous bag-populator is
+      likely enough).
+- [ ] Update `callWithAccumulatingTelemetry` tests + each migrated caller's tests.
+- [ ] Full PR checklist: `l10n` (if strings) · `prettier-fix` · `lint` · `jest` ·
+      `build`.
+
+## Explicitly out of scope for Iteration 10
+
+- The console gate (done in Iteration 9).
+- Any change to the framework package (`@microsoft/vscode-ext-webview`); this is a
+  DocumentDB `src/utils` refactor plus caller migration.
