@@ -315,6 +315,42 @@ extends:
                                   Write-Output "[Success] Found .tgz file: $($tgzFile.Name) (${tgzSize} KB)"
                                   Write-Output "##vso[task.setvariable variable=tgzFileName;isOutput=true]$($tgzFile.Name)"
 
+                        # Emit a run summary box (rendered at the top of the ADO run) so the
+                        # release intent - package, version, mode, and source build - is
+                        # visible to approvers without digging through step logs.
+                        - task: PowerShell@2
+                          displayName: "Publish run summary"
+                          condition: succeeded()
+                          inputs:
+                              targetType: 'inline'
+                              script: |
+                                  $mode = "${{ parameters.mode }}"
+                                  $modeNote = switch ($mode) {
+                                      'validate-only'  { 'Validation only - ESRP is NOT contacted and nothing is published.' }
+                                      'test-esrp-auth' { 'Smoke test - exercises ESRP auth then fails at content validation. Nothing is published.' }
+                                      'publish'        { '**REAL PUBLISH** - this run pushes the package to npmjs.org.' }
+                                      default          { "Unknown mode: $mode" }
+                                  }
+
+                                  $lines = @()
+                                  $lines += "## 🚀 npm release run"
+                                  $lines += ""
+                                  $lines += "| Field | Value |"
+                                  $lines += "| --- | --- |"
+                                  $lines += "| Package | ``${{ parameters.packageName }}`` |"
+                                  $lines += "| Version | ``${{ parameters.publishVersion }}`` |"
+                                  $lines += "| Mode | ``$mode`` |"
+                                  $lines += "| .tgz | ``$(findTgzStep.tgzFileName)`` |"
+                                  $lines += "| Source build | $(resources.pipeline.npmBuild.runName) (run $(resources.pipeline.npmBuild.runID)) |"
+                                  $lines += "| Source branch | $(resources.pipeline.npmBuild.sourceBranch) |"
+                                  $lines += "| Source commit | $(resources.pipeline.npmBuild.sourceCommit) |"
+                                  $lines += ""
+                                  $lines += "> $modeNote"
+
+                                  $summaryPath = "$(Build.ArtifactStagingDirectory)\release-summary.md"
+                                  $lines -join "`n" | Out-File -FilePath $summaryPath -Encoding utf8
+                                  Write-Host "##vso[task.uploadsummary]$summaryPath"
+
                   # Use compile-time inclusion so the publish job does NOT exist in the
                   # compiled pipeline graph for 'validate-only'. This is stronger than a
                   # runtime condition: even a future regression that drops the condition
@@ -490,3 +526,39 @@ extends:
                                   # to ESRPRELPACMAN (done) combined with using the publisher's
                                   # tenant id here.
                                   domaintenantid: '975f013f-7f24-47e8-a7d3-abc4752bf346'
+
+                            # Emit a run summary box describing the outcome. Runs with always()
+                            # so the summary is present whether the ESRP task succeeded or failed
+                            # (a failure in test-esrp-auth mode is the EXPECTED result).
+                            - task: PowerShell@2
+                              displayName: "Publish outcome summary"
+                              condition: always()
+                              inputs:
+                                  targetType: 'inline'
+                                  script: |
+                                      $mode = "${{ parameters.mode }}"
+                                      $esrpResult = "$(Agent.JobStatus)"  # Succeeded / SucceededWithIssues / Failed / Canceled
+
+                                      $lines = @()
+                                      $lines += "## 📤 ESRP publish outcome"
+                                      $lines += ""
+                                      $lines += "| Field | Value |"
+                                      $lines += "| --- | --- |"
+                                      $lines += "| Package | ``${{ parameters.packageName }}@${{ parameters.publishVersion }}`` |"
+                                      $lines += "| Mode | ``$mode`` |"
+                                      $lines += "| Job status | ``$esrpResult`` |"
+                                      $lines += ""
+
+                                      if ($mode -eq 'test-esrp-auth') {
+                                          $lines += "> Smoke test: NOTHING was published. A **failure** here is expected (ESRP rejects the Maven content-type at validation). Inspect the ESRP task log to confirm the failure was the content-type rejection and NOT an auth/cert/Key Vault error."
+                                      } elseif ($mode -eq 'publish') {
+                                          if ($esrpResult -eq 'Succeeded') {
+                                              $lines += "> ✅ Published ``${{ parameters.packageName }}@${{ parameters.publishVersion }}`` to npmjs.org."
+                                          } else {
+                                              $lines += "> ❌ Publish did NOT complete successfully (status: $esrpResult). Check the ESRP task log."
+                                          }
+                                      }
+
+                                      $summaryPath = "$(Build.ArtifactStagingDirectory)\publish-outcome-summary.md"
+                                      $lines -join "`n" | Out-File -FilePath $summaryPath -Encoding utf8
+                                      Write-Host "##vso[task.uploadsummary]$summaryPath"
