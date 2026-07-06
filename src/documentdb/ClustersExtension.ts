@@ -96,7 +96,12 @@ import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/Ku
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
 import { DiscoveryService } from '../services/discoveryServices';
 import { migrateLegacyEmulatorConnections } from '../services/legacyEmulatorMigration';
-import { disposeQuickStartOutputChannel } from '../services/localQuickStart/ContainerRuntime';
+import {
+    ContainerRuntime,
+    disposeQuickStartOutputChannel,
+    getQuickStartOutputChannel,
+} from '../services/localQuickStart/ContainerRuntime';
+import { migrateLegacyQuickStartKeys } from '../services/localQuickStart/quickStartRegistry';
 import { QuickStartService } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
@@ -269,6 +274,17 @@ export class ClustersExtension implements vscode.Disposable {
                     QuickStartService.onDidChangeStatus(() => {
                         ext.connectionsBranchDataProvider?.refresh();
                     }),
+                );
+                // One-time migration of the legacy flat Quick Start keys to the alias-keyed values.
+                // MUST complete BEFORE reconcile()/any provision() — ordering is data-safety (§6/R1):
+                // reconcile reading a missing alias-keyed secret + a re-provision would wipe the volume.
+                // (A failed migration is still safe: the service's reads fall back to the legacy key.)
+                await migrateLegacyQuickStartKeys(ext.secretStorage, ext.context.globalState, ContainerRuntime).catch(
+                    (error: unknown) => {
+                        getQuickStartOutputChannel().appendLine(
+                            `Quick Start key migration failed: ${error instanceof Error ? error.message : String(error)}`,
+                        );
+                    },
                 );
                 void QuickStartService.reconcile();
 

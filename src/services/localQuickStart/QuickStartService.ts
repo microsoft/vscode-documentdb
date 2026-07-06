@@ -42,8 +42,13 @@ import {
 import { composeConnectionString, generateCredentials, type GeneratedCredentials } from './quickStartCredentials';
 import {
     type AdvancedQuickStartOptions,
+    clusterId,
+    DEFAULT_ALIAS,
+    imageRefKey,
     type InstanceMetadata,
     InstanceState,
+    LEGACY_IMAGE_REF_KEY,
+    LEGACY_SECRET_KEY,
     type ProvisionStage,
     QUICK_START_ALIAS,
     QUICK_START_ALIAS_LABEL_KEY,
@@ -56,19 +61,20 @@ import {
     QUICK_START_VOLUME_NAME,
     type QuickStartStatus,
     resolveQuickStartImage,
+    secretKey,
     type StageEvent,
 } from './quickStartTypes';
 
-/** Stable cache key for CredentialCache / ClustersClient (single instance, POC). */
-export const QUICK_START_CLUSTER_ID = 'quickstart-local-documentdb';
+/** Stable cache key for CredentialCache / ClustersClient (the default instance). Ephemeral. */
+export const QUICK_START_CLUSTER_ID = clusterId(DEFAULT_ALIAS);
 
-const SECRET_KEY = 'documentdb.quickstart.connectionString';
+const SECRET_KEY = secretKey(DEFAULT_ALIAS);
 /**
  * Durable (non-secret) record of the image reference the managed instance's data volume
  * was created with, kept in globalState so a recreate AFTER a window reload (when the
  * in-memory metadata is gone) still reuses the original image instead of forcing `latest`.
  */
-const IMAGE_REF_STATE_KEY = 'documentdb.quickstart.imageRef';
+const IMAGE_REF_STATE_KEY = imageRefKey(DEFAULT_ALIAS);
 const READINESS_TIMEOUT_MS = 180_000;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
@@ -273,7 +279,10 @@ export class QuickStartServiceImpl {
         // globalState record (survives a window reload), then the default if neither is known.
         const usedCustomCreds = !reusing && !!(options?.username?.trim() && options?.password?.trim());
         const imageRef = reusing
-            ? (this.metadata?.imageRef ?? ext.context.globalState.get<string>(IMAGE_REF_STATE_KEY) ?? QUICK_START_IMAGE)
+            ? (this.metadata?.imageRef ??
+              ext.context.globalState.get<string>(IMAGE_REF_STATE_KEY) ??
+              ext.context.globalState.get<string>(LEGACY_IMAGE_REF_KEY) ??
+              QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);
         const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
         const explicitPort = typeof options?.port === 'number' ? options.port : undefined;
@@ -796,9 +805,19 @@ export class QuickStartServiceImpl {
      * them against the existing data volume (§6.1). Returns undefined if no usable
      * stored connection string exists (caller then generates fresh credentials).
      */
+    /**
+     * Read the default instance's stored connection string, falling back to the legacy flat key.
+     * Belt-and-suspenders: the activation migration (§6) normally copies the legacy value to the
+     * alias-keyed secret BEFORE any read, but if a destructive path ever ran pre-migration this
+     * prevents a spurious "no credentials → wipe" (R1).
+     */
+    private async readStoredConnectionString(): Promise<string | undefined> {
+        return (await ext.secretStorage.get(SECRET_KEY)) ?? (await ext.secretStorage.get(LEGACY_SECRET_KEY));
+    }
+
     private async getReusableCredentials(): Promise<GeneratedCredentials | undefined> {
         try {
-            const stored = await ext.secretStorage.get(SECRET_KEY);
+            const stored = await this.readStoredConnectionString();
             if (!stored) {
                 return undefined;
             }
@@ -980,10 +999,15 @@ export class QuickStartServiceImpl {
             await this.runtime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
             try {
                 await ext.secretStorage.delete(SECRET_KEY);
+                // Also purge the legacy flat keys: if an activation migration failed and left them
+                // behind, an explicit Delete must still be a full clean slate (no stale legacy
+                // credentials/image survive to be silently reused by the next provision — opus47-N1).
+                await ext.secretStorage.delete(LEGACY_SECRET_KEY);
             } catch {
                 // ignore — best-effort cleanup
             }
             await ext.context.globalState.update(IMAGE_REF_STATE_KEY, undefined);
+            await ext.context.globalState.update(LEGACY_IMAGE_REF_KEY, undefined);
             await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
             CredentialCache.deleteCredentials(QUICK_START_CLUSTER_ID);
             this.metadata = undefined;
@@ -1046,7 +1070,7 @@ export class QuickStartServiceImpl {
                 this.setStatus(InstanceState.NotInstalled);
                 return;
             }
-            const stored = await ext.secretStorage.get(SECRET_KEY);
+            const stored = await this.readStoredConnectionString();
             if (!stored) {
                 getQuickStartOutputChannel().appendLine(
                     'Removing an orphaned Quick Start container (no stored credentials) for a clean slate…',

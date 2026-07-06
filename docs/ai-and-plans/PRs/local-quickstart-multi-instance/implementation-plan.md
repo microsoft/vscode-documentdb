@@ -251,12 +251,24 @@ instances → today’s rocket empty-state (creates instance #1). Row labels use
     IContainerRuntime`; `isRunning`/`getBoundHostPort` now standalone exports; `QuickStartServiceImpl`
     gains `constructor(runtime: IContainerRuntime = ContainerRuntime)` + `this.runtime.*` (31 sites) and
     is `export`ed for test injection. Behavior-preserving. Gates: build · lint · jest **2768/2768**.
-- [ ] **WI-1 — Identity & keying foundation.** Add `DEFAULT_ALIAS` + derivation helpers
+- [x] **WI-1 — Identity & keying foundation.** Add `DEFAULT_ALIAS` + derivation helpers
   (`containerName/volumeName/clusterId/secretKey/imageRefKey`), the registry (§4.2) + locked
   `globalState` accessors, and the **legacy-key migration** (§6). **Also repoint the still-singleton
   service to the alias-keyed (`DEFAULT_ALIAS`) keys** so WI-1 is independently safe (R1/gpt55): the
   service must not read a flat key the migration just deleted. Pure + storage; fully unit-testable.
   *(5-agent review.)*
+  - _Done:_ `DEFAULT_ALIAS` + `containerName/volumeName/clusterId/secretKey/imageRefKey` helpers
+    (backward-compat: default maps to the legacy container/volume names) + `LEGACY_*` keys;
+    `quickStartRegistry.ts` (registry schema with lease/`operationId`, per-process-locked
+    `updateRegistry`, **step-wise resumable** `migrateLegacyQuickStartKeys` — `await`ed before
+    reconcile, copy→ensure→delete-legacy-last, port derived from conn-string/inspect); service
+    repointed to alias-keyed keys with a **legacy fallback** on the volume-wipe-gating reads + the
+    imageRef reuse chain; Delete purges legacy keys. **2 review rounds (initial + fix confirmation),
+    5-agent — round-2 unanimous APPROVE.** Note: `QUICK_START_CLUSTER_ID` value changed
+    (`quickstart-local-documentdb` → `quickstart-vscode-documentdb-local`) — ephemeral cache key only.
+    Deferred to WI-2 (registry becomes read there): `deleteContainer`/`finalizeReadyInstance` must
+    remove/upsert the alias's registry record (currently write-only, so inert). Gates: build · lint ·
+    jest **2787** (+21 tests).
 - [ ] **WI-2 — Service → multi-instance state machine.** `Map<alias, InstanceRuntimeState>` (incl.
   `missing`); alias-parameterize provision/lifecycle/reconcile/getStatus/listStatuses/
   refreshLiveState(**one `listByLabel`**, R15)/liveStateGuard/`isBusy(alias)`/
