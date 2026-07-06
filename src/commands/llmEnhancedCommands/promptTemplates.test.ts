@@ -86,7 +86,6 @@ describe('promptTemplates', () => {
             expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('"educationalContent"');
             expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('"analysis"');
             expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('"improvements"');
-            expect(FIND_QUERY_PROMPT_TEMPLATE).toContain('"verification"');
         });
 
         it('should contain CRITICAL_JSON_REMINDER', () => {
@@ -313,10 +312,6 @@ describe('promptTemplates', () => {
                 it('should include numbered instruction items', () => {
                     expect(template).toContain('1. **Single JSON output only**');
                     expect(template).toContain('2. **Do not hallucinate**');
-                });
-
-                it('should contain verification array requirement', () => {
-                    expect(template).toContain('Verification array requirement');
                 });
 
                 it('should end with JSON reminder', () => {

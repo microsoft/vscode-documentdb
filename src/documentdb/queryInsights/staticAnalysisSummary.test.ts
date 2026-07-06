@@ -22,7 +22,7 @@ function makeStage2Response(overrides: Partial<QueryInsightsStage2Response> = {}
         isCoveringQuery: false,
         concerns: [],
         efficiencyAnalysis: {
-            selectivity: '5.0%',
+            selectivity: 5,
             indexUsed: 'rating_1',
             fetchOverhead: 'Direct fetch',
             fetchOverheadKind: 'directFetch',
@@ -95,6 +95,13 @@ describe('buildStaticAnalysisSummary', () => {
         stage2.efficiencyAnalysis.selectivity = null;
         const summary = buildStaticAnalysisSummary(stage2);
         expect(summary).toContain('**Selectivity**: Unknown');
+    });
+
+    it('should show threshold text when selectivity is non-zero and below 0.1%', () => {
+        const stage2 = makeStage2Response();
+        stage2.efficiencyAnalysis.selectivity = 0.008;
+        const summary = buildStaticAnalysisSummary(stage2);
+        expect(summary).toContain('**Selectivity**: below 0.1%');
     });
 
     it('should show None when no index used', () => {
@@ -176,7 +183,7 @@ describe('buildStaticAnalysisSummary', () => {
             hadCollectionScan: true,
             concerns: ['Collection scan detected', 'In-memory sort required'],
             efficiencyAnalysis: {
-                selectivity: '0.008%',
+                selectivity: 0.008,
                 indexUsed: null,
                 fetchOverhead: 'Collection scan',
                 fetchOverheadKind: 'collectionScan',
@@ -228,7 +235,7 @@ describe('buildStaticAnalysisSummary', () => {
             documentsReturned: 50,
             isCoveringQuery: true,
             efficiencyAnalysis: {
-                selectivity: '0.5%',
+                selectivity: 0.5,
                 indexUsed: 'status_1_createdAt_-1',
                 fetchOverhead: 'Covered query',
                 fetchOverheadKind: 'covered',

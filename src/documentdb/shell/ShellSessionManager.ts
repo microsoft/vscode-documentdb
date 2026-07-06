@@ -36,7 +36,7 @@ export interface ShellConnectionMetadata {
     /** Host extracted from the connection string (without credentials). */
     readonly host: string;
     /** Authentication method used for the connection. */
-    readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID';
+    readonly authMechanism: 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth';
     /** Whether this is an emulator connection. */
     readonly isEmulator: boolean;
     /** Username for SCRAM auth (undefined for Entra ID). */
@@ -77,7 +77,7 @@ export class ShellSessionManager implements vscode.Disposable {
     /** Tracks the active database, surviving worker restarts. Updated on `use <db>`. */
     private _activeDatabase: string;
     /** Auth mechanism used for the current session (set after init). */
-    private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | undefined;
+    private _authMethod: 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth' | undefined;
 
     constructor(connectionInfo: ShellConnectionInfo, callbacks?: ShellSessionCallbacks) {
         this._connectionInfo = connectionInfo;
@@ -145,7 +145,7 @@ export class ShellSessionManager implements vscode.Disposable {
     /**
      * Authentication method used for the current session.
      */
-    get authMethod(): 'NativeAuth' | 'MicrosoftEntraID' | undefined {
+    get authMethod(): 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth' | undefined {
         return this._authMethod;
     }
 
@@ -249,6 +249,7 @@ export class ShellSessionManager implements vscode.Disposable {
         if (authMechanism === 'NativeAuth') {
             connectionString = CredentialCache.getConnectionStringWithPassword(this._connectionInfo.clusterId);
         } else {
+            // Entra ID and NoAuth use the connection string without embedded credentials.
             connectionString = credentials.connectionString;
         }
 
@@ -267,7 +268,7 @@ export class ShellSessionManager implements vscode.Disposable {
             connectionString,
             clientOptions,
             databaseName: this._activeDatabase,
-            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
+            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth',
             tenantId: credentials.entraIdConfig?.tenantId,
             persistent: true,
         };

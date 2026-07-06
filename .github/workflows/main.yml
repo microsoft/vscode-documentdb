@@ -34,7 +34,11 @@ on:
             - feature/**
 
 concurrency:
-    group: ${{ github.head_ref || github.run_id }}
+    # Use head_ref for PRs, ref_name for pushes. When a forward-merge PR
+    # (release/X.Y → main) is open, both the push to release/X.Y and the
+    # PR trigger resolve to the same group (release/X.Y) so they cancel
+    # each other instead of running CI twice.
+    group: ${{ github.head_ref || github.ref_name }}
     cancel-in-progress: true
 
 jobs:

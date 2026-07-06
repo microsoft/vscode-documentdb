@@ -3,8 +3,15 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { ObjectId } from 'bson';
 import { SchemaStore, type SchemaChangeEvent } from './SchemaStore';
+
+// Replace the telemetry helper with a no-op mock; individual tests override the
+// implementation to capture the measurements reported by `schemaStore.stats`.
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    callWithTelemetryAndErrorHandling: jest.fn(),
+}));
 
 describe('SchemaStore', () => {
     let store: SchemaStore;
@@ -178,6 +185,85 @@ describe('SchemaStore', () => {
         before.dispose();
         const after = SchemaStore.getInstance();
         expect(after).not.toBe(before);
+    });
+
+    // ── LRU eviction (memory ceiling, issue #604) ──
+
+    describe('LRU eviction', () => {
+        // Mirrors SchemaStore.DEFAULT_MAX_ENTRIES.
+        const MAX_ENTRIES = 50;
+
+        function fillCollections(count: number, prefix = 'coll'): void {
+            for (let i = 0; i < count; i++) {
+                store.addDocuments(clusterId, db, `${prefix}-${i}`, makeDocs([{ idx: i }]));
+            }
+        }
+
+        it('caps the number of cached collections at the limit', () => {
+            fillCollections(MAX_ENTRIES + 25);
+            expect(store.getStats().collectionCount).toBe(MAX_ENTRIES);
+        });
+
+        it('evicts the least-recently-used collection when exceeding the cap', () => {
+            fillCollections(MAX_ENTRIES); // coll-0 (LRU) ... coll-49 (MRU)
+
+            // One more insertion pushes the cache over the cap and evicts coll-0.
+            store.addDocuments(clusterId, db, 'coll-new', makeDocs([{ x: 1 }]));
+
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(false);
+            expect(store.hasSchema(clusterId, db, 'coll-new')).toBe(true);
+            expect(store.getStats().collectionCount).toBe(MAX_ENTRIES);
+        });
+
+        it('treats a read as recent use, protecting recently-read collections', () => {
+            fillCollections(MAX_ENTRIES); // coll-0 (LRU) ... coll-49 (MRU)
+
+            // Reading coll-0 makes it most-recently-used, so coll-1 becomes the LRU.
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(true);
+
+            store.addDocuments(clusterId, db, 'coll-new', makeDocs([{ x: 1 }]));
+
+            // coll-1 is evicted; coll-0 survives because it was just read.
+            expect(store.hasSchema(clusterId, db, 'coll-1')).toBe(false);
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(true);
+        });
+
+        it('allows an evicted collection to be re-added', () => {
+            fillCollections(MAX_ENTRIES);
+            store.addDocuments(clusterId, db, 'coll-new', makeDocs([{ x: 1 }])); // evicts coll-0
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(false);
+
+            store.addDocuments(clusterId, db, 'coll-0', makeDocs([{ y: 2 }]));
+
+            expect(store.hasSchema(clusterId, db, 'coll-0')).toBe(true);
+            expect(store.getStats().collectionCount).toBe(MAX_ENTRIES);
+        });
+
+        it('reports cache size, cap, and eviction count via telemetry', async () => {
+            const measurements: Record<string, number> = {};
+            const callWithTelemetryMock = jest.requireMock('@microsoft/vscode-azext-utils')
+                .callWithTelemetryAndErrorHandling as jest.Mock;
+            callWithTelemetryMock.mockImplementation(
+                async (_callbackId: string, callback: (ctx: IActionContext) => unknown) => {
+                    const ctx = {
+                        telemetry: { properties: {}, measurements },
+                        errorHandling: {},
+                    } as unknown as IActionContext;
+                    await callback(ctx);
+                    return undefined;
+                },
+            );
+
+            try {
+                fillCollections(MAX_ENTRIES + 10); // 10 evictions
+            } finally {
+                callWithTelemetryMock.mockReset();
+            }
+
+            expect(measurements.maxEntries).toBe(MAX_ENTRIES);
+            expect(measurements.currentCollectionCount).toBe(MAX_ENTRIES);
+            expect(measurements.evictionCount).toBeGreaterThanOrEqual(10);
+        });
     });
 
     // ── Events (debounced) ──

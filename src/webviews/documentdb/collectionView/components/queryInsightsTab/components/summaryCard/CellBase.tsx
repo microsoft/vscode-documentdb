@@ -76,6 +76,10 @@ export const CellBase: React.FC<CellBaseProps> = ({
     };
 
     const cellClassName = span === 'full' ? 'summaryCell cellSpanFull' : 'summaryCell';
+    // Reserve a fixed-height slot for the value so skeleton ↔ value swap doesn't shift layout.
+    // The slot is omitted for full-span cells, which host custom blocks (e.g. rating + diagnostics)
+    // whose intrinsic height already exceeds the reservation.
+    const valueSlot = span === 'full' ? renderValue() : <div className="cellValueSlot">{renderValue()}</div>;
 
     if (tooltipExplanation) {
         return (
@@ -97,7 +101,7 @@ export const CellBase: React.FC<CellBaseProps> = ({
                         {label}
                         <InfoRegular className="tooltipInfoIcon" />
                     </div>
-                    {renderValue()}
+                    {valueSlot}
                 </div>
             </Tooltip>
         );
@@ -106,7 +110,7 @@ export const CellBase: React.FC<CellBaseProps> = ({
     return (
         <div className={cellClassName}>
             <div className="cellLabel">{label}</div>
-            {renderValue()}
+            {valueSlot}
         </div>
     );
 };
