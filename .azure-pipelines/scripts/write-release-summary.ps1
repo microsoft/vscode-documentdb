@@ -26,7 +26,7 @@ $modeNote = switch ($Mode) {
 }
 
 $lines = @()
-$lines += "## 🚀 npm release run"
+$lines += "## npm release run"
 $lines += ""
 $lines += "| Field | Value |"
 $lines += "| --- | --- |"

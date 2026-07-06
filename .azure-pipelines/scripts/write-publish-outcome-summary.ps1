@@ -20,7 +20,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $lines = @()
-$lines += "## 📤 ESRP publish outcome"
+$lines += "## ESRP publish outcome"
 $lines += ""
 $lines += "| Field | Value |"
 $lines += "| --- | --- |"
@@ -33,9 +33,9 @@ if ($Mode -eq 'test-esrp-auth') {
     $lines += "> Smoke test: NOTHING was published. A **failure** here is expected (ESRP rejects the Maven content-type at validation). Inspect the ESRP task log to confirm the failure was the content-type rejection and NOT an auth/cert/Key Vault error."
 } elseif ($Mode -eq 'publish') {
     if ($JobStatus -eq 'Succeeded') {
-        $lines += "> ✅ Published ``$PackageName@$PublishVersion`` to npmjs.org."
+        $lines += "> [OK] Published ``$PackageName@$PublishVersion`` to npmjs.org."
     } else {
-        $lines += "> ❌ Publish did NOT complete successfully (status: $JobStatus). Check the ESRP task log."
+        $lines += "> [FAILED] Publish did NOT complete successfully (status: $JobStatus). Check the ESRP task log."
     }
 }
 

@@ -86,7 +86,7 @@ if ($tgzCount -ne $publishablePackages.Count) {
 # Emit a run summary box (rendered at the top of the ADO run, Extensions tab)
 # so the packed artifacts are visible without opening the step log.
 $summaryLines = @()
-$summaryLines += "## 📦 Packed npm packages"
+$summaryLines += "## Packed npm packages"
 $summaryLines += ""
 $summaryLines += "| Package | Version | .tgz file | Size |"
 $summaryLines += "| --- | --- | --- | --- |"
