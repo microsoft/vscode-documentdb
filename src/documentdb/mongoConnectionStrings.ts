@@ -6,7 +6,7 @@
 import { appendExtensionUserAgent, parseError, type IParsedError } from '@microsoft/vscode-azext-utils';
 import { type MongoClient } from 'mongodb';
 import { ParsedConnectionString } from '../ParsedConnectionString';
-import { meterSilentCatch } from '../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { nonNullValue } from '../utils/nonNull';
 import { connectToClient } from './connectToClient';
 

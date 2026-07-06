@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
