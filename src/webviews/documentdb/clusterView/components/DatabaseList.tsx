@@ -31,7 +31,7 @@ export interface DatabaseListProps {
  * `listDatabases` call, then fills metrics in per row via {@link useBoundedMetrics}.
  */
 export const DatabaseList = ({ onOpenDatabase }: DatabaseListProps): JSX.Element => {
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     const [names, setNames] = useState<ReadonlyArray<string>>([]);
     const [isLoading, setIsLoading] = useState(true);

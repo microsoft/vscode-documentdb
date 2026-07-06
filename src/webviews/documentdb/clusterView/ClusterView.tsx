@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import { type JSX, useState } from 'react';
 import './clusterView.scss';
 import { type ClusterViewWebviewConfigurationType } from './clusterViewController';

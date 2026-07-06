@@ -43,7 +43,7 @@ import { DatabaseNameStep } from '../../../commands/createDatabase/DatabaseNameS
 import { ExecuteStep as CreateDatabaseExecuteStep } from '../../../commands/createDatabase/ExecuteStep';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../documentdb/CredentialCache';
-import { meterSilentCatch } from '../../../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 import { nonNullValue } from '../../../utils/nonNull';
 import { type BaseRouterContext } from '../../_integration/appRouter';

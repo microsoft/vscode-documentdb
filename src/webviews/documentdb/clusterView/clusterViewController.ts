@@ -7,7 +7,7 @@ import * as vscode from 'vscode';
 
 import { API } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
-import { WebviewControllerBase } from '../../_integration/WebviewControllerBase';
+import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './clusterViewRouter';
 
 /**
@@ -29,14 +29,30 @@ export type ClusterViewWebviewConfigurationType = {
 };
 
 /**
- * Webview controller for the cluster dashboard / home page. Hosts the database
- * overview and the per-database collection drill-in.
+ * Opens the cluster dashboard / home page webview. Hosts the database overview
+ * and the per-database collection drill-in.
  */
-export class ClusterViewController extends WebviewControllerBase<ClusterViewWebviewConfigurationType> {
-    constructor(initialData: ClusterViewWebviewConfigurationType) {
-        const title: string = initialData.clusterDisplayName;
+export function openClusterWebview(
+    initialData: ClusterViewWebviewConfigurationType,
+): AppWebviewController<ClusterViewWebviewConfigurationType> {
+    const title: string = initialData.clusterDisplayName;
 
-        super(ext.context, title, 'clusterView', initialData, vscode.ViewColumn.One, {
+    const trpcContext: RouterContext = {
+        dbExperience: API.DocumentDB,
+        webviewName: 'clusterView',
+        clusterId: initialData.clusterId,
+        clusterDisplayName: initialData.clusterDisplayName,
+        viewId: initialData.viewId,
+        clusterTreeId: initialData.clusterTreeId,
+    };
+
+    return openAppWebview({
+        title,
+        webviewName: 'clusterView',
+        config: initialData,
+        context: trpcContext,
+        viewColumn: vscode.ViewColumn.One,
+        icon: {
             light: vscode.Uri.joinPath(
                 ext.context.extensionUri,
                 'resources',
@@ -49,17 +65,6 @@ export class ClusterViewController extends WebviewControllerBase<ClusterViewWebv
                 'icons',
                 'vscode-documentdb-icon-dark-themes.svg',
             ),
-        });
-
-        const trpcContext: RouterContext = {
-            dbExperience: API.DocumentDB,
-            webviewName: 'clusterView',
-            clusterId: initialData.clusterId,
-            clusterDisplayName: initialData.clusterDisplayName,
-            viewId: initialData.viewId,
-            clusterTreeId: initialData.clusterTreeId,
-        };
-
-        this.setupTrpc(trpcContext);
-    }
+        },
+    });
 }

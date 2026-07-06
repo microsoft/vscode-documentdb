@@ -31,7 +31,7 @@ export interface CollectionListProps {
  * immediately, metrics stream in per row with bounded concurrency.
  */
 export const CollectionList = ({ databaseName }: CollectionListProps): JSX.Element => {
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     const [names, setNames] = useState<ReadonlyArray<string>>([]);
     const [isLoading, setIsLoading] = useState(true);
