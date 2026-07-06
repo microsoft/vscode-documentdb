@@ -17,11 +17,7 @@ param(
     # Base output directory (ob_outputDirectory). The .tgz files are written to
     # <OutputDirectory>\npm-packages.
     [Parameter(Mandatory = $true)]
-    [string]$OutputDirectory,
-
-    # Path to write the run-summary markdown file that is uploaded to the ADO run.
-    [Parameter(Mandatory = $true)]
-    [string]$SummaryPath
+    [string]$OutputDirectory
 )
 
 $ErrorActionPreference = 'Stop'
@@ -82,20 +78,3 @@ if ($tgzCount -ne $publishablePackages.Count) {
     Write-Error "[Error] Expected $($publishablePackages.Count) .tgz file(s), found $tgzCount"
     exit 1
 }
-
-# Emit a run summary box (rendered at the top of the ADO run, Extensions tab)
-# so the packed artifacts are visible without opening the step log.
-$summaryLines = @()
-$summaryLines += "## Packed npm packages"
-$summaryLines += ""
-$summaryLines += "| Package | Version | .tgz file | Size |"
-$summaryLines += "| --- | --- | --- | --- |"
-foreach ($pkgDirName in $publishablePackages) {
-    $packageJson = Get-Content (Join-Path (Join-Path $SourcesDirectory 'packages') "$pkgDirName\package.json") | ConvertFrom-Json
-    $tgz = Get-ChildItem -Path $npmPackagesDir -Filter "*$pkgDirName*.tgz" | Select-Object -First 1
-    $sizeKB = if ($tgz) { [math]::Round($tgz.Length / 1KB, 2) } else { 'n/a' }
-    $tgzName = if ($tgz) { $tgz.Name } else { 'MISSING' }
-    $summaryLines += "| ``$($packageJson.name)`` | $($packageJson.version) | ``$tgzName`` | ${sizeKB} KB |"
-}
-$summaryLines -join "`n" | Out-File -FilePath $SummaryPath -Encoding utf8
-Write-Host "##vso[task.uploadsummary]$SummaryPath"

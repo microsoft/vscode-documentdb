@@ -138,7 +138,6 @@ extends:
                               arguments: >-
                                   -SourcesDirectory '$(Build.SourcesDirectory)'
                                   -OutputDirectory '$(ob_outputDirectory)'
-                                  -SummaryPath '$(Build.ArtifactStagingDirectory)\pack-summary.md'
 
                         - task: CopyFiles@2
                           displayName: 'Copy package metadata to staging'

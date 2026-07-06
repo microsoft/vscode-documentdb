@@ -236,9 +236,10 @@ extends:
                                   -PackageName '${{ parameters.packageName }}'
                                   -WorkingDirectory '$(System.DefaultWorkingDirectory)'
 
-                        # Emit a run summary box (rendered at the top of the ADO run) so the
-                        # release intent - package, version, mode, and source build - is
-                        # visible to approvers without digging through step logs.
+                        # Print the release intent - package, version, mode, and source
+                        # build - to the step log so it is visible to approvers without
+                        # digging through the other steps. (An ADO run-summary box would be
+                        # nicer, but the task.uploadsummary command is blocked by OneBranch policy.)
                         - task: PowerShell@2
                           displayName: 'Publish run summary'
                           condition: succeeded()
@@ -254,7 +255,6 @@ extends:
                                   -SourceRunId '$(resources.pipeline.npmBuild.runID)'
                                   -SourceBranch '$(resources.pipeline.npmBuild.sourceBranch)'
                                   -SourceCommit '$(resources.pipeline.npmBuild.sourceCommit)'
-                                  -SummaryPath '$(Build.ArtifactStagingDirectory)\release-summary.md'
 
                   # Use compile-time inclusion so the publish job does NOT exist in the
                   # compiled pipeline graph for 'validate-only'. This is stronger than a
@@ -372,9 +372,9 @@ extends:
                                     # tenant id here.
                                     domaintenantid: '975f013f-7f24-47e8-a7d3-abc4752bf346'
 
-                              # Emit a run summary box describing the outcome. Runs with always()
-                              # so the summary is present whether the ESRP task succeeded or failed
-                              # (a failure in test-esrp-auth mode is the EXPECTED result).
+                              # Print the ESRP outcome to the step log. Runs with always()
+                              # so the outcome is reported whether the ESRP task succeeded or
+                              # failed (a failure in test-esrp-auth mode is the EXPECTED result).
                               - task: PowerShell@2
                                 displayName: 'Publish outcome summary'
                                 condition: always()
@@ -386,4 +386,3 @@ extends:
                                         -PublishVersion '${{ parameters.publishVersion }}'
                                         -Mode '${{ parameters.mode }}'
                                         -JobStatus '$(Agent.JobStatus)'
-                                        -SummaryPath '$(Build.ArtifactStagingDirectory)\publish-outcome-summary.md'
