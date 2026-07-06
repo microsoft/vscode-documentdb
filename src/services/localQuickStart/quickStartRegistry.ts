@@ -62,6 +62,25 @@ export interface QuickStartRegistry {
 /** The initial `nextSuffix` on a fresh registry (the default instance has no suffix, so the next is 2). */
 export const INITIAL_NEXT_SUFFIX = 2;
 
+/**
+ * A provisioning lease older than this is treated as a crashed/abandoned pre-create and scavenged at
+ * reconcile (design §4 / §12). It MUST exceed the worst-case first image pull (which precedes any
+ * container), so a slow pull is never mistaken for a dead host. WI-2e renews `leaseAt` per stage.
+ */
+export const PROVISIONING_LEASE_TTL_MS = 20 * 60_000;
+
+/**
+ * True when `record` is an in-flight `'provisioning'` lease that has NOT expired — i.e. a create is
+ * genuinely still running (fresh), vs. a stale reservation left by a crashed host (to be scavenged).
+ */
+export function isProvisioningLeaseFresh(record: QuickStartInstanceRecord, now: number = Date.now()): boolean {
+    return (
+        record.phase === 'provisioning' &&
+        record.leaseAt !== undefined &&
+        now - record.leaseAt <= PROVISIONING_LEASE_TTL_MS
+    );
+}
+
 /** Read the registry, defaulting a fresh one. Returns a deep-ish copy so callers can mutate freely. */
 export function readRegistry(globalState: vscode.Memento): QuickStartRegistry {
     const stored = globalState.get<QuickStartRegistry>(REGISTRY_STATE_KEY);

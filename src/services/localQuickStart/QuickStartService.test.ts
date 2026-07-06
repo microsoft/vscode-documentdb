@@ -6,7 +6,7 @@
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
-import { readRegistry, upsertInstanceRecord } from './quickStartRegistry';
+import { PROVISIONING_LEASE_TTL_MS, readRegistry, upsertInstanceRecord } from './quickStartRegistry';
 import { QuickStartServiceImpl } from './QuickStartService';
 import {
     DEFAULT_ALIAS,
@@ -14,6 +14,9 @@ import {
     InstanceState,
     LEGACY_IMAGE_REF_KEY,
     LEGACY_SECRET_KEY,
+    QUICK_START_ALIAS_LABEL_KEY,
+    QUICK_START_LABEL_KEY,
+    QUICK_START_PORT,
     secretKey,
 } from './quickStartTypes';
 
@@ -68,7 +71,7 @@ function mockRuntime(overrides: Partial<IContainerRuntime>): IContainerRuntime {
 
 describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
     // jest-mock-vscode's createOutputChannel returns a channel without `appendLine`; stub it so the
-    // reconcile no-secret branch (which logs before removing the orphan) doesn't throw in tests.
+    // reconcile branches that log (credential-unavailable surface, duplicate-winner) don't throw.
     beforeAll(() => {
         jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
             name: 'test',
@@ -139,7 +142,7 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         expect(await service.willReuseExistingInstance()).toBe(true);
     });
 
-    it('reconcile() with NO stored secret removes the orphan container (but never the volume)', async () => {
+    it('reconcile() with NO stored secret surfaces the orphan as credential-unavailable (never removes it or its volume)', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
 
@@ -154,11 +157,12 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
 
         await service.reconcile();
 
-        // No recoverable credentials anywhere ⇒ the container is removed for a clean slate, but the
-        // volume is NEVER wiped (a lost secret does not prove the volume is disposable).
-        expect(removeContainer).toHaveBeenCalledTimes(1);
+        // No recoverable credentials anywhere ⇒ the labelled container is SURFACED as
+        // credential-unavailable (Error), NOT removed, and the volume is NEVER touched. A lost secret
+        // does not prove the volume is disposable, so the user decides (Delete, or restore the secret).
+        expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
-        expect(service.getStatus().state).toBe(InstanceState.NotInstalled);
+        expect(service.getStatus().state).toBe(InstanceState.Error);
     });
 
     it('deleteContainer() purges BOTH the alias-keyed and legacy keys (a full clean slate)', async () => {
@@ -189,5 +193,256 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         expect(globalState.get(LEGACY_IMAGE_REF_KEY)).toBeUndefined();
         // ...and the registry record is gone, so the instance won't linger as a ghost tree row (WI-2).
         expect(readRegistry(globalState).instances).toHaveLength(0);
+    });
+});
+
+// WI-2d: reconcile is registry-driven and multi-instance. It enumerates the union of the durable
+// registry and the live labelled containers (grouped by the alias label), rebuilding each alias's
+// state — adopting containers whose credentials we hold, surfacing (never removing) credential-less
+// ones, keeping a fresh provisioning lease as Provisioning, scavenging a stale one, and marking a
+// ready record whose container vanished as Missing.
+describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)', () => {
+    const ALIAS_2 = `${DEFAULT_ALIAS}-2`;
+    const CONN_1 = 'mongodb://u1:p1@localhost:10260/?tls=true&tlsAllowInvalidCertificates=true';
+    const CONN_2 = 'mongodb://u2:p2@localhost:10261/?tls=true&tlsAllowInvalidCertificates=true';
+
+    beforeAll(() => {
+        jest.spyOn(vscode.window, 'createOutputChannel').mockReturnValue({
+            name: 'test',
+            append: jest.fn(),
+            appendLine: jest.fn(),
+            replace: jest.fn(),
+            clear: jest.fn(),
+            show: jest.fn(),
+            hide: jest.fn(),
+            dispose: jest.fn(),
+        } as unknown as vscode.LogOutputChannel);
+        disposeQuickStartOutputChannel();
+    });
+
+    afterAll(() => {
+        disposeQuickStartOutputChannel();
+        jest.restoreAllMocks();
+    });
+
+    let originalSecretStorage: vscode.SecretStorage;
+    let originalContext: vscode.ExtensionContext;
+
+    beforeEach(() => {
+        originalSecretStorage = ext.secretStorage;
+        originalContext = ext.context;
+    });
+
+    afterEach(() => {
+        ext.secretStorage = originalSecretStorage;
+        ext.context = originalContext;
+    });
+
+    function inspectItem(id: string, opts: { running: boolean; port?: number; image?: string }): unknown {
+        return {
+            id,
+            status: opts.running ? 'running' : 'exited',
+            ports: opts.port ? [{ containerPort: QUICK_START_PORT, hostPort: opts.port }] : [],
+            image: opts.image ? { originalName: opts.image } : undefined,
+        };
+    }
+
+    function reconcileRuntime(opts: {
+        containers: Array<{ id: string; alias?: string; createdAt?: Date }>;
+        inspect?: Record<string, unknown>;
+        removeContainer?: jest.Mock;
+        removeVolume?: jest.Mock;
+    }): IContainerRuntime {
+        const inspect = opts.inspect ?? {};
+        return mockRuntime({
+            listByLabel: jest.fn().mockResolvedValue(
+                opts.containers.map((container) => ({
+                    id: container.id,
+                    createdAt: container.createdAt,
+                    labels: container.alias === undefined ? {} : { [QUICK_START_ALIAS_LABEL_KEY]: container.alias },
+                })),
+            ),
+            inspectContainer: jest.fn((id: string) =>
+                Promise.resolve(inspect[id]),
+            ) as unknown as IContainerRuntime['inspectContainer'],
+            removeContainer: opts.removeContainer ?? jest.fn().mockResolvedValue(undefined),
+            removeVolume: opts.removeVolume ?? jest.fn().mockResolvedValue(undefined),
+        });
+    }
+
+    it('adopts two labelled containers into isolated per-alias states (running + stopped)', async () => {
+        ext.secretStorage = fakeSecretStorage({
+            [secretKey(DEFAULT_ALIAS)]: CONN_1,
+            [secretKey(ALIAS_2)]: CONN_2,
+        });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [
+                    { id: 'c1', alias: DEFAULT_ALIAS },
+                    { id: 'c2', alias: ALIAS_2 },
+                ],
+                inspect: {
+                    c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
+                    c2: inspectItem('c2', { running: false, port: 10261, image: 'img:1' }),
+                },
+            }),
+        );
+
+        await service.reconcile();
+
+        expect(service.getStatus(DEFAULT_ALIAS).state).toBe(InstanceState.Running);
+        expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.Stopped);
+        // listStatuses is ordered DEFAULT-first; both instances are durable + ready.
+        expect(service.listStatuses().map((status) => status.alias)).toEqual([DEFAULT_ALIAS, ALIAS_2]);
+        expect(
+            readRegistry(ext.context.globalState)
+                .instances.map((record) => record.alias)
+                .sort(),
+        ).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
+    });
+
+    it('surfaces a credential-unavailable instance as Error without removing it or its volume (R2)', async () => {
+        ext.secretStorage = fakeSecretStorage({}); // no secret for ALIAS_2
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c2', alias: ALIAS_2 }],
+                inspect: { c2: inspectItem('c2', { running: true, port: 10261 }) },
+                removeContainer,
+                removeVolume,
+            }),
+        );
+
+        await service.reconcile();
+
+        expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.Error);
+        expect(removeContainer).not.toHaveBeenCalled();
+        expect(removeVolume).not.toHaveBeenCalled();
+    });
+
+    it('marks a ready record whose container vanished as Missing, keeping the record (recoverable)', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(ALIAS_2)]: CONN_2 });
+        const globalState = fakeMemento();
+        await upsertInstanceRecord(globalState, { alias: ALIAS_2, displayName: 'Second', port: 10261, phase: 'ready' });
+        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [] }));
+
+        await service.reconcile();
+
+        expect(service.listStatuses().find((status) => status.alias === ALIAS_2)?.missing).toBe(true);
+        expect(readRegistry(globalState).instances.some((record) => record.alias === ALIAS_2)).toBe(true);
+    });
+
+    it('scavenges a STALE provisioning reservation that never produced a container', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        const globalState = fakeMemento();
+        await upsertInstanceRecord(globalState, {
+            alias: ALIAS_2,
+            displayName: 'Second',
+            port: 10261,
+            phase: 'provisioning',
+            leaseAt: Date.now() - PROVISIONING_LEASE_TTL_MS - 1_000,
+        });
+        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [] }));
+
+        await service.reconcile();
+
+        expect(readRegistry(globalState).instances.some((record) => record.alias === ALIAS_2)).toBe(false);
+        expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.NotInstalled);
+    });
+
+    it('keeps a FRESH provisioning reservation as Provisioning (not scavenged)', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        const globalState = fakeMemento();
+        await upsertInstanceRecord(globalState, {
+            alias: ALIAS_2,
+            displayName: 'Second',
+            port: 10261,
+            phase: 'provisioning',
+            leaseAt: Date.now(),
+        });
+        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+        const service = new QuickStartServiceImpl(reconcileRuntime({ containers: [] }));
+
+        await service.reconcile();
+
+        expect(readRegistry(globalState).instances.some((record) => record.alias === ALIAS_2)).toBe(true);
+        expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.Provisioning);
+    });
+
+    it('adopts (never scavenges) a container present under a stale provisioning lease, promoting it to ready (Q4)', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(ALIAS_2)]: CONN_2 });
+        const globalState = fakeMemento();
+        await upsertInstanceRecord(globalState, {
+            alias: ALIAS_2,
+            displayName: 'Second',
+            port: 10261,
+            phase: 'provisioning',
+            leaseAt: Date.now() - PROVISIONING_LEASE_TTL_MS - 1_000,
+        });
+        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c2', alias: ALIAS_2 }],
+                inspect: { c2: inspectItem('c2', { running: true, port: 10261 }) },
+            }),
+        );
+
+        await service.reconcile();
+
+        expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.Running);
+        expect(readRegistry(globalState).instances.find((record) => record.alias === ALIAS_2)?.phase).toBe('ready');
+    });
+
+    it('deleteContainer() removes a surfaced (no-metadata) instance via a live lookup', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c2', alias: ALIAS_2 }],
+                inspect: {
+                    c2: {
+                        id: 'c2',
+                        status: 'running',
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: ALIAS_2 },
+                    },
+                },
+                removeContainer,
+                removeVolume,
+            }),
+        );
+
+        await service.reconcile(); // surfaces ALIAS_2 as credential-unavailable (no in-memory metadata)
+        await service.deleteContainer(ALIAS_2);
+
+        // The container is found via findManagedContainer despite no in-memory metadata, and an
+        // explicit Delete is a full clean slate (its own volume is wiped).
+        expect(removeContainer).toHaveBeenCalledTimes(1);
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+
+    it('is idempotent across repeated reconciles', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c1', alias: DEFAULT_ALIAS }],
+                inspect: { c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }) },
+            }),
+        );
+
+        await service.reconcile();
+        await service.reconcile();
+
+        expect(service.getStatus(DEFAULT_ALIAS).state).toBe(InstanceState.Running);
+        expect(
+            readRegistry(ext.context.globalState).instances.filter((record) => record.alias === DEFAULT_ALIAS),
+        ).toHaveLength(1);
     });
 });

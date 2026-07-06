@@ -4,11 +4,18 @@
 > committable, verifiable sub-step sequence. Round-1/2 findings: [`review-and-resolutions.md`](./review-and-resolutions.md).
 > **Status:** IMPLEMENTING — plan v2 (round-1 5-agent review folded in, see §8).
 > **Done:** WI-2b (fields → `Map<alias, InstanceRuntimeState>` + `stateFor`, commit `365dcd72`),
-> WI-2c (alias-thread methods + alias-derived names/keys + matcher/credential legacy fallback).
-> Both behavior-preserving; full jest 2790/2790, build/lint/prettier green. **Next:** WI-2d.
-> **Deviation note (WI-2c):** `liveStateGuard(id)` / `confirmStaysRunning(id)` were NOT given an
-> `alias` param — they act purely on a container id and threading it now would be a dead param (the
-> per-instance user message is a WI-4 l10n change). Deferred to WI-4 so 2c stays behavior-preserving.
+> WI-2c (alias-thread methods + alias-derived names/keys, `b8af43cc`),
+> WI-2d (registry-driven multi-alias reconcile + `listStatuses` ordering + all-alias `refreshLiveState`
+> + lease staleness + R2 inversion). Full jest 2798/2798, build/lint/prettier green. **Next:** WI-2e.
+> **WI-2d notes:** (1) `adoptContainer` promotes the record to `ready` (clears a stale lease) so a later
+> container-loss becomes Missing, not scavenged. (2) `deleteContainer` falls back to `findManagedContainer`
+> when in-memory metadata is absent, so Delete works on a surfaced Missing/credential-unavailable instance.
+> (3) `nextSuffix` self-heal + the "unlabelled name-holder" scan are deferred to WI-2e (allocation lives
+> there + it already lists containers for the collision preflight). (4) `refreshLiveState` keeps the
+> per-alias inspect (behavior-identical for the consumed DEFAULT) rather than the plan's single
+> `listByLabel`; equivalent for tracked-with-metadata aliases, revisit as a WI-3 perf tuning.
+> **Deviation note (WI-2c):** `liveStateGuard(id)` / `confirmStaysRunning(id)` act purely on a container
+> id — the per-instance message is a WI-4 l10n change, so no `alias` param was added.
 > **Prereqs done:** WI-0 (injectable `ContainerRuntime`), WI-1 (identity + keying + migration),
 > WI-2 part 1 (registry authoritative: `upsert/removeInstanceRecord`, finalize upsert, delete remove).
 

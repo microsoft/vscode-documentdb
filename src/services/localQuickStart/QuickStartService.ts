@@ -40,7 +40,15 @@ import {
     isRunning,
 } from './ContainerRuntime';
 import { composeConnectionString, generateCredentials, type GeneratedCredentials } from './quickStartCredentials';
-import { DEFAULT_INSTANCE_DISPLAY_NAME, removeInstanceRecord, upsertInstanceRecord } from './quickStartRegistry';
+import {
+    DEFAULT_INSTANCE_DISPLAY_NAME,
+    isProvisioningLeaseFresh,
+    type QuickStartInstanceRecord,
+    readRegistry,
+    removeInstanceRecord,
+    updateRegistry,
+    upsertInstanceRecord,
+} from './quickStartRegistry';
 import {
     type AdvancedQuickStartOptions,
     clusterId,
@@ -53,7 +61,6 @@ import {
     LEGACY_IMAGE_REF_KEY,
     LEGACY_SECRET_KEY,
     type ProvisionStage,
-    QUICK_START_ALIAS,
     QUICK_START_ALIAS_LABEL_KEY,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
@@ -71,11 +78,12 @@ import {
 export const QUICK_START_CLUSTER_ID = clusterId(DEFAULT_ALIAS);
 
 /**
- * Durable (non-secret) record of the image reference the managed instance's data volume
- * was created with, kept in globalState so a recreate AFTER a window reload (when the
- * in-memory metadata is gone) still reuses the original image instead of forcing `latest`.
+ * Surfaced (design §12) when a labelled container + on-disk volume exist but the stored credentials
+ * are gone, so the cluster can't be opened. Reconcile NEVER removes it (a lost secret does not prove
+ * the volume is disposable — R2); the user decides (Delete for a clean slate, or restore the secret).
  */
-const IMAGE_REF_STATE_KEY = imageRefKey(DEFAULT_ALIAS);
+const CREDENTIAL_UNAVAILABLE_MESSAGE =
+    'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use "Delete Container" to remove it and start fresh (this erases the data).';
 const READINESS_TIMEOUT_MS = 180_000;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
@@ -246,10 +254,22 @@ export class QuickStartServiceImpl {
         };
     }
 
-    /** Snapshot of every known instance for the tree (WI-3). WI-2b: the in-memory default only. */
+    /** Snapshot of every known instance for the tree (WI-3), ordered DEFAULT first then by alias. */
     public listStatuses(): InstanceStatus[] {
         this.stateFor(DEFAULT_ALIAS); // ensure the default is always represented
-        return [...this.instances.values()].map((entry) => this.toInstanceStatus(entry));
+        const entries = [...this.instances.values()].sort((a, b) => {
+            if (a.alias === b.alias) {
+                return 0;
+            }
+            if (a.alias === DEFAULT_ALIAS) {
+                return -1;
+            }
+            if (b.alias === DEFAULT_ALIAS) {
+                return 1;
+            }
+            return a.alias.localeCompare(b.alias);
+        });
+        return entries.map((entry) => this.toInstanceStatus(entry));
     }
 
     private toInstanceStatus(entry: InstanceRuntimeState): InstanceStatus {
@@ -1087,7 +1107,10 @@ export class QuickStartServiceImpl {
     public async deleteContainer(alias: string = DEFAULT_ALIAS): Promise<void> {
         await this.runLifecycle(alias, async () => {
             const entry = this.stateFor(alias);
-            const id = entry.metadata?.containerId;
+            // Prefer in-memory metadata; fall back to a live lookup so Delete also removes the
+            // container of a surfaced Missing / credential-unavailable instance (no metadata after
+            // a reload, or when reconcile surfaced it without adopting).
+            const id = entry.metadata?.containerId ?? (await this.findManagedContainer(alias))?.id;
             // If the container still exists, only remove it when it is ours.
             if (id && (entry.missing || (await this.isManaged(id, alias)))) {
                 await this.runtime.removeContainer(id).catch(() => undefined);
@@ -1125,25 +1148,30 @@ export class QuickStartServiceImpl {
      * hold metadata but Docker no longer has the container.
      */
     public async refreshLiveState(): Promise<void> {
-        const entry = this.stateFor(DEFAULT_ALIAS);
-        if (entry.provisioning || entry.lifecycleBusy || !entry.metadata) {
-            return;
-        }
-        try {
-            const inspected = await this.runtime.inspectContainer(entry.metadata.containerId);
-            if (!inspected) {
-                // Container is gone — keep metadata so the user can recreate.
-                entry.missing = true;
-                this.statusEmitter.fire();
-                return;
+        // Refresh every in-memory alias (the DEFAULT is always present). Per-alias inspect keeps the
+        // consumed default path identical to the single-instance behavior; scavenge is NEVER done here
+        // (reconcile/activation only) and an in-flight alias is never clobbered.
+        for (const alias of new Set<string>([DEFAULT_ALIAS, ...this.instances.keys()])) {
+            const entry = this.stateFor(alias);
+            // Skip in-flight aliases — a busy sibling must NOT skip the others.
+            if (entry.provisioning || entry.lifecycleBusy || !entry.metadata) {
+                continue;
             }
-            const running = isRunning(inspected);
-            const nextState = running ? InstanceState.Running : InstanceState.Stopped;
-            if (entry.missing || entry.state !== nextState) {
-                this.setStatus(DEFAULT_ALIAS, nextState);
+            try {
+                const inspected = await this.runtime.inspectContainer(entry.metadata.containerId);
+                if (!inspected) {
+                    // Container is gone — keep metadata so the user can recreate.
+                    entry.missing = true;
+                    this.statusEmitter.fire();
+                    continue;
+                }
+                const nextState = isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped;
+                if (entry.missing || entry.state !== nextState) {
+                    this.setStatus(alias, nextState);
+                }
+            } catch {
+                // Best-effort freshness; never throw into the tree render.
             }
-        } catch {
-            // Best-effort freshness; never throw into the tree render.
         }
     }
 
@@ -1163,70 +1191,198 @@ export class QuickStartServiceImpl {
     }
 
     /**
-     * Activation reconciliation (risk-review item): after a window reload the
-     * in-memory state is lost while the container keeps running. Detect the
-     * labelled container; if we still hold its credentials, re-adopt it so the
-     * inline tree node reappears; otherwise remove it for a clean slate so it
-     * doesn't block the next port bind.
+     * Activation reconciliation (design §12 / risk-review): after a window reload the in-memory state
+     * is lost while containers keep running. Enumerate every known instance — the union of the durable
+     * registry and the live labelled containers (grouped by the `vscode.documentdb.alias` label; an
+     * absent/empty label is the DEFAULT instance) — and rebuild each alias's state. A credential-less
+     * labelled container is SURFACED, never removed (R2); a stale pre-create reservation (crashed host)
+     * is scavenged; a ready record whose container vanished becomes Missing (recoverable via recreate).
      */
     public async reconcile(): Promise<void> {
         try {
-            const container = await this.findManagedContainer();
-            if (!container) {
-                this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled);
-                return;
+            const containers = (await this.runtime
+                .listByLabel({ [QUICK_START_LABEL_KEY]: '1' })
+                .catch(() => [])) as Array<{
+                id: string;
+                createdAt?: Date;
+                labels?: Record<string, string>;
+            }>;
+            const registry = readRegistry(ext.context.globalState);
+            const now = Date.now();
+
+            // Group live containers by alias (absent/empty alias label ⇒ DEFAULT).
+            const liveByAlias = new Map<string, Array<{ id: string; createdAt?: Date }>>();
+            for (const container of containers) {
+                const alias = container.labels?.[QUICK_START_ALIAS_LABEL_KEY] || DEFAULT_ALIAS;
+                const bucket = liveByAlias.get(alias);
+                if (bucket) {
+                    bucket.push(container);
+                } else {
+                    liveByAlias.set(alias, [container]);
+                }
             }
-            const stored = await this.readStoredConnectionString();
-            if (!stored) {
-                getQuickStartOutputChannel().appendLine(
-                    'Removing an orphaned Quick Start container (no stored credentials) for a clean slate…',
-                );
-                await this.runtime.removeContainer(container.id).catch(() => undefined);
-                // NOTE: only the container is removed — never the volume. A missing secret does
-                // NOT prove the volume is disposable (a previously successful instance whose secret
-                // was lost/reset externally would also land here), and deleting it would be
-                // irreversible data loss. A fresh timed-out attempt's orphan volume is instead
-                // wiped by the next fresh provision (`if (!reusing) removeVolume`), which is safe.
-                this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled);
-                return;
+
+            // The DEFAULT always exists; also reconcile every registry record and every live alias.
+            const aliases = new Set<string>([
+                DEFAULT_ALIAS,
+                ...registry.instances.map((record) => record.alias),
+                ...liveByAlias.keys(),
+            ]);
+            const scavenge = new Set<string>();
+            for (const alias of aliases) {
+                const record = registry.instances.find((existing) => existing.alias === alias);
+                const outcome = await this.reconcileAlias(alias, record, liveByAlias.get(alias) ?? [], now);
+                if (outcome.scavenge) {
+                    scavenge.add(alias);
+                }
             }
-            const inspected = await this.runtime.inspectContainer(container.id);
-            const boundPort = (inspected && getBoundHostPort(inspected)) || QUICK_START_PORT;
-            const running = isRunning(inspected);
-            let username = '';
-            let password = '';
-            try {
-                const parsed = new DocumentDBConnectionString(stored);
-                username = parsed.username;
-                password = parsed.password;
-            } catch {
-                username = '';
+
+            // Drop stale pre-create reservations in one locked write. Scavenge fires ONLY here
+            // (activation), never in the per-render refreshLiveState. (Adopted instances promote their
+            // own record to `ready` inside adoptContainer.)
+            if (scavenge.size > 0) {
+                await updateRegistry(ext.context.globalState, (reg) => {
+                    reg.instances = reg.instances.filter((record) => !scavenge.has(record.alias));
+                });
             }
-            if (running) {
-                this.populateCredentialCache(DEFAULT_ALIAS, stored, username, password);
-            }
-            const adoptedImageRef = inspected?.image?.originalName;
-            // Backfill the durable image record from the adopted container, so a recreate AFTER
-            // this container is later removed + the window reloads still reuses the original image
-            // — even for an instance we only adopted (never provisioned in-process). Never clear an
-            // existing value when the image can't be read.
-            if (adoptedImageRef) {
-                await ext.context.globalState.update(IMAGE_REF_STATE_KEY, adoptedImageRef);
-            }
-            this.setStatus(DEFAULT_ALIAS, running ? InstanceState.Running : InstanceState.Stopped, {
-                containerId: container.id,
-                alias: QUICK_START_ALIAS,
-                boundPort,
-                clusterId: QUICK_START_CLUSTER_ID,
-                connectionString: stored,
-                username,
-                // Recover the image the volume's cluster was created with, so a later
-                // recreate (after the container is removed) reuses it instead of forcing latest.
-                imageRef: adoptedImageRef,
-            });
         } catch {
             // Reconciliation is best-effort; never block activation.
         }
+    }
+
+    /**
+     * Reconcile one alias against its durable `record` and live `containers`. Returns registry
+     * side-effects for the caller to apply under the lock. NEVER removes a labelled container (R2/R3)
+     * and NEVER touches a volume.
+     */
+    private async reconcileAlias(
+        alias: string,
+        record: QuickStartInstanceRecord | undefined,
+        containers: Array<{ id: string; createdAt?: Date }>,
+        now: number,
+    ): Promise<{ scavenge?: boolean }> {
+        const winner = this.pickManagedContainer(alias, containers);
+        const freshLease = record !== undefined && isProvisioningLeaseFresh(record, now);
+
+        if (winner) {
+            const stored = await this.readStoredConnectionString(alias);
+            if (stored) {
+                // Case 1: credentials recoverable ⇒ adopt (running→Running, exited→Stopped).
+                await this.adoptContainer(alias, record, winner.id, stored);
+                return {};
+            }
+            if (freshLease) {
+                // A fresh in-flight container whose secret isn't written yet is Provisioning — never
+                // credential-unavailable.
+                this.setStatus(alias, InstanceState.Provisioning);
+                return {};
+            }
+            // Case 4: labelled container + no recoverable secret + no fresh lease ⇒ surface as
+            // credential-unavailable. NEVER remove it and NEVER touch its volume (R2).
+            getQuickStartOutputChannel().appendLine(
+                `DocumentDB Local instance "${alias}" is present but its stored credentials are missing; surfacing as credential-unavailable (not removed).`,
+            );
+            this.setStatus(alias, InstanceState.Error, undefined, CREDENTIAL_UNAVAILABLE_MESSAGE);
+            return {};
+        }
+
+        // No live container.
+        if (freshLease) {
+            // Case 2: a create is genuinely in flight (its container isn't listed yet).
+            this.setStatus(alias, InstanceState.Provisioning);
+            return {};
+        }
+        if (record?.phase === 'provisioning') {
+            // Stale pre-create reservation (crashed host): nothing was created ⇒ scavenge + clear.
+            this.setStatus(alias, InstanceState.NotInstalled);
+            return { scavenge: true };
+        }
+        if (record?.phase === 'ready') {
+            // Case 3: a known ready instance whose container vanished ⇒ Missing (recoverable via a
+            // recreate that reuses the volume). Keep the record so the tree still renders it.
+            const entry = this.stateFor(alias);
+            entry.missing = true;
+            entry.state = InstanceState.Stopped;
+            entry.port = record.port;
+            entry.errorMessage = undefined;
+            this.statusEmitter.fire();
+            return {};
+        }
+        // No record and no container (only the always-present DEFAULT reaches here) ⇒ NotInstalled.
+        this.setStatus(alias, InstanceState.NotInstalled);
+        return {};
+    }
+
+    /**
+     * Adopt a live container as `alias`'s instance and promote its durable record to `ready` (clearing
+     * any stale provisioning lease). Populates the credential cache only while running. The registry
+     * port is authoritative for a stopped instance (`docker ps -a` omits its binding); a running one
+     * writes its live bound port.
+     */
+    private async adoptContainer(
+        alias: string,
+        record: QuickStartInstanceRecord | undefined,
+        containerId: string,
+        stored: string,
+    ): Promise<void> {
+        const inspected = await this.runtime.inspectContainer(containerId);
+        const running = isRunning(inspected);
+        const boundPort = (inspected && getBoundHostPort(inspected)) || record?.port || QUICK_START_PORT;
+        let username = '';
+        let password = '';
+        try {
+            const parsed = new DocumentDBConnectionString(stored);
+            username = parsed.username;
+            password = parsed.password;
+        } catch {
+            username = '';
+        }
+        if (running) {
+            this.populateCredentialCache(alias, stored, username, password);
+        }
+        const adoptedImageRef = inspected?.image?.originalName;
+        // Backfill the durable image record from the adopted container, so a recreate AFTER this
+        // container is later removed + the window reloads still reuses the original image — even for an
+        // instance we only adopted (never provisioned in-process). Never clear an existing value.
+        if (adoptedImageRef) {
+            await ext.context.globalState.update(imageRefKey(alias), adoptedImageRef);
+        }
+        // Make the registry authoritative + clear any stale provisioning lease: an adopted container
+        // whose credentials we hold IS ready (so a later container-loss becomes Missing, not scavenged).
+        await upsertInstanceRecord(ext.context.globalState, {
+            alias,
+            displayName: record?.displayName ?? (alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias),
+            port: running ? boundPort : (record?.port ?? boundPort),
+            phase: 'ready',
+        });
+        this.setStatus(alias, running ? InstanceState.Running : InstanceState.Stopped, {
+            containerId,
+            alias,
+            boundPort,
+            clusterId: clusterId(alias),
+            connectionString: stored,
+            username,
+            // Recover the image the volume's cluster was created with, so a later recreate reuses it.
+            imageRef: adoptedImageRef,
+        });
+    }
+
+    /**
+     * Deterministic winner among an alias's live containers: the most-recently-created one. Duplicates
+     * (rare — a cross-window double-create) are logged and LEFT in place (never force-removed — R3).
+     */
+    private pickManagedContainer(
+        alias: string,
+        containers: Array<{ id: string; createdAt?: Date }>,
+    ): { id: string } | undefined {
+        if (containers.length <= 1) {
+            return containers[0];
+        }
+        const sorted = [...containers].sort((a, b) => (b.createdAt?.getTime() ?? 0) - (a.createdAt?.getTime() ?? 0));
+        getQuickStartOutputChannel().appendLine(
+            `Found ${containers.length} containers for DocumentDB Local instance "${alias}"; adopting the most recent (${sorted[0].id}) and leaving the rest.`,
+        );
+        return sorted[0];
     }
 }
 
