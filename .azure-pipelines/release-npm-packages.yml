@@ -83,7 +83,7 @@ parameters:
       default: 'validate-only'
       values:
           - validate-only
-          - test-esrp-auth
+          - test-esrp-auth (submits an invalid Maven job that ESRP rejects; nothing is published)
           - publish
 
     - name: 'debug'
@@ -169,7 +169,7 @@ extends:
                   - name: ob_release_environment
                     # Only use the Production environment (and its stricter approval gate)
                     # for an actual publish. Validation and smoke-test runs use Test.
-                    ${{ if eq(parameters.mode, 'publish') }}:
+                    ${{ if startsWith(parameters.mode, 'publish') }}:
                         value: Production
                     ${{ else }}:
                         value: Test
@@ -213,11 +213,13 @@ extends:
                                   $mode = "${{ parameters.mode }}"
                                   $buildId = "$(Build.BuildId)"
 
-                                  $modeSuffix = switch ($mode) {
-                                      'validate-only'  { '-validate' }
-                                      'test-esrp-auth' { '-esrptest' }
-                                      'publish'        { '' }
-                                      default          { "-$mode" }
+                                  # Match on the leading key so the descriptive text in the
+                                  # 'mode' picklist value can change without touching this logic.
+                                  $modeSuffix = switch -Wildcard ($mode) {
+                                      'validate-only*'  { '-validate' }
+                                      'test-esrp-auth*' { '-esrptest' }
+                                      'publish*'        { '' }
+                                      default           { "-$mode" }
                                   }
 
                                   $newBuildNumber = "npm-${packageName}-${publishVersion}${modeSuffix}-${buildId}"
@@ -333,11 +335,11 @@ extends:
                               targetType: 'inline'
                               script: |
                                   $mode = "${{ parameters.mode }}"
-                                  $modeNote = switch ($mode) {
-                                      'validate-only'  { 'Validation only - ESRP is NOT contacted and nothing is published.' }
-                                      'test-esrp-auth' { 'Smoke test - exercises ESRP auth then fails at content validation. Nothing is published.' }
-                                      'publish'        { 'REAL PUBLISH - this run pushes the package to npmjs.org.' }
-                                      default          { "Unknown mode: $mode" }
+                                  $modeNote = switch -Wildcard ($mode) {
+                                      'validate-only*'  { 'Validation only - ESRP is NOT contacted and nothing is published.' }
+                                      'test-esrp-auth*' { 'Smoke test - exercises ESRP auth then fails at content validation. Nothing is published.' }
+                                      'publish*'        { 'REAL PUBLISH - this run pushes the package to npmjs.org.' }
+                                      default           { "Unknown mode: $mode" }
                                   }
 
                                   Write-Output "=== npm release run ==="
@@ -355,7 +357,7 @@ extends:
                   # compiled pipeline graph for 'validate-only'. This is stronger than a
                   # runtime condition: even a future regression that drops the condition
                   # cannot accidentally publish in validate-only mode.
-                  - ${{ if or(eq(parameters.mode, 'publish'), eq(parameters.mode, 'test-esrp-auth')) }}:
+                  - ${{ if or(startsWith(parameters.mode, 'publish'), startsWith(parameters.mode, 'test-esrp-auth')) }}:
                         - job: PublishPackage
                           displayName: ${{ format('Publish ({0})', parameters.mode) }}
                           dependsOn: ReleaseValidation
@@ -376,7 +378,7 @@ extends:
                                     artifactName: drop_BuildStage_Main
                           steps:
                               # Loud banner for the smoke-test mode so logs are unambiguous
-                              - ${{ if eq(parameters.mode, 'test-esrp-auth') }}:
+                              - ${{ if startsWith(parameters.mode, 'test-esrp-auth') }}:
                                     - task: PowerShell@2
                                       displayName: 'SMOKE TEST MODE - not publishing'
                                       inputs:
@@ -391,7 +393,7 @@ extends:
 
                               # Loud banner for the REAL publish mode so the log is unambiguous
                               # about the fact that this run WILL push to npmjs.org.
-                              - ${{ if eq(parameters.mode, 'publish') }}:
+                              - ${{ if startsWith(parameters.mode, 'publish') }}:
                                     - task: PowerShell@2
                                       displayName: 'REAL PUBLISH MODE - will push to npmjs.org'
                                       inputs:
@@ -507,7 +509,7 @@ extends:
                                     signcertname: '$(EsrpSignCertName)'
                                     clientid: '$(EsrpClientId)'
                                     intent: 'PackageDistribution'
-                                    ${{ if eq(parameters.mode, 'test-esrp-auth') }}:
+                                    ${{ if startsWith(parameters.mode, 'test-esrp-auth') }}:
                                         contenttype: 'Maven'
                                     ${{ else }}:
                                         contenttype: 'npm'
@@ -545,9 +547,9 @@ extends:
                                         Write-Output "  Job status  : $jobStatus"
                                         Write-Output ""
 
-                                        if ($mode -eq 'test-esrp-auth') {
+                                        if ($mode -like 'test-esrp-auth*') {
                                             Write-Output "Smoke test: NOTHING was published. A failure here is expected (ESRP rejects the Maven content-type at validation). Inspect the ESRP task log to confirm the failure was the content-type rejection and NOT an auth/cert/Key Vault error."
-                                        } elseif ($mode -eq 'publish') {
+                                        } elseif ($mode -like 'publish*') {
                                             if ($jobStatus -eq 'Succeeded') {
                                                 Write-Output "[OK] Published ${{ parameters.packageName }}@${{ parameters.publishVersion }} to npmjs.org."
                                             } else {
