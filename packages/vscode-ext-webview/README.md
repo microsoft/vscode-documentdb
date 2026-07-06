@@ -78,10 +78,13 @@ and call procedures with `useTrpcClient`.
 npm install @microsoft/vscode-ext-webview
 ```
 
-The package declares `react`, `@trpc/client`, and `@trpc/server` as peer
-dependencies. Bring whatever versions you use yourself; the package will not
-pull duplicates into your webview bundle. `react-dom` is not a peer of this
-package; it is a transitive concern of any React DOM app shell.
+The package declares `@trpc/client`, `@trpc/server`, `react`, and
+`vscode-webview` as peer dependencies. Bring whatever versions you use yourself;
+the package will not pull duplicates into your webview bundle. `react` and
+`vscode-webview` are optional peers (see [Peer dependencies](#peer-dependencies)
+below): you only need them for the `./react` and webview-side surfaces, so a
+host-only or non-React consumer gets no missing-peer warning. `react-dom` is not
+a peer of this package; it is a transitive concern of any React DOM app shell.
 
 **2. Define the router (extension host)**
 
@@ -418,12 +421,16 @@ import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/
 
 ## Peer dependencies
 
-| Package          | Required version                       |
-| ---------------- | -------------------------------------- |
-| `react`          | `>=18.0.0` (only for `./react`)        |
-| `@trpc/client`   | `^11.0.0`                              |
-| `@trpc/server`   | `^11.0.0`                              |
-| `vscode-webview` | `^1.0.0` (optional, webview-side only) |
+| Package          | Version    | Optional?                                 |
+| ---------------- | ---------- | ----------------------------------------- |
+| `@trpc/client`   | `^11.0.0`  | Required — core transport                 |
+| `@trpc/server`   | `^11.0.0`  | Required — core transport                 |
+| `react`          | `>=18.0.0` | Optional — only for the `./react` surface |
+| `vscode-webview` | `^1.0.0`   | Optional — webview-side types only        |
+
+`react` and `vscode-webview` are declared optional via `peerDependenciesMeta`, so
+a consumer that only uses `./host` (or the framework-agnostic `./webview`) surface
+installs neither and sees no missing-peer warning.
 
 ## Scope
 
