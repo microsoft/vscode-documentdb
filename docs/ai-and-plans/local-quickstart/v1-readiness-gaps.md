@@ -282,3 +282,107 @@ instance.
     it could briefly show a not-yet-ready connection as healthy (no data loss; recoverable via
     Restart/Delete). Fix = a bounded `ping` before promoting to `Running`, or a durable pending marker.
   - Gates green: build · lint · jest (2139/2139) · l10n · prettier.
+
+- _2026-07-01_: **Branch integration — POC merged into `dev/feature/local-quickstart` off `main`.**
+  - The POC was **305 commits behind / 38 ahead** of `origin/main`. Created `dev/feature/local-quickstart`
+    from `origin/main` and merged `feature/local-quickstart/POC` with `--no-ff` (commit `0a8b50e8`).
+  - **3 conflicts resolved:** `ClustersClient.ts` (kept both imports); `DocumentDBClusterItem.ts` imports
+    (kept main's superset); the **TLS badge** — semantically integrated POC's host-gated
+    `resolveAllowInvalidCertificates` + emulator ✅ with main's non-emulator `isTlsDisabled()` branch
+    (`if allow-invalid ⚠ · else if emulator ✅ · else if isTlsDisabled() ⚠`); `l10n/bundle.l10n.json`
+    regenerated (1653 keys). Main added the `@kubernetes/client-node` dependency → `npm install`.
+  - Verified: build · lint · **jest 2706/2706 (154 suites)** incl. the tlsException/hostClassification
+    suites. Pushed explicitly to `dev/feature/local-quickstart` (not main).
+
+- _2026-07-06_: **Holistic PR-readiness review (3 rubber-duck agents + direct code verification).**
+  Lenses: **rd-design** (GPT‑5.5, design-completeness) · **rd-prod** (Opus 4.8, production) · **rd-pr**
+  (Opus 4.7, PR/maintainer). rd-pr **independently validated the merge** — "no merge regression detected";
+  the TLS-badge resolution matches runtime by construction (UI + `connectToClient`/auth handlers consult the
+  **same** `resolveAllowInvalidCertificates`). **Bottom line: clean merge, well-reasoned code, but NOT ready
+  to land as a single, always-on, unverified PR to main.**
+  - **✅ Verified concrete bugs (confirmed in code this session):**
+    - 🔴 **Published port binds `0.0.0.0`, not loopback** — `ContainerRuntime.ts:233` omits `hostIp`, and
+      `@microsoft/vscode-container-client` `withDockerPortsArg` emits `--publish 10260:10260` → LAN-exposed
+      DB, contradicting the "Runs on: This machine / localhost" UX (`LocalQuickStart.tsx:553,846`). **One-line
+      fix:** pass `hostIp: '127.0.0.1'` (also makes the bind consistent with the `127.0.0.1` `isPortFree`
+      pre-check at `ContainerRuntime.ts:170`).
+    - 🟡 **Running tree row loses its description** — `QuickStartClusterItem` (`LocalQuickStartItem.ts:34,37`)
+      sets `descriptionOverride = "Running · localhost:{port}"` but inherits `DocumentDBClusterItem.getTreeItem()`
+      (`:452-462`), which returns the TLS-computed `description` and **ignores `descriptionOverride`** (the
+      grandparent `ClusterItemBase.getTreeItem()` `:376` honors it; the subclass override drops it). So the
+      Running row shows "⚠ TLS/SSL Disabled" instead of the port/state. **Pre-existing in the POC, NOT a merge
+      regression** (verified against `feature/local-quickstart/POC`). Cosmetic. Fix = have the Quick Start item
+      merge `descriptionOverride` with the badge (other state rows are plain `TreeElement`s and render fine).
+  - **🔴 Consensus blockers (multiple agents):**
+    - **No automated tests on the risk-bearing surface** (rd-prod C1 + rd-pr B2). `provision`/`resumeReadiness`/
+      `discardTimedOutInstance`/`reconcile`/`liveStateGuard`/lifecycle — the code where **data loss and races
+      live** — is guaranteed only by inspection; only pure functions are covered. Both note infra exists
+      (singletons + `src/__mocks__/vscode.js`); the seam to add is an **injectable `ContainerRuntime` interface**.
+      Highest-value: the cleanup matrix + `removeVolume` only-when-`!reusing` guard (`:315-317`), reuse decision
+      (`:251-266`), timeout→resume (`:435-443`), `reconcile` no-secret-keeps-volume (`:1041-1053`).
+    - **Never live-run in the *merged* state** (rd-prod C1/I8 + rd-pr B1). POC was live-verified 3× on Windows
+      (each caught a real bug tests can't — verbatim args, restart-safety, false-`Running`); since then +305
+      commits + 3 conflicts. **macOS/Linux never verified at all**; `startDockerDesktop` Linux path is a guess
+      that returns `true` even when it no-ops (`ContainerRuntime.ts:399`).
+    - **Terminal-first (§P3‑3) unresolved** (rd-design + rd-pr B3). Doc says "design-required by Tomaz, in
+      progress"; code still uses `OutputChannel`. **Product decision — the item most likely to trigger a rewrite
+      request at review.** Needs an explicit yes/no from the design owner before opening the PR.
+  - **🟠 Missing (real gaps):** §7.3 TLS edit dialog · user-facing docs (CHANGELOG last at 0.9.1, no
+    release-notes, no walkthrough step) · **i18n of service-originated strings** (`QuickStartService.ts` success
+    headline `:428` + all error copy `:234,299,326,337,434,570,629,718,899,935` are hardcoded English; the l10n
+    gate does **not** catch un-wrapped literals) · telemetry taxonomy reconciled with §14 (`documentDB.quickstart.*`
+    vs design `quickstart.*`, **double-emitted** with the tRPC middleware auto-event) + verified against a real sink.
+  - **🟠 Not considered (ops/edge):** `viewQuickStartLogs` leaks an **uncancellable `docker logs -f` per click**
+    (`localQuickStartCommands.ts:102`) · **no timeout on a hung `docker info`** → dead spinner in `phase==='loading'`
+    with no Cancel (`LocalQuickStart.tsx:724-729`) · **unconditional `docker ps` on every activation**
+    (`reconcile()` cost for the non-user majority) · partial legacy-migration shows **silent duplicate** nodes ·
+    Service Discovery port-forward hosts have **no `PromptTlsExceptionStep` path** · uninstall orphans
+    container+volume+secret (inherent; document a pre-uninstall cleanup note).
+  - **🔵 Reframed — intentional deviations, NOT oversights (reconcile with design owner; do NOT auto-"fix"):**
+    - **Delete drops the volume** — documented v1.0 decision (log above) + matches the user's explicit
+      delete-while-running data-loss-warning request. Design §11 keeps the volume on Delete (Reset is the
+      destructive v1.2 split). *Needs sign-off, not a code change.*
+    - **Success page stays open / no auto-close** and **Open Connection keeps the panel open** — explicit user
+      feedback (committed `9342dbff`), deliberately overriding the design's auto-close.
+    - **Single instance; recreate reuses volume+creds** — settled decision (`decision-instance-model.md`).
+    - **180 s readiness timeout** vs the design's 60 s — chosen for slow first-pull safety; accept or align.
+  - **📋 Procedural (rd-pr):** **split the 65-file / +8.8k-line PR into 3** — §7 TLS-exception (affects all
+    users, well-tested) · P2 legacy migration (self-contained) · Quick Start (gate behind a flag). A reviewer
+    can't catch a §7 regression buried under ~1.6k lines of Quick Start UI. **Add
+    `documentDB.experimental.enableLocalQuickStart`** (precedent: `enableAIQueryGeneration`), default off until
+    live-verified on all platforms.
+  - **What's left for a successful review:**
+    1. **Product decisions first (gate everything — for Tomaz):** terminal-first now/defer/renegotiate · PR split
+       1-vs-3 · preview flag yes/no.
+    2. **Verification:** live E2E on the *merged* branch, Windows + macOS min (fresh provision → legacy migration
+       → stop/start/restart/delete → `reconcile()` after reload → Docker-daemon-absent).
+    3. **Tests:** state-machine smoke tests (happy path + timeout→resume + `reconcile` cases) with an injected
+       `ContainerRuntime`, **or** maintainer sign-off that live-Docker is the v0.10 acceptance bar.
+    4. **Ship hygiene:** CHANGELOG + release-notes + tracking issues (§7.3, §P3‑3 if deferred, reconcile-reused-timeout v1.2 slip).
+    5. **Quick wins (do now):** loopback bind (🔴 1 line) · Running-row description · `viewQuickStartLogs` follow-stream leak.
+  - No code changed in this pass (review only); the three findings above are candidate fixes pending the product decisions.
+
+- _2026-07-06_: **3 quick-win fixes from the PR-readiness review — DONE (5-agent review, all-correct consensus).**
+  - **Loopback bind (security):** `ContainerRuntime.createAndRunContainer` now publishes the port with
+    `hostIp: '127.0.0.1'` (`--publish 127.0.0.1:<port>:<port>`) so the local instance — auto-generated creds +
+    TLS-allow-invalid — is no longer reachable from the LAN. Matches the `127.0.0.1` `isPortFree` pre-check and
+    the "Runs on: This machine" UX.
+  - **Running tree row description:** `QuickStartClusterItem` now overrides `getTreeItem()` to keep the base
+    item (icon, security tooltip, context value) but force the state-aware description, so the Running row shows
+    "Running · localhost:<port>" instead of the inherited "⚠ TLS/SSL Disabled" (the base
+    `DocumentDBClusterItem.getTreeItem()` derives description from TLS state and ignores `descriptionOverride`).
+    Only the Running row is affected; other states are plain `TreeElement` rows.
+  - **`viewQuickStartLogs` follow leak:** the command now keeps a single module-level `CancellationTokenSource`
+    and cancels/disposes the prior follow before starting a new one, so repeated "View Logs" clicks no longer
+    stack concurrent `docker logs -f` streams (verified end-to-end: cancellation `tree-kill`s the child process,
+    not just the read loop; the provisioning-side follow uses an independent CTS and is unaffected).
+  - **5-agent review (GPT‑5.4/5.5 xhigh, Opus 4.6/4.7/4.8 max):** all five confirmed the three changes are
+    **correct and regression-free**; Fixes 2 & 3 unanimous with zero findings. Gates: prettier · lint (0 new) ·
+    jest 2706/2706 · build.
+  - **Tracked follow-up (out of scope for these quick-wins; feature is unreleased → no shipped users affected):**
+    the loopback bind applies only to *newly created* containers — a container created before this fix keeps its
+    0.0.0.0 binding through Start/Stop/Restart (Docker fixes port bindings at create time); only a re-provision
+    (Delete → Quick Start) re-binds it. **Follow-up:** on `reconcile()`/adopt, detect a non-loopback published
+    binding and re-secure via the data-safe recreate (reuse volume + creds), or at minimum a release-note
+    callout. Raised by GPT‑5.4 (blocking) + Opus‑4.7 (non-blocking nit); deferred by decision (unreleased →
+    a `docker rm` clears interim test containers).

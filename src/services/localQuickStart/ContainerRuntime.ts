@@ -230,7 +230,11 @@ class ContainerRuntimeImpl {
                 // whenever detached/interactive), matching the image README's `-dt`.
                 detached: true,
                 labels: { ...options.labels },
-                ports: [{ containerPort: options.containerPort, hostPort: options.hostPort }],
+                // Publish on loopback only. The local instance ships with auto-generated
+                // credentials and TLS-allow-invalid, and the UX promises "Runs on: This
+                // machine" / localhost — binding 0.0.0.0 would expose it to the LAN.
+                // `127.0.0.1` also matches the loopback `isPortFree` pre-check above.
+                ports: [{ containerPort: options.containerPort, hostPort: options.hostPort, hostIp: '127.0.0.1' }],
                 mounts,
                 environmentFiles: options.environmentFiles ? [...options.environmentFiles] : undefined,
                 command: options.command ? [...options.command] : undefined,

@@ -86,19 +86,32 @@ export function copyQuickStartPassword(_context: IActionContext): void {
     showConfirmationAsInSettings(l10n.t('Password copied to clipboard.'));
 }
 
+/**
+ * The single active `docker logs -f` follow. Reused across "View Logs" clicks so
+ * repeated invocations don't stack concurrent follows — each would duplicate the
+ * channel output and leak an orphaned child process until the container stops.
+ */
+let activeLogFollow: vscode.CancellationTokenSource | undefined;
+
 export function viewQuickStartLogs(_context: IActionContext): void {
     const channel = getQuickStartOutputChannel();
     channel.show(true);
     // Best-effort: stream the running container's current logs into the channel,
     // masking the password (D14) in case the image ever echoes it.
     const metadata = QuickStartService.getStatus().metadata;
-    if (metadata) {
-        let password = '';
-        try {
-            password = new DocumentDBConnectionString(metadata.connectionString).password;
-        } catch {
-            password = '';
-        }
-        void ContainerRuntime.followLogs(metadata.containerId, password ? [password] : [], undefined);
+    if (!metadata) {
+        return;
     }
+    // Cancel any prior follow before starting a new one (see activeLogFollow).
+    activeLogFollow?.cancel();
+    activeLogFollow?.dispose();
+    activeLogFollow = new vscode.CancellationTokenSource();
+    const token = activeLogFollow.token;
+    let password = '';
+    try {
+        password = new DocumentDBConnectionString(metadata.connectionString).password;
+    } catch {
+        password = '';
+    }
+    void ContainerRuntime.followLogs(metadata.containerId, password ? [password] : [], token);
 }

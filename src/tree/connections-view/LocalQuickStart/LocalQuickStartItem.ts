@@ -37,6 +37,17 @@ class QuickStartClusterItem extends DocumentDBClusterItem {
         this.descriptionOverride = description;
         this.contextValue = createContextValue([INSTANCE_CONTEXT, stateToken]);
     }
+
+    /**
+     * The base {@link DocumentDBClusterItem.getTreeItem} derives the row description
+     * from the TLS/SSL state and ignores `descriptionOverride` — which would replace
+     * the managed-instance state label (e.g. "Running · localhost:10260") with a
+     * "⚠ TLS/SSL Disabled" badge. Keep the base tree item (icon, security tooltip,
+     * context value) but force the state-aware description.
+     */
+    public override getTreeItem(): vscode.TreeItem {
+        return { ...super.getTreeItem(), description: this.descriptionOverride };
+    }
 }
 
 /**
