@@ -127,11 +127,14 @@ problem the README warns about.
 
 **Why `react` and `vscode-webview` are optional peers.** `peerDependenciesMeta`
 `optional: true` means "required only if you use the surface that needs it, and
-don't warn otherwise." `react` is only needed for the `./react` subpath;
-`vscode-webview` is webview-side only. A consumer using `./host` or the
-framework-agnostic `./webview` surface therefore installs neither and gets no
-missing-peer warning. `@trpc/client` / `@trpc/server` are **not** optional
-because they back the core transport on both surfaces.
+don't warn otherwise." Both `react` and `vscode-webview` are referenced only by
+the `./react` subpath (`vscode-webview` supplies the `WebviewApi` type used in
+`WithWebviewContext`; the framework-agnostic `./webview` transport defines its
+own structural `VsCodeApiLike` and imports nothing from `vscode-webview`). A
+consumer using `./host` or the framework-agnostic `./webview` surface therefore
+installs neither and gets no missing-peer warning. `@trpc/client` /
+`@trpc/server` are **not** optional because they back the core transport on both
+surfaces.
 
 A consumer does **not** have to match an exact version — they satisfy the
 declared range with whatever version they already use. Modern npm (v7+)
@@ -151,6 +154,26 @@ mismatches as warnings/errors at install time rather than at runtime.
 
 - `fix(package): add sideEffects flag to package.json`
 - `docs(vscode-ext-webview): clarify optional peer dependencies`
+- `docs(vscode-ext-webview): scope optional peers to the ./react surface` (review round 1)
+
+## Review round 1 — Copilot reviewer
+
+The Copilot reviewer flagged a real inconsistency in the first docs commit: the
+install prose said the optional peers were needed for "the `./react` and
+webview-side surfaces," implying a framework-agnostic `./webview` consumer needs
+`vscode-webview`. That is wrong and contradicted the peer-dependency table note
+(which correctly said a `./webview` consumer installs neither optional peer).
+
+Verified against source: only `src/react/WebviewContext.tsx` imports from the
+`vscode-webview` package; `src/webview/connectTrpc.ts` defines its own structural
+`VsCodeApiLike` and imports nothing from it. So both optional peers narrow to the
+`./react` surface only.
+
+Fix: reworded the install prose and the `vscode-webview` table row to say "only
+for the `./react` surface," and added a sentence explaining that the `./webview`
+transport uses a structural `VsCodeApiLike` instead. No `package.json` change was
+needed — the `peerDependenciesMeta` config was already correct; only the docs
+were imprecise.
 
 ## Verification
 

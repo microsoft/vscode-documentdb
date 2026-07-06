@@ -82,9 +82,10 @@ The package declares `@trpc/client`, `@trpc/server`, `react`, and
 `vscode-webview` as peer dependencies. Bring whatever versions you use yourself;
 the package will not pull duplicates into your webview bundle. `react` and
 `vscode-webview` are optional peers (see [Peer dependencies](#peer-dependencies)
-below): you only need them for the `./react` and webview-side surfaces, so a
-host-only or non-React consumer gets no missing-peer warning. `react-dom` is not
-a peer of this package; it is a transitive concern of any React DOM app shell.
+below): both are used only by the `./react` surface, so a host-only consumer or
+a framework-agnostic `./webview` consumer needs neither and gets no missing-peer
+warning. `react-dom` is not a peer of this package; it is a transitive concern
+of any React DOM app shell.
 
 **2. Define the router (extension host)**
 
@@ -426,11 +427,14 @@ import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/
 | `@trpc/client`   | `^11.0.0`  | Required — core transport                 |
 | `@trpc/server`   | `^11.0.0`  | Required — core transport                 |
 | `react`          | `>=18.0.0` | Optional — only for the `./react` surface |
-| `vscode-webview` | `^1.0.0`   | Optional — webview-side types only        |
+| `vscode-webview` | `^1.0.0`   | Optional — only for the `./react` surface |
 
 `react` and `vscode-webview` are declared optional via `peerDependenciesMeta`, so
 a consumer that only uses `./host` (or the framework-agnostic `./webview`) surface
-installs neither and sees no missing-peer warning.
+installs neither and sees no missing-peer warning. Both peers are referenced only
+by the `./react` surface (`vscode-webview` supplies the `WebviewApi` type used in
+`WithWebviewContext`); the `./webview` transport defines its own structural
+`VsCodeApiLike` instead, so it has no `vscode-webview` dependency.
 
 ## Scope
 
