@@ -125,11 +125,13 @@ variables:
     # ESRP-approved publisher app: DocumentDB-VSC-Extension-ESRP-Release (AME).
     EsrpClientId: '8ba27e59-eace-4759-a6dd-36962b0e55d0'
 
-    # ESRP release notification / approval contacts. Defaults to the current
-    # release owner, but prefer a TEAM security group or distribution list so
-    # releases are not tied to a single person. Override in ADO -> Variables.
-    EsrpReleaseOwners: 'guanzhousong@microsoft.com;tnaumowicz@microsoft.com'
-    EsrpReleaseApprovers: 'guanzhousong@microsoft.com;tnaumowicz@microsoft.com'
+    # ESRP release notification / approval contacts. Comma-separated list of
+    # email addresses (the EsrpRelease task splits on ',' - a ';' is treated as
+    # part of a single address and rejected as an invalid email). Prefer a TEAM
+    # security group or distribution list so releases are not tied to a single
+    # person. Override in ADO -> Variables.
+    EsrpReleaseOwners: 'guanzhousong@microsoft.com,tnaumowicz@microsoft.com'
+    EsrpReleaseApprovers: 'guanzhousong@microsoft.com,tnaumowicz@microsoft.com'
 
 extends:
     template: v2/OneBranch.Official.CrossPlat.yml@templates
