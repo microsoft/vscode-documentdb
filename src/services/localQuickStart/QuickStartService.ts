@@ -44,6 +44,7 @@ import { DEFAULT_INSTANCE_DISPLAY_NAME, removeInstanceRecord, upsertInstanceReco
 import {
     type AdvancedQuickStartOptions,
     clusterId,
+    containerName,
     DEFAULT_ALIAS,
     imageRefKey,
     type InstanceMetadata,
@@ -54,23 +55,21 @@ import {
     type ProvisionStage,
     QUICK_START_ALIAS,
     QUICK_START_ALIAS_LABEL_KEY,
-    QUICK_START_CONTAINER_NAME,
     QUICK_START_DATA_PATH,
     QUICK_START_IMAGE,
     QUICK_START_LABEL_KEY,
     QUICK_START_PORT,
     QUICK_START_PORT_BAND_END,
-    QUICK_START_VOLUME_NAME,
     type QuickStartStatus,
     resolveQuickStartImage,
     secretKey,
     type StageEvent,
+    volumeName,
 } from './quickStartTypes';
 
 /** Stable cache key for CredentialCache / ClustersClient (the default instance). Ephemeral. */
 export const QUICK_START_CLUSTER_ID = clusterId(DEFAULT_ALIAS);
 
-const SECRET_KEY = secretKey(DEFAULT_ALIAS);
 /**
  * Durable (non-secret) record of the image reference the managed instance's data volume
  * was created with, kept in globalState so a recreate AFTER a window reload (when the
@@ -314,6 +313,9 @@ export class QuickStartServiceImpl {
         // Starting a fresh run supersedes any container left running by a prior readiness
         // timeout — drop its retained "Wait longer" state (the run below removes the container).
         this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
+        // The alias this provision targets. WI-2c derives the container/volume/keys from it (still
+        // DEFAULT, so behavior is unchanged); WI-2e allocates a fresh alias here for `+ New`.
+        const alias = DEFAULT_ALIAS;
         const channel = getQuickStartOutputChannel();
         // Decide reuse from LIVE durable state, not the in-memory Missing flag: whenever we
         // still hold the instance's stored credentials (SecretStorage), a data volume bound to
@@ -324,7 +326,7 @@ export class QuickStartServiceImpl {
         // when NO credentials are recoverable is a clean wipe safe (the volume could not be
         // opened anyway). This makes a true fresh provision the explicit Delete-then-recreate
         // path, so running setup again can never silently destroy an existing data volume.
-        const reusable = await this.getReusableCredentials();
+        const reusable = await this.getReusableCredentials(alias);
         const reusing = reusable !== undefined;
         const credentials = reusable ?? resolveProvisionCredentials(options);
         const secrets: string[] = [credentials.password];
@@ -338,8 +340,8 @@ export class QuickStartServiceImpl {
         const usedCustomCreds = !reusing && !!(options?.username?.trim() && options?.password?.trim());
         const imageRef = reusing
             ? (this.stateFor(DEFAULT_ALIAS).metadata?.imageRef ??
-              ext.context.globalState.get<string>(IMAGE_REF_STATE_KEY) ??
-              ext.context.globalState.get<string>(LEGACY_IMAGE_REF_KEY) ??
+              ext.context.globalState.get<string>(imageRefKey(alias)) ??
+              (alias === DEFAULT_ALIAS ? ext.context.globalState.get<string>(LEGACY_IMAGE_REF_KEY) : undefined) ??
               QUICK_START_IMAGE)
             : resolveQuickStartImage(options?.imageTag);
         const usedCustomImage = !reusing && imageRef !== QUICK_START_IMAGE;
@@ -386,13 +388,13 @@ export class QuickStartServiceImpl {
             // labelled as ours, D9). When NOT reusing (no recoverable credentials) also drop
             // any stale data volume, so the new credentials initialize a clean cluster. When
             // reusing, the volume is intentionally KEPT so existing data survives the recreate.
-            const existing = await this.findManagedContainer();
+            const existing = await this.findManagedContainer(alias);
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
                 await this.runtime.removeContainer(existing.id).catch(() => undefined);
             }
             if (!reusing) {
-                await this.runtime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
+                await this.runtime.removeVolume(volumeName(alias)).catch(() => undefined);
             }
 
             // Pick a host port (design §8.3). An explicit Advanced port is honored exactly:
@@ -443,12 +445,12 @@ export class QuickStartServiceImpl {
             containerId = await this.runtime.createAndRunContainer(
                 {
                     imageRef: imageRef,
-                    name: QUICK_START_CONTAINER_NAME,
-                    labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: QUICK_START_ALIAS },
+                    name: containerName(alias),
+                    labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: alias },
                     hostPort: chosenPort,
                     containerPort: QUICK_START_PORT,
                     // Persist data across recreation (§8/§11).
-                    volumeName: QUICK_START_VOLUME_NAME,
+                    volumeName: volumeName(alias),
                     dataPath: QUICK_START_DATA_PATH,
                     // Credentials via env-file (§8.2), not CLI args. We also do NOT bake
                     // `--init-data true`: it re-runs the sample-data init on every
@@ -461,8 +463,8 @@ export class QuickStartServiceImpl {
             );
             containerCreated = true;
             if (!containerId) {
-                const item = await this.runtime.inspectContainer(QUICK_START_CONTAINER_NAME);
-                containerId = item?.id ?? QUICK_START_CONTAINER_NAME;
+                const item = await this.runtime.inspectContainer(containerName(alias));
+                containerId = item?.id ?? containerName(alias);
             }
             this.throwIfAborted(signal);
             yield stageEvent('creating', 'done');
@@ -484,8 +486,8 @@ export class QuickStartServiceImpl {
             // Retain everything a "Wait longer" resume needs BEFORE probing, so a readiness
             // timeout can keep this running container and finish adoption later (§9.1).
             const pending: PendingReadiness = {
-                alias: DEFAULT_ALIAS,
-                displayName: DEFAULT_INSTANCE_DISPLAY_NAME,
+                alias,
+                displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
                 containerId,
                 connectionString,
                 boundPort,
@@ -615,37 +617,37 @@ export class QuickStartServiceImpl {
             await this.seedSampleData(pending.containerId, [pending.password], token);
         }
         this.throwIfAborted(signal);
-        await ext.secretStorage.store(SECRET_KEY, pending.connectionString);
+        await ext.secretStorage.store(secretKey(pending.alias), pending.connectionString);
         // Durably remember the image this instance's volume was created with, so a recreate
         // after a window reload (in-memory metadata gone) keeps the same image.
-        await ext.context.globalState.update(IMAGE_REF_STATE_KEY, pending.imageRef);
-        // Make the registry authoritative: the default instance is now ready on its bound port.
-        // (WI-2 reads the registry to enumerate instances; single-instance behavior is unchanged.)
+        await ext.context.globalState.update(imageRefKey(pending.alias), pending.imageRef);
+        // Make the registry authoritative: this instance is now ready on its bound port.
+        // (WI-2 reads the registry to enumerate instances.)
         await upsertInstanceRecord(ext.context.globalState, {
-            alias: DEFAULT_ALIAS,
-            displayName: DEFAULT_INSTANCE_DISPLAY_NAME,
+            alias: pending.alias,
+            displayName: pending.displayName,
             port: pending.boundPort,
             phase: 'ready',
         });
         // Drop any stale client cached under this id (e.g. from a prior run with different
         // credentials) so the next browse uses the fresh credentials.
-        await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
-        this.populateCredentialCache(pending.connectionString, pending.username, pending.password);
+        await ClustersClient.deleteClient(clusterId(pending.alias)).catch(() => undefined);
+        this.populateCredentialCache(pending.alias, pending.connectionString, pending.username, pending.password);
         this.setStatus(
-            DEFAULT_ALIAS,
+            pending.alias,
             InstanceState.Running,
             {
                 containerId: pending.containerId,
-                alias: QUICK_START_ALIAS,
+                alias: pending.alias,
                 boundPort: pending.boundPort,
-                clusterId: QUICK_START_CLUSTER_ID,
+                clusterId: clusterId(pending.alias),
                 connectionString: pending.connectionString,
                 username: pending.username,
                 imageRef: pending.imageRef,
             },
             undefined,
         );
-        this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
+        this.stateFor(pending.alias).pendingReadiness = undefined;
     }
 
     /**
@@ -770,7 +772,7 @@ export class QuickStartServiceImpl {
             await this.runtime.stopContainer(pending.containerId).catch(() => undefined);
             await this.runtime.removeContainer(pending.containerId).catch(() => undefined);
             if (!pending.reusing) {
-                await this.runtime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
+                await this.runtime.removeVolume(volumeName(pending.alias)).catch(() => undefined);
             }
             this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled, undefined, undefined);
             return true;
@@ -881,13 +883,18 @@ export class QuickStartServiceImpl {
      * alias-keyed secret BEFORE any read, but if a destructive path ever ran pre-migration this
      * prevents a spurious "no credentials → wipe" (R1).
      */
-    private async readStoredConnectionString(): Promise<string | undefined> {
-        return (await ext.secretStorage.get(SECRET_KEY)) ?? (await ext.secretStorage.get(LEGACY_SECRET_KEY));
+    private async readStoredConnectionString(alias: string = DEFAULT_ALIAS): Promise<string | undefined> {
+        const stored = await ext.secretStorage.get(secretKey(alias));
+        if (stored !== undefined) {
+            return stored;
+        }
+        // The legacy flat key only ever held the DEFAULT instance's pre-alias credentials.
+        return alias === DEFAULT_ALIAS ? await ext.secretStorage.get(LEGACY_SECRET_KEY) : undefined;
     }
 
-    private async getReusableCredentials(): Promise<GeneratedCredentials | undefined> {
+    private async getReusableCredentials(alias: string = DEFAULT_ALIAS): Promise<GeneratedCredentials | undefined> {
         try {
-            const stored = await this.readStoredConnectionString();
+            const stored = await this.readStoredConnectionString(alias);
             if (!stored) {
                 return undefined;
             }
@@ -923,9 +930,23 @@ export class QuickStartServiceImpl {
         return filePath;
     }
 
-    private async findManagedContainer(): Promise<{ id: string } | undefined> {
+    private async findManagedContainer(alias: string = DEFAULT_ALIAS): Promise<{ id: string } | undefined> {
         const list = await this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }).catch(() => []);
-        return list[0];
+        return list.find((container: { id: string; labels?: Record<string, string> }) =>
+            this.aliasMatches(container.labels?.[QUICK_START_ALIAS_LABEL_KEY], alias),
+        );
+    }
+
+    /**
+     * A container belongs to `alias` when its `vscode.documentdb.alias` label equals `alias`. A
+     * pre-alias-label *legacy* container (no/empty alias label) belongs to the DEFAULT instance, so
+     * an existing single instance is still found/adopted with no rename (WI-2c, behavior-preserving).
+     */
+    private aliasMatches(aliasLabelValue: string | undefined, alias: string): boolean {
+        if (aliasLabelValue === alias) {
+            return true;
+        }
+        return alias === DEFAULT_ALIAS && (aliasLabelValue === undefined || aliasLabelValue === '');
     }
 
     /**
@@ -933,9 +954,9 @@ export class QuickStartServiceImpl {
      * connects without re-prompting. `DocumentDBClusterItem.getChildren` takes the
      * cached path when `CredentialCache.hasCredentials(clusterId)` is true.
      */
-    private populateCredentialCache(connectionString: string, username: string, password: string): void {
+    private populateCredentialCache(alias: string, connectionString: string, username: string, password: string): void {
         CredentialCache.setAuthCredentials(
-            QUICK_START_CLUSTER_ID,
+            clusterId(alias),
             AuthMethodId.NativeAuth,
             connectionString,
             { connectionUser: username, connectionPassword: password },
@@ -948,9 +969,12 @@ export class QuickStartServiceImpl {
      * touch a container that doesn't carry the Quick Start label, even if the id
      * matches.
      */
-    private async isManaged(containerId: string): Promise<boolean> {
+    private async isManaged(containerId: string, alias: string = DEFAULT_ALIAS): Promise<boolean> {
         const item = await this.runtime.inspectContainer(containerId);
-        return !!item && item.labels?.[QUICK_START_LABEL_KEY] === '1';
+        if (!item || item.labels?.[QUICK_START_LABEL_KEY] !== '1') {
+            return false;
+        }
+        return this.aliasMatches(item.labels?.[QUICK_START_ALIAS_LABEL_KEY], alias);
     }
 
     /**
@@ -979,19 +1003,19 @@ export class QuickStartServiceImpl {
     }
 
     /** Start a stopped instance (design §11). */
-    public async start(): Promise<void> {
-        await this.runLifecycle(async () => {
-            const id = this.stateFor(DEFAULT_ALIAS).metadata?.containerId;
-            if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['stopped']))) {
+    public async start(alias: string = DEFAULT_ALIAS): Promise<void> {
+        await this.runLifecycle(alias, async () => {
+            const id = this.stateFor(alias).metadata?.containerId;
+            if (!id || !(await this.isManaged(id, alias)) || !(await this.liveStateGuard(id, ['stopped']))) {
                 return;
             }
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Starting);
+            this.setStatus(alias, InstanceState.Starting);
             await this.runtime.startContainer(id);
             if (await this.confirmStaysRunning(id)) {
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Running);
+                this.setStatus(alias, InstanceState.Running);
             } else {
                 this.setStatus(
-                    DEFAULT_ALIAS,
+                    alias,
                     InstanceState.Error,
                     undefined,
                     'The container started but exited shortly after. Check the Quick Start logs.',
@@ -1001,34 +1025,34 @@ export class QuickStartServiceImpl {
     }
 
     /** Stop a running instance (design §11). */
-    public async stop(): Promise<void> {
-        await this.runLifecycle(async () => {
-            const id = this.stateFor(DEFAULT_ALIAS).metadata?.containerId;
-            if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['running']))) {
+    public async stop(alias: string = DEFAULT_ALIAS): Promise<void> {
+        await this.runLifecycle(alias, async () => {
+            const id = this.stateFor(alias).metadata?.containerId;
+            if (!id || !(await this.isManaged(id, alias)) || !(await this.liveStateGuard(id, ['running']))) {
                 return;
             }
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Stopping);
+            this.setStatus(alias, InstanceState.Stopping);
             await this.runtime.stopContainer(id);
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Stopped);
+            this.setStatus(alias, InstanceState.Stopped);
         });
     }
 
     /** Restart (stop + start) a running instance (design §11). */
-    public async restart(): Promise<void> {
-        await this.runLifecycle(async () => {
-            const id = this.stateFor(DEFAULT_ALIAS).metadata?.containerId;
-            if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['running', 'stopped']))) {
+    public async restart(alias: string = DEFAULT_ALIAS): Promise<void> {
+        await this.runLifecycle(alias, async () => {
+            const id = this.stateFor(alias).metadata?.containerId;
+            if (!id || !(await this.isManaged(id, alias)) || !(await this.liveStateGuard(id, ['running', 'stopped']))) {
                 return;
             }
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Stopping);
+            this.setStatus(alias, InstanceState.Stopping);
             await this.runtime.stopContainer(id).catch(() => undefined);
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Starting);
+            this.setStatus(alias, InstanceState.Starting);
             await this.runtime.startContainer(id);
             if (await this.confirmStaysRunning(id)) {
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Running);
+                this.setStatus(alias, InstanceState.Running);
             } else {
                 this.setStatus(
-                    DEFAULT_ALIAS,
+                    alias,
                     InstanceState.Error,
                     undefined,
                     'The container restarted but exited shortly after. Check the Quick Start logs.',
@@ -1060,33 +1084,38 @@ export class QuickStartServiceImpl {
      * Stop/Start/Restart and an external-loss `Missing` → recreate (which keeps the
      * volume). Returns to NotInstalled.
      */
-    public async deleteContainer(): Promise<void> {
-        await this.runLifecycle(async () => {
-            const id = this.stateFor(DEFAULT_ALIAS).metadata?.containerId;
+    public async deleteContainer(alias: string = DEFAULT_ALIAS): Promise<void> {
+        await this.runLifecycle(alias, async () => {
+            const entry = this.stateFor(alias);
+            const id = entry.metadata?.containerId;
             // If the container still exists, only remove it when it is ours.
-            if (id && (this.stateFor(DEFAULT_ALIAS).missing || (await this.isManaged(id)))) {
+            if (id && (entry.missing || (await this.isManaged(id, alias)))) {
                 await this.runtime.removeContainer(id).catch(() => undefined);
             }
             // Explicit Delete is a full clean slate: drop the data volume too.
-            await this.runtime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
+            await this.runtime.removeVolume(volumeName(alias)).catch(() => undefined);
             try {
-                await ext.secretStorage.delete(SECRET_KEY);
-                // Also purge the legacy flat keys: if an activation migration failed and left them
-                // behind, an explicit Delete must still be a full clean slate (no stale legacy
-                // credentials/image survive to be silently reused by the next provision — opus47-N1).
-                await ext.secretStorage.delete(LEGACY_SECRET_KEY);
+                await ext.secretStorage.delete(secretKey(alias));
+                // Also purge the legacy flat keys (default instance only): if an activation migration
+                // failed and left them behind, an explicit Delete must still be a full clean slate (no
+                // stale legacy credentials/image survive to be silently reused by a provision — opus47-N1).
+                if (alias === DEFAULT_ALIAS) {
+                    await ext.secretStorage.delete(LEGACY_SECRET_KEY);
+                }
             } catch {
                 // ignore — best-effort cleanup
             }
-            await ext.context.globalState.update(IMAGE_REF_STATE_KEY, undefined);
-            await ext.context.globalState.update(LEGACY_IMAGE_REF_KEY, undefined);
+            await ext.context.globalState.update(imageRefKey(alias), undefined);
+            if (alias === DEFAULT_ALIAS) {
+                await ext.context.globalState.update(LEGACY_IMAGE_REF_KEY, undefined);
+            }
             // Drop the registry record too — an explicit Delete is a full clean slate, so the
             // instance no longer appears when the tree enumerates the registry (WI-2).
-            await removeInstanceRecord(ext.context.globalState, DEFAULT_ALIAS);
-            await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
-            CredentialCache.deleteCredentials(QUICK_START_CLUSTER_ID);
-            this.stateFor(DEFAULT_ALIAS).metadata = undefined;
-            this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled);
+            await removeInstanceRecord(ext.context.globalState, alias);
+            await ClustersClient.deleteClient(clusterId(alias)).catch(() => undefined);
+            CredentialCache.deleteCredentials(clusterId(alias));
+            entry.metadata = undefined;
+            this.setStatus(alias, InstanceState.NotInstalled);
         });
     }
 
@@ -1118,17 +1147,18 @@ export class QuickStartServiceImpl {
         }
     }
 
-    private async runLifecycle(op: () => Promise<void>): Promise<void> {
-        if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
+    private async runLifecycle(alias: string, op: () => Promise<void>): Promise<void> {
+        const entry = this.stateFor(alias);
+        if (entry.provisioning || entry.lifecycleBusy) {
             return;
         }
-        this.stateFor(DEFAULT_ALIAS).lifecycleBusy = true;
+        entry.lifecycleBusy = true;
         try {
             await op();
         } catch (error) {
-            this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, errMessage(error));
+            this.setStatus(alias, InstanceState.Error, undefined, errMessage(error));
         } finally {
-            this.stateFor(DEFAULT_ALIAS).lifecycleBusy = false;
+            entry.lifecycleBusy = false;
         }
     }
 
@@ -1173,7 +1203,7 @@ export class QuickStartServiceImpl {
                 username = '';
             }
             if (running) {
-                this.populateCredentialCache(stored, username, password);
+                this.populateCredentialCache(DEFAULT_ALIAS, stored, username, password);
             }
             const adoptedImageRef = inspected?.image?.originalName;
             // Backfill the durable image record from the adopted container, so a recreate AFTER

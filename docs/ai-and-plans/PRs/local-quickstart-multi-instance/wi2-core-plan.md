@@ -2,7 +2,13 @@
 
 > Elaborates [`implementation-plan.md`](./implementation-plan.md) §4.2/§4.3/§5 WI-2 + §7/§8 into a
 > committable, verifiable sub-step sequence. Round-1/2 findings: [`review-and-resolutions.md`](./review-and-resolutions.md).
-> **Status:** PLAN v2 — round-1 5-agent plan-review folded in (see §8). Ready to implement WI-2b. No code yet.
+> **Status:** IMPLEMENTING — plan v2 (round-1 5-agent review folded in, see §8).
+> **Done:** WI-2b (fields → `Map<alias, InstanceRuntimeState>` + `stateFor`, commit `365dcd72`),
+> WI-2c (alias-thread methods + alias-derived names/keys + matcher/credential legacy fallback).
+> Both behavior-preserving; full jest 2790/2790, build/lint/prettier green. **Next:** WI-2d.
+> **Deviation note (WI-2c):** `liveStateGuard(id)` / `confirmStaysRunning(id)` were NOT given an
+> `alias` param — they act purely on a container id and threading it now would be a dead param (the
+> per-instance user message is a WI-4 l10n change). Deferred to WI-4 so 2c stays behavior-preserving.
 > **Prereqs done:** WI-0 (injectable `ContainerRuntime`), WI-1 (identity + keying + migration),
 > WI-2 part 1 (registry authoritative: `upsert/removeInstanceRecord`, finalize upsert, delete remove).
 
