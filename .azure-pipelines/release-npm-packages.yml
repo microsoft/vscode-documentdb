@@ -157,7 +157,7 @@ extends:
 
         stages:
             - stage: Release
-              displayName: Release npm package
+              displayName: ${{ format('Release npm package ({0})', parameters.mode) }}
               variables:
                   - name: ob_release_environment
                     # Only use the Production environment (and its stricter approval gate)
