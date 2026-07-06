@@ -14,7 +14,7 @@
  */
 
 import { type Document, type WithId } from 'mongodb';
-import { meterSilentCatch } from '../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { SchemaStore } from './SchemaStore';
 
 /**

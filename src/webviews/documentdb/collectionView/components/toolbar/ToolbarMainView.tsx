@@ -34,7 +34,7 @@ import {
     SparkleRegular,
     WindowConsoleRegular,
 } from '@fluentui/react-icons';
-import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
@@ -56,7 +56,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
     /**
      * Use the `useTrpcClient` hook to get the tRPC client
      */
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
     const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
 
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
@@ -205,7 +205,7 @@ const ToolbarQueryOperations = (): JSX.Element => {
  */
 const ToolbarSecondaryActions = (): JSX.Element => {
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     // ─── Handlers ───────────────────────────────────────────────────────────────
 
