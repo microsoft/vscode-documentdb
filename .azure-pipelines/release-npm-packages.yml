@@ -349,6 +349,18 @@ extends:
                                             Write-Host "##[warning]After the run, inspect the ESRP task logs to confirm the failure"
                                             Write-Host "##[warning]is the expected Maven content-type rejection, NOT an auth/cert error."
 
+                            # Loud banner for the REAL publish mode so the log is unambiguous
+                            # about the fact that this run WILL push to npmjs.org.
+                            - ${{ if eq(parameters.mode, 'publish') }}:
+                                  - task: PowerShell@2
+                                    displayName: "REAL PUBLISH MODE - will push to npmjs.org"
+                                    inputs:
+                                        targetType: 'inline'
+                                        script: |
+                                            Write-Host "##[warning]Running in 'publish' mode - this is a REAL RELEASE."
+                                            Write-Host "##[warning]Publishing ${{ parameters.packageName }}@${{ parameters.publishVersion }} to npmjs.org via ESRP."
+                                            Write-Host "##[warning]This action is PUBLIC and cannot be undone (npm unpublish is heavily restricted)."
+
                             # Copy only the selected .tgz to an isolated folder for ESRP
                             - task: PowerShell@2
                               displayName: "Prepare package for publishing"
