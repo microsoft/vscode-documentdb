@@ -26,6 +26,15 @@
         @extend .baseDataHeader;
     }
 
+    // Fixed-height slot for the cell value so skeleton ↔ value swap doesn't shift layout.
+    // 20px matches the line-height applied to .cellValue (see GenericCell.scss).
+    .cellValueSlot {
+        min-height: 20px;
+        display: flex;
+        align-items: center;
+        width: 100%;
+    }
+
     &.cellSpanFull {
         grid-column: span 2;
         margin-top: 4px;

@@ -9,47 +9,6 @@ import { l10n } from 'vscode';
 import { ext } from '../../extensionVariables';
 
 /**
- * Preferred and fallback **language-model families**, per feature.
- *
- * We deliberately key our preference chain on `LanguageModelChat.family`
- * (the documented well-known name returned by the VS Code Language Model
- * API — `gpt-4.1`, `gpt-4o`, …) rather than `LanguageModelChat.id`
- * (which is opaque and may change between Copilot extension versions, or
- * include date-stamped suffixes like `copilot-gpt-4o-mini-2024-07-18`).
- * Family names are the stable surface we expect to outlive id churn, so
- * matching by family avoids silent "preferred model missed" fallbacks
- * every time the Copilot team rev's an internal id.
- *
- * Each AI-backed feature picks its own family chain so the choices can
- * diverge as we tune them (e.g., one feature may prefer a faster/cheaper
- * model if depth of reasoning is less important). When sharing the same
- * value, keep them as separate constants so a change in one feature does
- * not silently affect the other.
- *
- * `copilot-utility` is the internal Copilot alias that resolves to whichever
- * chat model the CAPI marks as `is_chat_fallback`. The Copilot extension
- * publishes alias entries with the alias string used as **both** `id` and
- * `family` (see the alias-registration loop in
- * `vscode-copilot-chat/.../languageModelAccess.ts`), so it matches our
- * family-based selector without special-casing. Adding it as the final
- * fallback keeps each AI flow on a model that is intended to be
- * cost-neutral for Copilot subscribers, even if `gpt-4.1` / `gpt-4o`
- * become unavailable in the future.
- */
-
-/** Preferred model family for the Query Insights / index recommender feature. */
-export const INDEX_OPTIMIZATION_PREFERRED_FAMILY = 'gpt-4.1';
-
-/** Fallback family chain for the Query Insights / index recommender feature. */
-export const INDEX_OPTIMIZATION_FALLBACK_FAMILIES = ['gpt-4o', 'copilot-utility'];
-
-/** Preferred model family for the AI Query Generation feature. */
-export const QUERY_GENERATION_PREFERRED_FAMILY = 'gpt-4.1';
-
-/** Fallback family chain for the AI Query Generation feature. */
-export const QUERY_GENERATION_FALLBACK_FAMILIES = ['gpt-4o', 'copilot-utility'];
-
-/**
  * Prompt factory utility functions
  */
 export function createPriorityDeclaration(role: string): string {
@@ -207,15 +166,13 @@ export function setLastPromptSource(source: PromptSource): void {
     lastPromptSource = source;
 }
 
-const INDEX_ADVISOR_ROLE = 'MongoDB API Index Advisor assistant';
+const QUERY_PERFORMANCE_ANALYST_ROLE = 'DocumentDB API / MongoDB API Query Performance Analyst';
 const QUERY_GENERATOR_ROLE = 'MongoDB Query Generator assistant';
 
-const INDEX_ADVISOR_TASK_FIND =
-    'analyze MongoDB API queries and provide index optimization suggestions based on the data provided';
-const INDEX_ADVISOR_TASK_AGGREGATE =
-    'analyze MongoDB API aggregation pipelines and provide index optimization suggestions based on the data provided';
-const INDEX_ADVISOR_TASK_COUNT =
-    'analyze MongoDB API count queries and provide index optimization suggestions based on the data provided';
+const QUERY_PERFORMANCE_TASK_FIND = 'analyze MongoDB API query performance based on the data provided';
+const QUERY_PERFORMANCE_TASK_AGGREGATE =
+    'analyze MongoDB API aggregation pipeline performance based on the data provided';
+const QUERY_PERFORMANCE_TASK_COUNT = 'analyze MongoDB API count query performance based on the data provided';
 const QUERY_GENERATOR_TASK =
     "generate MongoDB queries based on the user's natural language description and the provided schema information";
 
@@ -245,9 +202,9 @@ const SINGLE_COLLECTION_QUERY_MESSAGES = [
 ];
 
 export const FIND_QUERY_PROMPT_TEMPLATE = `
-${createPriorityDeclaration(INDEX_ADVISOR_ROLE)}
+${createPriorityDeclaration(QUERY_PERFORMANCE_ANALYST_ROLE)}
 
-${createSecurityInstructions(FIND_QUERY_MESSAGES, INDEX_ADVISOR_TASK_FIND)}
+${createSecurityInstructions(FIND_QUERY_MESSAGES, QUERY_PERFORMANCE_TASK_FIND)}
 
 ## DATA PLACEHOLDERS
 The subsequent user messages will provide the following data that you should use to fill in your analysis:
@@ -261,9 +218,12 @@ The subsequent user messages will provide the following data that you should use
   - **Static Analysis Results** (if present): A summary of the static analysis already shown to the user, including performance rating, summary indicators, and diagnostic badges. You MUST read and consider this section.
 
 ## TASK INSTRUCTIONS
-You are an expert DocumentDB API / MongoDB API Query Performance Analyst for a find query executed against a collection — or confirm that no changes are needed. Using the data from subsequent messages, analyze the query and provide optimization recommendations.
+You are an expert DocumentDB API / MongoDB API Query Performance Analyst for a find query executed against a collection. Using the data from subsequent messages, analyze the query and provide optimization recommendations — or confirm that no changes are needed.
 
 Follow these strict instructions (must obey):
+
+> **PROTECTED INDEX — \`_id_\`**: The default \`_id_\` index can NEVER be hidden or dropped by the database. NEVER emit a \`hide\`, \`drop\`, or any \`modify\` recommendation that targets the \`_id_\` index, under ANY rule below (including the mandatory bitmap-hide rule), regardless of its scan type, cardinality, or efficiency. Treat \`_id_\` as immutable and silently exclude it from all index-change recommendations.
+
 1. **Single JSON output only** — your response MUST be a single valid JSON object and **nothing else**. Do NOT wrap your response in code fences (like \`\`\`json or \`\`\`). Do NOT include any surrounding text or explanation. Output ONLY the raw JSON object starting with { and ending with }.
 2. **Do not hallucinate** — only use facts present in the provided data (Collection_Stats, Indexes_Stats, Execution_Stats). If a required metric is absent, set the corresponding field to \`null\`.
 3. **CRITICAL — Low-cardinality / boolean field indexes** — Do NOT recommend creating an index with \`high\` priority on a field where the query filter uses a boolean value (\`true\`/\`false\`) or where the field clearly has very few distinct values (e.g., status flags, binary flags, yes/no fields). An index on such a field splits the collection into only 2–3 buckets, so the database still reads a large fraction of documents through the index and gains little over a collection scan, while paying ongoing write and storage costs. This applies to both single-field AND compound indexes where the low-cardinality field is the leading key. If you still believe a compound index could help where the low-cardinality field is NOT the leading key, set the priority to \`low\` and include a risk note about low cardinality.
@@ -329,23 +289,22 @@ Follow these strict instructions (must obey):
 16. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
 17. **Priority of modify and drop actions** — priority of modify and drop actions should always be set to \`low\`.
 18. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
-19. **Verification array requirement** — the \`verification\` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing \`\`\`javascript code blocks\`\`\` with valid mongosh commands to verify that specific improvement. If \`improvements\` is an empty array, \`verification\` must also be an empty array.
-20. **Do not drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
+19. **Do not drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
 
-
-21. **Additional low-value single-field hide suggestions (optional)** — you MAY also suggest hiding a non-bitmap single-field index (one key in \`key\`/\`keyPattern\`) when: (a) the field is boolean or very low cardinality AND the query returns >20% of the collection, or (b) \`estimatedEntryCount\` exceeds 20% of collection size. Same \`modify\`/\`hideIndex\`/\`priority: "low"\` shape. Never suggest hiding compound indexes or clearly load-bearing indexes (selectivity <5% and high cardinality).
-22. **It is OK to recommend nothing** — if no index change would meaningfully improve this query, return empty \`improvements\` and \`verification\` arrays. Explain in the analysis why no changes are needed. (The mandatory bitmap-hide rule 6 still applies independently.)
-23. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics."
-24. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
+20. **Additional low-value single-field hide suggestions (optional)** — you MAY also suggest hiding a non-bitmap single-field index (one key in \`key\`/\`keyPattern\`) when: (a) the field is boolean or very low cardinality AND the query returns >20% of the collection, or (b) \`estimatedEntryCount\` exceeds 20% of collection size. Same \`modify\`/\`hideIndex\`/\`priority: "low"\` shape. Never suggest hiding compound indexes or clearly load-bearing indexes (selectivity <5% and high cardinality).
+21. **It is OK to recommend nothing** — if no index change would meaningfully improve this query, return empty \`improvements\`. Explain in the analysis why no changes are needed. (The mandatory bitmap-hide rule 6 still applies independently.)
+22. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics."
+23. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
   - Allowed: \`###\` headings, paragraphs, lists, blockquotes, \`---\` rules, links, inline code, fenced code blocks (triple backticks).
   - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (\`$\`/\`$$\`), mermaid/diagrams, callouts/admonitions (\`> [!NOTE]\`, \`:::\`).
+
 Thinking / analysis tips (useful signals to form recommendations; don't output these tips themselves):
 - Check **which index(es)** the winning plan used (or whether a \`COLLSCAN\` occurred) and whether \`totalKeysExamined\` is much smaller than \`totalDocsExamined\`.
 - Prefer indexes that reduce document fetches and align with the winning plan's chosen index.
 - **Wildcard index**: If queries filter on multiple unpredictable or dynamic nested fields and no existing index covers them efficiently, and the collection is large (>100k documents), recommend a wildcard index (\`$**\`). Wildcard index should be suggested as an alternative of regular index if schema may vary significantly, but set medium priority.
 - **Equality first in compound index**: Always place equality (\`=\`) fields first in a compound index. These fields provide the highest selectivity and allow efficient index filtering.
 - **Prioritize high selectivity fields**: When multiple range fields exist, prioritize the high-selectivity fields (those that filter out more documents) first to reduce scanned documents and improve performance.
-- **Multiple range filters**: multiple range filters could also get benefit from a compound index, so compound index is also recommended.
+- **Multiple range filters**: multiple range filters could also benefit from a compound index.
 - **Regex considerations**: For \`$regex\` queries, suggest indexes for both anchored (e.g., \`^abc\`) and non-anchored patterns (e.g., \`abc\`), as non-anchored regexes can also benefit from indexes by narrowing down the documents needed to be scanned.
 - **Multikey/array considerations**: Be aware that multikey or array fields may affect index ordering and whether index-only coverage is achievable.
 - **Filter → sort pushdown**: In a compound index, place filter fields (equality and the first range/anchored regex) first, followed by sort-only fields, to maximize index pushdown and avoid in-memory sorting.
@@ -378,11 +337,6 @@ Output JSON schema (required shape; **adhere exactly**):
       "priority": "high" | "medium" | "low",
       "risks": "<short risk note or null>"
     }
-  ],
-  "verification": [
-    "<markdown string for improvement[0] with code blocks showing mongosh verification commands>",
-    "<markdown string for improvement[1] with code blocks showing mongosh verification commands>",
-    "... (one per improvement item, or empty array if no improvements)"
   ]
 }
 \`\`\`
@@ -391,14 +345,13 @@ Additional rules for the JSON:
 - \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each stage from the execution plan individually with its specific metrics.
 - \`analysis\` must be a Markdown string following the fixed template structure with three sections: **Performance Summary**, **Key Issues**, and **Recommendations**. Use proper markdown headings (###) and concise, actionable content.
 - \`shellCommand\` commands must **only** use double quotes and valid JS object notation.
-- \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
 ${CRITICAL_JSON_REMINDER}
 `;
 
 export const AGGREGATE_QUERY_PROMPT_TEMPLATE = `
-${createPriorityDeclaration(INDEX_ADVISOR_ROLE)}
+${createPriorityDeclaration(QUERY_PERFORMANCE_ANALYST_ROLE)}
 
-${createSecurityInstructions(AGGREGATE_QUERY_MESSAGES, INDEX_ADVISOR_TASK_AGGREGATE)}
+${createSecurityInstructions(AGGREGATE_QUERY_MESSAGES, QUERY_PERFORMANCE_TASK_AGGREGATE)}
 
 ## DATA PLACEHOLDERS
 The subsequent user messages will provide the following data that you should use to fill in your analysis:
@@ -412,9 +365,12 @@ The subsequent user messages will provide the following data that you should use
   - **Static Analysis Results** (if present): A summary of the static analysis already shown to the user, including performance rating, summary indicators, and diagnostic badges. You MUST read and consider this section.
 
 ## TASK INSTRUCTIONS
-You are an expert DocumentDB API / MongoDB API Query Performance Analyst for an aggregation pipeline executed against a collection — or confirm that no changes are needed. Using the data from subsequent messages, analyze the pipeline and provide optimization recommendations.
+You are an expert DocumentDB API / MongoDB API Query Performance Analyst for an aggregation pipeline executed against a collection. Using the data from subsequent messages, analyze the pipeline and provide optimization recommendations — or confirm that no changes are needed.
 
 Follow these strict instructions (must obey):
+
+> **PROTECTED INDEX — \`_id_\`**: The default \`_id_\` index can NEVER be hidden or dropped by the database. NEVER emit a \`hide\`, \`drop\`, or any \`modify\` recommendation that targets the \`_id_\` index, under ANY rule below (including the mandatory bitmap-hide rule), regardless of its scan type, cardinality, or efficiency. Treat \`_id_\` as immutable and silently exclude it from all index-change recommendations.
+
 1. **Single JSON output only** — your response MUST be a single valid JSON object and **nothing else**. Do NOT wrap your response in code fences (like \`\`\`json or \`\`\`). Do NOT include any surrounding text or explanation. Output ONLY the raw JSON object starting with { and ending with }.
 2. **Do not hallucinate** — only use facts present in the sections Collection_Stats, Indexes_Stats, Execution_Stats. If a required metric is absent, set the corresponding field to \`null\`.
 3. **CRITICAL — Low-cardinality / boolean field indexes** — Do NOT recommend creating an index with \`high\` priority on a field where the query filter uses a boolean value (\`true\`/\`false\`) or where the field clearly has very few distinct values (e.g., status flags, binary flags, yes/no fields). An index on such a field splits the collection into only 2–3 buckets, so the database still reads a large fraction of documents through the index and gains little over a collection scan, while paying ongoing write and storage costs. This applies to both single-field AND compound indexes where the low-cardinality field is the leading key. If you still believe a compound index could help where the low-cardinality field is NOT the leading key, set the priority to \`low\` and include a risk note about low cardinality.
@@ -480,16 +436,15 @@ Follow these strict instructions (must obey):
 16. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
 17. **Priority of modify and drop actions** — priority of modify and drop actions should always be set to \`low\`.
 18. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
-19. **Verification array requirement** — the \`verification\` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing \`\`\`javascript code blocks\`\`\` with valid mongosh commands to verify that specific improvement. If \`improvements\` is an empty array, \`verification\` must also be an empty array.
-20. **Do not drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
+19. **Do not drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
 
-
-21. **Additional low-value single-field hide suggestions (optional)** — you MAY also suggest hiding a non-bitmap single-field index (one key in \`key\`/\`keyPattern\`) when: (a) the field is boolean or very low cardinality AND the query returns >20% of the collection, or (b) \`estimatedEntryCount\` exceeds 20% of collection size. Same \`modify\`/\`hideIndex\`/\`priority: "low"\` shape. Never suggest hiding compound indexes or clearly load-bearing indexes (selectivity <5% and high cardinality).
-22. **It is OK to recommend nothing** — if no index change would meaningfully improve this query, return empty \`improvements\` and \`verification\` arrays. Explain in the analysis why no changes are needed. (The mandatory bitmap-hide rule 6 still applies independently.)
-23. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics."
-24. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
+20. **Additional low-value single-field hide suggestions (optional)** — you MAY also suggest hiding a non-bitmap single-field index (one key in \`key\`/\`keyPattern\`) when: (a) the field is boolean or very low cardinality AND the query returns >20% of the collection, or (b) \`estimatedEntryCount\` exceeds 20% of collection size. Same \`modify\`/\`hideIndex\`/\`priority: "low"\` shape. Never suggest hiding compound indexes or clearly load-bearing indexes (selectivity <5% and high cardinality).
+21. **It is OK to recommend nothing** — if no index change would meaningfully improve this query, return empty \`improvements\`. Explain in the analysis why no changes are needed. (The mandatory bitmap-hide rule 6 still applies independently.)
+22. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics."
+23. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
   - Allowed: \`###\` headings, paragraphs, lists, blockquotes, \`---\` rules, links, inline code, fenced code blocks (triple backticks).
   - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (\`$\`/\`$$\`), mermaid/diagrams, callouts/admonitions (\`> [!NOTE]\`, \`:::\`).
+
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **\\$match priority**: Place match stages early and check if indexes can accelerate filtering.
 - **\\$sort optimization**: Match sort order to index order to avoid blocking in-memory sorts.
@@ -538,11 +493,6 @@ Output JSON schema (required shape; adhere exactly):
       "priority": "high" | "medium" | "low",
       "risks": "<short risk note or null>"
     }
-  ],
-  "verification": [
-    "<markdown string for improvement[0] with code blocks showing mongosh verification commands>",
-    "<markdown string for improvement[1] with code blocks showing mongosh verification commands>",
-    "... (one per improvement item, or empty array if no improvements)"
   ]
 }
 \`\`\`
@@ -550,14 +500,13 @@ Additional rules for the JSON:
 - \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each pipeline stage from the execution plan individually with its specific metrics and purpose.
 - \`analysis\` must be a Markdown string following the fixed template structure with three sections: **Performance Summary**, **Key Issues**, and **Recommendations**. Use proper markdown headings (###) and concise, actionable content.
 - \`shellCommand\` commands must **only** use double quotes and valid JS object notation.
-- \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
 ${CRITICAL_JSON_REMINDER}
 `;
 
 export const COUNT_QUERY_PROMPT_TEMPLATE = `
-${createPriorityDeclaration(INDEX_ADVISOR_ROLE)}
+${createPriorityDeclaration(QUERY_PERFORMANCE_ANALYST_ROLE)}
 
-${createSecurityInstructions(COUNT_QUERY_MESSAGES, INDEX_ADVISOR_TASK_COUNT)}
+${createSecurityInstructions(COUNT_QUERY_MESSAGES, QUERY_PERFORMANCE_TASK_COUNT)}
 
 ## DATA PLACEHOLDERS
 The subsequent user messages will provide the following data that you should use to fill in your analysis:
@@ -571,9 +520,12 @@ The subsequent user messages will provide the following data that you should use
   - **Static Analysis Results** (if present): A summary of the static analysis already shown to the user, including performance rating, summary indicators, and diagnostic badges. You MUST read and consider this section.
 
 ## TASK INSTRUCTIONS
-You are an expert DocumentDB API / MongoDB API Query Performance Analyst for a count query — or confirm that no changes are needed. Using the data from subsequent messages, analyze the query and provide optimization recommendations.
+You are an expert DocumentDB API / MongoDB API Query Performance Analyst for a count query. Using the data from subsequent messages, analyze the query and provide optimization recommendations — or confirm that no changes are needed.
 
 Follow these strict instructions (must obey):
+
+> **PROTECTED INDEX — \`_id_\`**: The default \`_id_\` index can NEVER be hidden or dropped by the database. NEVER emit a \`hide\`, \`drop\`, or any \`modify\` recommendation that targets the \`_id_\` index, under ANY rule below (including the mandatory bitmap-hide rule), regardless of its scan type, cardinality, or efficiency. Treat \`_id_\` as immutable and silently exclude it from all index-change recommendations.
+
 1. **Single JSON output only** — your response MUST be a single valid JSON object and **nothing else**. Do NOT wrap your response in code fences (like \`\`\`json or \`\`\`). Do NOT include any surrounding text or explanation. Output ONLY the raw JSON object starting with { and ending with }.
 2. **Do not hallucinate** — only use facts present in the sections Query, Collection_Stats, Indexes_Stats, Execution_Stats, Cluster_Type. If a required metric is absent, set the corresponding field to \`null\`.
 3. **CRITICAL — Low-cardinality / boolean field indexes** — Do NOT recommend creating an index with \`high\` priority on a field where the query filter uses a boolean value (\`true\`/\`false\`) or where the field clearly has very few distinct values (e.g., status flags, binary flags, yes/no fields). An index on such a field splits the collection into only 2–3 buckets, so the database still reads a large fraction of documents through the index and gains little over a collection scan, while paying ongoing write and storage costs. This applies to both single-field AND compound indexes where the low-cardinality field is the leading key. If you still believe a compound index could help where the low-cardinality field is NOT the leading key, set the priority to \`low\` and include a risk note about low cardinality.
@@ -638,16 +590,15 @@ Follow these strict instructions (must obey):
 16. **Include priority** — each suggested improvement must include a \`priority\` (\`high\`/\`medium\`/\`low\`) so an engineer can triage.
 17. **Priority of modify and drop actions** — priority of modify and drop actions should always be set to \`low\`.
 18. **Be explicit about risks** — if a suggested index could increase write cost or large index size, include that as a short risk note in the improvement.
-19. **Verification array requirement** — the \`verification\` field must be an **array** with **exactly one verification item per improvement item**. Each verification item must be a Markdown string containing \`\`\`javascript code blocks\`\`\` with valid mongosh commands to verify that specific improvement. If \`improvements\` is an empty array, \`verification\` must also be an empty array.
-20. **Do not drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
+19. **Do not drop index** — when you want to drop an index, do not drop it, suggest hide it instead.
 
-
-21. **Additional low-value single-field hide suggestions (optional)** — you MAY also suggest hiding a non-bitmap single-field index (one key in \`key\`/\`keyPattern\`) when: (a) the field is boolean or very low cardinality AND the query returns >20% of the collection, or (b) \`estimatedEntryCount\` exceeds 20% of collection size. Same \`modify\`/\`hideIndex\`/\`priority: "low"\` shape. Never suggest hiding compound indexes or clearly load-bearing indexes (selectivity <5% and high cardinality).
-22. **It is OK to recommend nothing** — if no index change would meaningfully improve this query, return empty \`improvements\` and \`verification\` arrays. Explain in the analysis why no changes are needed. (The mandatory bitmap-hide rule 6 still applies independently.)
-23. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics."
-24. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
+20. **Additional low-value single-field hide suggestions (optional)** — you MAY also suggest hiding a non-bitmap single-field index (one key in \`key\`/\`keyPattern\`) when: (a) the field is boolean or very low cardinality AND the query returns >20% of the collection, or (b) \`estimatedEntryCount\` exceeds 20% of collection size. Same \`modify\`/\`hideIndex\`/\`priority: "low"\` shape. Never suggest hiding compound indexes or clearly load-bearing indexes (selectivity <5% and high cardinality).
+21. **It is OK to recommend nothing** — if no index change would meaningfully improve this query, return empty \`improvements\`. Explain in the analysis why no changes are needed. (The mandatory bitmap-hide rule 6 still applies independently.)
+22. **Limited confidence** — if the Indexes_Stats or Collection_Stats is not available ('N/A'), add the following sentence as the first line in your analysis: "Note: Limited confidence in recommendations due to missing optional statistics."
+23. **Markdown compatibility (react-markdown/CommonMark only)** — \`analysis\` and \`educationalContent\` must be **CommonMark only** (react-markdown, no plugins).
   - Allowed: \`###\` headings, paragraphs, lists, blockquotes, \`---\` rules, links, inline code, fenced code blocks (triple backticks).
   - Forbidden: tables, strikethrough, task lists, footnotes/definitions, raw HTML, math/LaTeX (\`$\`/\`$$\`), mermaid/diagrams, callouts/admonitions (\`> [!NOTE]\`, \`:::\`).
+
 Thinking / analysis tips (for your reasoning; do not output these tips):
 - **Index-only optimization**: The best count performance occurs when all filter fields are indexed, allowing a covered query that avoids document fetches entirely.
 - **Filter coverage**: Ensure all equality and range predicates in the count query are covered by an index; if not, suggest a compound index with equality fields first, range fields last.
@@ -676,11 +627,6 @@ Output JSON schema (required shape; adhere exactly):
       "priority": "high" | "medium" | "low",
       "risks": "<short risk note or null>"
     }
-  ],
-  "verification": [
-    "<markdown string for improvement[0] with code blocks showing mongosh verification commands>",
-    "<markdown string for improvement[1] with code blocks showing mongosh verification commands>",
-    "... (one per improvement item, or empty array if no improvements)"
   ]
 }
 \`\`\`
@@ -688,7 +634,6 @@ Additional rules for the JSON:
 - \`educationalContent\` must be a Markdown string following the fixed template structure with five sections: **Query Execution Overview**, **Execution Stages Breakdown**, **Index Usage Analysis**, **Performance Metrics**, and **Key Findings**. Use proper markdown headings (###) and write detailed, specific explanations. For the Execution Stages Breakdown section, analyze each stage from the execution plan individually with its specific metrics and purpose in the count operation.
 - \`analysis\` must be a Markdown string following the fixed template structure with three sections: **Performance Summary**, **Key Issues**, and **Recommendations**. Use proper markdown headings (###) and concise, actionable content.
 - \`shellCommand\` commands must **only** use double quotes and valid JS object notation.
-- \`verification\` must be an **array** with the **same length as improvements**. Each element is a Markdown string containing \`\`\`javascript code blocks\`\`\` with verification commands for the corresponding improvement. If \`improvements\` is empty, \`verification\` must be \`[]\`.
 ${CRITICAL_JSON_REMINDER}
 `;
 

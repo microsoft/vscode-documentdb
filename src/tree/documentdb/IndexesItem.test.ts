@@ -26,7 +26,7 @@ jest.mock('../../extensionVariables', () => ({
     },
 }));
 
-jest.mock('../../utils/callWithAccumulatingTelemetry', () => ({
+jest.mock('../../utils/accumulatingTelemetry', () => ({
     meterSilentCatch: jest.fn(),
 }));
 

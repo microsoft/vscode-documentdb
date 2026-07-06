@@ -43,7 +43,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
     stage2Loading,
     hasError,
 }) => {
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     const handleStageDetailsToggle = (isExpanded: boolean) => {
         trpcClient.common.reportEvent

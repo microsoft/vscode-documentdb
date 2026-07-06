@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { type CompletionCategory } from '../../telemetry/completionCategories';
-import { callWithAccumulatingTelemetry } from '../../utils/callWithAccumulatingTelemetry';
+import { accumulateTelemetry } from '../../utils/accumulatingTelemetry';
 import { classifyCommand, extractRunCommandName } from '../../utils/classifyCommand';
 import { ClustersClient } from '../ClustersClient';
 import { CredentialCache } from '../CredentialCache';
@@ -484,7 +484,12 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
             });
 
             // Display connection summary
-            const authLabel = metadata.authMechanism === 'MicrosoftEntraID' ? 'Entra ID' : 'SCRAM';
+            const authLabel =
+                metadata.authMechanism === 'MicrosoftEntraID'
+                    ? l10n.t('Entra ID')
+                    : metadata.authMechanism === 'NoAuth'
+                      ? l10n.t('No Authentication')
+                      : l10n.t('SCRAM');
             const hostLabel = metadata.isEmulator ? l10n.t('{0} (Emulator)', metadata.host) : metadata.host;
 
             this.writeLine(this._outputFormatter.formatSystemMessage(l10n.t('Connected to: {0}', hostLabel)));
@@ -818,9 +823,17 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
 
     /**
      * Write a line to the terminal (with \r\n).
+     *
+     * Normalizes any bare `\n` inside `text` to `\r\n` before appending the
+     * terminating newline. Multi-line payloads (e.g., error messages from
+     * underlying drivers, server-formatted MongoServerError strings) often
+     * contain `\n` only; the pseudoterminal needs `\r\n` so the cursor
+     * returns to column 0 on each line break instead of producing the
+     * "staircase" effect.
      */
     private writeLine(text: string): void {
-        this._writeEmitter.fire(text + '\r\n');
+        const normalized = text.replace(/\r?\n/g, '\r\n');
+        this._writeEmitter.fire(normalized + '\r\n');
     }
 
     /**
@@ -1252,9 +1265,9 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private trackCompletionAccepted(kind: CompletionCandidate['kind'], trigger: 'tab' | 'ghostText'): void {
         const category = DocumentDBShellPty.shellKindToCategory(kind);
-        void callWithAccumulatingTelemetry('completion.accepted', (ctx) => {
-            ctx.telemetry.measurements[`cat_${category}_src_shell`] = 1;
-            ctx.telemetry.measurements[`trigger_${trigger}`] = 1;
+        accumulateTelemetry('completion.accepted', (sample) => {
+            sample.measurements[`cat_${category}_src_shell`] = 1;
+            sample.measurements[`trigger_${trigger}`] = 1;
         });
     }
 
@@ -1262,8 +1275,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Track that a closing-brackets ghost text suggestion was shown.
      */
     private trackClosingBracketsShown(): void {
-        void callWithAccumulatingTelemetry('shell.closingBrackets', (ctx) => {
-            ctx.telemetry.measurements.shown = 1;
+        accumulateTelemetry('shell.closingBrackets', (sample) => {
+            sample.measurements.shown = 1;
         });
     }
 
@@ -1271,8 +1284,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      * Track that a closing-brackets ghost text suggestion was accepted.
      */
     private trackClosingBracketsAccepted(): void {
-        void callWithAccumulatingTelemetry('shell.closingBrackets', (ctx) => {
-            ctx.telemetry.measurements.accepted = 1;
+        accumulateTelemetry('shell.closingBrackets', (sample) => {
+            sample.measurements.accepted = 1;
         });
     }
 
@@ -1282,8 +1295,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
     private trackCompletionListShown(candidates: readonly CompletionCandidate[]): void {
         const kind = candidates[0]?.kind ?? 'command';
         const category = DocumentDBShellPty.shellKindToCategory(kind);
-        void callWithAccumulatingTelemetry('shell.completionList', (ctx) => {
-            ctx.telemetry.measurements[`shown_${category}`] = 1;
+        accumulateTelemetry('shell.completionList', (sample) => {
+            sample.measurements[`shown_${category}`] = 1;
         });
     }
 
@@ -1292,8 +1305,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private trackCompletionGhostShown(kind: CompletionCandidate['kind']): void {
         const category = DocumentDBShellPty.shellKindToCategory(kind);
-        void callWithAccumulatingTelemetry('shell.completionGhost', (ctx) => {
-            ctx.telemetry.measurements[`shown_${category}`] = 1;
+        accumulateTelemetry('shell.completionGhost', (sample) => {
+            sample.measurements[`shown_${category}`] = 1;
         });
     }
 
@@ -1302,8 +1315,8 @@ export class DocumentDBShellPty implements vscode.Pseudoterminal {
      */
     private trackCompletionGhostAccepted(kind: CompletionCandidate['kind']): void {
         const category = DocumentDBShellPty.shellKindToCategory(kind);
-        void callWithAccumulatingTelemetry('shell.completionGhost', (ctx) => {
-            ctx.telemetry.measurements[`accepted_${category}`] = 1;
+        accumulateTelemetry('shell.completionGhost', (sample) => {
+            sample.measurements[`accepted_${category}`] = 1;
         });
     }
 }

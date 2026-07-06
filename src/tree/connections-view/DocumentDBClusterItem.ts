@@ -31,6 +31,7 @@ import { ProvidePasswordStep } from '../../documentdb/wizards/authenticate/Provi
 import { ProvideUserNameStep } from '../../documentdb/wizards/authenticate/ProvideUsernameStep';
 import { SaveCredentialsStep } from '../../documentdb/wizards/authenticate/SaveCredentialsStep';
 import { ext } from '../../extensionVariables';
+import { ConnectionReachabilityService } from '../../services/connectionReachabilityService';
 import { ConnectionStorageService, ConnectionType, isConnection } from '../../services/connectionStorageService';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../documentdb/ClusterItemBase';
 import { type TreeCluster } from '../models/BaseClusterModel';
@@ -67,10 +68,13 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             return undefined;
         }
 
+        await this.ensureConnectionReachable(connectionCredentials.properties);
+
         return {
             connectionString: connectionCredentials.secrets.connectionString,
             availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
             selectedAuthMethod: authMethodFromString(connectionCredentials.properties.selectedAuthMethod),
+            connectionProperties: connectionCredentials.properties,
 
             // Structured auth configurations
             nativeAuthConfig: connectionCredentials.secrets.nativeAuthConfig,
@@ -110,6 +114,8 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
                 return null;
             }
 
+            await this.ensureConnectionReachable(connectionCredentials.properties);
+
             const connectionString = new DocumentDBConnectionString(connectionCredentials.secrets.connectionString);
 
             // Use nativeAuthConfig for credentials
@@ -121,13 +127,16 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
 
             /**
              * Prompt for credentials if no auth method selected or
-             * native auth but no username/password set
+             * native auth but no username/password set.
+             *
+             * NoAuth connections are intentionally anonymous: they have a defined auth
+             * method and need no credentials, so they must skip the authenticate wizard.
              */
-            if (
-                !authMethod ||
-                (authMethod === AuthMethodId.NativeAuth &&
-                    (!username || username.length === 0 || !password || password.length === 0))
-            ) {
+            const needsNativeCredentials =
+                authMethod === AuthMethodId.NativeAuth &&
+                (!username || username.length === 0 || !password || password.length === 0);
+
+            if (!authMethod || needsNativeCredentials) {
                 const wizardContext: AuthenticateWizardContext = {
                     ...context,
                     availableAuthMethods: authMethodsFromString(connectionCredentials.properties.availableAuthMethods),
@@ -359,6 +368,33 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
         return result ?? null;
     }
 
+    protected override async beforeCachedClientConnect(): Promise<void> {
+        const connectionType = this.cluster.emulatorConfiguration?.isEmulator
+            ? ConnectionType.Emulators
+            : ConnectionType.Clusters;
+        const connectionCredentials = await ConnectionStorageService.get(this.storageId, connectionType);
+
+        if (connectionCredentials && isConnection(connectionCredentials)) {
+            await this.ensureConnectionReachable(connectionCredentials.properties);
+        }
+    }
+
+    /**
+     * Some saved connections are not directly reachable and need a source-specific preparation step
+     * before we connect (e.g. a Kubernetes ClusterIP target whose `127.0.0.1:<localPort>` string only
+     * works while a port-forward tunnel is active). Rather than hard-code any one source here, this
+     * generic cluster node delegates to {@link ConnectionReachabilityService}: each source registers a
+     * {@link import('../../services/connectionReachabilityService').ConnectionReachabilityProvider} at
+     * activation, and we simply ask it to make the connection reachable based on the stored properties.
+     * The call is cheap and a no-op when no provider applies (the common case). Failures propagate to
+     * the connect flow's telemetry/error handling.
+     *
+     * @see docs/ai-and-plans/PRs/621-kubernetes-discovery/connection-reachability-providers.md
+     */
+    private async ensureConnectionReachable(connectionProperties: Record<string, unknown> | undefined): Promise<void> {
+        await ConnectionReachabilityService.ensureReachable(connectionProperties);
+    }
+
     /**
      * Prompts the user for credentials using a wizard.
      * @param wizardContext The wizard context.
@@ -405,6 +441,10 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             this.cluster.emulatorConfiguration?.isEmulator &&
             this.cluster.emulatorConfiguration?.disableEmulatorSecurity
         ) {
+            description = l10n.t('⚠ TLS/SSL Disabled');
+        } else if (!this.cluster.emulatorConfiguration?.isEmulator && this.isTlsDisabled()) {
+            // Surface a connection-string TLS/SSL override (e.g. tls=false) the same way the
+            // emulator's "disable security" state is shown.
             description = l10n.t('⚠ TLS/SSL Disabled');
         }
 
@@ -460,9 +500,32 @@ export class DocumentDBClusterItem extends ClusterItemBase<ConnectionClusterMode
             } else {
                 md.appendMarkdown(`✅ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Enabled')}\n\n`);
             }
+        } else if (this.isTlsDisabled()) {
+            // For non-emulator connections, only add a line when the connection string
+            // explicitly disables TLS/SSL; otherwise show no security entry.
+            md.appendMarkdown(`⚠️ **${l10n.t('Security')}:** ${l10n.t('TLS/SSL Disabled')}\n\n`);
         }
 
         return md;
+    }
+
+    /**
+     * Detects whether the connection string explicitly disables TLS/SSL
+     * (e.g. `tls=false` or `ssl=false`). Returns false when the parameter is
+     * absent or the connection string cannot be parsed.
+     */
+    private isTlsDisabled(): boolean {
+        if (!this.cluster.connectionString) {
+            return false;
+        }
+        try {
+            const parsed = new DocumentDBConnectionString(this.cluster.connectionString);
+            const tls = parsed.searchParams.get('tls');
+            const ssl = parsed.searchParams.get('ssl');
+            return tls === 'false' || ssl === 'false';
+        } catch {
+            return false;
+        }
     }
 
     /**

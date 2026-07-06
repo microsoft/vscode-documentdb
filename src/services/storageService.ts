@@ -479,4 +479,18 @@ export class StorageService {
 
         return this.instances.get(name)!;
     }
+
+    /**
+     * Test-only hook: drops all cached {@link Storage} instances so unit tests start from a clean
+     * in-memory state. Each {@link StorageImpl} keeps a short-lived `getItems` cache; because
+     * instances are cached here as singletons, that cache would otherwise survive between tests
+     * that clear only the underlying backing storage, causing later tests to read stale snapshots.
+     *
+     * Production code must never call this.
+     *
+     * @internal
+     */
+    public static _resetForTests(): void {
+        this.instances.clear();
+    }
 }

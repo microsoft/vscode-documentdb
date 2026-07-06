@@ -5,7 +5,7 @@
 
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { meterSilentCatch } from '../../../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { ClustersClient } from '../../ClustersClient';
 import { SchemaStore } from '../../SchemaStore';
 import { PlaygroundService } from '../../playground/PlaygroundService';

@@ -166,6 +166,38 @@ describe('TDD: Method Argument Context Detection', () => {
         expect(result?.collectionName).toBe('users');
     });
 
+    test('ignores closing parens inside string literals while detecting find arguments', () => {
+        const text = 'db.users.find({ note: ")", na';
+        const result = detectMethodArgContext(text, text.length);
+        expect(result).not.toBeNull();
+        expect(result?.methodName).toBe('find');
+        expect(result?.collectionName).toBe('users');
+    });
+
+    test('ignores nested parens inside regex literals while detecting find arguments', () => {
+        const text = 'db.users.find({ name: /foo(bar)/, ag';
+        const result = detectMethodArgContext(text, text.length);
+        expect(result).not.toBeNull();
+        expect(result?.methodName).toBe('find');
+        expect(result?.collectionName).toBe('users');
+    });
+
+    test('ignores parens inside comments while detecting find arguments', () => {
+        const text = 'db.users.find({ active: true /* ) */, na';
+        const result = detectMethodArgContext(text, text.length);
+        expect(result).not.toBeNull();
+        expect(result?.methodName).toBe('find');
+        expect(result?.collectionName).toBe('users');
+    });
+
+    test('ignores parens inside line comments while detecting find arguments', () => {
+        const text = 'db.users.find({\n// )\nna';
+        const result = detectMethodArgContext(text, text.length);
+        expect(result).not.toBeNull();
+        expect(result?.methodName).toBe('find');
+        expect(result?.collectionName).toBe('users');
+    });
+
     test('outside method call → null', () => {
         const text = 'db.users.';
         const result = detectMethodArgContext(text, 9);

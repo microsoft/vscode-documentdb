@@ -1,7 +1,7 @@
 {
   "name": "vscode-documentdb",
-  "version": "0.9.0-beta",
-  "releaseNotesUrl": "https://github.com/microsoft/vscode-documentdb/discussions/633",
+  "version": "0.9.1",
+  "releaseNotesUrl": "https://github.com/microsoft/vscode-documentdb/discussions/750",
   "aiKey": "0c6ae279ed8443289764825290e4f9e2-1a736e7c-1324-4338-be46-fc2a58ae4d14-7255",
   "publisher": "ms-azuretools",
   "displayName": "DocumentDB for VS Code",
@@ -154,7 +154,7 @@
     "webpack": "~5.105.4",
     "webpack-bundle-analyzer": "~5.2.0",
     "webpack-cli": "~6.0.1",
-    "webpack-dev-server": "~5.2.4"
+    "webpack-dev-server": "~5.2.5"
   },
   "dependencies": {
     "@azure/arm-compute": "^22.4.0",
@@ -166,6 +166,7 @@
     "@azure/identity": "~4.13.0",
     "@fluentui/react-components": "~9.73.3",
     "@fluentui/react-icons": "~2.0.320",
+    "@kubernetes/client-node": "1.4.0",
     "@microsoft/vscode-azext-azureauth": "~4.1.1",
     "@microsoft/vscode-azext-azureutils": "~4.2.0",
     "@microsoft/vscode-azext-utils": "~4.1.0",
@@ -183,7 +184,7 @@
     "@documentdb-js/operator-registry": "*",
     "@documentdb-js/shell-runtime": "*",
     "@documentdb-js/schema-analyzer": "*",
-    "@microsoft/vscode-ext-react-webview": "*",
+    "@microsoft/vscode-ext-webview": "*",
     "@vscode/l10n": "~0.0.18",
     "acorn": "^8.16.0",
     "acorn-walk": "^8.3.5",
@@ -205,11 +206,10 @@
     "vscode-uri": "~3.1.0",
     "zod": "~4.3.6"
   },
-  "//overrides": "Pin transitive dependencies: glob 12 for latest, test-exclude 7 for compatibility, applicationinsights-web-basic 3.3.x to retain applicationinsights-common needed by @vscode/extension-telemetry (see https://github.com/microsoft/vscode-extension-telemetry/issues/244, fixed in 1.5.2 but not yet released)",
+  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest, test-exclude 7 for compatibility.",
   "overrides": {
     "glob": "~12.0.0",
-    "test-exclude": "~7.0.1",
-    "@microsoft/applicationinsights-web-basic": "~3.3.4"
+    "test-exclude": "~7.0.1"
   },
   "extensionDependencies": [],
   "contributes": {
@@ -260,7 +260,7 @@
       },
       {
         "view": "discoveryView",
-        "contents": "Discover DocumentDB clusters across your cloud providers. Activate discovery to explore and manage your databases.\n[$(search) Activate Service Discovery](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to get started and to start discovering your databases."
+        "contents": "All service discovery providers are currently hidden.\n[$(search) Explore Providers…](command:vscode-documentdb.command.discoveryView.addRegistry)\nClick the button above to explore available discovery providers."
       }
     ],
     "languages": [
@@ -420,17 +420,17 @@
         "title": "Start Demo Task"
       },
       {
-        "//": "[DiscoveryView] Enable Registry",
+        "//": "[DiscoveryView] Show Hidden Provider",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.addRegistry",
-        "title": "Enable New Registry…",
+        "title": "Show Hidden Provider…",
         "icon": "$(add)"
       },
       {
-        "//": "[DiscoveryView] Disable Registry",
+        "//": "[DiscoveryView] Hide Provider",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.removeRegistry",
-        "title": "Disable Registry"
+        "title": "Hide Provider"
       },
       {
         "//": "[DiscoveryView] Save To DocumentDB Connections",
@@ -479,6 +479,62 @@
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.copyConnectionString",
         "title": "Copy Connection String…"
+      },
+      {
+        "//": "[DiscoveryView] Rename Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+        "title": "Rename…",
+        "icon": "$(edit)"
+      },
+      {
+        "//": "[DiscoveryView] Remove Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+        "title": "Remove…",
+        "icon": "$(trash)"
+      },
+      {
+        "//": "[DiscoveryView] Edit Kubernetes kubeconfig file source in the editor (file and default sources)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
+        "title": "Edit Kubeconfig",
+        "icon": "$(go-to-file)"
+      },
+      {
+        "//": "[DiscoveryView] View Kubernetes inline (pasted) kubeconfig source read-only",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
+        "title": "View Kubeconfig",
+        "icon": "$(eye)"
+      },
+      {
+        "//": "[DiscoveryView] Add Kubernetes kubeconfig source",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+        "title": "Add Kubeconfig…",
+        "icon": "$(add)"
+      },
+      {
+        "//": "[DiscoveryView] Rename Kubernetes context (display alias)",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+        "title": "Rename Context…",
+        "icon": "$(edit)"
+      },
+      {
+        "//": "[DiscoveryView] Switch Kubernetes discovery to the flat list view. Shown while the TREE view is active, so following the Search-view convention the icon reflects the CURRENT (tree) mode and the title states the action.",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+        "title": "View as List",
+        "icon": "$(list-tree)"
+      },
+      {
+        "//": "[DiscoveryView] Switch Kubernetes discovery to the hierarchical tree view. Shown while the LIST view is active, so the icon reflects the CURRENT (list) mode and the title states the action.",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+        "title": "View as Tree",
+        "icon": "$(list-selection)"
       },
       {
         "//": "Create Database",
@@ -607,6 +663,13 @@
         "title": "Query Playground: Show Connection Info"
       },
       {
+        "//": "[Query Playground] Connect / Reconnect",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.playground.connect",
+        "title": "Query Playground: Connect to Database",
+        "icon": "$(plug)"
+      },
+      {
         "//": "[Query Playground] Run All",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.playground.runAll",
@@ -684,17 +747,17 @@
       "view/item/context": [
         {
           "command": "vscode-documentdb.command.connectionsView.updateConnectionString",
-          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "3@1"
         },
         {
           "command": "vscode-documentdb.command.connectionsView.updateCredentials",
-          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "3@2"
         },
         {
           "command": "vscode-documentdb.command.connectionsView.renameConnection",
-          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "3@3"
         },
         {
@@ -712,19 +775,19 @@
         {
           "//": "New Connection in Folder...",
           "command": "vscode-documentdb.command.connectionsView.newConnectionInFolder",
-          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i && !listMultiSelection",
           "group": "0@1"
         },
         {
           "//": "Create Subfolder in Folder...",
           "command": "vscode-documentdb.command.connectionsView.createSubfolder",
-          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\b(treeItem_folder|treeItem_LocalEmulators|treeItem_emptyFolderPlaceholder)\\b/i && !listMultiSelection",
           "group": "0@2"
         },
         {
           "//": "Rename Folder...",
           "command": "vscode-documentdb.command.connectionsView.renameFolder",
-          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i && !listMultiSelection",
           "group": "1@1"
         },
         {
@@ -736,7 +799,7 @@
         {
           "//": "Delete Folder...",
           "command": "vscode-documentdb.command.connectionsView.deleteFolder",
-          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_folder\\b/i && !listMultiSelection",
           "group": "1@3"
         },
         {
@@ -748,11 +811,6 @@
           "command": "vscode-documentdb.command.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /\\brootItem\\b/i",
           "group": "2@1"
-        },
-        {
-          "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
-          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
-          "group": "0@1"
         },
         {
           "command": "vscode-documentdb.command.discoveryView.manageCredentials",
@@ -785,6 +843,62 @@
           "group": "2@4"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesSourceMutable\\b/i",
+          "group": "1@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesSourceMutable\\b/i",
+          "group": "1@2"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesSource(File|Default)\\b/i",
+          "group": "2@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesSourceInline\\b/i",
+          "group": "2@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesRootItem\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesRootItem\\b/i",
+          "group": "2@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesContext\\b/i",
+          "group": "1@1"
+        },
+        {
+          "//": "[DiscoveryView] View-mode toggle on the Kubernetes context node. The icon reflects the CURRENT mode and the action switches to the other (Search-view convention). Two commands gated by the current-mode marker; each contributed inline and in the menu group just above Refresh (zheLastGroup).",
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesViewModeTree\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesViewModeTree\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesViewModeList\\b/i",
+          "group": "inline@0"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
+          "when": "view == discoveryView && viewItem =~ /\\bdiscoveryKubernetesViewModeList\\b/i",
+          "group": "yheAlmostLastGroup@1"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.learnMoreAboutProvider",
           "when": "view == discoveryView && viewItem =~ /\\benableLearnMoreCommand\\b/i",
           "group": "inline@3"
@@ -797,145 +911,145 @@
         {
           "//": "Create database",
           "command": "vscode-documentdb.command.createDatabase",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "1@1"
         },
         {
           "//": "Copy connection string",
           "command": "vscode-documentdb.command.copyConnectionString",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "2@1"
         },
         {
           "//": "[Account] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "5@1"
         },
         {
           "//": "[Database] Create collection",
           "command": "vscode-documentdb.command.createCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "1@1"
         },
         {
           "//": "[Database] Delete database",
           "command": "vscode-documentdb.command.dropDatabase",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "2@1"
         },
         {
           "//": "[Database] Paste Collection",
           "command": "vscode-documentdb.command.pasteCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "1@2"
         },
         {
           "//": "[Database] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "5@1"
         },
         {
           "//": "[Database] Open Interactive Shell (inline)",
           "command": "vscode-documentdb.command.shell.open.inline",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "inline@1"
         },
         {
           "//": "[Collection] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "1@1"
         },
         {
           "//": "[Collection] Create document",
           "command": "vscode-documentdb.command.createDocument",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "2@1"
         },
         {
           "//": "[Collection] Import Documents",
           "command": "vscode-documentdb.command.importDocuments",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@1"
         },
         {
           "//": "[Collection] Export documents",
           "command": "vscode-documentdb.command.exportDocuments",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@2"
         },
         {
           "//": "[Cluster] Data Migration",
           "command": "vscode-documentdb.command.accessDataMigrationServices",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && !listMultiSelection",
           "group": "2@2"
         },
         {
           "//": "[Collection] Drop collection",
           "command": "vscode-documentdb.command.dropCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "4@1"
         },
         {
           "//": "[Index] Hide Index",
           "command": "vscode-documentdb.command.hideIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && !(viewItem =~ /\\bstate_hidden\\b/i) && !(viewItem =~ /\\bstate_default\\b/i) && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && !(viewItem =~ /\\bstate_hidden\\b/i) && !(viewItem =~ /\\bstate_default\\b/i) && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@1"
         },
         {
           "//": "[Index] Unhide Index",
           "command": "vscode-documentdb.command.unhideIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bstate_hidden\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bstate_hidden\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@2"
         },
         {
           "//": "[Index] Delete Index",
           "command": "vscode-documentdb.command.dropIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "4@1"
         },
         {
           "//": "[Collection] Open Interactive Shell",
           "command": "vscode-documentdb.command.shell.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "5@1"
         },
         {
           "//": "[Collection] Open Collection (inline)",
           "command": "vscode-documentdb.command.containerView.open.inline",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "inline@1"
         },
         {
           "//": "[Collection] Open Interactive Shell (inline)",
           "command": "vscode-documentdb.command.shell.open.inline",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "inline@3"
         },
         {
           "//": "[Collection] New Query Playground (inline)",
           "command": "vscode-documentdb.command.playground.new.inline",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "inline@2"
         },
         {
           "//": "[Database/Collection] New Query Playground",
           "command": "vscode-documentdb.command.playground.new",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_(database|collection)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "5@2"
         },
         {
           "//": "[Collection/Documents] Mongo DB|Cluster Open collection",
           "command": "vscode-documentdb.command.containerView.open",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documents\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_documents\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "2@1"
         },
         {
           "//": "[TreeItem] Refresh Item (cluster, database, collection, documents, indexes) -> but not in azure(ResourceGroups|FocusView) as it's done there by the Azure Resources host extension.",
           "command": "vscode-documentdb.command.refresh",
-          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection|documents|indexes|index)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView/ && viewItem =~ /\\btreeitem_(documentdbcluster|database|collection|documents|indexes|index)\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "zheLastGroup@1"
         },
         {
@@ -947,31 +1061,31 @@
         {
           "//": "[Collection] Copy Collection",
           "command": "vscode-documentdb.command.copyCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@3"
         },
         {
           "//": "[Collection] Paste Collection",
           "command": "vscode-documentdb.command.pasteCollection",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "3@4"
         },
         {
           "//": "[Database] Copy Reference",
           "command": "vscode-documentdb.command.copyReference",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_database\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "yheAlmostLastGroup@1"
         },
         {
           "//": "[Collection] Copy Reference",
           "command": "vscode-documentdb.command.copyReference",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_collection\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "yheAlmostLastGroup@1"
         },
         {
           "//": "[Index] Copy Reference",
           "command": "vscode-documentdb.command.copyReference",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
           "group": "yheAlmostLastGroup@1"
         }
       ],
@@ -1027,6 +1141,38 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.filterProviderContent",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.removeSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.editSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.viewSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.addSource",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.renameContext",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToFlatListView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.kubernetes.switchToTreeView",
           "when": "never"
         },
         {
@@ -1114,6 +1260,10 @@
           "when": "never"
         },
         {
+          "command": "vscode-documentdb.command.playground.connect",
+          "when": "editorLangId == 'documentdb-playground'"
+        },
+        {
           "command": "vscode-documentdb.command.playground.runAll",
           "when": "never"
         },
@@ -1192,6 +1342,28 @@
             "type": "integer",
             "default": 10260,
             "description": "Port to use when connecting to DocumentDB Local instance"
+          },
+          "documentDB.serviceDiscovery.kubernetes.portForward.localPortStrategy": {
+            "order": 30,
+            "type": "string",
+            "default": "matchRemote",
+            "enum": [
+              "matchRemote",
+              "autoSelect"
+            ],
+            "enumDescriptions": [
+              "Use the same port number as the remote Kubernetes service port.",
+              "Automatically find a free local port starting from localPortBase."
+            ],
+            "description": "How to choose the local port when opening a port-forward tunnel to a ClusterIP Kubernetes service."
+          },
+          "documentDB.serviceDiscovery.kubernetes.portForward.localPortBase": {
+            "order": 31,
+            "type": "integer",
+            "default": 27100,
+            "minimum": 1024,
+            "maximum": 65535,
+            "description": "Starting port for automatic local port selection when localPortStrategy is 'autoSelect'. The extension scans upward until a free port is found."
           },
           "documentDB.playground.confirmRunAll": {
             "order": 14,

@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { randomUUID } from 'crypto';
 import type * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { getBatchSizeSetting } from '../../utils/workspacUtils';
 import { CredentialCache } from '../CredentialCache';
 import { type ExecutionResult, type PlaygroundConnection } from './types';
@@ -28,6 +28,34 @@ import { type MainToWorkerMessage, type SerializableMongoClientOptions, type Wor
  *
  * The public API is unchanged from the in-process evaluator:
  * `evaluate(connection, code) → Promise<ExecutionResult>`
+ *
+ * ## Lifecycle
+ *
+ * The evaluator instance and the worker thread have **independent lifecycles**:
+ *
+ * ```
+ * Evaluator instance        Worker thread
+ * ─────────────────         ─────────────
+ * new PlaygroundEvaluator()
+ *   └─ evaluate() ────────► spawn + connect
+ *   └─ evaluate() ────────► reuse (no re-auth)
+ *   └─ killWorker() ──────► terminate
+ *   └─ evaluate() ────────► re-spawn + re-connect
+ *   └─ shutdown() ────────► graceful close
+ * ```
+ *
+ * After `killWorker()` (called on user cancellation), the evaluator instance
+ * stays registered in the per-cluster evaluator pool (`evaluators` Map in
+ * `executePlaygroundCode.ts`). The next `evaluate()` call detects that the
+ * worker is dead and transparently spawns a new one. Session telemetry
+ * (`_sessionId`, `_sessionEvalCount`) resets on each worker spawn, so a
+ * killed-and-respawned worker behaves like a fresh evaluator session.
+ *
+ * The evaluator is only removed from the pool by `shutdownEvaluator()` (when
+ * all playground documents for the cluster close) or by `disposeEvaluators()`
+ * (on extension deactivation). `shutdownEvaluator()` calls `shutdown()`, while
+ * `disposeEvaluators()` calls `dispose()`. Both paths gracefully close the
+ * worker before removing the evaluator.
  */
 export class PlaygroundEvaluator implements vscode.Disposable {
     private readonly _workerManager: WorkerSessionManager;
@@ -224,7 +252,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
         if (authMechanism === 'NativeAuth') {
             connectionString = CredentialCache.getConnectionStringWithPassword(connection.clusterId);
         } else {
-            // Entra ID: use connection string without embedded credentials
+            // Entra ID and NoAuth: use connection string without embedded credentials
             connectionString = credentials.connectionString;
         }
 
@@ -244,7 +272,7 @@ export class PlaygroundEvaluator implements vscode.Disposable {
             connectionString,
             clientOptions,
             databaseName: connection.databaseName,
-            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID',
+            authMechanism: authMechanism as 'NativeAuth' | 'MicrosoftEntraID' | 'NoAuth',
             tenantId: credentials.entraIdConfig?.tenantId,
         };
     }
