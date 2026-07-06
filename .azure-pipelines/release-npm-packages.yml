@@ -192,49 +192,135 @@ extends:
                         - task: PowerShell@2
                           displayName: 'Show source build metadata'
                           inputs:
-                              targetType: 'filePath'
-                              filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/show-source-build-metadata.ps1'
-                              arguments: >-
-                                  -PipelineName '$(resources.pipeline.npmBuild.pipelineName)'
-                                  -RunId '$(resources.pipeline.npmBuild.runID)'
-                                  -RunName '$(resources.pipeline.npmBuild.runName)'
-                                  -SourceBranch '$(resources.pipeline.npmBuild.sourceBranch)'
-                                  -SourceCommit '$(resources.pipeline.npmBuild.sourceCommit)'
-                                  -SourceProvider '$(resources.pipeline.npmBuild.sourceProvider)'
+                              targetType: 'inline'
+                              script: |
+                                  Write-Output "Releasing from npmBuild pipeline run:"
+                                  Write-Output "  Pipeline           : $(resources.pipeline.npmBuild.pipelineName)"
+                                  Write-Output "  Run id             : $(resources.pipeline.npmBuild.runID)"
+                                  Write-Output "  Run name           : $(resources.pipeline.npmBuild.runName)"
+                                  Write-Output "  Source branch      : $(resources.pipeline.npmBuild.sourceBranch)"
+                                  Write-Output "  Source commit      : $(resources.pipeline.npmBuild.sourceCommit)"
+                                  Write-Output "  Source provider    : $(resources.pipeline.npmBuild.sourceProvider)"
 
                         # Set a descriptive build number
                         - task: PowerShell@2
                           displayName: 'Set build number'
                           inputs:
-                              targetType: 'filePath'
-                              filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/set-release-build-number.ps1'
-                              arguments: >-
-                                  -PackageName '${{ parameters.packageName }}'
-                                  -PublishVersion '${{ parameters.publishVersion }}'
-                                  -Mode '${{ parameters.mode }}'
-                                  -BuildId '$(Build.BuildId)'
+                              targetType: 'inline'
+                              script: |
+                                  $packageName = "${{ parameters.packageName }}"
+                                  $publishVersion = "${{ parameters.publishVersion }}"
+                                  $mode = "${{ parameters.mode }}"
+                                  $buildId = "$(Build.BuildId)"
+
+                                  $modeSuffix = switch ($mode) {
+                                      'validate-only'  { '-validate' }
+                                      'test-esrp-auth' { '-esrptest' }
+                                      'publish'        { '' }
+                                      default          { "-$mode" }
+                                  }
+
+                                  $newBuildNumber = "npm-${packageName}-${publishVersion}${modeSuffix}-${buildId}"
+                                  Write-Output "Mode: $mode"
+                                  Write-Output "Setting build number to: $newBuildNumber"
+                                  Write-Output "##vso[build.updatebuildnumber]$newBuildNumber"
 
                         # Verify the version in package.json matches the intended publish version
                         - task: PowerShell@2
                           displayName: 'Verify package version'
                           inputs:
-                              targetType: 'filePath'
-                              filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/verify-package-version.ps1'
-                              arguments: >-
-                                  -PackageName '${{ parameters.packageName }}'
-                                  -PublishVersion '${{ parameters.publishVersion }}'
-                                  -WorkingDirectory '$(System.DefaultWorkingDirectory)'
+                              targetType: 'inline'
+                              script: |
+                                  $packageName = "${{ parameters.packageName }}"
+                                  $publishVersion = "${{ parameters.publishVersion }}"
+
+                                  $packageJsonPath = "$(System.DefaultWorkingDirectory)/packages/$packageName/package.json"
+                                  if (-not (Test-Path $packageJsonPath)) {
+                                      Write-Error "[Error] package.json not found at $packageJsonPath"
+                                      Write-Output "Available files:"
+                                      Get-ChildItem -Path "$(System.DefaultWorkingDirectory)" -Recurse -Filter "package.json" | ForEach-Object { Write-Output $_.FullName }
+                                      exit 1
+                                  }
+
+                                  $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
+                                  $actualVersion = $packageJson.version
+                                  $fullPackageName = $packageJson.name
+
+                                  Write-Output "Package: $fullPackageName"
+                                  Write-Output "Version in package.json: $actualVersion"
+                                  Write-Output "Expected publish version: $publishVersion"
+
+                                  # Validate semantic version format
+                                  $semverPattern = '^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$'
+                                  if ($actualVersion -notmatch $semverPattern) {
+                                      Write-Error "[Error] Version in package.json ($actualVersion) is not a valid semantic version"
+                                      exit 1
+                                  }
+                                  if ($publishVersion -notmatch $semverPattern) {
+                                      Write-Error "[Error] Publish version ($publishVersion) is not a valid semantic version"
+                                      exit 1
+                                  }
+
+                                  if ($actualVersion -eq $publishVersion) {
+                                      Write-Output "[Success] Version matches. Proceeding with release of $fullPackageName@$publishVersion"
+                                  } else {
+                                      Write-Error "[Error] Publish version '$publishVersion' does not match version in package.json '$actualVersion'. Cancelling release."
+                                      exit 1
+                                  }
+
+                                  # ESRP Release cannot publish private packages
+                                  if ($packageJson.private -eq $true) {
+                                      Write-Error "[Error] Package $fullPackageName is marked as private in package.json. Cannot publish to npm."
+                                      exit 1
+                                  }
 
                         # Find the .tgz file for the selected package
                         - task: PowerShell@2
                           displayName: 'Find .tgz file'
                           name: findTgzStep
                           inputs:
-                              targetType: 'filePath'
-                              filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/find-tgz.ps1'
-                              arguments: >-
-                                  -PackageName '${{ parameters.packageName }}'
-                                  -WorkingDirectory '$(System.DefaultWorkingDirectory)'
+                              targetType: 'inline'
+                              script: |
+                                  $packageName = "${{ parameters.packageName }}"
+                                  $npmPackagesDir = "$(System.DefaultWorkingDirectory)/npm-packages"
+
+                                  Write-Output "Searching for .tgz files in: $npmPackagesDir"
+
+                                  if (-not (Test-Path $npmPackagesDir)) {
+                                      Write-Error "[Error] npm-packages directory not found at $npmPackagesDir"
+                                      Write-Output "Available directories:"
+                                      Get-ChildItem -Path "$(System.DefaultWorkingDirectory)" -Directory | ForEach-Object { Write-Output $_.FullName }
+                                      exit 1
+                                  }
+
+                                  # List all available .tgz files
+                                  Write-Output "Available .tgz files:"
+                                  Get-ChildItem -Path $npmPackagesDir -Filter "*.tgz" | ForEach-Object {
+                                      $sizeKB = [math]::Round($_.Length / 1KB, 2)
+                                      Write-Output "  $($_.Name) (${sizeKB} KB)"
+                                  }
+
+                                  # Find the .tgz file matching the selected package.
+                                  # npm pack writes scope-flattened filenames, e.g.:
+                                  #   documentdb-js-schema-analyzer-0.8.1.tgz
+                                  #   microsoft-vscode-ext-webview-0.9.0-preview.tgz
+                                  # The packageName parameter matches the folder name under packages/,
+                                  # which appears in the .tgz filename for all packages here.
+                                  $tgzFiles = Get-ChildItem -Path $npmPackagesDir -Filter "*$packageName*.tgz"
+
+                                  if ($tgzFiles.Count -eq 0) {
+                                      Write-Error "[Error] No .tgz file found matching package '$packageName'"
+                                      exit 1
+                                  } elseif ($tgzFiles.Count -gt 1) {
+                                      Write-Error "[Error] Multiple .tgz files found matching package '$packageName': $($tgzFiles.Name -join ', ')"
+                                      exit 1
+                                  }
+
+                                  $tgzFile = $tgzFiles[0]
+                                  $tgzSize = [math]::Round($tgzFile.Length / 1KB, 2)
+                                  Write-Output ""
+                                  Write-Output "[Success] Found .tgz file: $($tgzFile.Name) (${tgzSize} KB)"
+                                  Write-Output "##vso[task.setvariable variable=tgzFileName;isOutput=true]$($tgzFile.Name)"
 
                         # Print the release intent - package, version, mode, and source
                         # build - to the step log so it is visible to approvers without
@@ -244,17 +330,26 @@ extends:
                           displayName: 'Publish run summary'
                           condition: succeeded()
                           inputs:
-                              targetType: 'filePath'
-                              filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/write-release-summary.ps1'
-                              arguments: >-
-                                  -PackageName '${{ parameters.packageName }}'
-                                  -PublishVersion '${{ parameters.publishVersion }}'
-                                  -Mode '${{ parameters.mode }}'
-                                  -TgzFileName '$(findTgzStep.tgzFileName)'
-                                  -SourceRunName '$(resources.pipeline.npmBuild.runName)'
-                                  -SourceRunId '$(resources.pipeline.npmBuild.runID)'
-                                  -SourceBranch '$(resources.pipeline.npmBuild.sourceBranch)'
-                                  -SourceCommit '$(resources.pipeline.npmBuild.sourceCommit)'
+                              targetType: 'inline'
+                              script: |
+                                  $mode = "${{ parameters.mode }}"
+                                  $modeNote = switch ($mode) {
+                                      'validate-only'  { 'Validation only - ESRP is NOT contacted and nothing is published.' }
+                                      'test-esrp-auth' { 'Smoke test - exercises ESRP auth then fails at content validation. Nothing is published.' }
+                                      'publish'        { 'REAL PUBLISH - this run pushes the package to npmjs.org.' }
+                                      default          { "Unknown mode: $mode" }
+                                  }
+
+                                  Write-Output "=== npm release run ==="
+                                  Write-Output "  Package        : ${{ parameters.packageName }}"
+                                  Write-Output "  Version        : ${{ parameters.publishVersion }}"
+                                  Write-Output "  Mode           : $mode"
+                                  Write-Output "  .tgz           : $(findTgzStep.tgzFileName)"
+                                  Write-Output "  Source build   : $(resources.pipeline.npmBuild.runName) (run $(resources.pipeline.npmBuild.runID))"
+                                  Write-Output "  Source branch  : $(resources.pipeline.npmBuild.sourceBranch)"
+                                  Write-Output "  Source commit  : $(resources.pipeline.npmBuild.sourceCommit)"
+                                  Write-Output ""
+                                  Write-Output $modeNote
 
                   # Use compile-time inclusion so the publish job does NOT exist in the
                   # compiled pipeline graph for 'validate-only'. This is stronger than a
@@ -310,12 +405,25 @@ extends:
                               - task: PowerShell@2
                                 displayName: 'Prepare package for publishing'
                                 inputs:
-                                    targetType: 'filePath'
-                                    filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/prepare-package.ps1'
-                                    arguments: >-
-                                        -TgzFileName '$(tgzFileName)'
-                                        -WorkingDirectory '$(System.DefaultWorkingDirectory)'
-                                        -PublishDir '$(Build.ArtifactStagingDirectory)\npm-publish'
+                                    targetType: 'inline'
+                                    script: |
+                                        $tgzFileName = "$(tgzFileName)"
+                                        $npmPackagesDir = "$(System.DefaultWorkingDirectory)\npm-packages"
+                                        $publishDir = "$(Build.ArtifactStagingDirectory)\npm-publish"
+
+                                        New-Item -ItemType Directory -Force -Path $publishDir | Out-Null
+
+                                        $sourcePath = Join-Path $npmPackagesDir $tgzFileName
+                                        if (-not (Test-Path $sourcePath)) {
+                                            Write-Error "[Error] .tgz file not found: $sourcePath"
+                                            exit 1
+                                        }
+
+                                        Copy-Item -Path $sourcePath -Destination $publishDir
+                                        Write-Output "Prepared for publishing:"
+                                        Get-ChildItem -Path $publishDir | ForEach-Object {
+                                            Write-Output "  $($_.Name) ($([math]::Round($_.Length / 1KB, 2)) KB)"
+                                        }
 
                               # Inspect the .tgz contents and fail on obviously sensitive files.
                               # This is a safety net (CredScan runs earlier, but the .tgz is the
@@ -323,10 +431,57 @@ extends:
                               - task: PowerShell@2
                                 displayName: 'Inspect .tgz contents'
                                 inputs:
-                                    targetType: 'filePath'
-                                    filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/inspect-tgz.ps1'
-                                    arguments: >-
-                                        -PublishDir '$(Build.ArtifactStagingDirectory)\npm-publish'
+                                    targetType: 'inline'
+                                    script: |
+                                        $ErrorActionPreference = "Stop"
+                                        $publishDir = "$(Build.ArtifactStagingDirectory)\npm-publish"
+                                        $tgzPath = Get-ChildItem -Path $publishDir -Filter "*.tgz" | Select-Object -First 1 -ExpandProperty FullName
+                                        if (-not $tgzPath) {
+                                            Write-Error "[Error] No .tgz found in $publishDir"
+                                            exit 1
+                                        }
+
+                                        Write-Output "Listing contents of $tgzPath ..."
+                                        $entries = & tar -tzf $tgzPath
+                                        if ($LASTEXITCODE -ne 0) {
+                                            Write-Error "[Error] Failed to list tarball contents"
+                                            exit 1
+                                        }
+
+                                        $entries | ForEach-Object { Write-Output "  $_" }
+
+                                        # Patterns that should never appear in a published package.
+                                        $forbiddenPatterns = @(
+                                            '\.env(\..*)?$',
+                                            '(^|/)\.npmrc$',
+                                            '(^|/)\.netrc$',
+                                            '(^|/)id_rsa(\.pub)?$',
+                                            '(^|/)\.ssh/',
+                                            '\.pem$',
+                                            '\.pfx$',
+                                            '\.p12$',
+                                            '\.key$',
+                                            '(^|/)secrets?(\.json|\.yaml|\.yml|\.txt)$',
+                                            '(^|/)credentials?(\.json|\.yaml|\.yml|\.txt)$'
+                                        )
+
+                                        $violations = @()
+                                        foreach ($entry in $entries) {
+                                            foreach ($pattern in $forbiddenPatterns) {
+                                                if ($entry -match $pattern) {
+                                                    $violations += "  $entry  (matched: $pattern)"
+                                                }
+                                            }
+                                        }
+
+                                        if ($violations.Count -gt 0) {
+                                            Write-Error "[Error] Forbidden file(s) detected in the .tgz:"
+                                            $violations | ForEach-Object { Write-Error $_ }
+                                            exit 1
+                                        }
+
+                                        Write-Output ""
+                                        Write-Output "[Success] No forbidden files detected ($($entries.Count) entries scanned)"
 
                               # Publish to npmjs.org via ESRP Release
                               # Docs: https://eng.ms/docs/microsoft-security/identity/trust-and-security-services/tss-release-distribute/tss-release-esrp-parent/release-onboarding
@@ -379,10 +534,23 @@ extends:
                                 displayName: 'Publish outcome summary'
                                 condition: always()
                                 inputs:
-                                    targetType: 'filePath'
-                                    filePath: '$(System.DefaultWorkingDirectory)/.azure-pipelines/scripts/write-publish-outcome-summary.ps1'
-                                    arguments: >-
-                                        -PackageName '${{ parameters.packageName }}'
-                                        -PublishVersion '${{ parameters.publishVersion }}'
-                                        -Mode '${{ parameters.mode }}'
-                                        -JobStatus '$(Agent.JobStatus)'
+                                    targetType: 'inline'
+                                    script: |
+                                        $mode = "${{ parameters.mode }}"
+                                        $jobStatus = "$(Agent.JobStatus)"
+
+                                        Write-Output "=== ESRP publish outcome ==="
+                                        Write-Output "  Package     : ${{ parameters.packageName }}@${{ parameters.publishVersion }}"
+                                        Write-Output "  Mode        : $mode"
+                                        Write-Output "  Job status  : $jobStatus"
+                                        Write-Output ""
+
+                                        if ($mode -eq 'test-esrp-auth') {
+                                            Write-Output "Smoke test: NOTHING was published. A failure here is expected (ESRP rejects the Maven content-type at validation). Inspect the ESRP task log to confirm the failure was the content-type rejection and NOT an auth/cert/Key Vault error."
+                                        } elseif ($mode -eq 'publish') {
+                                            if ($jobStatus -eq 'Succeeded') {
+                                                Write-Output "[OK] Published ${{ parameters.packageName }}@${{ parameters.publishVersion }} to npmjs.org."
+                                            } else {
+                                                Write-Output "[FAILED] Publish did NOT complete successfully (status: $jobStatus). Check the ESRP task log."
+                                            }
+                                        }

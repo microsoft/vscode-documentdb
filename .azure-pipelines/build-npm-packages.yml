@@ -89,10 +89,7 @@ extends:
                         type: windows
                     variables:
                         ob_outputDirectory: '$(Build.ArtifactStagingDirectory)\build' # this directory is uploaded to pipeline artifacts. More info at https://aka.ms/obpipelines/artifacts
-                        # Exclude .json/.js (the packed package) and .ps1 (the pipeline
-                        # scripts we bundle into the artifact for the release pipeline) from
-                        # code-sign validation - none of these are signed binaries.
-                        ob_sdl_codeSignValidation_excludes: '-|**\*.json;-|**\*.js;-|**\*.ps1;-|**\node_modules\**;'
+                        ob_sdl_codeSignValidation_excludes: '-|**\*.json;-|**\*.js;-|**\node_modules\**;'
                     steps:
                         - task: ComponentGovernanceComponentDetection@0
                           displayName: 'Component Governance - Component Detection'
@@ -150,16 +147,3 @@ extends:
                                   packages/vscode-ext-webview/package.json
                                   !**/node_modules/**
                               TargetFolder: $(ob_outputDirectory)
-
-                        # The release pipeline runs on a 'release' pool that consumes this
-                        # artifact and does NOT check out the repo, so the .ps1 scripts it
-                        # invokes must travel inside the artifact. Stage them here; they land
-                        # at $(System.DefaultWorkingDirectory)/.azure-pipelines/scripts after
-                        # the release pipeline downloads the artifact.
-                        - task: CopyFiles@2
-                          displayName: 'Stage pipeline scripts for the release pipeline'
-                          condition: succeeded()
-                          inputs:
-                              SourceFolder: '$(Build.SourcesDirectory)/.azure-pipelines/scripts'
-                              Contents: '*.ps1'
-                              TargetFolder: '$(ob_outputDirectory)/.azure-pipelines/scripts'
