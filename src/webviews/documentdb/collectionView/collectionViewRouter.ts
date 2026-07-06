@@ -25,7 +25,7 @@ import { Views } from '../../../documentdb/Views';
 import { ext } from '../../../extensionVariables';
 import { COMPLETION_CATEGORIES, CompletionSources } from '../../../telemetry/completionCategories';
 import { type CollectionItem } from '../../../tree/documentdb/CollectionItem';
-import { callWithAccumulatingTelemetry } from '../../../utils/callWithAccumulatingTelemetry';
+import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { escapeJsString } from '../../../utils/escapeJsString';
 import { toFieldCompletionItems } from '../../../utils/json/data-api/autocomplete/toFieldCompletionItems';
 import { promptAfterActionEventually } from '../../../utils/survey';
@@ -688,8 +688,8 @@ export const collectionsViewRouter = router({
                     `Unknown completion category received (source: ${CompletionSources.CollectionView})`,
                 );
             }
-            void callWithAccumulatingTelemetry('completion.accepted.cv', (accCtx) => {
-                accCtx.telemetry.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
+            accumulateTelemetry('completion.accepted.cv', (sample) => {
+                sample.measurements[`cat_${input.category}_src_${CompletionSources.CollectionView}`] = 1;
             });
         }),
 });

@@ -118,7 +118,7 @@ import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
-import { callWithAccumulatingTelemetry } from '../utils/callWithAccumulatingTelemetry';
+import { accumulateTelemetry } from '../utils/accumulatingTelemetry';
 import {
     registerCommandWithModalErrors,
     registerCommandWithTreeNodeUnwrappingAndModalErrors,
@@ -576,8 +576,8 @@ export class ClustersExtension implements vscode.Disposable {
                                 `Unknown completion source received: ${JSON.stringify(source)} (category: ${category ?? 'unknown'})`,
                             );
                         }
-                        void callWithAccumulatingTelemetry('completion.accepted', (accCtx) => {
-                            accCtx.telemetry.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
+                        accumulateTelemetry('completion.accepted', (sample) => {
+                            sample.measurements[`cat_${normalizedCategory}_src_${normalizedSource}`] = 1;
                         });
                     },
                 );

@@ -33,7 +33,7 @@
 import { Link, MessageBar, MessageBarBody, Skeleton, SkeletonItem, Text, tokens } from '@fluentui/react-components';
 import { ChatMailRegular, InfoRegular, SparkleRegular, WarningRegular } from '@fluentui/react-icons';
 import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview';
-import { useConfiguration } from '@microsoft/vscode-ext-react-webview';
+import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
@@ -90,7 +90,7 @@ export const QueryInsightsMain = (): JSX.Element => {
      */
     const configuration = useConfiguration<CollectionViewWebviewConfigurationType>();
 
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
     const [currentContext, setCurrentContext] = useContext(CollectionViewContext);
     const pipeline = currentContext.queryInsights;
 
@@ -161,7 +161,7 @@ export const QueryInsightsMain = (): JSX.Element => {
      * sends `subscription.stop` to the host, which both aborts the
      * per-operation `AbortController` and calls `iterator.return()` on the
      * procedure's async generator — so the underlying LLM call is cancelled
-     * in lock step. See packages/vscode-ext-react-webview README.
+     * in lock step. See packages/vscode-ext-webview ADVANCED.md.
      */
     const stage3SubscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
 

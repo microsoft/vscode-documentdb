@@ -129,7 +129,7 @@ export const queryInsightsRouter = router({
         const session: ClusterSession = ClusterSession.getSession(sessionId);
         const clusterMetadata = await session.getClient().getClusterMetadata();
 
-        ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+        myCtx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
         if (clusterMetadata?.domainInfo_api === 'RU') {
             // TODO: Platform identification improvements needed
             // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
@@ -246,7 +246,7 @@ export const queryInsightsRouter = router({
             const session: ClusterSession = ClusterSession.getSession(sessionId);
 
             const clusterMetadata = await session.getClient().getClusterMetadata();
-            ctx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+            myCtx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
 
             // Get query parameters from session with parsed BSON objects
             const queryParams = session.getCurrentFindQueryParamsWithObjects();
@@ -328,37 +328,37 @@ export const queryInsightsRouter = router({
 
         // --- Stage 2 telemetry ---
         // Performance metrics (safe to aggregate, no PII/OII)
-        ctx.telemetry.properties.performanceScore = transformed.efficiencyAnalysis.performanceRating.score;
-        ctx.telemetry.properties.executionStrategy = transformed.executionStrategy;
-        ctx.telemetry.properties.indexUsed = transformed.indexUsed ? 'true' : 'false';
-        ctx.telemetry.properties.hadCollectionScan = transformed.hadCollectionScan ? 'true' : 'false';
-        ctx.telemetry.properties.hadInMemorySort = transformed.hadInMemorySort ? 'true' : 'false';
-        ctx.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
-        ctx.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
-        ctx.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
+        myCtx.telemetry.properties.performanceScore = transformed.efficiencyAnalysis.performanceRating.score;
+        myCtx.telemetry.properties.executionStrategy = transformed.executionStrategy;
+        myCtx.telemetry.properties.indexUsed = transformed.indexUsed ? 'true' : 'false';
+        myCtx.telemetry.properties.hadCollectionScan = transformed.hadCollectionScan ? 'true' : 'false';
+        myCtx.telemetry.properties.hadInMemorySort = transformed.hadInMemorySort ? 'true' : 'false';
+        myCtx.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
+        myCtx.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
+        myCtx.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
 
-        ctx.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
-        ctx.telemetry.measurements.documentsReturned = transformed.documentsReturned;
-        ctx.telemetry.measurements.totalDocsExamined = transformed.totalDocsExamined;
-        ctx.telemetry.measurements.totalKeysExamined = transformed.totalKeysExamined;
-        ctx.telemetry.measurements.examinedToReturnedRatio = transformed.examinedToReturnedRatio;
-        ctx.telemetry.measurements.diagnosticBadgeCount =
+        myCtx.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
+        myCtx.telemetry.measurements.documentsReturned = transformed.documentsReturned;
+        myCtx.telemetry.measurements.totalDocsExamined = transformed.totalDocsExamined;
+        myCtx.telemetry.measurements.totalKeysExamined = transformed.totalKeysExamined;
+        myCtx.telemetry.measurements.examinedToReturnedRatio = transformed.examinedToReturnedRatio;
+        myCtx.telemetry.measurements.diagnosticBadgeCount =
             transformed.efficiencyAnalysis.performanceRating.diagnostics.length;
 
         if (totalCollectionDocs !== undefined) {
-            ctx.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
+            myCtx.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
         }
 
         const selectivityPercent = transformed.efficiencyAnalysis.selectivity;
         if (selectivityPercent !== null && selectivityPercent !== undefined) {
-            ctx.telemetry.measurements.selectivityPercent = selectivityPercent;
+            myCtx.telemetry.measurements.selectivityPercent = selectivityPercent;
         }
 
         // Badge IDs (safe categorical data, no PII)
         const diagnosticIds = transformed.efficiencyAnalysis.performanceRating.diagnostics
             .map((d) => d.diagnosticId)
             .join(',');
-        ctx.telemetry.properties.diagnosticBadgeIds = diagnosticIds;
+        myCtx.telemetry.properties.diagnosticBadgeIds = diagnosticIds;
 
         // Count badges by type
         const badgesByType = transformed.efficiencyAnalysis.performanceRating.diagnostics.reduce(
@@ -368,9 +368,9 @@ export const queryInsightsRouter = router({
             },
             {} as Record<string, number>,
         );
-        ctx.telemetry.measurements.positiveBadgeCount = badgesByType['positive'] ?? 0;
-        ctx.telemetry.measurements.neutralBadgeCount = badgesByType['neutral'] ?? 0;
-        ctx.telemetry.measurements.negativeBadgeCount = badgesByType['negative'] ?? 0;
+        myCtx.telemetry.measurements.positiveBadgeCount = badgesByType['positive'] ?? 0;
+        myCtx.telemetry.measurements.neutralBadgeCount = badgesByType['neutral'] ?? 0;
+        myCtx.telemetry.measurements.negativeBadgeCount = badgesByType['negative'] ?? 0;
 
         ext.outputChannel.trace(
             l10n.t(
