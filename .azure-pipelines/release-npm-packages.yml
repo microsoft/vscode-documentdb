@@ -44,9 +44,9 @@ parameters:
     - name: packageName
       displayName: 'Package to release'
       type: string
-      default: vscode-ext-react-webview
+      default: vscode-ext-webview
       values:
-          - vscode-ext-react-webview
+          - vscode-ext-webview
 
     # The expected version - must match the version in the package's package.json
     - name: publishVersion
@@ -296,7 +296,7 @@ extends:
                                   # Find the .tgz file matching the selected package.
                                   # npm pack writes scope-flattened filenames, e.g.:
                                   #   documentdb-js-schema-analyzer-0.8.1.tgz
-                                  #   microsoft-vscode-ext-react-webview-0.8.0-preview.tgz
+                                  #   microsoft-vscode-ext-webview-0.9.0-preview.tgz
                                   # The packageName parameter matches the folder name under packages/,
                                   # which appears in the .tgz filename for all packages here.
                                   $tgzFiles = Get-ChildItem -Path $npmPackagesDir -Filter "*$packageName*.tgz"
