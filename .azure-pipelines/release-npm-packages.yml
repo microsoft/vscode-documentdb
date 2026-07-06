@@ -323,6 +323,10 @@ extends:
                       - job: PublishPackage
                         displayName: ${{ format('Publish ({0})', parameters.mode) }}
                         dependsOn: ReleaseValidation
+                        # EsrpRelease runs with waitforreleasecompletion: true, which blocks
+                        # on the ESRP submission. Cap the job so a stalled ESRP approval or
+                        # submission cannot pin a release agent indefinitely.
+                        timeoutInMinutes: 120
                         pool:
                             type: release
                         variables:
