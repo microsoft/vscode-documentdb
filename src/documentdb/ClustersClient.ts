@@ -36,7 +36,7 @@ import {
 } from 'mongodb';
 import { Links } from '../constants';
 import { ext } from '../extensionVariables';
-import { meterSilentCatch } from '../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../utils/accumulatingTelemetry';
 import { type EmulatorConfiguration } from '../utils/emulatorConfiguration';
 import { type AuthHandler } from './auth/AuthHandler';
 import { AuthMethodId } from './auth/AuthMethod';

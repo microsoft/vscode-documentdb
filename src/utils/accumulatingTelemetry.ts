@@ -22,7 +22,7 @@ import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils
  *   Use for gauges (candidate counts, latencies, sizes).
  *
  * ```ts
- * callWithAccumulatingTelemetry('myEvent', (sample) => {
+ * accumulateTelemetry('myEvent', (sample) => {
  *     sample.measurements.hits = 1;                    // counter  → summed
  *     sample.distributions.candidateCount = candidates.length; // gauge → min/max/sum/count
  * });
@@ -66,9 +66,9 @@ interface DistributionAccumulator {
 export const AUTO_DURATION_DISTRIBUTION_KEY = 'auto_duration_ms';
 
 /**
- * Options controlling how `callWithAccumulatingTelemetry` batches events.
+ * Options controlling how `accumulateTelemetry` batches events.
  */
-export interface AccumulatingTelemetryOptions {
+export interface AccumulateTelemetryOptions {
     /**
      * How many accumulated calls trigger a flush attempt.
      *
@@ -97,7 +97,7 @@ interface AccumulatorState {
 
 const accumulators = new Map<string, AccumulatorState>();
 
-function getOrCreateState(callbackId: string, options: AccumulatingTelemetryOptions | undefined): AccumulatorState {
+function getOrCreateState(callbackId: string, options: AccumulateTelemetryOptions | undefined): AccumulatorState {
     let state = accumulators.get(callbackId);
     if (!state) {
         state = {
@@ -152,10 +152,10 @@ function getOrCreateState(callbackId: string, options: AccumulatingTelemetryOpti
  * - Fire-and-forget: returns `void`. There is no per-call promise to await
  *   because the per-call path does no async work.
  */
-export function callWithAccumulatingTelemetry(
+export function accumulateTelemetry(
     callbackId: string,
     populate: (sample: TelemetrySample) => void,
-    options?: AccumulatingTelemetryOptions,
+    options?: AccumulateTelemetryOptions,
 ): void {
     const state = getOrCreateState(callbackId, options);
 
@@ -267,7 +267,7 @@ function flushState(callbackId: string, state: AccumulatorState, now: number): v
  * to flush just that accumulator, or omit it to flush all registered ones
  * (e.g., on extension deactivation).
  */
-export function flushAccumulatingTelemetry(callbackId?: string): void {
+export function flushAccumulatedTelemetry(callbackId?: string): void {
     const now = Date.now();
     if (callbackId !== undefined) {
         const state = accumulators.get(callbackId);
@@ -305,7 +305,7 @@ export function flushAccumulatingTelemetry(callbackId?: string): void {
  * ```
  */
 export function meterSilentCatch(locationKey: string): void {
-    callWithAccumulatingTelemetry('silentCatch', (sample) => {
+    accumulateTelemetry('silentCatch', (sample) => {
         sample.measurements[`accumulated_${locationKey}`] = 1;
     });
 }

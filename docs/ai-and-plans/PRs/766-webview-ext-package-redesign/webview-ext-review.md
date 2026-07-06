@@ -36,6 +36,11 @@ for it. **Iteration 10 (2026-07-06)** implements R766-P05 part 2: the
 `callWithAccumulatingTelemetry` accumulate/flush redesign (Option 1) — the
 per-call path is now cheap in-memory work and the telemetry pipeline is entered
 only on flush, with all callers migrated to the new sample-bag callback.
+**Iteration 11 (2026-07-06)** renames that helper to `accumulateTelemetry`
+(+ `flushAccumulatedTelemetry`, file → `accumulatingTelemetry.ts`) so the name no
+longer implies the full-context scoped call of the `callWith…` convention, and
+files the "wrap an action" variant (`runWithAccumulatingTelemetry`) as a tracked
+enhancement issue rather than building it now.
 
 ## Summary
 
@@ -1163,7 +1168,7 @@ the host-side count is a faithful, zero-cost proxy for the webview fan-out — n
 webview→host round-trip needed.
 
 **How to emit it — reuse the accumulating telemetry.**
-[`callWithAccumulatingTelemetry`](../../../../src/utils/callWithAccumulatingTelemetry.ts#L96-L134)
+[`callWithAccumulatingTelemetry`](../../../../src/utils/accumulatingTelemetry.ts)
 already reduces a `distributions` gauge to `min / max / sum / count` across a
 batch and sums plain `measurements`, so one call per dispatched operation gives
 us the whole picture without per-op event spam:
@@ -2097,3 +2102,83 @@ required.
 | ID        | What changed                                                                                                                            | Why (motivation)                                                                                                                    |
 | --------- | --------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
 | R766-P05b | `callWithAccumulatingTelemetry` split into cheap synchronous accumulate + heavy flush; callback takes a `TelemetrySample` bag (was `IActionContext`); all callers migrated | The per-call `callWithTelemetryAndErrorHandling` wrapper ran on every call and added up on hot paths (per-RPC); now it runs once per flush. |
+
+---
+
+# Iteration 11 — accumulating-telemetry rename (R766-P06) (2026-07-06)
+
+> Naming follow-up to Iteration 10. After the accumulate/flush split, the helper's
+> `callWith…` name was actively misleading: the `callWith…` convention in
+> `@microsoft/vscode-azext-utils` promises "run my work inside a managed scope that
+> hands me a full `IActionContext` (telemetry **+** errorHandling **+** ui **+**
+> valuesToMask) and auto-records duration/result/errors for it." The redesigned
+> helper does none of that on the per-call path — it just fills a plain sample bag,
+> synchronously, and returns `void`. This iteration renames it so the name stops
+> promising a scoped call. Behavior is unchanged; this is a rename + file move only.
+
+## What changed
+
+- **Symbol rename** (language-server-safe, all call sites updated):
+  - `callWithAccumulatingTelemetry` → **`accumulateTelemetry`** — verb `accumulate`
+    (not `call`) signals "record a data point into a batch," and drops the false
+    "your work runs in a scope" cue.
+  - `flushAccumulatingTelemetry` → **`flushAccumulatedTelemetry`** (reads as "flush
+    what was accumulated").
+  - `AccumulatingTelemetryOptions` → **`AccumulateTelemetryOptions`**.
+  - Unchanged: `TelemetrySample`, `AUTO_DURATION_DISTRIBUTION_KEY`, `meterSilentCatch`
+    (its `meter` verb is already correct for a pure counter shorthand).
+- **File rename** (via `git mv`, history preserved):
+  `src/utils/callWithAccumulatingTelemetry.ts` → `src/utils/accumulatingTelemetry.ts`
+  (+ its `.test.ts`), so the filename no longer names a function that no longer
+  exists. Updated the import path in **all** importers, including the ~7
+  `meterSilentCatch`-only consumers and the two `jest.mock('…')` paths.
+- **Callers migrated:** `ClustersExtension`, `DocumentDBShellPty` (×6),
+  `collectionViewRouter`, `rpcConcurrencyLogger` (call sites → `accumulateTelemetry`);
+  `extension.ts` (deactivation flush → `flushAccumulatedTelemetry`); `configuration.ts`
+  and `rpcConcurrencyLogger.ts` doc-comment references. `meterSilentCatch` consumers
+  needed only the import-path change (the shorthand name is unchanged).
+- **Docs:** all `{@link}` / prose references in the helper updated; the stale
+  Iteration-2 file link in this review doc repointed to the renamed path (older
+  change-protocol *bodies* are left intact as an accurate record of the name in
+  force at the time).
+
+## Why this name (the teachable distinction)
+
+The verb now encodes **whether your callback is executed**:
+
+- `accumulateTelemetry(id, (sample) => …)` — your callback only *fills a sample*; no
+  work is run in a scope, no `ctx`.
+- a future `runWithAccumulatingTelemetry(id, (sample) => action)` — genuinely *runs*
+  your action, so a `runWith…` name would be honest there (tracked as R766-P07 /
+  GitHub enhancement issue, not built in this iteration).
+
+Naming the `sample` parameter (instead of `ctx`) reinforces it at every call site:
+`sample.measurements` visibly lacks `sample.ui` / `sample.errorHandling`.
+
+## Telemetry skill
+
+Reviewed `.github/skills/telemetry-instrumentation`: it documents
+`callWithTelemetryAndErrorHandling` and `publicProcedureWithTelemetry` but does
+**not** mention the accumulating helper by any name, so no skill edit was required.
+(If a future task adds an accumulating-telemetry section, it should show the
+`accumulateTelemetry('event', (sample) => { sample.measurements.x = 1 })` form.)
+
+## Post-change validation (all green)
+
+`jest` (full suite, 2668/2668) · `eslint` (touched files, 0 errors; 4 pre-existing
+unrelated `require-await` warnings) · `tsc` (project-wide `--noEmit`, clean) ·
+`npm run build` · `prettier`. No user-facing strings, so `l10n` not required.
+
+| ID       | What changed                                                                                                   | Why (motivation)                                                                                                     |
+| -------- | -------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| R766-P06 | Renamed `callWithAccumulatingTelemetry`→`accumulateTelemetry`, `flushAccumulatingTelemetry`→`flushAccumulatedTelemetry`, `AccumulatingTelemetryOptions`→`AccumulateTelemetryOptions`; file → `accumulatingTelemetry.ts`; all callers migrated | The `callWith…` name promised a full-context scoped call the redesigned helper no longer provides; the new names match what it actually does. |
+
+## Deferred — `runWithAccumulatingTelemetry` (R766-P07, tracked as a GitHub issue)
+
+The "wrap an action" variant (runs the action, batches successes, emits failures
+immediately, rethrows) is **not** built here. It was specced and filed as
+[microsoft/vscode-documentdb#777](https://github.com/microsoft/vscode-documentdb/issues/777)
+(`enhancement`, `[telemetry]` in the title) so it can be picked up when demand for
+richer hot-path telemetry arises. Key design points captured in the issue: success
+→ accumulate; error/cancel → immediate full emit; rethrow to keep the wrapper
+transparent; reuse the Iteration 10 internals.

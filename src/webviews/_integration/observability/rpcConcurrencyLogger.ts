@@ -23,7 +23,7 @@
  * single-listener + `Map<id, observer>` multiplexer. See the R766-S04 discussion
  * in the PR-766 review for the exact thresholds.
  *
- * The event is batched by {@link callWithAccumulatingTelemetry} (default 20 calls
+ * The event is batched by {@link accumulateTelemetry} (default 20 calls
  * / 30 s), so per-RPC volume is negligible. On flush it emits:
  *   - `dist_concurrentRpcOps_min/max/sum/count` — the concurrency gauge (`max` is
  *     the peak; `sum / count` is the average);
@@ -38,7 +38,7 @@ import {
 } from '@microsoft/vscode-ext-webview/host';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { callWithAccumulatingTelemetry } from '../../../utils/callWithAccumulatingTelemetry';
+import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { WEBVIEW_CONFIG } from '../configuration';
 
 /**
@@ -67,7 +67,7 @@ export const rpcConcurrencyLogger: ProcedureLogger = {
         }
         const concurrent = entry.concurrent;
 
-        callWithAccumulatingTelemetry(WEBVIEW_CONFIG.telemetry.rpcConcurrencyEvent, (sample) => {
+        accumulateTelemetry(WEBVIEW_CONFIG.telemetry.rpcConcurrencyEvent, (sample) => {
             // Gauge: reduced to min / max / sum / count across the batch.
             sample.distributions.concurrentRpcOps = concurrent;
             // Counter: total operations observed per flush window.

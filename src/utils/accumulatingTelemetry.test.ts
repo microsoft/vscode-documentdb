@@ -6,9 +6,9 @@
 import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import {
     AUTO_DURATION_DISTRIBUTION_KEY,
-    callWithAccumulatingTelemetry,
-    flushAccumulatingTelemetry,
-} from './callWithAccumulatingTelemetry';
+    accumulateTelemetry,
+    flushAccumulatedTelemetry,
+} from './accumulatingTelemetry';
 
 // Records the measurements snapshot each time the telemetry pipeline is entered
 // (which, after the R766-P05 redesign, happens only on flush and on the rare
@@ -16,7 +16,7 @@ import {
 const emitted: Array<Record<string, number | undefined>> = [];
 
 // The mock runs the callback synchronously so the emitted snapshot is available
-// immediately after a synchronous `flushAccumulatingTelemetry(...)` call (no
+// immediately after a synchronous `flushAccumulatedTelemetry(...)` call (no
 // microtask hop). The real helper's flush callback is synchronous, so this is a
 // faithful stand-in.
 jest.mock('@microsoft/vscode-azext-utils', () => ({
@@ -39,7 +39,7 @@ jest.mock('@microsoft/vscode-azext-utils', () => ({
 
 const mockCallWith = callWithTelemetryAndErrorHandling as jest.Mock;
 
-describe('callWithAccumulatingTelemetry', () => {
+describe('accumulateTelemetry', () => {
     beforeEach(() => {
         emitted.length = 0;
         // Clears recorded calls between tests but keeps the mock implementation.
@@ -53,11 +53,11 @@ describe('callWithAccumulatingTelemetry', () => {
     it('sums numeric measurements across the batch', () => {
         const id = 'test.counter';
         for (let i = 0; i < 20; i++) {
-            callWithAccumulatingTelemetry(id, (sample) => {
+            accumulateTelemetry(id, (sample) => {
                 sample.measurements.hits = 1;
             });
         }
-        flushAccumulatingTelemetry(id);
+        flushAccumulatedTelemetry(id);
 
         const flush = findFlush('hits');
         expect(flush).toBeDefined();
@@ -67,11 +67,11 @@ describe('callWithAccumulatingTelemetry', () => {
     it('records caller-provided distribution gauges as min/max/sum/count', () => {
         const id = 'test.callerGauge';
         for (let i = 0; i < 20; i++) {
-            callWithAccumulatingTelemetry(id, (sample) => {
+            accumulateTelemetry(id, (sample) => {
                 sample.distributions.candidateCount = i;
             });
         }
-        flushAccumulatingTelemetry(id);
+        flushAccumulatedTelemetry(id);
 
         const flush = findFlush('dist_candidateCount_count');
         expect(flush).toBeDefined();
@@ -84,11 +84,11 @@ describe('callWithAccumulatingTelemetry', () => {
     it('automatically records per-call duration with no caller bookkeeping', () => {
         const id = 'test.autoDuration';
         for (let i = 0; i < 20; i++) {
-            callWithAccumulatingTelemetry(id, () => {
+            accumulateTelemetry(id, () => {
                 // Caller records nothing; duration must still be captured.
             });
         }
-        flushAccumulatingTelemetry(id);
+        flushAccumulatedTelemetry(id);
 
         const countKey = `dist_${AUTO_DURATION_DISTRIBUTION_KEY}_count`;
         const flush = findFlush(countKey);
@@ -102,12 +102,12 @@ describe('callWithAccumulatingTelemetry', () => {
     it('skips non-finite numbers so a stray NaN/Infinity cannot poison the batch', () => {
         const id = 'test.finiteGuard';
         for (let i = 0; i < 20; i++) {
-            callWithAccumulatingTelemetry(id, (sample) => {
+            accumulateTelemetry(id, (sample) => {
                 sample.measurements.hits = i === 0 ? Number.NaN : 1; // one bad value
                 sample.distributions.gauge = i === 1 ? Number.POSITIVE_INFINITY : 5;
             });
         }
-        flushAccumulatingTelemetry(id);
+        flushAccumulatedTelemetry(id);
 
         const flush = findFlush('hits');
         expect(flush).toBeDefined();
@@ -122,7 +122,7 @@ describe('callWithAccumulatingTelemetry', () => {
         const id = 'test.cheapPath';
         // Stay below the default batch size so no auto-flush fires.
         for (let i = 0; i < 5; i++) {
-            callWithAccumulatingTelemetry(id, (sample) => {
+            accumulateTelemetry(id, (sample) => {
                 sample.measurements.hits = 1;
             });
         }
@@ -130,7 +130,7 @@ describe('callWithAccumulatingTelemetry', () => {
         // work and never opens a telemetry/error scope.
         expect(mockCallWith).not.toHaveBeenCalled();
 
-        flushAccumulatingTelemetry(id);
+        flushAccumulatedTelemetry(id);
 
         // The heavy wrapper is entered exactly once, on flush.
         expect(mockCallWith).toHaveBeenCalledTimes(1);
@@ -138,7 +138,7 @@ describe('callWithAccumulatingTelemetry', () => {
 
     it('does not accumulate when the populator throws, and reports the error once', () => {
         const id = 'test.errorsNeverBatch';
-        callWithAccumulatingTelemetry(id, () => {
+        accumulateTelemetry(id, () => {
             throw new Error('boom');
         });
 
@@ -147,7 +147,7 @@ describe('callWithAccumulatingTelemetry', () => {
         expect(mockCallWith).toHaveBeenCalledTimes(1);
         expect(mockCallWith.mock.calls[0][0]).toBe(id);
 
-        flushAccumulatingTelemetry(id);
+        flushAccumulatedTelemetry(id);
         const countKey = `dist_${AUTO_DURATION_DISTRIBUTION_KEY}_count`;
         expect(findFlush(countKey)).toBeUndefined();
     });

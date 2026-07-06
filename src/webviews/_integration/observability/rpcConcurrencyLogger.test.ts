@@ -6,7 +6,7 @@
 import { type ProcedureLogEntry } from '@microsoft/vscode-ext-webview/host';
 import * as vscode from 'vscode';
 import { ext } from '../../../extensionVariables';
-import { callWithAccumulatingTelemetry } from '../../../utils/callWithAccumulatingTelemetry';
+import { accumulateTelemetry } from '../../../utils/accumulatingTelemetry';
 import { WEBVIEW_CONFIG } from '../configuration';
 import { rpcConcurrencyLogger } from './rpcConcurrencyLogger';
 
@@ -16,8 +16,8 @@ const consoleLog = jest.fn();
 jest.mock('@microsoft/vscode-ext-webview/host', () => ({
     consoleProcedureLogger: { log: (entry: unknown) => consoleLog(entry) },
 }));
-jest.mock('../../../utils/callWithAccumulatingTelemetry', () => ({
-    callWithAccumulatingTelemetry: jest.fn(),
+jest.mock('../../../utils/accumulatingTelemetry', () => ({
+    accumulateTelemetry: jest.fn(),
 }));
 
 /**
@@ -49,13 +49,13 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
         rpcConcurrencyLogger.log(entry);
 
         expect(consoleLog).toHaveBeenCalledWith(entry);
-        expect(callWithAccumulatingTelemetry).toHaveBeenCalledWith(
+        expect(accumulateTelemetry).toHaveBeenCalledWith(
             WEBVIEW_CONFIG.telemetry.rpcConcurrencyEvent,
             expect.any(Function),
         );
 
         // Run the callback against a sample-bag stub to assert what it writes.
-        const callback = (callWithAccumulatingTelemetry as jest.Mock).mock.calls[0][1] as (sample: unknown) => void;
+        const callback = (accumulateTelemetry as jest.Mock).mock.calls[0][1] as (sample: unknown) => void;
         const sample = {
             properties: {},
             measurements: {} as Record<string, number>,
@@ -79,7 +79,7 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
         rpcConcurrencyLogger.log(entry);
 
         expect(consoleLog).toHaveBeenCalledWith(entry);
-        expect(callWithAccumulatingTelemetry).not.toHaveBeenCalled();
+        expect(accumulateTelemetry).not.toHaveBeenCalled();
     });
 
     it('logs the console line in the Test mode too (any non-production mode)', () => {
@@ -108,11 +108,11 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
         expect(consoleLog).not.toHaveBeenCalled();
 
         // ... but the telemetry gauge is unconditional, so production still samples.
-        expect(callWithAccumulatingTelemetry).toHaveBeenCalledWith(
+        expect(accumulateTelemetry).toHaveBeenCalledWith(
             WEBVIEW_CONFIG.telemetry.rpcConcurrencyEvent,
             expect.any(Function),
         );
-        const callback = (callWithAccumulatingTelemetry as jest.Mock).mock.calls[0][1] as (sample: unknown) => void;
+        const callback = (accumulateTelemetry as jest.Mock).mock.calls[0][1] as (sample: unknown) => void;
         const sample = {
             properties: {},
             measurements: {} as Record<string, number>,
