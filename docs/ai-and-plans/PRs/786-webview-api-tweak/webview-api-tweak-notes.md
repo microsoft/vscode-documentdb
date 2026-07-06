@@ -1,0 +1,163 @@
+# PR #786 — `@microsoft/vscode-ext-webview` publish-readiness tweaks
+
+**Branch:** `dev/tnaum/webview-api-tweak` → `main`
+**PR:** https://github.com/microsoft/vscode-documentdb/pull/786
+**Date:** 2026-07-06
+**Package:** `packages/vscode-ext-webview` (`@microsoft/vscode-ext-webview`, `0.9.0-preview`)
+
+This note records two small, low-risk improvements made to the webview API
+package after it was merged in [PR #766](../766-webview-ext-package-redesign/).
+They came out of review feedback and a follow-up question about peer
+dependencies. No runtime or API behaviour changes — this is packaging metadata
+plus documentation only.
+
+---
+
+## 1. Add `"sideEffects": false` to `package.json`
+
+### What
+
+Added a single field to `packages/vscode-ext-webview/package.json`, next to the
+other module-resolution fields:
+
+```json
+"main": "dist/index.js",
+"types": "dist/index.d.ts",
+"sideEffects": false,
+"exports": { ... }
+```
+
+### Why
+
+`"sideEffects": false` is a contract with consumer bundlers (webpack, Rollup,
+esbuild, Vite): it promises that importing any module from this package has **no
+observable side effect**, so any exports the consumer does not actually use can
+be safely eliminated (dead-code elimination / tree-shaking). This was the
+reviewer's suggestion:
+
+> react and vscode-webview peer deps are optional, but there's no top-level
+> engines/sideEffects field. Not required, but if you want cleaner tree-shaking
+> for consumers you could add `"sideEffects": false` to the package.json.
+
+Combined with the package's existing subpath exports (`.`, `./host`,
+`./webview`, `./react`), this gives consumers a clean guarantee that they only
+pay for what they import.
+
+### Why it is safe (verification of "no side effects")
+
+The flag is only safe if the package genuinely has no module-level side effects;
+otherwise a bundler could drop code a consumer implicitly relies on. Before
+adding it, every non-test source file was scanned for top-level executable
+statements. The only module-level code found is:
+
+- pure `function` / `const` declarations;
+- a `new WeakMap()` allocation in `src/react/connection.ts` (pure — used as a
+  per-`vscodeApi` connection cache);
+- `const defaultTrpc = initWebviewTrpc()` in `src/shared/initWebviewTrpc.ts`,
+  which calls `initTRPC.context<TContext>().create()` — a pure tRPC builder with
+  no I/O, no global mutation, and no side-effectful registration.
+
+There are no polyfills, no global patching, and no side-effectful imports.
+`"sideEffects": false` is therefore correct.
+
+### Why `engines` was intentionally skipped
+
+The reviewer mentioned `engines` in the same breath, but it was deliberately not
+added. For a library that is consumed through a bundler, an `engines` field is
+optional and can produce spurious `EBADENGINE` install warnings for consumers on
+a different Node version, without adding real value. The reviewer flagged it as
+"not required," so it earns its keep less than the `sideEffects` flag.
+
+---
+
+## 2. Clarify optional peer dependencies (README)
+
+### What
+
+Reconciled the README with what `package.json` already declares. Two spots were
+updated in `packages/vscode-ext-webview/README.md`:
+
+1. The **install** prose listed the peers as "react, @trpc/client, and
+   @trpc/server" — omitting `vscode-webview` — and did not say which are
+   optional. It now lists all four and calls out `react` and `vscode-webview` as
+   optional peers.
+2. The **Peer dependencies** table gained an explicit "Optional?" column and a
+   sentence explaining that `react` and `vscode-webview` are declared optional
+   via `peerDependenciesMeta`, so host-only / non-React consumers install
+   neither and see no missing-peer warning.
+
+### Why (and the peer-dependency reasoning behind it)
+
+This tweak came from a follow-up question: *"should I make react optional? if my
+consumer is not using the react section, they don't really need it."*
+
+The answer is that `react` is **already** optional — the package was set up
+correctly — but the docs under-described it. For the record, the peer-dependency
+design of this package is:
+
+```json
+"peerDependencies": {
+  "@trpc/client": "^11.0.0",
+  "@trpc/server": "^11.0.0",
+  "react": ">=18.0.0",
+  "vscode-webview": "^1.0.0"
+},
+"peerDependenciesMeta": {
+  "react":          { "optional": true },
+  "vscode-webview": { "optional": true }
+}
+```
+
+**Why peers and not regular dependencies?** A peer dependency says "the consumer
+provides this, and we must share a single instance," declaring a compatible
+*range* rather than pinning a version. That matters here because:
+
+- **`react`** — two copies of React in one bundle break hooks ("Invalid hook
+  call"). The package's hooks must use the consumer's React instance, never a
+  second bundled copy.
+- **`@trpc/client` / `@trpc/server`** — tRPC's end-to-end type safety and link
+  contracts rely on the *same* tRPC version on both sides of the transport; a
+  bundled copy could silently mismatch the consumer's router types.
+- **`vscode-webview`** — webview-environment types/globals provided by the host
+  runtime; duplicating them is meaningless.
+
+If these were regular `dependencies`, consumers could end up with duplicate
+React / tRPC copies — the exact "pull duplicates into your webview bundle"
+problem the README warns about.
+
+**Why `react` and `vscode-webview` are optional peers.** `peerDependenciesMeta`
+`optional: true` means "required only if you use the surface that needs it, and
+don't warn otherwise." `react` is only needed for the `./react` subpath;
+`vscode-webview` is webview-side only. A consumer using `./host` or the
+framework-agnostic `./webview` surface therefore installs neither and gets no
+missing-peer warning. `@trpc/client` / `@trpc/server` are **not** optional
+because they back the core transport on both surfaces.
+
+A consumer does **not** have to match an exact version — they satisfy the
+declared range with whatever version they already use. Modern npm (v7+)
+auto-installs missing required peers and surfaces incompatible-version
+mismatches as warnings/errors at install time rather than at runtime.
+
+---
+
+## Files changed
+
+| File | Change |
+| ---- | ------ |
+| `packages/vscode-ext-webview/package.json` | Add `"sideEffects": false`. |
+| `packages/vscode-ext-webview/README.md` | Clarify optional peer dependencies in the install prose and the peer-dependency table. |
+
+## Commits
+
+- `fix(package): add sideEffects flag to package.json`
+- `docs(vscode-ext-webview): clarify optional peer dependencies`
+
+## Verification
+
+Run from `packages/vscode-ext-webview` after `npm install` at the repo root:
+
+- `npm run build` (tsc) — clean.
+- `npx prettier --check package.json README.md` — clean.
+- `npm test` (jest) — 89/89 tests pass across 11 suites.
+
+No code or runtime behaviour changed; the package remains publish-ready.
