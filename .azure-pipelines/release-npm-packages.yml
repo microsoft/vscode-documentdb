@@ -80,11 +80,11 @@ parameters:
     - name: mode
       displayName: 'Run mode'
       type: string
-      default: 'validate-only'
+      default: 'validate-only (Validate the artifact only. Skips ESRP entirely. No risk of publishing.)'
       values:
-          - validate-only
-          - test-esrp-auth (submits an invalid Maven job that ESRP rejects; the job fails; nothing is published)
-          - publish
+          - validate-only (Validate the artifact only. Skips ESRP entirely. No risk of publishing.)
+          - test-esrp-auth (Submits an invalid job, Maven instead of npm, that ESRP rejects; the job fails; nothing is published.)
+          - publish (The REAL release. Publishes the package to npmjs.org via ESRP.)
 
     - name: 'debug'
       displayName: 'Enable debug output'
