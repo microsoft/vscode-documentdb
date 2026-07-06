@@ -137,7 +137,7 @@ const MetricCard = ({ label, value, badge }: { label: string; value: string; bad
 
 export const LocalQuickStart = (): JSX.Element => {
     const styles = useStyles();
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     const [phase, setPhase] = useState<Phase>('loading');
     const [docker, setDocker] = useState<DockerStatusResult | undefined>(undefined);

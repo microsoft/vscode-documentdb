@@ -23,7 +23,7 @@ import { PlaygroundDiagnostics } from './documentdb/playground/PlaygroundDiagnos
 import { PLAYGROUND_RESULT_SCHEME, PlaygroundResultProvider } from './documentdb/playground/PlaygroundResultProvider';
 import { SchemaStore } from './documentdb/SchemaStore';
 import { ext } from './extensionVariables';
-import { flushAccumulatingTelemetry } from './utils/callWithAccumulatingTelemetry';
+import { flushAccumulatedTelemetry } from './utils/accumulatingTelemetry';
 import { globalUriHandler } from './vscodeUriHandler';
 // Import the DocumentDB Extension API interfaces
 import { type AzureResourcesExtensionApi } from '@microsoft/vscode-azureresources-api';
@@ -148,8 +148,8 @@ export async function activateInternal(
 // this method is called when your extension is deactivated
 export function deactivateInternal(_context: vscode.ExtensionContext): void {
     // Flush any pending accumulated telemetry (high-frequency events batched via
-    // callWithAccumulatingTelemetry) so the last partial batch is not lost.
-    flushAccumulatingTelemetry();
+    // accumulateTelemetry) so the last partial batch is not lost.
+    flushAccumulatedTelemetry();
 }
 
 /**
