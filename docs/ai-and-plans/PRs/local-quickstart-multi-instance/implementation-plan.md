@@ -242,11 +242,15 @@ instances → today’s rocket empty-state (creates instance #1). Row labels use
 
 ## 5. Work items (sequenced, each committable + reviewable)
 
-- [ ] **WI-0 — Testability seam (R12).** Extract a `ContainerRuntime` **interface** and inject it into
+- [x] **WI-0 — Testability seam (R12).** Extract a `ContainerRuntime` **interface** and inject it into
   the service (today it's a module singleton called at **~38 sites**, with **no** service test). The
   **pure inspectors `isRunning(item)` / `getBoundHostPort(item)` become standalone exported functions**
   (no IO → keep the interface = IO surface only). Enables Docker-free tests for every later WI. No
   behavior change. **Unanimously green in round-2 — safe to start immediately, decoupled from WI-1/2.**
+  - _Done:_ `IContainerRuntime` (13 IO methods) extracted; `ContainerRuntimeImpl implements
+    IContainerRuntime`; `isRunning`/`getBoundHostPort` now standalone exports; `QuickStartServiceImpl`
+    gains `constructor(runtime: IContainerRuntime = ContainerRuntime)` + `this.runtime.*` (31 sites) and
+    is `export`ed for test injection. Behavior-preserving. Gates: build · lint · jest **2768/2768**.
 - [ ] **WI-1 — Identity & keying foundation.** Add `DEFAULT_ALIAS` + derivation helpers
   (`containerName/volumeName/clusterId/secretKey/imageRefKey`), the registry (§4.2) + locked
   `globalState` accessors, and the **legacy-key migration** (§6). **Also repoint the still-singleton

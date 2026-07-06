@@ -107,11 +107,42 @@ export interface CreateContainerOptions {
 }
 
 /**
+ * IO surface of the Docker-backed runtime (WI-0). Extracted so {@link QuickStartService}
+ * can be unit-tested against a mock runtime with no real Docker daemon. The pure inspectors
+ * ({@link getBoundHostPort}, {@link isRunning}) are standalone functions — deliberately NOT part
+ * of this contract, which stays an IO-only surface.
+ */
+export interface IContainerRuntime {
+    isDockerReady(): Promise<DockerReadiness>;
+    isPortFree(port?: number): Promise<boolean>;
+    findAvailablePort(preferred?: number, bandEnd?: number, attempts?: number): Promise<number | undefined>;
+    pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void>;
+    createAndRunContainer(
+        options: CreateContainerOptions,
+        secrets: ReadonlyArray<string>,
+        token?: vscode.CancellationToken,
+    ): Promise<string | undefined>;
+    inspectContainer(nameOrId: string): Promise<InspectContainersItem | undefined>;
+    startContainer(id: string): Promise<void>;
+    stopContainer(id: string): Promise<void>;
+    removeContainer(id: string, force?: boolean): Promise<void>;
+    removeVolume(name: string, force?: boolean): Promise<void>;
+    execShellInContainer(
+        id: string,
+        script: string,
+        secrets: ReadonlyArray<string>,
+        token?: vscode.CancellationToken,
+    ): Promise<void>;
+    listByLabel(labels: Record<string, string | boolean>): Promise<ListContainersItem[]>;
+    followLogs(id: string, secrets: ReadonlyArray<string>, token?: vscode.CancellationToken): Promise<void>;
+}
+
+/**
  * Stateless wrapper around a single Docker {@link DockerClient}. Each call
  * builds a fresh runner so its masked stdout/stderr writables don't leak state
  * between commands.
  */
-class ContainerRuntimeImpl {
+class ContainerRuntimeImpl implements IContainerRuntime {
     private readonly client = new DockerClient();
 
     private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken) {
@@ -252,16 +283,6 @@ class ContainerRuntimeImpl {
         }
     }
 
-    /** Read the host port actually bound to `containerPort` (design §8.3, D11). */
-    public getBoundHostPort(item: InspectContainersItem, containerPort: number = QUICK_START_PORT): number | undefined {
-        const binding = item.ports?.find((p) => p.containerPort === containerPort && typeof p.hostPort === 'number');
-        return binding?.hostPort;
-    }
-
-    public isRunning(item: InspectContainersItem | undefined): boolean {
-        return !!item?.status && item.status.toLowerCase().includes('running');
-    }
-
     public async startContainer(id: string): Promise<void> {
         const runner = this.makeRunner([]);
         await runner(this.client.startContainers({ container: [id] }));
@@ -373,7 +394,25 @@ class ContainerRuntimeImpl {
 }
 
 /** Singleton container runtime. */
-export const ContainerRuntime = new ContainerRuntimeImpl();
+/**
+ * Read the host port actually bound to `containerPort` (design §8.3, D11). Pure inspector
+ * (no IO) — kept off {@link IContainerRuntime} so that contract stays an IO-only surface.
+ */
+export function getBoundHostPort(
+    item: InspectContainersItem,
+    containerPort: number = QUICK_START_PORT,
+): number | undefined {
+    const binding = item.ports?.find((p) => p.containerPort === containerPort && typeof p.hostPort === 'number');
+    return binding?.hostPort;
+}
+
+/** True when the inspected container reports a "running" status. Pure inspector (no IO). */
+export function isRunning(item: InspectContainersItem | undefined): boolean {
+    return !!item?.status && item.status.toLowerCase().includes('running');
+}
+
+/** Singleton Docker-backed runtime; the default injected into {@link QuickStartService} (WI-0). */
+export const ContainerRuntime: IContainerRuntime = new ContainerRuntimeImpl();
 
 /**
  * Best-effort launch of Docker Desktop (design §5.3 / §13.2 "Start Docker Desktop").

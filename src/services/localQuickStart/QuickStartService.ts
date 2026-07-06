@@ -32,7 +32,13 @@ import { ClustersClient } from '../../documentdb/ClustersClient';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ext } from '../../extensionVariables';
-import { ContainerRuntime, getQuickStartOutputChannel } from './ContainerRuntime';
+import {
+    ContainerRuntime,
+    getBoundHostPort,
+    getQuickStartOutputChannel,
+    type IContainerRuntime,
+    isRunning,
+} from './ContainerRuntime';
 import { composeConnectionString, generateCredentials, type GeneratedCredentials } from './quickStartCredentials';
 import {
     type AdvancedQuickStartOptions,
@@ -167,7 +173,7 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
     });
 }
 
-class QuickStartServiceImpl {
+export class QuickStartServiceImpl {
     private state: InstanceState = InstanceState.NotInstalled;
     private metadata: InstanceMetadata | undefined;
     private errorMessage: string | undefined;
@@ -184,6 +190,12 @@ class QuickStartServiceImpl {
     private readonly statusEmitter = new vscode.EventEmitter<void>();
     /** Fires whenever the managed-instance status changes (drives the tree). */
     public readonly onDidChangeStatus = this.statusEmitter.event;
+
+    /**
+     * @param runtime Docker IO surface (WI-0). Defaults to the shared {@link ContainerRuntime}
+     * singleton; tests inject a mock so the state machine runs with no real daemon.
+     */
+    constructor(private readonly runtime: IContainerRuntime = ContainerRuntime) {}
 
     public getStatus(): QuickStartStatus {
         return {
@@ -292,7 +304,7 @@ class QuickStartServiceImpl {
 
             // --- checking ---
             yield stageEvent('checking', 'active', 'Checking Docker…');
-            const readiness = await ContainerRuntime.isDockerReady();
+            const readiness = await this.runtime.isDockerReady();
             this.throwIfAborted(signal);
             if (!readiness.cliInstalled || !readiness.daemonReachable) {
                 const message = !readiness.cliInstalled
@@ -310,10 +322,10 @@ class QuickStartServiceImpl {
             const existing = await this.findManagedContainer();
             if (existing) {
                 channel.appendLine(`Removing existing Quick Start container ${existing.id} for a clean run…`);
-                await ContainerRuntime.removeContainer(existing.id).catch(() => undefined);
+                await this.runtime.removeContainer(existing.id).catch(() => undefined);
             }
             if (!reusing) {
-                await ContainerRuntime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
+                await this.runtime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
             }
 
             // Pick a host port (design §8.3). An explicit Advanced port is honored exactly:
@@ -322,7 +334,7 @@ class QuickStartServiceImpl {
             let chosenPort: number;
             let portFallbackNote: string | undefined;
             if (explicitPort !== undefined) {
-                if (!(await ContainerRuntime.isPortFree(explicitPort))) {
+                if (!(await this.runtime.isPortFree(explicitPort))) {
                     const message = `Port ${explicitPort} is already in use. Choose a different port or free it, then retry.`;
                     this.setStatus(InstanceState.Error, undefined, message);
                     yield stageEvent('checking', 'error', message, message);
@@ -331,7 +343,7 @@ class QuickStartServiceImpl {
                 this.throwIfAborted(signal);
                 chosenPort = explicitPort;
             } else {
-                const available = await ContainerRuntime.findAvailablePort(QUICK_START_PORT);
+                const available = await this.runtime.findAvailablePort(QUICK_START_PORT);
                 this.throwIfAborted(signal);
                 if (available === undefined) {
                     const message = `Ports ${QUICK_START_PORT}-${QUICK_START_PORT_BAND_END - 1} are all in use. Free one and retry.`;
@@ -350,7 +362,7 @@ class QuickStartServiceImpl {
 
             // --- pulling ---
             yield stageEvent('pulling', 'active', 'Pulling the official image…');
-            await ContainerRuntime.pullImage(imageRef, cts.token);
+            await this.runtime.pullImage(imageRef, cts.token);
             this.throwIfAborted(signal);
             yield stageEvent('pulling', 'done');
 
@@ -361,7 +373,7 @@ class QuickStartServiceImpl {
             // appear on the docker CLI / host process list (design §8.2). The image
             // reads USERNAME/PASSWORD from the environment.
             envFilePath = await this.writeEnvFile(credentials.username, credentials.password);
-            containerId = await ContainerRuntime.createAndRunContainer(
+            containerId = await this.runtime.createAndRunContainer(
                 {
                     imageRef: imageRef,
                     name: QUICK_START_CONTAINER_NAME,
@@ -382,7 +394,7 @@ class QuickStartServiceImpl {
             );
             containerCreated = true;
             if (!containerId) {
-                const item = await ContainerRuntime.inspectContainer(QUICK_START_CONTAINER_NAME);
+                const item = await this.runtime.inspectContainer(QUICK_START_CONTAINER_NAME);
                 containerId = item?.id ?? QUICK_START_CONTAINER_NAME;
             }
             this.throwIfAborted(signal);
@@ -390,13 +402,13 @@ class QuickStartServiceImpl {
 
             // --- starting (confirm running, read bound port, follow logs) ---
             yield stageEvent('starting', 'active', 'Starting container…');
-            const inspected = await ContainerRuntime.inspectContainer(containerId);
+            const inspected = await this.runtime.inspectContainer(containerId);
             // Fall back to the port we actually requested (not the canonical default) if the
             // inspect can't report the binding, so a custom port stays correct in the success
             // message + stored connection string.
-            const boundPort = (inspected && ContainerRuntime.getBoundHostPort(inspected)) || chosenPort;
+            const boundPort = (inspected && getBoundHostPort(inspected)) || chosenPort;
             // Stream container logs to the channel during the wait (compensates for -dt detach, D2).
-            void ContainerRuntime.followLogs(containerId, secrets, cts.token);
+            void this.runtime.followLogs(containerId, secrets, cts.token);
             yield stageEvent('starting', 'done');
 
             // --- waiting (wire-protocol readiness, D7) ---
@@ -461,15 +473,15 @@ class QuickStartServiceImpl {
                 // Cleanup (D12): when a container exists, stop+remove it.
                 if (containerCreated && containerId) {
                     channel.appendLine(`Cleaning up container ${containerId}…`);
-                    await ContainerRuntime.stopContainer(containerId).catch(() => undefined);
-                    await ContainerRuntime.removeContainer(containerId).catch(() => undefined);
+                    await this.runtime.stopContainer(containerId).catch(() => undefined);
+                    await this.runtime.removeContainer(containerId).catch(() => undefined);
                 } else if (createAttempted && !containerId) {
                     // The CLI may have been killed after the daemon created the
                     // container but before its id was captured — sweep by label.
                     const orphan = await this.findManagedContainer();
                     if (orphan) {
                         channel.appendLine(`Removing orphaned container ${orphan.id}…`);
-                        await ContainerRuntime.removeContainer(orphan.id).catch(() => undefined);
+                        await this.runtime.removeContainer(orphan.id).catch(() => undefined);
                     }
                 }
                 // Interrupted before settling (cancel / unsubscribe) → reset state.
@@ -601,7 +613,7 @@ class QuickStartServiceImpl {
             yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
-            void ContainerRuntime.followLogs(pending.containerId, [pending.password], cts.token);
+            void this.runtime.followLogs(pending.containerId, [pending.password], cts.token);
             await this.waitForReadiness(pending.connectionString, signal);
             this.throwIfAborted(signal);
             await this.finalizeReadyInstance(pending, cts.token, signal);
@@ -676,10 +688,10 @@ class QuickStartServiceImpl {
         this.pendingReadiness = undefined;
         this.lifecycleBusy = true;
         try {
-            await ContainerRuntime.stopContainer(pending.containerId).catch(() => undefined);
-            await ContainerRuntime.removeContainer(pending.containerId).catch(() => undefined);
+            await this.runtime.stopContainer(pending.containerId).catch(() => undefined);
+            await this.runtime.removeContainer(pending.containerId).catch(() => undefined);
             if (!pending.reusing) {
-                await ContainerRuntime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
+                await this.runtime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
             }
             this.setStatus(InstanceState.NotInstalled, undefined, undefined);
             return true;
@@ -741,7 +753,7 @@ class QuickStartServiceImpl {
     ): Promise<void> {
         try {
             const script = `${SAMPLE_DATA_INIT_SCRIPT} -H localhost -P ${QUICK_START_PORT} -u "$USERNAME" -p "$PASSWORD" -d ${SAMPLE_DATA_DIR}`;
-            await ContainerRuntime.execShellInContainer(containerId, script, secrets, token);
+            await this.runtime.execShellInContainer(containerId, script, secrets, token);
         } catch (error) {
             getQuickStartOutputChannel().appendLine(`Sample data load skipped: ${errMessage(error)}`);
         }
@@ -823,7 +835,7 @@ class QuickStartServiceImpl {
     }
 
     private async findManagedContainer(): Promise<{ id: string } | undefined> {
-        const list = await ContainerRuntime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }).catch(() => []);
+        const list = await this.runtime.listByLabel({ [QUICK_START_LABEL_KEY]: '1' }).catch(() => []);
         return list[0];
     }
 
@@ -848,7 +860,7 @@ class QuickStartServiceImpl {
      * matches.
      */
     private async isManaged(containerId: string): Promise<boolean> {
-        const item = await ContainerRuntime.inspectContainer(containerId);
+        const item = await this.runtime.inspectContainer(containerId);
         return !!item && item.labels?.[QUICK_START_LABEL_KEY] === '1';
     }
 
@@ -860,12 +872,8 @@ class QuickStartServiceImpl {
      * Returns true when the action may proceed.
      */
     private async liveStateGuard(id: string, allowed: ReadonlyArray<'running' | 'stopped'>): Promise<boolean> {
-        const item = await ContainerRuntime.inspectContainer(id);
-        const live: 'running' | 'stopped' | 'missing' = !item
-            ? 'missing'
-            : ContainerRuntime.isRunning(item)
-              ? 'running'
-              : 'stopped';
+        const item = await this.runtime.inspectContainer(id);
+        const live: 'running' | 'stopped' | 'missing' = !item ? 'missing' : isRunning(item) ? 'running' : 'stopped';
         if (live === 'missing' || !allowed.includes(live)) {
             await this.refreshLiveState();
             const label =
@@ -889,7 +897,7 @@ class QuickStartServiceImpl {
                 return;
             }
             this.setStatus(InstanceState.Starting);
-            await ContainerRuntime.startContainer(id);
+            await this.runtime.startContainer(id);
             if (await this.confirmStaysRunning(id)) {
                 this.setStatus(InstanceState.Running);
             } else {
@@ -910,7 +918,7 @@ class QuickStartServiceImpl {
                 return;
             }
             this.setStatus(InstanceState.Stopping);
-            await ContainerRuntime.stopContainer(id);
+            await this.runtime.stopContainer(id);
             this.setStatus(InstanceState.Stopped);
         });
     }
@@ -923,9 +931,9 @@ class QuickStartServiceImpl {
                 return;
             }
             this.setStatus(InstanceState.Stopping);
-            await ContainerRuntime.stopContainer(id).catch(() => undefined);
+            await this.runtime.stopContainer(id).catch(() => undefined);
             this.setStatus(InstanceState.Starting);
-            await ContainerRuntime.startContainer(id);
+            await this.runtime.startContainer(id);
             if (await this.confirmStaysRunning(id)) {
                 this.setStatus(InstanceState.Running);
             } else {
@@ -946,8 +954,8 @@ class QuickStartServiceImpl {
     private async confirmStaysRunning(id: string): Promise<boolean> {
         for (let attempt = 0; attempt < START_CONFIRM_ATTEMPTS; attempt++) {
             await new Promise((resolve) => setTimeout(resolve, START_CONFIRM_INTERVAL_MS));
-            const inspected = await ContainerRuntime.inspectContainer(id);
-            if (!ContainerRuntime.isRunning(inspected)) {
+            const inspected = await this.runtime.inspectContainer(id);
+            if (!isRunning(inspected)) {
                 return false;
             }
         }
@@ -966,10 +974,10 @@ class QuickStartServiceImpl {
             const id = this.metadata?.containerId;
             // If the container still exists, only remove it when it is ours.
             if (id && (this.missing || (await this.isManaged(id)))) {
-                await ContainerRuntime.removeContainer(id).catch(() => undefined);
+                await this.runtime.removeContainer(id).catch(() => undefined);
             }
             // Explicit Delete is a full clean slate: drop the data volume too.
-            await ContainerRuntime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
+            await this.runtime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
             try {
                 await ext.secretStorage.delete(SECRET_KEY);
             } catch {
@@ -993,14 +1001,14 @@ class QuickStartServiceImpl {
             return;
         }
         try {
-            const inspected = await ContainerRuntime.inspectContainer(this.metadata.containerId);
+            const inspected = await this.runtime.inspectContainer(this.metadata.containerId);
             if (!inspected) {
                 // Container is gone — keep metadata so the user can recreate.
                 this.missing = true;
                 this.statusEmitter.fire();
                 return;
             }
-            const running = ContainerRuntime.isRunning(inspected);
+            const running = isRunning(inspected);
             const nextState = running ? InstanceState.Running : InstanceState.Stopped;
             if (this.missing || this.state !== nextState) {
                 this.setStatus(nextState);
@@ -1043,7 +1051,7 @@ class QuickStartServiceImpl {
                 getQuickStartOutputChannel().appendLine(
                     'Removing an orphaned Quick Start container (no stored credentials) for a clean slate…',
                 );
-                await ContainerRuntime.removeContainer(container.id).catch(() => undefined);
+                await this.runtime.removeContainer(container.id).catch(() => undefined);
                 // NOTE: only the container is removed — never the volume. A missing secret does
                 // NOT prove the volume is disposable (a previously successful instance whose secret
                 // was lost/reset externally would also land here), and deleting it would be
@@ -1052,9 +1060,9 @@ class QuickStartServiceImpl {
                 this.setStatus(InstanceState.NotInstalled);
                 return;
             }
-            const inspected = await ContainerRuntime.inspectContainer(container.id);
-            const boundPort = (inspected && ContainerRuntime.getBoundHostPort(inspected)) || QUICK_START_PORT;
-            const running = ContainerRuntime.isRunning(inspected);
+            const inspected = await this.runtime.inspectContainer(container.id);
+            const boundPort = (inspected && getBoundHostPort(inspected)) || QUICK_START_PORT;
+            const running = isRunning(inspected);
             let username = '';
             let password = '';
             try {
