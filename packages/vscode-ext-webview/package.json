@@ -4,6 +4,7 @@
   "description": "Webview infrastructure for VS Code extensions: type-safe tRPC over postMessage with pluggable telemetry middleware, plus an optional extension-host panel facade, a framework-agnostic webview client, and optional React hooks.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "sideEffects": false,
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
