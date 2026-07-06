@@ -128,8 +128,8 @@ variables:
     # ESRP release notification / approval contacts. Defaults to the current
     # release owner, but prefer a TEAM security group or distribution list so
     # releases are not tied to a single person. Override in ADO -> Variables.
-    EsrpReleaseOwners: 'guanzhousong@microsoft.com'
-    EsrpReleaseApprovers: 'guanzhousong@microsoft.com'
+    EsrpReleaseOwners: 'guanzhousong@microsoft.com;tnaumowicz@microsoft.com'
+    EsrpReleaseApprovers: 'guanzhousong@microsoft.com;tnaumowicz@microsoft.com'
 
 extends:
     template: v2/OneBranch.Official.CrossPlat.yml@templates
