@@ -1,0 +1,221 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+@use '../../index';
+
+.indexView {
+    @extend .selectionDisabled;
+
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    row-gap: 10px;
+    padding-top: 10px;
+
+    .indexHeader {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 0 10px;
+    }
+
+    .indexToolbar {
+        padding: 0 10px;
+    }
+
+    .indexTableContainer {
+        flex-grow: 1;
+        flex-shrink: 1;
+        min-height: 0;
+        overflow: auto;
+        padding: 0 10px;
+    }
+
+    .indexFooter {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        justify-content: flex-start;
+        gap: 20px;
+        padding: 10px;
+        border-top: 1px solid var(--colorNeutralStroke2);
+    }
+
+    .footerMetric {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.2;
+    }
+
+    .footerMetricLabel {
+        color: var(--colorNeutralForeground3);
+    }
+
+    .footerMetricValue {
+        font-weight: 600;
+    }
+
+    .fieldChip {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        padding: 2px 6px;
+        margin: 2px;
+        background-color: var(--colorNeutralBackground3);
+        border-radius: 4px;
+        font-family: var(--fontFamilyMonospace);
+        font-size: var(--fontSizeBase200);
+    }
+
+    .indexTable {
+        td,
+        th {
+            vertical-align: middle;
+        }
+
+        /*
+         * Alternating row backgrounds — mirrors the VS Code tree-view
+         * convention used in the Results tab. Parity is computed in the
+         * component (rowEven / rowOdd) from the data index so that the
+         * expanded detail row inherits the same shade as its parent.
+         */
+        .rowEven > td {
+            background-color: var(--colorNeutralBackground1);
+        }
+        .rowOdd > td {
+            background-color: var(--colorNeutralBackground2);
+        }
+
+        /*
+         * Name column gets a generous fixed width — real index names
+         * such as the auto-generated `field1_1_field2_-1_field3_1` can
+         * easily exceed 80 chars; we'd rather let them wrap inside their
+         * own column than have them push every other column off-screen.
+         */
+        /*
+         * Name column: Fluent's `useTableColumnSizing_unstable` hook
+         * controls the actual width (initial 320px, user-resizable down
+         * to 120px). We only set `word-break` here so long auto-generated
+         * names like `field1_1_field2_-1_field3_1` wrap inside the cell
+         * instead of forcing horizontal scroll.
+         */
+        .nameHeaderCell,
+        .nameCell {
+            word-break: break-all;
+        }
+
+        /* Narrow column reserved for the per-row expand chevron */
+        .expandHeaderCell,
+        .expandCell {
+            padding-right: 0;
+        }
+
+        /*
+         * Left-align the Usage column (header + cells). Fluent's
+         * TableCell/TableHeaderCell use `display: flex`, so we set both
+         * `justify-content` (flex main-axis) and `text-align` to keep the
+         * count snug against the left edge of the column.
+         */
+        .usageCell {
+            justify-content: flex-start;
+            text-align: left;
+        }
+
+        /*
+         * Tree-style detail row that mirrors the Results tab tree view:
+         * indented under its parent, laid out as a two-column grid
+         * (Field, Order). Background is inherited from the parent row's
+         * zebra class so the pair reads as a single unit.
+         */
+        .fieldsDetailRow .fieldsDetailCell {
+            padding-left: 40px; /* visual indent under the chevron column */
+            padding-top: 8px;
+            padding-bottom: 8px;
+        }
+
+        .fieldsDetailGrid {
+            display: grid;
+            grid-template-columns: minmax(180px, 1fr) minmax(80px, auto);
+            column-gap: 24px;
+            row-gap: 4px;
+            max-width: 640px;
+        }
+
+        .fieldsDetailHeader {
+            font-weight: var(--fontWeightSemibold);
+            color: var(--colorNeutralForeground3);
+            font-size: var(--fontSizeBase200);
+        }
+
+        .fieldsDetailField {
+            font-family: var(--fontFamilyMonospace);
+            font-size: var(--fontSizeBase200);
+            word-break: break-all;
+        }
+
+        .fieldsDetailDirection {
+            font-family: var(--fontFamilyMonospace);
+            font-size: var(--fontSizeBase200);
+            color: var(--colorNeutralForeground2);
+        }
+
+        /* "Created" row inside the detail panel, below the field grid */
+        .fieldsDetailMeta {
+            margin-top: 8px;
+            font-size: var(--fontSizeBase200);
+            color: var(--colorNeutralForeground2);
+        }
+
+        .fieldsDetailMetaLabel {
+            font-weight: var(--fontWeightSemibold);
+            color: var(--colorNeutralForeground3);
+        }
+    }
+
+    .actionsCell {
+        display: flex;
+        flex-direction: row;
+        gap: 4px;
+    }
+}
+
+.createIndexDialog {
+    display: flex;
+    flex-direction: column;
+    row-gap: 10px;
+
+    /*
+     * Stack of field rows. Each row is [combobox] [type dropdown] [delete].
+     * Spacing here matches the dialog's row-gap for visual rhythm.
+     */
+    .indexFieldsList {
+        display: flex;
+        flex-direction: column;
+        row-gap: 8px;
+    }
+
+    .fieldRow {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
+    }
+
+    .fieldGrow {
+        flex: 1 1 0;
+        min-width: 0;
+    }
+
+    .typeOptions {
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+        padding: 10px;
+        background-color: var(--colorNeutralBackground2);
+        border-radius: 4px;
+    }
+}
