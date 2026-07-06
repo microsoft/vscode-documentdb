@@ -279,6 +279,14 @@ instances → today’s rocket empty-state (creates instance #1). Row labels use
   rejects an unlabelled container holding `containerName(alias)` before pull/create (R6). Remove the
   reconcile no-secret-remove branch (R2). Preserve §7 invariants; add the §8 tests. **The big one.**
   *(5-agent review.)*
+  - _In progress — **part 1 done** (commit `0cf022cd`): the registry is now authoritative
+    (`upsertInstanceRecord`/`removeInstanceRecord`; `finalizeReadyInstance` upserts the default record
+    as `'ready'`; `deleteContainer` removes it). **RESUME HERE →** the core `Map<alias,
+    InstanceRuntimeState>` field migration, the alias-parameterized methods, the cross-window
+    concurrency model (§4.2 lease/`operationId`/`nextSuffix`-heal, §4.3), the port reservation +
+    collision preflight, removing the reconcile no-secret branch (R2), and the 5-agent review all
+    remain. The service is `QuickStartService.ts` (~1,120 lines); state fields at `:171-182`; provision
+    generator `:250-536`; finalize `:546`; resume `:588`; discard `:690`; reconcile `:1066`._
 - [ ] **WI-3 — Tree: N instances + “＋ New instance.”** `listStatuses()`-driven rows, per-alias ids,
   per-instance **Provisioning** row (no hardcoded port), add-instance action + its **command id +
   `package.json` `view/item/context` contribution** (R15); display-name labels.
