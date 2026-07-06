@@ -3,17 +3,20 @@
 > Elaborates [`implementation-plan.md`](./implementation-plan.md) §4.2/§4.3/§5 WI-2 + §7/§8 into a
 > committable, verifiable sub-step sequence. Round-1/2 findings: [`review-and-resolutions.md`](./review-and-resolutions.md).
 > **Status:** IMPLEMENTING — plan v2 (round-1 5-agent review folded in, see §8).
-> **Done:** WI-2b (fields → `Map<alias, InstanceRuntimeState>` + `stateFor`, commit `365dcd72`),
-> WI-2c (alias-thread methods + alias-derived names/keys, `b8af43cc`),
-> WI-2d (registry-driven multi-alias reconcile + `listStatuses` ordering + all-alias `refreshLiveState`
-> + lease staleness + R2 inversion). Full jest 2798/2798, build/lint/prettier green. **Next:** WI-2e.
-> **WI-2d notes:** (1) `adoptContainer` promotes the record to `ready` (clears a stale lease) so a later
-> container-loss becomes Missing, not scavenged. (2) `deleteContainer` falls back to `findManagedContainer`
-> when in-memory metadata is absent, so Delete works on a surfaced Missing/credential-unavailable instance.
-> (3) `nextSuffix` self-heal + the "unlabelled name-holder" scan are deferred to WI-2e (allocation lives
-> there + it already lists containers for the collision preflight). (4) `refreshLiveState` keeps the
-> per-alias inspect (behavior-identical for the consumed DEFAULT) rather than the plan's single
-> `listByLabel`; equivalent for tracked-with-metadata aliases, revisit as a WI-3 perf tuning.
+> **Done:** WI-2b (`365dcd72`), WI-2c (`b8af43cc`), WI-2d (`d9f2a133`, registry-driven reconcile + R2
+> inversion), **WI-2e-1** (`3dcd4d0f`, RR4 volume-wipe gate + scavenge phase-guard + refreshLiveState
+> stale-entry guard — from a 3-agent foundation review, then **5-agent confirmation: 5/5 APPROVE**).
+> Full jest 2801/2801, build/lint/prettier green. **Next: WI-2e-2 (allocation core).**
+> **WI-2e-2 checklist (folds in review finding C4 — the DEFAULT-hardwired provision path):** allocate a
+> fresh alias + port at Start for `+New` (async `updateRegistry` mutator; reserve every registry port
+> running+stopped + in-flight; bind the reserved port, never re-pick); write the `provisioning` lease
+> AFTER Docker/port checks; `operationId` pre-clean decision table (own-id for recreate, op-guarded for
+> `+New`, skip no-op-label); collision preflight (never touch an unlabelled name holder); `nextSuffix`
+> self-heal (incl. unlabelled name holders). **Thread the OWNING alias through EVERY `stateFor(...)`/
+> `findManagedContainer(...)`/`setStatus(...)` in `provision` (~15 refs incl. the `:572` orphan-sweep +
+> `:580` reset), `resumeReadiness` (~7), `discardTimedOutInstance` (~2)** — NOT just the `const alias =`;
+> the `pendingReadiness` write especially must use the owning alias or DEFAULT's leaks (opus47/opus48 C4).
+> Also skip in-flight aliases in `reconcileAlias` (opus48 S2). Then WI-2f: full matrix + mandatory 5-agent review.
 > **Deviation note (WI-2c):** `liveStateGuard(id)` / `confirmStaysRunning(id)` act purely on a container
 > id — the per-instance message is a WI-4 l10n change, so no `alias` param was added.
 > **Prereqs done:** WI-0 (injectable `ContainerRuntime`), WI-1 (identity + keying + migration),
