@@ -48,6 +48,7 @@ import {
     imageRefKey,
     type InstanceMetadata,
     InstanceState,
+    type InstanceStatus,
     LEGACY_IMAGE_REF_KEY,
     LEGACY_SECRET_KEY,
     type ProvisionStage,
@@ -124,6 +125,9 @@ class ReadinessTimeoutError extends Error {
  * (the container is kept running) and cleared on success / discard / a new provision.
  */
 interface PendingReadiness {
+    /** The instance this pending readiness belongs to (WI-2). */
+    readonly alias: string;
+    readonly displayName: string;
     readonly containerId: string;
     readonly connectionString: string;
     readonly boundPort: number;
@@ -133,6 +137,24 @@ interface PendingReadiness {
     readonly sampleDataRequested: boolean;
     /** A fresh (non-reusing) attempt owns its half-initialized volume, so a discard may wipe it. */
     readonly reusing: boolean;
+}
+
+/**
+ * Per-alias runtime state (WI-2). Replaces the single-instance fields; every method operates on
+ * `stateFor(alias)`. Until WI-3/4/5 pass a real alias, callers use `DEFAULT_ALIAS`, so the machine
+ * behaves as single-instance.
+ */
+interface InstanceRuntimeState {
+    readonly alias: string;
+    displayName: string;
+    port?: number;
+    metadata?: InstanceMetadata;
+    state: InstanceState;
+    provisioning: boolean;
+    lifecycleBusy: boolean;
+    missing: boolean;
+    pendingReadiness?: PendingReadiness;
+    errorMessage?: string;
 }
 
 /**
@@ -181,18 +203,25 @@ function delay(ms: number, signal: AbortSignal): Promise<void> {
 }
 
 export class QuickStartServiceImpl {
-    private state: InstanceState = InstanceState.NotInstalled;
-    private metadata: InstanceMetadata | undefined;
-    private errorMessage: string | undefined;
-    private missing = false;
-    private provisioning = false;
-    /**
-     * Set when a readiness probe timed out but the container was left running (§9.1). Holds
-     * what a "Wait longer" resume needs to finish adoption; cleared on success/discard/new run.
-     */
-    private pendingReadiness: PendingReadiness | undefined;
-    /** Serializes lifecycle ops (start/stop/restart/delete) so they don't overlap. */
-    private lifecycleBusy = false;
+    /** Per-alias runtime state (WI-2). See {@link InstanceRuntimeState}. */
+    private readonly instances = new Map<string, InstanceRuntimeState>();
+
+    /** Lazily get (creating a NotInstalled default for) an alias's runtime state. */
+    private stateFor(alias: string): InstanceRuntimeState {
+        let entry = this.instances.get(alias);
+        if (!entry) {
+            entry = {
+                alias,
+                displayName: alias === DEFAULT_ALIAS ? DEFAULT_INSTANCE_DISPLAY_NAME : alias,
+                state: InstanceState.NotInstalled,
+                provisioning: false,
+                lifecycleBusy: false,
+                missing: false,
+            };
+            this.instances.set(alias, entry);
+        }
+        return entry;
+    }
 
     private readonly statusEmitter = new vscode.EventEmitter<void>();
     /** Fires whenever the managed-instance status changes (drives the tree). */
@@ -204,34 +233,62 @@ export class QuickStartServiceImpl {
      */
     constructor(private readonly runtime: IContainerRuntime = ContainerRuntime) {}
 
-    public getStatus(): QuickStartStatus {
+    public getStatus(alias: string = DEFAULT_ALIAS): QuickStartStatus {
+        const entry = this.stateFor(alias);
         return {
-            state: this.state,
-            metadata: this.metadata,
-            errorMessage: this.errorMessage,
-            missing: this.missing,
+            state: entry.state,
+            metadata: entry.metadata,
+            errorMessage: entry.errorMessage,
+            missing: entry.missing,
             // Only "resumable" once the provision/resume has settled (not mid-wait): pendingReadiness
             // is set BEFORE the probe, so gating on the busy flags keeps a reopened panel from
             // offering "Wait longer" while setup is still actively running (gpt-5.5).
-            canResumeReadiness: !this.provisioning && !this.lifecycleBusy && this.pendingReadiness !== undefined,
+            canResumeReadiness: !entry.provisioning && !entry.lifecycleBusy && entry.pendingReadiness !== undefined,
         };
     }
 
+    /** Snapshot of every known instance for the tree (WI-3). WI-2b: the in-memory default only. */
+    public listStatuses(): InstanceStatus[] {
+        this.stateFor(DEFAULT_ALIAS); // ensure the default is always represented
+        return [...this.instances.values()].map((entry) => this.toInstanceStatus(entry));
+    }
+
+    private toInstanceStatus(entry: InstanceRuntimeState): InstanceStatus {
+        return {
+            alias: entry.alias,
+            displayName: entry.displayName,
+            state: entry.state,
+            missing: entry.missing,
+            port: entry.metadata?.boundPort ?? entry.port,
+            errorMessage: entry.errorMessage,
+            canResumeReadiness: !entry.provisioning && !entry.lifecycleBusy && entry.pendingReadiness !== undefined,
+            metadata: entry.metadata,
+        };
+    }
+
+    /** Legacy single-instance busy getter (kept for the router until WI-4). */
     public get isBusy(): boolean {
-        return this.provisioning;
+        return this.stateFor(DEFAULT_ALIAS).provisioning;
+    }
+
+    /** Alias-scoped busy check (WI-3/4/5). */
+    public isBusyFor(alias: string): boolean {
+        return this.stateFor(alias).provisioning;
     }
 
     public dispose(): void {
         this.statusEmitter.dispose();
     }
 
-    private setStatus(state: InstanceState, metadata?: InstanceMetadata, errorMessage?: string): void {
-        this.state = state;
+    private setStatus(alias: string, state: InstanceState, metadata?: InstanceMetadata, errorMessage?: string): void {
+        const entry = this.stateFor(alias);
+        entry.state = state;
         if (metadata !== undefined) {
-            this.metadata = metadata;
+            entry.metadata = metadata;
+            entry.port = metadata.boundPort;
         }
-        this.errorMessage = errorMessage;
-        this.missing = false;
+        entry.errorMessage = errorMessage;
+        entry.missing = false;
         this.statusEmitter.fire();
     }
 
@@ -249,14 +306,14 @@ export class QuickStartServiceImpl {
      * fires when the consumer unsubscribes (iterator `return()`).
      */
     public async *provision(signal: AbortSignal, options?: AdvancedQuickStartOptions): AsyncGenerator<StageEvent> {
-        if (this.provisioning || this.lifecycleBusy) {
+        if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
             yield stageEvent('error', 'error', 'Setup is already in progress.', 'Setup is already in progress.');
             return;
         }
-        this.provisioning = true;
+        this.stateFor(DEFAULT_ALIAS).provisioning = true;
         // Starting a fresh run supersedes any container left running by a prior readiness
         // timeout — drop its retained "Wait longer" state (the run below removes the container).
-        this.pendingReadiness = undefined;
+        this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
         const channel = getQuickStartOutputChannel();
         // Decide reuse from LIVE durable state, not the in-memory Missing flag: whenever we
         // still hold the instance's stored credentials (SecretStorage), a data volume bound to
@@ -280,7 +337,7 @@ export class QuickStartServiceImpl {
         // globalState record (survives a window reload), then the default if neither is known.
         const usedCustomCreds = !reusing && !!(options?.username?.trim() && options?.password?.trim());
         const imageRef = reusing
-            ? (this.metadata?.imageRef ??
+            ? (this.stateFor(DEFAULT_ALIAS).metadata?.imageRef ??
               ext.context.globalState.get<string>(IMAGE_REF_STATE_KEY) ??
               ext.context.globalState.get<string>(LEGACY_IMAGE_REF_KEY) ??
               QUICK_START_IMAGE)
@@ -310,7 +367,7 @@ export class QuickStartServiceImpl {
         const provisionStartedAt = Date.now();
 
         try {
-            this.setStatus(InstanceState.Provisioning, undefined, undefined);
+            this.setStatus(DEFAULT_ALIAS, InstanceState.Provisioning, undefined, undefined);
 
             // --- checking ---
             yield stageEvent('checking', 'active', 'Checking Docker…');
@@ -320,7 +377,7 @@ export class QuickStartServiceImpl {
                 const message = !readiness.cliInstalled
                     ? 'Docker CLI was not found on your PATH. Install Docker and retry.'
                     : 'Docker is installed but the daemon is not reachable. Start Docker and retry.';
-                this.setStatus(InstanceState.Error, undefined, message);
+                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                 yield stageEvent('checking', 'error', message, message);
                 return;
             }
@@ -346,7 +403,7 @@ export class QuickStartServiceImpl {
             if (explicitPort !== undefined) {
                 if (!(await this.runtime.isPortFree(explicitPort))) {
                     const message = `Port ${explicitPort} is already in use. Choose a different port or free it, then retry.`;
-                    this.setStatus(InstanceState.Error, undefined, message);
+                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                     yield stageEvent('checking', 'error', message, message);
                     return;
                 }
@@ -357,7 +414,7 @@ export class QuickStartServiceImpl {
                 this.throwIfAborted(signal);
                 if (available === undefined) {
                     const message = `Ports ${QUICK_START_PORT}-${QUICK_START_PORT_BAND_END - 1} are all in use. Free one and retry.`;
-                    this.setStatus(InstanceState.Error, undefined, message);
+                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                     yield stageEvent('checking', 'error', message, message);
                     return;
                 }
@@ -427,6 +484,8 @@ export class QuickStartServiceImpl {
             // Retain everything a "Wait longer" resume needs BEFORE probing, so a readiness
             // timeout can keep this running container and finish adoption later (§9.1).
             const pending: PendingReadiness = {
+                alias: DEFAULT_ALIAS,
+                displayName: DEFAULT_INSTANCE_DISPLAY_NAME,
                 containerId,
                 connectionString,
                 boundPort,
@@ -436,7 +495,7 @@ export class QuickStartServiceImpl {
                 sampleDataRequested,
                 reusing,
             };
-            this.pendingReadiness = pending;
+            this.stateFor(DEFAULT_ALIAS).pendingReadiness = pending;
             await this.waitForReadiness(connectionString, signal);
             this.throwIfAborted(signal);
 
@@ -461,14 +520,14 @@ export class QuickStartServiceImpl {
                 // "Wait longer" resume finish adoption. The instance sits in Error until then. The
                 // event is buffered and emitted after `finally` (see below) so the flags are clean.
                 readinessTimedOut = true;
-                this.setStatus(InstanceState.Error, undefined, message);
+                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('waiting', 'error', message, message, undefined, /* timedOut */ true);
             } else {
                 // Any other failure (or cancel) discards the attempt — drop the retained state so a
                 // stale timeout can't offer "Wait longer" against a container we're about to remove.
-                this.pendingReadiness = undefined;
+                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
                 if (!aborted) {
-                    this.setStatus(InstanceState.Error, undefined, message);
+                    this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                 }
                 // Buffered and emitted after `finally` (like the timeout event) so a Retry click
                 // driven by this event can't race the still-set `provisioning` guard either
@@ -496,8 +555,8 @@ export class QuickStartServiceImpl {
                 }
                 // Interrupted before settling (cancel / unsubscribe) → reset state.
                 // The error path already settled to `Error` in `catch`.
-                if (this.state === InstanceState.Provisioning) {
-                    this.setStatus(InstanceState.NotInstalled, undefined, undefined);
+                if (this.stateFor(DEFAULT_ALIAS).state === InstanceState.Provisioning) {
+                    this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled, undefined, undefined);
                 }
             }
             signal.removeEventListener('abort', onAbort);
@@ -527,7 +586,7 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.sampleData = String(sampleDataRequested);
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
-            this.provisioning = false;
+            this.stateFor(DEFAULT_ALIAS).provisioning = false;
         }
         // Emitted only now — after `finally` cleared `provisioning` — so a "Wait longer" / "Start
         // over" / "Retry" click triggered by this event never races the still-running guard.
@@ -573,6 +632,7 @@ export class QuickStartServiceImpl {
         await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
         this.populateCredentialCache(pending.connectionString, pending.username, pending.password);
         this.setStatus(
+            DEFAULT_ALIAS,
             InstanceState.Running,
             {
                 containerId: pending.containerId,
@@ -585,7 +645,7 @@ export class QuickStartServiceImpl {
             },
             undefined,
         );
-        this.pendingReadiness = undefined;
+        this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
     }
 
     /**
@@ -595,12 +655,12 @@ export class QuickStartServiceImpl {
      * a hard error the container is still kept so the user can retry or Start over.
      */
     public async *resumeReadiness(signal: AbortSignal): AsyncGenerator<StageEvent> {
-        const pending = this.pendingReadiness;
+        const pending = this.stateFor(DEFAULT_ALIAS).pendingReadiness;
         if (!pending) {
             yield stageEvent('error', 'error', 'There is nothing to resume.', 'There is nothing to resume.');
             return;
         }
-        if (this.provisioning || this.lifecycleBusy) {
+        if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
             // A prior resume/provision may still be unwinding (its abort can take a few seconds to
             // observe). Carry the timed-out affordance so the webview keeps the Wait longer / Start
             // over view instead of flipping to the generic error (opus-4.8) — the container and
@@ -615,7 +675,7 @@ export class QuickStartServiceImpl {
             );
             return;
         }
-        this.provisioning = true;
+        this.stateFor(DEFAULT_ALIAS).provisioning = true;
         const cts = new vscode.CancellationTokenSource();
         const onAbort = (): void => cts.cancel();
         signal.addEventListener('abort', onAbort, { once: true });
@@ -627,7 +687,7 @@ export class QuickStartServiceImpl {
         let terminalEvent: StageEvent | undefined;
         let resumeResult: 'success' | 'timeout' | 'cancelled' | 'error' = 'error';
         try {
-            this.setStatus(InstanceState.Provisioning, undefined, undefined);
+            this.setStatus(DEFAULT_ALIAS, InstanceState.Provisioning, undefined, undefined);
             yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
@@ -659,13 +719,13 @@ export class QuickStartServiceImpl {
                 ? 'Still initializing. Keep waiting, view the logs, or start over.'
                 : errMessage(error);
             if (!finalized) {
-                this.setStatus(InstanceState.Error, undefined, aborted ? undefined : message);
+                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, aborted ? undefined : message);
             }
             // A hard finalize error is NOT a timeout — drop the retained state so reopening the
             // panel shows the real error (via a fresh setup) rather than a misleading "Wait longer"
             // (gpt-5.5). Timeout/cancel keep pendingReadiness so the container stays resumable.
             if (!timedOut) {
-                this.pendingReadiness = undefined;
+                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
             }
             terminalEvent = stageEvent('waiting', 'error', message, aborted ? undefined : message, undefined, timedOut);
         } finally {
@@ -673,7 +733,7 @@ export class QuickStartServiceImpl {
             // Stop the followLogs stream (started with cts.token) before disposing.
             cts.cancel();
             cts.dispose();
-            this.provisioning = false;
+            this.stateFor(DEFAULT_ALIAS).provisioning = false;
             // §14: resume outcome — booleans/enum + duration only, never names/ports/creds.
             void callWithTelemetryAndErrorHandling('documentDB.quickstart.resumeReadiness', (telemetryContext) => {
                 telemetryContext.errorHandling.suppressDisplay = true;
@@ -697,24 +757,25 @@ export class QuickStartServiceImpl {
      * the timed-out actions instead of dropping to review with the container still running.
      */
     public async discardTimedOutInstance(): Promise<boolean> {
+        const entry = this.stateFor(DEFAULT_ALIAS);
         // Guard BEFORE mutating: if a provision/lifecycle op is running, leave the retained
         // state untouched (clearing it here would orphan the still-running container).
-        if (this.provisioning || this.lifecycleBusy || !this.pendingReadiness) {
+        if (entry.provisioning || entry.lifecycleBusy || !entry.pendingReadiness) {
             return false;
         }
-        const pending = this.pendingReadiness;
-        this.pendingReadiness = undefined;
-        this.lifecycleBusy = true;
+        const pending = entry.pendingReadiness;
+        entry.pendingReadiness = undefined;
+        entry.lifecycleBusy = true;
         try {
             await this.runtime.stopContainer(pending.containerId).catch(() => undefined);
             await this.runtime.removeContainer(pending.containerId).catch(() => undefined);
             if (!pending.reusing) {
                 await this.runtime.removeVolume(QUICK_START_VOLUME_NAME).catch(() => undefined);
             }
-            this.setStatus(InstanceState.NotInstalled, undefined, undefined);
+            this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled, undefined, undefined);
             return true;
         } finally {
-            this.lifecycleBusy = false;
+            entry.lifecycleBusy = false;
         }
     }
 
@@ -920,16 +981,17 @@ export class QuickStartServiceImpl {
     /** Start a stopped instance (design §11). */
     public async start(): Promise<void> {
         await this.runLifecycle(async () => {
-            const id = this.metadata?.containerId;
+            const id = this.stateFor(DEFAULT_ALIAS).metadata?.containerId;
             if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['stopped']))) {
                 return;
             }
-            this.setStatus(InstanceState.Starting);
+            this.setStatus(DEFAULT_ALIAS, InstanceState.Starting);
             await this.runtime.startContainer(id);
             if (await this.confirmStaysRunning(id)) {
-                this.setStatus(InstanceState.Running);
+                this.setStatus(DEFAULT_ALIAS, InstanceState.Running);
             } else {
                 this.setStatus(
+                    DEFAULT_ALIAS,
                     InstanceState.Error,
                     undefined,
                     'The container started but exited shortly after. Check the Quick Start logs.',
@@ -941,31 +1003,32 @@ export class QuickStartServiceImpl {
     /** Stop a running instance (design §11). */
     public async stop(): Promise<void> {
         await this.runLifecycle(async () => {
-            const id = this.metadata?.containerId;
+            const id = this.stateFor(DEFAULT_ALIAS).metadata?.containerId;
             if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['running']))) {
                 return;
             }
-            this.setStatus(InstanceState.Stopping);
+            this.setStatus(DEFAULT_ALIAS, InstanceState.Stopping);
             await this.runtime.stopContainer(id);
-            this.setStatus(InstanceState.Stopped);
+            this.setStatus(DEFAULT_ALIAS, InstanceState.Stopped);
         });
     }
 
     /** Restart (stop + start) a running instance (design §11). */
     public async restart(): Promise<void> {
         await this.runLifecycle(async () => {
-            const id = this.metadata?.containerId;
+            const id = this.stateFor(DEFAULT_ALIAS).metadata?.containerId;
             if (!id || !(await this.isManaged(id)) || !(await this.liveStateGuard(id, ['running', 'stopped']))) {
                 return;
             }
-            this.setStatus(InstanceState.Stopping);
+            this.setStatus(DEFAULT_ALIAS, InstanceState.Stopping);
             await this.runtime.stopContainer(id).catch(() => undefined);
-            this.setStatus(InstanceState.Starting);
+            this.setStatus(DEFAULT_ALIAS, InstanceState.Starting);
             await this.runtime.startContainer(id);
             if (await this.confirmStaysRunning(id)) {
-                this.setStatus(InstanceState.Running);
+                this.setStatus(DEFAULT_ALIAS, InstanceState.Running);
             } else {
                 this.setStatus(
+                    DEFAULT_ALIAS,
                     InstanceState.Error,
                     undefined,
                     'The container restarted but exited shortly after. Check the Quick Start logs.',
@@ -999,9 +1062,9 @@ export class QuickStartServiceImpl {
      */
     public async deleteContainer(): Promise<void> {
         await this.runLifecycle(async () => {
-            const id = this.metadata?.containerId;
+            const id = this.stateFor(DEFAULT_ALIAS).metadata?.containerId;
             // If the container still exists, only remove it when it is ours.
-            if (id && (this.missing || (await this.isManaged(id)))) {
+            if (id && (this.stateFor(DEFAULT_ALIAS).missing || (await this.isManaged(id)))) {
                 await this.runtime.removeContainer(id).catch(() => undefined);
             }
             // Explicit Delete is a full clean slate: drop the data volume too.
@@ -1022,8 +1085,8 @@ export class QuickStartServiceImpl {
             await removeInstanceRecord(ext.context.globalState, DEFAULT_ALIAS);
             await ClustersClient.deleteClient(QUICK_START_CLUSTER_ID).catch(() => undefined);
             CredentialCache.deleteCredentials(QUICK_START_CLUSTER_ID);
-            this.metadata = undefined;
-            this.setStatus(InstanceState.NotInstalled);
+            this.stateFor(DEFAULT_ALIAS).metadata = undefined;
+            this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled);
         });
     }
 
@@ -1033,21 +1096,22 @@ export class QuickStartServiceImpl {
      * hold metadata but Docker no longer has the container.
      */
     public async refreshLiveState(): Promise<void> {
-        if (this.provisioning || this.lifecycleBusy || !this.metadata) {
+        const entry = this.stateFor(DEFAULT_ALIAS);
+        if (entry.provisioning || entry.lifecycleBusy || !entry.metadata) {
             return;
         }
         try {
-            const inspected = await this.runtime.inspectContainer(this.metadata.containerId);
+            const inspected = await this.runtime.inspectContainer(entry.metadata.containerId);
             if (!inspected) {
                 // Container is gone — keep metadata so the user can recreate.
-                this.missing = true;
+                entry.missing = true;
                 this.statusEmitter.fire();
                 return;
             }
             const running = isRunning(inspected);
             const nextState = running ? InstanceState.Running : InstanceState.Stopped;
-            if (this.missing || this.state !== nextState) {
-                this.setStatus(nextState);
+            if (entry.missing || entry.state !== nextState) {
+                this.setStatus(DEFAULT_ALIAS, nextState);
             }
         } catch {
             // Best-effort freshness; never throw into the tree render.
@@ -1055,16 +1119,16 @@ export class QuickStartServiceImpl {
     }
 
     private async runLifecycle(op: () => Promise<void>): Promise<void> {
-        if (this.provisioning || this.lifecycleBusy) {
+        if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
             return;
         }
-        this.lifecycleBusy = true;
+        this.stateFor(DEFAULT_ALIAS).lifecycleBusy = true;
         try {
             await op();
         } catch (error) {
-            this.setStatus(InstanceState.Error, undefined, errMessage(error));
+            this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, errMessage(error));
         } finally {
-            this.lifecycleBusy = false;
+            this.stateFor(DEFAULT_ALIAS).lifecycleBusy = false;
         }
     }
 
@@ -1079,7 +1143,7 @@ export class QuickStartServiceImpl {
         try {
             const container = await this.findManagedContainer();
             if (!container) {
-                this.setStatus(InstanceState.NotInstalled);
+                this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled);
                 return;
             }
             const stored = await this.readStoredConnectionString();
@@ -1093,7 +1157,7 @@ export class QuickStartServiceImpl {
                 // was lost/reset externally would also land here), and deleting it would be
                 // irreversible data loss. A fresh timed-out attempt's orphan volume is instead
                 // wiped by the next fresh provision (`if (!reusing) removeVolume`), which is safe.
-                this.setStatus(InstanceState.NotInstalled);
+                this.setStatus(DEFAULT_ALIAS, InstanceState.NotInstalled);
                 return;
             }
             const inspected = await this.runtime.inspectContainer(container.id);
@@ -1119,7 +1183,7 @@ export class QuickStartServiceImpl {
             if (adoptedImageRef) {
                 await ext.context.globalState.update(IMAGE_REF_STATE_KEY, adoptedImageRef);
             }
-            this.setStatus(running ? InstanceState.Running : InstanceState.Stopped, {
+            this.setStatus(DEFAULT_ALIAS, running ? InstanceState.Running : InstanceState.Stopped, {
                 containerId: container.id,
                 alias: QUICK_START_ALIAS,
                 boundPort,

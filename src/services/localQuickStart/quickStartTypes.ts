@@ -207,6 +207,22 @@ export interface QuickStartStatus {
     readonly canResumeReadiness?: boolean;
 }
 
+/**
+ * Per-instance snapshot for the tree (WI-3). Unlike {@link QuickStartStatus} it carries the
+ * `alias`, `displayName`, and `port` at the top level, so a Provisioning / Missing /
+ * credential-unavailable row (which has no `metadata`) can still be keyed and labelled.
+ */
+export interface InstanceStatus {
+    readonly alias: string;
+    readonly displayName: string;
+    readonly state: InstanceState;
+    readonly missing: boolean;
+    readonly port?: number;
+    readonly errorMessage?: string;
+    readonly canResumeReadiness: boolean;
+    readonly metadata?: InstanceMetadata;
+}
+
 /** Result of the `getDockerStatus` query (powers the webview review cards). */
 export interface DockerStatusResult {
     readonly readiness: DockerReadiness;
