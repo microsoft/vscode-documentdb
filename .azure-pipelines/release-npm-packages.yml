@@ -83,7 +83,7 @@ parameters:
       default: 'validate-only'
       values:
           - validate-only
-          - test-esrp-auth (submits an invalid Maven job that ESRP rejects; nothing is published)
+          - test-esrp-auth (submits an invalid Maven job that ESRP rejects; the job fails; nothing is published)
           - publish
 
     - name: 'debug'
