@@ -37,7 +37,7 @@ export interface IndexesTabProps {
  * UI copy.
  */
 export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => {
-    const { trpcClient } = useTrpcClient();
+    const trpcClient = useTrpcClient();
 
     // Index list, loading state, and the unified dialog state. Dialog
     // operations also expose a separate `modalBusy` flag so the dialog

@@ -14,7 +14,7 @@ import {
 } from '../../documentdb/ClustersClient';
 import { type Experience } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { meterSilentCatch } from '../../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../../utils/accumulatingTelemetry';
 import { getCountPrefix } from '../../utils/countPrefix';
 import { type BaseClusterModel, type TreeCluster } from '../models/BaseClusterModel';
 import { type TreeElement } from '../TreeElement';

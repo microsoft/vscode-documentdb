@@ -45,7 +45,7 @@ import { z } from 'zod';
 import { ClustersClient, type IndexItemModel } from '../../../documentdb/ClustersClient';
 import { type IndexSpecification } from '../../../documentdb/LlmEnhancedFeatureApis';
 import { SchemaStore } from '../../../documentdb/SchemaStore';
-import { meterSilentCatch } from '../../../utils/callWithAccumulatingTelemetry';
+import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
