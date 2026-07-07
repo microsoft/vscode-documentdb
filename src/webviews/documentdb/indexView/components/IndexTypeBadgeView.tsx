@@ -26,13 +26,15 @@ const BADGE_COLOR: Record<IndexTypeBadge, BadgeProps['color']> = {
 
 export interface IndexTypeBadgeViewProps {
     type: IndexTypeBadge;
+    /** Badge size. Defaults to `medium` (table); cards pass `small` to match Query Insights. */
+    size?: BadgeProps['size'];
 }
 
-export const IndexTypeBadgeView = ({ type }: IndexTypeBadgeViewProps): JSX.Element => {
+export const IndexTypeBadgeView = ({ type, size = 'medium' }: IndexTypeBadgeViewProps): JSX.Element => {
     // Keep multi-word labels (e.g. "Single Field") on one line so the badge
     // doesn't wrap and blow up the row height — use a non-breaking space.
     return (
-        <Badge appearance="tint" color={BADGE_COLOR[type]} shape="rounded" aria-label={type}>
+        <Badge appearance="tint" color={BADGE_COLOR[type]} shape="rounded" size={size} aria-label={type}>
             {type.replace(/ /g, '\u00A0')}
         </Badge>
     );
