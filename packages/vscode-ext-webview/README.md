@@ -78,10 +78,14 @@ and call procedures with `useTrpcClient`.
 npm install @microsoft/vscode-ext-webview
 ```
 
-The package declares `react`, `@trpc/client`, and `@trpc/server` as peer
-dependencies. Bring whatever versions you use yourself; the package will not
-pull duplicates into your webview bundle. `react-dom` is not a peer of this
-package; it is a transitive concern of any React DOM app shell.
+The package declares `@trpc/client`, `@trpc/server`, `react`, and
+`vscode-webview` as peer dependencies. Bring whatever versions you use yourself;
+the package will not pull duplicates into your webview bundle. `react` and
+`vscode-webview` are optional peers (see [Peer dependencies](#peer-dependencies)
+below): both are used only by the `./react` surface, so a host-only consumer or
+a framework-agnostic `./webview` consumer needs neither and gets no missing-peer
+warning. `react-dom` is not a peer of this package; it is a transitive concern
+of any React DOM app shell.
 
 **2. Define the router (extension host)**
 
@@ -290,10 +294,7 @@ failures tracked — **off by default** so you are not opted into events you may
 not want:
 
 ```tsx
-<WithWebviewContext
-  vscodeApi={vscodeApi}
-  onObserverError={(error, { info, phase }) => report(info.path, phase, error)}
->
+<WithWebviewContext vscodeApi={vscodeApi} onObserverError={(error, { info, phase }) => report(info.path, phase, error)}>
   <App />
 </WithWebviewContext>
 ```
@@ -360,21 +361,21 @@ export const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opt
 
 Inside a procedure, read `ctx.telemetry` to add properties/measurements. The
 package types that slot minimally, so azext consumers usually re-type it to
-`ITelemetryContext` with a one-line `WithTelemetry<T>` helper — see
-[ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full worked adapter and a
-copyable helper.
+`ITelemetryContext` with a one-line `WithTelemetry<T>` helper (exported from
+`./host`) — see [ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full
+worked adapter and a copyable helper.
 
 ## Entry points
 
 The package has four entry points so bundlers do not drag Node / VS Code APIs
 into the webview bundle, and so a non-React consumer never pulls React in.
 
-| Subpath     | Side                             | Imports                | Key exports                                                                                                                    |
-| ----------- | -------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `.`         | shared (side-agnostic)           | no `vscode`, no React  | `initWebviewTrpc`, `BaseRouterContext`, `TypedEventSink`, wire-protocol message types                                          |
-| `./host`    | extension host (Node.js)         | `fs`, `path`, `vscode` | `openWebview`, `WebviewController`, `attachTrpc`, `telemetryMiddlewareBody`, `loggingMiddlewareBody`, `consoleProcedureLogger` |
-| `./webview` | webview (browser), any framework | no React               | `connectTrpc`, `createEventChannel`, `vscodeLink`, `errorLink`                                                                 |
-| `./react`   | webview (browser), React         | React                  | `useTrpcClient`, `useRpcEvents`, `useConfiguration`, `WithWebviewContext`                                                      |
+| Subpath     | Side                             | Imports                | Key exports                                                                                                                                     |
+| ----------- | -------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`         | shared (side-agnostic)           | no `vscode`, no React  | `initWebviewTrpc`, `BaseRouterContext`, `TypedEventSink`, wire-protocol message types                                                           |
+| `./host`    | extension host (Node.js)         | `fs`, `path`, `vscode` | `openWebview`, `WebviewController`, `attachTrpc`, `telemetryMiddlewareBody`, `loggingMiddlewareBody`, `consoleProcedureLogger`, `WithTelemetry` |
+| `./webview` | webview (browser), any framework | no React               | `connectTrpc`, `createEventChannel`, `vscodeLink`, `errorLink`                                                                                  |
+| `./react`   | webview (browser), React         | React                  | `useTrpcClient`, `useRpcEvents`, `useConfiguration`, `WithWebviewContext`                                                                       |
 
 ```ts
 // Shared. Safe to import from either side.
@@ -418,12 +419,19 @@ import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/
 
 ## Peer dependencies
 
-| Package          | Required version                       |
-| ---------------- | -------------------------------------- |
-| `react`          | `>=18.0.0` (only for `./react`)        |
-| `@trpc/client`   | `^11.0.0`                              |
-| `@trpc/server`   | `^11.0.0`                              |
-| `vscode-webview` | `^1.0.0` (optional, webview-side only) |
+| Package          | Version    | Optional?                                 |
+| ---------------- | ---------- | ----------------------------------------- |
+| `@trpc/client`   | `^11.0.0`  | Required — core transport                 |
+| `@trpc/server`   | `^11.0.0`  | Required — core transport                 |
+| `react`          | `>=18.0.0` | Optional — only for the `./react` surface |
+| `vscode-webview` | `^1.0.0`   | Optional — only for the `./react` surface |
+
+`react` and `vscode-webview` are declared optional via `peerDependenciesMeta`, so
+a consumer that only uses `./host` (or the framework-agnostic `./webview`) surface
+installs neither and sees no missing-peer warning. Both peers are referenced only
+by the `./react` surface (`vscode-webview` supplies the `WebviewApi` type used in
+`WithWebviewContext`); the `./webview` transport defines its own structural
+`VsCodeApiLike` instead, so it has no `vscode-webview` dependency.
 
 ## Scope
 
@@ -456,6 +464,25 @@ extensions are working examples of that layout against this package.
 
 `0.9.0-preview`. APIs are subject to change while the package is in preview. See
 [ADVANCED.md](./ADVANCED.md) for the full set of primitives and patterns.
+
+## Contributors
+
+This package and the [vscode-webview-starter-kit](https://github.com/tnaum-ms/vscode-webview-starter-kit)
+built alongside it were a team effort:
+
+- [**tnaum-ms**](https://github.com/tnaum-ms) extracted the package from the
+  webview stack that ships in DocumentDB for VS Code, shaped the tRPC
+  integration and public API, and built the companion starter kit.
+- [**bk201-**](https://github.com/bk201-) built the dynamic theming system and,
+  with sevoku, test-drove the package in [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb),
+  helping show the path toward a more modular design.
+- [**guanzhousongmicrosoft**](https://github.com/guanzhousongmicrosoft) built
+  the npm release pipelines that publish the package.
+- [**sevoku**](https://github.com/sevoku) helped test-drive the package in
+  [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb)
+  with bk201-, surfacing the modular direction.
+
+Thanks to everyone who contributed ideas, reviews, and feedback along the way.
 
 ## License
 
