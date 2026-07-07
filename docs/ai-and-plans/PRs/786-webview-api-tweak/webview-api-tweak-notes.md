@@ -5,11 +5,11 @@
 **Date:** 2026-07-06
 **Package:** `packages/vscode-ext-webview` (`@microsoft/vscode-ext-webview`, `0.9.0-preview`)
 
-This note records two small, low-risk improvements made to the webview API
+This note records three small, low-risk improvements made to the webview API
 package after it was merged in [PR #766](../766-webview-ext-package-redesign/).
-They came out of review feedback and a follow-up question about peer
-dependencies. No runtime or API behaviour changes — this is packaging metadata
-plus documentation only.
+They came out of review feedback, a follow-up question about peer
+dependencies, and an external consumer's documentation bug report. No runtime
+or API behaviour changes — this is packaging metadata plus documentation only.
 
 ---
 
@@ -88,8 +88,8 @@ updated in `packages/vscode-ext-webview/README.md`:
 
 ### Why (and the peer-dependency reasoning behind it)
 
-This tweak came from a follow-up question: *"should I make react optional? if my
-consumer is not using the react section, they don't really need it."*
+This tweak came from a follow-up question: _"should I make react optional? if my
+consumer is not using the react section, they don't really need it."_
 
 The answer is that `react` is **already** optional — the package was set up
 correctly — but the docs under-described it. For the record, the peer-dependency
@@ -110,13 +110,13 @@ design of this package is:
 
 **Why peers and not regular dependencies?** A peer dependency says "the consumer
 provides this, and we must share a single instance," declaring a compatible
-*range* rather than pinning a version. That matters here because:
+_range_ rather than pinning a version. That matters here because:
 
 - **`react`** — two copies of React in one bundle break hooks ("Invalid hook
   call"). The package's hooks must use the consumer's React instance, never a
   second bundled copy.
 - **`@trpc/client` / `@trpc/server`** — tRPC's end-to-end type safety and link
-  contracts rely on the *same* tRPC version on both sides of the transport; a
+  contracts rely on the _same_ tRPC version on both sides of the transport; a
   bundled copy could silently mismatch the consumer's router types.
 - **`vscode-webview`** — webview-environment types/globals provided by the host
   runtime; duplicating them is meaningless.
@@ -145,10 +145,10 @@ mismatches as warnings/errors at install time rather than at runtime.
 
 ## Files changed
 
-| File | Change |
-| ---- | ------ |
-| `packages/vscode-ext-webview/package.json` | Add `"sideEffects": false`. |
-| `packages/vscode-ext-webview/README.md` | Clarify optional peer dependencies in the install prose and the peer-dependency table. |
+| File                                       | Change                                                                                 |
+| ------------------------------------------ | -------------------------------------------------------------------------------------- |
+| `packages/vscode-ext-webview/package.json` | Add `"sideEffects": false`.                                                            |
+| `packages/vscode-ext-webview/README.md`    | Clarify optional peer dependencies in the install prose and the peer-dependency table. |
 
 ## Commits
 
@@ -174,6 +174,58 @@ for the `./react` surface," and added a sentence explaining that the `./webview`
 transport uses a structural `VsCodeApiLike` instead. No `package.json` change was
 needed — the `peerDependenciesMeta` config was already correct; only the docs
 were imprecise.
+
+---
+
+## 3. Fix `WithTelemetry` documented entry point
+
+### What
+
+`docs/ai-and-plans/PRs/766-webview-ext-package-redesign/webview-ext-migration-manual.md`
+listed `WithTelemetry<T, TTelemetry>` under the `.` (shared) entry point in the
+"New primitives that had no old equivalent" table. That is wrong — it is
+exported from `./host`. Also added `WithTelemetry` to the `./host` row of the
+"Entry points" table in `packages/vscode-ext-webview/README.md`, and made the
+Observability/Telemetry section prose in that README explicitly say the helper
+comes from `./host`. `ADVANCED.md` already imported it correctly from `./host`
+and needed no change.
+
+### Why
+
+Verified against the shipped type declarations: `dist/shared/index.d.ts`
+exports only `BaseRouterContext`, `initWebviewTrpc`, `publicProcedure`,
+`router`, `WebviewTrpc`, `TypedEventSink` (+ related event types), and the
+wire-protocol message types — it does **not** export `WithTelemetry`.
+`WithTelemetry` is exported from `dist/host/index.d.ts` (re-exported from
+`./middleware/telemetry`). This matches the package's own reference consumer,
+which imports it as
+`import { type WithTelemetry } from '@microsoft/vscode-ext-webview/host'`
+(see `ADVANCED.md` and `src/webviews/_integration/trpc.ts`).
+
+This was reported by the first external consumer of the published package —
+the `vscode-webview-starter-kit`, using `@microsoft/vscode-ext-webview@0.9.0-preview`
+as its first real npm consumer — who hit the mismatch trying to import
+`WithTelemetry` from the shared entry point per the migration manual.
+
+Docs-only fix; no source/exports were changed — the package's exports were
+already correct.
+
+---
+
+## Files changed
+
+| File                                                                                     | Change                                                                                                                                               |
+| ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `packages/vscode-ext-webview/package.json`                                               | Add `"sideEffects": false`.                                                                                                                          |
+| `packages/vscode-ext-webview/README.md`                                                  | Clarify optional peer dependencies in the install prose and the peer-dependency table; correct `WithTelemetry`'s documented entry point to `./host`. |
+| `docs/ai-and-plans/PRs/766-webview-ext-package-redesign/webview-ext-migration-manual.md` | Correct `WithTelemetry`'s documented entry point to `./host`.                                                                                        |
+
+## Commits
+
+- `fix(package): add sideEffects flag to package.json`
+- `docs(vscode-ext-webview): clarify optional peer dependencies`
+- `docs(vscode-ext-webview): scope optional peers to the ./react surface` (review round 1)
+- `docs(vscode-ext-webview): fix WithTelemetry documented entry point to ./host`
 
 ## Verification
 

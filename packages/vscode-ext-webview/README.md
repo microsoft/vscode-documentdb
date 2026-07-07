@@ -364,21 +364,21 @@ export const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opt
 
 Inside a procedure, read `ctx.telemetry` to add properties/measurements. The
 package types that slot minimally, so azext consumers usually re-type it to
-`ITelemetryContext` with a one-line `WithTelemetry<T>` helper — see
-[ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full worked adapter and a
-copyable helper.
+`ITelemetryContext` with a one-line `WithTelemetry<T>` helper (exported from
+`./host`) — see [ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full
+worked adapter and a copyable helper.
 
 ## Entry points
 
 The package has four entry points so bundlers do not drag Node / VS Code APIs
 into the webview bundle, and so a non-React consumer never pulls React in.
 
-| Subpath     | Side                             | Imports                | Key exports                                                                                                                    |
-| ----------- | -------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `.`         | shared (side-agnostic)           | no `vscode`, no React  | `initWebviewTrpc`, `BaseRouterContext`, `TypedEventSink`, wire-protocol message types                                          |
-| `./host`    | extension host (Node.js)         | `fs`, `path`, `vscode` | `openWebview`, `WebviewController`, `attachTrpc`, `telemetryMiddlewareBody`, `loggingMiddlewareBody`, `consoleProcedureLogger` |
-| `./webview` | webview (browser), any framework | no React               | `connectTrpc`, `createEventChannel`, `vscodeLink`, `errorLink`                                                                 |
-| `./react`   | webview (browser), React         | React                  | `useTrpcClient`, `useRpcEvents`, `useConfiguration`, `WithWebviewContext`                                                      |
+| Subpath     | Side                             | Imports                | Key exports                                                                                                                                     |
+| ----------- | -------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `.`         | shared (side-agnostic)           | no `vscode`, no React  | `initWebviewTrpc`, `BaseRouterContext`, `TypedEventSink`, wire-protocol message types                                                           |
+| `./host`    | extension host (Node.js)         | `fs`, `path`, `vscode` | `openWebview`, `WebviewController`, `attachTrpc`, `telemetryMiddlewareBody`, `loggingMiddlewareBody`, `consoleProcedureLogger`, `WithTelemetry` |
+| `./webview` | webview (browser), any framework | no React               | `connectTrpc`, `createEventChannel`, `vscodeLink`, `errorLink`                                                                                  |
+| `./react`   | webview (browser), React         | React                  | `useTrpcClient`, `useRpcEvents`, `useConfiguration`, `WithWebviewContext`                                                                       |
 
 ```ts
 // Shared. Safe to import from either side.
