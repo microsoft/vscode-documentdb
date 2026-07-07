@@ -23,16 +23,42 @@
         padding: 0 10px;
     }
 
+    // Toolbar between the metrics row and the content: filter box on the left,
+    // Cards/Table view toggle pushed to the right by the flexible spacer.
     .indexToolbar {
         padding: 0 10px;
+        gap: 8px;
+
+        .indexFilterInput {
+            max-width: 280px;
+            flex: 0 1 280px;
+        }
+
+        .indexToolbarSpacer {
+            flex: 1 1 auto;
+        }
     }
 
-    .indexTableContainer {
+    .indexContentContainer {
         flex-grow: 1;
         flex-shrink: 1;
         min-height: 0;
         overflow: auto;
         padding: 0 10px;
+    }
+
+    // Placeholder shown by the (currently empty) Cards view.
+    .indexCardsView {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 120px;
+        padding: 24px 10px;
+
+        .indexCardsPlaceholder {
+            color: var(--colorNeutralForeground3);
+            font-style: italic;
+        }
     }
 
     // Wraps the top-of-dashboard summary cards. The MetricsRow grid itself
