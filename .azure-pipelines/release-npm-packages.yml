@@ -246,7 +246,7 @@ extends:
                                       exit 1
                                   }
 
-                                  $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
+                                  $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
                                   $actualVersion = $packageJson.version
                                   $fullPackageName = $packageJson.name
 
