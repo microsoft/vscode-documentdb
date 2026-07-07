@@ -81,9 +81,25 @@
             gap: 10px;
         }
 
+        // Title + subtitle truncate with an ellipsis instead of wrapping.
         .cardName {
             font-weight: var(--fontWeightSemibold);
-            word-break: break-all;
+        }
+
+        .cardName,
+        .cardSubtitle {
+            display: block;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        // Let the CardHeader content column shrink so ellipsis can apply to the
+        // title / subtitle rather than forcing the card wider.
+        .fui-CardHeader__header,
+        .fui-CardHeader__description {
+            min-width: 0;
+            overflow: hidden;
         }
 
         // Leading icon surface in the Card header (icon + title + subtitle).
@@ -104,13 +120,6 @@
             color: var(--colorBrandForeground1);
         }
 
-        .cardBadgeRow {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
         // Shared small-caps stat label (echoes Query Insights `.baseDataHeader`).
         .statLabel {
             font-size: 12px;
@@ -118,7 +127,7 @@
             color: var(--colorNeutralForeground3);
         }
 
-        // 3A / 3B — big figures (Query Insights metric-card feel).
+        // Big figures (Query Insights metric-card feel).
         .statsBig {
             display: flex;
             gap: 24px;
@@ -137,71 +146,16 @@
             line-height: 28px;
         }
 
-        // 3C — bordered grid cells (execution-plan StageDetailCard feel).
-        .borderedStatGrid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(110px, 1fr));
-            gap: 8px;
-        }
-
-        .borderedStatCell {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            padding: 8px;
-            border: 1px solid var(--colorNeutralStroke2);
-            border-radius: var(--borderRadiusMedium);
-        }
-
-        .statCellValue {
-            font-size: 14px;
-            font-weight: 600;
-        }
-
-        // 3D — inline stat badges.
+        // Inline stat badges.
         .statBadges {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
         }
 
-        // 3E — two-column summary grid (query-efficiency SummaryCard feel).
-        .summaryStatGrid {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 12px;
-        }
-
-        .summaryStatCell {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .statMedValue {
-            font-size: 14px;
-            font-weight: 600;
-            line-height: 20px;
-        }
-
-        // 3F — compact medium inline figures.
-        .statsMediumRow {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--colorNeutralForeground2);
-        }
-
-        .statDot {
-            opacity: 0.6;
-        }
-
-        // Icon / menu actions pinned to the card's bottom-right corner.
-        .cardActionsBottomRight {
-            display: flex;
+        // Right-aligned footer action row.
+        .cardFooterRight {
             justify-content: flex-end;
-            gap: 4px;
-            margin-top: 4px;
         }
 
         .cardsPrototypeNote {

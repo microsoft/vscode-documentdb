@@ -29,9 +29,11 @@ export interface IndexTypeBadgeViewProps {
 }
 
 export const IndexTypeBadgeView = ({ type }: IndexTypeBadgeViewProps): JSX.Element => {
+    // Keep multi-word labels (e.g. "Single Field") on one line so the badge
+    // doesn't wrap and blow up the row height — use a non-breaking space.
     return (
-        <Badge appearance="tint" color={BADGE_COLOR[type]} shape="rounded">
-            {type}
+        <Badge appearance="tint" color={BADGE_COLOR[type]} shape="rounded" aria-label={type}>
+            {type.replace(/ /g, '\u00A0')}
         </Badge>
     );
 };

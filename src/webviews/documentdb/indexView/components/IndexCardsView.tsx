@@ -11,11 +11,6 @@ import {
     Card,
     CardFooter,
     CardHeader,
-    Menu,
-    MenuItem,
-    MenuList,
-    MenuPopover,
-    MenuTrigger,
     Subtitle2,
     Text,
     Tooltip,
@@ -25,12 +20,12 @@ import {
     DeleteRegular,
     EyeOffRegular,
     EyeRegular,
-    MoreHorizontalRegular,
     SquareMultipleRegular,
     StorageRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
+import '../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../types';
 import { formatBytes, formatOps } from '../utils/format';
 import { classifyIndex } from '../utils/indexType';
@@ -72,19 +67,61 @@ const IndexIcon = (): JSX.Element => (
     </span>
 );
 
-/** Standard card header: accent index icon + name + key summary, optional trailing action. */
-const CardHeaderStd = ({ index, action }: { index: IndexRow; action?: JSX.Element }): JSX.Element => (
+/**
+ * Standard card header: accent index icon + name + key summary, with the type
+ * badge as the trailing action. Title and subtitle truncate with an ellipsis
+ * rather than wrapping.
+ */
+const CardHeaderStd = ({ index }: { index: IndexRow }): JSX.Element => (
     <CardHeader
         image={<IndexIcon />}
-        header={<Body1 className="cardName">{index.name}</Body1>}
-        description={<Caption1 className="cardMuted">{keySummary(index)}</Caption1>}
-        action={action}
+        header={
+            <Body1 className="cardName" title={index.name}>
+                {index.name}
+            </Body1>
+        }
+        description={
+            <Caption1 className="cardSubtitle cardMuted" title={keySummary(index)}>
+                {keySummary(index)}
+            </Caption1>
+        }
+        action={<IndexTypeBadgeView type={classifyIndex(index)} />}
     />
 );
 
-// -- Stat renderings (borrowed from the Query Insights stage / summary cards) --
+/** Accessible (keyboard-focusable) stat badge — follows the focusableBadge pattern. */
+const StatBadge = ({ icon, label, tooltip }: { icon: JSX.Element; label: string; tooltip: string }): JSX.Element => (
+    <Tooltip content={tooltip} relationship="description">
+        <Badge
+            appearance="outline"
+            color="informative"
+            icon={icon}
+            tabIndex={0}
+            className="focusableBadge"
+            aria-label={label}
+        >
+            <span aria-hidden="true">{label}</span>
+        </Badge>
+    </Tooltip>
+);
 
-/** Big figures, like the Query Insights metric cards (28px value + small caps label). */
+/** Size + usage as accessible badges (StageDetailCard optional-metrics feel). */
+const StatsBadges = ({ index }: { index: IndexRow }): JSX.Element => (
+    <div className="statBadges">
+        <StatBadge
+            icon={<StorageRegular />}
+            label={l10n.t('Size {0}', formatBytes(index.sizeBytes))}
+            tooltip={l10n.t('On-disk size of this index.')}
+        />
+        <StatBadge
+            icon={<DataUsageRegular />}
+            label={l10n.t('Usage {0}', formatOps(index.usageOps))}
+            tooltip={l10n.t('Operations that have used this index since usage tracking began.')}
+        />
+    </div>
+);
+
+/** Big figures (Query Insights metric-card feel). */
 const StatsBig = ({ index }: { index: IndexRow }): JSX.Element => (
     <div className="statsBig">
         <div className="statBigItem">
@@ -98,87 +135,9 @@ const StatsBig = ({ index }: { index: IndexRow }): JSX.Element => (
     </div>
 );
 
-/** Bordered grid cells, like the execution-plan StageDetailCard primary metrics. */
-const StatsBordered = ({ index }: { index: IndexRow }): JSX.Element => (
-    <div className="borderedStatGrid">
-        <div className="borderedStatCell">
-            <span className="statLabel">{l10n.t('Size')}</span>
-            <span className="statCellValue">{formatBytes(index.sizeBytes)}</span>
-        </div>
-        <div className="borderedStatCell">
-            <span className="statLabel">{l10n.t('Usage')}</span>
-            <span className="statCellValue">{formatOps(index.usageOps)}</span>
-        </div>
-    </div>
-);
-
-/** Inline gray badges, like the StageDetailCard optional metrics. */
-const StatsBadges = ({ index }: { index: IndexRow }): JSX.Element => (
-    <div className="statBadges">
-        <Badge appearance="outline" color="informative" icon={<StorageRegular />}>
-            {l10n.t('Size {0}', formatBytes(index.sizeBytes))}
-        </Badge>
-        <Badge appearance="outline" color="informative" icon={<DataUsageRegular />}>
-            {l10n.t('Usage {0}', formatOps(index.usageOps))}
-        </Badge>
-    </div>
-);
-
-/** Two-column label/value grid, like the query-efficiency SummaryCard. */
-const StatsSummaryGrid = ({ index }: { index: IndexRow }): JSX.Element => (
-    <div className="summaryStatGrid">
-        <div className="summaryStatCell">
-            <span className="statLabel">{l10n.t('Size')}</span>
-            <span className="statMedValue">{formatBytes(index.sizeBytes)}</span>
-        </div>
-        <div className="summaryStatCell">
-            <span className="statLabel">{l10n.t('Usage')}</span>
-            <span className="statMedValue">{formatOps(index.usageOps)}</span>
-        </div>
-    </div>
-);
-
-/** Compact medium inline figures. */
-const StatsMedium = ({ index }: { index: IndexRow }): JSX.Element => (
-    <div className="statsMediumRow">
-        <StorageRegular />
-        <Body1>{formatBytes(index.sizeBytes)}</Body1>
-        <span className="statDot">·</span>
-        <DataUsageRegular />
-        <Body1>{formatOps(index.usageOps)}</Body1>
-    </div>
-);
-
-// -- Action renderings (with / without; footer buttons, icon buttons, menu) --
-
-const OverflowMenu = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Menu>
-        <MenuTrigger disableButtonEnhancement>
-            <Button
-                appearance="subtle"
-                icon={<MoreHorizontalRegular />}
-                aria-label={l10n.t('More actions for {0}', index.name)}
-            />
-        </MenuTrigger>
-        <MenuPopover>
-            <MenuList>
-                <MenuItem
-                    icon={index.hidden ? <EyeRegular /> : <EyeOffRegular />}
-                    disabled={index.isDefault}
-                    onClick={() => onToggleHidden(index)}
-                >
-                    {index.hidden ? l10n.t('Unhide') : l10n.t('Hide')}
-                </MenuItem>
-                <MenuItem icon={<DeleteRegular />} disabled={index.isDefault} onClick={() => onDelete(index)}>
-                    {l10n.t('Delete')}
-                </MenuItem>
-            </MenuList>
-        </MenuPopover>
-    </Menu>
-);
-
-const FooterButtons = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <CardFooter>
+/** Footer Hide/Unhide + Delete buttons, right-aligned. Disabled on the default `_id` index. */
+const FooterButtonsRight = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+    <CardFooter className="cardFooterRight">
         <Button
             size="small"
             appearance="subtle"
@@ -200,91 +159,25 @@ const FooterButtons = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX
     </CardFooter>
 );
 
-/** Icon-only actions aligned to the bottom-right corner of the card. */
-const IconActionsBottomRight = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <div className="cardActionsBottomRight">
-        <Tooltip content={index.hidden ? l10n.t('Unhide') : l10n.t('Hide')} relationship="label">
-            <Button
-                size="small"
-                appearance="subtle"
-                icon={index.hidden ? <EyeRegular /> : <EyeOffRegular />}
-                disabled={index.isDefault}
-                aria-label={index.hidden ? l10n.t('Unhide {0}', index.name) : l10n.t('Hide {0}', index.name)}
-                onClick={() => onToggleHidden(index)}
-            />
-        </Tooltip>
-        <Tooltip content={l10n.t('Delete')} relationship="label">
-            <Button
-                size="small"
-                appearance="subtle"
-                icon={<DeleteRegular />}
-                disabled={index.isDefault}
-                aria-label={l10n.t('Delete {0}', index.name)}
-                onClick={() => onDelete(index)}
-            />
-        </Tooltip>
-    </div>
-);
-
 // ---------------------------------------------------------------------------
-// Variant 3 sub-variants (stat-forward). Each mixes a stat rendering with an
-// action treatment (none / icon buttons / overflow menu / footer buttons).
+// Variant 3D family
 // ---------------------------------------------------------------------------
 
-// 3A — Big figures, no actions.
-const Card3A = ({ index }: { index: IndexRow }): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <CardHeaderStd index={index} />
-        <StatsBig index={index} />
-    </Card>
-);
-
-// 3B — Big figures + icon actions at bottom-right.
-const Card3B = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <CardHeaderStd index={index} />
-        <StatsBig index={index} />
-        <IconActionsBottomRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
-    </Card>
-);
-
-// 3C — Bordered stat cells + overflow (…) menu in the header.
-const Card3C = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="outline">
-        <CardHeaderStd
-            index={index}
-            action={<OverflowMenu index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />}
-        />
-        <StatsBordered index={index} />
-    </Card>
-);
-
-// 3D — Inline stat badges + footer buttons.
+// 3D — Accessible stat badges + right-aligned footer buttons.
 const Card3D = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
     <Card className="indexCard" appearance="filled">
-        <CardHeaderStd index={index} action={<IndexTypeBadgeView type={classifyIndex(index)} />} />
+        <CardHeaderStd index={index} />
         <StatsBadges index={index} />
-        <FooterButtons index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
+        <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
     </Card>
 );
 
-// 3E — Summary-grid stats + icon actions at bottom-right.
-const Card3E = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled-alternative">
+// 3D+ — Big figures (from 3A) + right-aligned footer buttons.
+const Card3DBig = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+    <Card className="indexCard" appearance="filled">
         <CardHeaderStd index={index} />
-        <StatsSummaryGrid index={index} />
-        <IconActionsBottomRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
-    </Card>
-);
-
-// 3F — Compact medium figures + overflow (…) menu at bottom-right.
-const Card3F = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="outline">
-        <CardHeaderStd index={index} />
-        <StatsMedium index={index} />
-        <div className="cardActionsBottomRight">
-            <OverflowMenu index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
-        </div>
+        <StatsBig index={index} />
+        <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
     </Card>
 );
 
@@ -296,11 +189,8 @@ const Card3F = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Elemen
  * Card layout for the Index Management tab — the comfortable view intended for
  * collections with only a handful of indexes.
  *
- * PROTOTYPE (variant 3 deep-dive): a gallery of stat-forward card designs that
- * vary how size/usage are rendered (big figures, bordered cells, badges,
- * summary grid, medium inline — echoing the Query Insights stage / efficiency
- * cards) and how row actions appear (none, icon buttons bottom-right, overflow
- * menu, or footer buttons). Pick a direction to keep as the single layout.
+ * PROTOTYPE (variant 3D deep-dive): accessible stat badges vs. big figures,
+ * both with a right-aligned footer action row. Pick one to keep.
  */
 export const IndexCardsView = ({ indexes, onDelete, onToggleHidden }: IndexCardsViewProps): JSX.Element => {
     if (indexes.length === 0) {
@@ -312,26 +202,13 @@ export const IndexCardsView = ({ indexes, onDelete, onToggleHidden }: IndexCards
     }
 
     const variations: ReadonlyArray<{ title: string; render: (index: IndexRow) => JSX.Element }> = [
-        { title: l10n.t('3A — Big figures, no actions'), render: (idx) => <Card3A index={idx} /> },
         {
-            title: l10n.t('3B — Big figures + icon actions (bottom-right)'),
-            render: (idx) => <Card3B index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
-        },
-        {
-            title: l10n.t('3C — Bordered stat cells + (…) menu'),
-            render: (idx) => <Card3C index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
-        },
-        {
-            title: l10n.t('3D — Stat badges + footer buttons'),
+            title: l10n.t('3D — Stat badges + right-aligned actions'),
             render: (idx) => <Card3D index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
         },
         {
-            title: l10n.t('3E — Summary grid + icon actions'),
-            render: (idx) => <Card3E index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
-        },
-        {
-            title: l10n.t('3F — Medium figures + (…) menu (bottom-right)'),
-            render: (idx) => <Card3F index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
+            title: l10n.t('3D+ — Big figures + right-aligned actions'),
+            render: (idx) => <Card3DBig index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
         },
     ];
 
@@ -349,7 +226,7 @@ export const IndexCardsView = ({ indexes, onDelete, onToggleHidden }: IndexCards
             ))}
 
             <Text as="p" className="cardMuted cardsPrototypeNote">
-                {l10n.t('Prototype: stat-forward card designs for the same indexes. Pick one to keep.')}
+                {l10n.t('Prototype: two variant 3D designs for the same indexes. Pick one to keep.')}
             </Text>
         </div>
     );
