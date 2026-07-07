@@ -72,7 +72,7 @@ Import-side rules the split enforces:
 
 New primitives that had no old equivalent:
 
-- `.`: `WithTelemetry<T, TTelemetry>` — a generic helper that re-types the
+- `./host`: `WithTelemetry<T, TTelemetry>` — a generic helper that re-types the
   `telemetry` slot on a context to a richer telemetry type (consumers alias it,
   e.g. `WithTelemetry<T, ITelemetryContext>`).
 - `./host`: `getInvocationSignal(ctx)` — reads the per-operation `AbortSignal`
