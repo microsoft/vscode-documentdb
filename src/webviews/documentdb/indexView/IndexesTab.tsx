@@ -204,7 +204,11 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
                         onToggleHidden={(idx) => void handleToggleHidden(idx)}
                     />
                 ) : (
-                    <IndexCardsView />
+                    <IndexCardsView
+                        indexes={indexes}
+                        onDelete={(idx) => setModal({ kind: 'delete', index: idx })}
+                        onToggleHidden={(idx) => void handleToggleHidden(idx)}
+                    />
                 )}
             </div>
 

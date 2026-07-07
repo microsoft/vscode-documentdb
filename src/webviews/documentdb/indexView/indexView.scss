@@ -47,16 +47,88 @@
         padding: 0 10px;
     }
 
-    // Placeholder shown by the (currently empty) Cards view.
+    // Card layout prototype: a vertical stack of labelled design variations,
+    // each a responsive grid of index cards.
     .indexCardsView {
         display: flex;
-        align-items: center;
-        justify-content: center;
-        min-height: 120px;
-        padding: 24px 10px;
+        flex-direction: column;
+        gap: 20px;
+        padding: 12px 10px 24px;
 
-        .indexCardsPlaceholder {
+        .cardMuted {
             color: var(--colorNeutralForeground3);
+        }
+
+        .cardsVariation {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .cardsVariationTitle {
+            color: var(--colorNeutralForeground2);
+        }
+
+        .cardsGrid {
+            display: grid;
+            gap: 12px;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+        }
+
+        // Compact (horizontal) cards can be a touch wider.
+        .cardsGridWide {
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+        }
+
+        .indexCard {
+            gap: 8px;
+        }
+
+        .cardName {
+            font-weight: var(--fontWeightSemibold);
+            word-break: break-all;
+        }
+
+        .cardBadgeRow {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cardStatChips {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+
+        .cardStatChip {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            color: var(--colorNeutralForeground2);
+            font-size: var(--fontSizeBase200);
+        }
+
+        .cardStatsPreview {
+            display: flex;
+            align-items: center;
+            justify-content: flex-start;
+            padding: 8px 12px;
+            background-color: var(--colorNeutralBackground3);
+        }
+
+        .cardStatsGrid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+        }
+
+        .cardStatBlock {
+            display: flex;
+            flex-direction: column;
+        }
+
+        .cardsPrototypeNote {
             font-style: italic;
         }
     }
