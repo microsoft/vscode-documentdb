@@ -42,14 +42,14 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_FIELD,
         description: 'Updates the field only if the specified value is less than the existing field value.',
         snippet: '{ $min: { "${1:field}": ${2:value} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$min', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$min', // inferred from another category
     },
     {
         value: '$max',
         meta: META_UPDATE_FIELD,
         description: 'Updates the field only if the specified value is greater than the existing field value.',
         snippet: '{ $max: { "${1:field}": ${2:value} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$max', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$max', // inferred from another category
     },
     {
         value: '$mul',
@@ -68,9 +68,9 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$set',
         meta: META_UPDATE_FIELD,
-        description: 'The $set operator in Azure DocumentDB updates or creates a new field with a specified value',
+        description: 'The $set operator in DocumentDB updates or creates a new field with a specified value',
         snippet: '{ $set: { "${1:field}": ${2:value} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$set', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/aggregation/$set', // inferred from another category
     },
     {
         value: '$setOnInsert',
@@ -85,7 +85,7 @@ const fieldUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_FIELD,
         description: 'Removes the specified field from a document.',
         snippet: '{ $unset: { "${1:field}": ${2:value} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$unset', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/aggregation/$unset', // inferred from another category
     },
 ];
 
@@ -123,7 +123,7 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
     {
         value: '$pop',
         meta: META_UPDATE_ARRAY,
-        description: 'Removes the first or last element of an array.',
+        description: 'The $pop operator removes the first or last element of an array.',
         snippet: '{ $pop: { "${1:field}": ${2:1} } }',
         link: getDocLink('$pop', META_UPDATE_ARRAY),
     },
@@ -168,14 +168,14 @@ const arrayUpdateOperators: readonly OperatorEntry[] = [
         meta: META_UPDATE_ARRAY,
         description: 'Limits the number of elements in an array during a `$push` operation.',
         snippet: '{ $slice: ${1:number} }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-expression/$slice', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/array-expression/$slice', // inferred from another category
     },
     {
         value: '$sort',
         meta: META_UPDATE_ARRAY,
         description: 'Sorts the elements of an array during a `$push` operation.',
         snippet: '{ $sort: { "${1:field}": ${2:1} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/aggregation/$sort', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/aggregation/$sort', // inferred from another category
     },
 ];
 

@@ -27,14 +27,14 @@ const windowOperators: readonly OperatorEntry[] = [
         meta: META_WINDOW,
         description: 'The $sum operator calculates the sum of the values of a field based on a filtering criteria',
         snippet: '{ $sum: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$sum', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$sum', // inferred from another category
     },
     {
         value: '$push',
         meta: META_WINDOW,
         description: 'The $push operator adds a specified value to an array within a document.',
         snippet: '{ $push: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$push', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/array-update/$push', // inferred from another category
     },
     {
         value: '$addToSet',
@@ -42,7 +42,7 @@ const windowOperators: readonly OperatorEntry[] = [
         description:
             "The addToSet operator adds elements to an array if they don't already exist, while ensuring uniqueness of elements within the set.",
         snippet: '{ $addToSet: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/array-update/$addtoset', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/array-update/$addtoset', // inferred from another category
     },
     {
         value: '$count',
@@ -50,35 +50,36 @@ const windowOperators: readonly OperatorEntry[] = [
         description:
             'The `$count` operator is used to count the number of documents that match a query filtering criteria.',
         snippet: '{ $count: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$count', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$count', // inferred from another category
     },
     {
         value: '$max',
         meta: META_WINDOW,
         description: 'The $max operator returns the maximum value from a set of input values.',
         snippet: '{ $max: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$max', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$max', // inferred from another category
     },
     {
         value: '$min',
         meta: META_WINDOW,
-        description: 'Retrieves the minimum value for a specified field',
+        description: 'The $min operator retrieves the minimum value for a specified field',
         snippet: '{ $min: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$min', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$min', // inferred from another category
     },
     {
         value: '$avg',
         meta: META_WINDOW,
-        description: 'Computes the average of numeric values for documents in a group, bucket, or window.',
+        description:
+            'The $avg operator computes the average of numeric values for documents in a group, bucket, or window.',
         snippet: '{ $avg: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$avg', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$avg', // inferred from another category
     },
     {
         value: '$stdDevPop',
         meta: META_WINDOW,
         description: 'The $stddevpop operator calculates the standard deviation of the specified values',
         snippet: '{ $stdDevPop: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$stddevpop', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$stddevpop', // inferred from another category
     },
     {
         value: '$bottom',
@@ -86,14 +87,14 @@ const windowOperators: readonly OperatorEntry[] = [
         description:
             "The $bottom operator returns the last document from the query's result set sorted by one or more fields",
         snippet: '{ $bottom: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$bottom', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$bottom', // inferred from another category
     },
     {
         value: '$bottomN',
         meta: META_WINDOW,
         description: 'The $bottomN operator returns the last N documents from the result sorted by one or more fields',
         snippet: '{ $bottomN: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$bottomn', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$bottomn', // inferred from another category
     },
     {
         value: '$covariancePop',
@@ -146,7 +147,7 @@ const windowOperators: readonly OperatorEntry[] = [
         meta: META_WINDOW,
         description: "The $first operator returns the first value in a group according to the group's sorting order.",
         snippet: '{ $first: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$first', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$first', // inferred from another category
     },
     {
         value: '$integral',
@@ -161,7 +162,7 @@ const windowOperators: readonly OperatorEntry[] = [
         meta: META_WINDOW,
         description: 'The $last operator returns the last document from the result sorted by one or more fields',
         snippet: '{ $last: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$last', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$last', // inferred from another category
     },
     {
         value: '$linearFill',
@@ -182,7 +183,7 @@ const windowOperators: readonly OperatorEntry[] = [
     {
         value: '$minN',
         meta: META_WINDOW,
-        description: 'Retrieves the bottom N values based on a specified filtering criteria',
+        description: 'The $minN operator retrieves the bottom N values based on a specified filtering criteria',
         snippet: '{ $minN: "${1:\\$field}" }',
         link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn',
     },
@@ -206,21 +207,21 @@ const windowOperators: readonly OperatorEntry[] = [
         description:
             'The $stddevsamp operator calculates the standard deviation of a specified sample of values and not the entire population',
         snippet: '{ $stdDevSamp: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$stddevsamp', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$stddevsamp', // inferred from another category
     },
     {
         value: '$top',
         meta: META_WINDOW,
         description: 'The $top operator returns the first document from the result set sorted by one or more fields',
         snippet: '{ $top: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$top', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$top', // inferred from another category
     },
     {
         value: '$topN',
         meta: META_WINDOW,
         description: 'The $topN operator returns the first N documents from the result sorted by one or more fields',
         snippet: '{ $topN: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$topn', // inferred from another category
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$topn', // inferred from another category
     },
 ];
 

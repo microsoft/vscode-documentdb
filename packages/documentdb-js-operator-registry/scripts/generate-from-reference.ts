@@ -75,6 +75,10 @@ const CATEGORY_TO_META: Record<string, string> = {
     'Bitwise Query Operators': 'META_QUERY_BITWISE',
     'Projection Operators': 'META_QUERY_PROJECTION',
     'Miscellaneous Query Operators': 'META_QUERY_MISC',
+    // $meta appears in the compat table under both "Projection Operators" and
+    // "Text Expression Operator"; it is the same operator, so both map to the
+    // projection meta and the generator deduplicates by value + meta.
+    'Text Expression Operator': 'META_QUERY_PROJECTION',
     'Field Update Operators': 'META_UPDATE_FIELD',
     'Array Update Operators': 'META_UPDATE_ARRAY',
     'Bitwise Update Operators': 'META_UPDATE_BITWISE',
@@ -125,6 +129,7 @@ const CATEGORY_TO_FILE: Record<string, string> = {
     'Bitwise Query Operators': 'queryOperators',
     'Projection Operators': 'queryOperators',
     'Miscellaneous Query Operators': 'queryOperators',
+    'Text Expression Operator': 'queryOperators',
     'Field Update Operators': 'updateOperators',
     'Array Update Operators': 'updateOperators',
     'Bitwise Update Operators': 'updateOperators',
