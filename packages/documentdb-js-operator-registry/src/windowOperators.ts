@@ -185,7 +185,7 @@ const windowOperators: readonly OperatorEntry[] = [
         meta: META_WINDOW,
         description: 'The $minN operator retrieves the bottom N values based on a specified filtering criteria',
         snippet: '{ $minN: "${1:\\$field}" }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn',
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$minn',
     },
     {
         value: '$rank',

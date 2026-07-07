@@ -77,7 +77,7 @@ const DOC_LINK_BASE = 'https://learn.microsoft.com/en-us/documentdb/query/operat
  * Maps category names (as they appear in column 1 of the compat page table)
  * to the docs directory used for per-operator doc pages.
  *
- * This mapping is derived from the operators TOC.yml in the azure-databases-docs repo.
+ * This mapping is derived from the operators TOC.yml in the nosql-docs repo.
  * Category names are trimmed before lookup, so leading/trailing spaces are OK.
  */
 const CATEGORY_TO_DIR: Record<string, string> = {
@@ -795,7 +795,8 @@ async function buildGlobalFileIndex(): Promise<Map<string, string>> {
             index.set(file.name.toLowerCase(), dir.name);
         }
 
-        // Also check subdirectories (e.g., aggregation/type-expression/)
+        // Also check any subdirectories (defensive — the operators tree is
+        // currently flat in nosql-docs, but this keeps the crawl future-proof).
         for (const sub of subdirs) {
             await sleep(300);
 

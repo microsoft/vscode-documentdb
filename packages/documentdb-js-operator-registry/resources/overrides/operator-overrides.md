@@ -264,19 +264,19 @@
 
 ### $minN
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn
+- **Doc Link:** https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$minn
 
 ## Comparison Expression Operators
 
 ### $cmp
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$cmp
+- **Doc Link:** https://learn.microsoft.com/en-us/documentdb/query/operators/comparison-query/$cmp
 
 ## Window Operators
 
 ### $minN
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn
+- **Doc Link:** https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$minn
 
 ## Geospatial Operators
 

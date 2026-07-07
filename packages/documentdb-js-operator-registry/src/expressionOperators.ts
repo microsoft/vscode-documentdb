@@ -245,7 +245,7 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_ARRAY,
         description: 'The $minN operator retrieves the bottom N values based on a specified filtering criteria',
         snippet: '{ $minN: { input: "${1:\\$array}", n: ${2:number} } }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn',
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$minn',
     },
     {
         value: '$objectToArray',
@@ -386,7 +386,7 @@ const comparisonExpressionOperators: readonly OperatorEntry[] = [
         meta: META_EXPR_COMPARISON,
         description: 'The $cmp operator compares two values',
         snippet: '{ $cmp: ["${1:\\$field1}", "${2:\\$field2}"] }',
-        link: 'https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$cmp',
+        link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/comparison-query/$cmp',
     },
     {
         value: '$eq',
