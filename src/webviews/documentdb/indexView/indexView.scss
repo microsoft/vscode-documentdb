@@ -87,28 +87,36 @@
             gap: 10px;
         }
 
-        // Title + subtitle truncate with an ellipsis instead of wrapping.
+        // Name truncates with an ellipsis instead of wrapping.
         .cardName {
-            font-weight: var(--fontWeightSemibold);
-        }
-
-        .cardName,
-        .cardSubtitle {
             display: block;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            font-weight: var(--fontWeightSemibold);
         }
 
-        // Let the CardHeader content column shrink so ellipsis can apply to the
-        // title / subtitle rather than forcing the card wider.
-        .fui-CardHeader__header,
-        .fui-CardHeader__description {
+        // Robust title row: [icon] [growing title block] [action]. The block
+        // grows and clamps so the name always renders and ellipsises.
+        .cardTitleRow {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .cardTitleBlock {
+            flex: 1 1 auto;
             min-width: 0;
-            overflow: hidden;
         }
 
-        // Leading icon surface in the Card header (icon + title + subtitle).
+        .cardMetaRow {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        // Leading icon surface — a single accent colour for every index type.
         .cardTypeIcon {
             display: inline-flex;
             align-items: center;
@@ -119,21 +127,63 @@
             background-color: var(--colorNeutralBackground3);
             color: var(--colorNeutralForeground2);
             font-size: 20px;
+            flex-shrink: 0;
         }
 
-        // Accent-tinted index icon (mirrors the tree's `combine` codicon colour).
         .cardTypeIconAccent {
             color: var(--colorBrandForeground1);
         }
 
-        // Shared small-caps stat label (echoes Query Insights `.baseDataHeader`).
+        // Filled accent tile (icon reversed out of the accent).
+        .cardTypeTile {
+            background-color: var(--colorBrandBackground);
+            color: var(--colorNeutralForegroundOnBrand);
+        }
+
+        // Key-component chips (field + direction).
+        .keyBadges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+
+        .keyBadgesEmphasis {
+            gap: 6px;
+        }
+
+        .keyDir {
+            margin-inline-start: 4px;
+            color: var(--colorNeutralForeground3);
+        }
+
+        // Quiet single-line stats (no icons — kept intentionally small/plain).
+        .mutedStatsLine {
+            display: flex;
+            align-items: center;
+            flex-wrap: wrap;
+            gap: 6px;
+            width: fit-content;
+            color: var(--colorNeutralForeground3);
+            font-size: var(--fontSizeBase200);
+        }
+
+        .statDot {
+            opacity: 0.6;
+        }
+
+        .statTooltip {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        // Small-caps stat label + big figures.
         .statLabel {
             font-size: 12px;
             font-weight: 600;
             color: var(--colorNeutralForeground3);
         }
 
-        // Big figures (Query Insights metric-card feel).
         .statsBig {
             display: flex;
             gap: 24px;
@@ -152,102 +202,21 @@
             line-height: 28px;
         }
 
-        // Inline stat badges.
+        // Accessible stat badges row.
         .statBadges {
             display: flex;
             flex-wrap: wrap;
             gap: 6px;
         }
 
-        // Right-aligned footer action row.
+        // Right-aligned footer + inline icon actions.
         .cardFooterRight {
             justify-content: flex-end;
         }
 
-        // Accent-tinted per-type icon (colour applied inline from TYPE_ACCENT).
-        // The neutral surface is shared; `.cardTypeIconAccent` only sets colour.
-        // Filled accent tile variant (icon reversed out of the accent colour).
-        .cardTypeTile {
-            color: var(--colorNeutralForegroundOnBrand);
-            flex-shrink: 0;
-        }
-
-        // Key-component chips (field + direction).
-        .keyBadges {
+        .cardActionsRight {
             display: flex;
-            flex-wrap: wrap;
             gap: 4px;
-        }
-
-        .keyDir {
-            margin-inline-start: 4px;
-            color: var(--colorNeutralForeground3);
-        }
-
-        // Quiet single-line stats.
-        .mutedStatsLine {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-            color: var(--colorNeutralForeground3);
-            font-size: var(--fontSizeBase200);
-        }
-
-        .statDot {
-            opacity: 0.6;
-        }
-
-        // F1 — accent left border.
-        .freshBorder {
-            border-inline-start-width: 3px;
-            border-inline-start-style: solid;
-        }
-
-        // F2 — soft brand header band.
-        .freshBand {
-            padding: 0;
-            overflow: hidden;
-        }
-
-        .cardBrandBand {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 12px;
-            background-color: var(--colorBrandBackground2);
-            color: var(--colorBrandForeground2);
-        }
-
-        .cardBandName {
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-
-        .cardBandBody {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            padding: 12px;
-        }
-
-        // F3 — big-name hero, minimal chrome.
-        .freshHero {
-            gap: 8px;
-        }
-
-        .heroTop {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-
-            .cardName {
-                min-width: 0;
-            }
-        }
-
-        .heroStats {
-            margin-top: 2px;
         }
 
         // F4 — accent icon tile (horizontal).
@@ -269,41 +238,19 @@
             flex: 1 1 auto;
         }
 
-        .tileHeaderRow {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-
-            .cardName {
-                min-width: 0;
-            }
-        }
-
-        // F5 — component chips forward.
-        .componentsHeader {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-
-            .cardName {
-                flex: 1 1 auto;
-                min-width: 0;
-            }
-        }
-
+        // F5 — component chips are the hero: a readable, padded panel.
         .componentsHero {
-            padding: 8px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding: 10px;
             border-radius: var(--borderRadiusMedium);
             background-color: var(--colorNeutralBackground2);
         }
 
-        // F6 — colour-accented footer (top border colour applied inline).
-        .cardFooterAccent {
-            border-top-width: 2px;
-            border-top-style: solid;
-            padding-top: 8px;
-            margin-top: 4px;
+        .componentsLabel {
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
         }
 
         .cardsPrototypeNote {
