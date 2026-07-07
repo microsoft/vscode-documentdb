@@ -294,10 +294,7 @@ failures tracked — **off by default** so you are not opted into events you may
 not want:
 
 ```tsx
-<WithWebviewContext
-  vscodeApi={vscodeApi}
-  onObserverError={(error, { info, phase }) => report(info.path, phase, error)}
->
+<WithWebviewContext vscodeApi={vscodeApi} onObserverError={(error, { info, phase }) => report(info.path, phase, error)}>
   <App />
 </WithWebviewContext>
 ```
@@ -467,6 +464,25 @@ extensions are working examples of that layout against this package.
 
 `0.9.0-preview`. APIs are subject to change while the package is in preview. See
 [ADVANCED.md](./ADVANCED.md) for the full set of primitives and patterns.
+
+## Contributors
+
+This package and the [vscode-webview-starter-kit](https://github.com/tnaum-ms/vscode-webview-starter-kit)
+built alongside it were a team effort:
+
+- [**tnaum-ms**](https://github.com/tnaum-ms) extracted the package from the
+  webview stack that ships in DocumentDB for VS Code, shaped the tRPC
+  integration and public API, and built the companion starter kit.
+- [**bk201-**](https://github.com/bk201-) built the dynamic theming system and,
+  with sevoku, test-drove the package in [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb),
+  helping show the path toward a more modular design.
+- [**guanzhousongmicrosoft**](https://github.com/guanzhousongmicrosoft) built
+  the npm release pipelines that publish the package.
+- [**sevoku**](https://github.com/sevoku) helped test-drive the package in
+  [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb)
+  with bk201-, surfacing the modular direction.
+
+Thanks to everyone who contributed ideas, reviews, and feedback along the way.
 
 ## License
 
