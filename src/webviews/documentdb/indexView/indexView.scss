@@ -69,15 +69,12 @@
             color: var(--colorNeutralForeground2);
         }
 
+        // Card width follows the compact-list feel (~260px) but cards are free
+        // to grow taller with header + stats + footer content.
         .cardsGrid {
             display: grid;
             gap: 12px;
-            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-        }
-
-        // Compact (horizontal) cards can be a touch wider.
-        .cardsGridWide {
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
         }
 
         .indexCard {
@@ -89,32 +86,48 @@
             word-break: break-all;
         }
 
+        // Leading icon surface in the Card header (icon + title + subtitle).
+        .cardTypeIcon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 32px;
+            height: 32px;
+            border-radius: var(--borderRadiusMedium);
+            background-color: var(--colorNeutralBackground3);
+            color: var(--colorNeutralForeground2);
+            font-size: 20px;
+        }
+
         .cardBadgeRow {
             display: flex;
             align-items: center;
-            gap: 8px;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        // Preview strip that hosts the property badges (template-card style).
+        .cardBadgePreview {
+            padding: 10px 12px;
+            background-color: var(--colorNeutralBackground3);
         }
 
         .cardStatChips {
             display: flex;
-            gap: 12px;
+            gap: 20px;
             flex-wrap: wrap;
         }
 
         .cardStatChip {
+            display: flex;
+            flex-direction: column;
+        }
+
+        // Icon + value row inside a stat chip.
+        .cardStatValue {
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            color: var(--colorNeutralForeground2);
-            font-size: var(--fontSizeBase200);
-        }
-
-        .cardStatsPreview {
-            display: flex;
-            align-items: center;
-            justify-content: flex-start;
-            padding: 8px 12px;
-            background-color: var(--colorNeutralBackground3);
         }
 
         .cardStatsGrid {

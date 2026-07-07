@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    Badge,
     Body1,
     Button,
     Caption1,
@@ -11,31 +12,39 @@ import {
     CardFooter,
     CardHeader,
     CardPreview,
-    Menu,
-    MenuItem,
-    MenuList,
-    MenuPopover,
-    MenuTrigger,
     Subtitle2,
     Text,
 } from '@fluentui/react-components';
 import {
+    BranchRegular,
+    DataUsageRegular,
     DeleteRegular,
+    DocumentMultipleRegular,
+    DocumentRegular,
     EyeOffRegular,
     EyeRegular,
-    MoreHorizontalRegular,
+    GlobeRegular,
+    KeyRegular,
     NumberSymbolRegular,
+    StarRegular,
     StorageRegular,
+    TextAlignLeftRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
-import { type IndexRow } from '../types';
+import { type IndexRow, type IndexTypeBadge } from '../types';
 import { formatBytes, formatOps } from '../utils/format';
 import { classifyIndex } from '../utils/indexType';
 import { IndexTypeBadgeView } from './IndexTypeBadgeView';
 
 export interface IndexCardsViewProps {
     indexes: ReadonlyArray<IndexRow>;
+    onDelete: (index: IndexRow) => void;
+    onToggleHidden: (index: IndexRow) => void;
+}
+
+interface IndexCardProps {
+    index: IndexRow;
     onDelete: (index: IndexRow) => void;
     onToggleHidden: (index: IndexRow) => void;
 }
@@ -56,155 +65,138 @@ function keySummary(index: IndexRow): string {
     return index.key.map((k) => `${k.field}: ${formatDirection(k.direction)}`).join(', ');
 }
 
-/** Shared 3-dot actions menu (Hide/Unhide, Delete). Disabled on the default index. */
-const IndexActionsMenu = ({
-    index,
-    onDelete,
-    onToggleHidden,
-}: {
-    index: IndexRow;
-    onDelete: (index: IndexRow) => void;
-    onToggleHidden: (index: IndexRow) => void;
-}): JSX.Element => (
-    <Menu>
-        <MenuTrigger disableButtonEnhancement>
-            <Button
-                appearance="subtle"
-                icon={<MoreHorizontalRegular />}
-                aria-label={l10n.t('More actions for {0}', index.name)}
-            />
-        </MenuTrigger>
-        <MenuPopover>
-            <MenuList>
-                <MenuItem
-                    icon={index.hidden ? <EyeRegular /> : <EyeOffRegular />}
-                    disabled={index.isDefault}
-                    onClick={() => onToggleHidden(index)}
-                >
-                    {index.hidden ? l10n.t('Unhide') : l10n.t('Hide')}
-                </MenuItem>
-                <MenuItem icon={<DeleteRegular />} disabled={index.isDefault} onClick={() => onDelete(index)}>
-                    {l10n.t('Delete')}
-                </MenuItem>
-            </MenuList>
-        </MenuPopover>
-    </Menu>
+/** A representative leading icon per classified index type (CardHeader image slot). */
+const TYPE_ICON: Record<IndexTypeBadge, JSX.Element> = {
+    Default: <KeyRegular />,
+    ObjectId: <KeyRegular />,
+    'Single Field': <DocumentRegular />,
+    Compound: <DocumentMultipleRegular />,
+    Text: <TextAlignLeftRegular />,
+    Geospatial: <GlobeRegular />,
+    Wildcard: <StarRegular />,
+    Hashed: <NumberSymbolRegular />,
+};
+
+const IndexTypeIcon = ({ index }: { index: IndexRow }): JSX.Element => (
+    <span className="cardTypeIcon" aria-hidden="true">
+        {TYPE_ICON[classifyIndex(index)] ?? <BranchRegular />}
+    </span>
 );
 
-/** Two small stat chips (size + usage) reused across variations. */
+/** Row of small property badges (Fluent "template card" badge style). */
+const IndexPropertyBadges = ({ index, includeType }: { index: IndexRow; includeType?: boolean }): JSX.Element => (
+    <div className="cardBadgeRow">
+        {includeType && <IndexTypeBadgeView type={classifyIndex(index)} />}
+        {index.unique && (
+            <Badge size="small" appearance="tint" color="brand">
+                {l10n.t('Unique')}
+            </Badge>
+        )}
+        {index.sparse && (
+            <Badge size="small" appearance="tint" color="informative">
+                {l10n.t('Sparse')}
+            </Badge>
+        )}
+        {index.expireAfterSeconds !== undefined && (
+            <Badge size="small" appearance="tint" color="warning">
+                {l10n.t('TTL')}
+            </Badge>
+        )}
+        {index.hidden && (
+            <Badge size="small" appearance="tint" color="subtle">
+                {l10n.t('Hidden')}
+            </Badge>
+        )}
+    </div>
+);
+
+/** Inline size + usage figures. */
 const IndexStatChips = ({ index }: { index: IndexRow }): JSX.Element => (
     <div className="cardStatChips">
         <span className="cardStatChip">
-            <StorageRegular />
-            {formatBytes(index.sizeBytes)}
+            <Caption1 className="cardMuted">{l10n.t('Size')}</Caption1>
+            <span className="cardStatValue">
+                <StorageRegular />
+                <Body1>{formatBytes(index.sizeBytes)}</Body1>
+            </span>
         </span>
         <span className="cardStatChip">
-            <NumberSymbolRegular />
-            {formatOps(index.usageOps)}
+            <Caption1 className="cardMuted">{l10n.t('Usage')}</Caption1>
+            <span className="cardStatValue">
+                <DataUsageRegular />
+                <Body1>{formatOps(index.usageOps)}</Body1>
+            </span>
         </span>
     </div>
 );
 
+/** Footer Hide/Unhide + Delete buttons, disabled on the default `_id` index. */
+const IndexFooterActions = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+    <CardFooter>
+        <Button
+            size="small"
+            appearance="subtle"
+            icon={index.hidden ? <EyeRegular /> : <EyeOffRegular />}
+            disabled={index.isDefault}
+            onClick={() => onToggleHidden(index)}
+        >
+            {index.hidden ? l10n.t('Unhide') : l10n.t('Hide')}
+        </Button>
+        <Button
+            size="small"
+            appearance="subtle"
+            icon={<DeleteRegular />}
+            disabled={index.isDefault}
+            onClick={() => onDelete(index)}
+        >
+            {l10n.t('Delete')}
+        </Button>
+    </CardFooter>
+);
+
 // ---------------------------------------------------------------------------
-// Variation A — Compact horizontal list cards
+// Variation 1 — Icon header (icon + title + subtitle) + stat chips + footer
 // ---------------------------------------------------------------------------
 
-const CardVariationCompact = ({ index }: { index: IndexRow }): JSX.Element => (
-    <Card className="indexCard" appearance="filled" orientation="horizontal" size="small">
+const CardHeaderIcon = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+    <Card className="indexCard" appearance="filled">
         <CardHeader
-            image={<IndexTypeBadgeView type={classifyIndex(index)} />}
+            image={<IndexTypeIcon index={index} />}
             header={<Body1 className="cardName">{index.name}</Body1>}
             description={<Caption1 className="cardMuted">{keySummary(index)}</Caption1>}
         />
+        <IndexStatChips index={index} />
+        <IndexFooterActions index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
     </Card>
 );
 
 // ---------------------------------------------------------------------------
-// Variation B — Vertical cards with explicit footer action buttons
+// Variation 2 — Small property badges on top + icon header + footer
 // ---------------------------------------------------------------------------
 
-const CardVariationFooterActions = ({
-    index,
-    onDelete,
-    onToggleHidden,
-}: {
-    index: IndexRow;
-    onDelete: (index: IndexRow) => void;
-    onToggleHidden: (index: IndexRow) => void;
-}): JSX.Element => (
+const CardTopBadges = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
     <Card className="indexCard" appearance="outline">
+        <IndexPropertyBadges index={index} includeType />
         <CardHeader
+            image={<IndexTypeIcon index={index} />}
             header={<Body1 className="cardName">{index.name}</Body1>}
-            description={<IndexTypeBadgeView type={classifyIndex(index)} />}
+            description={<Caption1 className="cardMuted">{keySummary(index)}</Caption1>}
         />
-        <Caption1 className="cardMuted">{keySummary(index)}</Caption1>
         <IndexStatChips index={index} />
-        <CardFooter>
-            <Button
-                size="small"
-                icon={index.hidden ? <EyeRegular /> : <EyeOffRegular />}
-                disabled={index.isDefault}
-                onClick={() => onToggleHidden(index)}
-            >
-                {index.hidden ? l10n.t('Unhide') : l10n.t('Hide')}
-            </Button>
-            <Button size="small" icon={<DeleteRegular />} disabled={index.isDefault} onClick={() => onDelete(index)}>
-                {l10n.t('Delete')}
-            </Button>
-        </CardFooter>
+        <IndexFooterActions index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
     </Card>
 );
 
 // ---------------------------------------------------------------------------
-// Variation C — Vertical cards with a 3-dot overflow menu (required)
+// Variation 3 — Stat-forward: large Size / Usage figures + footer
 // ---------------------------------------------------------------------------
 
-const CardVariationMenu = ({
-    index,
-    onDelete,
-    onToggleHidden,
-}: {
-    index: IndexRow;
-    onDelete: (index: IndexRow) => void;
-    onToggleHidden: (index: IndexRow) => void;
-}): JSX.Element => (
-    <Card className="indexCard" appearance="filled-alternative">
+const CardStatForward = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+    <Card className="indexCard" appearance="filled">
         <CardHeader
+            image={<IndexTypeIcon index={index} />}
             header={<Body1 className="cardName">{index.name}</Body1>}
             description={<Caption1 className="cardMuted">{keySummary(index)}</Caption1>}
-            action={<IndexActionsMenu index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />}
-        />
-        <div className="cardBadgeRow">
-            <IndexTypeBadgeView type={classifyIndex(index)} />
-            {index.hidden && <Caption1 className="cardMuted">{l10n.t('Hidden')}</Caption1>}
-        </div>
-        <IndexStatChips index={index} />
-    </Card>
-);
-
-// ---------------------------------------------------------------------------
-// Variation D — Stat-forward cards with a coloured preview strip + menu
-// ---------------------------------------------------------------------------
-
-const CardVariationStats = ({
-    index,
-    onDelete,
-    onToggleHidden,
-}: {
-    index: IndexRow;
-    onDelete: (index: IndexRow) => void;
-    onToggleHidden: (index: IndexRow) => void;
-}): JSX.Element => (
-    <Card className="indexCard indexCardStats" appearance="filled">
-        <CardPreview className="cardStatsPreview">
-            <div className="cardStatsPreviewInner">
-                <IndexTypeBadgeView type={classifyIndex(index)} />
-            </div>
-        </CardPreview>
-        <CardHeader
-            header={<Body1 className="cardName">{index.name}</Body1>}
-            description={<Caption1 className="cardMuted">{keySummary(index)}</Caption1>}
-            action={<IndexActionsMenu index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />}
         />
         <div className="cardStatsGrid">
             <div className="cardStatBlock">
@@ -216,6 +208,26 @@ const CardVariationStats = ({
                 <Caption1 className="cardMuted">{l10n.t('Usage')}</Caption1>
             </div>
         </div>
+        <IndexFooterActions index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
+    </Card>
+);
+
+// ---------------------------------------------------------------------------
+// Variation 4 — Preview strip with type + property badges + stats + footer
+// ---------------------------------------------------------------------------
+
+const CardPreviewBadges = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+    <Card className="indexCard" appearance="filled-alternative">
+        <CardPreview className="cardBadgePreview">
+            <IndexPropertyBadges index={index} includeType />
+        </CardPreview>
+        <CardHeader
+            image={<IndexTypeIcon index={index} />}
+            header={<Body1 className="cardName">{index.name}</Body1>}
+            description={<Caption1 className="cardMuted">{keySummary(index)}</Caption1>}
+        />
+        <IndexStatChips index={index} />
+        <IndexFooterActions index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
     </Card>
 );
 
@@ -227,9 +239,11 @@ const CardVariationStats = ({
  * Card layout for the Index Management tab — the comfortable view intended
  * for collections with only a handful of indexes.
  *
- * PROTOTYPE: this renders the same index list four times, once per card design
- * variation, so a direction can be chosen. Once picked, the winning variation
- * becomes the single card layout and the others are removed.
+ * PROTOTYPE: renders the same index list once per card design variation so a
+ * direction can be chosen. Every variation uses Fluent's Card header (icon +
+ * title + subtitle) and footer actions (Hide/Unhide, Delete); they differ in
+ * how they surface property badges and the size/usage figures. Once a design
+ * is picked, the winning variation becomes the single layout.
  */
 export const IndexCardsView = ({ indexes, onDelete, onToggleHidden }: IndexCardsViewProps): JSX.Element => {
     if (indexes.length === 0) {
@@ -240,61 +254,40 @@ export const IndexCardsView = ({ indexes, onDelete, onToggleHidden }: IndexCards
         );
     }
 
+    const variations: ReadonlyArray<{ title: string; render: (index: IndexRow) => JSX.Element }> = [
+        {
+            title: l10n.t('Variation 1 — Icon header + stat chips'),
+            render: (idx) => <CardHeaderIcon index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
+        },
+        {
+            title: l10n.t('Variation 2 — Property badges on top'),
+            render: (idx) => <CardTopBadges index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
+        },
+        {
+            title: l10n.t('Variation 3 — Stat-forward figures'),
+            render: (idx) => <CardStatForward index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
+        },
+        {
+            title: l10n.t('Variation 4 — Preview strip with badges'),
+            render: (idx) => <CardPreviewBadges index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
+        },
+    ];
+
     return (
         <div className="indexCardsView">
-            <section className="cardsVariation">
-                <Subtitle2 className="cardsVariationTitle">{l10n.t('Variation A — Compact list cards')}</Subtitle2>
-                <div className="cardsGrid cardsGridWide">
-                    {indexes.map((idx) => (
-                        <CardVariationCompact key={idx.name} index={idx} />
-                    ))}
-                </div>
-            </section>
-
-            <section className="cardsVariation">
-                <Subtitle2 className="cardsVariationTitle">{l10n.t('Variation B — Footer action buttons')}</Subtitle2>
-                <div className="cardsGrid">
-                    {indexes.map((idx) => (
-                        <CardVariationFooterActions
-                            key={idx.name}
-                            index={idx}
-                            onDelete={onDelete}
-                            onToggleHidden={onToggleHidden}
-                        />
-                    ))}
-                </div>
-            </section>
-
-            <section className="cardsVariation">
-                <Subtitle2 className="cardsVariationTitle">{l10n.t('Variation C — Overflow (…) menu')}</Subtitle2>
-                <div className="cardsGrid">
-                    {indexes.map((idx) => (
-                        <CardVariationMenu
-                            key={idx.name}
-                            index={idx}
-                            onDelete={onDelete}
-                            onToggleHidden={onToggleHidden}
-                        />
-                    ))}
-                </div>
-            </section>
-
-            <section className="cardsVariation">
-                <Subtitle2 className="cardsVariationTitle">{l10n.t('Variation D — Stat-forward cards')}</Subtitle2>
-                <div className="cardsGrid">
-                    {indexes.map((idx) => (
-                        <CardVariationStats
-                            key={idx.name}
-                            index={idx}
-                            onDelete={onDelete}
-                            onToggleHidden={onToggleHidden}
-                        />
-                    ))}
-                </div>
-            </section>
+            {variations.map((variation) => (
+                <section className="cardsVariation" key={variation.title}>
+                    <Subtitle2 className="cardsVariationTitle">{variation.title}</Subtitle2>
+                    <div className="cardsGrid">
+                        {indexes.map((idx) => (
+                            <div key={idx.name}>{variation.render(idx)}</div>
+                        ))}
+                    </div>
+                </section>
+            ))}
 
             <Text as="p" className="cardMuted cardsPrototypeNote">
-                {l10n.t('Prototype: four card designs for the same indexes. Pick one to keep.')}
+                {l10n.t('Prototype: multiple card designs for the same indexes. Pick one to keep.')}
             </Text>
         </div>
     );
