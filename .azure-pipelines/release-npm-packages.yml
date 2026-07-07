@@ -310,7 +310,7 @@ extends:
                                   #   microsoft-vscode-ext-webview-0.9.0-preview.tgz
                                   # The packageName parameter matches the folder name under packages/,
                                   # which appears in the .tgz filename for all packages here.
-                                  $tgzFiles = Get-ChildItem -Path $npmPackagesDir -Filter "*$packageName*.tgz"
+                                  $tgzFiles = @(Get-ChildItem -Path $npmPackagesDir -Filter "*$packageName*.tgz")
 
                                   if ($tgzFiles.Count -eq 0) {
                                       Write-Error "[Error] No .tgz file found matching package '$packageName'"
