@@ -21,6 +21,15 @@ export const DEFAULT_ID_INDEX_NAME = '_id_';
 /** Index key special value for text indexes. */
 export const TEXT_INDEX_DIRECTION = 'text';
 
+/** Index key special value for hashed indexes (e.g. `{ field: 'hashed' }`). */
+export const HASHED_INDEX_DIRECTION = 'hashed';
+
+/**
+ * Token that appears in a wildcard index key field, e.g. `$**` or `path.$**`.
+ * See the `Wildcard` entry in `@documentdb-js/operator-registry`'s `INDEX_TYPES`.
+ */
+export const WILDCARD_INDEX_FIELD_TOKEN = '$**';
+
 /** Index key special values recognised as geospatial. */
 export const GEOSPATIAL_INDEX_DIRECTIONS: ReadonlySet<string> = new Set(['2dsphere', '2d', 'geoHaystack']);
 

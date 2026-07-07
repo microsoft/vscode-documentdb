@@ -20,6 +20,8 @@ const BADGE_COLOR: Record<IndexTypeBadge, BadgeProps['color']> = {
     Compound: 'important',
     Text: 'success',
     Geospatial: 'warning',
+    Wildcard: 'severe',
+    Hashed: 'danger',
 };
 
 export interface IndexTypeBadgeViewProps {

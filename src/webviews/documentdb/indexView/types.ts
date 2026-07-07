@@ -36,7 +36,15 @@ export interface IndexRow {
 }
 
 /** Logical badge category used for the colour-coded Type column. */
-export type IndexTypeBadge = 'Default' | 'ObjectId' | 'Single Field' | 'Compound' | 'Text' | 'Geospatial';
+export type IndexTypeBadge =
+    | 'Default'
+    | 'ObjectId'
+    | 'Single Field'
+    | 'Compound'
+    | 'Text'
+    | 'Geospatial'
+    | 'Wildcard'
+    | 'Hashed';
 
 /** Sort direction stored alongside a field in the create-index form. */
 export type SortDirection = 1 | -1;
