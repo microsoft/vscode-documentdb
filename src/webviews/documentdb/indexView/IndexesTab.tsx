@@ -9,7 +9,7 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { CreateIndexDialog } from './components/CreateIndexDialog';
-import { IndexFooterBar } from './components/IndexFooterBar';
+import { IndexMetricsRow } from './components/IndexMetricsRow';
 import { IndexTable } from './components/IndexTable';
 import { OPEN_CREATE_INDEX_EVENT } from './constants';
 import './indexView.scss';
@@ -174,6 +174,12 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
         <div className="indexView">
             {isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
 
+            {/* First row: summary metric cards (mirrors the Query Insights layout). */}
+            <div className="indexMetricsRowContainer">
+                <IndexMetricsRow indexes={indexes} isLoading={isLoading} />
+            </div>
+
+            {/* Second row: the index table. */}
             <div className="indexTableContainer">
                 <IndexTable
                     indexes={indexes}
@@ -181,8 +187,6 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
                     onToggleHidden={(idx) => void handleToggleHidden(idx)}
                 />
             </div>
-
-            <IndexFooterBar indexes={indexes} />
 
             <CreateIndexDialog
                 open={modal.kind === 'create'}

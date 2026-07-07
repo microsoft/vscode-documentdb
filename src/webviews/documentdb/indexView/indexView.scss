@@ -35,28 +35,10 @@
         padding: 0 10px;
     }
 
-    .indexFooter {
-        display: flex;
-        flex-direction: row;
-        align-items: center;
-        justify-content: flex-start;
-        gap: 20px;
-        padding: 10px;
-        border-top: 1px solid var(--colorNeutralStroke2);
-    }
-
-    .footerMetric {
-        display: flex;
-        flex-direction: column;
-        line-height: 1.2;
-    }
-
-    .footerMetricLabel {
-        color: var(--colorNeutralForeground3);
-    }
-
-    .footerMetricValue {
-        font-weight: 600;
+    // Wraps the top-of-dashboard summary cards. The MetricsRow grid itself
+    // has no horizontal padding, so we align it with the table's gutter here.
+    .indexMetricsRowContainer {
+        padding: 0 10px;
     }
 
     .fieldChip {
