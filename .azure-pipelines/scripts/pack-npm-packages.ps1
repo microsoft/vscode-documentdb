@@ -70,7 +70,7 @@ Get-ChildItem -Path $npmPackagesDir -Filter "*.tgz" | ForEach-Object {
     Write-Output "  $($_.Name) (${sizeKB} KB)"
 }
 
-$tgzCount = (Get-ChildItem -Path $npmPackagesDir -Filter "*.tgz").Count
+$tgzCount = @(Get-ChildItem -Path $npmPackagesDir -Filter "*.tgz").Count
 Write-Output ""
 Write-Output "Total packages: $tgzCount"
 
