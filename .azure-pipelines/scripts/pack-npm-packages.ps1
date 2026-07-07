@@ -43,7 +43,7 @@ foreach ($pkgDirName in $publishablePackages) {
         exit 1
     }
 
-    $packageJson = Get-Content $packageJsonPath | ConvertFrom-Json
+    $packageJson = Get-Content $packageJsonPath -Raw | ConvertFrom-Json
     $pkgName = $packageJson.name
     $pkgVersion = $packageJson.version
 
