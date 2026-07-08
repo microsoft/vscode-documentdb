@@ -46,13 +46,6 @@ export type IndexTypeBadge =
     | 'Wildcard'
     | 'Hashed';
 
-/**
- * Which presentation the Index Management tab is showing:
- * - `cards`: a comfortable card layout, suited to collections with few indexes.
- * - `table`: the dense, sortable table (good for many indexes).
- */
-export type IndexViewMode = 'cards' | 'table';
-
 /** Sort direction stored alongside a field in the create-index form. */
 export type SortDirection = 1 | -1;
 

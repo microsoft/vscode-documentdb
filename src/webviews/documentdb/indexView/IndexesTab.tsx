@@ -9,13 +9,12 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { CreateIndexDialog } from './components/CreateIndexDialog';
-import { IndexCardsView } from './components/IndexCardsView';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
 import { IndexTable } from './components/IndexTable';
 import { IndexToolbar } from './components/IndexToolbar';
 import { OPEN_CREATE_INDEX_EVENT } from './constants';
 import './indexView.scss';
-import { type CreateIndexInput, type IndexRow, type IndexViewMode } from './types';
+import { type CreateIndexInput, type IndexRow } from './types';
 
 /**
  * Discriminated union describing which dialog (if any) is currently open
@@ -49,10 +48,7 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
     const [modal, setModal] = useState<ModalState>({ kind: 'none' });
     const [modalBusy, setModalBusy] = useState(false);
 
-    // Presentation state for the in-tab toolbar. `viewMode` toggles between the
-    // comfortable card layout (default) and the dense table; `filterText` is
-    // captured for a future client-side filter (not wired up yet).
-    const [viewMode, setViewMode] = useState<IndexViewMode>('cards');
+    // Filter text for the toolbar's filter box (not wired to filtering yet).
     const [filterText, setFilterText] = useState('');
 
     // Field suggestions (from SchemaStore) and the collection's document
@@ -187,29 +183,16 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
                 <IndexMetricsRow indexes={indexes} isLoading={isLoading} />
             </div>
 
-            {/* Toolbar: filter box + Cards/Table view toggle. */}
-            <IndexToolbar
-                viewMode={viewMode}
-                onViewModeChange={setViewMode}
-                filterText={filterText}
-                onFilterTextChange={setFilterText}
-            />
+            {/* Filter row: filter box + (not-yet-wired) filter toggles. */}
+            <IndexToolbar filterText={filterText} onFilterTextChange={setFilterText} />
 
-            {/* Second row: the selected view (cards placeholder or the table). */}
+            {/* Index table. */}
             <div className="indexContentContainer">
-                {viewMode === 'table' ? (
-                    <IndexTable
-                        indexes={indexes}
-                        onDelete={(idx) => setModal({ kind: 'delete', index: idx })}
-                        onToggleHidden={(idx) => void handleToggleHidden(idx)}
-                    />
-                ) : (
-                    <IndexCardsView
-                        indexes={indexes}
-                        onDelete={(idx) => setModal({ kind: 'delete', index: idx })}
-                        onToggleHidden={(idx) => void handleToggleHidden(idx)}
-                    />
-                )}
+                <IndexTable
+                    indexes={indexes}
+                    onDelete={(idx) => setModal({ kind: 'delete', index: idx })}
+                    onToggleHidden={(idx) => void handleToggleHidden(idx)}
+                />
             </div>
 
             <CreateIndexDialog

@@ -3,39 +3,65 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Dropdown, Option, SearchBox, Toolbar } from '@fluentui/react-components';
+import {
+    Menu,
+    MenuButton,
+    MenuItemCheckbox,
+    MenuList,
+    MenuPopover,
+    MenuTrigger,
+    SearchBox,
+    Toolbar,
+    ToolbarDivider,
+    ToolbarToggleButton,
+} from '@fluentui/react-components';
+import { EyeOffRegular, FilterRegular, PulseRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { type JSX } from 'react';
-import { type IndexViewMode } from '../types';
+import { useState, type JSX } from 'react';
 
 export interface IndexToolbarProps {
-    /** Current view mode; drives the dropdown's selected option. */
-    viewMode: IndexViewMode;
-    onViewModeChange: (mode: IndexViewMode) => void;
-    /** Filter text (not wired to filtering yet — prototype). */
+    /** Filter text (not wired to filtering yet). */
     filterText: string;
     onFilterTextChange: (value: string) => void;
 }
 
-/** Human-readable labels for each view mode (also the dropdown display text). */
-const VIEW_MODE_LABELS: Record<IndexViewMode, string> = {
-    cards: l10n.t('Cards View'),
-    table: l10n.t('Table View'),
-};
+/**
+ * Suggested index-type filter options. Presentational only for now — these
+ * mirror the type badges shown in the table's Type column.
+ */
+const INDEX_TYPE_FILTERS: ReadonlyArray<string> = [
+    'Single Field',
+    'Compound',
+    'Multikey',
+    'Text',
+    'Wildcard',
+    'Geospatial',
+    'Hashed',
+];
 
 /**
- * Toolbar shown between the metrics row and the index content. Hosts a filter
- * box (for collections with many indexes) and a Cards/Table view dropdown —
- * mirroring the Results tab's Table/Tree/JSON `ViewSwitcher`.
+ * Filter row shown between the metrics row and the index table. Hosts the
+ * filter box plus a set of suggested filter controls.
+ *
+ * NOTE: the filter box and the toggles below are intentionally NOT wired to the
+ * table yet — they are UI proposals so we can settle on which filters are worth
+ * building (filter by index type, and quick "Hidden" / "Unused" toggles).
  */
-export const IndexToolbar = ({
-    viewMode,
-    onViewModeChange,
-    filterText,
-    onFilterTextChange,
-}: IndexToolbarProps): JSX.Element => {
+export const IndexToolbar = ({ filterText, onFilterTextChange }: IndexToolbarProps): JSX.Element => {
+    // Presentational-only selection state (does not affect the table yet).
+    const [checkedTypes, setCheckedTypes] = useState<Record<string, string[]>>({ type: [] });
+    const [quickFilters, setQuickFilters] = useState<Record<string, string[]>>({ quick: [] });
+
     return (
-        <Toolbar size="small" className="indexToolbar" aria-label={l10n.t('Index view options')}>
+        <Toolbar
+            size="small"
+            className="indexToolbar"
+            aria-label={l10n.t('Filter indexes')}
+            checkedValues={quickFilters}
+            onCheckedValueChange={(_event, { name, checkedItems }) =>
+                setQuickFilters((prev) => ({ ...prev, [name]: checkedItems }))
+            }
+        >
             <SearchBox
                 className="indexFilterInput"
                 placeholder={l10n.t('Filter indexes…')}
@@ -44,22 +70,38 @@ export const IndexToolbar = ({
                 aria-label={l10n.t('Filter indexes')}
             />
 
-            <div className="indexToolbarSpacer" />
+            <ToolbarDivider />
 
-            <Dropdown
-                className="indexViewDropdown"
-                aria-label={l10n.t('Select index view')}
-                value={VIEW_MODE_LABELS[viewMode]}
-                selectedOptions={[viewMode]}
-                onOptionSelect={(_event, data) => {
-                    if (data.optionValue === 'cards' || data.optionValue === 'table') {
-                        onViewModeChange(data.optionValue);
-                    }
-                }}
+            {/* Filter by index type (multi-select). Presentational for now. */}
+            <Menu
+                checkedValues={checkedTypes}
+                onCheckedValueChange={(_event, { name, checkedItems }) =>
+                    setCheckedTypes((prev) => ({ ...prev, [name]: checkedItems }))
+                }
             >
-                <Option value="cards">{VIEW_MODE_LABELS.cards}</Option>
-                <Option value="table">{VIEW_MODE_LABELS.table}</Option>
-            </Dropdown>
+                <MenuTrigger disableButtonEnhancement>
+                    <MenuButton size="small" appearance="subtle" icon={<FilterRegular />}>
+                        {l10n.t('Type')}
+                    </MenuButton>
+                </MenuTrigger>
+                <MenuPopover>
+                    <MenuList>
+                        {INDEX_TYPE_FILTERS.map((type) => (
+                            <MenuItemCheckbox key={type} name="type" value={type}>
+                                {type}
+                            </MenuItemCheckbox>
+                        ))}
+                    </MenuList>
+                </MenuPopover>
+            </Menu>
+
+            {/* Quick filter toggles. Presentational for now. */}
+            <ToolbarToggleButton name="quick" value="hidden" appearance="subtle" icon={<EyeOffRegular />}>
+                {l10n.t('Hidden')}
+            </ToolbarToggleButton>
+            <ToolbarToggleButton name="quick" value="unused" appearance="subtle" icon={<PulseRegular />}>
+                {l10n.t('Unused')}
+            </ToolbarToggleButton>
         </Toolbar>
     );
 };

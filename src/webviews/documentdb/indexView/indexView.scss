@@ -23,19 +23,16 @@
         padding: 0 10px;
     }
 
-    // Toolbar between the metrics row and the content: filter box on the left,
-    // Cards/Table view toggle pushed to the right by the flexible spacer.
+    // Filter row between the metrics row and the table: filter box + filter
+    // controls (index-type menu, quick toggles).
     .indexToolbar {
         padding: 0 10px;
         gap: 8px;
+        flex-wrap: wrap;
 
         .indexFilterInput {
             max-width: 280px;
             flex: 0 1 280px;
-        }
-
-        .indexToolbarSpacer {
-            flex: 1 1 auto;
         }
     }
 
@@ -45,212 +42,6 @@
         min-height: 0;
         overflow: auto;
         padding: 0 10px;
-    }
-
-    // Card layout prototype: a vertical stack of labelled design variations,
-    // each a responsive grid of index cards.
-    .indexCardsView {
-        // ===== TUNE ME =====
-        // Minimum card width. The grid auto-fills as many columns as fit, so a
-        // LARGER value means fewer columns (columns are introduced at wider
-        // widths / later). e.g. 260px → 3 columns at ~800px; 320px → 3 columns
-        // at ~980px; 380px → 3 columns at ~1160px.
-        --index-card-min-width: 320px;
-
-        display: flex;
-        flex-direction: column;
-        gap: 20px;
-        padding: 12px 10px 24px;
-
-        .cardMuted {
-            color: var(--colorNeutralForeground3);
-        }
-
-        .cardsVariation {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .cardsVariationTitle {
-            color: var(--colorNeutralForeground2);
-        }
-
-        // Responsive grid: as many columns as fit at `--index-card-min-width`.
-        .cardsGrid {
-            display: grid;
-            gap: 12px;
-            grid-template-columns: repeat(auto-fill, minmax(var(--index-card-min-width), 1fr));
-        }
-
-        .indexCard {
-            gap: 12px;
-        }
-
-        // Name truncates with an ellipsis instead of wrapping.
-        .cardName {
-            display: block;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-            font-weight: var(--fontWeightSemibold);
-        }
-
-        // Title row: [icon] [growing title block] [action].
-        .cardTitleRow {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-
-        .cardTitleBlock {
-            flex: 1 1 auto;
-            min-width: 0;
-        }
-
-        // Leading icon — a single accent colour for every index type.
-        .cardTypeIcon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 32px;
-            height: 32px;
-            border-radius: var(--borderRadiusMedium);
-            background-color: var(--colorNeutralBackground3);
-            color: var(--colorNeutralForeground2);
-            font-size: 20px;
-            flex-shrink: 0;
-        }
-
-        .cardTypeIconAccent {
-            color: var(--colorBrandForeground1);
-        }
-
-        // ===== Big-number stats =====
-        .statLabel {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--colorNeutralForeground3);
-        }
-
-        .statBigItem {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            min-width: 0;
-        }
-
-        .statBigValue {
-            font-size: 24px;
-            font-weight: 600;
-            line-height: 28px;
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
-        // Two figures, spaced.
-        .statsBig {
-            display: flex;
-            gap: 32px;
-            flex-wrap: wrap;
-        }
-
-        // Three unified columns, each 1/3.
-        .statsBig3 {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 12px;
-        }
-
-        // Big figures in bordered cells.
-        .bigStatCells {
-            display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 8px;
-        }
-
-        .bigStatCell {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-            min-width: 0;
-            padding: 8px 10px;
-            border: 1px solid var(--colorNeutralStroke2);
-            border-radius: var(--borderRadiusMedium);
-        }
-
-        // ===== Details toggle + revealed fields =====
-        .cardDetailsBar {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 8px;
-        }
-
-        .detailsFields {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            padding-top: 8px;
-        }
-
-        .componentsLabel {
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        // ===== Key-field chips (revealed fields) =====
-        .keyBadges {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 4px;
-        }
-
-        .keyBadgesEmphasis {
-            gap: 6px;
-        }
-
-        // Explicit, always-legible chip colour (Fluent's subtle Badge rendered
-        // near-invisible text on some themes).
-        .keyChip {
-            display: inline-flex;
-            align-items: baseline;
-            gap: 4px;
-            padding: 1px 6px;
-            border-radius: var(--borderRadiusMedium);
-            background-color: var(--colorNeutralBackground3);
-            border: 1px solid var(--colorNeutralStroke2);
-            font-family: var(--fontFamilyMonospace);
-            font-size: var(--fontSizeBase200);
-        }
-
-        .keyChipEmphasis {
-            padding: 2px 8px;
-            font-size: var(--fontSizeBase300);
-        }
-
-        .keyField {
-            color: var(--colorNeutralForeground1);
-        }
-
-        .keyDir {
-            color: var(--colorNeutralForeground3);
-        }
-
-        // ===== Actions =====
-        .cardFooterRight {
-            justify-content: flex-end;
-        }
-
-        .cardActionsRight {
-            display: flex;
-            gap: 4px;
-        }
-
-        .cardsPrototypeNote {
-            font-style: italic;
-        }
     }
 
     // Wraps the top-of-dashboard summary cards. The MetricsRow grid itself
