@@ -8,21 +8,16 @@ import { type JSX } from 'react';
 import { type IndexTypeBadge } from '../types';
 
 /**
- * Maps each badge label to a Fluent UI Badge `color` token. We rely on the
- * design system's palette (rendered via `--colorPalette*` CSS variables) so
- * the badge tints adapt to the active VS Code theme without introducing any
- * hard-coded hex values.
+ * Colour token for the type badge.
+ *
+ * NOTE: index types are intentionally NOT colour-coded. Colour is a poor
+ * (inaccessible) way to encode a category, and the previous per-type mapping
+ * assigned alarming palette tokens with no real meaning — e.g. Wildcard →
+ * `severe` (orange) and Hashed → `danger` (red) — which wrongly implied those
+ * indexes were problematic. Every type now uses one neutral, legible tint; the
+ * type is communicated by the badge's text label (and the card's icon).
  */
-const BADGE_COLOR: Record<IndexTypeBadge, BadgeProps['color']> = {
-    Default: 'informative',
-    ObjectId: 'subtle',
-    'Single Field': 'brand',
-    Compound: 'important',
-    Text: 'success',
-    Geospatial: 'warning',
-    Wildcard: 'severe',
-    Hashed: 'danger',
-};
+const BADGE_COLOR: BadgeProps['color'] = 'informative';
 
 export interface IndexTypeBadgeViewProps {
     type: IndexTypeBadge;
@@ -34,7 +29,7 @@ export const IndexTypeBadgeView = ({ type, size = 'medium' }: IndexTypeBadgeView
     // Keep multi-word labels (e.g. "Single Field") on one line so the badge
     // doesn't wrap and blow up the row height — use a non-breaking space.
     return (
-        <Badge appearance="tint" color={BADGE_COLOR[type]} shape="rounded" size={size} aria-label={type}>
+        <Badge appearance="tint" color={BADGE_COLOR} shape="rounded" size={size} aria-label={type}>
             {type.replace(/ /g, '\u00A0')}
         </Badge>
     );

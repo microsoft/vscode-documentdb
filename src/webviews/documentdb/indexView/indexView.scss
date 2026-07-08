@@ -151,8 +151,30 @@
             gap: 6px;
         }
 
+        // Custom key-field chip with an explicit, always-legible text colour
+        // (Fluent's subtle Badge rendered near-invisible text on some themes).
+        .keyChip {
+            display: inline-flex;
+            align-items: baseline;
+            gap: 4px;
+            padding: 1px 6px;
+            border-radius: var(--borderRadiusMedium);
+            background-color: var(--colorNeutralBackground3);
+            border: 1px solid var(--colorNeutralStroke2);
+            font-family: var(--fontFamilyMonospace);
+            font-size: var(--fontSizeBase200);
+        }
+
+        .keyChipEmphasis {
+            padding: 2px 8px;
+            font-size: var(--fontSizeBase300);
+        }
+
+        .keyField {
+            color: var(--colorNeutralForeground1);
+        }
+
         .keyDir {
-            margin-inline-start: 4px;
             color: var(--colorNeutralForeground3);
         }
 
@@ -248,9 +270,98 @@
             background-color: var(--colorNeutralBackground2);
         }
 
+        // Same content, no surface panel.
+        .componentsInline {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
         .componentsLabel {
             text-transform: uppercase;
             letter-spacing: 0.04em;
+        }
+
+        // ===== L family: full-width "rich list" rows =====
+        // A vertical stack of full-width cards; each row shares the same grid
+        // template so columns line up across rows (table-like).
+        .cardsList {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+
+            > div {
+                width: 100%;
+            }
+        }
+
+        .indexListCard {
+            width: 100%;
+        }
+
+        .listRow {
+            display: grid;
+            // Columns: name | type | fields | stats | actions.
+            // TUNE column sizing here.
+            grid-template-columns:
+                minmax(140px, 1.4fr)
+                minmax(96px, auto)
+                minmax(140px, 1.6fr)
+                minmax(120px, auto)
+                auto;
+            align-items: start;
+            gap: 16px;
+        }
+
+        .listName {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 0;
+
+            .cardName {
+                min-width: 0;
+            }
+        }
+
+        .listType,
+        .listStats {
+            display: flex;
+            align-items: center;
+        }
+
+        // Fields, one chip per line (stacked).
+        .listFieldLines {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-start;
+            gap: 4px;
+            min-width: 0;
+        }
+
+        // Fields as inline, wrapping chips.
+        .listFieldsInline {
+            min-width: 0;
+        }
+
+        .listActions {
+            display: flex;
+            align-items: center;
+            justify-content: flex-end;
+        }
+
+        // Narrow panels: collapse the row into a simple stack (to be optimised).
+        @media (max-width: 720px) {
+            .listRow {
+                grid-template-columns: 1fr auto;
+                row-gap: 8px;
+
+                .listFieldLines,
+                .listFieldsInline,
+                .listStats {
+                    grid-column: 1 / -1;
+                }
+            }
         }
 
         .cardsPrototypeNote {
