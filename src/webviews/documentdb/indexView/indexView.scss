@@ -84,7 +84,7 @@
         }
 
         .indexCard {
-            gap: 10px;
+            gap: 12px;
         }
 
         // Name truncates with an ellipsis instead of wrapping.
@@ -96,8 +96,7 @@
             font-weight: var(--fontWeightSemibold);
         }
 
-        // Robust title row: [icon] [growing title block] [action]. The block
-        // grows and clamps so the name always renders and ellipsises.
+        // Title row: [icon] [growing title block] [action].
         .cardTitleRow {
             display: flex;
             align-items: center;
@@ -109,14 +108,7 @@
             min-width: 0;
         }
 
-        .cardMetaRow {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        // Leading icon surface — a single accent colour for every index type.
+        // Leading icon — a single accent colour for every index type.
         .cardTypeIcon {
             display: inline-flex;
             align-items: center;
@@ -134,20 +126,81 @@
             color: var(--colorBrandForeground1);
         }
 
-        // Filled accent tile (icon reversed out of the accent).
-        .cardTypeTile {
-            background-color: var(--colorBrandBackground);
-            color: var(--colorNeutralForegroundOnBrand);
+        // ===== Big-number stats =====
+        .statLabel {
+            font-size: 12px;
+            font-weight: 600;
+            color: var(--colorNeutralForeground3);
         }
 
-        // No background — just the icon in the accent colour (Query Insights AI
-        // card style). Keep the box size so it aligns with the other treatments.
-        .cardTypeIconPlain {
-            background-color: transparent;
-            color: var(--colorBrandForeground1);
+        .statBigItem {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
         }
 
-        // Key-component chips (field + direction).
+        .statBigValue {
+            font-size: 24px;
+            font-weight: 600;
+            line-height: 28px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        // Two figures, spaced.
+        .statsBig {
+            display: flex;
+            gap: 32px;
+            flex-wrap: wrap;
+        }
+
+        // Three unified columns, each 1/3.
+        .statsBig3 {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 12px;
+        }
+
+        // Big figures in bordered cells.
+        .bigStatCells {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 8px;
+        }
+
+        .bigStatCell {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+            padding: 8px 10px;
+            border: 1px solid var(--colorNeutralStroke2);
+            border-radius: var(--borderRadiusMedium);
+        }
+
+        // ===== Details toggle + revealed fields =====
+        .cardDetailsBar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+        }
+
+        .detailsFields {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-top: 8px;
+        }
+
+        .componentsLabel {
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+        }
+
+        // ===== Key-field chips (revealed fields) =====
         .keyBadges {
             display: flex;
             flex-wrap: wrap;
@@ -158,8 +211,8 @@
             gap: 6px;
         }
 
-        // Custom key-field chip with an explicit, always-legible text colour
-        // (Fluent's subtle Badge rendered near-invisible text on some themes).
+        // Explicit, always-legible chip colour (Fluent's subtle Badge rendered
+        // near-invisible text on some themes).
         .keyChip {
             display: inline-flex;
             align-items: baseline;
@@ -185,60 +238,7 @@
             color: var(--colorNeutralForeground3);
         }
 
-        // Quiet single-line stats (no icons — kept intentionally small/plain).
-        .mutedStatsLine {
-            display: flex;
-            align-items: center;
-            flex-wrap: wrap;
-            gap: 6px;
-            width: fit-content;
-            color: var(--colorNeutralForeground3);
-            font-size: var(--fontSizeBase200);
-        }
-
-        .statDot {
-            opacity: 0.6;
-        }
-
-        .statTooltip {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        // Small-caps stat label + big figures.
-        .statLabel {
-            font-size: 12px;
-            font-weight: 600;
-            color: var(--colorNeutralForeground3);
-        }
-
-        .statsBig {
-            display: flex;
-            gap: 24px;
-            flex-wrap: wrap;
-        }
-
-        .statBigItem {
-            display: flex;
-            flex-direction: column;
-            gap: 2px;
-        }
-
-        .statBigValue {
-            font-size: 24px;
-            font-weight: 600;
-            line-height: 28px;
-        }
-
-        // Accessible stat badges row.
-        .statBadges {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-        }
-
-        // Right-aligned footer + inline icon actions.
+        // ===== Actions =====
         .cardFooterRight {
             justify-content: flex-end;
         }
@@ -246,135 +246,6 @@
         .cardActionsRight {
             display: flex;
             gap: 4px;
-        }
-
-        // F4 — accent icon tile (horizontal).
-        .freshTile {
-            align-items: flex-start;
-
-            .cardTypeTile {
-                width: 40px;
-                height: 40px;
-                font-size: 22px;
-            }
-        }
-
-        .tileBody {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            min-width: 0;
-            flex: 1 1 auto;
-        }
-
-        // F5 — component chips are the hero: a readable, padded panel.
-        .componentsHero {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-            padding: 10px;
-            border-radius: var(--borderRadiusMedium);
-            background-color: var(--colorNeutralBackground2);
-        }
-
-        // Same content, no surface panel.
-        .componentsInline {
-            display: flex;
-            flex-direction: column;
-            gap: 6px;
-        }
-
-        .componentsLabel {
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-        }
-
-        // ===== L family: full-width "rich list" rows =====
-        // A single-column grid; `grid-auto-rows: 1fr` makes EVERY row the same
-        // height (the tallest row's height), so entries with more/less fields
-        // stay aligned as a uniform table-like list.
-        .cardsList {
-            display: grid;
-            grid-template-columns: 1fr;
-            grid-auto-rows: 1fr;
-            gap: 8px;
-
-            > div {
-                width: 100%;
-                height: 100%;
-            }
-        }
-
-        .indexListCard {
-            width: 100%;
-            height: 100%;
-        }
-
-        // Fixed (non-fr) column widths so columns line up across every card —
-        // each card is its own grid, so only fixed tracks + a single flexible
-        // Fields column resolve to the same widths on all rows. TUNE here.
-        .listRow {
-            display: grid;
-            grid-template-columns:
-                minmax(160px, 260px) // name
-                110px // type
-                minmax(0, 1fr) // fields (flexible)
-                150px // stats
-                auto; // actions
-            align-items: center;
-            gap: 16px;
-            height: 100%;
-        }
-
-        .listName {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            min-width: 0;
-
-            .cardName {
-                min-width: 0;
-            }
-        }
-
-        .listType,
-        .listStats {
-            display: flex;
-            align-items: center;
-        }
-
-        // Fields, one chip per line (stacked).
-        .listFieldLines {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-start;
-            gap: 4px;
-            min-width: 0;
-        }
-
-        // Fields as inline, wrapping chips.
-        .listFieldsInline {
-            min-width: 0;
-        }
-
-        .listActions {
-            display: flex;
-            align-items: center;
-            justify-content: flex-end;
-        }
-
-        // Narrow panels: collapse the row into a simple stack (to be optimised).
-        @media (max-width: 720px) {
-            .listRow {
-                grid-template-columns: 1fr auto;
-                row-gap: 8px;
-
-                .listFieldLines,
-                .listFieldsInline,
-                .listStats {
-                    grid-column: 1 / -1;
-                }
-            }
         }
 
         .cardsPrototypeNote {
