@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    Badge,
     Body1,
     Button,
     Caption1,
@@ -20,7 +19,6 @@ import {
     Tooltip,
 } from '@fluentui/react-components';
 import {
-    DataUsageRegular,
     DeleteRegular,
     DocumentMultipleRegular,
     EyeOffRegular,
@@ -31,12 +29,10 @@ import {
     NumberSymbolRegular,
     SquareMultipleRegular,
     StarRegular,
-    StorageRegular,
     TextAlignLeftRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
-import '../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow, type IndexTypeBadge } from '../types';
 import { formatBytes, formatDate, formatOps, formatSinceTooltip } from '../utils/format';
 import { classifyIndex } from '../utils/indexType';
@@ -54,15 +50,13 @@ interface IndexCardProps {
     onToggleHidden: (index: IndexRow) => void;
 }
 
+/** Icon rendering treatment for the leading index icon. */
+type IconVariant = 'surface' | 'tile' | 'plain';
+
 // ---------------------------------------------------------------------------
 // Icons (per type) — a single accent colour for all types (no colour coding).
 // ---------------------------------------------------------------------------
 
-/**
- * Icon per index type. Single Field uses SquareMultiple to match the `combine`
- * codicon shown for indexes in the tree view; the rest get a thematic icon.
- * Colour is a single theme accent for every type (we don't colour-code types).
- */
 const TYPE_ICON: Record<IndexTypeBadge, JSX.Element> = {
     Default: <KeyRegular />,
     ObjectId: <KeyRegular />,
@@ -74,15 +68,14 @@ const TYPE_ICON: Record<IndexTypeBadge, JSX.Element> = {
     Hashed: <NumberSymbolRegular />,
 };
 
-const IndexIcon = ({ index }: { index: IndexRow }): JSX.Element => (
-    <span className="cardTypeIcon cardTypeIconAccent" aria-hidden="true">
-        {TYPE_ICON[classifyIndex(index)]}
-    </span>
-);
+const ICON_VARIANT_CLASS: Record<IconVariant, string> = {
+    surface: 'cardTypeIcon cardTypeIconAccent', // neutral surface + accent icon
+    tile: 'cardTypeIcon cardTypeTile', // accent background + reversed icon (F4 style)
+    plain: 'cardTypeIcon cardTypeIconPlain', // no background, accent icon (Query Insights AI style)
+};
 
-/** Filled accent tile variant of the icon (icon reversed out of the accent). */
-const IndexTile = ({ index }: { index: IndexRow }): JSX.Element => (
-    <span className="cardTypeIcon cardTypeTile" aria-hidden="true">
+const IndexIcon = ({ index, variant = 'surface' }: { index: IndexRow; variant?: IconVariant }): JSX.Element => (
+    <span className={ICON_VARIANT_CLASS[variant]} aria-hidden="true">
         {TYPE_ICON[classifyIndex(index)]}
     </span>
 );
@@ -97,12 +90,10 @@ function directionGlyph(direction: number | string): string {
     return String(direction);
 }
 
-/** The index's key fields as chips (field + direction). `emphasis` makes them readable/larger. */
+/** The index's key fields as chips (field + direction). `emphasis` makes them larger. */
 const KeyBadges = ({ index, emphasis }: { index: IndexRow; emphasis?: boolean }): JSX.Element => (
     <div className={emphasis ? 'keyBadges keyBadgesEmphasis' : 'keyBadges'}>
         {index.key.map((k, i) => (
-            // Custom chip (not a Fluent Badge) so the field-name text has an
-            // explicit, always-legible colour on any card surface.
             <span key={`${k.field}-${i}`} className={emphasis ? 'keyChip keyChipEmphasis' : 'keyChip'}>
                 <span className="keyField">{k.field}</span>
                 <span className="keyDir">{directionGlyph(k.direction)}</span>
@@ -111,23 +102,32 @@ const KeyBadges = ({ index, emphasis }: { index: IndexRow; emphasis?: boolean })
     </div>
 );
 
-/**
- * Robust title row: optional icon, an ellipsised name that always renders
- * (grows inside its own min-width:0 block), and an optional trailing action.
- */
+/** Key fields stacked one per line (Fields column of the list layout). */
+const KeyLines = ({ index }: { index: IndexRow }): JSX.Element => (
+    <div className="listFieldLines">
+        {index.key.map((k, i) => (
+            <span key={`${k.field}-${i}`} className="keyChip">
+                <span className="keyField">{k.field}</span>
+                <span className="keyDir">{directionGlyph(k.direction)}</span>
+            </span>
+        ))}
+    </div>
+);
+
+/** Robust title row: optional icon, an always-rendered ellipsised name, optional action. */
 const TitleRow = ({
     index,
-    withIcon,
+    iconVariant,
     big,
     action,
 }: {
     index: IndexRow;
-    withIcon?: boolean;
+    iconVariant?: IconVariant;
     big?: boolean;
     action?: JSX.Element;
 }): JSX.Element => (
     <div className="cardTitleRow">
-        {withIcon && <IndexIcon index={index} />}
+        {iconVariant && <IndexIcon index={index} variant={iconVariant} />}
         <div className="cardTitleBlock">
             {big ? (
                 <Subtitle2 className="cardName" title={index.name}>
@@ -143,43 +143,7 @@ const TitleRow = ({
     </div>
 );
 
-/** Accessible (keyboard-focusable), small stat badge — matches Query Insights sizing. */
-const StatBadge = ({ icon, label, tooltip }: { icon: JSX.Element; label: string; tooltip: string }): JSX.Element => (
-    <Tooltip content={tooltip} relationship="description">
-        <Badge
-            appearance="tint"
-            shape="rounded"
-            size="small"
-            color="informative"
-            icon={icon}
-            tabIndex={0}
-            className="focusableBadge"
-            aria-label={label}
-        >
-            <span aria-hidden="true">{label}</span>
-        </Badge>
-    </Tooltip>
-);
-
-const StatsBadges = ({ index }: { index: IndexRow }): JSX.Element => (
-    <div className="statBadges">
-        <StatBadge
-            icon={<StorageRegular />}
-            label={l10n.t('Size {0}', formatBytes(index.sizeBytes))}
-            tooltip={l10n.t('On-disk size of this index.')}
-        />
-        <StatBadge
-            icon={<DataUsageRegular />}
-            label={l10n.t('Usage {0}', formatOps(index.usageOps))}
-            tooltip={formatSinceTooltip(index.usageSince)}
-        />
-    </div>
-);
-
-/**
- * Minimal, icon-free stats line for the "hero" cards: size · usage · since.
- * Focusable, with the same tooltip depth as the stat badges.
- */
+/** Minimal, icon-free stats line: size · usage · since. Focusable, with a full tooltip. */
 const MinimalStats = ({ index }: { index: IndexRow }): JSX.Element => (
     <Tooltip
         relationship="description"
@@ -191,7 +155,7 @@ const MinimalStats = ({ index }: { index: IndexRow }): JSX.Element => (
             </div>
         }
     >
-        {/* Focusable so keyboard users get the same tooltip depth as the stat badges. */}
+        {/* Focusable so keyboard users get the same tooltip depth as the badges. */}
         {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
         <div className="mutedStatsLine" tabIndex={0} role="group" aria-label={l10n.t('Index statistics')}>
             <span>{formatBytes(index.sizeBytes)}</span>
@@ -294,95 +258,42 @@ const IconActionsRight = ({ index, onDelete, onToggleHidden }: IndexCardProps): 
     </div>
 );
 
-// ---------------------------------------------------------------------------
-// Kept variants: 3D, 3D+, F4 tile
-// ---------------------------------------------------------------------------
-
-// 3D — accessible stat badges + right-aligned footer.
-const Card3D = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow index={index} withIcon action={<IndexTypeBadgeView type={classifyIndex(index)} size="small" />} />
-        <StatsBadges index={index} />
-        <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
-    </Card>
-);
-
-// 3D+ — big figures + right-aligned footer.
-const Card3DBig = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow index={index} withIcon action={<IndexTypeBadgeView type={classifyIndex(index)} size="small" />} />
-        <StatsBig index={index} />
-        <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
-    </Card>
-);
-
-// F4 — accent icon tile (single accent), key chips, quiet stats, overflow menu.
-const CardTile = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard freshTile" appearance="filled" orientation="horizontal">
-        <IndexTile index={index} />
-        <div className="tileBody">
-            <div className="cardTitleRow">
-                <div className="cardTitleBlock">
-                    <Body1 className="cardName" title={index.name}>
-                        {index.name}
-                    </Body1>
-                </div>
-                <OverflowMenu index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
-            </div>
-            <IndexTypeBadgeView type={classifyIndex(index)} size="small" />
-            <KeyBadges index={index} />
-            <MinimalStats index={index} />
-        </div>
-    </Card>
-);
-
-// ---------------------------------------------------------------------------
-// F3 family — minimal "hero" cards (filled surface). Vary icon + actions.
-// ---------------------------------------------------------------------------
-
-const HeroMeta = ({ index }: { index: IndexRow }): JSX.Element => (
-    <div className="cardMetaRow">
-        <IndexTypeBadgeView type={classifyIndex(index)} size="small" />
-        <KeyBadges index={index} />
+/** Hide/Unhide with a visible label + icon-only Delete, right-aligned. */
+const LabeledActions = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+    <div className="cardActionsRight">
+        <Button
+            size="small"
+            appearance="subtle"
+            icon={index.hidden ? <EyeRegular /> : <EyeOffRegular />}
+            disabled={index.isDefault}
+            onClick={() => onToggleHidden(index)}
+        >
+            {index.hidden ? l10n.t('Unhide') : l10n.t('Hide')}
+        </Button>
+        <Tooltip content={l10n.t('Delete')} relationship="label">
+            <Button
+                size="small"
+                appearance="subtle"
+                icon={<DeleteRegular />}
+                disabled={index.isDefault}
+                aria-label={l10n.t('Delete {0}', index.name)}
+                onClick={() => onDelete(index)}
+            />
+        </Tooltip>
     </div>
 );
 
-// F3a — no icon, no action buttons (cleanest).
-const CardF3a = ({ index }: { index: IndexRow }): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow index={index} big />
-        <HeroMeta index={index} />
-        <MinimalStats index={index} />
-    </Card>
-);
-
-// F3b — no icon, overflow (…) menu.
-const CardF3b = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow
-            index={index}
-            big
-            action={<OverflowMenu index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />}
-        />
-        <HeroMeta index={index} />
-        <MinimalStats index={index} />
-    </Card>
-);
-
-// F3c — with icon + footer buttons.
-const CardF3c = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow index={index} withIcon big />
-        <HeroMeta index={index} />
-        <MinimalStats index={index} />
-        <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
-    </Card>
-);
-
 // ---------------------------------------------------------------------------
-// F5 family — component-forward cards (key chips are the hero). Vary icon,
-// panel vs. inline chips, and actions.
+// Component content blocks
 // ---------------------------------------------------------------------------
+
+/** Key chips inline (no surface panel); optional "Fields" label. */
+const ComponentsInline = ({ index, showLabel }: { index: IndexRow; showLabel?: boolean }): JSX.Element => (
+    <div className="componentsInline">
+        {showLabel && <Caption1 className="cardMuted componentsLabel">{l10n.t('Fields')}</Caption1>}
+        <KeyBadges index={index} emphasis />
+    </div>
+);
 
 /** Key chips in a padded, labelled panel. */
 const ComponentsHero = ({ index }: { index: IndexRow }): JSX.Element => (
@@ -392,100 +303,78 @@ const ComponentsHero = ({ index }: { index: IndexRow }): JSX.Element => (
     </div>
 );
 
-/** Key chips inline (no surface panel). */
-const ComponentsInline = ({ index }: { index: IndexRow }): JSX.Element => (
-    <div className="componentsInline">
-        <Caption1 className="cardMuted componentsLabel">{l10n.t('Fields')}</Caption1>
-        <KeyBadges index={index} emphasis />
-    </div>
+// ---------------------------------------------------------------------------
+// Grid card variants (kept per feedback)
+// ---------------------------------------------------------------------------
+
+// 3D+ — big figures, kept as a reference.
+const Card3DBig = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+    <Card className="indexCard" appearance="filled">
+        <TitleRow
+            index={index}
+            iconVariant="surface"
+            action={<IndexTypeBadgeView type={classifyIndex(index)} size="small" />}
+        />
+        <StatsBig index={index} />
+        <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
+    </Card>
 );
 
-// F5a — icon, panel, footer buttons.
-const CardF5a = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+// F3c — minimal hero with the type badge in the upper-right corner.
+const CardF3c = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
     <Card className="indexCard" appearance="filled">
-        <TitleRow index={index} withIcon action={<IndexTypeBadgeView type={classifyIndex(index)} size="small" />} />
-        <ComponentsHero index={index} />
+        <TitleRow
+            index={index}
+            iconVariant="surface"
+            big
+            action={<IndexTypeBadgeView type={classifyIndex(index)} size="small" />}
+        />
+        <KeyBadges index={index} />
         <MinimalStats index={index} />
         <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
     </Card>
 );
 
-// F5b — no icon, panel, overflow (…) menu.
-const CardF5b = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
+// F5c — component panel; Hide/Unhide shows its label. `iconVariant` undefined = no icon.
+const CardF5c = ({
+    index,
+    onDelete,
+    onToggleHidden,
+    iconVariant,
+}: IndexCardProps & { iconVariant?: IconVariant }): JSX.Element => (
     <Card className="indexCard" appearance="filled">
         <TitleRow
             index={index}
+            iconVariant={iconVariant}
+            action={<LabeledActions index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />}
+        />
+        <ComponentsHero index={index} />
+        <MinimalStats index={index} />
+    </Card>
+);
+
+// F5e — inline chips (no frame), overflow menu; optional "Fields" label.
+const CardF5e = ({
+    index,
+    onDelete,
+    onToggleHidden,
+    showLabel,
+}: IndexCardProps & { showLabel?: boolean }): JSX.Element => (
+    <Card className="indexCard" appearance="filled">
+        <TitleRow
+            index={index}
+            iconVariant="surface"
             action={<OverflowMenu index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />}
         />
-        <IndexTypeBadgeView type={classifyIndex(index)} size="small" />
-        <ComponentsHero index={index} />
-        <StatsBadges index={index} />
-    </Card>
-);
-
-// F5c — icon, panel, icon-only action buttons.
-const CardF5c = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow
-            index={index}
-            withIcon
-            action={<IconActionsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />}
-        />
-        <ComponentsHero index={index} />
+        <ComponentsInline index={index} showLabel={showLabel} />
         <MinimalStats index={index} />
-    </Card>
-);
-
-// F5d — NO icon, big title (F3 style), panel, footer buttons.
-const CardF5d = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow index={index} big action={<IndexTypeBadgeView type={classifyIndex(index)} size="small" />} />
-        <ComponentsHero index={index} />
-        <MinimalStats index={index} />
-        <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
-    </Card>
-);
-
-// F5e — icon, NO gray panel (inline chips), overflow (…) menu.
-const CardF5e = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow
-            index={index}
-            withIcon
-            action={<OverflowMenu index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />}
-        />
-        <ComponentsInline index={index} />
-        <MinimalStats index={index} />
-    </Card>
-);
-
-// F5f — NO icon, big title, NO gray panel (inline chips), footer buttons.
-const CardF5f = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
-    <Card className="indexCard" appearance="filled">
-        <TitleRow index={index} big action={<IndexTypeBadgeView type={classifyIndex(index)} size="small" />} />
-        <ComponentsInline index={index} />
-        <MinimalStats index={index} />
-        <FooterButtonsRight index={index} onDelete={onDelete} onToggleHidden={onToggleHidden} />
     </Card>
 );
 
 // ---------------------------------------------------------------------------
-// L family — full-width "rich list" rows. Each card spans the row; a shared
-// grid template keeps columns aligned across rows (table-like). Key components
-// stack one per line; actions sit at the far right.
+// L family — full-width "rich list" rows (fixed columns align across rows;
+// all rows equal height).
 // ---------------------------------------------------------------------------
-
-/** Key fields stacked one per line (Fields column of the list layout). */
-const KeyLines = ({ index }: { index: IndexRow }): JSX.Element => (
-    <div className="listFieldLines">
-        {index.key.map((k, i) => (
-            <span key={`${k.field}-${i}`} className="keyChip">
-                <span className="keyField">{k.field}</span>
-                <span className="keyDir">{directionGlyph(k.direction)}</span>
-            </span>
-        ))}
-    </div>
-);
 
 // L1 — no icon, stacked field lines, icon actions at far right.
 const CardL1 = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Element => (
@@ -568,10 +457,9 @@ const CardL3 = ({ index, onDelete, onToggleHidden }: IndexCardProps): JSX.Elemen
  * Card layout for the Index Management tab — the comfortable view intended for
  * collections with only a handful of indexes.
  *
- * PROTOTYPE gallery: kept 3D / 3D+ / tile designs plus F3 (minimal hero) and
- * F5 (component-forward) families, each explored with / without an icon and
- * with different action treatments (none, footer buttons, icon buttons,
- * overflow menu). A single accent colour is used for every index type.
+ * PROTOTYPE gallery (trimmed to the promising directions): a big-figures
+ * reference, the F3c minimal hero, the F5 component families (with icon
+ * treatments + label options), and the full-width L rich-list rows.
  */
 export const IndexCardsView = ({ indexes, onDelete, onToggleHidden }: IndexCardsViewProps): JSX.Element => {
     if (indexes.length === 0) {
@@ -588,49 +476,42 @@ export const IndexCardsView = ({ indexes, onDelete, onToggleHidden }: IndexCards
         render: (index: IndexRow) => JSX.Element;
     }> = [
         {
-            title: l10n.t('3D — Stat badges + footer'),
-            render: (idx) => <Card3D index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
-        },
-        {
-            title: l10n.t('3D+ — Big figures + footer'),
+            title: l10n.t('3D+ — Big figures (reference)'),
             render: (idx) => <Card3DBig index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
         },
         {
-            title: l10n.t('F4 — Accent icon tile'),
-            render: (idx) => <CardTile index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
-        },
-        { title: l10n.t('F3a — Minimal hero (no icon, no actions)'), render: (idx) => <CardF3a index={idx} /> },
-        {
-            title: l10n.t('F3b — Minimal hero (no icon, … menu)'),
-            render: (idx) => <CardF3b index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
-        },
-        {
-            title: l10n.t('F3c — Minimal hero (icon + footer)'),
+            title: l10n.t('F3c — Minimal hero (type badge top-right)'),
             render: (idx) => <CardF3c index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
         },
         {
-            title: l10n.t('F5a — Components (icon + footer)'),
-            render: (idx) => <CardF5a index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
+            title: l10n.t('F5c — Components (icon on surface, labeled Hide)'),
+            render: (idx) => (
+                <CardF5c index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} iconVariant="surface" />
+            ),
         },
         {
-            title: l10n.t('F5b — Components (no icon, … menu)'),
-            render: (idx) => <CardF5b index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
-        },
-        {
-            title: l10n.t('F5c — Components (icon + icon actions)'),
+            title: l10n.t('F5c — Components (no icon, labeled Hide)'),
             render: (idx) => <CardF5c index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
         },
         {
-            title: l10n.t('F5d — Components (no icon, big title, footer)'),
-            render: (idx) => <CardF5d index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
+            title: l10n.t('F5c — Components (accent tile icon)'),
+            render: (idx) => (
+                <CardF5c index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} iconVariant="tile" />
+            ),
         },
         {
-            title: l10n.t('F5e — Components (icon, no panel, … menu)'),
+            title: l10n.t('F5c — Components (accent icon, no background)'),
+            render: (idx) => (
+                <CardF5c index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} iconVariant="plain" />
+            ),
+        },
+        {
+            title: l10n.t('F5e — Inline fields (with “Fields” label)'),
+            render: (idx) => <CardF5e index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} showLabel />,
+        },
+        {
+            title: l10n.t('F5e — Inline fields (no label)'),
             render: (idx) => <CardF5e index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
-        },
-        {
-            title: l10n.t('F5f — Components (no icon, no panel, footer)'),
-            render: (idx) => <CardF5f index={idx} onDelete={onDelete} onToggleHidden={onToggleHidden} />,
         },
         {
             title: l10n.t('L1 — Rich list (no icon, stacked fields, icon actions)'),

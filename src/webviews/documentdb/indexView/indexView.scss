@@ -140,6 +140,13 @@
             color: var(--colorNeutralForegroundOnBrand);
         }
 
+        // No background — just the icon in the accent colour (Query Insights AI
+        // card style). Keep the box size so it aligns with the other treatments.
+        .cardTypeIconPlain {
+            background-color: transparent;
+            color: var(--colorBrandForeground1);
+        }
+
         // Key-component chips (field + direction).
         .keyBadges {
             display: flex;
@@ -283,34 +290,40 @@
         }
 
         // ===== L family: full-width "rich list" rows =====
-        // A vertical stack of full-width cards; each row shares the same grid
-        // template so columns line up across rows (table-like).
+        // A single-column grid; `grid-auto-rows: 1fr` makes EVERY row the same
+        // height (the tallest row's height), so entries with more/less fields
+        // stay aligned as a uniform table-like list.
         .cardsList {
-            display: flex;
-            flex-direction: column;
+            display: grid;
+            grid-template-columns: 1fr;
+            grid-auto-rows: 1fr;
             gap: 8px;
 
             > div {
                 width: 100%;
+                height: 100%;
             }
         }
 
         .indexListCard {
             width: 100%;
+            height: 100%;
         }
 
+        // Fixed (non-fr) column widths so columns line up across every card —
+        // each card is its own grid, so only fixed tracks + a single flexible
+        // Fields column resolve to the same widths on all rows. TUNE here.
         .listRow {
             display: grid;
-            // Columns: name | type | fields | stats | actions.
-            // TUNE column sizing here.
             grid-template-columns:
-                minmax(140px, 1.4fr)
-                minmax(96px, auto)
-                minmax(140px, 1.6fr)
-                minmax(120px, auto)
-                auto;
-            align-items: start;
+                minmax(160px, 260px) // name
+                110px // type
+                minmax(0, 1fr) // fields (flexible)
+                150px // stats
+                auto; // actions
+            align-items: center;
             gap: 16px;
+            height: 100%;
         }
 
         .listName {
