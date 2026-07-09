@@ -174,7 +174,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             createGenericElementWithContext({
                 id: `${this.id}/start`,
                 contextValue: 'treeItem_quickStartAction',
-                label: l10n.t('Click here to install & try DocumentDB locally'),
+                label: l10n.t('Click here to start DocumentDB Local'),
                 iconPath: new vscode.ThemeIcon('rocket'),
                 commandId: 'vscode-documentdb.command.localQuickStart.open',
             }),
