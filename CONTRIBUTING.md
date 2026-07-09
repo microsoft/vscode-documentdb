@@ -321,6 +321,25 @@ This process keeps the quality bar high.
 
 For complex problems, or general problems the review discovers, the author is free to ask the agent to create an issue on the repo and summarize it. This makes sense especially for low-severity, nice-to-have items. It lets the PR move forward while keeping track of things that can be done in another iteration, and it is a good source of "good first issue" items for future contributors.
 
+### 6.6 Reviewing UX and workflows with an agent (recommended, under evaluation)
+
+> **Status:** This is a **recommendation**, not a hard rule. The workflow is currently in use and being evaluated, so treat it as a pattern to try and give feedback on rather than a fixed process.
+
+The stages above target code review. UX and workflow review is different: the value comes from actually using the extension and exercising real user journeys, not from reading a diff. The recommended pattern here is a **person paired with an agent on the side**: the person steers, the agent reads the code, checks claims against it, and keeps the running log.
+
+A worked example lives in [`docs/ai-and-plans/PRs/621-kubernetes-discovery/bugbash-090-kubernetes-ux-review.md`](docs/ai-and-plans/PRs/621-kubernetes-discovery/bugbash-090-kubernetes-ux-review.md).
+
+How the pattern works:
+
+- **The person drives the UX.** You try the extension, walk the flows, and share what you find with the agent. The agent does the reading, verifies behavior against the current code, drafts wording, and records decisions.
+- **Split the work into phases by user journey**, not by issue number. For example: first-run and empty states, adding a source, tree presentation, connectivity and tooltips, and so on. Discuss, decide, and implement one phase, then **close it out before moving to the next**.
+- **Why phase it:** the agent's working context stays lean, because only the slice of code and discussion relevant to the current phase is loaded at any time, which keeps the analysis accurate instead of sprawling. The reviewer's attention also stays on one coherent area at a time.
+- **Keep a running log** in the PR's `docs/ai-and-plans/` folder. Each iteration records the feedback that came in, the reasoning, the decision, and what was actually implemented, so a future reader, human or agent, can pick up any single phase cold and understand both what was decided and why.
+- **Ask the agent for tests** as discoveries land, so behavior agreed during the review is locked in rather than re-derived later.
+- **Use scannable status markers** (for example Done, Partial or Deferred, Flag, Won't fix) so the state of each item is visible at a glance.
+- **Extract out-of-scope findings into issues.** A UX review often surfaces things that are beyond the PR's scope, or that would risk delaying the merge if pulled in now. When that happens, ask the agent to file an issue on the repo summarizing the finding and link it from the log. This keeps the current PR focused and mergeable while making sure nothing discovered is lost.
+- **Reconcile after merge.** A running log goes stale the moment behavior changes. Once the work merges, stamp the log with a short note pointing to the current source of truth (the user manual and the pre-merge code review), so nobody mistakes an old iteration for current behavior.
+
 ## 7. Release Process
 
 This section is for maintainers cutting a release. It is written so a maintainer, with or without an AI agent, can follow it end to end. The steps assume the release content has already been decided and the relevant PRs are merged to `main` (see [1.3 Releases](#13-releases)).
