@@ -270,7 +270,7 @@ The canonical location is `docs/ai-and-plans/` (see PR #766). Use that exact pat
 
 ### 5.1 Per-PR documentation
 
-Per-PR documentation lives in `docs/ai-and-plans/PRs/<pr-number>-slug/`, for example `docs/ai-and-plans/PRs/766-webview-package/`. This folder holds:
+Per-PR documentation lives in `docs/ai-and-plans/PRs/<pr-number>-slug/`, for example `docs/ai-and-plans/PRs/766-webview-ext-package-redesign/`. This folder holds:
 
 - the planning doc(s) for the PR, and
 - a progress-and-decision log.
