@@ -2,23 +2,27 @@
 
 Thank you for your interest in contributing to the **DocumentDB for VS Code** extension. This guide helps you set up your development environment and configure Visual Studio Code to effectively contribute to the extension.
 
-The document consists of four sections:
+The document consists of six sections:
 
 1. [Branching Strategy](#1-branching-strategy)
 2. [Machine Setup](#2-machine-setup)
 3. [VS Code Configuration](#3-vs-code-configuration)
 4. [PR Submission Checklist](#4-pr-submission-checklist)
+5. [Documenting Work with AI](#5-documenting-work-with-ai)
+6. [AI-Assisted Review Workflow](#6-ai-assisted-review-workflow)
 
 ## 1. Branching Strategy
 
 ### 1.1 Branch overview
 
-| Branch               | Purpose                                                                      | Lifetime                                     |
-| -------------------- | ---------------------------------------------------------------------------- | -------------------------------------------- |
-| `main`               | Default trunk. All PRs target it. Always open.                               | Long-lived                                   |
-| `release/<X.Y>`      | Stabilization + patch line for one minor release. Cut from `main` at freeze. | Short (days to cut, kept around for patches) |
-| `dev/<user>/<topic>` | Personal working branches                                                    | Short                                        |
-| `feature/<name>`     | Shared collaboration on large features before they are ready for `main`      | Variable                                     |
+| Branch               | Purpose                                                                                         | Force pushes  | Lifetime                                  |
+| -------------------- | ----------------------------------------------------------------------------------------------- | ------------- | ----------------------------------------- |
+| `main`               | Default trunk. All PRs target it. Always open. Releases are tagged here.                        | No, protected | Long-lived                                |
+| `dev/<user>/<topic>` | Personal working branches                                                                       | Allowed       | Short                                     |
+| `feature/<name>`     | Shared collaboration on large features before they are ready for `main`                         | Discouraged   | Variable                                  |
+| `release/<X.Y>`      | Created only when a patch must ship while `main` is not releasable. Branched off a release tag. | Discouraged   | Short (deleted after the patch is tagged) |
+
+See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the force-push column.
 
 ### 1.2 GitHub Actions
 
@@ -30,20 +34,28 @@ CI runs automatically on:
 
 ### 1.3 Releases
 
-Releases are cut from a `release/<X.Y>` branch, not from `main` directly:
+Releases are tags-first. Normally there are no release branches at all:
 
-1. When the team is ready to freeze, a maintainer cuts `release/0.9` from a chosen `main` commit and pushes it.
-2. Stabilization (bug fixes only) happens on the release branch. Each fix is opened as a PR to `release/<X.Y>`, reviewed, merged, and immediately forward-merged to `main` so `main` stays up to date.
-3. When stable, the maintainer tags `v0.9.0` on the release branch and publishes from that tag.
-4. Patch releases (`v0.9.1`, `v0.9.2`, …) tag later commits on the same branch.
+1. When the team is ready to release, a maintainer tags a chosen `main` commit, for example `v0.9.0`, and publishes from that tag. Every release has a tag.
+2. Later patch releases (`v0.9.1`, `v0.9.2`, and so on) normally tag later commits on `main` in the same way.
 
-**The cut point is the content decision.** If you have a PR you want in the upcoming release, merge it to `main` before the release branch is cut. Once the branch is cut, new PRs merged to `main` target the _next_ release.
+A `release/<X.Y>` branch is created for one scenario only: a quick patch release must ship while `main` is not yet in a releasable state. In that case:
 
-> **Example:** The team is preparing v0.9. A contributor submits PR #690 — a small connection timeout fix the team wants to include. The maintainer merges #690 to `main`, then cuts `release/0.9` — the fix is in. At the same time, PR #695 proposes a complex new authentication flow that isn't fully ready. The release branch is cut before #695 merges; #695 lands on `main` afterward and ships in v0.10.
+1. Branch `release/<X.Y>` off the relevant release tag, for example off `v0.9.0`.
+2. Apply the patch on that branch and open it as a PR to `release/<X.Y>`.
+3. Tag the patch release (`v0.9.1`) on that branch and publish from the tag.
+4. Forward-merge the fix back into `main` so `main` stays up to date.
+5. Delete the release branch. The tag preserves the release permanently, so deleting the branch is safe and loses nothing. If another patch is needed later, re-branch from the tag.
+
+**The tag is the release.** If you have a PR you want in the upcoming release, merge it to `main` before the release is tagged. Once a version is tagged, new PRs merged to `main` target the _next_ release.
+
+> **Example:** The team is preparing v0.9. A contributor submits PR #690, a small connection timeout fix the team wants to include. The maintainer merges #690 to `main`, then tags `v0.9.0` on that commit, so the fix is in. Later, a critical bug is found but `main` already contains half-finished work for v0.10. The maintainer branches `release/0.9` off the `v0.9.0` tag, applies the fix, tags `v0.9.1` from that branch, forward-merges the fix into `main`, and then deletes `release/0.9`.
 
 ### 1.4 Large features
 
 Large features — those that span multiple PRs, touch core subsystems, or carry meaningful integration risk — live on a `feature/<name>` branch until they are merge-ready as a whole. A maintainer merges individual PRs into the feature branch as work progresses. When the feature is complete and validated end-to-end, a single PR from `feature/<name>` to `main` brings it in.
+
+**Why this helps quality.** The real benefit is that every individual PR against the feature branch receives the full sweep of reviews, the same bar we apply anywhere else. Instead of one massive PR that is hard to review well, the work arrives as scoped, self-contained items that are easy to reason about. By the time the feature branch is ready, each component and contribution has already been reviewed on its own, so we have far more trust in the quality of the whole. The feature branch is still reviewed ahead of merging into `main`, but that final review builds on a foundation of already-vetted pieces rather than starting from scratch. This structure is not a gimmick to keep the process complex, it genuinely helps us keep the product's quality high.
 
 > **Example:** The integrated shell was built across more than 10 dedicated PRs, each reviewed and merged into `feature/shell`. Once the feature was complete and validated as a whole, it landed on `main` in a single PR.
 
@@ -67,6 +79,16 @@ If a PR is approved but the team wants to defer merging — for example, to avoi
 3. Leave a short comment with the reason and expected timeline, e.g.: _"Approved — holding until v0.9 ships (~2 weeks). No action needed from you."_
 
 To release the hold: remove the `on-hold` label and click **Ready for review**, then merge normally.
+
+### 1.6 Force-push policy
+
+Shared branches are collaboration surfaces, so an uncoordinated force push can destroy a collaborator's work. The rules below reflect that:
+
+- **`dev/*`** (personal working branches): force pushes are **allowed**. This is where individuals work, so rebasing, squashing, and history cleanup are expected.
+- **`feature/*`** and **`release/*`** (collaboration branches): force pushes are **discouraged but not blocked**. There are legitimate cases where a force push is needed to clean up history. When one is necessary, it MUST be coordinated with everyone working on that branch first.
+- **`main`**: protected. No force pushes. PRs only.
+
+The relaxed protection on `feature/*` and `release/*` is a deliberate escape hatch, not an invitation.
 
 ## 2. Machine Setup
 
@@ -229,6 +251,74 @@ This step catches webpack bundling issues and missing assets that unit tests alo
 > npm run lint
 > npm run package
 > ```
+
+## 5. Documenting Work with AI
+
+This section is for new contributors, code maintainers, and AI agents. It describes where documentation about work done with AI lives so that decisions and reasoning stay discoverable long after a PR merges.
+
+The canonical location is `docs/ai-and-plans/` (see PR #766). Use that exact path consistently.
+
+### 5.1 Per-PR documentation
+
+Per-PR documentation lives in `docs/ai-and-plans/PRs/<pr-number>-slug/`, for example `docs/ai-and-plans/PRs/766-webview-package/`. This folder holds:
+
+- the planning doc(s) for the PR, and
+- a progress-and-decision log.
+
+The decision log must capture decisions **and the reasons behind each decision**. Recording the reasoning shortens review loops: a reviewer, human or agent, who can see why a choice was made often does not need to ask. Only the code is not enough, the context is what makes review efficient.
+
+### 5.2 Cross-cutting concepts
+
+General or cross-cutting concepts that are not tied to a single PR go in the root of `docs/ai-and-plans/`.
+
+### 5.3 Draft PRs and bootstrapping the PR number
+
+- Work that is still in progress must be opened as a **draft** pull request. This prevents the automatic GitHub Copilot review from kicking in before it is wanted.
+- Before a PR exists there is no PR number yet, so the `<pr-number>-slug` subfolder cannot be named. In that case, keep the planning and progress files directly in `docs/ai-and-plans/` (without the numbered subfolder) while you work.
+- Once the draft PR is created and the number is known, relocate those files into `docs/ai-and-plans/PRs/<pr-number>-slug/`.
+
+## 6. AI-Assisted Review Workflow
+
+Contributors are expected to pre-review their own code with AI before requesting human review. The goal is to shorten the human PR-review loop by catching issues earlier. This is the repo maintainer's expectation, not optional polish. The stages below produce a structured review file that is committed into the PR's `docs/ai-and-plans/` folder.
+
+> **Note:** Some of these prompts will be turned into skills in the near future. They are recorded here now for transparency and to help current contributors.
+
+### 6.1 Stage 1: AI review pass (run by the contributor)
+
+A multi-step review that produces a committed review markdown file stored in `docs/ai-and-plans/PRs/<pr-number>-slug/`:
+
+1. **Initial edge-case review** using a stronger model from one vendor. Every issue gets a severity level. Findings are written to the review markdown file in the PR folder.
+2. **Merge the Copilot reviewer comments.** Pull the GitHub Copilot reviewer's comments from the PR, merge them into the same file, and reassess the severity of each. Keep a link to each reviewer comment so it can be referenced later in follow-up responses.
+3. **Validation gate** using a stronger model from a different vendor than the first, at standard context. A 1M or extended context window is not needed here because everything is already scoped at this point, so the standard context window is sufficient. This gate verifies each finding against the codebase to confirm valid vs false positive, reassesses severity, and for each issue proposes one or more solutions with pros and cons and a recommended option. It filters out false assumptions made by the earlier passes.
+4. **Independent sweep:** the model looks beyond the captured issues for additional risks not identified earlier, and proposes solutions for them too.
+
+Output: a well-structured review file that must be checked in.
+
+### 6.2 Stage 2: Author decisions
+
+**This is the actual contribution, and it matters most.** The PR author reviews each suggestion in the review file and has the agent record the author's decision, with reasoning, inline in the review file. This is where the author is expected to invest real time. It is what lets future code maintainers understand why decisions were made. Recording these decisions with their reasoning is the maintainer's expectation.
+
+### 6.3 Stage 3: Coding agent implements the fixes
+
+Prompt guidance for the coding agent:
+
+- Report progress inline for each work item.
+- If it deviates from the task, document the reasoning.
+- Move forward only when confidence is above 80 percent; otherwise stop and ask the operator.
+- Commit each work item individually. No mass commits. For each: commit, push, then post a comment in the review markdown file summarizing what was done and why, with a link reference to the commit.
+- Post the same comment on GitHub in the PR, one comment per pushed commit.
+- If a fix addresses a comment from the Copilot reviewer, post the comment as a reply in the thread of that review.
+
+### 6.4 Stage 4: Author final review
+
+- The author reviews the changes. Looking at individual commits is easier, and the review file makes the changes visible.
+- Then the author goes to the GitHub review page and ensures everything the Copilot reviewer asked for has been addressed, and resolves those discussions.
+
+This process keeps the quality bar high.
+
+### 6.5 Escape hatch: create issues instead of blocking the PR
+
+For complex problems, or general problems the review discovers, the author is free to ask the agent to create an issue on the repo and summarize it. This makes sense especially for low-severity, nice-to-have items. It lets the PR move forward while keeping track of things that can be done in another iteration, and it is a good source of "good first issue" items for future contributors.
 
 ## You're Ready to Contribute! 🎉
 
