@@ -275,7 +275,7 @@ Per-PR documentation lives in `docs/ai-and-plans/PRs/<pr-number>-slug/`, for exa
 - the planning doc(s) for the PR, and
 - a progress-and-decision log.
 
-The decision log must capture decisions **and the reasons behind each decision**. Recording the reasoning shortens review loops: a reviewer, human or agent, who can see why a choice was made often does not need to ask. Only the code is not enough, the context is what makes review efficient.
+The decision log must capture decisions **and the reasons behind each decision**. Recording the reasoning shortens review loops: a reviewer, human or agent, who can see why a choice was made often does not need to ask. The code alone is not enough — the context is what makes review efficient.
 
 ### 5.2 Cross-cutting concepts
 
