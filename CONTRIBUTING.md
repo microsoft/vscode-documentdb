@@ -29,7 +29,7 @@ See [1.6 Force-push policy](#16-force-push-policy) for the rules behind the forc
 
 CI runs automatically on:
 
-- **Push to `main` or `release/**`\*\* — full build, tests, and packaging; build sizes cached for PR comparisons.
+- **Push to `main` or `release/**`** — full build, tests, and packaging; build sizes cached for PR comparisons.
 - **Pull requests targeting `main`, `release/**`, or `feature/**`** — full build, tests, packaging, and a code-quality report posted as a PR comment.
 - **Manual dispatch** — use `workflow_dispatch` with `enforce_full_run` to run the full pipeline on any branch.
 
