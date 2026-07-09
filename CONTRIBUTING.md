@@ -2,7 +2,7 @@
 
 Thank you for your interest in contributing to the **DocumentDB for VS Code** extension. This guide helps you set up your development environment and configure Visual Studio Code to effectively contribute to the extension.
 
-The document consists of six sections:
+The document consists of seven sections:
 
 1. [Branching Strategy](#1-branching-strategy)
 2. [Machine Setup](#2-machine-setup)
@@ -10,6 +10,7 @@ The document consists of six sections:
 4. [PR Submission Checklist](#4-pr-submission-checklist)
 5. [Documenting Work with AI](#5-documenting-work-with-ai)
 6. [AI-Assisted Review Workflow](#6-ai-assisted-review-workflow)
+7. [Release Process](#7-release-process)
 
 ## 1. Branching Strategy
 
@@ -319,6 +320,64 @@ This process keeps the quality bar high.
 ### 6.5 Escape hatch: create issues instead of blocking the PR
 
 For complex problems, or general problems the review discovers, the author is free to ask the agent to create an issue on the repo and summarize it. This makes sense especially for low-severity, nice-to-have items. It lets the PR move forward while keeping track of things that can be done in another iteration, and it is a good source of "good first issue" items for future contributors.
+
+## 7. Release Process
+
+This section is for maintainers cutting a release. It is written so a maintainer, with or without an AI agent, can follow it end to end. The steps assume the release content has already been decided and the relevant PRs are merged to `main` (see [1.3 Releases](#13-releases)).
+
+Throughout, `X.Y.Z` is the version being released, for example `0.9.2`.
+
+### 7.1 Generate the changelog and release notes
+
+Use the `writing-release-notes` skill to produce both the `CHANGELOG.md` entry and the `docs/release-notes/X.Y.md` release notes. The skill knows how to format and split the output; steer it when needed.
+
+Gather the raw material from the milestone for this release:
+
+- **All PRs merged into `main` with milestone `X.Y.Z` attached.**
+- **All closed issues assigned to that same milestone.**
+
+Ask the agent to deduplicate and merge the two lists: a single change is often represented by both an issue and its PR, and should appear only once. The skill can process these inputs, but it relies on good source material, so **PRs must have meaningful descriptions.** Thin or empty descriptions produce thin release notes and force manual rewriting.
+
+Review the generated files and edit for accuracy before continuing.
+
+### 7.2 Commit the notes
+
+Commit the generated `CHANGELOG.md` and `docs/release-notes/X.Y.md`.
+
+### 7.3 Bump the version
+
+1. Update the `version` field in `package.json` to `X.Y.Z`.
+2. Run `npm install` so the lock file (`package-lock.json`) is regenerated with the new version.
+
+Running `npm install` here is required: bumping `package.json` alone leaves the lock file out of sync.
+
+### 7.4 Create the announcement discussion
+
+Based on the `docs/release-notes/X.Y.md` file, create a new discussion under **Discussions** on the GitHub repo. This is the user-facing announcement for the release.
+
+If this is **more than a patch release** (a new minor or major, `X.Y.0`), copy the link to that discussion into the `releaseNotesUrl` field in `package.json` so users see the announcement from inside the extension. For a plain patch release, leave `releaseNotesUrl` pointing at the current minor's announcement.
+
+### 7.5 Commit the version bump
+
+Commit `package.json`, the updated `package-lock.json`, and any `releaseNotesUrl` change together.
+
+### 7.6 Build the official artifact
+
+1. Run the Azure DevOps (ADO) pipeline to build the release.
+2. Download the official, verified build (the `.vsix`) produced by that pipeline.
+
+Always ship the artifact from the ADO pipeline, not a locally packaged build.
+
+### 7.7 Create the GitHub release
+
+1. Create a release on GitHub for tag `vX.Y.Z`.
+2. Use the changelog content for this version as the release body.
+3. Attach the `.vsix` downloaded from the ADO pipeline.
+4. Save the release.
+
+### 7.8 Publish to the Marketplace
+
+In parallel with creating the GitHub release, use the internal release pipeline to publish the verified build to the Visual Studio Marketplace.
 
 ## You're Ready to Contribute! 🎉
 
