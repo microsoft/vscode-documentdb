@@ -56,8 +56,11 @@ review hammered the _presentation and robustness_ of that journey: how the migra
 and sorted, how the empty-state rows read, how honest and stable the setup webview's header/progress
 is, how the running instance's menu and icons compare to regular clusters, whether destructive
 actions match the rest of the extension, and — the one hard bug — what happens when the container is
-deleted **outside** VS Code. Most items are wording/consistency polish; one (§4 header) is a real
-"stuck UI" bug; one (§9 external delete) is a silent-failure bug with a clear root cause.
+deleted **outside** VS Code. Most items are wording/consistency polish; one (§4.2 header) is a real
+"stuck UI" bug; §9 collects the harder robustness failures — a silent no-op on Start after an external
+delete, and a **restart dead end** when saved credentials go missing (hit live during the review) that
+also exposed a broader anti-pattern: **tree nodes used as error dialogs**. §8 adds the data/volume
+model questions (ephemeral toggle, delete-drops-volume, image-linked volumes, delete-only-our-containers).
 
 ---
 
@@ -131,9 +134,80 @@ parent `DocumentDB Local - Quick Start` node (a new `view/item/context` gated on
 
 ---
 
-## 4. The setup webview — header stability
+## 4. The setup webview — flow, loading & header
 
-### 4.1 The webview header changes with state and gets stuck on "Setting up…" ⚠️
+### 4.1 Current flow — what the webview shows, and when 🔍
+
+**Observation:** It should be clear what the setup webview renders at each step, so reviewers know
+which screen a finding refers to.
+
+**Finding:** The panel is one React component driven by a `Phase` state machine
+(`'loading' | 'review' | 'dockerNotReady' | 'provisioning' | 'success' | 'failed'` in
+[LocalQuickStart.tsx](../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx)). On
+open it queries `getDockerStatus`, then branches:
+
+```text
+        panel opens
+             |
+             v
+     +-----------------+   getDockerStatus()
+     |    loading      |------------------------------.
+     | (BARE spinner:  |                              |
+     |  "Checking      |            Docker not ready   v
+     |   Docker..."    |          +----------------------------+
+     |  no hero/cards) |--------->|      dockerNotReady        |
+     +-----------------+          | hero "Docker is required"  |
+             |                    | 3 readiness cards          |
+         Docker ready             | (CLI / daemon / platform)  |
+             |                    | + "How to fix" + [Retry] ---+  (re-query)
+             |                    +----------------------------+
+             |
+     ready & canResumeReadiness?  --- yes --> jump to [failed / timedOut] (resume a prior
+             |                                          timed-out container: Wait longer / Start over)
+             | no
+             v
+     +-----------------+   [Start DocumentDB Local]
+     |     review      |----------------------------.
+     | hero "Start     |                            |
+     |  DocumentDB     |                            v
+     |  Local"         |                 +----------------------+
+     | 4 config cards  |                 |    provisioning      |
+     | (Image / Port / |                 | hero "Setting up..." |
+     |  Data / Security|                 | elapsed timer        |
+     | + Advanced      | <-- [Edit       | stage checklist:     |
+     |   (collapsed))  |     settings] --| checking > pulling > |
+     | + [Start]       |                 | creating > starting >|
+     +-----------------+                 | waiting > done       |
+             ^                           | [Cancel] [View output]|
+             |                           +----------+-----------+
+             | [Start over]           success |    | failed / timeout
+             |                                v    v
+             |                    +-----------+  +----------------------+
+             +------------------- |  success  |  |       failed         |
+                                  | Next steps|  | error box            |
+                                  | [Open] [Copy] | [Retry][Edit] OR     |
+                                  | [Close]   |  | [Wait longer][Start  |
+                                  +-----------+  |  over] (on timeout)   |
+                                                 +----------------------+
+```
+
+Phase-by-phase, what is actually rendered:
+
+- **loading** — **only** a full-panel `<Spinner label="Checking Docker…" />`. No hero/title, no cards
+  — the whole panel is the spinner until `getDockerStatus` resolves, then it snaps to the next
+  layout (see §4.3).
+- **dockerNotReady** — `hero("Docker is required")` + **three** readiness cards (Docker CLI / Docker
+  daemon / Platform, each with a ✓/! badge) + a "How to fix" card + `Retry`.
+- **review** — `hero("Start DocumentDB Local")` + **four** config cards (Image / Port / Data /
+  Security) + a summary + a collapsed **Advanced** panel + `Start DocumentDB Local`.
+- **provisioning** — `hero("Setting up DocumentDB Local…")` + elapsed timer + the stage checklist
+  (checking → pulling → creating → starting → waiting → done) + `Cancel` + `View Docker output`.
+- **success** — header still reads "Setting up…" (bug, §4.2) + a success box + Next steps +
+  `Open Connection` / `Copy Connection String` / `Close`.
+- **failed** — header still reads "Setting up…" (§4.2) + an error box + either `Retry` / `Edit
+settings`, or (on a readiness timeout) `Wait longer` / `Start over`.
+
+### 4.2 The webview header changes with state and gets stuck on "Setting up…" ⚠️
 
 **Observation:** The header should be static. Today it changes with status/progress/errors, which is
 unexpected — and it sometimes stays on "Setting up DocumentDB Local…" even when setup is actually
@@ -157,6 +231,202 @@ and `'Start DocumentDB Local'` (review). Both halves of the observation are conf
 success/failure boxes already exist). That satisfies "header should be static" and eliminates the
 stuck-text bug in one move. If a dynamic header is preferred, it must at minimum branch on
 `success`/`failed` the way the `dockerNotReady` screen already does.
+
+### 4.3 The initial "Checking Docker" loading should render chrome + skeleton cards (reuse the metric card) ⚠️💡
+
+**Observation:** The initial `loading` ("Checking Docker") state should be reworked to behave like the
+**Query Insights** view: the webview chrome renders immediately (title + header/hero), and the four
+cards behave like our **metrics cards** — they show a **loading skeleton** while status resolves, then
+fill **independently** (at least from a UX perspective; we don't care about splitting the backend now,
+that's for later). Worth **reusing the existing metric card** — it's accessible and has tooltip
+support, a better experience.
+
+**Finding:**
+
+- ⚠️ The `loading` phase renders **only** `<Spinner label="Checking Docker…" />` inside an otherwise
+  empty panel — no hero/title, no cards (§4.1). When `getDockerStatus` resolves, the panel **snaps**
+  from a bare spinner to the full `dockerNotReady`/`review` layout, which is the jump the observation
+  describes. Query Insights, by contrast, renders its header + metric row up front and lets the
+  individual metrics resolve into place.
+- 🔍 The readiness/config cards use a **local, simplified** `MetricCard` defined inline in
+  [LocalQuickStart.tsx](../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx)
+  (a plain `Card` with label + value + optional badge) — **no skeleton, no tooltip, weaker a11y.**
+- 🔍 Query Insights already ships a purpose-built, accessible metric card: **`MetricBase`** at
+  [MetricBase.tsx](../../../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/metricsRow/MetricBase.tsx).
+  It supports a **loading skeleton** (`value === undefined` → `SkeletonItem`), a **null/unavailable**
+  placeholder, **tooltip explanations** (`tooltipExplanation`), and a solid **accessibility** pattern
+  (keyboard-focusable card, an `aria-label` carrying label + value + tooltip, `aria-hidden` children
+  to avoid double announcement). That's exactly the skeleton + tooltip + a11y behavior the
+  observation asks for.
+
+💡 **Suggestion:**
+
+1. Rework `loading` so it renders the **hero/header immediately** (like every other phase, and like
+   Query Insights), then renders the readiness cards in **skeleton** state, each flipping to its
+   value independently as status resolves — no need to split the backend; from the UX side a card can
+   go skeleton → value on its own.
+2. **Reuse `MetricBase`** instead of the local `MetricCard`. It's accessible and has tooltip +
+   skeleton support out of the box — a better experience than the inline card. Two bits of work: (a) a
+   small **extension** (e.g. a badge slot for the ✓/! status badge the readiness cards use), and (b)
+   **relocation to a shared** webview location — it currently lives buried under
+   `collectionView/queryInsightsTab/`, and importing a query-insights-internal component into the
+   Quick Start webview is the wrong dependency direction. The move + small extension is worth it: one
+   accessible, tooltip-capable metric card shared across features.
+
+### 4.4 Advanced panel: credentials should sit behind a toggle, and "placeholder = default" is ambiguous ⚠️💡
+
+**Observation:** In the Advanced section, username + password should be grouped **behind a toggle** —
+the user flips "override the default" and only then specifies a username and password. The current
+ghost text **"auto"** is confusing (is it the default _value_?). More generally, the panel label says
+_"Leave any field blank to keep the automatic default,"_ yet the **Image tag** field shows **"latest"**
+as ghost text — so how is the user meant to "keep it blank"? The person who addresses this should
+**think through the options**.
+
+**Finding** (Advanced panel in
+[LocalQuickStart.tsx](../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx),
+`renderAdvanced()`):
+
+- On a fresh provision (`!isRecreate`) the panel renders Port, Image tag, Username, Password (each
+  always visible) + a "Load sample data" switch, under the label _"Leave any field blank to keep the
+  automatic default."_
+- ⚠️ **Placeholder means two different things across fields.** Port's placeholder is the literal
+  default value (`10260`), Image tag's is the literal default tag (`latest`) — but Username/Password
+  use the word **`'auto'`**, which is a _description of behavior_ ("will be auto-generated"), not a
+  value you'd type. So "latest" reads as if a value is already set, while "auto" reads as a mode.
+  Combined with "leave blank to keep the default," the greyed-in `latest` makes it genuinely unclear
+  whether the field is pre-filled or empty — the exact confusion the observation calls out.
+- 🔍 The credentials already follow a **both-or-neither** rule in `advValidation`
+  (_"Enter both a username and a password, or leave both blank to auto-generate."_). A toggle would
+  encode that rule structurally instead of leaving it to a validation error after the fact.
+- 🔍 On a recreate (`isRecreate`) the credential/tag fields are already hidden and replaced by a note
+  that the original credentials/image are reused — so this only concerns the fresh-provision path.
+
+💡 **Suggestion:**
+
+1. **Group credentials behind a toggle.** Add an "Override generated credentials" (or "Set my own
+   username & password") switch, **off** by default. Off → show a short read-only note
+   ("Auto-generated, stored securely," matching the summary card); On → reveal both fields, required
+   together (reuses the existing both-or-neither validation). This removes the ambiguous `'auto'`
+   ghost text entirely and makes "I want to override" an explicit, discoverable action.
+2. **Resolve the "placeholder = default value" ambiguity** — options for whoever implements it to weigh
+   (the goal: a user can always tell "blank = default" from "I typed a value"):
+   - **A. Drop literal-value placeholders.** Leave the input visually empty (or a neutral
+     "Default") and keep the real default only in the `hint` line under the field (the panel already
+     renders _"Default {port}"_ / _"Default “latest”"_ / _"Default: auto-generated"_). Then "leave
+     blank = default" is honest: the box looks empty, the hint states the default. Cheapest and most
+     consistent.
+   - **B. Pre-fill the actual default value** (not a placeholder) and let the user edit it. No "blank"
+     concept at all — what you see is what runs. But then the "leave blank" label must go and empty
+     must be re-validated/normalized.
+   - **C. Per-field "Use default" affordance** (checkbox/toggle per field). Most explicit, but heavier
+     and busier than A for a panel that already has one toggle model in suggestion 1.
+   - **Leaning A** for consistency + minimal work, paired with suggestion 1 so credentials leave the
+     grid entirely. Whichever is chosen, apply the **same** convention to every Advanced field so
+     placeholder never sometimes-means-value and sometimes-means-mode.
+
+### 4.5 Error/status messages must leave the hero — show a content-area card; run a small UX experiment ⚠️💡
+
+**Observation:** We have error/status states (e.g. Docker missing). The core requirement: these
+messages **must not live in the hero section** — the hero stays constant and the message becomes a
+**card in the content area** with the actions the user can perform. Query Insights already has good
+building blocks for this — not just the `MessageBar`, but the **richer composed card** shown when an
+RU user opens the Query Insights tab; the two **could be combined**. Because it isn't obvious which
+shape reads best, whoever implements this should **render a few options to compare** (a UX
+experiment), and we also need to decide **where the Retry action lives** — there's no good home for it
+in today's model.
+
+**Finding:**
+
+- ⚠️ Today an error is handled by switching to a **dedicated phase that replaces the hero**:
+  `dockerNotReady` swaps the hero to _"Docker is required"_ and renders a bespoke full-screen layout
+  (three readiness cards + a "How to fix" card + a bottom `Retry` that calls `loadDockerStatus`); the
+  `failed` phase similarly shows an error box with the hero **stuck** on _"Setting up…"_ (§4.2). So the
+  message is **coupled to the hero** — exactly what the observation wants to stop. (A `Retry` _does_
+  exist on the docker-not-ready screen, but only as part of that full-screen error phase, not as an
+  inline card action.)
+- 🔍 **Query Insights already ships two reusable shapes** — both leave the surrounding header/title
+  untouched and put the message in the content area:
+  - **Concise inline `MessageBar`.**
+    [`GetPerformanceInsightsCard.tsx`](../../../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/optimizationCards/custom/GetPerformanceInsightsCard.tsx)
+    renders a Fluent **`MessageBar`** (`MessageBarBody` + `MessageBarTitle`) when `errorMessage` is set
+    and **relabels its primary button to "Retry"** — the same handler doubles as retry:
+    `{errorMessage ? l10n.t('Retry') : l10n.t('Get AI Performance Insights')}`. The card title never
+    changes.
+    [`ImprovementCard.tsx`](../../../../src/webviews/documentdb/collectionView/components/queryInsightsTab/components/optimizationCards/ImprovementCard.tsx)
+    uses the same `MessageBar intent="warning"` / `intent="success"` blocks for per-action state.
+  - **Richer composed card (the RU-tab card the observation refers to).** When an RU user opens Query
+    Insights, [`QueryInsightsTab.tsx`](../../../../src/webviews/documentdb/collectionView/components/queryInsightsTab/QueryInsightsTab.tsx)
+    (the `QUERY_INSIGHTS_PLATFORM_NOT_SUPPORTED_RU` branch) renders a **`MarkdownCardEx`** — an
+    icon + title (_"Query Insights Not Available"_) + a markdown body explaining _why_ and a
+    call-to-action (links to start a GitHub discussion) — and **nests a `MessageBar` inside it** for
+    the concise one-line status. So the "card" and the "message bar" are **already combined** there:
+    the composed card is the container, the `MessageBar` is the crisp summary line within it.
+
+💡 **Suggestion:**
+
+1. **Get the message out of the hero.** Keep the hero **static** (per §4.2) and render error/status as
+   a **content-area card**, never as a hero-text swap or a `dockerNotReady`/`failed` full-screen phase
+   that hijacks the title. Applies to docker-not-ready and provisioning `failed`.
+2. **Combine the two shapes, and experiment.** The RU card shows the pattern to reuse: a composed
+   titled card (icon + title + short explanation + actions) that **contains** a `MessageBar` for the
+   crisp status line. Because the right density isn't obvious, whoever implements this should **render
+   a few candidate variants to compare** rather than pick one blindly, e.g.:
+   - **Option A — plain `MessageBar`** with an inline `Retry` (lightest; good for transient errors).
+   - **Option B — composed card** (`MarkdownCardEx`-style: icon + title + body + action buttons), no
+     separate bar (richest; good for "Docker is required" with fix steps + links).
+   - **Option C — combined** (composed card **containing** a `MessageBar`), matching the RU tab.
+     Render A/B/C against the real states (Docker missing, provisioning failed, readiness timeout) and
+     pick per-state — a lightweight bar may suit `failed`, while docker-not-ready likely wants the richer
+     card with fix links.
+3. **Retry placement:** put `Retry` **on the chosen card**, next to the other recovery actions (Install
+   Docker / Troubleshooting; Edit settings / Wait longer / Start over), following the Query Insights
+   convention of **relabeling the card's primary action to "Retry"** when an error is present — not a
+   separate bottom-of-panel button. The retry logic already exists (`loadDockerStatus` / `handleStart`);
+   only its _home_ changes.
+4. This pairs with **§9.3** (tree side: errors are actions/dialogs, not passive nodes) — the same
+   principle on the webview: **a message is an actionable content card, not a state that hijacks the
+   hero.** A shared, reusable error/status card (composed card + optional `MessageBar` + primary/Retry
+   - links) would serve docker-not-ready and `failed` and keep the hero constant.
+
+### 4.6 What does "Cancel" do mid-provision? Consider the verb "Abort" (no full rollback promise) ⚠️💡
+
+**Observation (work item):** Investigate what **Cancel** actually does when clicked while provisioning
+is in progress. Do we **delete an image that has started downloading**, or just abort? A clean
+rollback is hard to implement (and to promise), so **"Abort"** may be a cleaner verb — "Cancel" implies
+cancel-and-roll-back, which we can't reliably guarantee.
+
+**Finding** (traced in `provision()`,
+[QuickStartService.ts](../../../../src/services/localQuickStart/QuickStartService.ts)): the answer is
+**"abort, with partial cleanup—but the image is kept."** On cancel (the panel's `Cancel` button aborts
+the provisioning subscription → `AbortSignal` → `onAbort` fires `cts.cancel()`):
+
+- 🔍 The in-flight Docker command is **aborted** via the cancellation token — a `docker pull` in
+  progress stops promptly.
+- 🔍 In `finally`, cleanup is **container-scoped only** (decision D12): if a container was created it's
+  stopped + removed; if a create was attempted but the id wasn't captured, an orphan is swept by
+  label; the temp env-file is deleted; state resets `Provisioning → NotInstalled`.
+- ⚠️ **The image is never deleted.** Nothing calls a `removeImage`; whatever layers `docker pull`
+  already fetched **stay in Docker's local cache** (by design — a resumable/cached pull makes the next
+  attempt fast). So Cancel is a **partial** rollback: the half-created _container_ is removed, but the
+  partially-/fully-downloaded _image_ is retained.
+- Net: "Cancel" today reads as "undo everything," but we only undo the container, not the download. The
+  retained image cache is arguably the _right_ behavior (fast retry) — it just isn't what "Cancel"
+  promises.
+
+💡 **Suggestion:**
+
+1. **Rename the verb to "Abort"** (or "Stop setup") to set honest expectations: we stop the in-progress
+   operation and remove any half-created container, but we **don't** promise to erase everything — the
+   cached image layers are kept intentionally. "Cancel" over-promises a rollback we don't perform.
+2. **Say what's kept**, right by the button: a one-liner like _"Stops setup. The downloaded image is
+   kept so a retry is faster."_ removes the ambiguity the observation raises.
+3. **Confirm the behavior per phase** as part of the work item (pull / creating / starting / waiting):
+   verify no orphaned resources survive _besides_ the intentional image cache, and that a mid-pull
+   abort leaves nothing half-written except cached layers. Decide explicitly that keeping the image is
+   desired (it is, for retry speed) and document it.
+4. If a true "remove everything including the image" is ever wanted, make it a **separate, explicit**
+   action (e.g. an "Abort and clean up" secondary), never the default — deleting cached layers on every
+   cancel would make retries slow and is the "clean rollback is tough" case the observation flags.
 
 ---
 
@@ -286,7 +556,7 @@ emulator at a glance. Low priority, but cheap.
 
 ---
 
-## 8. Destructive actions
+## 8. Destructive actions & the data / volume model
 
 ### 8.1 "Delete Container" bypasses the shared confirmation and uses em dashes ⚠️
 
@@ -312,6 +582,78 @@ confirmation code path as other destructive actions (like in Settings), and shou
 the confirmation word — there's no "type the container name" concept yet, so a simple word like
 `delete` matches the other delete flows). Separately, do a **one-pass em-dash sweep** of the whole
 feature's user-facing strings rather than fixing only the delete dialog.
+
+### 8.2 Persistence is always on — there's no "ephemeral / no-persistence" option 💡
+
+**Observation:** Our default is a persistent data volume. That should be a **toggle** — sometimes a
+user wants a throwaway instance with no persistence.
+
+**Finding:** 🔍 `AdvancedQuickStartOptions`
+([quickStartTypes.ts](../../../../src/services/localQuickStart/quickStartTypes.ts)) exposes `port`,
+`username`, `password`, `imageTag`, and `loadSampleData` — but **no persistence flag**.
+`createAndRunContainer()` **always** mounts a named volume (`volumeName(alias)` at
+`QUICK_START_DATA_PATH`). So every instance is persistent by construction; there is no way to opt out
+of the on-disk volume.
+
+💡 **Suggestion:** Add an Advanced toggle **"Persist data across restarts"** (default **on**, keeping
+the current zero-decision behavior). When **off**, create the container **without** the named-volume
+mount so data lives only in the container's writable layer and is gone on delete — useful for quick
+throwaway trials and clean repros. Trade-offs in [§13.6](#136-persistence--the-volume-model).
+
+### 8.3 A user-initiated delete must always delete the data volume ⚠️
+
+**Observation:** When the user deletes a container, we should for sure delete the persisted volume as
+well.
+
+**Finding:** 🔍 The explicit **Delete Container** path already does this: `deleteContainer()`
+([QuickStartService.ts](../../../../src/services/localQuickStart/QuickStartService.ts)) calls
+`removeVolume(volumeName(alias))` alongside the secret / globalState / registry cleanup — an
+intentional "full clean slate." Two caveats to stamp: (a) the credential-unavailable **reconcile**
+path deliberately does **not** touch the volume (R2 data-safety — see §9.2), which is correct for an
+_automatic_ path but means the _user-initiated_ delete must remain the thing that wipes it; (b) once
+§9.2 makes the credential-unavailable state actionable, its Delete must route through this same
+volume-removing path.
+
+💡 **Suggestion:** Keep explicit Delete = remove container **+ volume** (already the case). Ensure
+every **user-initiated** delete surface (including the future credential-unavailable / Missing Delete)
+funnels through `deleteContainer()` so a volume is never orphaned. Automatic / reconcile paths keep
+R2 (never auto-wipe without the user choosing it).
+
+### 8.4 Data volumes should be linked to the image — no shared data volumes 💡
+
+**Observation:** Our persisted volumes should be **linked to the image**. We won't share data volumes
+across images; advanced users can do that themselves.
+
+**Finding:** 🔍 Today the volume is keyed to the **alias** (`${alias}-data`), independent of the
+image. To stay safe, the service **pins the image to the volume**: on a recreate it reuses the stored
+`imageRef` (from in-memory metadata → `globalState` → default) rather than the user's requested tag,
+and custom image/creds are ignored on a Missing-recreate — precisely so an existing volume isn't
+opened by a different (possibly older) image version that could corrupt it. So the intent ("one image
+↔ one volume") is enforced by _runtime pinning_, but the volume is not _named/keyed_ by image, and
+there is no model for multiple images each owning their own volume.
+
+💡 **Suggestion:** Make the linkage **structural**, not just runtime — key or label the volume by its
+image (or record the image on the volume) so "one image ↔ one data volume" is guaranteed even if the
+pinning logic changes. Do **not** implement cross-image volume sharing; leave that to advanced users
+operating Docker directly. This also sets up a cleaner story if multi-instance / multi-image lands.
+
+### 8.5 We should only ever delete containers we created (pre-release safety) ⚠️
+
+**Observation:** Keep as a review note — not urgent now, but must be addressed **before final
+release**: we should be allowed to delete **only** the containers we created.
+
+**Finding:** 🔍 Removal is already label-guarded in the normal path — `deleteContainer()` only removes
+when `entry.missing || isManaged(id)`, and `isManaged()` verifies the `vscode.documentdb.quickstart`
+label. But there are softer spots: on `entry.missing` the label re-check is **skipped** (the id comes
+from metadata / `findManagedContainer`, which filters by label, so it is _currently_ safe but relies
+on that invariant), and `ContainerRuntime.removeContainer()` itself does **no** label check. As the
+feature grows (multi-instance, user-named containers, more recovery flows), an id-based delete without
+a label re-verify is a latent risk of removing something we didn't create.
+
+💡 **Suggestion:** Before final release, make "ours" a **hard precondition on every removal** —
+re-verify the `vscode.documentdb.quickstart` label immediately before `removeContainer` /
+`removeVolume`, regardless of the `missing` shortcut, so no code path can ever remove a container or
+volume the extension didn't create.
 
 ---
 
@@ -358,6 +700,74 @@ same settings** (the existing `Missing` row's recreate flow + `getReusableCreden
 `provision()` likely already covers most of this — worth confirming it's sufficient once reachable
 from the lifecycle actions). Full UX options in [§13.4](#134-external-deletemissing-recovery-affordance).
 
+### 9.2 Credential-unavailable state after a restart is a UI dead end (the demo incident) ⚠️
+
+**Observation (real incident, mid-review):** An instance was created via Quick Start, then stopped,
+then its container/image were removed outside VS Code. After a **VS Code restart** the Quick Start
+node showed the rocket _"Click here to start DocumentDB locally"_ row **plus** a warning row
+_"DocumentDB Local has data on disk but its saved credentials are missing…"_ (truncated in the tree).
+There was **no way from the UI** to delete the leftover container/volume or to start cleanly — no
+Delete node, no recreate action. Recovery required manually removing the container and its volume with
+Docker, then refreshing.
+
+**Finding:**
+
+- On activation, `reconcile()` → `reconcileAlias()` hits **"Case 4"**: a labelled container (or a
+  `ready` record) exists but the stored secret is unrecoverable, so it calls
+  `setStatus(alias, InstanceState.Error, undefined, CREDENTIAL_UNAVAILABLE_MESSAGE)` with
+  **`metadata: undefined`**. By design it **never** removes the container or volume (R2 data-safety: a
+  lost secret doesn't prove the volume is disposable — the user must choose the wipe).
+- Because `metadata` is `undefined`, `LocalQuickStartItem.getChildren()` skips every `metadata && …`
+  branch and falls through to the **NotInstalled** branch, which renders the rocket action row **plus**
+  a passive `treeItem_quickStartError` warning row carrying the message.
+- ⚠️ That warning row has **no command and no context menu**, and the Delete command's `when` requires
+  `treeItem_quickStartInstance` + a `state_*` token — which this surfaced state never carries. So
+  **Delete is unreachable**, and unlike the true `Missing` row (which at least says "click to
+  recreate") no recovery action is offered. The user is genuinely stuck in the UI.
+- ⚠️ **Restart behavior specifically:** in-memory state is rebuilt from durable state on every reload,
+  so this dead end **reproduces on every restart** — it is not a transient glitch. The
+  volume-plus-missing-secret combination persists, so each launch re-surfaces the same non-actionable
+  warning. (Clicking the rocket to "start fresh" doesn't help either: the on-disk volume + missing
+  credentials block a clean provision, and §9.1's silent-return path compounds it.)
+- **How we recovered (for the runbook):** removed the labelled container and its data volume directly
+  with Docker (`docker rm -f vscode-documentdb-local` + `docker volume rm vscode-documentdb-local-data`),
+  then refreshed the view; reconcile found nothing and returned to the clean NotInstalled empty state.
+
+💡 **Suggestion:** The credential-unavailable state must be **actionable**, not a passive warning. Render
+it like the `Missing` row — a real instance row (`treeItem_quickStartInstance` + a dedicated
+`state_credentialsMissing` token) that exposes **Delete Container** (clean slate: container + volume +
+stale records, via `deleteContainer()` per §8.3) and, where safe, **Recreate**. Keep R2 (never
+_auto_-wipe) — but give the user a one-click way to _choose_ the wipe. This should share the recovery
+UX in [§13.4](#134-external-deletemissing-recovery-affordance), and is a direct instance of the §9.3
+principle below.
+
+### 9.3 Tree nodes are misused to display errors (they should be actions, not dialogs) ⚠️💡
+
+**Observation:** This incident exposed a broader pattern problem — we render an **error message as a
+tree node**. Leaf/error nodes in a tree should be **actions the user can take**, not a substitute for
+a dialog or a status surface.
+
+**Finding:**
+
+- Several Quick Start states render a passive, non-actionable row purely to display text:
+  `treeItem_quickStartError` (the credential-unavailable / error message, §9.2), and the empty state
+  also **appends** an error row when `status.state === Error && errorMessage`. These rows have no
+  command and no menu — they exist only to show a string, which then **truncates** in the tree (the
+  incident's "…saved credentials are miss…"), can't be copied, and competes visually with the real
+  action row.
+- This contradicts where the rest of the extension landed. The **Kubernetes discovery** review
+  reached exactly this conclusion and reversed it: classified in-tree error-summary nodes were
+  **removed** in favor of a **modal** (`showErrorMessage(…, { modal: true })`) plus a single
+  actionable retry node — see that review's §F/#19 iteration 2 and its post-merge reconciliation note.
+  Quick Start currently repeats the anti-pattern the K8s feature already retired.
+
+💡 **Suggestion:** Adopt the same rule feature-wide: **tree rows are actions; errors are dialogs /
+status.** Concretely: (a) surface an error/credential-unavailable condition as a **modal** (with detail
+in the output channel), and (b) keep **only actionable rows** in the tree (Delete / Recreate / Retry /
+"Click here to…"). This removes the passive `treeItem_quickStartError` and the error-append row, and it
+directly fixes §9.2's dead end. It also rhymes with §4.2 (the webview header carrying status it
+shouldn't) — the same "don't overload one surface with state it isn't meant to hold" theme.
+
 ---
 
 ## 10. Possible additions
@@ -389,19 +799,29 @@ natural power-user affordance. Open details (menu group/icon, shell fallback pro
 
 ## 11. Consolidated flags & suggestions (read this before testing)
 
-| §    | Item                                            | Verdict                  | Suggested next step                                                                                                     |
-| ---- | ----------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
-| 2.1  | Legacy migration folder discoverability         | ⚠️ Flag                  | One-time toast + "Reveal"; optional distinct badge/pin ([§13.1](#131-surfacing-the-legacy-migration-folder))            |
-| 3.1  | Empty-state wording / drop "Learn more"         | ✅ Fix applied           | Decide if "Learn more" returns as a context-menu entry                                                                  |
-| 4.1  | Webview header changes / stuck on "Setting up"  | ⚠️ Flag (real bug)       | Make the header a single static string; body carries state                                                              |
-| 5.1  | "Waiting for connections" static for minutes    | ⚠️ Flag                  | Add in-stage elapsed/sub-info; surface "View output" earlier                                                            |
-| 6.1  | No image-pull progress                          | ⚠️ Flag                  | Indeterminate `ProgressBar` + "N of M layers" ([§13.2](#132-image-pull-progress-indicator))                             |
-| 7.1  | Running row lacks regular cluster commands      | 🔍 Answered (deliberate) | Add back storage-independent commands explicitly ([§13.3](#133-cluster-commands-on-the-quick-start-row))                |
-| 7.2  | Copy Connection String silently adds password   | ⚠️ Flag                  | Reuse the regular QuickPick confirmation, or document the divergence                                                    |
-| 7.3  | Generic `$(plug)` icon, no distinct identity    | 🔍 Answered              | Give the instance a distinct icon (reuse the rocket motif)                                                              |
-| 8.1  | Delete bypasses shared confirmation + em dashes | ⚠️ Flag                  | Switch to `getConfirmationAsInSettings()`; sweep em dashes feature-wide                                                 |
-| 9.1  | External container delete not handled on Start  | ⚠️ Flag (real bug)       | Distinguish missing vs not-ours; route to Missing + recovery ([§13.4](#134-external-deletemissing-recovery-affordance)) |
-| 10.1 | "Open terminal in container"                    | 🔍 Feasible              | Add `state_running` "Open in Terminal" command ([§13.5](#135-open-terminal-in-container))                               |
+| §    | Item                                                 | Verdict                  | Suggested next step                                                                                                                 |
+| ---- | ---------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
+| 2.1  | Legacy migration folder discoverability              | ⚠️ Flag                  | One-time toast + "Reveal"; optional distinct badge/pin ([§13.1](#131-surfacing-the-legacy-migration-folder))                        |
+| 3.1  | Empty-state wording / drop "Learn more"              | ✅ Fix applied           | Decide if "Learn more" returns as a context-menu entry                                                                              |
+| 4.2  | Webview header changes / stuck on "Setting up"       | ⚠️ Flag (real bug)       | Make the header a single static string; body carries state                                                                          |
+| 4.3  | "Checking Docker" loading is a bare spinner          | ⚠️ Flag / 💡 Suggestion  | Render header + skeleton cards; reuse & relocate the Query Insights `MetricBase`                                                    |
+| 4.4  | Advanced: creds not behind a toggle; placeholders    | ⚠️ Flag / 💡 Suggestion  | Toggle to reveal user/pass; drop literal-value placeholders (keep in `hint`)                                                        |
+| 4.5  | Errors swap the hero / full-screen phase             | ⚠️ Flag / 💡 Suggestion  | Move messages out of the hero to a content card; combine `MessageBar` + composed RU-style card; experiment A/B/C; Retry on the card |
+| 4.6  | "Cancel" mid-provision: partial rollback, image kept | ⚠️ Flag / 💡 Suggestion  | Rename to "Abort"; state the image is kept; confirm per-phase cleanup                                                               |
+| 5.1  | "Waiting for connections" static for minutes         | ⚠️ Flag                  | Add in-stage elapsed/sub-info; surface "View output" earlier                                                                        |
+| 6.1  | No image-pull progress                               | ⚠️ Flag                  | Indeterminate `ProgressBar` + "N of M layers" ([§13.2](#132-image-pull-progress-indicator))                                         |
+| 7.1  | Running row lacks regular cluster commands           | 🔍 Answered (deliberate) | Add back storage-independent commands explicitly ([§13.3](#133-cluster-commands-on-the-quick-start-row))                            |
+| 7.2  | Copy Connection String silently adds password        | ⚠️ Flag                  | Reuse the regular QuickPick confirmation, or document the divergence                                                                |
+| 7.3  | Generic `$(plug)` icon, no distinct identity         | 🔍 Answered              | Give the instance a distinct icon (reuse the rocket motif)                                                                          |
+| 8.1  | Delete bypasses shared confirmation + em dashes      | ⚠️ Flag                  | Switch to `getConfirmationAsInSettings()`; sweep em dashes feature-wide                                                             |
+| 8.2  | Persistence always on — no ephemeral option          | 💡 Suggestion            | Add an Advanced "Persist data" toggle (default on) ([§13.6](#136-persistence--the-volume-model))                                    |
+| 8.3  | User delete must always drop the volume              | ⚠️ Flag                  | Route every user-initiated delete through `deleteContainer()` (volume incl.)                                                        |
+| 8.4  | Volumes not structurally linked to the image         | 💡 Suggestion            | Key/label the volume by image; no cross-image sharing                                                                               |
+| 8.5  | Delete only containers we created                    | ⚠️ Flag (pre-release)    | Re-verify the Quick Start label immediately before every remove                                                                     |
+| 9.1  | External container delete not handled on Start       | ⚠️ Flag (real bug)       | Distinguish missing vs not-ours; route to Missing + recovery ([§13.4](#134-external-deletemissing-recovery-affordance))             |
+| 9.2  | Credential-unavailable state is a restart dead end   | ⚠️ Flag (real bug)       | Make it an actionable instance row (Delete / Recreate); shares [§13.4](#134-external-deletemissing-recovery-affordance)             |
+| 9.3  | Tree nodes misused as error dialogs                  | ⚠️ Flag (pattern)        | Errors → modal + output channel; tree rows are actions only                                                                         |
+| 10.1 | "Open terminal in container"                         | 🔍 Feasible              | Add `state_running` "Open in Terminal" command ([§13.5](#135-open-terminal-in-container))                                           |
 
 ---
 
@@ -423,15 +843,19 @@ for the team to react to, not decisions.
 
 ### 13.1 Surfacing the legacy migration folder (§2.1)
 
-| Option                                        | Pros                                                      | Cons                                                              |
-| --------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------- |
-| **A. One-time toast + "Reveal" action**       | Loud exactly once, at the moment it matters; non-blocking | Transient; a user who dismisses it still has to find the folder   |
-| **B. Distinct folder icon/description badge** | Persistent visual marker; no extra flow                   | Adds a special-case to folder rendering; mild clutter             |
-| **C. Pin to a fixed position (first/last)**   | Predictable location regardless of name                   | Breaks the pure-alphabetical model; users may still not notice it |
-| **D. Do nothing (current)**                   | Zero code                                                 | Folder hides in the alphabetical sort; confusing post-upgrade     |
+| Option                                        | Pros                                                                                                                                                   | Cons                                                                                |
+| --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------- |
+| **A. One-time toast + "Reveal" action**       | Loud exactly once, at the moment it matters; non-blocking                                                                                              | Transient; a user who dismisses it still has to find the folder                     |
+| **B. Distinct folder icon/description badge** | Persistent visual marker; no extra flow                                                                                                                | Adds a special-case to folder rendering; mild clutter                               |
+| **C. Pin to a fixed position (first/last)**   | Predictable location regardless of name                                                                                                                | Breaks the pure-alphabetical model; users may still not notice it                   |
+| **D. Do nothing (current)**                   | Zero code                                                                                                                                              | Folder hides in the alphabetical sort; confusing post-upgrade                       |
+| **E. Prefix the folder name with `_`**        | Dead-cheap: `_` sorts before letters, so `_Local Connections (Legacy)` floats to the top of the alphabetical list with **zero** rendering/sort changes | Cosmetic leading `_` in the name; a user can rename it away; not as loud as a toast |
 
 > 💡 **Suggested:** **A**, optionally with **B**. The toast solves the "I didn't know my connections
 > moved" moment directly; a subtle badge helps the user re-find it later without breaking the sort.
+> If a code-free quick win is preferred first, **E** (prefix the name with `_`) reliably pins it to the
+> top of the existing `localeCompare(..., { numeric: true })` order with no sort/render changes, and
+> composes fine with A/B.
 
 ### 13.2 Image-pull progress indicator (§6.1)
 
@@ -479,3 +903,20 @@ for the team to react to, not decisions.
 
 > 💡 **Suggested:** **B** — the standard, low-maintenance pattern, gated on `state_running`. Reserve **C**
 > only if we later want to parse/relay the shell I/O.
+
+### 13.6 Persistence & the volume model (§8.2 / §8.3 / §8.4)
+
+Three related choices about how the on-disk data volume behaves. They interact: an "ephemeral" option
+only makes sense once delete reliably wipes the volume, and both are cleaner if the volume is tied to
+its image.
+
+| Question                   | Options                                                                                               | Suggested                                                                                       |
+| -------------------------- | ----------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| **Persist vs ephemeral**   | (A) Always persist (current). (B) Advanced toggle, default persist. (C) Prompt each run.              | **B** — a default-on "Persist data across restarts" toggle; no mount when off.                  |
+| **Delete → volume**        | (A) Delete container only. (B) Delete container **+ volume** on user delete (current explicit path).  | **B**, applied to _every_ user-initiated delete (incl. the future credential-missing Delete).   |
+| **Volume ↔ image linkage** | (A) Alias-keyed volume + runtime image pinning (current). (B) Structurally key/label volume by image. | **B** — make "one image ↔ one volume" structural; no cross-image sharing (advanced users only). |
+
+> 💡 **Suggested overall:** default stays "persistent, clean-delete, image-pinned" so the zero-decision
+> path is unchanged; add the **ephemeral toggle** for throwaway trials, make the **volume↔image link
+> structural**, and never share data volumes across images (advanced users can wire that up in Docker
+> themselves). Pre-release, pair this with §8.5 (only ever remove containers/volumes we created).
