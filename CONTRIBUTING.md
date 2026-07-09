@@ -232,7 +232,15 @@ Run ESLint and fix all reported issues before submitting:
 npm run lint
 ```
 
-### 4.4. Package Verification
+### 4.4. Tests
+
+Run the Jest test suite and make sure it passes:
+
+```bash
+npm run jesttest
+```
+
+### 4.5. Package Verification
 
 Verify the extension can be packaged successfully without errors:
 
@@ -244,12 +252,13 @@ This step catches webpack bundling issues and missing assets that unit tests alo
 
 ---
 
-> **Summary — run these four commands before every PR:**
+> **Summary — run these five commands before every PR:**
 >
 > ```bash
 > npm run l10n
 > npm run prettier-fix
 > npm run lint
+> npm run jesttest
 > npm run package
 > ```
 
