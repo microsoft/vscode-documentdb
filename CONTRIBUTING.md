@@ -266,7 +266,7 @@ This step catches webpack bundling issues and missing assets that unit tests alo
 
 This section is for new contributors, code maintainers, and AI agents. It describes where documentation about work done with AI lives so that decisions and reasoning stay discoverable long after a PR merges.
 
-The canonical location is `docs/ai-and-plans/` (see PR #766). Use that exact path consistently.
+The canonical location is `docs/ai-and-plans/` (see [PR #766](https://github.com/microsoft/vscode-documentdb/pull/766)). Use that exact path consistently.
 
 ### 5.1 Per-PR documentation
 
