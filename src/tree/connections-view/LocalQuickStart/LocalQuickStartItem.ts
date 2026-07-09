@@ -54,8 +54,8 @@ class QuickStartClusterItem extends DocumentDBClusterItem {
  * Root node "DocumentDB Local - Quick Start" (WI-6). Renders unconditionally
  * (even with zero saved connections — handled in ConnectionsBranchDataProvider).
  *
- * - No managed instance → a rocket empty-state row that opens the Quick Start
- *   webview, plus a "Learn more…" link.
+ * - No managed instance → a single rocket empty-state row that opens the Quick
+ *   Start webview (UX review #3).
  * - A managed instance → the inline cluster (Running, expand to browse) or a
  *   state row (Stopped/Starting/Stopping/Missing/Error) carrying lifecycle menus.
  */
@@ -167,22 +167,16 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             ];
         }
 
-        // NotInstalled (no metadata) → empty-state rocket + learn more.
+        // NotInstalled (no metadata) → single empty-state action row (UX review #3:
+        // reworded to an explicit "Click here to…" call to action; the separate
+        // "Learn more…" row was dropped as an extra, rarely-used list item).
         const children: TreeElement[] = [
             createGenericElementWithContext({
                 id: `${this.id}/start`,
                 contextValue: 'treeItem_quickStartAction',
-                label: l10n.t('Quick Start — Install & try DocumentDB locally'),
+                label: l10n.t('Click here to install & try DocumentDB locally'),
                 iconPath: new vscode.ThemeIcon('rocket'),
                 commandId: 'vscode-documentdb.command.localQuickStart.open',
-            }),
-            createGenericElementWithContext({
-                id: `${this.id}/learnMore`,
-                contextValue: 'treeItem_quickStartLearnMore',
-                label: l10n.t('Learn more…'),
-                iconPath: new vscode.ThemeIcon('link-external'),
-                commandId: 'vscode.open',
-                commandArgs: [vscode.Uri.parse('https://github.com/microsoft/documentdb')],
             }),
         ];
 
