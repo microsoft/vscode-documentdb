@@ -1,532 +1,481 @@
-# DocumentDB Local Quick Start — UX Review Notes
+# DocumentDB Local Quick Start — UX Review Pack
 
-**Feature area:** `src/services/localQuickStart/`, `src/commands/localQuickStart/`,
-`src/tree/connections-view/LocalQuickStart/`, `src/webviews/documentdb/localQuickStart/`
-**Related design docs:** `docs/ai-and-plans/local-quickstart/local-quickstart-v2.md`,
-`docs/ai-and-plans/PRs/local-quickstart-poc/`, `docs/ai-and-plans/PRs/local-quickstart-multi-instance/`
-**Review date:** 2026-07-09
+> **Who this is for:** anyone about to do a hands-on UX review of the **Local Quick Start** feature
+> (installing/running a local DocumentDB container from inside VS Code), or anyone reading back how
+> the review unfolded.
+> **What this is:** a single catch-up document that captures a round of runtime UX feedback on the
+> feature, states what the code _actually does today_ (verified against the current branch), groups
+> the findings by user journey, and — for each — offers a **suggestion** the team can react to.
+> Most items are still open discovery notes; where a quick, low-risk fix was applied it is stamped.
 
-## What this document is
+- **Feature area:** `src/services/localQuickStart/`, `src/commands/localQuickStart/`,
+  `src/tree/connections-view/LocalQuickStart/`, `src/webviews/documentdb/localQuickStart/`
+- **Working branch:** `dev/tnaum/documentdb-quickstart-ux-review`
+- **Related design docs:** [local-quickstart-v2.md](../../local-quickstart/local-quickstart-v2.md),
+  [local-quickstart-poc/](../local-quickstart-poc/),
+  [local-quickstart-multi-instance/](../local-quickstart-multi-instance/)
+- **Scope of this doc:** the UX-facing surface (tree structure, wording, icons, the provisioning
+  webview, lifecycle actions, error recovery). Deeper backend/state-machine internals are only
+  discussed where they explain a user-visible symptom.
+- **Review date:** 2026-07-09
 
-This is a running log of manager (Tomaz) runtime observations on the Local Quick Start feature,
-each enhanced with code research: exact locations, why the current behavior happens, and related
-context or prior decisions. **Nothing in this document has been fixed yet** — findings are
-discovery notes to inform a later triage/implementation pass. Severity/priority calls and actual
-fixes are deliberately deferred to that follow-up.
+## How this review was run
 
----
+This is a **runtime UX pass**: a person exercised the real feature (install → run → stop → delete →
+break-it-externally) and dictated observations, and an AI assistant did the code-checking, root-cause
+tracing, and write-up. The intent is that each finding is backed by the exact code path that produces
+the behavior, so a later triage/implementation pass doesn't have to re-derive it.
 
-## 1. Legacy emulator connections migration folder
+The sections below are organized **by user journey** (upgrade, first run, the setup webview, the
+running instance, destructive actions, lifecycle robustness, possible additions) rather than by the
+order the feedback happened to arrive. Each item leads with a one-line **Verdict**, then records the
+**Observation** (what the reviewer saw), the **Finding** (what the code actually does and why), and a
+**Suggestion** (a concrete, reactable recommendation — not a decision). Heavier design questions with
+real trade-offs are pulled into [§13 Open ideas](#13-open-ideas--options-pros--cons) at the end.
 
-**Observation:** Is the one-time migration of original "DocumentDB Local" emulator connections to
-a new folder still happening? What's the folder called? Sorting could place it somewhere
-unexpected.
+## Legend
 
-**Code findings:**
-
-- The one-time migration lives in [src/services/legacyEmulatorMigration.ts](../../../../src/services/legacyEmulatorMigration.ts),
-  invoked from [src/documentdb/ClustersExtension.ts](../../../../src/documentdb/ClustersExtension.ts)
-  on every activation (`migrateLegacyEmulatorConnections`), guarded by a `globalState` flag
-  (`documentdb.localQuickStart.legacyEmulatorMigration.completed`) so it only runs once. Yes, it is
-  still active code — nothing has removed it.
-- Destination folder name: **`Local Connections (Legacy)`** (`LEGACY_FOLDER_BASE_NAME`), with a
-  deterministic id (`vscode-documentdb.legacyLocalConnectionsFolder`) so retries reuse the same
-  folder instead of duplicating it. If a user already has a root folder with that exact name, the
-  migration suffixes it `(2)`, `(3)`, … (`uniqueLegacyFolderName()`).
-- The folder is created directly under the **root of the regular Clusters/Connections zone** — it
-  is a normal, renamable, movable folder like any user-created one, not a pinned/reserved node.
-  Emulators-zone sub-folders are intentionally **flattened**: every migrated connection lands
-  directly in this one folder (documented as a deliberate scope cut, not a bug).
-- The legacy `Emulators` storage zone (and its `LocalEmulatorsItem` tree node) is kept as a
-  read-only rollback path until migration succeeds, then the tree node is retired — see the
-  `isLegacyEmulatorMigrationComplete()` gate in
-  [ConnectionsBranchDataProvider.ts](../../../../src/tree/connections-view/ConnectionsBranchDataProvider.ts) (root items array).
-
-**Why sorting can surprise:** Root-level items are assembled in `ConnectionsBranchDataProvider.getRootItems()`
-in this fixed order: `LocalQuickStartItem` → (legacy `LocalEmulatorsItem`, if migration not yet
-complete) → **all cluster folders, alphabetically** → **all ungrouped connections, alphabetically**
-→ `New Connection` placeholder. Folders are sorted with a single
-`localeCompare(..., { numeric: true })` pass across _all_ root folders — there is no special-casing
-that pins "Local Connections (Legacy)" to the top or bottom. So depending on the user's other
-folder names, it can land anywhere in the alphabetical list (e.g. between "Azure" and "Backups"),
-which is easy to miss on a first look since nothing visually marks it as "this is where your old
-stuff went."
-
-**Open questions for later:** Should this folder be visually distinguished (icon, description
-badge) or pinned to a fixed position (e.g., always first/last among folders) so users don't have to
-hunt for it after upgrading? Should there be a one-time toast/notification pointing at it instead of
-relying on the user noticing it in an alphabetical list? (The migration code comment doesn't
-mention a toast — worth confirming whether one exists elsewhere; a search for a notification tied to
-`MIGRATION_COMPLETED_KEY` didn't surface one in this pass.)
+| Marker             | Meaning                                                                     |
+| ------------------ | --------------------------------------------------------------------------- |
+| ✅ **Fix applied** | A quick, low-risk change was made on this branch and verified               |
+| ⚠️ **Flag**        | Confirmed gap or bug; needs a decision/fix in a follow-up                   |
+| 💡 **Suggestion**  | A design/wording recommendation for the team to react to                    |
+| 🔍 **Answered**    | A "how does this work?" question, answered from the code (no change needed) |
 
 ---
 
-## 2. "Delete Container" confirmation doesn't match the standard delete flow
+## 1. The story in one paragraph
 
-**Observation:** The Delete Container modal is fine as a concept, but it should use the same delete
-confirmation code path as other destructive actions (e.g., in Settings), and should not use
-em dashes.
-
-**Code findings:**
-
-- Standard destructive commands — [removeConnection.ts](../../../../src/commands/removeConnection/removeConnection.ts),
-  [deleteCollection.ts](../../../../src/commands/deleteCollection/deleteCollection.ts),
-  [deleteDatabase.ts](../../../../src/commands/deleteDatabase/deleteDatabase.ts),
-  [ConfirmDeleteStep.ts](../../../../src/commands/connections-view/deleteFolder/ConfirmDeleteStep.ts) —
-  all call **`getConfirmationAsInSettings()`** from
-  [src/utils/dialogs/getConfirmation.ts](../../../../src/utils/dialogs/getConfirmation.ts). That
-  function reads the `ext.settingsKeys.confirmationStyle` VS Code setting and dispatches to one of
-  three styles: type-the-word, a number challenge, or a plain click-confirm — i.e. "confirm like in
-  settings" is a user-configurable, shared code path.
-- `deleteQuickStartInstance()` in
-  [localQuickStartCommands.ts](../../../../src/commands/localQuickStart/localQuickStartCommands.ts)
-  instead calls **`getConfirmationWithClick()`** directly — the click-only style, unconditionally,
-  ignoring the user's configured `confirmationStyle`. It's the odd one out; the only other callers
-  of `getConfirmationWithClick` directly (bypassing the setting) are `hideIndex`/`unhideIndex`
-  (non-destructive, reversible operations) and two spots in `QueryInsightsAIService.ts` — none of
-  which are "delete data permanently" operations like this one.
-- Em dashes: the two confirmation `detail` strings in `deleteQuickStartInstance` both contain a
-  literal em dash — `'…This cannot be undone — you can recreate a fresh instance…'` — plus one in a
-  code comment above it. Same character also appears in several other user-facing strings in this
-  feature (e.g., `LocalQuickStart.tsx` next-steps bullets: `'Open Connection — browse your
-databases…'`, `'Copy Connection String — use it from…'`, and the "waiting" timeout message
-  `'…may still be initializing — keep waiting, view the logs, or start over.'`). Worth a sweep of
-  the whole feature, not just the delete dialog, if em dashes are to be eliminated consistently.
-
-**Open questions for later:** Should Delete Container switch to `getConfirmationAsInSettings` (word
-confirmation would ask the user to type something — worth deciding what word, since there's no
-existing "type container name" concept for Quick Start)? Should the whole feature's strings be
-swept for em dashes/other punctuation-style consistency in one pass rather than piecemeal?
+Local Quick Start adds a **`DocumentDB Local - Quick Start`** root node to the Connections view. From
+an empty state a user clicks one row to open a **setup webview**, which checks Docker, pulls the
+image, creates + starts a container, waits for readiness, and seeds sample data — reporting progress
+as a stage checklist. Once running, the instance appears **inline** in the tree as a browsable
+cluster with a Quick-Start-specific context menu (Start/Stop/Restart/Delete/Copy/View Logs). On
+upgrade, pre-existing local "emulator" connections are migrated once into a regular folder. This
+review hammered the _presentation and robustness_ of that journey: how the migration folder is named
+and sorted, how the empty-state rows read, how honest and stable the setup webview's header/progress
+is, how the running instance's menu and icons compare to regular clusters, whether destructive
+actions match the rest of the extension, and — the one hard bug — what happens when the container is
+deleted **outside** VS Code. Most items are wording/consistency polish; one (§4 header) is a real
+"stuck UI" bug; one (§9 external delete) is a silent-failure bug with a clear root cause.
 
 ---
 
-## 3. Empty Quick Start list — tree item wording
+## 2. Upgrade & migration (existing users)
 
-**Observation:** The tree items shown when there's no managed instance yet should be reworded. The
-action row should say something like "Click here to…". "Learn more" could be dropped from the list
-and instead live in the context menu of the local node.
+### 2.1 Legacy emulator connections migrate to a folder that can hide in the sort order ⚠️ 🔍
 
-**Code findings:** Both rows are built in `LocalQuickStartItem.getChildren()`
+**Observation:** Is the one-time migration of original "DocumentDB Local" emulator connections still
+happening? What's the folder called? Sorting could place it somewhere unexpected and cause confusion.
+
+**Finding:**
+
+- 🔍 Yes, it's still active. The migration lives in
+  [legacyEmulatorMigration.ts](../../../../src/services/legacyEmulatorMigration.ts), invoked from
+  [ClustersExtension.ts](../../../../src/documentdb/ClustersExtension.ts) on every activation
+  (`migrateLegacyEmulatorConnections`), guarded by a `globalState` flag
+  (`documentdb.localQuickStart.legacyEmulatorMigration.completed`) so it runs once.
+- 🔍 The destination folder is named **`Local Connections (Legacy)`** (`LEGACY_FOLDER_BASE_NAME`),
+  deterministic id `vscode-documentdb.legacyLocalConnectionsFolder`. If a user already has a root
+  folder with that exact name, it's suffixed `(2)`, `(3)`, … It is a **normal** renamable/movable
+  folder under the regular Clusters zone — not pinned or reserved. Emulators-zone sub-folders are
+  intentionally **flattened** into this single folder (documented scope cut, not a bug). The old
+  `Emulators` zone/`LocalEmulatorsItem` node is kept as a read-only rollback until migration
+  succeeds, then retired (`isLegacyEmulatorMigrationComplete()` gate in
+  [ConnectionsBranchDataProvider.ts](../../../../src/tree/connections-view/ConnectionsBranchDataProvider.ts)).
+- ⚠️ **Why it can surprise:** root items are assembled in a fixed order (Quick Start node → legacy
+  emulator node if un-migrated → **all folders, alphabetically** → ungrouped connections → New
+  Connection). Folders sort with a single `localeCompare(..., { numeric: true })` pass with **no
+  special-casing** for the legacy folder, so it lands wherever "L…" falls among the user's other
+  folder names — easy to miss right after an upgrade, since nothing marks it as "your old stuff
+  moved here." No migration toast surfaced in this pass (a search for a notification tied to
+  `MIGRATION_COMPLETED_KEY` found none).
+
+💡 **Suggestion:** Make the destination discoverable rather than relying on alphabetical luck. Cheapest
+first: (a) a **one-time toast** after a successful migration ("N local connections were moved to
+_Local Connections (Legacy)_") with a "Reveal" action; optionally (b) a distinct folder **description
+badge/icon** so it stands out; and/or (c) pin it to a fixed position among folders (first or last).
+See [§13.1](#131-surfacing-the-legacy-migration-folder) for the options weighed.
+
+---
+
+## 3. First run — the empty Quick Start node
+
+### 3.1 Empty-state tree rows: reword the action, drop "Learn more" ✅
+
+**Observation:** The rows shown when there's no managed instance yet should be reworded — the action
+row should read like "Click here to…" — and "Learn more" could be dropped from the list (it could
+live in the node's context menu instead).
+
+**Finding:** Both rows are built in `LocalQuickStartItem.getChildren()`
 ([LocalQuickStartItem.ts](../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts))
-for the `NotInstalled` state (no metadata yet):
+for the `NotInstalled` state: an action row (rocket, `treeItem_quickStartAction`, opens the webview)
+and a separate "Learn more…" row (`link-external`, `treeItem_quickStartLearnMore`, opens
+`https://github.com/microsoft/documentdb`). Neither row has any `view/item/context` entry in
+`package.json`, so there is **no existing context-menu** to move "Learn more" into — that would be new
+plumbing. The action label/command is also reused by the `Missing` state (see §9), so wording should
+stay consistent across both.
 
-- Action row: label `l10n.t('Quick Start — Install & try DocumentDB locally')`, rocket icon,
-  `contextValue: 'treeItem_quickStartAction'`, bound to command
-  `vscode-documentdb.command.localQuickStart.open`.
-- Learn-more row: label `l10n.t('Learn more…')`, `link-external` icon,
-  `contextValue: 'treeItem_quickStartLearnMore'`, bound to `vscode.open` with a hardcoded URL to
-  `https://github.com/microsoft/documentdb`.
-- Also note: this same action label/icon/command (`treeItem_quickStartAction` /
-  `localQuickStart.open`) is reused for the `Missing` state's alternate rendering path (see finding
-  #12 below) — any rewording of the "click to do X" phrasing should stay consistent across both
-  surfaces.
-- Neither row currently has **any** `view/item/context` entry in `package.json` — a search for
-  `treeItem_localQuickStart`, `treeItem_quickStartAction`, or `treeItem_quickStartLearnMore` in
-  `package.json` returns no matches. So today "Learn more" only exists as its own list row; there is
-  no existing context-menu wiring to move it into, moving it to the parent
-  (`treeItem_localQuickStart`) node's context menu would be new plumbing, not a small toggle.
+✅ **Fix applied (2026-07-09):** Implemented the quick half of this directly, in `getChildren()`'s
+`NotInstalled` branch:
 
-**Open questions for later:** Confirm exact copy for the action row (e.g. "Click here to install
-DocumentDB locally with Quick Start" — needs to stay short for a tree row). Decide whether "Learn
-more" moves to the parent `DocumentDB Local - Quick Start` node's context menu (new `view/item/context`
-entry gated on `treeItem_localQuickStart`) or is dropped from the tree entirely in favor of the
-walkthrough/README.
+- Action row relabeled `'Quick Start — Install & try DocumentDB locally'` →
+  **`'Click here to install & try DocumentDB locally'`**.
+- The `'Learn more…'` row (`treeItem_quickStartLearnMore`) was **removed** from the empty state. It is
+  **not** relocated to a context menu (deferred — no menu plumbing exists yet), so the external repo
+  link is no longer reachable from the tree until/unless it's re-added.
 
-**Fix applied (2026-07-09):** Implemented the quick, low-risk half of this finding directly (the
-"move Learn more into the parent context menu" question above is still open/deferred — this only
-covers the reword + drop):
-
-- Action row label changed from `'Quick Start — Install & try DocumentDB locally'` to
-  `'Click here to install & try DocumentDB locally'`.
-- The separate `'Learn more…'` row (`contextValue: 'treeItem_quickStartLearnMore'`) was removed
-  entirely from the `NotInstalled` empty state — it is not (yet) relocated to a context menu; that
-  part of the original ask is left as an open item above, since no `view/item/context` plumbing
-  exists for `treeItem_localQuickStart` today (would be new work, not a move).
-- Both changes are in
-  [LocalQuickStartItem.ts](../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts),
-  `getChildren()`'s `NotInstalled` branch. The `Missing` state's row (finding #11) still reuses the
-  `treeItem_quickStartAction` contextValue/command but keeps its own distinct label
-  (`'Missing · click to recreate'`) — unaffected by this change.
-- Not done as part of this quick fix: the `treeItem_quickStartLearnMore` contextValue is no longer
-  referenced anywhere, and the external link (`https://github.com/microsoft/documentdb`) is no
-  longer reachable from the tree at all until/unless it's re-added via a context menu.
+💡 **Suggestion (remaining):** Decide whether "Learn more" comes back as a context-menu entry on the
+parent `DocumentDB Local - Quick Start` node (a new `view/item/context` gated on
+`treeItem_localQuickStart`), or is dropped for good in favor of the walkthrough/README. Low priority.
 
 ---
 
-## 4. Webview header changes with state and can get stuck
+## 4. The setup webview — header stability
 
-**Observation:** The header should be static; today it changes depending on status/progress/errors,
-which is unexpected. It sometimes gets stuck on "Setting up DocumentDB Local…" even when the
-operation is actually complete.
+### 4.1 The webview header changes with state and gets stuck on "Setting up…" ⚠️
 
-**Code findings** (all in
-[LocalQuickStart.tsx](../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx)):
+**Observation:** The header should be static. Today it changes with status/progress/errors, which is
+unexpected — and it sometimes stays on "Setting up DocumentDB Local…" even when setup is actually
+complete.
 
-- The header ("hero") is rendered by a local `hero(title, subtitle)` helper, called **three
-  separate times** with different literal titles depending on `phase`:
-  - `phase === 'dockerNotReady'` → `l10n.t('Docker is required')`
-  - `phase === 'provisioning' || phase === 'success' || phase === 'failed'` → **the same call**,
-    `l10n.t('Setting up DocumentDB Local…')`, with the subtitle showing the elapsed timer only
-    while `phase === 'provisioning'` (empty string otherwise)
-  - `phase === 'review'` (the initial screen) → `l10n.t('Start DocumentDB Local')`
-- This confirms both parts of the observation exactly:
-  1. The header text does change across phases (three different literal strings), which reads as
-     inconsistent/jumping if a user watches the panel through a full run.
-  2. **The "stuck" complaint is a real bug, not perception**: `success` and `failed` reuse the exact
-     same title as `provisioning` — "Setting up DocumentDB Local…" is still shown even once the
-     instance is fully running (`phase === 'success'`) or once setup has definitively failed
-     (`phase === 'failed'`). Only the content _below_ the header (the `successBox`/`errorBox`, the
-     stage checklist, and the action buttons) reflects the actual outcome — the header itself never
-     catches up.
-- There is a `provisioningStatusMessage` computed a few lines above (derived from the active stage
-  label) that IS phase/stage-aware and correctly blanks itself out once any stage errors — but it's
-  only surfaced to screen readers via a visually-hidden `aria-live` region, not shown visually.
+**Finding** (in [LocalQuickStart.tsx](../../../../src/webviews/documentdb/localQuickStart/LocalQuickStart.tsx)):
+the header ("hero") is rendered by a local `hero(title, subtitle)` helper called with **three
+different literal titles** depending on `phase`: `'Docker is required'` (dockerNotReady),
+`'Setting up DocumentDB Local…'` (**provisioning, success, _and_ failed all share this one call**),
+and `'Start DocumentDB Local'` (review). Both halves of the observation are confirmed:
 
-**Open questions for later:** Should the header become a single static string for the whole
-provisioning/success/failed lifecycle (e.g. "DocumentDB Local"), with all state communicated via
-subtitle/body instead? Or should it explicitly branch on `success`/`failed` like the review/error
-screens already do for `dockerNotReady`?
+- ⚠️ The title genuinely changes across phases (three strings), reading as a jumpy header.
+- ⚠️ **The "stuck" complaint is a real bug:** `success` and `failed` reuse the `provisioning` title
+  verbatim, so "Setting up DocumentDB Local…" is still shown even once the instance is running or has
+  definitively failed. Only the body below (success/error box, stage checklist, buttons) reflects the
+  outcome — the header never catches up. (A phase/stage-aware `provisioningStatusMessage` exists but
+  is only piped to a screen-reader-only live region, not shown visually.)
+
+💡 **Suggestion:** Make the header a **single static string** for the whole panel lifecycle (e.g.
+"DocumentDB Local" or "Local Quick Start"), and let the subtitle/body carry all state (elapsed timer,
+success/failure boxes already exist). That satisfies "header should be static" and eliminates the
+stuck-text bug in one move. If a dynamic header is preferred, it must at minimum branch on
+`success`/`failed` the way the `dockerNotReady` screen already does.
 
 ---
 
-## 5. "Waiting for DocumentDB to accept connections" wording / intermediate progress
+## 5. The setup webview — the "waiting" stage
 
-**Observation:** This message could be reworded, or show some intermediate progress as a sub-info,
-since it can take time.
+### 5.1 "Waiting for DocumentDB to accept connections" can sit static for minutes ⚠️
 
-**Code findings:**
+**Observation:** This message could be reworded, or show some intermediate progress as sub-info, since
+it can take a while.
 
-- Stage label: `STAGE_LABELS.waiting = l10n.t('Waiting for DocumentDB to accept connections')` in
-  `LocalQuickStart.tsx`. The service-side stage message is
-  `'Waiting for DocumentDB to accept connections…'` in
-  [QuickStartService.ts](../../../../src/services/localQuickStart/QuickStartService.ts) (`provision()`,
-  `--- waiting ---` section).
-- This stage wraps `waitForReadiness()`, which polls the wire protocol (a real MongoClient
-  connection attempt) with a `READINESS_TIMEOUT_MS = 180_000` (3 minutes) budget and a
-  `PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000` per attempt — i.e. it can legitimately retry for up to
-  3 minutes with no visible change other than the elapsed-time counter in the (currently static,
-  see #4) header subtitle.
-- There is no intermediate sub-status during this stage today — the stage row just shows a spinner
-  - the same static label the whole time; the per-attempt retry count / time remaining isn't
-    surfaced. Logs _do_ stream to the "DocumentDB Local Quick Start" output channel during this window
-    (via `followLogs`, started right after `docker start`), so the information exists, just not
-    in-panel.
-- On timeout, a distinct `ReadinessTimeoutError` is raised (kept separate from hard failures
-  specifically so the container is preserved and "Wait longer" can resume it) — the `failed` phase
-  with `timedOut === true` shows a dedicated message: `'The container is running, but DocumentDB has
-not accepted connections yet. It may still be initializing — keep waiting, view the logs, or start
-over.'` (contains another em dash — see #2).
+**Finding:** The stage label is `'Waiting for DocumentDB to accept connections'`. It wraps
+`waitForReadiness()` in [QuickStartService.ts](../../../../src/services/localQuickStart/QuickStartService.ts),
+which polls the wire protocol with a **`READINESS_TIMEOUT_MS = 180_000` (3 min)** budget and a 3 s
+per-attempt timeout. During that window the stage row shows only a spinner + the same static label —
+⚠️ **no in-panel sub-status** (attempt count, elapsed-in-stage, remaining). The information _does_
+exist: logs stream to the "DocumentDB Local Quick Start" output channel via `followLogs` the whole
+time, just not surfaced in the panel. On timeout a distinct `ReadinessTimeoutError` (kept separate so
+the container is preserved for "Wait longer") shows the `failed`/`timedOut` message. (That message and
+several others here contain em dashes — see §8.1.)
 
-**Open questions for later:** What sub-info would be useful here — elapsed time within the stage,
-attempt count, a rotating "still working" hint after N seconds, or a link to "View Docker output"
-surfaced earlier instead of only at the bottom of the panel? Any reword should stay accurate for
-both a fresh pull-to-ready cold start and a plain restart (both funnel through the same stage).
+💡 **Suggestion:** Add a lightweight **sub-info line** under this stage while it's active — cheapest is
+an **in-stage elapsed timer** ("still initializing… 0:45") and/or a rotating reassurance after N
+seconds ("first run generates TLS certs, this can take a minute"). Also consider surfacing the "View
+Docker output" link _during_ this stage (it currently only appears at the bottom of the panel). A
+reword should stay accurate for both a cold first run and a plain restart, since both funnel through
+this stage.
 
 ---
 
-## 6. Image pull/download progress tracking
+## 6. The setup webview — image pull progress
 
-**Observation:** Do we track progress while the image is downloaded? That's a long-running
-operation too.
+### 6.1 No structured progress while the image downloads ⚠️
 
-**Code findings:**
+**Observation:** Do we track progress while the image is pulled? It's a long-running op too.
 
-- `provision()` yields exactly one `active` `StageEvent` for the pulling stage — `stageEvent('pulling',
-'active', 'Pulling the official image…')` — then `await this.runtime.pullImage(imageRef,
-cts.token)`, then one `done` event. No intermediate events are yielded between those two.
-- `ContainerRuntime.pullImage()` ([ContainerRuntime.ts](../../../../src/services/localQuickStart/ContainerRuntime.ts))
-  runs `docker pull` through the shared CLI shell-runner (`@microsoft/vscode-container-client`'s
-  `DockerClient`), with `stdout`/`stderr` piped only to the output channel via
-  `MaskedChannelWritable` (line-buffered + secret-masked). Nothing from that stream is captured,
-  parsed, or forwarded back to the caller — so per-layer Docker progress (`Downloading`,
-  `Verifying Checksum`, `Extracting`, `Pull complete`, etc., one line per layer per event when not
-  attached to a TTY) is visible **only** in the raw output channel text, never in the webview.
-- So: no, there is no structured progress tracking for the pull today, confirming the observation.
-  The webview shows a spinner + static label for however long the pull takes, same as "waiting" (#5).
+**Finding:** ⚠️ No. `provision()` yields one `active` event (`'Pulling the official image…'`), awaits
+`pullImage()`, then one `done` event — nothing in between. `ContainerRuntime.pullImage()`
+([ContainerRuntime.ts](../../../../src/services/localQuickStart/ContainerRuntime.ts)) runs `docker
+pull` through the shared CLI shell-runner, piping stdout/stderr **only** to the output channel
+(masked, line-buffered). Docker's per-layer progress (`Downloading`/`Extracting`/`Pull complete`) is
+therefore visible only as raw channel text, never in the webview — the panel shows a spinner +
+static label for the entire pull, same as §5.
 
-**Ideas for indeterminate/step progress (no fix applied, just candidates to discuss):**
-
-- Docker's plain-text pull output (non-TTY) already gives one line per layer per status
-  transition, including a `"<layer-id>: Pull complete"` line once each layer finishes. Since the
-  number of layers isn't known until Docker starts announcing "Pulling fs layer" lines, a
-  precise percentage isn't available up front, but a **running count of "N of M layers pulled"**
-  is derivable simply by tracking, per pull, how many distinct layer ids have been seen so far
-  (M, growing) vs. how many have reached `Pull complete` (N) — that only requires
-  `ContainerRuntime.pullImage` to accept an optional line/progress callback instead of writing
-  straight to the channel, and forwarding parsed counts as extra `StageEvent` fields (mirroring how
-  `boundPort`/`timedOut` already ride along on `StageEvent` for other stages).
-  - **Caveat:** because non-TTY docker pull is a plain scrolling text stream, not a JSON event
-    stream, layer counting means resurrecting a small regex parser over free-form CLI text. It'd be
-    more robust (and would expose _actual_ byte totals per layer, since Docker does know each
-    layer's compressed size) to switch this specific call to the Docker Engine API's pull endpoint
-    directly (e.g. via `dockerode`'s `docker.pull()`, which streams structured JSON progress events
-    with `id`, `status`, and `progressDetail: { current, total }` per layer) rather than parsing CLI
-    text — a larger change than the current CLI-wrapper approach, worth flagging as a design
-    decision rather than a quick tweak.
-- On the visual side, since a true 0–100% isn't known in advance without that JSON-stream rework,
-  an **indeterminate `ProgressBar`** (Fluent UI v9 `ProgressBar` with no `value` prop renders as an
-  animated indeterminate bar) reads better than a static spinner for a stage that can run tens of
-  seconds, and is already a component this design system ships — no new dependency. Layered under
-  it, a small live sub-label like "Downloading… (3 of 6 layers)" would satisfy the "some kind of
-  progress" ask without needing byte-accurate totals — that count is the cheap parse described
-  above, not the JSON-stream rework.
-- A literal "dot per completed layer" (e.g. a row of small filled/empty dots) is visually appealing
-  for a small, bounded number of steps, but is a poor fit here specifically because the total layer
-  count isn't known until the pull starts announcing them — the dot row would have to grow/shrink
-  as new layers appear, which reads as jittery. The numeric "N of M" counter (or an indeterminate
-  bar with that counter as a sub-label) avoids that problem while still being honest about what we
-  actually know.
-- Either option is a genuine, if modest, plumbing change (new callback param on `pullImage` /
-  `IContainerRuntime`, a new `StageEvent` shape, and webview rendering), not a copy tweak — worth
-  scoping separately from the wording-only findings above.
+💡 **Suggestion:** Give the pull an **indeterminate but alive** treatment. Since a true 0–100% isn't
+known up front without a bigger rework, pair a Fluent UI **indeterminate `ProgressBar`** with a small
+live **"N of M layers"** sub-label (derivable by counting distinct layer ids vs. `Pull complete`
+lines). This needs modest plumbing (a progress callback on `pullImage`/`IContainerRuntime`, extra
+`StageEvent` fields, webview rendering). Full options, including a Docker-Engine-API/`dockerode`
+route for real byte totals and why a literal "dot per layer" reads as jittery, are in
+[§13.2](#132-image-pull-progress-indicator).
 
 ---
 
-## 7. Running-container tree item doesn't share cluster context commands
+## 7. The running instance in the tree
 
-**Observation:** The tree item for a running managed instance doesn't share context menu commands
-with regular clusters. Do we still extend the cluster item base class? If not, what would break if
-we did?
+### 7.1 The running-instance row doesn't share regular cluster context commands 🔍
 
-**Code findings:**
+**Observation:** The running managed instance doesn't share context-menu commands with regular
+clusters. Do we still extend the cluster base class? If not, what would break if we did?
 
-- Yes, it still extends the base class: `QuickStartClusterItem extends DocumentDBClusterItem` in
-  [LocalQuickStartItem.ts](../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts).
-  It overrides `getTreeItem()` only to force the state-aware description text, and reuses the base
-  class for icon, tooltip, and (critically) all the actual cluster-browsing behavior — the comment
-  on the class explicitly says browsing "reuses the base `DocumentDBClusterItem`."
-- The reason regular cluster context commands don't show up: the **contextValue is fully replaced**,
-  not extended. The constructor sets
-  `this.contextValue = createContextValue([INSTANCE_CONTEXT, stateToken])` — i.e.
-  `treeItem_quickStartInstance` + `state_running` (etc.) — which **discards** whatever contextValue
-  the base `DocumentDBClusterItem` constructor/`getTreeItem()` would normally compute (which
-  includes the `treeitem_documentdbcluster` token). Every regular-cluster `view/item/context` entry
-  in `package.json` gates on `viewItem =~ /\btreeitem_documentdbcluster\b/i` (e.g.
-  `updateConnectionString`, `updateCredentials`, `renameConnection`, `moveItems`,
-  `removeConnection`) — none of those `when` clauses match a Quick Start row, since that token is
-  never present on it.
-- This looks deliberate, not an oversight: the class-level comment says the Quick Start node
-  "carr[ies] a Quick-Start-specific context value so the instance shows Quick Start lifecycle
-  actions **instead of** the generic cluster menus." The `INSTANCE_CONTEXT` token instead gates the
-  Quick Start–specific commands (`start`/`stop`/`restart`/`delete`/`copyConnectionString`/
-  `copyPassword`/`viewLogs`), each `when`-clause requiring both `treeItem_quickStartInstance` and a
-  specific `state_*` token (see `package.json`, `view/item/context` for
-  `vscode-documentdb.command.localQuickStart.*`).
-- **What would likely break if the base contextValue were also kept (appended rather than
-  replaced):** the generic cluster commands assume storage-backed operations — `removeConnection`
-  deletes a _stored connection record_, `moveItems`/`renameConnection` operate against
-  `ConnectionStorageService`, `updateConnectionString`/`updateCredentials` open storage-editing
-  wizards. The Quick Start instance is explicitly **not** stored in any zone (the model comment says
-  "the Quick Start managed instance is in-memory (CredentialCache-based) and not stored in any
-  zone"). Enabling those commands as-is would let a user try to "rename"/"move to folder"/"delete
-  connection" an item that has no storage record to act on — likely a silent no-op at best, or an
-  exception/orphaned-state at worst, unless each of those commands were also taught to special-case
-  the Quick Start row. So the current full-replacement approach avoids a class of bugs, but at the
-  cost of losing genuinely useful, storage-independent commands too, e.g. "Open in Shell" / "New
-  Query" style commands if any are gated only on `treeitem_documentdbcluster` without also touching
-  storage — worth an inventory of exactly which cluster commands are storage-dependent vs. purely
-  connection-based, since only the latter could be safely re-enabled.
+**Finding:**
 
-**Open questions for later:** Would it be worth splitting the base contextValue into a
-storage-dependent subset and a connection-only subset, so Quick Start could opt into the latter? Or
-is a curated, Quick-Start-specific menu (as today) actually the right long-term shape, just missing
-a few commands (e.g., "Open in Shell") that should be added explicitly rather than inherited?
+- 🔍 Yes — `QuickStartClusterItem extends DocumentDBClusterItem`
+  ([LocalQuickStartItem.ts](../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts)).
+  It overrides `getTreeItem()` only to force the state-aware description, and reuses the base for
+  icon/tooltip/browsing.
+- 🔍 The reason regular commands don't appear: the **contextValue is fully replaced, not extended.**
+  The constructor sets `contextValue = createContextValue([INSTANCE_CONTEXT, stateToken])` — i.e.
+  `treeItem_quickStartInstance` + `state_running` — discarding the base's `treeitem_documentdbcluster`
+  token that every regular-cluster `view/item/context` `when`-clause matches on. This is deliberate
+  (class comment: show Quick Start lifecycle actions "instead of the generic cluster menus").
+- 🔍 **What would break if the base contextValue were kept too:** the generic commands assume a
+  **stored** connection — `removeConnection` deletes a storage record, `moveItems`/`renameConnection`
+  hit `ConnectionStorageService`, `update*` open storage wizards. The Quick Start instance is
+  explicitly **in-memory only** (not in any storage zone), so those commands would act on a record
+  that doesn't exist — silent no-ops at best, orphaned-state/exceptions at worst — unless each learned
+  to special-case this row. So full replacement avoids a bug class, but also throws out genuinely
+  useful storage-independent commands (e.g. "Open in Shell").
 
----
+💡 **Suggestion:** Keep the curated menu, but **add back the storage-independent commands explicitly**
+(most valuable: "Open in Shell" / "New Query" against the running instance). The clean version of
+this is splitting the base contextValue into a storage-dependent subset and a connection-only subset
+so Quick Start can opt into the latter — weighed in [§13.3](#133-cluster-commands-on-the-quick-start-row).
 
-## 8. Copy Connection String is a separate, slightly different implementation
+### 7.2 "Copy Connection String" is a separate impl and silently includes the password ⚠️
 
-**Observation:** Copy Connection String appears to be reimplemented for Quick Start and behaves
-slightly differently — it doesn't ask whether to include the password.
+**Observation:** Copy Connection String seems reimplemented for Quick Start and behaves slightly
+differently — it doesn't ask whether to include the password.
 
-**Code findings:**
+**Finding:** Regular clusters use `copyConnectionString()`
+([copyConnectionString.ts](../../../../src/commands/copyConnectionString/copyConnectionString.ts)),
+which prompts via `showQuickPick` ("with password" vs "without password", gated by
+`canIncludeNativePassword()`) and is well-tested. Quick Start uses a **separate, shorter**
+`copyQuickStartConnectionString()`
+([localQuickStartCommands.ts](../../../../src/commands/localQuickStart/localQuickStartCommands.ts))
+that copies `metadata.connectionString` (password already embedded) **with no prompt** — a genuine
+behavioral difference, not just styling. ⚠️ A plaintext password always lands on the clipboard
+silently, which stands out given how careful the rest of the feature is about credentials (masked
+logging, env-file instead of CLI args). There is a _separate_ `copyQuickStartPassword()` command, but
+the connection-string action itself never asks.
 
-- Regular clusters: `copyConnectionString()` in
-  [copyConnectionString.ts](../../../../src/commands/copyConnectionString/copyConnectionString.ts)
-  calls `context.ui.showQuickPick` with two options — "The connection string will not include the
-  password" vs. "...will include the password" — gated by `canIncludeNativePassword()`, only
-  prompting when native-auth credentials are actually present. Well tested (see
-  `copyConnectionString.test.ts`, e.g. "picks WITH/WITHOUT password" cases).
-- Quick Start: `copyQuickStartConnectionString()` in
-  [localQuickStartCommands.ts](../../../../src/commands/localQuickStart/localQuickStartCommands.ts)
-  is a completely separate, much shorter function — it reads `metadata.connectionString` (which
-  already has the generated username/password embedded from `composeConnectionString()`) and copies
-  it directly to the clipboard with no prompt at all. There's a **separate** `copyQuickStartPassword()`
-  command for copying just the password, but the "copy connection string" action always includes the
-  password silently.
-- This is a genuine behavioral difference, not just a styling one: for a regular cluster, a user is
-  asked each time whether the clipboard should carry the plaintext password; for the Quick Start
-  instance, the password always goes to the clipboard silently whenever "Copy Connection String" is
-  used. Given Quick Start's own design docs are otherwise careful about credential handling (masked
-  output-channel logging, env-file instead of CLI args, etc. — see `outputMasking.ts` and the
-  `D14`/masking comments throughout `QuickStartService.ts`), this asymmetry stands out.
+💡 **Suggestion:** Reuse the regular command's QuickPick confirmation for parity (Quick Start always
+uses native auth, so no extra branching is needed), or — if the extra click is unwanted for a
+one-click-local flow — at minimum make the two commands' behavior a **conscious, documented** choice
+rather than an incidental divergence.
 
-**Open questions for later:** Should Quick Start's "Copy Connection String" reuse the same
-QuickPick-based confirmation as the regular command (auto-answering "Quick Start always uses native
-auth" without extra branching), for parity and because it's also copying a plaintext password to the
-clipboard?
+### 7.3 Icons are all inherited/generic — nothing marks "this is the Quick Start instance" 🔍💡
+
+**Observation:** How are the icons chosen for the Quick Start instances?
+
+**Finding:** 🔍 There's no bespoke icon set:
+
+- **Root node:** the extension's product icon (`vscode-documentdb-icon-*.svg`).
+- **Running row:** no override — inherits `DocumentDBClusterItem`'s logic, which picks `$(plug)` when
+  `emulatorConfiguration.isEmulator` is true (always, for Quick Start) else `$(server-environment)`.
+  So the running instance gets **the same `$(plug)`** as any other connection flagged as an emulator
+  (including the §2.1 migrated legacy connections). Nothing visually distinguishes "the managed
+  Quick Start instance."
+- **State rows** (Starting/Stopping/Stopped/Error/Missing): generic `ThemeIcon`s (`loading~spin`,
+  `circle-outline`, `warning` with theme colors).
+- **Empty-state rows:** `rocket` and `link-external`.
+
+💡 **Suggestion:** Give the managed instance a **distinct, state-independent identity** — e.g. reuse
+the **rocket** (already the feature's motif on the root/action rows) for the instance row, or a
+dedicated brand mark, so users can tell "the Quick-Start-managed one" apart from a manually-flagged
+emulator at a glance. Low priority, but cheap.
 
 ---
 
-## 9. "Open terminal in the Docker container" — feasibility
+## 8. Destructive actions
 
-**Observation:** Would it make sense to add a command to open a terminal inside the Docker
-container? Can this be done?
+### 8.1 "Delete Container" bypasses the shared confirmation and uses em dashes ⚠️
 
-**Code findings / feasibility:**
+**Observation:** The Delete Container modal is fine conceptually, but it should use the same delete
+confirmation code path as other destructive actions (like in Settings), and shouldn't use em dashes.
 
-- The repo already has precedent for terminal-backed commands:
-  [openInteractiveShell.ts](../../../../src/commands/openInteractiveShell/openInteractiveShell.ts)
-  calls `vscode.window.createTerminal({ name, pty, iconPath })` with a custom
-  `DocumentDBShellPty` (`vscode.Pseudoterminal`) for the integrated mongosh-style shell — that's a
-  more elaborate mechanism (a custom pty implementation) built for a different purpose (parsing/
-  relaying shell I/O), not required here.
-- For a plain "shell into the container" command, the much simpler standard VS Code pattern is
-  `vscode.window.createTerminal({ name, shellPath: 'docker', shellArgs: ['exec', '-it', containerId,
-'/bin/bash'] })` (with a `/bin/sh` fallback if `bash` isn't present in the image) — this is exactly
-  how other Docker-focused VS Code extensions expose "Attach Shell"/"Open in Terminal". No custom
-  pty is needed since Docker itself drives the interactive TTY.
-- The container id is already tracked in-memory (`InstanceRuntimeState.metadata.containerId`) and
-  exposed via `QuickStartService.getStatus().metadata`, so the command would have everything it
-  needs without new state plumbing. `ContainerRuntime` already has `execShellInContainer()`, but
-  that's a fire-and-forget non-interactive `docker exec` used for the sample-data init script — it
-  writes to the output channel, not a live TTY, so it isn't directly reusable for an interactive
-  terminal; a new, simple command function (not a `ContainerRuntime` method) would be the more
-  natural fit, calling `createTerminal` directly the way `openInteractiveShell` does.
-- No fundamental blocker found: Docker is already a hard dependency for this whole feature, so
-  requiring `docker` on PATH for this command adds no new dependency. The main design questions are
-  which state(s) it should be enabled for (`state_running` only, presumably — a stopped container
-  can't `exec` into it) and what shell to try first.
+**Finding:**
 
-**Open questions for later:** Confirm which context-menu group/icon this would use, and whether it's
-worth a fallback prompt if `bash` isn't in the image (the DocumentDB image's shell availability
-wasn't checked in this pass).
+- ⚠️ Every other destructive command — [removeConnection](../../../../src/commands/removeConnection/removeConnection.ts),
+  [deleteCollection](../../../../src/commands/deleteCollection/deleteCollection.ts),
+  [deleteDatabase](../../../../src/commands/deleteDatabase/deleteDatabase.ts),
+  [folder delete](../../../../src/commands/connections-view/deleteFolder/ConfirmDeleteStep.ts) — calls
+  **`getConfirmationAsInSettings()`** ([getConfirmation.ts](../../../../src/utils/dialogs/getConfirmation.ts)),
+  which honors the user's `confirmationStyle` setting (type-the-word / number challenge / click).
+  `deleteQuickStartInstance()` instead calls **`getConfirmationWithClick()`** directly, ignoring that
+  setting — it's the only _destructive_ command that does (the other direct callers are
+  non-destructive: `hideIndex`/`unhideIndex`).
+- ⚠️ Its two confirmation `detail` strings both contain a literal **em dash** ("…This cannot be undone
+  — you can recreate…"). The character also appears across the feature's other strings
+  (`LocalQuickStart.tsx` next-steps bullets, the §5 timeout message).
+
+💡 **Suggestion:** Switch Delete Container to **`getConfirmationAsInSettings()`** for consistency (decide
+the confirmation word — there's no "type the container name" concept yet, so a simple word like
+`delete` matches the other delete flows). Separately, do a **one-pass em-dash sweep** of the whole
+feature's user-facing strings rather than fixing only the delete dialog.
 
 ---
 
-## 10. How are the Quick Start tree icons chosen?
+## 9. Lifecycle robustness & error recovery
 
-**Observation:** How are the icons chosen for the Quick Start DocumentDB instances?
+### 9.1 A container deleted _outside_ VS Code isn't handled on Start (silent no-op) ⚠️
 
-**Code findings:** There's no bespoke Quick Start icon set — every icon is either the generic
-extension logo or inherited/generic VS Code `ThemeIcon`s, reused from existing logic:
-
-- **Root node** (`DocumentDB Local - Quick Start`): the extension's own product icon —
-  `vscode-documentdb-icon-{light,dark}-themes.svg` from `getResourcesPath()` — same icon used
-  elsewhere for the extension/product identity, not specific to Quick Start.
-- **Running instance row** (`QuickStartClusterItem`): no icon override at all — it falls through to
-  the inherited `DocumentDBClusterItem.getTreeItem()` icon logic, which picks
-  `$(plug)` **iff** `cluster.emulatorConfiguration?.isEmulator` is true, else `$(server-environment)`.
-  Since the Quick Start model always sets `emulatorConfiguration: { isEmulator: true, ... }` (see
-  `LocalQuickStartItem.getChildren()`), the running row always gets `$(plug)` — the exact same icon
-  any other connection flagged as an "emulator" gets (including the legacy migrated connections in
-  finding #1, which also carry `isEmulator: true`). There is nothing that visually distinguishes "the
-  one managed-by-Quick-Start instance" from "any other connection someone marked as an emulator."
-- **Non-running state rows** (Starting/Stopping/Stopped/Error/Missing): plain generic VS Code
-  `ThemeIcon`s chosen per state in `LocalQuickStartItem.getChildren()` —
-  `loading~spin` (Starting/Stopping/Provisioning), `circle-outline` (Stopped), `warning` with
-  `list.errorForeground`/`list.warningForeground` theme color (Error/Missing). None of these relate
-  to cluster icons at all; they're the same generic vocabulary used for background-task rows
-  elsewhere in the extension.
-- **Empty-state rows:** `rocket` (action) and `link-external` (Learn more) — again generic
-  `ThemeIcon`s, not custom art.
-
-**Open questions for later:** Is `$(plug)` (shared with any manually-flagged "emulator" connection)
-an acceptable representation for the one managed local instance, or should Quick Start rows carry a
-distinct icon (e.g. reusing the rocket used for the root node/action row) so the "this is the
-Quick-Start-managed one" identity is visually obvious at a glance, independent of state?
-
----
-
-## 11. Deleted-externally container isn't handled when the user tries "Start"
-
-**Observation (repro):** Created an instance via Quick Start, stopped it, then deleted the
-_container_ directly via Docker (outside VS Code). Back in VS Code, clicking Start on the (still
-"Stopped"-looking) tree row does nothing visible — no error dialog, no tree update — only the raw
-Docker error appears in the "DocumentDB Local Quick Start" output channel:
+**Observation (repro):** Created an instance via Quick Start, stopped it, then deleted the _container_
+directly via Docker. Back in VS Code, clicking Start on the still-"Stopped"-looking row does nothing
+visible — no dialog, no tree update — only the raw Docker error appears in the output channel:
 
 ```
-$ docker container inspect --format '{{json .}}' 57f8311fd9ec77aed5483b6ef36da22890f8a71e1057073f884273ba89c68248
-Error response from daemon: No such container: 57f8311fd9ec77aed5483b6ef36da22890f8a71e1057073f884273ba89c68248
+$ docker container inspect --format '{{json .}}' 57f8311fd9ec…
+Error response from daemon: No such container: 57f8311fd9ec…
 ```
 
-**Code findings — this traces to a specific, reproducible gap, not vague flakiness:**
+**Finding — a specific, reproducible gap:**
 
-- `ContainerRuntime.inspectContainer()` ([ContainerRuntime.ts](../../../../src/services/localQuickStart/ContainerRuntime.ts))
-  wraps the CLI call in `try { ... } catch { return undefined; }` — it deliberately swallows _all_
-  errors, including "No such container," into a plain `undefined` return. That's a reasonable
-  existence-check contract on its own. But every call is still run through the shared
-  `makeRunner()`, whose `onCommand` callback unconditionally logs `'$ ' + command` to the output
-  channel _before_ running, and whose `stdErrPipe` streams the daemon's stderr response into the
-  same channel regardless of whether the caller ends up treating the failure as "expected." That's
-  exactly the two lines the user saw — this is the extension's own inspect call being logged, not a
-  manual terminal session.
-- `start()` (`QuickStartService.ts`) calls `this.isManaged(id, alias)` before doing anything else:
-  ```ts
-  private async isManaged(containerId, alias) {
-      const item = await this.runtime.inspectContainer(containerId);
-      if (!item || item.labels?.[QUICK_START_LABEL_KEY] !== '1') return false;
-      return this.aliasMatches(...);
-  }
-  ```
-  When the container has been removed, `inspectContainer` returns `undefined` → `isManaged` returns
-  `false` — **the exact same `false` it would return for "this container exists but isn't ours."**
-  `isManaged()` cannot distinguish "gone" from "not managed by us."
-- Back in `start()`:
-  ```ts
-  if (!id || !(await this.isManaged(id, alias)) || !(await this.liveStateGuard(id, ['stopped']))) {
-    return;
-  }
-  ```
-  Because `isManaged` already returned `false`, the `||` short-circuits — **`liveStateGuard()` is
-  never even called** for this scenario. That matters because `liveStateGuard` is the piece of code
-  that _would_ have handled this gracefully: it explicitly checks for a `'missing'` live state, calls
-  `refreshLiveState()`, and shows `vscode.window.showInformationMessage(...)` telling the user the
-  instance changed in another window. That path exists and is well-built for _other_ window /
-  external-stop scenarios — it's just unreachable here because `isManaged` gates in front of it and
-  returns the same "false" for two different situations.
-- Net effect: `start()`'s whole body becomes a silent early `return` — no `setStatus(...)` call, so
-  `statusEmitter` never fires, so `ConnectionsBranchDataProvider.refresh()` (wired in
-  `ClustersExtension.ts` via `QuickStartService.onDidChangeStatus`) never runs, so the tree keeps
-  showing the stale "Stopped" row indefinitely until something else (e.g. expanding/collapsing the
-  node, which re-triggers `LocalQuickStartItem.getChildren()` → `refreshLiveState()`) happens to
-  refresh it independently.
-- Worth noting there's already a very similar, well-designed pattern for a related case:
-  `refreshLiveState()` itself _does_ correctly set `entry.missing = true` and fire the status event
-  when a periodic/tree-driven check finds the container gone — and the tree already has full
-  rendering support for that (`Missing · click to recreate`, bound to reopen the Quick Start panel,
-  which re-provisions). The gap is specifically that the **lifecycle actions** (`start`/`stop`/
-  `restart`, and to a lesser extent `deleteContainer`, which has its own separate fallback lookup)
-  don't funnel through that same "missing" detection before giving up.
+- `ContainerRuntime.inspectContainer()` wraps the CLI call in `try { … } catch { return undefined; }`,
+  swallowing "No such container" into `undefined`. But the shared `makeRunner()` still logs the
+  command and streams the daemon's stderr to the channel — that's exactly the two lines the user saw
+  (the extension's own inspect call, not a manual terminal session).
+- `start()` calls `isManaged(id)` first, which returns `false` both when the container **isn't ours**
+  _and_ when it's **gone** (`inspectContainer` → `undefined`). ⚠️ **`isManaged()` cannot distinguish
+  "missing" from "not ours."**
+- `start()`'s guard is `if (!id || !isManaged || !liveStateGuard(…)) return;`. Because `isManaged`
+  already returned `false`, the `||` short-circuits and **`liveStateGuard()` never runs** — which is
+  the very code that _would_ have handled this gracefully (it detects a `'missing'` live state, calls
+  `refreshLiveState()`, and shows an info message). That path is well-built for the multi-window /
+  external-stop case; it's just unreachable here.
+- Net effect: `start()` early-returns silently, `setStatus` never fires, the tree never refreshes, and
+  the stale "Stopped" row persists until something else (e.g. collapsing/expanding the node) triggers
+  `refreshLiveState()` independently.
+- Note there's already a good pattern for the related case: `refreshLiveState()` _does_ set
+  `entry.missing = true` and the tree already renders `Missing · click to recreate`. The gap is that
+  the **lifecycle actions** (`start`/`stop`/`restart`) don't funnel through that missing-detection
+  before giving up.
 
-**Open questions for later (explicitly deferred — discuss when fixing):**
-
-- Should `isManaged()` (or a new check ahead of it in `start`/`stop`/`restart`) distinguish "no
-  container found" from "found but not ours," and in the former case do what `liveStateGuard`
-  already does for the multi-window case — refresh live state + surface a message — rather than
-  silently returning?
-- What should the message/options be? The user's suggestion: tell them the container wasn't found
-  (possibly deleted), and offer next steps — Delete (clean up the stale metadata/volume) and/or
-  "reload with same settings" (re-provision using the same image/credentials, similar to how the
-  existing `Missing` row already offers "click to recreate"). Note the `Missing` row's recreate flow
-  and the reuse-credentials path in `provision()` (`getReusableCredentials`) may already cover most
-  of "reload with same settings" — worth checking whether that flow is sufficient once actually
-  reachable from `start()`/`stop()`/`restart()`, or needs its own affordance.
+💡 **Suggestion:** Teach `start`/`stop`/`restart` to distinguish "no container found" from "found but
+not ours" (a small change to `isManaged`, or a check ahead of it) and, on "missing," do what
+`liveStateGuard` already does for the multi-window case — refresh state to the `Missing` badge and
+surface a message with next steps: **Delete** (clean up stale metadata/volume) and/or **Recreate with
+same settings** (the existing `Missing` row's recreate flow + `getReusableCredentials()` in
+`provision()` likely already covers most of this — worth confirming it's sufficient once reachable
+from the lifecycle actions). Full UX options in [§13.4](#134-external-deletemissing-recovery-affordance).
 
 ---
 
-## Summary table
+## 10. Possible additions
 
-| #   | Topic                                             | Status                                                                                                                                      |
-| --- | ------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| 1   | Legacy migration folder name/placement            | Confirmed: `Local Connections (Legacy)`, alphabetically sorted with no pinning                                                              |
-| 2   | Delete Container confirmation + em dashes         | Confirmed: bypasses `getConfirmationAsInSettings`; em dashes present in multiple strings                                                    |
-| 3   | Empty-state tree row wording/Learn-more placement | **Fix applied:** reworded to "Click here to install & try DocumentDB locally"; "Learn more" row dropped (context-menu relocation left open) |
-| 4   | Webview header instability / stuck text           | Confirmed real bug: `success`/`failed` reuse the `provisioning` header verbatim                                                             |
-| 5   | "Waiting for connections" wording/sub-progress    | Confirmed: static label for up to 3 minutes, no sub-status shown in-panel                                                                   |
-| 6   | Image pull progress tracking                      | Confirmed: none; ideas drafted (layer counter, indeterminate `ProgressBar`)                                                                 |
-| 7   | Running-instance row vs. cluster context commands | Confirmed deliberate contextValue replacement; discussed what would break if merged                                                         |
-| 8   | Copy Connection String reimplementation           | Confirmed: separate function, no password-inclusion prompt unlike regular clusters                                                          |
-| 9   | Open terminal in container                        | Feasible via `createTerminal` + `docker exec -it`; no blocker found                                                                         |
-| 10  | Icon selection logic                              | Confirmed: no bespoke icons; inherited/generic `ThemeIcon`s throughout                                                                      |
-| 11  | Externally-deleted container not handled on Start | Root cause found: `isManaged()` conflates "missing" with "not ours," bypassing the existing `liveStateGuard` missing-state handling         |
+### 10.1 "Open terminal in the container" — feasible, no blocker 🔍💡
+
+**Observation:** Would a command to open a terminal inside the Docker container make sense? Can we do
+it?
+
+**Finding:** 🔍 Feasible, no blocker.
+
+- The repo already uses `vscode.window.createTerminal(...)` for terminal-backed commands
+  ([openInteractiveShell.ts](../../../../src/commands/openInteractiveShell/openInteractiveShell.ts)),
+  though that uses a custom `Pseudoterminal` for the integrated shell — more than needed here.
+- For a plain "shell into the container," the standard pattern is
+  `createTerminal({ name, shellPath: 'docker', shellArgs: ['exec', '-it', containerId, '/bin/bash'] })`
+  (with a `/bin/sh` fallback) — Docker drives the TTY, no custom pty required.
+- The container id is already tracked (`metadata.containerId`, via `getStatus()`), so no new state is
+  needed. `ContainerRuntime.execShellInContainer()` exists but is non-interactive (channel output),
+  so a new small command calling `createTerminal` directly is the better fit. Docker is already a hard
+  dependency, so no new prerequisite.
+
+💡 **Suggestion:** Add an **"Open in Terminal"** context-menu command gated on `state_running` (a
+stopped container can't `exec`), trying `bash` then falling back to `sh`. Small, self-contained, and a
+natural power-user affordance. Open details (menu group/icon, shell fallback prompt) in
+[§13.5](#135-open-terminal-in-container).
+
+---
+
+## 11. Consolidated flags & suggestions (read this before testing)
+
+| §    | Item                                            | Verdict                  | Suggested next step                                                                                                     |
+| ---- | ----------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------- |
+| 2.1  | Legacy migration folder discoverability         | ⚠️ Flag                  | One-time toast + "Reveal"; optional distinct badge/pin ([§13.1](#131-surfacing-the-legacy-migration-folder))            |
+| 3.1  | Empty-state wording / drop "Learn more"         | ✅ Fix applied           | Decide if "Learn more" returns as a context-menu entry                                                                  |
+| 4.1  | Webview header changes / stuck on "Setting up"  | ⚠️ Flag (real bug)       | Make the header a single static string; body carries state                                                              |
+| 5.1  | "Waiting for connections" static for minutes    | ⚠️ Flag                  | Add in-stage elapsed/sub-info; surface "View output" earlier                                                            |
+| 6.1  | No image-pull progress                          | ⚠️ Flag                  | Indeterminate `ProgressBar` + "N of M layers" ([§13.2](#132-image-pull-progress-indicator))                             |
+| 7.1  | Running row lacks regular cluster commands      | 🔍 Answered (deliberate) | Add back storage-independent commands explicitly ([§13.3](#133-cluster-commands-on-the-quick-start-row))                |
+| 7.2  | Copy Connection String silently adds password   | ⚠️ Flag                  | Reuse the regular QuickPick confirmation, or document the divergence                                                    |
+| 7.3  | Generic `$(plug)` icon, no distinct identity    | 🔍 Answered              | Give the instance a distinct icon (reuse the rocket motif)                                                              |
+| 8.1  | Delete bypasses shared confirmation + em dashes | ⚠️ Flag                  | Switch to `getConfirmationAsInSettings()`; sweep em dashes feature-wide                                                 |
+| 9.1  | External container delete not handled on Start  | ⚠️ Flag (real bug)       | Distinguish missing vs not-ours; route to Missing + recovery ([§13.4](#134-external-deletemissing-recovery-affordance)) |
+| 10.1 | "Open terminal in container"                    | 🔍 Feasible              | Add `state_running` "Open in Terminal" command ([§13.5](#135-open-terminal-in-container))                               |
+
+---
+
+## 12. Applied changes on this branch
+
+- **§3.1** — empty-state action row relabeled to "Click here to install & try DocumentDB locally"; the
+  "Learn more…" row removed. Files: [LocalQuickStartItem.ts](../../../../src/tree/connections-view/LocalQuickStart/LocalQuickStartItem.ts),
+  [l10n/bundle.l10n.json](../../../../l10n/bundle.l10n.json). Verified via `l10n` / `prettier` / `lint`
+  / full Jest suite / `build`.
+
+Everything else in this document is a discovery note or suggestion — no other code was changed.
+
+---
+
+## 13. Open ideas — options, pros & cons
+
+These are the genuinely open design questions with real trade-offs. Recommendations are suggestions
+for the team to react to, not decisions.
+
+### 13.1 Surfacing the legacy migration folder (§2.1)
+
+| Option                                        | Pros                                                      | Cons                                                              |
+| --------------------------------------------- | --------------------------------------------------------- | ----------------------------------------------------------------- |
+| **A. One-time toast + "Reveal" action**       | Loud exactly once, at the moment it matters; non-blocking | Transient; a user who dismisses it still has to find the folder   |
+| **B. Distinct folder icon/description badge** | Persistent visual marker; no extra flow                   | Adds a special-case to folder rendering; mild clutter             |
+| **C. Pin to a fixed position (first/last)**   | Predictable location regardless of name                   | Breaks the pure-alphabetical model; users may still not notice it |
+| **D. Do nothing (current)**                   | Zero code                                                 | Folder hides in the alphabetical sort; confusing post-upgrade     |
+
+> 💡 **Suggested:** **A**, optionally with **B**. The toast solves the "I didn't know my connections
+> moved" moment directly; a subtle badge helps the user re-find it later without breaking the sort.
+
+### 13.2 Image-pull progress indicator (§6.1)
+
+| Option                                                         | Pros                                                        | Cons                                                                           |
+| -------------------------------------------------------------- | ----------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| **A. Spinner + static label (current)**                        | Zero work                                                   | Looks frozen for tens of seconds on a cold pull                                |
+| **B. Indeterminate `ProgressBar` + "N of M layers" sub-label** | Alive + honest; reuses existing components; modest plumbing | Layer count parsed from free-form CLI text (small regex); no true %            |
+| **C. Docker Engine API / `dockerode` structured pull**         | Real per-layer byte totals → an actual percentage           | Larger change; new dependency/route away from the CLI-wrapper approach         |
+| **D. "Dot per completed layer" row**                           | Visually pleasant for small bounded step counts             | Total layer count unknown until pull starts → row grows/shrinks, reads jittery |
+
+> 💡 **Suggested:** **B** as the near-term win (alive UI without the C rework), with **C** noted as the
+> "if we want a real percentage" follow-up. Avoid **D** — the unknown-until-runtime layer count makes
+> the dot row jitter.
+
+### 13.3 Cluster commands on the Quick Start row (§7.1)
+
+| Option                                                            | Pros                                                              | Cons                                                                     |
+| ----------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| **A. Curated menu only (current)**                                | No risk of storage commands acting on an in-memory item           | Loses genuinely useful storage-independent commands (e.g. Open in Shell) |
+| **B. Add specific storage-independent commands explicitly**       | Gains the useful ones; still no storage-command risk              | Each command re-declared with a Quick-Start `when`-clause                |
+| **C. Split base contextValue into storage vs connection subsets** | Clean, reusable; Quick Start opts into the connection-only subset | Touches the base cluster item + every command's `when`; larger refactor  |
+
+> 💡 **Suggested:** **B** now (add "Open in Shell"/"New Query" against the running instance), keep **C**
+> as the eventual clean-up if more items want the same split.
+
+### 13.4 External-delete / Missing recovery affordance (§9.1)
+
+| Option                                                             | Pros                                                             | Cons                                                                   |
+| ------------------------------------------------------------------ | ---------------------------------------------------------------- | ---------------------------------------------------------------------- |
+| **A. Silent early-return (current)**                               | —                                                                | Looks broken; stale row; error only in the output channel              |
+| **B. Detect missing → set Missing badge + info message**           | Reuses the existing `Missing` rendering + `liveStateGuard` style | User still has to choose the next step                                 |
+| **C. B + actionable prompt: Delete / Recreate with same settings** | One-click recovery; matches the "click to recreate" Missing row  | Slightly more logic; must confirm `getReusableCredentials()` covers it |
+
+> 💡 **Suggested:** **C**. It turns a silent dead-end into a self-service recovery, and most of the
+> machinery (Missing rendering, credential reuse in `provision()`) already exists — the work is mainly
+> routing `start`/`stop`/`restart` into it instead of early-returning.
+
+### 13.5 Open terminal in container (§10.1)
+
+| Option                                                   | Pros                                           | Cons                                                       |
+| -------------------------------------------------------- | ---------------------------------------------- | ---------------------------------------------------------- |
+| **A. `createTerminal` with `docker exec -it … bash`**    | Simplest; Docker drives the TTY; no custom pty | Assumes `bash` in the image                                |
+| **B. A + `/bin/sh` fallback**                            | Works even on minimal images                   | Two-attempt logic (or a probe)                             |
+| **C. Custom `Pseudoterminal` like the integrated shell** | Full control over I/O                          | Overkill for "just give me a shell"; more code to maintain |
+
+> 💡 **Suggested:** **B** — the standard, low-maintenance pattern, gated on `state_running`. Reserve **C**
+> only if we later want to parse/relay the shell I/O.
