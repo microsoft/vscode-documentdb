@@ -41,11 +41,11 @@ Heavier design questions with real trade-offs are pulled into [Open ideas](#open
 
 ### Status
 
-| Status              | Meaning                                                                                     |
-| ------------------- | ------------------------------------------------------------------------------------------- |
-| 🟠 **Open**         | Recorded + analyzed; **the operator must choose the direction** (see the item's Suggestion) |
-| 🟡 **Acknowledged** | Known and accepted; not planned now — may be revisited                                      |
-| ✅ **Implemented**  | A change was made on this branch and verified                                               |
+| Status             | Meaning                                                                                                                                        |
+| ------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
+| 🟠 **Open**        | Recorded + analyzed; carries a **TN recommendation** ("TN leans towards …") but stays **Open** — a _suggestion_ the team may revisit / replace |
+| 🟡 **Open (soft)** | Open, but the recommendation depends on a **technical investigation** (item 25) or is a **soft "leave as-is"** (item 27)                       |
+| ✅ **Implemented** | A change was made on this branch and verified                                                                                                  |
 
 ### Markers (inline)
 
@@ -55,10 +55,12 @@ Heavier design questions with real trade-offs are pulled into [Open ideas](#open
 | 💡 **Suggestion** | A design/wording recommendation to react to             |
 | 🔍 **Answered**   | A "how does this work?" question answered from the code |
 
-> **For the operator:** almost everything below is **Open**. Each item states a recommended direction
-> in its **Suggestion** (and, where there are real trade-offs, an entry under
-> [Open ideas](#open-ideas--options-pros--cons)). Pick a direction per item; the review does not decide
-> for you. Exactly **one** item is already **Implemented** (item 30). One is **Acknowledged** (item 27).
+> **For the operator:** almost everything below is **Open**. Each item records a **TN recommendation**
+> ("TN leans towards … because …") — but these are **suggestions, not final decisions**: the team may
+> revisit and propose another approach. **TN is open to discussion — if you disagree with a
+> recommendation, raise it.** Where there are real trade-offs, see the matching entry under
+> [Open ideas](#open-ideas--options-pros--cons). Exactly **one** item is already **Implemented**
+> (item 30).
 
 ---
 
@@ -81,41 +83,48 @@ webview flow.
 
 ## Priority index
 
-| #   | Priority | Item                                                  | Status          |
-| --- | -------- | ----------------------------------------------------- | --------------- |
-| 1   | **P0**   | Credential-missing state is a restart dead end        | 🟠 Open         |
-| 2   | **P0**   | External container delete → silent no-op on Start     | 🟠 Open         |
-| 3   | **P1**   | Webview header stuck on "Setting up…"                 | 🟠 Open         |
-| 4   | **P1**   | Tree nodes misused to display errors                  | 🟠 Open         |
-| 5   | **P1**   | Error/status messages hijack the hero                 | 🟠 Open         |
-| 6   | **P1**   | "Delete deletes data" vs "recreate/recover" clash     | 🟠 Open         |
-| 7   | **P1**   | Copy Connection String silently copies the password   | 🟠 Open         |
-| 8   | **P1**   | Delete bypasses the shared confirmation (+ em dashes) | 🟠 Open         |
-| 9   | **P1**   | Only ever delete containers we created                | 🟠 Open         |
-| 10  | **P2**   | Legacy migration folder hides in the sort             | 🟠 Open         |
-| 11  | **P2**   | Phase out the "local connection" concept              | 🟠 Open         |
-| 12  | **P2**   | "Checking Docker" is a bare spinner                   | 🟠 Open         |
-| 13  | **P2**   | Advanced: creds toggle + ambiguous placeholders       | 🟠 Open         |
-| 14  | **P2**   | "Cancel" implies a rollback it doesn't do             | 🟠 Open         |
-| 15  | **P2**   | No "What was done" summary on completion              | 🟠 Open         |
-| 16  | **P2**   | No upfront "first run takes a few minutes"            | 🟠 Open         |
-| 17  | **P2**   | "Load sample data" is all-or-nothing                  | 🟠 Open         |
-| 18  | **P2**   | "Waiting…" static for minutes                         | 🟠 Open         |
-| 19  | **P2**   | No image-pull progress                                | 🟠 Open         |
-| 20  | **P2**   | Running row lacks regular cluster commands            | 🟠 Open         |
-| 21  | **P2**   | Credential storage is a bespoke plainer path          | 🟠 Open         |
-| 22  | **P2**   | Always persistent — no ephemeral option               | 🟠 Open         |
-| 23  | **P2**   | User delete must always drop the volume               | 🟠 Open         |
-| 24  | **P2**   | Volumes not structurally linked to the image          | 🟠 Open         |
-| 25  | **P2**   | Container keeps running after VS Code closes          | 🟠 Open         |
-| 26  | **P2**   | Tree state changes not announced (accessibility)      | 🟠 Open         |
-| 27  | **P3**   | Docker prereq only revealed after the click           | 🟡 Acknowledged |
-| 28  | **P3**   | Generic `$(plug)` icon, no distinct identity          | 🟠 Open         |
-| 29  | **P3**   | "Open terminal in the container"                      | 🟠 Open         |
-| 30  | **P1\*** | Empty-state tree row reworded / "Learn more" dropped  | ✅ Implemented  |
+| #   | Priority | Item                                                  | Status         |
+| --- | -------- | ----------------------------------------------------- | -------------- |
+| 1   | **P0**   | Credential-missing state is a restart dead end        | 🟠 Open        |
+| 2   | **P0**   | External container delete → silent no-op on Start     | 🟠 Open        |
+| 3   | **P1**   | Webview header stuck on "Setting up…"                 | 🟠 Open        |
+| 4   | **P1**   | Tree nodes misused to display errors                  | 🟠 Open        |
+| 5   | **P1**   | Error/status messages hijack the hero                 | 🟠 Open        |
+| 6   | **P1**   | "Delete deletes data" vs "recreate/recover" clash     | 🟠 Open        |
+| 7   | **P1**   | Copy Connection String silently copies the password   | 🟠 Open        |
+| 8   | **P1**   | Delete bypasses the shared confirmation (+ em dashes) | 🟠 Open        |
+| 9   | **P1**   | Only ever delete containers we created                | 🟠 Open        |
+| 10  | **P2**   | Legacy migration folder hides in the sort             | 🟠 Open        |
+| 11  | **P2**   | Phase out the "local connection" concept              | 🟠 Open        |
+| 12  | **P2**   | "Checking Docker" is a bare spinner                   | 🟠 Open        |
+| 13  | **P2**   | Advanced: creds toggle + ambiguous placeholders       | 🟠 Open        |
+| 14  | **P2**   | "Cancel" implies a rollback it doesn't do             | 🟠 Open        |
+| 15  | **P2**   | No "What was done" summary on completion              | 🟠 Open        |
+| 16  | **P2**   | No upfront "first run takes a few minutes"            | 🟠 Open        |
+| 17  | **P2**   | "Load sample data" is all-or-nothing                  | 🟠 Open\*      |
+| 18  | **P2**   | "Waiting…" static for minutes                         | 🟠 Open\*      |
+| 19  | **P2**   | No image-pull progress                                | 🟠 Open\*      |
+| 20  | **P2**   | Running row lacks regular cluster commands            | 🟠 Open        |
+| 21  | **P2**   | Credential storage is a bespoke plainer path          | 🟠 Open        |
+| 22  | **P2**   | Always persistent — no ephemeral option               | 🟠 Open        |
+| 23  | **P2**   | User delete must always drop the volume               | 🟠 Open        |
+| 24  | **P2**   | Volumes not structurally linked to the image          | 🟠 Open        |
+| 25  | **P2**   | Container keeps running after VS Code closes          | 🟡 Open\*      |
+| 26  | **P2**   | Tree state changes not announced (accessibility)      | 🟠 Open        |
+| 27  | **P3**   | Docker prereq only revealed after the click           | 🟡 Open\*      |
+| 28  | **P3**   | Generic `$(plug)` icon, no distinct identity          | 🟠 Open        |
+| 29  | **P3**   | "Open terminal in the container"                      | 🟠 Open        |
+| 30  | **P1\*** | Empty-state tree row reworded / "Learn more" dropped  | ✅ Implemented |
 
 > \* Item 30 was a P1-ish wording nit; it's the one item already shipped on this branch, so it's parked
 > at the end under Implemented.
+>
+> **Status key:** every item is **🟠 Open** (a few are **🟡 Open (soft)**), plus one **✅ Implemented**
+> (item 30). Each Open item carries a **TN recommendation** recorded inline as _"TN leans towards …"_ —
+> **a suggestion, not a decision**; the team may revisit. An **Open\*** (items 17, 18, 19) means the
+> recommended _direction_ is set but an **investigation** is required before/while implementing (data
+> source, real progress signal). **🟡 Open\*** (item 25) means the recommendation (keep always-on) holds
+> pending a technical check. **TN is open to discussion — disagree freely.**
 
 ---
 
@@ -123,7 +132,12 @@ webview flow.
 
 ### 1. Credential-missing state after a restart is a UI dead end (the demo incident) ⚠️
 
-**Priority:** P0 · **Status:** 🟠 Open — operator to choose the direction (see Suggestion + Open idea O4).
+**Priority:** P0 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards Delete-only** (no Recreate here) — keep it **clean and simple**. Communicate
+> clearly to the user that this is a **corrupted / unusable state that needs to be removed**, and offer
+> a single **Delete** action. _Because a lost-secret state is rare, and a clear "this is broken, remove
+> it and start over" reads better than trying to recover onto an opaque on-disk volume._
 
 **Observation (real incident, mid-review):** An instance was created via Quick Start, then stopped,
 then its container/image were removed outside VS Code. After a **VS Code restart** the Quick Start node
@@ -163,7 +177,12 @@ idea O4; a direct instance of item 4's principle.
 
 ### 2. A container deleted _outside_ VS Code isn't handled on Start (silent no-op) ⚠️
 
-**Priority:** P0 · **Status:** 🟠 Open — operator to choose the direction (see Suggestion + Open idea O4).
+**Priority:** P0 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards "show as Missing + a Delete/Remove action"** (not a silent removal) so the user
+> **notices something happened**; put the extra detail in the **tooltip**. Keep it **good-enough and
+> low-cost** — it's an edge case, so the fix should be solid but not expensive. _Because the goal is
+> visible feedback plus a clear way out, not a polished recovery flow._
 
 **Observation (repro):** Created an instance via Quick Start, stopped it, then deleted the _container_
 directly via Docker. Back in VS Code, clicking Start on the still-"Stopped"-looking row does nothing
@@ -207,7 +226,11 @@ covers most of it — confirm once reachable). Options in Open idea O4.
 
 ### 3. The webview header changes with state and gets stuck on "Setting up…" ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P1 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards a fixed header area** — static across all phases; all state lives in the body /
+> subtitle. _Because the header jumping (and sticking on "Setting up…") is unexpected; a constant
+> header is calmer and removes the stuck-text bug outright._
 
 **Observation:** The header should be static. Today it changes with status/progress/errors, and it
 sometimes stays on "Setting up DocumentDB Local…" even when setup is actually complete.
@@ -233,7 +256,12 @@ already does.
 
 ### 4. Tree nodes are misused to display errors (they should be actions, not dialogs) ⚠️💡
 
-**Priority:** P1 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P1 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards unifying** — adopt the rule feature-wide: errors go to a **modal** (+ the output
+> channel for detail), and tree rows stay **actionable only**. _Because it matches the rest of the
+> extension (the Kubernetes feature already did this) and removes the passive error rows at the root,
+> which also fixes item 1's dead end._
 
 **Observation:** A broader pattern problem exposed by the incident (item 1) — we render an **error message
 as a tree node**. Leaf/error nodes should be **actions the user can take**, not a substitute for a dialog
@@ -260,7 +288,11 @@ surface with state it isn't meant to hold" theme.
 
 ### 5. Error/status messages must leave the hero — show a content-area card; run a small UX experiment ⚠️💡
 
-**Priority:** P1 · **Status:** 🟠 Open — operator to choose the direction (a UX experiment is requested).
+**Priority:** P1 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards static hero + inline error card** (this was my original suggestion when I reported
+> the issue). Prototype variants **A/B/C** and pick per-state, with **Retry on the card**. _Because the
+> message belongs in the content area as an actionable card, not in the hero._
 
 **Observation:** We have error/status states (e.g. Docker missing). The core requirement: these messages
 **must not live in the hero section** — the hero stays constant and the message becomes a **card in the
@@ -303,7 +335,14 @@ should **render a few options to compare**. We also need to decide **where Retry
 
 ### 6. "Delete deletes data" vs "Recreate / recover" — resolve the contradiction ⚠️💡
 
-**Priority:** P1 · **Status:** 🟠 Open — operator to choose the direction (a discussion is requested).
+**Priority:** P1 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards no recovery at all** — **Delete always wipes everything**; there is no "keep data"
+> / Recreate-onto-surviving-volume path. Keep the code **and** the UX simple. Advanced data-retention
+> scenarios are **out of scope** — users who want to retain data can manage their local instances with
+> the Docker CLI/tools directly. Missing/error copy just states the instance is gone and should be
+> removed; no contradiction because there is no recovery to promise. _Because edge cases should stay
+> simple and cheap, not grow a recovery subsystem._
 
 **Observation:** We tell the user that **deleting deletes the data** — so then what does **recreate /
 recovery** mean? The two messages appear to contradict each other.
@@ -332,7 +371,11 @@ recovery** mean? The two messages appear to contradict each other.
 
 ### 7. "Copy Connection String" is a separate impl and silently includes the password ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P1 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards reuse** — use the standard `copyConnectionString()` with/without-password QuickPick
+> for parity, instead of the separate silent-copy path. _Because it's a plaintext secret going to the
+> clipboard; consistency with every other connection wins._
 
 **Observation:** Copy Connection String seems reimplemented for Quick Start and behaves slightly differently
 — it doesn't ask whether to include the password.
@@ -354,7 +397,11 @@ incidental divergence.
 
 ### 8. "Delete Container" bypasses the shared confirmation and uses em dashes ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P1 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards switching** to `getConfirmationAsInSettings()` (so it honors the user's
+> confirmation style) **and updating the wording** — including the feature-wide em-dash sweep. _Because
+> a destructive action should match every other destructive command in the extension._
 
 **Observation:** The Delete Container modal is fine conceptually, but it should use the same delete
 confirmation code path as other destructive actions (like in Settings), and shouldn't use em dashes.
@@ -380,7 +427,13 @@ sweep** of the whole feature's user-facing strings rather than fixing only the d
 
 ### 9. We should only ever delete containers we created (pre-release safety) ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open — operator to choose the direction (pre-release must-fix).
+**Priority:** P1 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards a hard label precondition on every removal, no exceptions.** Re-verify the
+> `vscode.documentdb.quickstart` label immediately before `removeContainer`/`removeVolume`. If a
+> container is **not** ours, **do not delete it** — show a warning that it can't be removed because it
+> was **created outside the extension**. _Because we must never remove a container/volume we didn't
+> create._
 
 **Observation:** Not urgent now, but must be addressed **before final release**: we should be allowed to
 delete **only** the containers we created.
@@ -402,7 +455,11 @@ user-named containers, more recovery flows), an id-based delete without a label 
 
 ### 10. Legacy emulator connections migrate to a folder that can hide in the sort order ⚠️🔍
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction (see Open idea O1).
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards the cheap `_`-prefix only** (Open idea O1 · E) — rename the folder to
+> `_Local Connections (Legacy)` so it floats to the top with zero sort/render code. **No toast, no
+> badge** for now. _Because the user base is still small; this isn't worth a bigger investment yet._
 
 **Observation:** Is the one-time migration of original "DocumentDB Local" emulator connections still
 happening? What's the folder called? Sorting could place it somewhere unexpected.
@@ -429,7 +486,11 @@ See Open idea O1.
 
 ### 11. Phase out the "local connection" concept — a localhost connection is just a connection 💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction (a cleanup epic, not one PR).
+**Priority:** P2 · **Status:** 🟠 Open — TN suggests deferring to a follow-up issue (the team may revisit).
+
+> **TN leans towards a separate follow-up issue** — this is a larger cleanup and **should not be part of
+> this PR.** Track it independently and sequence it after the Quick Start bugs land. _Because bundling a
+> broad deprecation into this PR would balloon its scope._
 
 **Observation:** Ideally we **phase out** the notion of a special "local connection" entirely. A connection to
 `localhost` is just a **regular connection that happens to point at localhost**. Once that lands there is no
@@ -453,7 +514,11 @@ both fold into this end state.
 
 ### 12. The initial "Checking Docker" loading should render chrome + skeleton cards (reuse the metric card) ⚠️💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards both** — render the chrome + skeleton cards immediately (fill independently) **and**
+> reuse + relocate the accessible Query Insights `MetricBase`. _Because it fixes the snap-in jump and
+> gives us one shared, accessible metric card._
 
 **Observation:** The initial `loading` ("Checking Docker") state should behave like the **Query Insights**
 view: the chrome renders immediately (title + header), and the cards behave like our **metrics cards** — a
@@ -479,7 +544,12 @@ Start is the wrong dependency direction). Worth it: one accessible, tooltip-capa
 
 ### 13. Advanced panel: credentials should sit behind a toggle, and "placeholder = default" is ambiguous ⚠️💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction (options to weigh below).
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards: (1) credentials behind an "override" toggle**, and **(2) placeholder Option A** —
+> the default lives **only in the hint line**, with an explanation that **the default is applied when the
+> field is left empty** (no literal-value ghost text). Apply the same convention to every Advanced field.
+> _Because "blank = default" only reads honestly when the box actually looks empty._
 
 **Observation:** Username + password should be grouped **behind a toggle** — the user flips "override the
 default" and only then specifies them. The ghost text **"auto"** is confusing (is it the default _value_?).
@@ -508,7 +578,11 @@ Advanced field.
 
 ### 14. What does "Cancel" do mid-provision? Consider the verb "Abort" (no full rollback promise) ⚠️💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards the "Abort" wording**, and — **even on abort** — **show the "what was done" summary**
+> (cf. item 15) so there's full clarity about what happened (e.g. the image was kept). _Because "Abort"
+> sets honest expectations and the summary removes any ambiguity about residual state._
 
 **Observation:** Investigate what **Cancel** does while provisioning is in progress. Do we **delete an image
 that started downloading**, or just abort? A clean rollback is hard to promise, so **"Abort"** may be a cleaner
@@ -532,7 +606,11 @@ by the button ("Stops setup. The downloaded image is kept so a retry is faster."
 
 ### 15. On completion, show a "What was done" summary card — below the content ⚠️💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards yes** — mirror the review screen: **"what we'll do" → "what was done."** It must be
+> easy to grasp at a glance (users are busy). _Because the symmetry makes the outcome obvious and
+> surfaces the real bound port/creds._
 
 **Observation:** When a deployment completes, the info card should render **below** the other content (not
 above), and carry a **summary of what was done** — a table-ish block like the review screen's "what we'll do"
@@ -555,7 +633,11 @@ the real port.
 
 ### 16. Set an upfront "the first run can take a few minutes" expectation 💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards yes** — have the one-liner ready (review screen and/or provisioning subtitle),
+> distinguishing first-run from a restart. _Because it reframes a long cold start from "stuck" to
+> "expected."_
 
 **Observation:** Whatever we can do to set expectations up front — a cold first run is genuinely long.
 
@@ -570,7 +652,13 @@ from a restart.
 
 ### 17. "Load sample data" is all-or-nothing — add a choice of test data ⚠️💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning; needs investigation (the team may revisit).
+
+> **TN leans towards a multiselect dropdown** of datasets to preload — **but the data source needs
+> discussion.** The current tiny "5 docs per container" sample is weak; consider a **custom-file picker**
+> (the Docker image may support loading one). **Whoever implements this must investigate** where the data
+> should come from and what the image supports. _Because a real, richer, choosable dataset is far more
+> useful than a fixed toy sample._
 
 **Observation:** The sample-data option is all-or-nothing today. We'll have to add **options to choose the test
 data** (which dataset, or none).
@@ -585,7 +673,14 @@ ideally with a one-line description of each. Keep exec-once semantics per datase
 
 ### 18. "Waiting for DocumentDB to accept connections" can sit static for minutes ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning; needs investigation (the team may revisit).
+
+> **TN leans towards no fake sub-timer / no simulated progress** (it doesn't help). Prefer **real
+> signal**; if none is available, iterate a **rotating one-liner** (toggle ~every 2 s) that explains
+> what's happening in general — e.g. _"waiting for the container to initialize"_, _"waiting for data to
+> preload"_, _"waiting for network config…"_ — to keep the user engaged. **Real data would be truly
+> better — investigative task.** _Because honest signal beats a spinner, and simulated progress is
+> worse than none._
 
 **Observation:** This message could be reworded, or show intermediate progress as sub-info, since it can take a
 while.
@@ -603,7 +698,14 @@ surfacing "View Docker output" _during_ this stage (it currently only appears at
 
 ### 19. No structured progress while the image downloads ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction (see Open idea O2).
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning; needs investigation (the team may revisit).
+
+> **TN leans towards keeping the spinner** (we already show one per sub-progress stage) and adding
+> **extra info** rather than a fake intermediate bar. Ask the implementer to **experiment**: an
+> **N-of-M layers** progress bar could still help even though **M is a moving target** (our knowledge of
+> the layer count grows during the pull); or better, a **megabytes-downloaded counter** — showing data
+> flowing is a strong "something is happening" signal. **Investigate** what real numbers Docker gives us
+> (layer counts and/or byte totals). _Because real throughput/bytes beats a decorative bar._
 
 **Observation:** Do we track progress while the image is pulled? It's a long-running op too.
 
@@ -620,7 +722,15 @@ lines). Full options in Open idea O2.
 
 ### 20. The running-instance row doesn't share regular cluster context commands 🔍
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction (see Open idea O3).
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards keeping the replaced contextValue** rather than filtering Quick Start out of every
+> menu. Adding `&& not quickstart` to every generic cluster command is worse than adding `|| quickstart`
+> to the **few** we want (e.g. Open in Shell). Model the Quick Start row as a **sub-view** of the
+> connections view: **replace the connections-view context entry with a sub-view marker**, then
+> **explicitly opt specific commands in via `or`**. Ask the implementer to **spend time getting this
+> simple and maintainable** for future maintainers (the extra `view`/sub-view layer adds complexity if
+> done carelessly). _Because opt-in on a short allowlist is cleaner than opt-out on everything._
 
 **Observation:** The running managed instance doesn't share context-menu commands with regular clusters. Do we
 still extend the cluster base class? If not, what would break if we did?
@@ -644,7 +754,11 @@ Open idea O3.
 
 ### 21. Credential storage: reuse the extension's secure-storage patterns 💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards attempting to reuse** the `ConnectionStorageService` secure-storage patterns. Can
+> be a follow-up, but **better in this release** so we don't have to deal with a connection/credential
+> **migration** later. _Because doing it now avoids a migration debt._
 
 **Observation:** Flag the plaintext-password posture. Everything else is careful (masked logs, env-files), yet
 the generated password is embedded in the stored connection string and is one-click copyable/visible. **Think
@@ -667,7 +781,10 @@ connections, they inherit this storage naturally.
 
 ### 22. Persistence is always on — there's no "ephemeral / no-persistence" option 💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction (see Open idea O6).
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards adding the ephemeral toggle** ("Persist data across restarts," default on). _Because
+> more options here are easy for the user and genuinely helpful for throwaway trials._
 
 **Observation:** Our default is a persistent data volume. That should be a **toggle** — sometimes a user wants a
 throwaway instance with no persistence.
@@ -684,7 +801,11 @@ delete — good for throwaway trials. Trade-offs in Open idea O6.
 
 ### 23. A user-initiated delete must always delete the data volume ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards always dropping the volume** on a user delete (every user-initiated delete routes
+> through `deleteContainer()`). _Because minimizing moving parts lowers the user's mental load — fewer
+> things to understand, more happiness._
 
 **Observation:** When the user deletes a container, we should for sure delete the persisted volume as well.
 
@@ -701,7 +822,10 @@ reconcile paths keep R2 (never auto-wipe without the user choosing it).
 
 ### 24. Data volumes should be linked to the image — no shared data volumes 💡
 
-**Priority:** P2 · **Status:** 🟠 Open — operator to choose the direction (see Open idea O6).
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards structural image↔volume linkage, no cross-image sharing.** _Because it keeps the
+> model simple to understand for the user (one image, one volume)._
 
 **Observation:** Our persisted volumes should be **linked to the image**. We won't share data volumes across
 images; advanced users can do that themselves.
@@ -718,7 +842,14 @@ leave that to advanced users operating Docker directly.
 
 ### 25. The container keeps running after VS Code closes — decide the desired behavior ⚠️💡
 
-**Priority:** P2 · **Status:** 🟠 Open — genuinely undecided; needs a pros/cons evaluation (Open idea O7).
+**Priority:** P2 · **Status:** 🟡 Open · investigate first — TN leans to keeping always-on (the team may revisit).
+
+> **TN leans towards always-on** for now. The "stop on exit" setting is **worrying**: on extension
+> **deactivation** we may not get enough time to clean up before the process is killed — this could be a
+> real problem. **Investigate first** how much time VS Code actually gives us on deactivate. Only if we
+> truly have that control should we consider a **modal on quit** ("keep the container running?"). The
+> suspicion is that we **don't** have that level of control in extensions, so the default stays
+> always-on. _Because promising a clean stop we can't guarantee is worse than a clear always-on._
 
 **Observation:** Non-standard for an extension-managed local resource (a user may expect it to stop like a dev
 server), and can leave an orphaned container holding a port + RAM.
@@ -732,7 +863,11 @@ deciding; whatever is chosen should be **explicit** (a setting and/or clear copy
 
 ### 26. Tree state transitions aren't announced — accessibility work item (post-redesign; discuss with Tomasz) ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open — sequenced work item; **owner/approach to be agreed with Tomasz.**
+**Priority:** P2 · **Status:** 🟠 Open — TN leaning; post-redesign a11y work item (the team may revisit).
+
+> **TN leans towards confirmed** — keep this as a **sequenced post-webview-redesign** accessibility work
+> item, applying past accessibility-testing learnings; **owner/approach to be agreed with Tomasz.** No
+> change now.
 
 **Observation:** The webview is carefully accessible, but the **tree** state rows (Starting / Stopping / Missing
 / Running) change only their `description` text + icon, with no live-region announcement, so screen-reader users
@@ -754,7 +889,12 @@ Tomasz** before implementation.
 
 ### 27. Docker prerequisite is only revealed after opening the webview 🔍
 
-**Priority:** P3 · **Status:** 🟡 Acknowledged — "it is what it is" for now; may be revisited.
+**Priority:** P3 · **Status:** 🟡 Open — TN suggests leaving as-is, no tooltip (the team may revisit).
+
+> **TN leans towards no tooltip** — users will open the webview and find out that Docker is required,
+> which is **good enough**. A prerequisite hint may matter more in the future if we add **other container
+> runtimes** beyond Docker. _Because it's a cheap-but-unnecessary hint for a single-runtime feature
+> today._
 
 **Observation:** The empty-state row invites "Click here to start DocumentDB Local," but the hard **Docker
 requirement** only surfaces once the webview opens (the `dockerNotReady` screen). Recorded so it isn't
@@ -769,7 +909,11 @@ tooltip / description ("Requires Docker") or a hover.
 
 ### 28. Icons are all inherited/generic — nothing marks "this is the Quick Start instance" 🔍💡
 
-**Priority:** P3 · **Status:** 🟠 Open — operator to choose the direction.
+**Priority:** P3 · **Status:** 🟠 Open — TN leaning (a suggestion; the team may revisit).
+
+> **TN leans towards a better, distinct icon set** — use the **rocket for user-created Quick Start
+> instances** (so they're easy to tell apart) and **something else** for other/ambient images that just
+> happen to be around. _Because the icon should signal "this is the one you created via Quick Start."_
 
 **Observation:** How are the icons chosen for the Quick Start instances?
 
@@ -785,7 +929,12 @@ a glance. Low priority, but cheap.
 
 ### 29. "Open terminal in the container" — feasible, no blocker 🔍💡
 
-**Priority:** P3 · **Status:** 🟠 Open — operator to choose the direction (see Open idea O5).
+**Priority:** P3 · **Status:** 🟠 Open — TN leaning; do it if cheap, else file an issue (the team may revisit).
+
+> **TN leans towards doing it if cheap** (it helps advanced users) — the standard `createTerminal` +
+> `docker exec -it` (bash → sh fallback), gated on `state_running`. If it turns out non-trivial,
+> **file a new `enhancement`-tagged issue and move on.** _Because it's a nice power-user affordance, not
+> a blocker._
 
 **Observation:** Would a command to open a terminal inside the Docker container make sense? Can we do it?
 
