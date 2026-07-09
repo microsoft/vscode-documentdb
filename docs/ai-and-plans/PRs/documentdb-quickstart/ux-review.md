@@ -799,6 +799,38 @@ natural power-user affordance. Open details (menu group/icon, shell fallback pro
 
 ## 11. Consolidated flags & suggestions (read this before testing)
 
+**Priority legend:** **P0** blocking — the user gets stuck · **P1** broken/misleading, or a
+consistency & safety gap · **P2** polish, expectation, or a smaller feature gap · **P3**
+nice-to-have / cosmetic.
+
+### 11.1 By priority (P0 → P3)
+
+| Priority | §    | Item                                                | Why it ranks here                                                |
+| -------- | ---- | --------------------------------------------------- | ---------------------------------------------------------------- |
+| **P0**   | 9.2  | Credential-missing state is a restart dead end      | Real bug, hit live; the user is fully stuck with no UI action    |
+| **P0**   | 9.1  | External container delete → silent no-op on Start   | Real bug; stale row, zero feedback, only an output-channel error |
+| **P1**   | 4.2  | Webview header stuck on "Setting up…"               | Real bug; the panel looks unfinished after success/failure       |
+| **P1**   | 9.3  | Tree nodes misused as error dialogs                 | Pattern; the root cause of 9.2, contradicts the K8s decision     |
+| **P1**   | 4.5  | Errors hijack the hero (should be content cards)    | Webview twin of 9.3; ties to the 4.2 header bug                  |
+| **P1**   | 7.2  | Copy Connection String silently copies the password | Consistency + a credential surprise vs the regular command       |
+| **P1**   | 8.1  | Delete bypasses the shared confirmation             | The only destructive command ignoring `confirmationStyle`        |
+| **P1**   | 8.5  | Only delete containers we created                   | Data-safety; a pre-release must-fix as the feature grows         |
+| **P2**   | 2.1  | Legacy migration folder hides in the sort           | Post-upgrade confusion; connections seem to "vanish"             |
+| **P2**   | 4.3  | "Checking Docker" is a bare spinner                 | Loading polish; reuse the accessible `MetricBase`                |
+| **P2**   | 4.4  | Advanced: creds toggle + ambiguous placeholders     | Confusing defaults ("auto" vs "latest" vs "leave blank")         |
+| **P2**   | 4.6  | "Cancel" implies a rollback it doesn't do           | Verb → "Abort"; the image is kept                                |
+| **P2**   | 5.1  | "Waiting…" static for minutes                       | No progress feedback during a long wait                          |
+| **P2**   | 6.1  | No image-pull progress                              | Looks frozen on a cold pull                                      |
+| **P2**   | 7.1  | Running row lacks regular cluster commands          | Missing "Open in Shell" / "New Query" on the instance            |
+| **P2**   | 8.2  | Always persistent — no ephemeral option             | Feature gap; no throwaway instance                               |
+| **P2**   | 8.3  | User delete must always drop the volume             | Mostly done; guarantee it across every user delete               |
+| **P2**   | 8.4  | Volumes not structurally linked to the image        | Data-model hardening (pinning is runtime-only today)             |
+| **P3**   | 7.3  | Generic `$(plug)` icon, no distinct identity        | Cosmetic; shared with any "emulator" connection                  |
+| **P3**   | 10.1 | "Open terminal in the container"                    | Enhancement; feasible, no blocker                                |
+| **✅**   | 3.1  | Empty-state wording / drop "Learn more"             | Fix applied on this branch                                       |
+
+### 11.2 By section (full detail)
+
 | §    | Item                                                 | Verdict                  | Suggested next step                                                                                                                 |
 | ---- | ---------------------------------------------------- | ------------------------ | ----------------------------------------------------------------------------------------------------------------------------------- |
 | 2.1  | Legacy migration folder discoverability              | ⚠️ Flag                  | One-time toast + "Reveal"; optional distinct badge/pin ([§13.1](#131-surfacing-the-legacy-migration-folder))                        |
