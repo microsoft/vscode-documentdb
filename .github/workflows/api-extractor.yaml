@@ -23,7 +23,7 @@ jobs:
 
         steps:
             - name: ✅ Checkout Repository
-              uses: actions/checkout@v6
+              uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
 
             - name: 🔍 Check if API directory exists
               id: check-dir
@@ -38,14 +38,14 @@ jobs:
 
             - name: 🛠 Setup Node.js Environment
               if: steps.check-dir.outputs.api_exists == 'true'
-              uses: actions/setup-node@v5
+              uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
               with:
                   node-version-file: .nvmrc
                   cache: 'npm'
 
             - name: 💾 Restore npm Cache
               if: steps.check-dir.outputs.api_exists == 'true'
-              uses: actions/cache@v5
+              uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
               with:
                   path: ~/.npm
                   key: ${{ runner.os }}-node-${{ hashFiles('package-lock.json') }}
