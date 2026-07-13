@@ -90,6 +90,22 @@ export type RouterContext = BaseRouterContext & {
     closePanel: () => void;
 };
 
+/**
+ * Strip the credential-bearing {@link QuickStartStatus.metadata} before returning status to the
+ * webview: its `connectionString`/`username` are secrets the renderer never reads (it only uses
+ * `canResumeReadiness`, plus `readiness`/`willReuse` from the wrapper). Keeping them out of the
+ * renderer process is defense-in-depth — the password never crosses into the webview's JS heap, so a
+ * future webview vulnerability can't exfiltrate it. All non-sensitive fields are preserved.
+ */
+function toWebviewStatus(status: QuickStartStatus): QuickStartStatus {
+    return {
+        state: status.state,
+        errorMessage: status.errorMessage,
+        missing: status.missing,
+        canResumeReadiness: status.canResumeReadiness,
+    };
+}
+
 export const localQuickStartRouter = router({
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
     getDockerStatus: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<DockerStatusResult> => {
@@ -107,11 +123,11 @@ export const localQuickStartRouter = router({
               : 'ok';
         tctx.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
         const willReuse = await QuickStartService.willReuseExistingInstance();
-        return { readiness, status: QuickStartService.getStatus(), busy: QuickStartService.isBusy, willReuse };
+        return { readiness, status: toWebviewStatus(QuickStartService.getStatus()), busy: QuickStartService.isBusy, willReuse };
     }),
 
     /** Lightweight status poll (no docker call). */
-    getStatus: publicProcedure.query((): QuickStartStatus => QuickStartService.getStatus()),
+    getStatus: publicProcedure.query((): QuickStartStatus => toWebviewStatus(QuickStartService.getStatus())),
 
     /** Disposes the panel when the user explicitly clicks Close. */
     closePanel: publicProcedure.mutation(({ ctx }) => {
@@ -132,11 +148,12 @@ export const localQuickStartRouter = router({
     }),
 
     /** Success hand-off (§5.5): copy the managed instance's connection string. */
-    copyConnectionString: publicProcedure.mutation(() => {
-        const metadata = QuickStartService.getStatus().metadata;
-        if (metadata) {
-            void vscode.env.clipboard.writeText(metadata.connectionString);
-        }
+    copyConnectionString: publicProcedure.mutation(async () => {
+        // Delegate to the shared copy command so the webview button gets the same with/without-password
+        // QuickPick as everywhere else, instead of silently copying the password-bearing string (UX
+        // review #7). The command reads the managed instance from QuickStartService and strips the
+        // password from the base before offering the choice.
+        await vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.copyConnectionString');
     }),
 
     /**

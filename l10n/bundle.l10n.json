@@ -373,7 +373,6 @@
   "Connection string": "Connection string",
   "Connection String": "Connection String",
   "Connection string cannot be empty.": "Connection string cannot be empty.",
-  "Connection string copied to clipboard.": "Connection string copied to clipboard.",
   "Connection string is not set": "Connection string is not set",
   "Connection timed out": "Connection timed out",
   "Connection to \"{cluster}\" was cancelled.": "Connection to \"{cluster}\" was cancelled.",
