@@ -191,6 +191,7 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | 🗣️ #4     | 🟠 Open        |
 | 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | —         | 🟠 Open        |
 | 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | (🗣️ #3)   | 🟠 Open        |
+| 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | 🗣️ live   | 🟠 Open        |
 | 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | 🗣️ #2     | 🟡 Open (soft) |
 | 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | 🗣️ #6     | 🟡 Open (soft) |
 | 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | 🗣️ #5     | 🟡 Open (soft) |
@@ -198,7 +199,65 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 10  | **P2**   | Project node has no tooltip                                                    | —         | 🟠 Open        |
 | 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | —         | 🟠 Open        |
 | 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | —         | 🟠 Open        |
-| 13  | **P3**   | Active-filter state not visible on the root                                    | —         | 🟠 Open        |
+| 13  | **P3**   | ~~Active-filter state not visible on the root~~ — superseded by #14            | —         | 🚫 Closed      |
+
+---
+
+## Work bundles (grouped & ordered)
+
+The same items, **bundled by the code they touch** and ordered so a contributor can pick a
+self-contained chunk. No items are added or removed here — every active item from the index
+appears in exactly one bundle (closed #13 is noted where it belongs). Bundles A–C are the
+release blockers; D is quick polish; E is the sequenced follow-up redesign.
+
+### Bundle A — Sign-in & error surfacing (root + project) · **P1 · do first**
+
+The first-run authentication cluster: one sign-in node, one retry story, consistent error
+surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth flow.
+
+1. **Item 1** — Remove the auto-prompt; expand shows only the sign-in node.
+2. **Item 4** — Project errors → modal + a single retry node; detail to the output channel.
+3. **Item 2** — Add retry / "update credentials" affordance after an auth failure.
+4. **Item 3** — Disambiguate the misleading "No projects found" (permissions vs. empty).
+
+> Do them in this order — 1 establishes the single sign-in entry, 4 defines the shared
+> modal+retry helper, then 2 and 3 reuse that helper for the auth-failure and empty-state
+> cases.
+
+### Bundle B — Add-Connection wizard · **P1**
+
+Both items live in `SelectAtlasSteps` / `getDiscoveryWizard`.
+
+5. **Item 5** — Replace raw throws with the Azure-style always-show "Manage MongoDB Atlas
+   Credentials…" option + clean `UserCancelledError`.
+6. **Item 9** — Reconcile the IDLE-only cluster filter so the wizard list matches the tree.
+
+### Bundle C — Filtering removal · **P1 · independent, do early**
+
+7. **Item 14** — Remove all org/project filtering + its storage (**closes item 13**).
+
+> Independent of A/B and worth landing early: it deletes code that the credential/view
+> redesign (Bundle E) would otherwise have to carry forward.
+
+### Bundle D — Tree/root presentation polish · **P2–P3 · quick wins**
+
+Small, independent touches to the tree items and root description.
+
+8. **Item 10** — Add a project-node tooltip.
+9. **Item 11** — Reveal/expand the root after a successful sign-in.
+10. **Item 12** — Show the signed-in identity in the root description/tooltip (P3).
+
+### Bundle E — Credential & view redesign · **P2 · sequenced follow-up PRs**
+
+The three larger reviewer design directions; strictly ordered because each depends on the
+previous (see [Sequencing](#sequencing-suggested)).
+
+11. **Item 6** — Guided webview for credential entry (also hosts "Add" / "Update credentials").
+12. **Item 7** — Multi-credential management on the shared `StorageService` (Azure-style flow).
+13. **Item 8** — Tree/List view toggle + org level, once the org-aware credential model exists.
+
+> Bundle E benefits from Bundle C landing first (fewer filter surfaces to migrate) and from
+> Bundle A's single sign-in entry point.
 
 ---
 
@@ -213,7 +272,8 @@ key with no recovery path), promote it to P0. **P0 and P1 both block the release
 ## P1 — Broken / misleading, or consistency & safety — release blocker
 
 > These gate the release. The first three are the **first-run authentication** cluster the
-> reviewer hit live; items 4–5 are the pre-existing structural gaps they build on.
+> reviewer hit live; items 4–5 are the pre-existing structural gaps they build on; item 14
+> is a decided scope-reduction cleanup (remove filtering).
 
 ### 1. Root auto-opens the auth picker on expand — should just show the sign-in node ⚠️ 🗣️
 
@@ -233,6 +293,12 @@ don't do this. We already have an error node that lets a user sign in. That is e
 "Manage Credentials" action). This also deletes the `consumeSuppressAutoPrompt()`
 work-around, since there is no longer an auto-prompt to suppress. **Influences items 2, 6,
 7** (all sign-in entry points funnel through the same node/flow).
+
+> **Decision (Iteration 3):** Remove the auto-prompt. Expanding the signed-out root shows
+> **only** the "Sign in to view MongoDB Atlas clusters" error node — no QuickPick fires on
+> expand. **Reason:** the sign-in node is already a sufficient, explicit call to action;
+> auto-opening a picker the user didn't request is surprising ("no magic") and inconsistent
+> with the Azure siblings.
 
 ---
 
@@ -308,6 +374,14 @@ retry` node instead of a passive classified row. The inherited error-node cache
 (`resetNodeErrorState`) already prevents modal spam. Route raw `error.message` to the
 output channel + a friendly summary. See [O2](#o2-project-level-error--retry-presentation-items-2-3-4).
 
+> **Decision (Iteration 3):** **All** the passive "failed to load clusters" / session / auth
+> error tree nodes go away. On a project load failure: show an **error modal** and leave
+> **only a single retry node** in the tree; push the full detail to the **`ext.outputChannel`**.
+> **Reason:** passive error rows are the last inconsistency left — the root already does modal
+>
+> - retry, and the tree should never carry raw, truncating error strings when the output
+>   channel can hold the detail.
+
 ---
 
 ### 5. Add-Connection wizard steps throw raw errors that close the flow ⚠️
@@ -329,6 +403,45 @@ always-show header row + clean `UserCancelledError`; or K8s style: inline "Sign 
 re-prompt). For the empty-cluster case, keep the user in the wizard with a clear "no
 connectable clusters in this project" step rather than throwing. See
 [O1](#o1-wizard-no-session--empty-cluster-recovery-item-5).
+
+> **Decision (Iteration 3):** Adopt the **Azure style** (Option A). The Add-Connection wizard
+> **always** shows a top `alwaysShow` item that opens credential management — mirror Azure's
+> smart wording from [SelectSubscriptionStep](../../../../src/plugins/api-shared/azure/wizard/SelectSubscriptionStep.ts#L120):
+> label **"Manage MongoDB Atlas Credentials…"**, detail _"Sign in with a different API key or
+> Service Account to see more projects and clusters."_, `key` icon, followed by a separator
+> and the project/cluster list. On selection, run credential management, show a short
+> "completed — retry discovery" notice, then exit cleanly with `UserCancelledError` (never a
+> raw `throw`). **Reason:** the user should always have a way to fix/switch credentials from
+> inside the wizard; this is the established, well-worded pattern across all three Azure
+> siblings.
+
+---
+
+### 14. Remove all filtering (org + project) and its storage — release cleanup ⚠️ 🗣️
+
+**Priority:** P1 · **Status:** 🟠 Open · **Reviewer (live pass)**
+
+**Observation:** _"Filtering — I think we can skip this completely, at least for now. Users
+can't log in as themselves; they use scoped Service Accounts and keys. So clean up everything
+filter-related for the Atlas discovery, including any associated storage."_
+
+**Finding:** Filtering is spread across several surfaces, all of which would be removed:
+
+- ⚠️ **Project filter** — [AtlasDiscoveryProvider.configureTreeItemFilter](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L104) (the "Filter Entries…" QuickPick) and the `enableFilterCommand` token on the root [contextValue](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L29).
+- ⚠️ **Org filter** — [AtlasDiscoveryProvider.showOrganizations](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L221) and the "account → organizations" branch of [configureCredentials](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L169).
+- ⚠️ **Filter application + empty state** — the org/project filter logic and the "All projects are hidden by filter" node in [fetchProjectItems](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L114).
+- ⚠️ **Session-manager API + storage** — `getSelectedOrgId` / `setSelectedOrgId` / `getSelectedProjectIds` / `setSelectedProjectIds` in [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts), plus the `STATE_SELECTED_PROJECTS` and `STATE_SELECTED_ORG_ID` keys in [config.ts](../../../../src/plugins/service-atlas-mongodb/config.ts#L37).
+- 🔍 Atlas discovery **has never shipped**, so there is **no persisted user state to migrate** — the storage keys can simply be deleted.
+
+💡 **Suggestion:** Remove all of the above (command registration, provider methods, session
+API, storage keys, and the `enableFilterCommand` token). Keep a **minimal org lookup only if
+item 3 needs it** for the "orgs present but no projects → permissions" disambiguation — that
+is a read, not a filter, and can be a lightweight count check rather than a stored selection.
+
+> **Decision (Iteration 3):** **Remove filtering entirely for now.** **Reason:** with scoped
+> Service Accounts / API keys (no interactive personal login), a key already sees only what
+> it's authorized for, so org/project filtering adds UI and storage that don't earn their
+> keep. Revisit only if interactive sign-in (many orgs per user) ever lands.
 
 ---
 
@@ -373,7 +486,7 @@ we can do it."_
 
 - 🔍 Atlas today is **single-session**: [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts) holds one `AtlasSession`, and [configureCredentials](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L169) shows a flat account / sign-out / exit QuickPick. There is no concept of a credential list.
 - 🔍 The Azure reference is [configureAzureCredentials](../../../../src/plugins/api-shared/azure/credentialsManagement/configureAzureCredentials.ts#L94) → an `AzureWizard` of `SelectAccountStep` → `AccountTenantsStep` → `TenantActionStep` (+ `ExecuteStep`), titled "Manage Azure Accounts", supporting multiple accounts with add/remove. That structure maps cleanly onto Atlas (accounts/keys instead of Azure accounts; orgs/projects instead of tenants/subscriptions).
-- 🔍 **Reuse the Kubernetes storage stack (build on what we already have).** Atlas currently persists secrets with **fixed single-slot keys** — [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts) calls `secretStorage.store('atlas-mongodb.apikey.publicKey', …)` etc., which structurally allows **exactly one** API key and one Service Account. Kubernetes already solved "an ordered list of credentials, each with its own secrets" on top of the shared **[StorageService](../../../../src/services/storageService.ts)** — a per-workspace item store that persists **`properties` → `globalState`** and **`secrets` → `SecretStorage`** in a single typed API. The reference wrapper is [sourceStore.ts](../../../../src/plugins/service-kubernetes/sources/sourceStore.ts): each source is a `StorageItem` with an `order` field for stable display order, an inline secret in `secrets[]`, and an in-memory cache with explicit invalidation. Kubernetes also ships a [migrationV2.ts](../../../../src/plugins/service-kubernetes/sources/migrationV2.ts) that upgrades legacy fixed-key `globalState` storage into `StorageService` items — the exact shape of migration Atlas needs from its current single-slot keys.
+- 🔍 **Reuse the Kubernetes storage stack (build on what we already have).** Atlas currently persists secrets with **fixed single-slot keys** — [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts) calls `secretStorage.store('atlas-mongodb.apikey.publicKey', …)` etc., which structurally allows **exactly one** API key and one Service Account. Kubernetes already solved "an ordered list of credentials, each with its own secrets" on top of the shared **[StorageService](../../../../src/services/storageService.ts)** — a per-workspace item store that persists **`properties` → `globalState`** and **`secrets` → `SecretStorage`** in a single typed API. The reference wrapper is [sourceStore.ts](../../../../src/plugins/service-kubernetes/sources/sourceStore.ts): each source is a `StorageItem` with an `order` field for stable display order, an inline secret in `secrets[]`, and an in-memory cache with explicit invalidation.
 - 🔍 **API-redesign impact (as the reviewer noted):** `AtlasSessionManager` becomes a store of **N** credentials (each API key / Service Account), the API client is selected per credential, and the tree must attribute each org/project/cluster to the credential that surfaced it (relevant to the org level in item 8). This is the biggest structural change of the three design items.
 
 💡 **Suggestion:** Adopt the Azure `credentialsManagement/` wizard shape for the UI (a
@@ -389,9 +502,8 @@ build on the same secrets solution rather than a bespoke one:
   the K8s inline-YAML secret).
 - Keep an `order` field for stable list ordering and an in-memory cache, mirroring
   `sourceStore.ts`.
-- Ship a one-time migration (à la `migrationV2.ts`) that folds the current
-  `AtlasSessionManager` single-slot keys into the first `StorageItem`, so existing users
-  are not signed out on upgrade.
+- **No migration needed** — Atlas discovery has never shipped, so the current single-slot
+  `AtlasSessionManager` keys carry no real user data; the new store starts clean.
 
 See [O4](#o4-multi-credential-model--api-redesign-item-7). **This supersedes the earlier
 "staged Back/status wording" polish item** — that lands for free with the Azure-style flow.
@@ -477,17 +589,15 @@ tooltip when Active.
 
 ---
 
-### 13. Active filter state is not visible on the root ⚠️
+### 13. Active filter state is not visible on the root 🚫
 
-**Priority:** P3 · **Status:** 🟠 Open
+**Priority:** P3 · **Status:** 🚫 Closed
 
-**Finding:** Two independent filters exist (org via Manage Credentials, project via the
-funnel). When a filter is hiding projects, the only signal is the empty-state row; the root
-gives no "filtered" badge (iteration 1 §9.2). Risk: users think projects are _missing_
-(compounds the misdiagnosis in item 3).
+**Finding:** Two independent filters existed (org via Manage Credentials, project via the
+funnel), with no "filtered" badge on the root (iteration 1 §9.2).
 
-💡 **Suggestion:** Add a small "filtered" affordance to the root description when a filter
-is active.
+🚫 **Closed (Iteration 3):** Superseded by **item 14** — filtering is being removed entirely,
+so there is no filter state left to surface. **Reason:** no filtering, no filter indicator.
 
 ---
 
@@ -517,17 +627,19 @@ the next one; nothing is dropped without a terminal status.
 
 ### Iteration 3 (this pass)
 
-| #    | Item                                                                       | Decision (why) | Outcome                               |
-| ---- | -------------------------------------------------------------------------- | -------------- | ------------------------------------- |
-| 1    | Root auto-opens auth picker on expand (🗣️ #1)                              | _pending_      | 🟠 Open — **release blocker**         |
-| 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | _pending_      | 🟠 Open — **release blocker**         |
-| 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | _pending_      | 🟠 Open — **release blocker**         |
-| 4    | Project-level passive error rows                                           | _pending_      | 🟠 Open — **release blocker**         |
-| 5    | Wizard raw-throw dead-ends                                                 | _pending_      | 🟠 Open — **release blocker**         |
-| 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_      | 🟡 Open (soft) — likely follow-up PRs |
-| 9–13 | Polish items                                                               | _pending_      | 🟠 Open — awaiting decisions          |
+| #    | Item                                                                       | Decision (why)                                                                           | Outcome                               |
+| ---- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------- |
+| 1    | Root auto-opens auth picker on expand (🗣️ #1)                              | Remove auto-prompt; show only the sign-in node ("no magic"; the node is enough)          | 🟠 Decided — **release blocker**      |
+| 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | _pending_                                                                                | 🟠 Open — **release blocker**         |
+| 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | _pending_                                                                                | 🟠 Open — **release blocker**         |
+| 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**      |
+| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | 🟠 Decided — **release blocker**      |
+| 14   | Remove all filtering + storage (🗣️ live)                                   | Remove entirely; scoped keys make filtering pointless; no migration (never shipped)      | 🟠 Decided — **release blocker**      |
+| 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                | 🟡 Open (soft) — likely follow-up PRs |
+| 9–13 | Polish items                                                               | #13 closed (filtering removed); rest pending                                             | 🟠 Open / 🚫 Closed                   |
 
-> 🗣️ = raised by the reviewer in the live pass. Items 6–8 are dependent (see
+> 🗣️ = raised by the reviewer in the live pass. "Decided" items have an agreed direction (see
+> the Decision block on each) but are not yet implemented. Items 6–8 are dependent (see
 > [Sequencing](#sequencing-suggested)) and larger than a single release.
 
 ---
@@ -587,10 +699,10 @@ the next one; nothing is dropped without a terminal status.
 > shared **[StorageService](../../../../src/services/storageService.ts)** the way Kubernetes
 > does in [sourceStore.ts](../../../../src/plugins/service-kubernetes/sources/sourceStore.ts)
 > (ordered list of `StorageItem`s; `properties` → globalState, `secrets` → SecretStorage;
-> in-memory cache) with a one-time migration modeled on
-> [migrationV2.ts](../../../../src/plugins/service-kubernetes/sources/migrationV2.ts) from
-> today's fixed single-slot [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts)
-> keys. This keeps Atlas on the same secrets solution as the rest of the extension.
+> in-memory cache). No migration is required — Atlas discovery has never shipped, so the
+> current single-slot [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts)
+> keys carry no real user data and the new store starts clean. This keeps Atlas on the same
+> secrets solution as the rest of the extension.
 
 ### O5. Tree/List toggle + org level (item 8)
 
