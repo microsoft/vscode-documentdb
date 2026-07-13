@@ -468,7 +468,11 @@ export class QuickStartServiceImpl {
                 chosenPort = available;
                 if (chosenPort !== QUICK_START_PORT) {
                     portFallback = true;
-                    portFallbackNote = `Port ${QUICK_START_PORT} was busy — using ${chosenPort} instead.`;
+                    portFallbackNote = l10n.t(
+                        'Port {0} was busy, using {1} instead.',
+                        String(QUICK_START_PORT),
+                        String(chosenPort),
+                    );
                     channel.appendLine(portFallbackNote);
                 }
             }

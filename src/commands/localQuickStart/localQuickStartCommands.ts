@@ -10,7 +10,7 @@ import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBCon
 import { ContainerRuntime, getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState } from '../../services/localQuickStart/quickStartTypes';
-import { getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
+import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 
 /**
@@ -45,13 +45,13 @@ export async function deleteQuickStartInstance(context: IActionContext): Promise
 
     const detail = wasRunning
         ? l10n.t(
-              'The container is currently running. It will be stopped and permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone — you can recreate a fresh instance any time with Quick Start.',
+              'The container is currently running. It will be stopped and permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone. You can recreate a fresh instance any time with Quick Start.',
           )
         : l10n.t(
-              'The container and its data volume will be permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone — you can recreate a fresh instance any time with Quick Start.',
+              'The container and its data volume will be permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone. You can recreate a fresh instance any time with Quick Start.',
           );
 
-    const confirmed = await getConfirmationWithClick(l10n.t('Delete DocumentDB Local container?'), detail);
+    const confirmed = await getConfirmationAsInSettings(l10n.t('Delete DocumentDB Local container?'), detail, 'delete');
     if (!confirmed) {
         return;
     }

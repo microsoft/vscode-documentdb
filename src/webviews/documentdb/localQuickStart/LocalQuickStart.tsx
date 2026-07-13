@@ -838,12 +838,12 @@ export const LocalQuickStart = (): JSX.Element => {
                             </Text>
                             <Text size={200}>
                                 {l10n.t(
-                                    '• Open Connection — browse your databases in the Connections view, under “DocumentDB Local”.',
+                                    '• Open Connection: browse your databases in the Connections view, under “DocumentDB Local”.',
                                 )}
                             </Text>
                             <Text size={200}>
                                 {l10n.t(
-                                    '• Copy Connection String — use it from a Query Playground, your app, or mongosh (localhost:{0}).',
+                                    '• Copy Connection String: use it from a Query Playground, your app, or mongosh (localhost:{0}).',
                                     String(boundPort ?? QUICK_START_PORT),
                                 )}
                             </Text>
@@ -865,7 +865,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         {timedOut ? (
                             <Text>
                                 {l10n.t(
-                                    'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing — keep waiting, view the logs, or start over.',
+                                    'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing. Keep waiting, view the logs, or start over.',
                                 )}
                             </Text>
                         ) : (
