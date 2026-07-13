@@ -747,9 +747,9 @@ export const LocalQuickStart = (): JSX.Element => {
                     politeness="assertive"
                 />
                 {hero(
-                    l10n.t('Docker is required'),
+                    l10n.t('DocumentDB Local'),
                     l10n.t(
-                        'Local Quick Start runs DocumentDB on your machine using Docker. The extension does not install Docker for you.',
+                        'Docker is required to run DocumentDB locally. The extension does not install Docker for you.',
                     ),
                 )}
                 <div className={styles.cardGrid}>
@@ -827,7 +827,10 @@ export const LocalQuickStart = (): JSX.Element => {
                 <div role="status" aria-live="polite" aria-atomic="true" className={styles.srOnly}>
                     {phase === 'provisioning' ? provisioningStatusMessage : ''}
                 </div>
-                {hero(l10n.t('Setting up DocumentDB Local…'), phase === 'provisioning' ? elapsedLabel() : '')}
+                {hero(
+                    l10n.t('DocumentDB Local'),
+                    phase === 'provisioning' ? l10n.t('Setting up… {0}', elapsedLabel()) : '',
+                )}
 
                 {phase === 'success' && (
                     <div className={styles.successBox}>
@@ -936,7 +939,7 @@ export const LocalQuickStart = (): JSX.Element => {
     return (
         <div className={styles.root}>
             {hero(
-                l10n.t('Start DocumentDB Local'),
+                l10n.t('DocumentDB Local'),
                 l10n.t('Get a working local DocumentDB instance in one click. No terminal commands needed.'),
             )}
             {renderReviewCards()}
