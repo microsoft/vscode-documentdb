@@ -83,6 +83,9 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                     contextValue: createContextValue([INSTANCE_CONTEXT, 'state_missing']),
                     label: l10n.t('DocumentDB Local'),
                     description: l10n.t('Missing · click to recreate'),
+                    tooltip: l10n.t(
+                        'The container was removed outside VS Code. Click to recreate it (your data is preserved), or use Delete Container to remove it and its data.',
+                    ),
                     iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.warningForeground')),
                     commandId: 'vscode-documentdb.command.localQuickStart.open',
                 }),

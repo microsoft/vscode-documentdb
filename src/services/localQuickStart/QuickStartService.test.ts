@@ -336,6 +336,142 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         expect(readRegistry(globalState).instances.some((record) => record.alias === ALIAS_2)).toBe(true);
     });
 
+    it('start() after an external container delete surfaces Missing instead of a silent no-op (#2)', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+
+        const startContainer = jest.fn().mockResolvedValue(undefined);
+        // Mutable inspect map: present during reconcile (adopted as Stopped), then removed to
+        // simulate `docker rm` outside VS Code before the user clicks Start.
+        const inspect: Record<string, unknown> = {
+            c1: inspectItem('c1', { running: false, port: 10260, image: 'img:1' }),
+        };
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(inspect[id]),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                startContainer,
+            }),
+        );
+
+        await service.reconcile();
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+
+        // The container vanishes (external `docker rm`): every subsequent inspect returns undefined.
+        delete inspect.c1;
+        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+
+        await service.start();
+
+        // The regression: previously isManaged() returned false for a gone container and the `||`
+        // chain short-circuited before the missing-detection, so start() early-returned silently.
+        expect(startContainer).not.toHaveBeenCalled(); // never tried to start a container that is gone
+        expect(info).toHaveBeenCalled(); // the user is told, not left with a stale "Stopped" row
+        expect(service.getStatus().missing).toBe(true); // routed to the recoverable Missing badge (O4)
+        info.mockRestore();
+    });
+
+    it('deleteContainer() refuses to remove a container that is not ours, even when surfaced as Missing (#9)', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        // Three phases for the SAME id/name: (1) ours (adopt), (2) gone (Start marks it Missing),
+        // (3) a FOREIGN container now holds the name. This reproduces the exact old bypass:
+        // entry.missing === true, so the pre-fix `entry.missing || isManaged(...)` would have removed
+        // a container the extension never created (metadata.containerId can be a NAME, not an id).
+        let phase: 'ours' | 'gone' | 'foreign' = 'ours';
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(
+                        phase === 'gone'
+                            ? undefined
+                            : phase === 'foreign'
+                              ? { id, status: 'running', labels: {} } // not ours: no quickstart label
+                              : {
+                                    id,
+                                    status: 'running',
+                                    ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                                    image: { originalName: 'img:1' },
+                                    labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                                },
+                    ),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                startContainer: jest.fn().mockResolvedValue(undefined),
+                removeContainer,
+                removeVolume,
+            }),
+        );
+
+        await service.reconcile(); // adopts as Running (metadata.containerId = 'c1')
+        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        phase = 'gone';
+        await service.start(); // container gone ⇒ ensureActionable sets entry.missing = true
+        expect(service.getStatus().missing).toBe(true);
+
+        phase = 'foreign'; // the id/name now resolves to a container the extension did not create
+        const warn = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
+        await service.deleteContainer();
+
+        // #9: even with entry.missing === true (the old bypass), never remove a container — or its
+        // possibly-shared volume — that the extension did not create.
+        expect(removeContainer).not.toHaveBeenCalled();
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(warn).toHaveBeenCalled();
+        info.mockRestore();
+        warn.mockRestore();
+    });
+
+    it('start() on a container that drifted to running in another window refreshes without starting', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+
+        const startContainer = jest.fn().mockResolvedValue(undefined);
+        // Adopt as Stopped, then the container is actually running (another window started it).
+        // The inspect result carries our labels (as real Docker does) so ensureActionable recognizes
+        // it as ours and hits the drift branch rather than the foreign one.
+        let running = false;
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve({
+                        id,
+                        status: running ? 'running' : 'exited',
+                        ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                        image: { originalName: 'img:1' },
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    }),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                startContainer,
+            }),
+        );
+
+        await service.reconcile();
+        expect(service.getStatus().state).toBe(InstanceState.Stopped);
+
+        running = true; // drift: it's already running
+        const info = jest.spyOn(vscode.window, 'showInformationMessage').mockResolvedValue(undefined);
+        await service.start();
+
+        expect(startContainer).not.toHaveBeenCalled(); // start on an already-running container is a no-op
+        expect(info).toHaveBeenCalled(); // the user is told the state changed
+        expect(service.getStatus().state).toBe(InstanceState.Running); // corrected to the live state
+        expect(service.getStatus().missing).toBe(false);
+        info.mockRestore();
+    });
+
     it('scavenges a STALE provisioning reservation that never produced a container', async () => {
         ext.secretStorage = fakeSecretStorage({});
         const globalState = fakeMemento();
