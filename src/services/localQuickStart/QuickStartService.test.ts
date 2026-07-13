@@ -158,11 +158,12 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
         await service.reconcile();
 
         // No recoverable credentials anywhere ⇒ the labelled container is SURFACED as
-        // credential-unavailable (Error), NOT removed, and the volume is NEVER touched. A lost secret
-        // does not prove the volume is disposable, so the user decides (Delete, or restore the secret).
+        // credential-unavailable (CredentialsMissing), NOT removed, and the volume is NEVER touched. A
+        // lost secret does not prove the volume is disposable, so the user decides (Delete, or restore
+        // the secret).
         expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
-        expect(service.getStatus().state).toBe(InstanceState.Error);
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
     });
 
     it('deleteContainer() purges BOTH the alias-keyed and legacy keys (a full clean slate)', async () => {
@@ -302,7 +303,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         ).toEqual([ALIAS_2, DEFAULT_ALIAS].sort());
     });
 
-    it('surfaces a credential-unavailable instance as Error without removing it or its volume (R2)', async () => {
+    it('surfaces a credential-unavailable instance as CredentialsMissing without removing it or its volume (R2)', async () => {
         ext.secretStorage = fakeSecretStorage({}); // no secret for ALIAS_2
         ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
         const removeContainer = jest.fn().mockResolvedValue(undefined);
@@ -318,7 +319,7 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         await service.reconcile();
 
-        expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.Error);
+        expect(service.getStatus(ALIAS_2).state).toBe(InstanceState.CredentialsMissing);
         expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
     });
@@ -402,7 +403,10 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
                                     status: 'running',
                                     ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
                                     image: { originalName: 'img:1' },
-                                    labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                                    labels: {
+                                        [QUICK_START_LABEL_KEY]: '1',
+                                        [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                    },
                                 },
                     ),
                 ) as unknown as IContainerRuntime['inspectContainer'],
@@ -658,7 +662,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
 
         expect(removeVolume).not.toHaveBeenCalled();
         expect(removeContainer).not.toHaveBeenCalled();
-        expect(service.getStatus().state).toBe(InstanceState.Error);
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
     });
 
     it('aborts (never wipes) when a durable ready record exists but no secret (container already gone)', async () => {
@@ -677,7 +681,7 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         await drain(service.provision(new AbortController().signal));
 
         expect(removeVolume).not.toHaveBeenCalled();
-        expect(service.getStatus().state).toBe(InstanceState.Error);
+        expect(service.getStatus().state).toBe(InstanceState.CredentialsMissing);
     });
 
     it('proceeds to the clean-slate wipe for a truly-fresh alias (no container, no ready record)', async () => {

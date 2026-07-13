@@ -82,8 +82,11 @@ export const QUICK_START_CLUSTER_ID = clusterId(DEFAULT_ALIAS);
  * are gone, so the cluster can't be opened. Reconcile NEVER removes it (a lost secret does not prove
  * the volume is disposable — R2); the user decides (Delete for a clean slate, or restore the secret).
  */
-const CREDENTIAL_UNAVAILABLE_MESSAGE =
-    'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use "Delete Container" to remove it and start fresh (this erases the data).';
+function credentialUnavailableMessage(): string {
+    return l10n.t(
+        'DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use "Delete Container" to remove it and start fresh (this erases the data).',
+    );
+}
 const READINESS_TIMEOUT_MS = 180_000;
 /** Per-attempt server-selection timeout so a Cancel is observed within ~3s. */
 const PROBE_SERVER_SELECTION_TIMEOUT_MS = 3_000;
@@ -421,12 +424,12 @@ export class QuickStartServiceImpl {
                     (record) => record.alias === alias && record.phase === 'ready',
                 );
                 if (existing || hasReadyRecord) {
-                    this.setStatus(alias, InstanceState.Error, undefined, CREDENTIAL_UNAVAILABLE_MESSAGE);
+                    this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialUnavailableMessage());
                     yield stageEvent(
                         'checking',
                         'error',
-                        CREDENTIAL_UNAVAILABLE_MESSAGE,
-                        CREDENTIAL_UNAVAILABLE_MESSAGE,
+                        credentialUnavailableMessage(),
+                        credentialUnavailableMessage(),
                     );
                     return;
                 }
@@ -1235,8 +1238,15 @@ export class QuickStartServiceImpl {
         // (reconcile/activation only) and an in-flight alias is never clobbered.
         for (const alias of new Set<string>([DEFAULT_ALIAS, ...this.instances.keys()])) {
             const entry = this.stateFor(alias);
-            // Skip in-flight aliases — a busy sibling must NOT skip the others.
-            if (entry.provisioning || entry.lifecycleBusy || !entry.metadata) {
+            // Skip in-flight aliases — a busy sibling must NOT skip the others. Also skip a
+            // CredentialsMissing instance: it is a terminal, user-actionable state (Delete to start
+            // over) whose stale metadata must never be re-inspected back to Running/Stopped.
+            if (
+                entry.provisioning ||
+                entry.lifecycleBusy ||
+                !entry.metadata ||
+                entry.state === InstanceState.CredentialsMissing
+            ) {
                 continue;
             }
             try {
@@ -1380,7 +1390,7 @@ export class QuickStartServiceImpl {
             getQuickStartOutputChannel().appendLine(
                 `DocumentDB Local instance "${alias}" is present but its stored credentials are missing; surfacing as credential-unavailable (not removed).`,
             );
-            this.setStatus(alias, InstanceState.Error, undefined, CREDENTIAL_UNAVAILABLE_MESSAGE);
+            this.setStatus(alias, InstanceState.CredentialsMissing, undefined, credentialUnavailableMessage());
             return {};
         }
 

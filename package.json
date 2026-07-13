@@ -830,7 +830,7 @@
         },
         {
           "command": "vscode-documentdb.command.localQuickStart.viewLogs",
-          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(running|stopped|starting|stopping|error|missing)\\b/i",
           "group": "1_quickstart@3"
         },
         {
@@ -845,7 +845,7 @@
         },
         {
           "command": "vscode-documentdb.command.localQuickStart.delete",
-          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(running|stopped|error|missing)\\b/i",
+          "when": "view == connectionsView && viewItem =~ /\\btreeItem_quickStartInstance\\b/i && viewItem =~ /\\bstate_(running|stopped|error|missing|credentialsMissing)\\b/i",
           "group": "3_quickstart@1"
         },
         {

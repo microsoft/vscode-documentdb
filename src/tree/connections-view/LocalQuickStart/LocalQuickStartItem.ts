@@ -159,6 +159,26 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             }
         }
 
+        // Credential-unavailable (UX review #1): a labelled container / ready record exists but its
+        // saved credentials are gone, so it can't be opened. Render an ACTIONABLE instance row (not a
+        // passive rocket + warning dead end) that carries the Delete menu (its when-clause matches
+        // treeItem_quickStartInstance + state_credentialsMissing), so the user can remove it and start
+        // over. Per TN this is Delete-only — no browse/start, so the row has no click command.
+        if (status.state === InstanceState.CredentialsMissing) {
+            return [
+                createGenericElementWithContext({
+                    id: `${this.id}/instance`,
+                    contextValue: createContextValue([INSTANCE_CONTEXT, 'state_credentialsMissing']),
+                    label: l10n.t('DocumentDB Local'),
+                    description: l10n.t('Credentials missing · delete to start over'),
+                    tooltip: l10n.t(
+                        'Saved credentials for this instance are missing, so it cannot be opened. Use Delete Container to remove it and start fresh (this erases the data).',
+                    ),
+                    iconPath: new vscode.ThemeIcon('warning', new vscode.ThemeColor('list.errorForeground')),
+                }),
+            ];
+        }
+
         if (status.state === InstanceState.Provisioning) {
             return [
                 createGenericElementWithContext({

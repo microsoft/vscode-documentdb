@@ -129,6 +129,12 @@ export enum InstanceState {
     Running = 'Running',
     Stopping = 'Stopping',
     Stopped = 'Stopped',
+    /**
+     * A labelled container (or durable `ready` record) exists but its saved credentials are gone, so
+     * the instance can't be opened. Distinct from `Error` so the tree renders an ACTIONABLE row that
+     * offers Delete (UX review #1) instead of a passive, command-less warning.
+     */
+    CredentialsMissing = 'CredentialsMissing',
     Error = 'Error',
 }
 
