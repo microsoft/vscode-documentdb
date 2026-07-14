@@ -204,7 +204,7 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | 🟠 Open        |
 | 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | 🟠 Open        |
 | 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | 🟠 Open        |
-| 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | 🟠 Open        |
+| 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) |
 | 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | 🟡 Open (soft) |
 | 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft) |
 | 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | ~15     | 🗣️ #5     | 🟡 Open (soft) |
@@ -236,7 +236,7 @@ entry, and is internally sequential).
 | ------ | ----------------------------- | -------- | ---------------- | ------------------ | ---------------------- |
 | **A**  | Sign-in & error surfacing     | P1       | 1 → 4 → {2 ‖ 3}  | ~20                | **B, C, D**            |
 | **B**  | Add-Connection wizard         | P1       | 5 → 9            | ~10                | **A, C, D**            |
-| **C**  | Filtering removal             | P1       | 14               | ~10                | **A, B, D** (do early) |
+| **C**  | Filtering removal             | P1       | 14 ✅ ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) | ~10                | **A, B, D** (completed) |
 | **D**  | Tree/root presentation polish | P2–P3    | 10 ‖ 11 ‖ 12     | ~15                | **A, B, C**            |
 | **E**  | Credential & view redesign    | P2       | 6 → 7 → 8        | ~50                | after **C** (& **A**)  |
 
@@ -268,14 +268,16 @@ Both items live in `SelectAtlasSteps` / `getDiscoveryWizard`.
 | 1     | **Item 5** — raw throws → Azure-style "Manage MongoDB Atlas Credentials…" + `UserCancelledError` | `SelectAtlasSteps`, `getDiscoveryWizard`      | ~5           | Do first                                                                 |
 | 2     | **Item 9** — reconcile the IDLE-only cluster filter to match the tree                            | `SelectAtlasSteps` (`SelectAtlasClusterStep`) | ~5           | No hard dependency on 5, but **same file** — sequence to avoid conflicts |
 
-### Bundle C — Filtering removal · **P1 · independent, do early**
+### Bundle C — Filtering removal · **P1 · implemented**
 
 | Order | Item                                                                      | Touches                                                                                              | \u2248 Files | Parallel within bundle?                          |
 | ----- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------ |
-| 1     | **Item 14** — remove all org/project filtering + storage (**closes #13**) | `AtlasDiscoveryProvider`, `AtlasServiceRootItem`, `AtlasSessionManager`, `config.ts`, `package.json` | ~10          | Single item; independent of A/B — **land early** |
+| 1     | **Item 14** — remove all org/project filtering + storage (**closes #13**) | `AtlasDiscoveryProvider`, `AtlasServiceRootItem`, `AtlasSessionManager`, `config.ts` | ~10          | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
 
-> Independent of A/B and worth landing early: it deletes code that the credential/view
-> redesign (Bundle E) would otherwise have to carry forward.
+> Completed independently of A/B: it deleted code that the credential/view redesign (Bundle
+> E) would otherwise have had to carry forward. The shared `filterProviderContent` command
+> remains because Azure discovery providers still use it; Atlas no longer contributes its
+> `enableFilterCommand` context token.
 
 ### Bundle D — Tree/root presentation polish · **P2–P3 · quick wins**
 
@@ -299,7 +301,7 @@ the previous (see [Sequencing](#sequencing-suggested)).
 | 2     | **Item 7** — multi-credential management on the shared `StorageService`         | `AtlasSessionManager` → N-credential store, `configureCredentials` wizard, API client, tree attribution | ~20          | After 6 — the webview is the "Add" surface     |
 | 3     | **Item 8** — Tree/List view toggle + org level                                  | new `AtlasOrgItem`, `config.ts`, 2 commands, `package.json`, `AtlasProjectItem`/`AtlasClusterItem`      | ~15          | After 7 — needs the org-aware credential model |
 
-> Bundle E benefits from Bundle C landing first (fewer filter surfaces to migrate) and from
+> Bundle E benefits from Bundle C having landed (fewer filter surfaces to migrate) and from
 > Bundle A's single sign-in entry point.
 
 ---
@@ -316,7 +318,8 @@ key with no recovery path), promote it to P0. **P0 and P1 both block the release
 
 > These gate the release. The first three are the **first-run authentication** cluster the
 > reviewer hit live; items 4–5 are the pre-existing structural gaps they build on; item 14
-> is a decided scope-reduction cleanup (remove filtering).
+> is a completed scope-reduction cleanup (filtering removed in
+> [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)).
 
 ### 1. Root auto-opens the auth picker on expand — should just show the sign-in node ⚠️ 🗣️
 
@@ -462,7 +465,7 @@ connectable clusters in this project" step rather than throwing. See
 
 ### 14. Remove all filtering (org + project) and its storage — release cleanup ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~10 files · **Reviewer (live pass)**
+**Priority:** P1 · **Status:** ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) · **Complexity:** ~10 files · **Reviewer (live pass)**
 
 **Observation:** _"Filtering — I think we can skip this completely, at least for now. Users
 can't log in as themselves; they use scoped Service Accounts and keys. So clean up everything
@@ -485,6 +488,12 @@ is a read, not a filter, and can be a lightweight count check rather than a stor
 > Service Accounts / API keys (no interactive personal login), a key already sees only what
 > it's authorized for, so org/project filtering adds UI and storage that don't earn their
 > keep. Revisit only if interactive sign-in (many orgs per user) ever lands.
+
+✅ **Implemented (Iteration 3):** [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)
+removes the Atlas project-filter QuickPick, credential-menu organization picker, selected
+organization/project storage APIs and keys, root `enableFilterCommand` context token, and
+filtered empty state. Organization lookup remains read-only for project descriptions and
+future permissions diagnostics. **Verification:** `npm run build` passed.
 
 ---
 
@@ -639,8 +648,9 @@ tooltip when Active.
 **Finding:** Two independent filters existed (org via Manage Credentials, project via the
 funnel), with no "filtered" badge on the root (iteration 1 §9.2).
 
-🚫 **Closed (Iteration 3):** Superseded by **item 14** — filtering is being removed entirely,
-so there is no filter state left to surface. **Reason:** no filtering, no filter indicator.
+🚫 **Closed (Iteration 3):** Superseded by **item 14** — filtering was removed in
+[a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70), so there is no
+filter state left to surface. **Reason:** no filtering, no filter indicator.
 
 ---
 
@@ -677,7 +687,7 @@ the next one; nothing is dropped without a terminal status.
 | 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | _pending_                                                                                | 🟠 Open — **release blocker**         |
 | 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**      |
 | 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | 🟠 Decided — **release blocker**      |
-| 14   | Remove all filtering + storage (🗣️ live)                                   | Remove entirely; scoped keys make filtering pointless; no migration (never shipped)      | 🟠 Decided — **release blocker**      |
+| 14   | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)     | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
 | 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                | 🟡 Open (soft) — likely follow-up PRs |
 | 9–13 | Polish items                                                               | #13 closed (filtering removed); rest pending                                             | 🟠 Open / 🚫 Closed                   |
 

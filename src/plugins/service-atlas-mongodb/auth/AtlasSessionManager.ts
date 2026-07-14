@@ -4,11 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import {
-    SECRET_KEY_PREFIX,
-    STATE_AUTH_METHOD,
-    STATE_USER_DISPLAY_NAME,
-} from '../config';
+import { SECRET_KEY_PREFIX, STATE_AUTH_METHOD, STATE_USER_DISPLAY_NAME } from '../config';
 import {
     AtlasSessionState,
     type AtlasApiKeySession,
