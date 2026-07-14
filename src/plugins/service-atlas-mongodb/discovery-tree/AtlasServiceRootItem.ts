@@ -92,12 +92,19 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         const [projects, orgs] = await Promise.all([client.listProjects(), client.listOrganizations()]);
 
         if (projects.length === 0) {
+            const hasVisibleOrganizations = orgs.length > 0;
             return [
                 createGenericElementWithContext({
                     contextValue: 'info',
-                    id: `${this.id}/no-projects`,
-                    label: vscode.l10n.t('No projects found'),
-                    description: vscode.l10n.t('Create a project in the Atlas console'),
+                    id: `${this.id}/${hasVisibleOrganizations ? 'no-visible-projects' : 'no-projects'}`,
+                    label: hasVisibleOrganizations
+                        ? vscode.l10n.t('No projects visible to this API key')
+                        : vscode.l10n.t('No projects found'),
+                    tooltip: hasVisibleOrganizations
+                        ? vscode.l10n.t(
+                              'This API key can access organizations, but it cannot view any projects. Check the project access and roles for this key.',
+                          )
+                        : vscode.l10n.t('Create a project in the Atlas console'),
                     iconPath: new vscode.ThemeIcon('info'),
                 }),
             ];

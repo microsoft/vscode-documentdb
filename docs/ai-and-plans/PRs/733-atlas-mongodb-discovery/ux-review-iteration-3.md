@@ -201,7 +201,7 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | --- | -------- | ------------------------------------------------------------------------------ | ------- | --------- | -------------- |
 | 1   | **P1**   | Root auto-opens the auth picker on expand — should just show the sign-in node  | ~5      | 🗣️ #1     | ✅ Implemented |
 | 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | ~5      | 🗣️ #3     | ✅ Implemented |
-| 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | 🟠 Open        |
+| 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | ✅ Implemented |
 | 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | ✅ Implemented |
 | 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | 🟠 Open        |
 | 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) |
@@ -254,7 +254,7 @@ surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth fl
 | 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | ✅ Implemented — establishes the single sign-in entry      |
 | 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | ✅ Implemented — defines the shared modal+retry helper      |
 | 3a    | **Item 2** — retry / "update credentials" after an auth failure           | `AtlasServiceRootItem`, `AtlasApiKeyFlow`                     | ~5           | ✅ Implemented — follows Item 4 |
-| 3b    | **Item 3** — disambiguate "No projects found" (permissions vs. empty)     | `AtlasServiceRootItem.fetchProjectItems`, tooltip             | ~5           | After 4 — **‖ parallel with 3a**                         |
+| 3b    | **Item 3** — disambiguate "No projects found" (permissions vs. empty)     | `AtlasServiceRootItem.fetchProjectItems`, tooltip             | ~5           | ✅ Implemented — follows Item 4                           |
 
 > Sequence: 1 establishes the single sign-in entry, 4 defines the shared modal+retry helper,
 > then 2 and 3 reuse that helper for the auth-failure and empty-state cases **in parallel**.
@@ -386,7 +386,7 @@ management flow. The future multi-credential storage redesign remains in Bundle 
 
 ### 3. Under-permissioned key mis-reported as "No projects found" (+ unreadable description) ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files · **Reviewer #4**
+**Priority:** P1 · **Status:** ✅ Implemented · **Complexity:** ~5 files · **Reviewer #4**
 
 **Observation:** _"An unexpected node with a long description said no projects were found in
 the Atlas org, with long text that's not readable because it's too long. And it was wrong —
@@ -404,6 +404,12 @@ key's project access / roles") with the actionable hint, rather than "Create a p
 Keep the label short; move any longer explanation into a **tooltip**, not the `description`.
 Optionally offer an "Update credentials" affordance here too (ties to item 2). **Merges
 with item 4** as part of the project/empty-state presentation pass.
+
+✅ **Implemented (Iteration 3):** The empty result now distinguishes a genuinely empty account
+from a permissions problem. When the API key can see organizations but no projects, the tree
+shows **No projects visible to this API key** and places the project-access guidance in its
+tooltip. The generic empty-account guidance also moved from `description` to a tooltip.
+**Verification:** `npm run build` passed.
 
 ---
 
@@ -701,7 +707,7 @@ the next one; nothing is dropped without a terminal status.
 | ---- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------- |
 | 1    | Root auto-opens auth picker on expand (🗣️ #1)                              | Remove auto-prompt; show only the sign-in node ("no magic"; the node is enough)          | 🟠 Decided — **release blocker**      |
 | 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes       | ✅ Implemented                        |
-| 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | _pending_                                                                                | 🟠 Open — **release blocker**         |
+| 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | Distinguish visible organizations with no visible projects; move guidance to tooltip     | ✅ Implemented                        |
 | 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**      |
 | 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | 🟠 Decided — **release blocker**      |
 | 14   | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)     | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
