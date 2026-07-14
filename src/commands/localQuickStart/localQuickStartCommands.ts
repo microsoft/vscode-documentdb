@@ -6,12 +6,15 @@
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { AuthMethodId } from '../../documentdb/auth/AuthMethod';
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
 import { ContainerRuntime, getQuickStartOutputChannel } from '../../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../../services/localQuickStart/QuickStartService';
 import { InstanceState } from '../../services/localQuickStart/quickStartTypes';
-import { getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
+import { type EphemeralClusterCredentials } from '../../tree/documentdb/ClusterItemBase';
+import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { copyStandardConnectionString } from '../copyConnectionString/copyConnectionString';
 
 /**
  * Quick Start managed-instance lifecycle commands (design §6.2 / §11). They act
@@ -45,27 +48,70 @@ export async function deleteQuickStartInstance(context: IActionContext): Promise
 
     const detail = wasRunning
         ? l10n.t(
-              'The container is currently running. It will be stopped and permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone — you can recreate a fresh instance any time with Quick Start.',
+              'The container is currently running. It will be stopped and permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone. You can recreate a fresh instance any time with Quick Start.',
           )
         : l10n.t(
-              'The container and its data volume will be permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone — you can recreate a fresh instance any time with Quick Start.',
+              'The container and its data volume will be permanently removed. All data, logs, and the auto-generated credentials will be lost. This cannot be undone. You can recreate a fresh instance any time with Quick Start.',
           );
 
-    const confirmed = await getConfirmationWithClick(l10n.t('Delete DocumentDB Local container?'), detail);
+    const confirmed = await getConfirmationAsInSettings(l10n.t('Delete DocumentDB Local container?'), detail, 'delete');
     if (!confirmed) {
         return;
     }
-    await QuickStartService.deleteContainer();
-    showConfirmationAsInSettings(l10n.t('DocumentDB Local container deleted.'));
+    const outcome = await QuickStartService.deleteContainer();
+    context.telemetry.properties.deleteOutcome = outcome;
+    // Only claim success when the instance was actually removed. On 'refused' (a container created
+    // outside the extension) or 'error' (Docker refused to remove our container) the service already
+    // showed the relevant message; on 'busy' another lifecycle op is running. In all three cases stay
+    // silent rather than show a contradictory "deleted" toast (GPT-5.6 review).
+    if (outcome === 'deleted') {
+        showConfirmationAsInSettings(l10n.t('DocumentDB Local container deleted.'));
+    }
 }
 
-export function copyQuickStartConnectionString(_context: IActionContext): void {
+/**
+ * Build password-free ephemeral credentials for the shared copy flow from a Quick Start instance's
+ * (credential-bearing) connection string. The shared flow treats `connectionString` as a password-
+ * free base and carries the password only in `nativeAuthConfig`, so we strip the embedded username +
+ * password here. Returns `undefined` (fail closed — copy nothing rather than leak) when the string
+ * can't be parsed.
+ */
+export function buildQuickStartCopyCredentials(
+    connectionString: string,
+    username: string,
+): EphemeralClusterCredentials | undefined {
+    let parsed: DocumentDBConnectionString;
+    try {
+        parsed = new DocumentDBConnectionString(connectionString);
+    } catch {
+        return undefined;
+    }
+    const password = parsed.password;
+    parsed.username = '';
+    parsed.password = '';
+    return {
+        connectionString: parsed.toString(),
+        availableAuthMethods: [AuthMethodId.NativeAuth],
+        selectedAuthMethod: AuthMethodId.NativeAuth,
+        nativeAuthConfig: { connectionUser: username, connectionPassword: password },
+    };
+}
+
+export async function copyQuickStartConnectionString(context: IActionContext): Promise<void> {
     const metadata = QuickStartService.getStatus().metadata;
     if (!metadata) {
         return;
     }
-    void vscode.env.clipboard.writeText(metadata.connectionString);
-    showConfirmationAsInSettings(l10n.t('Connection string copied to clipboard.'));
+    // Reuse the shared copy flow so the user gets the same with/without-password QuickPick as every
+    // other connection instead of silently copying the password (UX review #7). The Quick Start
+    // instance is in-memory (not a stored connection), so we build password-free ephemeral
+    // credentials from its metadata rather than going through the storage-backed node.getCredentials().
+    const credentials = buildQuickStartCopyCredentials(metadata.connectionString, metadata.username);
+    if (!credentials) {
+        return;
+    }
+    context.telemetry.properties.copyOrigin = 'quickStart';
+    await copyStandardConnectionString(context, credentials, true, false);
 }
 
 export function copyQuickStartPassword(_context: IActionContext): void {

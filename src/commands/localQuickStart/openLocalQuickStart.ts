@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import * as vscode from 'vscode';
 import { openLocalQuickStartWebview } from '../../webviews/documentdb/localQuickStart/localQuickStartController';
 
 /**
@@ -12,5 +13,9 @@ import { openLocalQuickStartWebview } from '../../webviews/documentdb/localQuick
  */
 export function openLocalQuickStart(_context: IActionContext): void {
     const view = openLocalQuickStartWebview({ id: 'localQuickStart' });
-    view.revealToForeground();
+    // Reveal in the panel's own column when it already has one (so reopening the create-or-reveal
+    // singleton doesn't move a panel the user parked in another group), falling back to the active
+    // column instead of the framework default (ViewColumn.One), which would yank the tab to column 1
+    // (GPT-5.6 review + panel follow-up).
+    view.revealToForeground(view.panel.viewColumn ?? vscode.ViewColumn.Active);
 }
