@@ -12,17 +12,14 @@ import {
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
-import { promptAtlasAuthMethod } from '../auth/AtlasAuthQuickPick';
 import { AtlasSessionState } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
-import { executeAtlasAuthFlow } from '../auth/executeAtlasAuthFlow';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { AtlasProjectItem } from './AtlasProjectItem';
 
 /**
  * Root tree item for the MongoDB Atlas discovery provider.
- * Handles authentication gating — on expand, ensures a valid session exists
- * before fetching and displaying projects.
+ * Handles authentication gating before fetching and displaying projects.
  */
 export class AtlasServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
@@ -37,23 +34,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        // Attempt to get or establish a session
-        let session = await this.sessionManager.getSession();
-
-        if (!session) {
-            // A sign-in was just cancelled — the resulting refresh should show the sign-in
-            // node rather than immediately re-opening the auth prompt.
-            if (this.sessionManager.consumeSuppressAutoPrompt()) {
-                return [this.createSignInNode()];
-            }
-
-            // No session — prompt user to authenticate
-            const authenticated = await this.promptAuthentication();
-            if (!authenticated) {
-                return [this.createSignInNode()];
-            }
-            session = await this.sessionManager.getSession();
-        }
+        const session = await this.sessionManager.getSession();
 
         if (!session) {
             return [this.createSignInNode()];
@@ -143,19 +124,6 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             iconPath: new vscode.ThemeIcon('cloud'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
-    }
-
-    /**
-     * Prompts user for authentication method and executes the chosen flow.
-     */
-    private async promptAuthentication(): Promise<boolean> {
-        const authMethod = await promptAtlasAuthMethod();
-
-        if (!authMethod) {
-            return false; // User cancelled
-        }
-
-        return executeAtlasAuthFlow(authMethod, this.sessionManager);
     }
 
     private createSignInNode(): TreeElement & TreeElementWithContextValue {

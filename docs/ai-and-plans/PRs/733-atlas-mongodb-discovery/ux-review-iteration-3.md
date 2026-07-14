@@ -234,7 +234,7 @@ entry, and is internally sequential).
 
 | Bundle | Theme                         | Priority | Items (in order) | \u2248 Files (sum) | Parallelizable with    |
 | ------ | ----------------------------- | -------- | ---------------- | ------------------ | ---------------------- |
-| **A**  | Sign-in & error surfacing     | P1       | 1 → 4 → {2 ‖ 3}  | ~20                | **B, C, D**            |
+| **A**  | Sign-in & error surfacing     | P1       | 1 ✅ → 4 → {2 ‖ 3}  | ~20                | **B, C, D**            |
 | **B**  | Add-Connection wizard         | P1       | 5 → 9            | ~10                | **A, C, D**            |
 | **C**  | Filtering removal             | P1       | 14 ✅ ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) | ~10                | **A, B, D** (completed) |
 | **D**  | Tree/root presentation polish | P2–P3    | 10 ‖ 11 ‖ 12     | ~15                | **A, B, C**            |
@@ -251,7 +251,7 @@ surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth fl
 
 | Order | Item                                                                      | Touches                                                       | \u2248 Files | Parallel within bundle?                                  |
 | ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------ | -------------------------------------------------------- |
-| 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | **Do first** — establishes the single sign-in entry      |
+| 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | ✅ Implemented — establishes the single sign-in entry      |
 | 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | After 1 — **defines the shared modal+retry helper**      |
 | 3a    | **Item 2** — retry / "update credentials" after an auth failure           | `AtlasServiceRootItem`, `AtlasApiKeyFlow`                     | ~5           | After 4 — **‖ parallel with 3b** (both reuse the helper) |
 | 3b    | **Item 3** — disambiguate "No projects found" (permissions vs. empty)     | `AtlasServiceRootItem.fetchProjectItems`, tooltip             | ~5           | After 4 — **‖ parallel with 3a**                         |
@@ -323,7 +323,7 @@ key with no recovery path), promote it to P0. **P0 and P1 both block the release
 
 ### 1. Root auto-opens the auth picker on expand — should just show the sign-in node ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files · **Reviewer #1**
+**Priority:** P1 · **Status:** ✅ Implemented · **Complexity:** ~5 files · **Reviewer #1**
 
 **Observation:** _"When I attempt to expand the Atlas discovery, the auth wizard shows —
 don't do this. We already have an error node that lets a user sign in. That is enough."_
@@ -345,6 +345,11 @@ work-around, since there is no longer an auto-prompt to suppress. **Influences i
 > expand. **Reason:** the sign-in node is already a sufficient, explicit call to action;
 > auto-opening a picker the user didn't request is surprising ("no magic") and inconsistent
 > with the Azure siblings.
+
+✅ **Implemented (Iteration 3):** `AtlasServiceRootItem.getChildren()` now returns the existing
+sign-in node immediately when no session exists. The automatic auth QuickPick path and the
+`AtlasSessionManager.consumeSuppressAutoPrompt()` cancellation latch were removed. **Verification:**
+`npm run build` passed.
 
 ---
 
