@@ -197,22 +197,22 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 > Implemented, 🚫 Closed with a reason, or 🔗 Tracked with a committed follow-up) **before
 > this PR can ship**. P2/P3 are strongly desired but do not gate the release.
 
-| #   | Priority | Item                                                                           | ≈ Files | Reviewer? | Status         |
-| --- | -------- | ------------------------------------------------------------------------------ | ------- | --------- | -------------- |
-| 1   | **P1**   | Root auto-opens the auth picker on expand — should just show the sign-in node  | ~5      | 🗣️ #1     | ✅ Implemented |
-| 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | ~5      | 🗣️ #3     | ✅ Implemented |
-| 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | ✅ Implemented |
-| 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | ✅ Implemented |
-| 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | 🟠 Open        |
+| #   | Priority | Item                                                                           | ≈ Files | Reviewer? | Status                                                                                      |
+| --- | -------- | ------------------------------------------------------------------------------ | ------- | --------- | ------------------------------------------------------------------------------------------- |
+| 1   | **P1**   | Root auto-opens the auth picker on expand — should just show the sign-in node  | ~5      | 🗣️ #1     | ✅ Implemented                                                                              |
+| 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | ~5      | 🗣️ #3     | ✅ Implemented                                                                              |
+| 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | ✅ Implemented                                                                              |
+| 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | ✅ Implemented                                                                              |
+| 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | 🟠 Open                                                                                     |
 | 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) |
-| 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | 🟡 Open (soft) |
-| 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft) |
-| 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | ~15     | 🗣️ #5     | 🟡 Open (soft) |
-| 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | ~5      | —         | 🟠 Open        |
-| 10  | **P2**   | Project node has no tooltip                                                    | ~5      | —         | 🟠 Open        |
-| 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | ~5      | —         | 🟠 Open        |
-| 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | ~5      | —         | 🟠 Open        |
-| 13  | **P3**   | ~~Active-filter state not visible on the root~~ — superseded by #14            | —       | —         | 🚫 Closed      |
+| 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | 🟡 Open (soft)                                                                              |
+| 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft)                                                                              |
+| 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | ~15     | 🗣️ #5     | 🟡 Open (soft)                                                                              |
+| 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | ~5      | —         | 🟠 Open                                                                                     |
+| 10  | **P2**   | Project node has no tooltip                                                    | ~5      | —         | 🟠 Open                                                                                     |
+| 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | ~5      | —         | 🟠 Open                                                                                     |
+| 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | ~5      | —         | 🟠 Open                                                                                     |
+| 13  | **P3**   | ~~Active-filter state not visible on the root~~ — superseded by #14            | —       | —         | 🚫 Closed                                                                                   |
 
 ---
 
@@ -232,13 +232,13 @@ cross-bundle dependency** — they can be picked up by four contributors **at th
 Bundle **E** is the only one that must wait (it builds on C's cleanup and A's single sign-in
 entry, and is internally sequential).
 
-| Bundle | Theme                         | Priority | Items (in order) | \u2248 Files (sum) | Parallelizable with    |
-| ------ | ----------------------------- | -------- | ---------------- | ------------------ | ---------------------- |
-| **A**  | Sign-in & error surfacing     | P1       | 1 ✅ → 4 ✅ → {2 ‖ 3}  | ~20                | **B, C, D**            |
-| **B**  | Add-Connection wizard         | P1       | 5 → 9            | ~10                | **A, C, D**            |
+| Bundle | Theme                         | Priority | Items (in order)                                                                   | \u2248 Files (sum) | Parallelizable with     |
+| ------ | ----------------------------- | -------- | ---------------------------------------------------------------------------------- | ------------------ | ----------------------- |
+| **A**  | Sign-in & error surfacing     | P1       | 1 ✅ → 4 ✅ → {2 ‖ 3}                                                              | ~20                | **B, C, D**             |
+| **B**  | Add-Connection wizard         | P1       | 5 → 9                                                                              | ~10                | **A, C, D**             |
 | **C**  | Filtering removal             | P1       | 14 ✅ ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) | ~10                | **A, B, D** (completed) |
-| **D**  | Tree/root presentation polish | P2–P3    | 10 ‖ 11 ‖ 12     | ~15                | **A, B, C**            |
-| **E**  | Credential & view redesign    | P2       | 6 → 7 → 8        | ~50                | after **C** (& **A**)  |
+| **D**  | Tree/root presentation polish | P2–P3    | 10 ‖ 11 ‖ 12                                                                       | ~15                | **A, B, C**             |
+| **E**  | Credential & view redesign    | P2       | 6 → 7 → 8                                                                          | ~50                | after **C** (& **A**)   |
 
 > Legend for the ordering column: `→` = must be done in sequence; `‖` = order does not matter
 > (safe to parallelize); `{ }` = a parallel group. So Bundle A is _1, then 4, then 2 and 3 in
@@ -249,12 +249,12 @@ entry, and is internally sequential).
 The first-run authentication cluster: one sign-in node, one retry story, consistent error
 surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth flow.
 
-| Order | Item                                                                      | Touches                                                       | \u2248 Files | Parallel within bundle?                                  |
-| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------ | -------------------------------------------------------- |
-| 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | ✅ Implemented — establishes the single sign-in entry      |
-| 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | ✅ Implemented — defines the shared modal+retry helper      |
-| 3a    | **Item 2** — retry / "update credentials" after an auth failure           | `AtlasServiceRootItem`, `AtlasApiKeyFlow`                     | ~5           | ✅ Implemented — follows Item 4 |
-| 3b    | **Item 3** — disambiguate "No projects found" (permissions vs. empty)     | `AtlasServiceRootItem.fetchProjectItems`, tooltip             | ~5           | ✅ Implemented — follows Item 4                           |
+| Order | Item                                                                      | Touches                                                       | \u2248 Files | Parallel within bundle?                                |
+| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------ | ------------------------------------------------------ |
+| 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | ✅ Implemented — establishes the single sign-in entry  |
+| 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | ✅ Implemented — defines the shared modal+retry helper |
+| 3a    | **Item 2** — retry / "update credentials" after an auth failure           | `AtlasServiceRootItem`, `AtlasApiKeyFlow`                     | ~5           | ✅ Implemented — follows Item 4                        |
+| 3b    | **Item 3** — disambiguate "No projects found" (permissions vs. empty)     | `AtlasServiceRootItem.fetchProjectItems`, tooltip             | ~5           | ✅ Implemented — follows Item 4                        |
 
 > Sequence: 1 establishes the single sign-in entry, 4 defines the shared modal+retry helper,
 > then 2 and 3 reuse that helper for the auth-failure and empty-state cases **in parallel**.
@@ -270,8 +270,8 @@ Both items live in `SelectAtlasSteps` / `getDiscoveryWizard`.
 
 ### Bundle C — Filtering removal · **P1 · implemented**
 
-| Order | Item                                                                      | Touches                                                                                              | \u2248 Files | Parallel within bundle?                          |
-| ----- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------ |
+| Order | Item                                                                      | Touches                                                                              | \u2248 Files | Parallel within bundle?                                                                                              |
+| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------------------------------ | ------------ | -------------------------------------------------------------------------------------------------------------------- |
 | 1     | **Item 14** — remove all org/project filtering + storage (**closes #13**) | `AtlasDiscoveryProvider`, `AtlasServiceRootItem`, `AtlasSessionManager`, `config.ts` | ~10          | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
 
 > Completed independently of A/B: it deleted code that the credential/view redesign (Bundle
@@ -703,16 +703,16 @@ the next one; nothing is dropped without a terminal status.
 
 ### Iteration 3 (this pass)
 
-| #    | Item                                                                       | Decision (why)                                                                           | Outcome                               |
-| ---- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------- |
-| 1    | Root auto-opens auth picker on expand (🗣️ #1)                              | Remove auto-prompt; show only the sign-in node ("no magic"; the node is enough)          | 🟠 Decided — **release blocker**      |
-| 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes       | ✅ Implemented                        |
-| 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | Distinguish visible organizations with no visible projects; move guidance to tooltip     | ✅ Implemented                        |
-| 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**      |
-| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | 🟠 Decided — **release blocker**      |
+| #    | Item                                                                       | Decision (why)                                                                           | Outcome                                                                                                              |
+| ---- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 1    | Root auto-opens auth picker on expand (🗣️ #1)                              | Remove auto-prompt; show only the sign-in node ("no magic"; the node is enough)          | 🟠 Decided — **release blocker**                                                                                     |
+| 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes       | ✅ Implemented                                                                                                       |
+| 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | Distinguish visible organizations with no visible projects; move guidance to tooltip     | ✅ Implemented                                                                                                       |
+| 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**                                                                                     |
+| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | 🟠 Decided — **release blocker**                                                                                     |
 | 14   | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)     | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
-| 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                | 🟡 Open (soft) — likely follow-up PRs |
-| 9–13 | Polish items                                                               | #13 closed (filtering removed); rest pending                                             | 🟠 Open / 🚫 Closed                   |
+| 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                | 🟡 Open (soft) — likely follow-up PRs                                                                                |
+| 9–13 | Polish items                                                               | #13 closed (filtering removed); rest pending                                             | 🟠 Open / 🚫 Closed                                                                                                  |
 
 > 🗣️ = raised by the reviewer in the live pass. "Decided" items have an agreed direction (see
 > the Decision block on each) but are not yet implemented. Items 6–8 are dependent (see
