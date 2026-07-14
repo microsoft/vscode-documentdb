@@ -689,7 +689,30 @@ the next one; nothing is dropped without a terminal status.
 
 ## Open ideas — options, pros & cons
 
-### O1. Wizard no-session / empty-cluster recovery (item 5)
+**What these are (and when they must be answered).** Each `O`-block is a **decision aid** for
+one item: it lays out the realistic options with pros/cons and a 💡 **Suggested** pick. They
+are _not_ extra work items and they are _not_ all gating. Two categories:
+
+- **Already decided** — for the P1 release blockers, the choice is **made** and recorded in
+  that item's **Decision** block (the `O`-table just preserves the alternatives that were
+  weighed). No further sign-off needed; a contributor can start from the Decision. This covers
+  **O1** (item 5 → Option A) and **O2** (items 2/3/4 → Option A).
+- **Must be answered before Bundle E starts** — for the P2 follow-up redesign, the direction is
+  still a _suggestion_. **O3, O4, O5** need an explicit pick **before** the corresponding
+  Bundle E item is implemented — but they do **not** block Bundles A–D, which can proceed now.
+
+| Block  | Item(s) | Bundle | Priority | Answer needed before…                    | State                          |
+| ------ | ------- | ------ | -------- | ---------------------------------------- | ------------------------------ |
+| **O1** | 5       | B      | P1       | already answered                         | ✅ Decided — Option A          |
+| **O2** | 2, 3, 4 | A      | P1       | already answered                         | ✅ Decided — Option A          |
+| **O3** | 6       | E      | P2       | starting **Bundle E · item 6**           | 🟡 Open — 💡 suggests Option C |
+| **O4** | 7       | E      | P2       | starting **Bundle E · item 7** (after 6) | 🟡 Open — 💡 suggests Option A |
+| **O5** | 8       | E      | P2       | starting **Bundle E · item 8** (after 7) | 🟡 Open — 💡 suggests Option A |
+
+> So: nothing here blocks the release-blocker bundles (A–D). Only **O3/O4/O5** need a decision,
+> and only at the point Bundle E's sequenced work reaches each item.
+
+### O1. Wizard no-session / empty-cluster recovery (item 5) · ✅ Decided (Option A — see [item 5](#5-add-connection-wizard-steps-throw-raw-errors-that-close-the-flow-))
 
 | Option                                                               | Pros                                                                | Cons                                                      |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
@@ -700,7 +723,7 @@ the next one; nothing is dropped without a terminal status.
 > 💡 **Suggested:** Option A for fastest parity with the Azure siblings; Option B if the
 > team wants the best UX. Either beats today's raw throw (Option C).
 
-### O2. Project-level error + retry presentation (items 2, 3, 4)
+### O2. Project-level error + retry presentation (items 2, 3, 4) · ✅ Decided (Option A — see [item 4](#4-project-level-loadauth-errors-render-as-passive-in-tree-rows-))
 
 | Option                                                                                    | Pros                                                                            | Cons                                                     |
 | ----------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | -------------------------------------------------------- |
@@ -712,7 +735,7 @@ the next one; nothing is dropped without a terminal status.
 > retry/error helper covers items 2, 3, and 4 at once. Retry is the must-have (Reviewer #3:
 > "simple retry is enough"); "Update credentials" is the strong nice-to-have.
 
-### O3. Credential-entry surface: webview vs QuickPick (item 6)
+### O3. Credential-entry surface: webview vs QuickPick (item 6) · 🟡 Open — decide before **Bundle E · item 6**
 
 | Option                                                                           | Pros                                                                                     | Cons                                                                |
 | -------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------------------------------------- |
@@ -725,7 +748,7 @@ the next one; nothing is dropped without a terminal status.
 > add/edit credential form is a webview. Do Option B's `detail` tweak as a cheap stopgap if
 > the webview slips past this release.
 
-### O4. Multi-credential model + API redesign (item 7)
+### O4. Multi-credential model + API redesign (item 7) · 🟡 Open — decide before **Bundle E · item 7**
 
 | Option                                         | Pros                                                                           | Cons                                                                                                  |
 | ---------------------------------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------- |
@@ -747,7 +770,7 @@ the next one; nothing is dropped without a terminal status.
 > keys carry no real user data and the new store starts clean. This keeps Atlas on the same
 > secrets solution as the rest of the extension.
 
-### O5. Tree/List toggle + org level (item 8)
+### O5. Tree/List toggle + org level (item 8) · 🟡 Open — decide before **Bundle E · item 8**
 
 | Option                                                                        | Pros                                                           | Cons                                                              |
 | ----------------------------------------------------------------------------- | -------------------------------------------------------------- | ----------------------------------------------------------------- |
