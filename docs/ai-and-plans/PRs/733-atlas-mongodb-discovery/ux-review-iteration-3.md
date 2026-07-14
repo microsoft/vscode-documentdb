@@ -58,6 +58,19 @@ the reviewer saw), a **Finding** (what the code does and why), a **Suggestion**,
 > or 🔗 Tracked. Each fix records **why it was chosen** (Decision) and **how it was done**
 > (Implemented + commit link).
 
+### Complexity (≈ files touched)
+
+A rough sizing so work can be distributed: the approximate number of files each item touches
+(source + tests + `package.json` / l10n), **bucketed in groups of five**. It is an _effort
+signal for parallelizing the work_, not a contract.
+
+| Bucket  | ≈ Files | Rough scope                                              |
+| ------- | ------- | -------------------------------------------------------- |
+| **~5**  | 1–5     | One or two files + tests; a localized change             |
+| **~10** | 6–10    | Several files across one area (e.g. remove a feature)    |
+| **~15** | 11–15   | A new surface (webview / tree level) spanning many files |
+| **~20** | 16–20   | Cross-cutting redesign (storage + API + tree + wizard)   |
+
 ### Markers (inline)
 
 | Marker            | Meaning                                                 |
@@ -184,22 +197,22 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 > Implemented, 🚫 Closed with a reason, or 🔗 Tracked with a committed follow-up) **before
 > this PR can ship**. P2/P3 are strongly desired but do not gate the release.
 
-| #   | Priority | Item                                                                           | Reviewer? | Status         |
-| --- | -------- | ------------------------------------------------------------------------------ | --------- | -------------- |
-| 1   | **P1**   | Root auto-opens the auth picker on expand — should just show the sign-in node  | 🗣️ #1     | 🟠 Open        |
-| 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | 🗣️ #3     | 🟠 Open        |
-| 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | 🗣️ #4     | 🟠 Open        |
-| 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | —         | 🟠 Open        |
-| 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | (🗣️ #3)   | 🟠 Open        |
-| 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | 🗣️ live   | 🟠 Open        |
-| 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | 🗣️ #2     | 🟡 Open (soft) |
-| 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | 🗣️ #6     | 🟡 Open (soft) |
-| 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | 🗣️ #5     | 🟡 Open (soft) |
-| 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | —         | 🟠 Open        |
-| 10  | **P2**   | Project node has no tooltip                                                    | —         | 🟠 Open        |
-| 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | —         | 🟠 Open        |
-| 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | —         | 🟠 Open        |
-| 13  | **P3**   | ~~Active-filter state not visible on the root~~ — superseded by #14            | —         | 🚫 Closed      |
+| #   | Priority | Item                                                                           | ≈ Files | Reviewer? | Status         |
+| --- | -------- | ------------------------------------------------------------------------------ | ------- | --------- | -------------- |
+| 1   | **P1**   | Root auto-opens the auth picker on expand — should just show the sign-in node  | ~5      | 🗣️ #1     | 🟠 Open        |
+| 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | ~5      | 🗣️ #3     | 🟠 Open        |
+| 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | 🟠 Open        |
+| 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | 🟠 Open        |
+| 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | 🟠 Open        |
+| 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | 🟠 Open        |
+| 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | 🟡 Open (soft) |
+| 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft) |
+| 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | ~15     | 🗣️ #5     | 🟡 Open (soft) |
+| 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | ~5      | —         | 🟠 Open        |
+| 10  | **P2**   | Project node has no tooltip                                                    | ~5      | —         | 🟠 Open        |
+| 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | ~5      | —         | 🟠 Open        |
+| 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | ~5      | —         | 🟠 Open        |
+| 13  | **P3**   | ~~Active-filter state not visible on the root~~ — superseded by #14            | —       | —         | 🚫 Closed      |
 
 ---
 
@@ -208,53 +221,83 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 The same items, **bundled by the code they touch** and ordered so a contributor can pick a
 self-contained chunk. No items are added or removed here — every active item from the index
 appears in exactly one bundle (closed #13 is noted where it belongs). Bundles A–C are the
-release blockers; D is quick polish; E is the sequenced follow-up redesign.
+release blockers; D is quick polish; E is the sequenced follow-up redesign. Each item carries
+its **≈ files** estimate (from the [Complexity legend](#complexity--files-touched)) so work can
+be sized and distributed.
+
+### Bundle overview — what runs in parallel
+
+The four release-blocker bundles (**A, B, C, D**) touch **disjoint files** and have **no
+cross-bundle dependency** — they can be picked up by four contributors **at the same time**.
+Bundle **E** is the only one that must wait (it builds on C's cleanup and A's single sign-in
+entry, and is internally sequential).
+
+| Bundle | Theme                         | Priority | Items (in order) | \u2248 Files (sum) | Parallelizable with    |
+| ------ | ----------------------------- | -------- | ---------------- | ------------------ | ---------------------- |
+| **A**  | Sign-in & error surfacing     | P1       | 1 → 4 → {2 ‖ 3}  | ~20                | **B, C, D**            |
+| **B**  | Add-Connection wizard         | P1       | 5 → 9            | ~10                | **A, C, D**            |
+| **C**  | Filtering removal             | P1       | 14               | ~10                | **A, B, D** (do early) |
+| **D**  | Tree/root presentation polish | P2–P3    | 10 ‖ 11 ‖ 12     | ~15                | **A, B, C**            |
+| **E**  | Credential & view redesign    | P2       | 6 → 7 → 8        | ~50                | after **C** (& **A**)  |
+
+> Legend for the ordering column: `→` = must be done in sequence; `‖` = order does not matter
+> (safe to parallelize); `{ }` = a parallel group. So Bundle A is _1, then 4, then 2 and 3 in
+> parallel_; Bundle D is _all three in any order / in parallel_.
 
 ### Bundle A — Sign-in & error surfacing (root + project) · **P1 · do first**
 
 The first-run authentication cluster: one sign-in node, one retry story, consistent error
 surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth flow.
 
-1. **Item 1** — Remove the auto-prompt; expand shows only the sign-in node.
-2. **Item 4** — Project errors → modal + a single retry node; detail to the output channel.
-3. **Item 2** — Add retry / "update credentials" affordance after an auth failure.
-4. **Item 3** — Disambiguate the misleading "No projects found" (permissions vs. empty).
+| Order | Item                                                                      | Touches                                                       | \u2248 Files | Parallel within bundle?                                  |
+| ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------ | -------------------------------------------------------- |
+| 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | **Do first** — establishes the single sign-in entry      |
+| 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | After 1 — **defines the shared modal+retry helper**      |
+| 3a    | **Item 2** — retry / "update credentials" after an auth failure           | `AtlasServiceRootItem`, `AtlasApiKeyFlow`                     | ~5           | After 4 — **‖ parallel with 3b** (both reuse the helper) |
+| 3b    | **Item 3** — disambiguate "No projects found" (permissions vs. empty)     | `AtlasServiceRootItem.fetchProjectItems`, tooltip             | ~5           | After 4 — **‖ parallel with 3a**                         |
 
-> Do them in this order — 1 establishes the single sign-in entry, 4 defines the shared
-> modal+retry helper, then 2 and 3 reuse that helper for the auth-failure and empty-state
-> cases.
+> Sequence: 1 establishes the single sign-in entry, 4 defines the shared modal+retry helper,
+> then 2 and 3 reuse that helper for the auth-failure and empty-state cases **in parallel**.
 
 ### Bundle B — Add-Connection wizard · **P1**
 
 Both items live in `SelectAtlasSteps` / `getDiscoveryWizard`.
 
-5. **Item 5** — Replace raw throws with the Azure-style always-show "Manage MongoDB Atlas
-   Credentials…" option + clean `UserCancelledError`.
-6. **Item 9** — Reconcile the IDLE-only cluster filter so the wizard list matches the tree.
+| Order | Item                                                                                             | Touches                                       | \u2248 Files | Parallel within bundle?                                                  |
+| ----- | ------------------------------------------------------------------------------------------------ | --------------------------------------------- | ------------ | ------------------------------------------------------------------------ |
+| 1     | **Item 5** — raw throws → Azure-style "Manage MongoDB Atlas Credentials…" + `UserCancelledError` | `SelectAtlasSteps`, `getDiscoveryWizard`      | ~5           | Do first                                                                 |
+| 2     | **Item 9** — reconcile the IDLE-only cluster filter to match the tree                            | `SelectAtlasSteps` (`SelectAtlasClusterStep`) | ~5           | No hard dependency on 5, but **same file** — sequence to avoid conflicts |
 
 ### Bundle C — Filtering removal · **P1 · independent, do early**
 
-7. **Item 14** — Remove all org/project filtering + its storage (**closes item 13**).
+| Order | Item                                                                      | Touches                                                                                              | \u2248 Files | Parallel within bundle?                          |
+| ----- | ------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- | ------------ | ------------------------------------------------ |
+| 1     | **Item 14** — remove all org/project filtering + storage (**closes #13**) | `AtlasDiscoveryProvider`, `AtlasServiceRootItem`, `AtlasSessionManager`, `config.ts`, `package.json` | ~10          | Single item; independent of A/B — **land early** |
 
 > Independent of A/B and worth landing early: it deletes code that the credential/view
 > redesign (Bundle E) would otherwise have to carry forward.
 
 ### Bundle D — Tree/root presentation polish · **P2–P3 · quick wins**
 
-Small, independent touches to the tree items and root description.
+Small, independent touches to the tree items and root description. **All three touch different
+files — order does not matter and they can be done in parallel.**
 
-8. **Item 10** — Add a project-node tooltip.
-9. **Item 11** — Reveal/expand the root after a successful sign-in.
-10. **Item 12** — Show the signed-in identity in the root description/tooltip (P3).
+| Order | Item                                                            | Touches                                    | \u2248 Files | Parallel within bundle?               |
+| ----- | --------------------------------------------------------------- | ------------------------------------------ | ------------ | ------------------------------------- |
+| ‖     | **Item 10** — add a project-node tooltip                        | `AtlasProjectItem.getTreeItem`             | ~5           | **Fully parallel** — independent file |
+| ‖     | **Item 11** — reveal/expand the root after a successful sign-in | `AtlasDiscoveryProvider`                   | ~5           | **Fully parallel** — independent file |
+| ‖     | **Item 12** — show the signed-in identity in the root (P3)      | `AtlasServiceRootItem.getStateDescription` | ~5           | **Fully parallel** — independent file |
 
 ### Bundle E — Credential & view redesign · **P2 · sequenced follow-up PRs**
 
-The three larger reviewer design directions; strictly ordered because each depends on the
-previous (see [Sequencing](#sequencing-suggested)).
+The three larger reviewer design directions; **strictly sequential** because each depends on
+the previous (see [Sequencing](#sequencing-suggested)).
 
-11. **Item 6** — Guided webview for credential entry (also hosts "Add" / "Update credentials").
-12. **Item 7** — Multi-credential management on the shared `StorageService` (Azure-style flow).
-13. **Item 8** — Tree/List view toggle + org level, once the org-aware credential model exists.
+| Order | Item                                                                            | Touches                                                                                                 | \u2248 Files | Parallel within bundle?                        |
+| ----- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------- |
+| 1     | **Item 6** — guided webview for credential entry (hosts "Add" / "Update creds") | new webview (React + tRPC router + controller), `AtlasApiKeyFlow`                                       | ~15          | **Strictly sequential** — do first             |
+| 2     | **Item 7** — multi-credential management on the shared `StorageService`         | `AtlasSessionManager` → N-credential store, `configureCredentials` wizard, API client, tree attribution | ~20          | After 6 — the webview is the "Add" surface     |
+| 3     | **Item 8** — Tree/List view toggle + org level                                  | new `AtlasOrgItem`, `config.ts`, 2 commands, `package.json`, `AtlasProjectItem`/`AtlasClusterItem`      | ~15          | After 7 — needs the org-aware credential model |
 
 > Bundle E benefits from Bundle C landing first (fewer filter surfaces to migrate) and from
 > Bundle A's single sign-in entry point.
@@ -277,7 +320,7 @@ key with no recovery path), promote it to P0. **P0 and P1 both block the release
 
 ### 1. Root auto-opens the auth picker on expand — should just show the sign-in node ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Reviewer #1**
+**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files · **Reviewer #1**
 
 **Observation:** _"When I attempt to expand the Atlas discovery, the auth wizard shows —
 don't do this. We already have an error node that lets a user sign in. That is enough."_
@@ -304,7 +347,7 @@ work-around, since there is no longer an auto-prompt to suppress. **Influences i
 
 ### 2. Auth failure / bad key has no retry or "update credentials" path ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Reviewer #3**
+**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files · **Reviewer #3**
 
 **Observation:** _"When auth fails (I tried the API key path), it just fails and I have no
 retry / update-creds path — I had to restart the wizard. A retry node and an 'update
@@ -328,7 +371,7 @@ project).
 
 ### 3. Under-permissioned key mis-reported as "No projects found" (+ unreadable description) ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Reviewer #4**
+**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files · **Reviewer #4**
 
 **Observation:** _"An unexpected node with a long description said no projects were found in
 the Atlas org, with long text that's not readable because it's too long. And it was wrong —
@@ -351,7 +394,7 @@ with item 4** as part of the project/empty-state presentation pass.
 
 ### 4. Project-level load/auth errors render as passive in-tree rows ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files
 
 **Observation:** Break discovery after projects are already listed (revoke the key / drop
 the network), then expand a **project** — you get a plain error row, not the modal +
@@ -386,7 +429,7 @@ output channel + a friendly summary. See [O2](#o2-project-level-error--retry-pre
 
 ### 5. Add-Connection wizard steps throw raw errors that close the flow ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open
+**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files
 
 **Observation:** Start the Add-Connection wizard with a dropped session, or pick a project
 whose clusters are all mid-provision — the wizard **closes with a raw error** instead of
@@ -419,7 +462,7 @@ connectable clusters in this project" step rather than throwing. See
 
 ### 14. Remove all filtering (org + project) and its storage — release cleanup ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Reviewer (live pass)**
+**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~10 files · **Reviewer (live pass)**
 
 **Observation:** _"Filtering — I think we can skip this completely, at least for now. Users
 can't log in as themselves; they use scoped Service Accounts and keys. So clean up everything
@@ -449,7 +492,7 @@ is a read, not a filter, and can be a lightweight count check rather than a stor
 
 ### 6. Rework credential entry as a guided webview (tell the user where to get the keys) 🗣️
 
-**Priority:** P2 · **Status:** 🟡 Open (soft) · **Reviewer #2**
+**Priority:** P2 · **Status:** 🟡 Open (soft) · **Complexity:** ~15 files · **Reviewer #2**
 
 **Observation:** _"The sign-in QuickPick will have to be redone as a webview. It's currently
 too hard for the user to know what to do — the QuickPick doesn't share enough context on
@@ -474,7 +517,7 @@ _Likely a follow-up PR, not a release blocker — confirm scope._
 
 ### 7. Multi-credential management, modeled on the Azure accounts flow 🗣️
 
-**Priority:** P2 · **Status:** 🟡 Open (soft) · **Reviewer #6**
+**Priority:** P2 · **Status:** 🟡 Open (soft) · **Complexity:** ~20 files · **Reviewer #6**
 
 **Observation:** _"Redesign credential management — support multiple API keys. Replicate the
 Azure 'Manage Credentials' QuickPick: see what we have, a 'Remove' option in a submenu, and
@@ -513,7 +556,7 @@ _Follow-up PR; sequence after item 6._
 
 ### 8. Tree/List view toggle with an org level (Kubernetes-style) 🗣️
 
-**Priority:** P2 · **Status:** 🟡 Open (soft) · **Reviewer #5**
+**Priority:** P2 · **Status:** 🟡 Open (soft) · **Complexity:** ~15 files · **Reviewer #5**
 
 **Observation:** _"Replicate the modes from the Kubernetes view — the user can switch between
 tree and list. The tree would show orgs → projects → clusters nested; the list would show all
@@ -535,7 +578,7 @@ follow-up PR._
 
 ### 9. Wizard shows only IDLE clusters — the tree shows all ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** 🟠 Open · **Complexity:** ~5 files
 
 **Observation:** A cluster visible in the discovery tree (e.g. tagged `Updating…`) is
 **absent** from the Add-Connection wizard's cluster list.
@@ -552,7 +595,7 @@ intentional and give the empty case a friendly in-flow message (ties into item 5
 
 ### 10. Project node has no tooltip ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** 🟠 Open · **Complexity:** ~5 files
 
 **Finding:**
 
@@ -565,7 +608,7 @@ the same `---`-separated style as the cluster tooltip for cross-provider consist
 
 ### 11. No reveal/expand of the Atlas root after a successful sign-in ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open
+**Priority:** P2 · **Status:** 🟠 Open · **Complexity:** ~5 files
 
 **Finding:**
 
@@ -580,7 +623,7 @@ appear without a manual expand.
 
 ### 12. Root shows no "signed in as…" identity when Active ⚠️
 
-**Priority:** P3 · **Status:** 🟠 Open
+**Priority:** P3 · **Status:** 🟠 Open · **Complexity:** ~5 files
 
 **Finding:** [getStateDescription](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L221) only annotates `Expired` / `Authenticating`; when `Active` the description is blank even though `getUserDisplayName()` is available (iteration 1 §9.1). Gains extra value under multi-credential (item 7): the root could show _which_ credential is active.
 
