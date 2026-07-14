@@ -14,7 +14,8 @@ jest.mock('../../../utils/icons', () => ({ getResourcesPath: () => '/resources' 
 // UX review #1: the credential-unavailable state must render an ACTIONABLE, Delete-only instance row
 // (not the passive rocket + command-less warning dead end). This locks in the tree contract: the row
 // carries treeItem_quickStartInstance + state_credentialsMissing (so the Delete when-clause matches)
-// and has NO click command (Delete-only, per TN — no accidental browse/recreate).
+// and a single click launches the Delete command (which shows the confirmation dialog) so the
+// recovery is discoverable (GPT-5.6 review follow-up).
 describe('LocalQuickStartItem — CredentialsMissing row (UX review #1)', () => {
     afterEach(() => jest.restoreAllMocks());
 
@@ -36,7 +37,7 @@ describe('LocalQuickStartItem — CredentialsMissing row (UX review #1)', () => 
         // Both tokens present so the Delete command's when-clause matches (package.json).
         expect(contextValue).toContain('treeItem_quickStartInstance');
         expect(contextValue).toContain('state_credentialsMissing');
-        // Delete-only: the row exposes no click command (no browse/recreate).
-        expect(treeItem.command).toBeUndefined();
+        // A single click launches Delete (with its confirmation) — discoverable one-click recovery.
+        expect(treeItem.command?.command).toBe('vscode-documentdb.command.localQuickStart.delete');
     });
 });

@@ -58,8 +58,15 @@ export async function deleteQuickStartInstance(context: IActionContext): Promise
     if (!confirmed) {
         return;
     }
-    await QuickStartService.deleteContainer();
-    showConfirmationAsInSettings(l10n.t('DocumentDB Local container deleted.'));
+    const outcome = await QuickStartService.deleteContainer();
+    context.telemetry.properties.deleteOutcome = outcome;
+    // Only claim success when the instance was actually removed. On 'refused' (a container created
+    // outside the extension) or 'error' (Docker refused to remove our container) the service already
+    // showed the relevant message; on 'busy' another lifecycle op is running. In all three cases stay
+    // silent rather than show a contradictory "deleted" toast (GPT-5.6 review).
+    if (outcome === 'deleted') {
+        showConfirmationAsInSettings(l10n.t('DocumentDB Local container deleted.'));
+    }
 }
 
 /**

@@ -184,7 +184,9 @@ describe('QuickStartService — R1 legacy-fallback safety (WI-1)', () => {
 
         const service = new QuickStartServiceImpl(mockRuntime({}));
 
-        await service.deleteContainer();
+        const outcome = await service.deleteContainer();
+        // No container to reconcile against ⇒ records/secrets are cleaned and the outcome is 'deleted'.
+        expect(outcome).toBe('deleted');
 
         // Explicit Delete leaves no stale credentials/image behind — neither alias-keyed nor legacy —
         // so the next provision can never silently reuse them (locks the opus47-N1 fix).
@@ -424,13 +426,16 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
 
         phase = 'foreign'; // the id/name now resolves to a container the extension did not create
         const warn = jest.spyOn(vscode.window, 'showWarningMessage').mockResolvedValue(undefined);
-        await service.deleteContainer();
+        const outcome = await service.deleteContainer();
 
         // #9: even with entry.missing === true (the old bypass), never remove a container — or its
         // possibly-shared volume — that the extension did not create.
         expect(removeContainer).not.toHaveBeenCalled();
         expect(removeVolume).not.toHaveBeenCalled();
         expect(warn).toHaveBeenCalled();
+        // ...and the outcome is 'refused' so the command suppresses its "container deleted" toast
+        // (GPT-5.6 review): the instance is untouched, so a success message would be contradictory.
+        expect(outcome).toBe('refused');
         info.mockRestore();
         warn.mockRestore();
     });
@@ -559,12 +564,235 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         );
 
         await service.reconcile(); // surfaces ALIAS_2 as credential-unavailable (no in-memory metadata)
-        await service.deleteContainer(ALIAS_2);
+        const outcome = await service.deleteContainer(ALIAS_2);
 
         // The container is found via findManagedContainer despite no in-memory metadata, and an
         // explicit Delete is a full clean slate (its own volume is wiped).
         expect(removeContainer).toHaveBeenCalledTimes(1);
         expect(removeVolume).toHaveBeenCalledTimes(1);
+        // An owned container was actually removed ⇒ 'deleted' so the command shows its success toast.
+        expect(outcome).toBe('deleted');
+    });
+
+    it('deleteContainer() reports an error (not a false "deleted") when removing OUR container fails', async () => {
+        // GPT-5.6 review follow-up: if Docker refuses to remove our OWNED container, deleteContainer
+        // must NOT swallow the failure and claim success. It surfaces the error, returns 'error', and
+        // leaves the volume + records intact so the instance can be retried rather than becoming a
+        // credential-missing ghost.
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeContainer = jest.fn().mockRejectedValue(new Error('docker daemon unavailable'));
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            reconcileRuntime({
+                containers: [{ id: 'c2', alias: ALIAS_2 }],
+                inspect: {
+                    c2: {
+                        id: 'c2',
+                        status: 'running',
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: ALIAS_2 },
+                    },
+                },
+                removeContainer,
+                removeVolume,
+            }),
+        );
+        const errorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+
+        await service.reconcile();
+        const outcome = await service.deleteContainer(ALIAS_2);
+
+        expect(removeContainer).toHaveBeenCalledTimes(1);
+        expect(outcome).toBe('error');
+        // We bailed before the clean-slate cleanup: the volume is NOT wiped (the container may still
+        // hold that data) and an error was surfaced to the user.
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(errorMessage).toHaveBeenCalled();
+        errorMessage.mockRestore();
+    });
+
+    it('deleteContainer() reports an error (not a false "deleted") when the live container lookup fails', async () => {
+        // GPT-5.6 review follow-up: on the no-metadata path (surfaced Missing / credential-unavailable),
+        // a Docker lookup FAILURE must not be mistaken for "already gone". We cannot verify the
+        // container, so surface an error and leave records/secrets intact rather than reporting a clean
+        // delete and turning a still-running container into a credential-missing ghost.
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        const globalState = fakeMemento();
+        await upsertInstanceRecord(globalState, {
+            alias: DEFAULT_ALIAS,
+            displayName: 'DocumentDB Local',
+            port: 10273,
+            phase: 'ready',
+        });
+        ext.context = { globalState } as unknown as vscode.ExtensionContext;
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest.fn().mockRejectedValue(new Error('docker daemon unavailable')),
+                removeContainer,
+                removeVolume,
+            }),
+        );
+        const errorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+
+        const outcome = await service.deleteContainer();
+
+        expect(outcome).toBe('error');
+        expect(removeContainer).not.toHaveBeenCalled();
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(errorMessage).toHaveBeenCalled();
+        // Records + secrets preserved so the instance stays in the tree and Delete can be retried.
+        expect(await ext.secretStorage.get(secretKey(DEFAULT_ALIAS))).toBe(CONN_1);
+        expect(readRegistry(globalState).instances).toHaveLength(1);
+        errorMessage.mockRestore();
+    });
+
+    it('deleteContainer() removes the LIVE labelled container when the stored metadata id is stale', async () => {
+        // GPT-5.6 review follow-up: inspectContainer swallows Docker errors and returns undefined, so a
+        // stale metadata id that no longer resolves must NOT be trusted as "already gone". If the
+        // original container was externally replaced by a NEW labelled same-alias container, Delete must
+        // remove the LIVE container (found authoritatively by label), not wipe records and leave a
+        // running ghost that resurfaces as CredentialsMissing.
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        let phase: 'adopt' | 'delete' = 'adopt';
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest.fn(() =>
+                    Promise.resolve(
+                        phase === 'adopt'
+                            ? [{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]
+                            : // the stored id 'c1' is gone; a NEW labelled same-alias container 'c2' is live
+                              [
+                                  {
+                                      id: 'c2',
+                                      labels: {
+                                          [QUICK_START_LABEL_KEY]: '1',
+                                          [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                      },
+                                  },
+                              ],
+                    ),
+                ) as unknown as IContainerRuntime['listByLabel'],
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(
+                        phase === 'adopt'
+                            ? {
+                                  id,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                                  image: { originalName: 'img:1' },
+                                  labels: {
+                                      [QUICK_START_LABEL_KEY]: '1',
+                                      [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                  },
+                              }
+                            : undefined, // delete phase: the stale id 'c1' inspects as gone
+                    ),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                removeContainer,
+                removeVolume,
+            }),
+        );
+        await service.reconcile(); // adopts c1 (metadata.containerId = 'c1')
+        phase = 'delete';
+
+        const outcome = await service.deleteContainer();
+
+        // The stale id 'c1' inspects to undefined, but the authoritative label lookup finds the LIVE
+        // replacement 'c2' — so we remove c2 (not wipe records) and report a truthful 'deleted'.
+        expect(removeContainer).toHaveBeenCalledTimes(1);
+        expect(removeContainer).toHaveBeenCalledWith('c2');
+        expect(outcome).toBe('deleted');
+    });
+
+    it('deleteContainer() reports an error when the stored id inspects as gone but the label lookup fails', async () => {
+        // GPT-5.6 review follow-up: inspectContainer returning undefined for a stored metadata id is
+        // inconclusive (it swallows Docker errors). Before wiping records we confirm absence with the
+        // non-swallowing label lookup; if THAT fails (Docker unreachable) the outcome is 'error', not a
+        // false 'deleted' — the still-live container must not be abandoned as a credential-missing ghost.
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        let phase: 'adopt' | 'delete' = 'adopt';
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest.fn(() =>
+                    phase === 'adopt'
+                        ? Promise.resolve([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }])
+                        : Promise.reject(new Error('docker daemon unavailable')),
+                ) as unknown as IContainerRuntime['listByLabel'],
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(
+                        phase === 'adopt'
+                            ? {
+                                  id,
+                                  status: 'running',
+                                  ports: [{ containerPort: QUICK_START_PORT, hostPort: 10260 }],
+                                  image: { originalName: 'img:1' },
+                                  labels: {
+                                      [QUICK_START_LABEL_KEY]: '1',
+                                      [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS,
+                                  },
+                              }
+                            : undefined, // delete phase: the stored id inspects as gone (swallowed error)
+                    ),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+                removeContainer,
+                removeVolume,
+            }),
+        );
+        await service.reconcile(); // adopts c1 (metadata.containerId = 'c1')
+        phase = 'delete';
+        const errorMessage = jest.spyOn(vscode.window, 'showErrorMessage').mockResolvedValue(undefined);
+
+        const outcome = await service.deleteContainer();
+
+        expect(outcome).toBe('error');
+        expect(removeContainer).not.toHaveBeenCalled();
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(errorMessage).toHaveBeenCalled();
+        // Records preserved so the still-live container isn't abandoned; Delete can be retried.
+        expect(await ext.secretStorage.get(secretKey(DEFAULT_ALIAS))).toBe(CONN_1);
+        errorMessage.mockRestore();
+    });
+
+    it('deleteContainer() removes EVERY same-alias managed container (no ghost survivor)', async () => {
+        // GPT-5.6 review follow-up: a cross-window double-create can leave more than one managed
+        // container for the alias (reconcile adopts the newest and LEAVES the rest — pickManagedContainer).
+        // Delete is a full clean slate, so it must remove ALL label-matched containers; removing only the
+        // first would strand a survivor that resurfaces as a credential-missing ghost.
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeContainer = jest.fn().mockResolvedValue(undefined);
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest.fn().mockResolvedValue([
+                    {
+                        id: 'dup1',
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    },
+                    {
+                        id: 'dup2',
+                        labels: { [QUICK_START_LABEL_KEY]: '1', [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS },
+                    },
+                ]),
+                removeContainer,
+                removeVolume,
+            }),
+        );
+
+        const outcome = await service.deleteContainer();
+
+        expect(removeContainer).toHaveBeenCalledTimes(2);
+        expect(removeContainer).toHaveBeenCalledWith('dup1');
+        expect(removeContainer).toHaveBeenCalledWith('dup2');
+        expect(outcome).toBe('deleted');
     });
 
     it('is idempotent across repeated reconciles', async () => {
