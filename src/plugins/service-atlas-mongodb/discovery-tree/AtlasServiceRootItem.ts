@@ -38,6 +38,9 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         const session = await this.sessionManager.getSession();
 
         if (!session) {
+            if (await this.sessionManager.hasStoredCredentials()) {
+                return [this.createRetryNode(), this.createUpdateCredentialsNode()];
+            }
             return [this.createSignInNode()];
         }
 
@@ -73,12 +76,12 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
                 // Transient failure or insufficient permissions — keep the session intact and
                 // offer a retry instead of forcing the user to re-authenticate.
                 await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), error.message);
-                return [this.createRetryNode()];
+                return [this.createRetryNode(), this.createUpdateCredentialsNode()];
             }
 
             const errorMessage = error instanceof Error ? error.message : String(error);
             await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), errorMessage);
-            return [this.createRetryNode()];
+            return [this.createRetryNode(), this.createUpdateCredentialsNode()];
         }
     }
 
@@ -145,6 +148,17 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             label: vscode.l10n.t('Click here to retry'),
             iconPath: new vscode.ThemeIcon('refresh'),
             commandId: 'vscode-documentdb.command.internal.retry',
+            commandArgs: [this],
+        });
+    }
+
+    private createUpdateCredentialsNode(): TreeElement & TreeElementWithContextValue {
+        return createGenericElementWithContext({
+            contextValue: 'error',
+            id: `${this.id}/update-credentials`,
+            label: vscode.l10n.t('Update credentials'),
+            iconPath: new vscode.ThemeIcon('key'),
+            commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
             commandArgs: [this],
         });
     }

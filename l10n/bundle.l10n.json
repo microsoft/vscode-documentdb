@@ -1513,6 +1513,7 @@
   "Update Azure Account Extension to at least version \"{0}\"...": "Update Azure Account Extension to at least version \"{0}\"...",
   "Update cluster credentials": "Update cluster credentials",
   "Update Connection String": "Update Connection String",
+  "Update credentials": "Update credentials",
   "Update Saved Password": "Update Saved Password",
   "Updated entity \"{name}\".": "Updated entity \"{name}\".",
   "Updating…": "Updating…",

@@ -108,14 +108,18 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         context.telemetry.properties.credentialConfigActivated = 'true';
         context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
 
-        // If already authenticated, show user identity with sign out option
+        // If already authenticated, show user identity with credential actions.
         if (this.sessionManager.state === AtlasSessionState.Active) {
             const displayName = this.sessionManager.getUserDisplayName() ?? l10n.t('Atlas Account');
+            const updateCredentials = l10n.t('Update credentials');
             const signOut = l10n.t('Sign Out');
             const exit = l10n.t('Exit');
 
             const choice = await window.showQuickPick(
                 [
+                    {
+                        label: `$(key) ${updateCredentials}`,
+                    },
                     {
                         label: `$(sign-out) ${signOut}`,
                     },
@@ -130,6 +134,11 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
 
             if (!choice || choice.label.includes(exit)) {
                 return; // User cancelled or chose Exit
+            }
+
+            if (choice.label.includes(updateCredentials)) {
+                await this.authenticateAndFetchUserInfo(context, node);
+                return;
             }
 
             if (choice.label.includes(signOut)) {

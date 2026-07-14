@@ -199,10 +199,10 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 
 | #   | Priority | Item                                                                           | ≈ Files | Reviewer? | Status         |
 | --- | -------- | ------------------------------------------------------------------------------ | ------- | --------- | -------------- |
-| 1   | **P1**   | Root auto-opens the auth picker on expand — should just show the sign-in node  | ~5      | 🗣️ #1     | 🟠 Open        |
-| 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | ~5      | 🗣️ #3     | 🟠 Open        |
+| 1   | **P1**   | Root auto-opens the auth picker on expand — should just show the sign-in node  | ~5      | 🗣️ #1     | ✅ Implemented |
+| 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | ~5      | 🗣️ #3     | ✅ Implemented |
 | 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | 🟠 Open        |
-| 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | 🟠 Open        |
+| 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | ✅ Implemented |
 | 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | 🟠 Open        |
 | 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) |
 | 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | 🟡 Open (soft) |
@@ -253,7 +253,7 @@ surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth fl
 | ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------ | -------------------------------------------------------- |
 | 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | ✅ Implemented — establishes the single sign-in entry      |
 | 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | ✅ Implemented — defines the shared modal+retry helper      |
-| 3a    | **Item 2** — retry / "update credentials" after an auth failure           | `AtlasServiceRootItem`, `AtlasApiKeyFlow`                     | ~5           | After 4 — **‖ parallel with 3b** (both reuse the helper) |
+| 3a    | **Item 2** — retry / "update credentials" after an auth failure           | `AtlasServiceRootItem`, `AtlasApiKeyFlow`                     | ~5           | ✅ Implemented — follows Item 4 |
 | 3b    | **Item 3** — disambiguate "No projects found" (permissions vs. empty)     | `AtlasServiceRootItem.fetchProjectItems`, tooltip             | ~5           | After 4 — **‖ parallel with 3a**                         |
 
 > Sequence: 1 establishes the single sign-in entry, 4 defines the shared modal+retry helper,
@@ -355,7 +355,7 @@ sign-in node immediately when no session exists. The automatic auth QuickPick pa
 
 ### 2. Auth failure / bad key has no retry or "update credentials" path ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files · **Reviewer #3**
+**Priority:** P1 · **Status:** ✅ Implemented · **Complexity:** ~5 files · **Reviewer #3**
 
 **Observation:** _"When auth fails (I tried the API key path), it just fails and I have no
 retry / update-creds path — I had to restart the wizard. A retry node and an 'update
@@ -374,6 +374,13 @@ the entry flow). "Simple retry is enough" per the reviewer, so retry is the must
 update-credentials is the strong-nice-to-have. This lands even better once entry is a
 webview (item 6). **Merges with item 4** (unify the retry/error presentation across root +
 project).
+
+✅ **Implemented (Iteration 3):** Submitted API key and Service Account credentials are now
+stored in secure storage before validation, preserving a retry path when Atlas-side access is
+corrected. A failed authentication renders **Click here to retry** and **Update credentials**
+at the root. Retry uses the stored credential; update credentials opens the existing credential
+management flow. The future multi-credential storage redesign remains in Bundle E. **Verification:**
+`npm run build` passed.
 
 ---
 
@@ -693,7 +700,7 @@ the next one; nothing is dropped without a terminal status.
 | #    | Item                                                                       | Decision (why)                                                                           | Outcome                               |
 | ---- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | ------------------------------------- |
 | 1    | Root auto-opens auth picker on expand (🗣️ #1)                              | Remove auto-prompt; show only the sign-in node ("no magic"; the node is enough)          | 🟠 Decided — **release blocker**      |
-| 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | _pending_                                                                                | 🟠 Open — **release blocker**         |
+| 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes       | ✅ Implemented                        |
 | 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | _pending_                                                                                | 🟠 Open — **release blocker**         |
 | 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**      |
 | 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | 🟠 Decided — **release blocker**      |

@@ -80,6 +80,22 @@ export class AtlasSessionManager {
     }
 
     /**
+     * Stores API Key credentials so a failed validation can be retried after the user updates
+     * their Atlas access settings.
+     */
+    public async storeApiKeyCredentialsForRetry(publicKey: string, privateKey: string): Promise<void> {
+        await Promise.all([
+            this.secretStorage.store(APIKEY_PUBLIC_KEY, publicKey),
+            this.secretStorage.store(APIKEY_PRIVATE_KEY, privateKey),
+        ]);
+
+        await this.globalState.update(STATE_AUTH_METHOD, 'apikey' satisfies AtlasAuthMethod);
+
+        this._cachedSession = undefined;
+        this.transitionTo(AtlasSessionState.Expired);
+    }
+
+    /**
      * Stores Service Account credentials and transitions to Active state.
      */
     public async storeServiceAccountCredentials(
@@ -101,6 +117,24 @@ export class AtlasSessionManager {
 
         this._cachedSession = { type: 'serviceaccount', accessToken };
         this.transitionTo(AtlasSessionState.Active);
+    }
+
+    /**
+     * Stores Service Account credentials before obtaining a token, allowing token acquisition
+     * to be retried after the account is corrected in Atlas.
+     */
+    public async storeServiceAccountCredentialsForRetry(clientId: string, clientSecret: string): Promise<void> {
+        await Promise.all([
+            this.secretStorage.store(SA_CLIENT_ID_KEY, clientId),
+            this.secretStorage.store(SA_CLIENT_SECRET_KEY, clientSecret),
+            this.secretStorage.delete(SA_ACCESS_TOKEN_KEY),
+            this.secretStorage.delete(SA_EXPIRES_AT_KEY),
+        ]);
+
+        await this.globalState.update(STATE_AUTH_METHOD, 'serviceaccount' satisfies AtlasAuthMethod);
+
+        this._cachedSession = undefined;
+        this.transitionTo(AtlasSessionState.Expired);
     }
 
     /**
@@ -128,6 +162,30 @@ export class AtlasSessionManager {
      */
     public getAuthMethod(): AtlasAuthMethod | undefined {
         return this.globalState.get<AtlasAuthMethod>(STATE_AUTH_METHOD);
+    }
+
+    /**
+     * Returns whether credentials are available for a retry even when no active session exists.
+     */
+    public async hasStoredCredentials(): Promise<boolean> {
+        const authMethod = this.getAuthMethod();
+        if (authMethod === 'apikey') {
+            const [publicKey, privateKey] = await Promise.all([
+                this.secretStorage.get(APIKEY_PUBLIC_KEY),
+                this.secretStorage.get(APIKEY_PRIVATE_KEY),
+            ]);
+            return Boolean(publicKey && privateKey);
+        }
+
+        if (authMethod === 'serviceaccount') {
+            const [clientId, clientSecret] = await Promise.all([
+                this.secretStorage.get(SA_CLIENT_ID_KEY),
+                this.secretStorage.get(SA_CLIENT_SECRET_KEY),
+            ]);
+            return Boolean(clientId && clientSecret);
+        }
+
+        return false;
     }
 
     /**
@@ -251,13 +309,9 @@ export class AtlasSessionManager {
             );
 
             return this._cachedSession as AtlasServiceAccountSession;
-        } catch (error) {
-            // If credentials are rejected, sign out
-            if (error instanceof Error && error.message.includes('invalid_client')) {
-                await this.signOut();
-            } else {
-                this.transitionTo(AtlasSessionState.Expired);
-            }
+        } catch {
+            // Keep submitted credentials so the user can correct Atlas-side access and retry.
+            this.transitionTo(AtlasSessionState.Expired);
             return undefined;
         }
     }

@@ -54,12 +54,15 @@ export async function executeServiceAccountFlow(sessionManager: AtlasSessionMana
         return false; // User cancelled
     }
 
-    // Step 3: Validate by fetching a token
+    // Step 3: Store credentials so users can retry after correcting Atlas-side access.
+    await sessionManager.storeServiceAccountCredentialsForRetry(clientId.trim(), clientSecret.trim());
+
+    // Step 4: Validate by fetching a token
     try {
         const { fetchServiceAccountToken } = await import('./AtlasServiceAccountClient');
         const tokenResponse = await fetchServiceAccountToken(clientId.trim(), clientSecret.trim());
 
-        // Step 4: Store credentials and token
+        // Step 5: Store the validated credentials and token.
         await sessionManager.storeServiceAccountCredentials(
             clientId.trim(),
             clientSecret.trim(),

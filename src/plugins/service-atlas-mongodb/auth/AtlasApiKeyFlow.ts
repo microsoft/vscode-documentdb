@@ -54,7 +54,10 @@ export async function executeApiKeyFlow(sessionManager: AtlasSessionManager): Pr
         return false; // User cancelled
     }
 
-    // Step 3: Validate credentials
+    // Step 3: Store credentials so users can retry after correcting Atlas-side access.
+    await sessionManager.storeApiKeyCredentialsForRetry(publicKey.trim(), privateKey.trim());
+
+    // Step 4: Validate credentials
     const { AtlasApiError } = await import('../api/AtlasApiClient');
     try {
         await validateApiKeyCredentials(publicKey.trim(), privateKey.trim());
@@ -86,7 +89,7 @@ export async function executeApiKeyFlow(sessionManager: AtlasSessionManager): Pr
         return false;
     }
 
-    // Step 4: Store credentials
+    // Step 5: Mark the validated credentials as active.
     await sessionManager.storeApiKeyCredentials(publicKey.trim(), privateKey.trim());
 
     void vscode.window.showInformationMessage(vscode.l10n.t('Successfully authenticated with MongoDB Atlas.'));
