@@ -93,7 +93,9 @@ re-export:
 
 ```ts
 export const trpc = initWebviewTrpc<RouterContext>();
-export const appRouter = trpc.router({ /* … */ });
+export const appRouter = trpc.router({
+  /* … */
+});
 
 openWebview(ctx, { router: appRouter, trpc, context, config, sourceLayout });
 ```
@@ -112,7 +114,7 @@ deprecated in favour of the `trpc` option, but still honored.
 ## Create-or-reveal (single-instance panels)
 
 `openWebview` creates a **new** panel on every call, so opening the same logical
-view twice yields two tabs. Many extensions instead want *create-or-reveal*: the
+view twice yields two tabs. Many extensions instead want _create-or-reveal_: the
 first call opens the panel, later calls for the same key just bring the existing
 tab to the foreground. The package deliberately does **not** own this — a panel
 registry is consumer state, not transport state — but the returned controller
@@ -174,7 +176,11 @@ elsewhere, implement `ProcedureLogger`:
 import { loggingMiddlewareBody, type ProcedureLogger } from '@microsoft/vscode-ext-webview/host';
 
 const logger: ProcedureLogger = {
-  log(entry) {
+  onStart(entry) {
+    // entry: { type, path }
+    myOutputChannel.appendLine(`→ ${entry.type} ${entry.path}`);
+  },
+  onEnd(entry) {
     // entry: { type, path, durationMs, ok, aborted, error? }
     myOutputChannel.appendLine(`${entry.type} ${entry.path} ${entry.durationMs}ms`);
   },
@@ -182,6 +188,9 @@ const logger: ProcedureLogger = {
 
 const logged = publicProcedure.use((opts) => loggingMiddlewareBody(opts, logger));
 ```
+
+Both `onStart` and `onEnd` are optional — implement only the hook you need
+(`onEnd` alone is the common case).
 
 You can also pass a `ProcedureLogger` as the `telemetry` option to `openWebview`
 / `WebviewController` (or the last argument to `attachTrpc`) to log at the
@@ -191,79 +200,88 @@ dispatch layer without touching procedure definitions.
 
 For real analytics (for example Application Insights via
 `@microsoft/vscode-azext-utils`), implement a `TelemetryRunner` that
-establishes a telemetry scope and hands the body a telemetry bag:
+establishes a telemetry scope, contributes fields to the procedure context, and
+classifies the outcome. The middleware body itself is a thin delegator: it
+resolves the event id (via `buildEventId`) and calls `runner.run`.
 
 ```ts
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import {
   initWebviewTrpc,
   // shared entry
 } from '@microsoft/vscode-ext-webview';
-import { telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
+import { getInvocationSignal, telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
 
-const runner: TelemetryRunner = {
-  async run(invocation, execute) {
-    const result = await callWithTelemetryAndErrorHandling(
-      `myExt.rpc.${invocation.type}.${invocation.path}`,
-      async (context) => {
-        context.errorHandling.suppressDisplay = true;
-        return execute(context.telemetry);
-      },
-    );
-    if (!result) throw new Error(`No result for ${invocation.type} ${invocation.path}`);
+// `TEnrichment` is whatever the runner contributes to ctx. Here: the whole
+// IActionContext, surfaced to procedures as `ctx.actionContext`.
+const runner: TelemetryRunner<{ actionContext: IActionContext }> = {
+  async run(eventId, invocation, invoke) {
+    const result = await callWithTelemetryAndErrorHandling(eventId, async (actionContext) => {
+      actionContext.errorHandling.suppressDisplay = true;
+
+      const middlewareResult = await invoke({ actionContext });
+
+      // `callWithTelemetryAndErrorHandling` already records `duration` and would
+      // classify a *thrown* error, but tRPC returns failures as a result object
+      // (`{ ok: false }`) rather than a throw, so translate that here.
+      const aborted = getInvocationSignal(invocation.ctx)?.aborted ?? false;
+      if (aborted) {
+        actionContext.telemetry.properties.result = 'Canceled';
+      } else if (!middlewareResult.ok && middlewareResult.error) {
+        actionContext.telemetry.properties.result = 'Failed';
+        actionContext.telemetry.properties.error = middlewareResult.error.name ?? '';
+        actionContext.telemetry.properties.errorMessage = middlewareResult.error.message ?? '';
+      }
+      return middlewareResult;
+    });
+    if (!result) throw new Error(`No result for ${eventId}`);
     return result;
   },
 };
 
 const { publicProcedure } = initWebviewTrpc<RouterContext>();
-export const trackedProcedure = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
+export const trackedProcedure = publicProcedure.use(
+  telemetryMiddlewareBody(runner, { buildEventId: ({ type, path }) => `myExt.rpc.${type}.${path}` }),
+);
 ```
 
-`telemetryMiddlewareBody` injects the telemetry bag into `ctx.telemetry`, times
-the call, records cancellation as `Canceled` (with `aborted: 'true'`), records
-failures as `Failed` with the error name and message, and returns the
-procedure's result unchanged. Build your router from `trackedProcedure` instead
-of the bare `publicProcedure` to instrument every call.
+The body resolves the event id, delegates to the runner, and returns the
+procedure's result unchanged. All timing and outcome classification live in the
+runner: `callWithTelemetryAndErrorHandling` records `duration` and dispatches to
+Application Insights, and the runner translates the tRPC result object into
+`Canceled` / `Failed`. Build your router from `trackedProcedure` instead of the
+bare `publicProcedure` to instrument every call.
 
 The dispatch logger and the middleware body are independent sinks: the logger
 reports at the transport boundary, the middleware reports inside each procedure
 scope. Using both does not double-count a single call into one analytics event.
 
-### Reading `ctx.telemetry` without casts: `WithTelemetry`
+### Reading the runner's contributed fields
 
-`telemetryMiddlewareBody` injects the bag your `TelemetryRunner` supplies into
-`ctx.telemetry`. The package types that slot minimally (`{ properties,
-measurements }`) so it stays library-agnostic, but your runner usually hands over
-a richer type — for example `ITelemetryContext` from
-`@microsoft/vscode-azext-utils`. Rather than casting `ctx.telemetry` at every
-procedure, re-type the context once with the exported `WithTelemetry` helper:
+`telemetryMiddlewareBody` merges whatever your runner passes to
+`invoke(enrichment)` into the procedure `ctx` via tRPC's `next({ ctx })`. Declare
+that field on your router context type so procedures read it with no
+telemetry-specific cast:
 
 ```ts
-import type { ITelemetryContext } from '@microsoft/vscode-azext-utils';
+import type { IActionContext } from '@microsoft/vscode-azext-utils';
 import type { BaseRouterContext } from '@microsoft/vscode-ext-webview';
-import { type WithTelemetry } from '@microsoft/vscode-ext-webview/host';
 
-type RouterContext = BaseRouterContext & { db: Db };
+// The runner contributes `{ actionContext }`; declare it on the context.
+type RouterContext = BaseRouterContext & { db: Db; actionContext: IActionContext };
 
-// The context as procedures see it once the telemetry middleware has run:
-export type TrackedContext = WithTelemetry<RouterContext, ITelemetryContext>;
-
-export const stats = trackedProcedure.query(({ ctx }: { ctx: TrackedContext }) => {
-  ctx.telemetry.properties.result = 'ok'; // typed
-  ctx.telemetry.suppressIfSuccessful = true; // azext-specific field, also typed
+export const stats = trackedProcedure.query(({ ctx }: { ctx: RouterContext }) => {
+  ctx.actionContext.telemetry.properties.result = 'ok'; // typed
+  ctx.actionContext.telemetry.suppressIfSuccessful = true; // azext-specific field, also typed
   return ctx.db.stats();
 });
 ```
 
-`WithTelemetry<TContext, TTelemetry>` is `Omit<TContext, 'telemetry'> &
-{ telemetry: TTelemetry }`: it swaps the minimal slot for your concrete type and
-makes it required. Consumers commonly alias it once so procedure code just writes
-`WithTelemetry<Ctx>`:
-
-```ts
-import { type WithTelemetry as FrameworkWithTelemetry } from '@microsoft/vscode-ext-webview/host';
-export type WithTelemetry<T extends { telemetry?: unknown }> = FrameworkWithTelemetry<T, ITelemetryContext>;
-```
+When a single tRPC instance is bound to a base context and serves several views,
+procedures narrow `ctx` to their view's `RouterContext` (which declares
+`actionContext`) with a single `ctx as RouterContext`. The root context the
+controller builds does **not** carry `actionContext` — the runner injects it per
+call — so type that root object as `Omit<RouterContext, 'actionContext'>`.
 
 ## The webview event channel
 

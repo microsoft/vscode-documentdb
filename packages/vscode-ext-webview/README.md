@@ -318,7 +318,7 @@ import { openWebview, type ProcedureLogger } from '@microsoft/vscode-ext-webview
 
 const channel = vscode.window.createOutputChannel('My View');
 const logger: ProcedureLogger = {
-  log: (e) => channel.appendLine(`${e.type} ${e.path} ${e.durationMs}ms ${e.ok ? 'ok' : 'FAIL'}`),
+  onEnd: (e) => channel.appendLine(`${e.type} ${e.path} ${e.durationMs}ms ${e.ok ? 'ok' : 'FAIL'}`),
 };
 
 openWebview(ctx, {
@@ -330,40 +330,48 @@ openWebview(ctx, {
 ### Telemetry (Application Insights via `@microsoft/vscode-azext-utils`)
 
 For structured analytics, wire the instance-agnostic `telemetryMiddlewareBody`
-onto your procedures with a `TelemetryRunner` adapter. The runner establishes the
-telemetry scope; the body times each call, records `Canceled` / `Failed`, and
-injects a telemetry bag into `ctx.telemetry`. Most VS Code extensions route this
-through `callWithTelemetryAndErrorHandling`:
+onto your procedures with a `TelemetryRunner` adapter. The body is a thin
+delegator: it resolves the telemetry event id and hands control to your runner.
+The runner establishes the telemetry scope, contributes whatever it likes to the
+procedure context via `invoke(enrichment)`, and classifies the outcome from the
+returned result. Most VS Code extensions route this through
+`callWithTelemetryAndErrorHandling`, which records `duration` for free:
 
 ```ts
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { initWebviewTrpc } from '@microsoft/vscode-ext-webview';
-import { telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
+import { getInvocationSignal, telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
 
-const runner: TelemetryRunner = {
-  async run(invocation, execute) {
-    const result = await callWithTelemetryAndErrorHandling(
-      `myExt.rpc.${invocation.type}.${invocation.path}`,
-      async (context) => {
-        context.errorHandling.suppressDisplay = true;
-        return execute(context.telemetry); // hands the azext telemetry bag to the body
-      },
-    );
-    if (!result) throw new Error(`no telemetry result for ${invocation.path}`);
+const runner: TelemetryRunner<{ actionContext: IActionContext }> = {
+  async run(eventId, invocation, invoke) {
+    const result = await callWithTelemetryAndErrorHandling(eventId, async (actionContext) => {
+      actionContext.errorHandling.suppressDisplay = true;
+      const middlewareResult = await invoke({ actionContext }); // procedures read ctx.actionContext
+      const aborted = getInvocationSignal(invocation.ctx)?.aborted ?? false;
+      if (aborted) actionContext.telemetry.properties.result = 'Canceled';
+      else if (!middlewareResult.ok && middlewareResult.error) {
+        actionContext.telemetry.properties.result = 'Failed';
+        actionContext.telemetry.properties.error = middlewareResult.error.name ?? '';
+      }
+      return middlewareResult;
+    });
+    if (!result) throw new Error(`no telemetry result for ${eventId}`);
     return result;
   },
 };
 
 const { publicProcedure } = initWebviewTrpc<RouterContext>();
 // Build your router from `tracked` instead of the bare `publicProcedure`:
-export const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
+export const tracked = publicProcedure.use(
+  telemetryMiddlewareBody(runner, { buildEventId: ({ type, path }) => `myExt.rpc.${type}.${path}` }),
+);
 ```
 
-Inside a procedure, read `ctx.telemetry` to add properties/measurements. The
-package types that slot minimally, so azext consumers usually re-type it to
-`ITelemetryContext` with a one-line `WithTelemetry<T>` helper (exported from
-`./host`) — see [ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full
-worked adapter and a copyable helper.
+Inside a procedure, read the fields your runner contributed (here
+`ctx.actionContext`) to add properties/measurements. Declare that field on your
+router context type so procedures read it without a telemetry-specific cast — see
+[ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full worked adapter, and
+[MIGRATION.md](./MIGRATION.md) if you are upgrading from an earlier version.
 
 ## Entry points
 
@@ -373,7 +381,7 @@ into the webview bundle, and so a non-React consumer never pulls React in.
 | Subpath     | Side                             | Imports                | Key exports                                                                                                                                     |
 | ----------- | -------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
 | `.`         | shared (side-agnostic)           | no `vscode`, no React  | `initWebviewTrpc`, `BaseRouterContext`, `TypedEventSink`, wire-protocol message types                                                           |
-| `./host`    | extension host (Node.js)         | `fs`, `path`, `vscode` | `openWebview`, `WebviewController`, `attachTrpc`, `telemetryMiddlewareBody`, `loggingMiddlewareBody`, `consoleProcedureLogger`, `WithTelemetry` |
+| `./host`    | extension host (Node.js)         | `fs`, `path`, `vscode` | `openWebview`, `WebviewController`, `attachTrpc`, `telemetryMiddlewareBody`, `loggingMiddlewareBody`, `consoleProcedureLogger` |
 | `./webview` | webview (browser), any framework | no React               | `connectTrpc`, `createEventChannel`, `vscodeLink`, `errorLink`                                                                                  |
 | `./react`   | webview (browser), React         | React                  | `useTrpcClient`, `useRpcEvents`, `useConfiguration`, `WithWebviewContext`                                                                       |
 
