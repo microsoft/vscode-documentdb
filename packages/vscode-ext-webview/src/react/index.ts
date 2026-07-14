@@ -12,6 +12,7 @@
  * split `useRpcEvents` out of `useTrpcClient`.
  */
 
+export { type AnyRouter } from '@trpc/server';
 export { type ObserverErrorContext, type ObserverErrorHandler, type ObserverErrorPhase } from '../webview/events';
 export { useConfiguration } from './useConfiguration';
 export { useRpcEvents } from './useRpcEvents';

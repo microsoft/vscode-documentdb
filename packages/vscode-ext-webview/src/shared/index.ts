@@ -12,6 +12,7 @@
  * build on top of these primitives.
  */
 
+export { type AnyRouter } from '@trpc/server';
 export { type BaseRouterContext } from './BaseRouterContext';
 export { initWebviewTrpc, mergeRouters, publicProcedure, router, type WebviewTrpc } from './initWebviewTrpc';
 export { TypedEventSink, type DiscriminatedEvent, type EventOfType, type UntypedEventEmitter } from './TypedEventSink';

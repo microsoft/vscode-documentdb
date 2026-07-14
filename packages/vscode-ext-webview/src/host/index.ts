@@ -27,6 +27,7 @@ export {
     type ProcedureInvocation,
     type ProcedureLogEntry,
     type ProcedureLogger,
+    type ProcedureStartEntry,
     type ProcedureTelemetry,
     type ProcedureType,
     type TelemetryMiddlewareOptions,

@@ -203,7 +203,7 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
      * includes the operation being logged.
      */
     const logProcedure = (entry: ProcedureLogEntry): void => {
-        logger?.log({ ...entry, concurrent: activeOperations.size + activeSubscriptions.size });
+        logger?.onEnd?.({ ...entry, concurrent: activeOperations.size + activeSubscriptions.size });
     };
 
     const handleSubscriptionMessage = async (message: VsCodeLinkRequestMessage): Promise<void> => {

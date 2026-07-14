@@ -12,7 +12,7 @@ function createCapturingLogger(): { logger: ProcedureLogger; entries: ProcedureL
     return {
         entries,
         logger: {
-            log(entry) {
+            onEnd(entry) {
                 entries.push(entry);
             },
         },
@@ -73,5 +73,24 @@ describe('loggingMiddlewareBody', () => {
 
         expect(entries).toHaveLength(1);
         expect(entries[0].aborted).toBe(true);
+    });
+
+    it('fires onStart before the procedure and onEnd after it', async () => {
+        const events: string[] = [];
+        const logger: ProcedureLogger = {
+            onStart: (entry) => events.push(`start:${entry.type}:${entry.path}`),
+            onEnd: (entry) => events.push(`end:${entry.path}:${entry.ok ? 'ok' : 'fail'}`),
+        };
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+
+        const logged = publicProcedure.use((opts) => loggingMiddlewareBody(opts, logger));
+        const appRouter = router({
+            greet: logged.query(() => 'hello'),
+        });
+
+        const caller = createCallerFactory(appRouter)({});
+        await expect(caller.greet()).resolves.toBe('hello');
+
+        expect(events).toEqual(['start:query:greet', 'end:greet:ok']);
     });
 });

@@ -281,7 +281,7 @@ describe('attachTrpc', () => {
 
     it('logs one entry per completed query when a logger is supplied', async () => {
         const entries: ProcedureLogEntry[] = [];
-        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+        const logger: ProcedureLogger = { onEnd: (entry) => entries.push(entry) };
 
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
         const appRouter = router({
@@ -300,7 +300,7 @@ describe('attachTrpc', () => {
 
     it('stamps each log entry with the concurrent in-flight count (R766-S04)', async () => {
         const entries: ProcedureLogEntry[] = [];
-        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+        const logger: ProcedureLogger = { onEnd: (entry) => entries.push(entry) };
 
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
         const appRouter = router({
@@ -320,7 +320,7 @@ describe('attachTrpc', () => {
 
     it('logs a failed entry (ok: false) when a procedure throws', async () => {
         const entries: ProcedureLogEntry[] = [];
-        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+        const logger: ProcedureLogger = { onEnd: (entry) => entries.push(entry) };
 
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
         const appRouter = router({
@@ -341,7 +341,7 @@ describe('attachTrpc', () => {
 
     it('logs one subscription entry on natural completion', async () => {
         const entries: ProcedureLogEntry[] = [];
-        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+        const logger: ProcedureLogger = { onEnd: (entry) => entries.push(entry) };
 
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
         const appRouter = router({
