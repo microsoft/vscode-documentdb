@@ -123,7 +123,12 @@ export const localQuickStartRouter = router({
               : 'ok';
         tctx.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
         const willReuse = await QuickStartService.willReuseExistingInstance();
-        return { readiness, status: toWebviewStatus(QuickStartService.getStatus()), busy: QuickStartService.isBusy, willReuse };
+        return {
+            readiness,
+            status: toWebviewStatus(QuickStartService.getStatus()),
+            busy: QuickStartService.isBusy,
+            willReuse,
+        };
     }),
 
     /** Lightweight status poll (no docker call). */
