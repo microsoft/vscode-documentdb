@@ -55,6 +55,8 @@ independent local DocumentDB instances side by side — the concrete use cases G
 ### Non-goals (unchanged from the design)
 - **Adopting unlabelled / hand-run containers** — still out. Recognition stays **label-only**
   (`vscode.documentdb.quickstart=1`); those connect via the regular wizard (design §13.10).
+  Recognizing **foreign / pre-existing** DocumentDB Local containers via a baked-in **image** label
+  (`com.documentdb.documentdb.local=true`) is **deferred** — see §10.6.
 - **Auto-discovery** of non-managed DocumentDB containers — belongs to the generic connections
   experience, not Quick Start.
 - **Cross-instance orchestration** (compose, dependency graphs) — out.
@@ -422,3 +424,19 @@ wired). New `QuickStartService.multiInstance.test.ts`:
 4. **Cap:** **no hard cap**; add a **soft warning** in the provisioning panel when many (~5+) instances
    are running (WI-3/WI-4).
 5. **Rename an instance:** **deferred** to a later release.
+6. **Recognize foreign / pre-existing DocumentDB Local containers via an image label — DEFERRED (2026-07-14).**
+   The extension recognizes instances **only** via the run-time label it stamps at `docker run`
+   (`vscode.documentdb.quickstart=1` + `vscode.documentdb.alias`). That is **self-sufficient for every
+   instance the extension provisions** — reconcile/`findManagedContainers` (`listByLabel({ 'vscode.documentdb.quickstart': '1' })`)
+   find them on reload / in another window / after quitting VS Code — and it needs **no** image change.
+   Recognizing a container the extension did **not** create (run via CLI / another tool / a pre-label
+   build) would require the DocumentDB Local **image** to self-identify with a baked-in
+   `com.documentdb.documentdb.local=true` label. That is a **two-sided, cross-repo change on a ≥1-month
+   timeline**: (a) merge + release the Dockerfile `LABEL` (documentdb/documentdb PR #652, pgmongo ADO
+   #2191069) **and** wait for users to pull the new image, **and** (b) add extension code to also
+   query/adopt that label (a design change from the current "our-label-only" model — the extension
+   references `com.documentdb` nowhere today). **Decision: defer.** For v1, foreign / pre-existing
+   containers remain unrecognized by Quick Start and connect via the regular connection wizard
+   (consistent with the §1 non-goal). Revisit once the image label has shipped in a released
+   DocumentDB Local image; at that point scope a WI for extension-side recognition/adoption behind the
+   image label.
