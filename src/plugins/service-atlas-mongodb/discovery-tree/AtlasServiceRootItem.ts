@@ -16,6 +16,7 @@ import { AtlasSessionState } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { AtlasProjectItem } from './AtlasProjectItem';
+import { showAtlasLoadFailure } from './showAtlasLoadFailure';
 
 /**
  * Root tree item for the MongoDB Atlas discovery provider.
@@ -71,12 +72,12 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
                 // Transient failure or insufficient permissions — keep the session intact and
                 // offer a retry instead of forcing the user to re-authenticate.
-                await this.showLoadFailure(error.message);
+                await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), error.message);
                 return [this.createRetryNode()];
             }
 
             const errorMessage = error instanceof Error ? error.message : String(error);
-            await this.showLoadFailure(errorMessage);
+            await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), errorMessage);
             return [this.createRetryNode()];
         }
     }
@@ -145,16 +146,6 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             iconPath: new vscode.ThemeIcon('refresh'),
             commandId: 'vscode-documentdb.command.internal.retry',
             commandArgs: [this],
-        });
-    }
-
-    private async showLoadFailure(errorMessage: string): Promise<void> {
-        await vscode.window.showErrorMessage(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), {
-            modal: true,
-            detail:
-                vscode.l10n.t('Revisit credentials and filters, then try again.') +
-                '\n\n' +
-                vscode.l10n.t('Error: {0}', errorMessage),
         });
     }
 

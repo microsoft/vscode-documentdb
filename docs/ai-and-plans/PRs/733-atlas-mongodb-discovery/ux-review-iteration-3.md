@@ -234,7 +234,7 @@ entry, and is internally sequential).
 
 | Bundle | Theme                         | Priority | Items (in order) | \u2248 Files (sum) | Parallelizable with    |
 | ------ | ----------------------------- | -------- | ---------------- | ------------------ | ---------------------- |
-| **A**  | Sign-in & error surfacing     | P1       | 1 ✅ → 4 → {2 ‖ 3}  | ~20                | **B, C, D**            |
+| **A**  | Sign-in & error surfacing     | P1       | 1 ✅ → 4 ✅ → {2 ‖ 3}  | ~20                | **B, C, D**            |
 | **B**  | Add-Connection wizard         | P1       | 5 → 9            | ~10                | **A, C, D**            |
 | **C**  | Filtering removal             | P1       | 14 ✅ ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) | ~10                | **A, B, D** (completed) |
 | **D**  | Tree/root presentation polish | P2–P3    | 10 ‖ 11 ‖ 12     | ~15                | **A, B, C**            |
@@ -252,7 +252,7 @@ surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth fl
 | Order | Item                                                                      | Touches                                                       | \u2248 Files | Parallel within bundle?                                  |
 | ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------ | -------------------------------------------------------- |
 | 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | ✅ Implemented — establishes the single sign-in entry      |
-| 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | After 1 — **defines the shared modal+retry helper**      |
+| 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | ✅ Implemented — defines the shared modal+retry helper      |
 | 3a    | **Item 2** — retry / "update credentials" after an auth failure           | `AtlasServiceRootItem`, `AtlasApiKeyFlow`                     | ~5           | After 4 — **‖ parallel with 3b** (both reuse the helper) |
 | 3b    | **Item 3** — disambiguate "No projects found" (permissions vs. empty)     | `AtlasServiceRootItem.fetchProjectItems`, tooltip             | ~5           | After 4 — **‖ parallel with 3a**                         |
 
@@ -402,7 +402,7 @@ with item 4** as part of the project/empty-state presentation pass.
 
 ### 4. Project-level load/auth errors render as passive in-tree rows ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files
+**Priority:** P1 · **Status:** ✅ Implemented · **Complexity:** ~5 files
 
 **Observation:** Break discovery after projects are already listed (revoke the key / drop
 the network), then expand a **project** — you get a plain error row, not the modal +
@@ -432,6 +432,11 @@ output channel + a friendly summary. See [O2](#o2-project-level-error--retry-pre
 >
 > - retry, and the tree should never carry raw, truncating error strings when the output
 >   channel can hold the detail.
+
+✅ **Implemented (Iteration 3):** Root and project load failures now use a shared
+`showAtlasLoadFailure()` helper. The helper logs the technical detail to `ext.outputChannel`
+and shows a concise modal; `AtlasProjectItem` now returns only the canonical retry node and
+participates in the inherited retry-node cache. **Verification:** `npm run build` passed.
 
 ---
 
