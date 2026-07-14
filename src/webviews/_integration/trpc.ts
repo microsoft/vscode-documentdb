@@ -57,7 +57,7 @@ import { WEBVIEW_CONFIG } from './configuration';
  * through this instance's `createCallerFactory`.
  */
 const trpc = initWebviewTrpc<FrameworkBaseRouterContext>();
-const { publicProcedure, router, createCallerFactory } = trpc;
+const { publicProcedure, router, mergeRouters, createCallerFactory } = trpc;
 
 /**
  * Shape the DocumentDB telemetry runner contributes to the procedure context.
@@ -145,4 +145,4 @@ export const publicProcedureWithTelemetry = publicProcedure.use(
 // against the same tRPC instance the router was built with. Panel factories pass
 // `trpc` to `openAppWebview` (R766-N02) so the caller factory rides along with
 // the instance and cannot be mismatched with the router.
-export { createCallerFactory, publicProcedure, router, trpc };
+export { createCallerFactory, mergeRouters, publicProcedure, router, trpc };

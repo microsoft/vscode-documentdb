@@ -57,7 +57,7 @@ export function openCollectionWebview(
         enableAIQueryGeneration,
     };
 
-    const trpcContext: RouterContext = {
+    const trpcContext: Omit<RouterContext, 'actionContext'> = {
         dbExperience: API.DocumentDB,
         webviewName: 'collectionView',
         sessionId: initialData.sessionId,

@@ -14,7 +14,7 @@ import { rpcConcurrencyLogger } from './rpcConcurrencyLogger';
 // pulling in the real package (which imports `vscode`) or the telemetry pipeline.
 const consoleLog = jest.fn();
 jest.mock('@microsoft/vscode-ext-webview/host', () => ({
-    consoleProcedureLogger: { log: (entry: unknown) => consoleLog(entry) },
+    consoleProcedureLogger: { onEnd: (entry: unknown) => consoleLog(entry) },
 }));
 jest.mock('../../../utils/accumulatingTelemetry', () => ({
     accumulateTelemetry: jest.fn(),
@@ -46,7 +46,7 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
             concurrent: 3,
         };
 
-        rpcConcurrencyLogger.log(entry);
+        rpcConcurrencyLogger.onEnd!(entry);
 
         expect(consoleLog).toHaveBeenCalledWith(entry);
         expect(accumulateTelemetry).toHaveBeenCalledWith(
@@ -76,7 +76,7 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
             aborted: false,
         };
 
-        rpcConcurrencyLogger.log(entry);
+        rpcConcurrencyLogger.onEnd!(entry);
 
         expect(consoleLog).toHaveBeenCalledWith(entry);
         expect(accumulateTelemetry).not.toHaveBeenCalled();
@@ -85,7 +85,7 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
     it('logs the console line in the Test mode too (any non-production mode)', () => {
         setExtensionMode(vscode.ExtensionMode.Test);
 
-        rpcConcurrencyLogger.log({ type: 'query', path: 'greet', durationMs: 1, ok: true, aborted: false });
+        rpcConcurrencyLogger.onEnd!({ type: 'query', path: 'greet', durationMs: 1, ok: true, aborted: false });
 
         expect(consoleLog).toHaveBeenCalledTimes(1);
     });
@@ -102,7 +102,7 @@ describe('rpcConcurrencyLogger (R766-S04)', () => {
             concurrent: 7,
         };
 
-        rpcConcurrencyLogger.log(entry);
+        rpcConcurrencyLogger.onEnd!(entry);
 
         // Console line is gated out on a shipped build ...
         expect(consoleLog).not.toHaveBeenCalled();

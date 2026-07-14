@@ -12,10 +12,9 @@
  * (queries/mutations, in `queryInsightsRouter.ts`) separate from
  * "things the host pushes" (subscriptions, here).
  *
- * Export shape: a flat record of `{ procedureName: subscriptionProcedure }`
- * that the main router spreads into its own `router({ ... })` call. This
- * yields flat tRPC paths (e.g. `collectionView.queryInsights.streamStage3`)
- * without needing the (currently non-re-exported) `t.mergeRouters` helper.
+ * Export shape: a router built from these subscription procedures, merged
+ * into the main router with the framework's `mergeRouters`. This yields flat
+ * tRPC paths (e.g. `collectionView.queryInsights.streamStage3`).
  */
 
 import { z } from 'zod';
@@ -28,7 +27,7 @@ import { buildStaticAnalysisSummary } from '../../../../documentdb/queryInsights
 import { StreamingResponseParser } from '../../../../documentdb/queryInsights/streamingResponseParser';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
-import { publicProcedureWithTelemetry, type WithTelemetry } from '../../../_integration/trpc';
+import { publicProcedureWithTelemetry, router } from '../../../_integration/trpc';
 import { type RouterContext } from '../collectionViewRouter';
 import { type QueryInsightsStreamEvent } from '../types/queryInsightsStream';
 
@@ -73,12 +72,11 @@ function newCompletionTelemetry(): CompletionTelemetry {
 }
 
 /**
- * Record of push-style (subscription) procedures contributed by
- * `queryInsightsEventsRouter`. Spread into `queryInsightsRouter` so the
- * webview-visible paths stay flat (e.g.
- * `collectionView.queryInsights.streamStage3`).
+ * Router of push-style (subscription) procedures contributed by this file.
+ * Merged into `queryInsightsRouter` with `mergeRouters` so the webview-visible
+ * paths stay flat (e.g. `collectionView.queryInsights.streamStage3`).
  */
-export const queryInsightsEventsRoutes = {
+export const queryInsightsEventsRouter = router({
     /**
      * Stage 3 progressive streaming subscription.
      *
@@ -120,7 +118,7 @@ export const queryInsightsEventsRoutes = {
     streamStage3: publicProcedureWithTelemetry
         .input(z.object({ requestKey: z.string() }))
         .subscription(async function* ({ ctx, input }): AsyncGenerator<QueryInsightsStreamEvent, void, void> {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
             const { sessionId, databaseName, collectionName } = myCtx;
             const { requestKey } = input;
 
@@ -613,4 +611,4 @@ export const queryInsightsEventsRoutes = {
                 flushCompletionEvent();
             }
         }),
-};
+});

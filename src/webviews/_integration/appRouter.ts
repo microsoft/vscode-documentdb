@@ -22,7 +22,7 @@
  * https://trpc.io/docs/quickstart
  */
 
-import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
 import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import * as vscode from 'vscode';
 import { z } from 'zod';
@@ -66,17 +66,6 @@ export { publicProcedure, publicProcedureWithTelemetry, router };
  */
 export type BaseRouterContext = FrameworkBaseRouterContext & {
     dbExperience: API;
-    /**
-     * The full `IActionContext` for the current RPC call, contributed by the
-     * DocumentDB telemetry runner in `./trpc.ts` for procedures built from
-     * `publicProcedureWithTelemetry`. Procedures read
-     * `ctx.actionContext.telemetry` (`properties` / `measurements`,
-     * `suppressIfSuccessful`, …) and `ctx.actionContext.errorHandling` directly.
-     *
-     * It is always present for tracked procedures; procedures built from the
-     * bare `publicProcedure` do not receive it and must not read it.
-     */
-    actionContext: IActionContext;
     /**
      * Label used in telemetry event names to identify the source webview
      * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
