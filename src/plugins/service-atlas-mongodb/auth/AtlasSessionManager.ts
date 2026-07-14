@@ -7,8 +7,6 @@ import * as vscode from 'vscode';
 import {
     SECRET_KEY_PREFIX,
     STATE_AUTH_METHOD,
-    STATE_SELECTED_ORG_ID,
-    STATE_SELECTED_PROJECTS,
     STATE_USER_DISPLAY_NAME,
 } from '../config';
 import {
@@ -149,34 +147,6 @@ export class AtlasSessionManager {
      */
     public getUserDisplayName(): string | undefined {
         return this.globalState.get<string>(STATE_USER_DISPLAY_NAME);
-    }
-
-    /**
-     * Gets the set of project IDs selected for filtering (undefined = show all).
-     */
-    public getSelectedProjectIds(): string[] | undefined {
-        return this.globalState.get<string[]>(STATE_SELECTED_PROJECTS);
-    }
-
-    /**
-     * Stores the set of project IDs to display (undefined = show all).
-     */
-    public async setSelectedProjectIds(projectIds: string[] | undefined): Promise<void> {
-        await this.globalState.update(STATE_SELECTED_PROJECTS, projectIds);
-    }
-
-    /**
-     * Gets the selected organization ID for filtering (undefined = show all orgs).
-     */
-    public getSelectedOrgId(): string | undefined {
-        return this.globalState.get<string>(STATE_SELECTED_ORG_ID);
-    }
-
-    /**
-     * Stores the selected organization ID (undefined = show all orgs).
-     */
-    public async setSelectedOrgId(orgId: string | undefined): Promise<void> {
-        await this.globalState.update(STATE_SELECTED_ORG_ID, orgId);
     }
 
     /**

@@ -27,7 +27,7 @@ import { AtlasProjectItem } from './AtlasProjectItem';
 export class AtlasServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string =
-        'enableRefreshCommand;enableManageCredentialsCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem';
+        'enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem';
 
     constructor(
         private readonly sessionManager: AtlasSessionManager,
@@ -102,8 +102,6 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
     /**
      * Fetches projects and organizations from Atlas, returning tree items.
-     * Applies org filter (from Manage Credentials → Organizations) and/or
-     * project filter (from the Filter icon) if configured.
      */
     private async fetchProjectItems(client: AtlasApiClient): Promise<ExtTreeElementBase[]> {
         const [projects, orgs] = await Promise.all([client.listProjects(), client.listOrganizations()]);
@@ -120,36 +118,10 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             ];
         }
 
-        // Apply organization filter (set via Manage Credentials → Organizations)
-        const selectedOrgId = this.sessionManager.getSelectedOrgId();
-        let filteredProjects =
-            selectedOrgId === undefined ? projects : projects.filter((project) => project.orgId === selectedOrgId);
-
-        // Apply project filter (set via Filter icon)
-        const selectedProjectIds = this.sessionManager.getSelectedProjectIds();
-        if (selectedProjectIds !== undefined) {
-            filteredProjects = filteredProjects.filter((project) => selectedProjectIds.includes(project.id));
-        }
-
-        if (filteredProjects.length === 0) {
-            const message = selectedOrgId
-                ? vscode.l10n.t('No projects found for the selected organization')
-                : vscode.l10n.t('All projects are hidden by filter');
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'info',
-                    id: `${this.id}/all-filtered`,
-                    label: message,
-                    description: vscode.l10n.t('Use the filter button to adjust'),
-                    iconPath: new vscode.ThemeIcon('filter'),
-                }),
-            ];
-        }
-
         // Build org name lookup for project descriptions
         const orgNameMap = new Map(orgs.map((org) => [org.id, org.name]));
 
-        return filteredProjects
+        return projects
             .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
             .map(
                 (project) => new AtlasProjectItem(this.id, project, this.sessionManager, orgNameMap.get(project.orgId)),

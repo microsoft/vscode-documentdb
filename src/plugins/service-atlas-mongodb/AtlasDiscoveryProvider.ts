@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext, type IWizardOptions, UserCancelledError } from '@microsoft/vscode-azext-utils';
-import { Disposable, l10n, QuickPickItemKind, window } from 'vscode';
+import { Disposable, l10n, window } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
@@ -104,70 +104,6 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         return 'https://www.mongodb.com/docs/atlas/api/';
     }
 
-    async configureTreeItemFilter(context: IActionContext, node: TreeElement): Promise<void> {
-        if (!(node instanceof AtlasServiceRootItem)) {
-            return;
-        }
-
-        context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
-
-        const session = await this.sessionManager.getSession();
-        if (!session) {
-            void window.showWarningMessage(l10n.t('Please sign in to MongoDB Atlas first.'));
-            return;
-        }
-
-        const client = new AtlasApiClient(session, this.sessionManager);
-        let projects = await client.listProjects();
-
-        if (projects.length === 0) {
-            void window.showInformationMessage(l10n.t('No projects found in your MongoDB Atlas account.'));
-            return;
-        }
-
-        // Scope to the selected organization if one is active
-        const selectedOrgId = this.sessionManager.getSelectedOrgId();
-        if (selectedOrgId) {
-            projects = projects.filter((project) => project.orgId === selectedOrgId);
-            if (projects.length === 0) {
-                void window.showInformationMessage(
-                    l10n.t('No projects found for the selected organization in your MongoDB Atlas account.'),
-                );
-                return;
-            }
-        }
-
-        const currentSelection = this.sessionManager.getSelectedProjectIds();
-
-        const items = projects
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-            .map((project) => ({
-                label: project.name,
-                description: project.id,
-                picked: currentSelection === undefined || currentSelection.includes(project.id),
-                projectId: project.id,
-            }));
-
-        const selected = await window.showQuickPick(items, {
-            canPickMany: true,
-            placeHolder: l10n.t('Select projects to display (deselect to hide)'),
-            title: l10n.t('Filter Atlas Projects'),
-        });
-
-        if (selected === undefined) {
-            return; // User cancelled
-        }
-
-        // If all are selected, store undefined (show all)
-        const selectedIds = selected.map((item) => item.projectId);
-        const allSelected = selectedIds.length === projects.length;
-        await this.sessionManager.setSelectedProjectIds(allSelected ? undefined : selectedIds);
-
-        context.telemetry.properties.filterAction = allSelected ? 'showAll' : 'filtered';
-
-        ext.discoveryBranchDataProvider.refresh(node);
-    }
-
     async configureCredentials(context: IActionContext, node?: TreeElement): Promise<void> {
         context.telemetry.properties.credentialConfigActivated = 'true';
         context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
@@ -180,11 +116,6 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
 
             const choice = await window.showQuickPick(
                 [
-                    {
-                        label: `$(account) ${displayName}`,
-                        description: l10n.t('Currently signed in'),
-                    },
-                    { label: '', kind: QuickPickItemKind.Separator },
                     {
                         label: `$(sign-out) ${signOut}`,
                     },
@@ -211,78 +142,10 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
                 }
                 return;
             }
-
-            // User selected their account — show organizations
-            await this.showOrganizations(context);
-            return;
         }
 
         // Not authenticated — prompt for auth method
         await this.authenticateAndFetchUserInfo(context, node);
-    }
-
-    /**
-     * Shows accessible organizations for the authenticated user.
-     * Selecting an organization filters the tree to show only that org's projects.
-     */
-    private async showOrganizations(context: IActionContext): Promise<void> {
-        const session = await this.sessionManager.getSession();
-        if (!session) {
-            return;
-        }
-
-        try {
-            const client = new AtlasApiClient(session, this.sessionManager);
-            const orgs = await client.listOrganizations();
-
-            if (orgs.length === 0) {
-                void window.showInformationMessage(l10n.t('No organizations found for this MongoDB Atlas account.'));
-                return;
-            }
-
-            const currentOrgId = this.sessionManager.getSelectedOrgId();
-            const showAllLabel = l10n.t('Show All');
-
-            const items = [
-                {
-                    label: `$(list-flat) ${showAllLabel}`,
-                    orgId: undefined as string | undefined,
-                    description: currentOrgId === undefined ? l10n.t('Currently active') : undefined,
-                },
-                { label: '', kind: QuickPickItemKind.Separator, orgId: undefined as string | undefined },
-                ...orgs
-                    .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-                    .map((org) => ({
-                        label: org.name,
-                        orgId: org.id as string | undefined,
-                        description: currentOrgId === org.id ? l10n.t('Currently active') : undefined,
-                    })),
-            ];
-
-            const selected = await window.showQuickPick(items, {
-                placeHolder: l10n.t('Select an organization to show its projects'),
-                title: l10n.t('Organizations'),
-            });
-
-            if (selected === undefined) {
-                return; // User cancelled
-            }
-
-            await this.sessionManager.setSelectedOrgId(selected.orgId);
-            // Clear project filter when switching orgs
-            await this.sessionManager.setSelectedProjectIds(undefined);
-
-            context.telemetry.properties.action = 'selectOrganization';
-            context.telemetry.properties.filterAction = selected.orgId === undefined ? 'showAll' : 'filtered';
-
-            ext.discoveryBranchDataProvider.refresh();
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            void window.showErrorMessage(l10n.t('Failed to fetch MongoDB Atlas organizations.'), {
-                modal: true,
-                detail: l10n.t('Error: {0}', errorMessage),
-            });
-        }
     }
 
     /**
