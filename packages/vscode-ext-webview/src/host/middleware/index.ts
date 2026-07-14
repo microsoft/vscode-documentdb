@@ -14,8 +14,8 @@ export { consoleProcedureLogger, loggingMiddlewareBody, type ProcedureLogEntry, 
 export {
     telemetryMiddlewareBody,
     type ProcedureTelemetry,
+    type TelemetryMiddlewareOptions,
     type TelemetryRunner,
-    type WithTelemetry,
 } from './telemetry';
 export {
     getInvocationSignal,

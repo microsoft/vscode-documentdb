@@ -6,38 +6,72 @@
 import { type BaseRouterContext } from '../../shared/BaseRouterContext';
 import { initWebviewTrpc } from '../../shared/initWebviewTrpc';
 import { telemetryMiddlewareBody, type ProcedureTelemetry, type TelemetryRunner } from './telemetry';
+import { getInvocationSignal } from './types';
 
+/**
+ * Enrichment shape used by these tests. The runner contributes a plain
+ * telemetry bag under `ctx.telemetry`; a richer integration would contribute
+ * its own shape (for example `{ actionContext }`).
+ */
+interface TestEnrichment {
+    telemetry: ProcedureTelemetry;
+}
+
+/**
+ * A capturing runner that mirrors what a real consumer runner does: it opens a
+ * bag per call, injects it into `ctx` via `invoke`, and classifies the outcome
+ * (Canceled vs Failed) from the returned result and the invocation signal.
+ */
 function createCapturingRunner(): {
-    runner: TelemetryRunner;
+    runner: TelemetryRunner<TestEnrichment>;
     bags: ProcedureTelemetry[];
-    invocations: Array<{ type: string; path: string }>;
+    eventIds: string[];
 } {
     const bags: ProcedureTelemetry[] = [];
-    const invocations: Array<{ type: string; path: string }> = [];
+    const eventIds: string[] = [];
     return {
         bags,
-        invocations,
+        eventIds,
         runner: {
-            run(invocation, execute) {
-                invocations.push({ type: invocation.type, path: invocation.path });
+            async run(eventId, invocation, invoke) {
+                eventIds.push(eventId);
                 const telemetry: ProcedureTelemetry = { properties: {}, measurements: {} };
                 bags.push(telemetry);
-                return execute(telemetry);
+
+                const result = await invoke({ telemetry });
+
+                const aborted = getInvocationSignal(invocation.ctx)?.aborted ?? false;
+                if (aborted) {
+                    telemetry.properties.aborted = 'true';
+                    telemetry.properties.result = 'Canceled';
+                } else if (!result.ok) {
+                    telemetry.properties.result = 'Failed';
+                    if (result.error?.name) {
+                        telemetry.properties.error = result.error.name;
+                    }
+                    if (result.error?.message) {
+                        telemetry.properties.errorMessage = result.error.message;
+                    }
+                }
+
+                return result;
             },
         },
     };
 }
 
 describe('telemetryMiddlewareBody', () => {
-    it('runs through the runner, injects the telemetry bag into ctx, and records duration', async () => {
-        const { runner, bags, invocations } = createCapturingRunner();
+    it('resolves the event id via buildEventId, injects the enrichment into ctx, and returns the result', async () => {
+        const { runner, bags, eventIds } = createCapturingRunner();
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
 
-        const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
+        const tracked = publicProcedure.use(
+            telemetryMiddlewareBody(runner, { buildEventId: ({ type, path }) => `ext.rpc.${type}.${path}` }),
+        );
         const appRouter = router({
             touch: tracked.query(({ ctx }) => {
-                // The body injected the runner's bag as `ctx.telemetry`; the
-                // procedure can read and write it with no cast.
+                // The body merged the runner's enrichment into ctx; the procedure
+                // reads `ctx.telemetry` with no cast.
                 if (ctx.telemetry) {
                     ctx.telemetry.properties.touched = 'yes';
                 }
@@ -48,18 +82,35 @@ describe('telemetryMiddlewareBody', () => {
         const caller = createCallerFactory(appRouter)({});
         await expect(caller.touch()).resolves.toBe('ok');
 
-        expect(invocations).toEqual([{ type: 'query', path: 'touch' }]);
+        expect(eventIds).toEqual(['ext.rpc.query.touch']);
         expect(bags).toHaveLength(1);
         expect(bags[0].properties.touched).toBe('yes');
-        expect(bags[0].measurements.durationMs).toBeGreaterThanOrEqual(0);
+        // The thin body does not stamp duration or a result — that is the
+        // runner's job, and this runner leaves them unset on success.
+        expect(bags[0].measurements.durationMs).toBeUndefined();
         expect(bags[0].properties.result).toBeUndefined();
     });
 
-    it('records a failure as Failed with the error name and message, then re-throws', async () => {
+    it('defaults the event id to `${type}.${path}` when buildEventId is omitted', async () => {
+        const { runner, eventIds } = createCapturingRunner();
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+
+        const tracked = publicProcedure.use(telemetryMiddlewareBody(runner));
+        const appRouter = router({
+            ping: tracked.mutation(() => 'pong'),
+        });
+
+        const caller = createCallerFactory(appRouter)({});
+        await expect(caller.ping()).resolves.toBe('pong');
+
+        expect(eventIds).toEqual(['mutation.ping']);
+    });
+
+    it('surfaces a failed result to the runner so it records Failed with the error name and message, then re-throws', async () => {
         const { runner, bags } = createCapturingRunner();
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
 
-        const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
+        const tracked = publicProcedure.use(telemetryMiddlewareBody(runner));
         const appRouter = router({
             boom: tracked.mutation(() => {
                 throw new Error('kaboom');
@@ -74,31 +125,13 @@ describe('telemetryMiddlewareBody', () => {
         expect(bags[0].properties.errorMessage).toBe('kaboom');
     });
 
-    it('records an aborted invocation as Canceled and not Failed', async () => {
+    it('gives the runner the signal to classify an aborted invocation as Canceled and not Failed [R766-C01]', async () => {
         const { runner, bags } = createCapturingRunner();
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
 
-        const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
+        const tracked = publicProcedure.use(telemetryMiddlewareBody(runner));
         const appRouter = router({
-            work: tracked.query(() => 'done'),
-        });
-
-        const controller = new AbortController();
-        controller.abort();
-        const caller = createCallerFactory(appRouter)({ signal: controller.signal });
-        await caller.work();
-
-        expect(bags[0].properties.aborted).toBe('true');
-        expect(bags[0].properties.result).toBe('Canceled');
-    });
-
-    it('does not stamp error name/message when an aborted invocation also fails [R766-C01]', async () => {
-        const { runner, bags } = createCapturingRunner();
-        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
-
-        const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
-        const appRouter = router({
-            boom: tracked.mutation(() => {
+            work: tracked.mutation(() => {
                 throw new Error('work cancelled');
             }),
         });
@@ -106,7 +139,7 @@ describe('telemetryMiddlewareBody', () => {
         const controller = new AbortController();
         controller.abort();
         const caller = createCallerFactory(appRouter)({ signal: controller.signal });
-        await expect(caller.boom()).rejects.toThrow('work cancelled');
+        await expect(caller.work()).rejects.toThrow('work cancelled');
 
         // An aborted call is recorded only as Canceled — no error* fields, so a
         // cancellation is never mistaken for a failure on the error dimension.

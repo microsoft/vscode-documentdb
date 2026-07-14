@@ -29,8 +29,8 @@ export {
     type ProcedureLogger,
     type ProcedureTelemetry,
     type ProcedureType,
+    type TelemetryMiddlewareOptions,
     type TelemetryRunner,
-    type WithTelemetry,
 } from './middleware';
 export { openWebview } from './openWebview';
 export { WebviewController, type WebviewControllerOptions, type WebviewSourceLayout } from './WebviewController';
