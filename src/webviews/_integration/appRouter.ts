@@ -8,12 +8,12 @@
  * with a shared `commonRouter` exposing cross-webview procedures (telemetry
  * helpers, dialog helpers, survey hooks).
  *
- * The tRPC primitives (`publicProcedureWithTelemetry`, `WithTelemetry`, and
- * the re-exports of `publicProcedure` / `router`) live in `./trpc.ts`, a
- * leaf module that this file and every per-view router import from. Keeping
- * them in a separate module avoids a circular import: `appRouter.ts`
- * imports the per-view routers, so the per-view routers must not import
- * value bindings back from `appRouter.ts`.
+ * The tRPC primitives (`publicProcedureWithTelemetry` and the re-exports of
+ * `publicProcedure` / `router`) live in `./trpc.ts`, a leaf module that this
+ * file and every per-view router import from. Keeping them in a separate
+ * module avoids a circular import: `appRouter.ts` imports the per-view
+ * routers, so the per-view routers must not import value bindings back from
+ * `appRouter.ts`.
  *
  * This file also defines the DocumentDB-flavoured `BaseRouterContext` used
  * across procedures.
@@ -22,7 +22,7 @@
  * https://trpc.io/docs/quickstart
  */
 
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft/vscode-ext-webview';
 import * as vscode from 'vscode';
 import { z } from 'zod';
@@ -33,12 +33,11 @@ import { UsageImpact } from '../../utils/surveyTypes';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { WEBVIEW_CONFIG } from './configuration';
-import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from './trpc';
+import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
 // Re-export tRPC primitives for backward compatibility with existing imports.
 // Prefer importing directly from `./trpc` in new code.
 export { publicProcedure, publicProcedureWithTelemetry, router };
-export type { WithTelemetry };
 
 /**
  * DocumentDB-flavoured router context. Extends the framework's
@@ -57,7 +56,7 @@ export type { WithTelemetry };
  *
  * ```ts
  * .query(async ({ ctx }) => {
- *     const myCtx = ctx as WithTelemetry<RouterContext>;
+ *     const myCtx = ctx as RouterContext;
  *     // Option 1: pass to APIs that accept AbortSignal (e.g. MongoDB driver)
  *     const cursor = collection.find(filter, { signal: myCtx.signal });
  *     // Option 2: check manually
@@ -67,6 +66,17 @@ export type { WithTelemetry };
  */
 export type BaseRouterContext = FrameworkBaseRouterContext & {
     dbExperience: API;
+    /**
+     * The full `IActionContext` for the current RPC call, contributed by the
+     * DocumentDB telemetry runner in `./trpc.ts` for procedures built from
+     * `publicProcedureWithTelemetry`. Procedures read
+     * `ctx.actionContext.telemetry` (`properties` / `measurements`,
+     * `suppressIfSuccessful`, …) and `ctx.actionContext.errorHandling` directly.
+     *
+     * It is always present for tracked procedures; procedures built from the
+     * bare `publicProcedure` do not receive it and must not read it.
+     */
+    actionContext: IActionContext;
     /**
      * Label used in telemetry event names to identify the source webview
      * (combined with `WEBVIEW_CONFIG.telemetry.webviewEventPrefix` to form
