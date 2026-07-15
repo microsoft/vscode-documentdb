@@ -69,7 +69,8 @@ export const myViewRouter = router({
   // Query with telemetry (preferred for operations that touch external services)
   getData: publicProcedureWithTelemetry.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
     const myCtx = ctx as WithTelemetry<RouterContext>;
-    // myCtx.actionContext (the full IActionContext) is guaranteed present
+    // Instrumented procedure: myCtx.actionContext (the full IActionContext) is present.
+    myCtx.actionContext.telemetry.properties.itemId = input.id;
     // myCtx.signal is the AbortSignal for cancellation
     return { data: 'result' };
   }),
