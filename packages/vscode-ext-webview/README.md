@@ -378,12 +378,12 @@ router context type so procedures read it without a telemetry-specific cast — 
 The package has four entry points so bundlers do not drag Node / VS Code APIs
 into the webview bundle, and so a non-React consumer never pulls React in.
 
-| Subpath     | Side                             | Imports                | Key exports                                                                                                                                     |
-| ----------- | -------------------------------- | ---------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `.`         | shared (side-agnostic)           | no `vscode`, no React  | `initWebviewTrpc`, `BaseRouterContext`, `TypedEventSink`, wire-protocol message types                                                           |
+| Subpath     | Side                             | Imports                | Key exports                                                                                                                    |
+| ----------- | -------------------------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------ |
+| `.`         | shared (side-agnostic)           | no `vscode`, no React  | `initWebviewTrpc`, `BaseRouterContext`, `TypedEventSink`, wire-protocol message types                                          |
 | `./host`    | extension host (Node.js)         | `fs`, `path`, `vscode` | `openWebview`, `WebviewController`, `attachTrpc`, `telemetryMiddlewareBody`, `loggingMiddlewareBody`, `consoleProcedureLogger` |
-| `./webview` | webview (browser), any framework | no React               | `connectTrpc`, `createEventChannel`, `vscodeLink`, `errorLink`                                                                                  |
-| `./react`   | webview (browser), React         | React                  | `useTrpcClient`, `useRpcEvents`, `useConfiguration`, `WithWebviewContext`                                                                       |
+| `./webview` | webview (browser), any framework | no React               | `connectTrpc`, `createEventChannel`, `vscodeLink`, `errorLink`                                                                 |
+| `./react`   | webview (browser), React         | React                  | `useTrpcClient`, `useRpcEvents`, `useConfiguration`, `WithWebviewContext`                                                      |
 
 ```ts
 // Shared. Safe to import from either side.
@@ -470,7 +470,7 @@ extensions are working examples of that layout against this package.
 
 ## Status
 
-`0.9.0-preview`. APIs are subject to change while the package is in preview. See
+`0.10.0`. APIs are subject to change while the package is in preview. See
 [ADVANCED.md](./ADVANCED.md) for the full set of primitives and patterns.
 
 ## Contributors

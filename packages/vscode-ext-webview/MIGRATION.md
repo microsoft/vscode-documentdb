@@ -131,6 +131,24 @@ If a single tRPC instance serves several views, the root context your controller
 builds does not carry the injected field (the runner adds it per call), so type
 that root object as `Omit<RouterContext, 'actionContext'>`.
 
+Alternatively — recommended when some procedures run on plain `publicProcedure` —
+keep `actionContext` **off** the base `RouterContext` and add it back only for
+instrumented procedures via a tiny consumer-side alias, so the type reflects what
+the runner actually injected:
+
+```ts
+type WithTelemetry<T> = T & { actionContext: IActionContext };
+
+// instrumented procedure (publicProcedureWithTelemetry):
+const c = ctx as WithTelemetry<RouterContext>; // actionContext present
+
+// plain publicProcedure procedure:
+const c = ctx as RouterContext; // reading actionContext is a compile error, not a runtime undefined
+```
+
+This way an uninstrumented procedure can never assert an `actionContext` that was
+never injected. The DocumentDB reference extension uses this pattern.
+
 ### 3. `ProcedureLogger.log` → `onStart?` / `onEnd?` (breaking)
 
 The single required `log(entry)` hook is replaced by two optional hooks. Rename
