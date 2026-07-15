@@ -44,8 +44,9 @@ const STATUS_EVENT_INTERVAL_MS = 250;
  *
  * Per plan §7 / WI-10, the auto rpc event
  * (`documentDB.rpc.subscription.collectionView.queryInsights.streamStage3`)
- * still fires but — because `trpcToTelemetry` wraps `opts.next()` which
- * for a subscription resolves at generator-creation time — carries ~0
+ * still fires but — because the telemetry middleware
+ * (`telemetryMiddlewareBody`) wraps the invocation, which for a
+ * subscription resolves at generator-creation time — carries ~0
  * duration and no custom measurements. This dedicated event is the
  * canonical source of all Stage 3 telemetry for the streaming path and
  * carries every key the buffered procedure's rpc event used to carry,
@@ -59,7 +60,7 @@ const STAGE3_COMPLETION_EVENT = 'documentDB.queryInsights.stage3.completed';
  * iteration and flushed once on subscription unwind (success or abort)
  * via {@link callWithTelemetryAndErrorHandling}. Keys mirror the ones
  * the (now-deleted) buffered `getQueryInsightsStage3` procedure used to
- * record onto `ctx.telemetry` 1:1 (plan §7), so the new event is a
+ * record onto `ctx.actionContext.telemetry` 1:1 (plan §7), so the new event is a
  * drop-in source for any telemetry query that targeted the old keys.
  */
 interface CompletionTelemetry {
@@ -157,8 +158,9 @@ export const queryInsightsEventsRouter = router({
 
             // Dedicated completion-event accumulator (WI-10 / plan §7). The
             // surrounding subscription's auto rpc event fires with ~0
-            // duration and no measurements because `trpcToTelemetry` wraps
-            // `opts.next()` which resolves at generator-creation time; we
+            // duration and no measurements because the telemetry middleware
+            // (`telemetryMiddlewareBody`) wraps the invocation, which
+            // resolves at generator-creation time; we
             // flush this accumulator from the `finally` below so it
             // captures success, cancels, and the (rare) error path with
             // their final values + `outcome` + wall-clock `durationMs`.
