@@ -10,7 +10,7 @@ import { z } from 'zod';
 import { ClusterSession } from '../../../documentdb/ClusterSession';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
-import { publicProcedureWithTelemetry, router } from '../../_integration/trpc';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 import * as l10n from '@vscode/l10n';
 import {
@@ -34,15 +34,6 @@ import { type BaseRouterContext } from '../../_integration/appRouter';
 import { queryInsightsRouter } from './queryInsights/queryInsightsRouter';
 
 export type RouterContext = BaseRouterContext & {
-    /**
-     * The full `IActionContext` for the current RPC call, contributed by the
-     * DocumentDB telemetry runner for `publicProcedureWithTelemetry` procedures.
-     * Read `actionContext.telemetry` (`properties` / `measurements`,
-     * `suppressIfSuccessful`, …) and `actionContext.errorHandling`. The view
-     * controller builds the root context without it (`Omit<RouterContext,
-     * 'actionContext'>`); it is injected per call before procedures run.
-     */
-    actionContext: IActionContext;
     sessionId: string;
     /**
      * Stable cluster identifier for cache/client lookups.
@@ -567,7 +558,7 @@ export const collectionsViewRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // ── Telemetry: activation source for cross-feature analytics ──
             myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
@@ -603,7 +594,7 @@ export const collectionsViewRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // ── Telemetry: activation source for cross-feature analytics ──
             myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
@@ -688,7 +679,7 @@ export const collectionsViewRouter = router({
             }),
         )
         .mutation(({ input, ctx }) => {
-            const myCtx = ctx as RouterContext;
+            const myCtx = ctx as WithTelemetry<RouterContext>;
             // Suppress per-call tRPC telemetry — we accumulate instead
             myCtx.actionContext.telemetry.suppressAll = true;
 

@@ -65,13 +65,34 @@ const { publicProcedure, router, mergeRouters, createCallerFactory } = trpc;
  * Procedures reach `ctx.actionContext` — the full `IActionContext` from
  * `@microsoft/vscode-azext-utils` — for telemetry `properties` / `measurements`
  * (`ctx.actionContext.telemetry`), `errorHandling.suppressDisplay`,
- * `telemetry.suppressIfSuccessful`, and so on. The DocumentDB `RouterContext`
- * types declare this field so procedures read it after a plain
- * `ctx as RouterContext` narrowing, with no telemetry-specific cast.
+ * `telemetry.suppressIfSuccessful`, and so on. Only `publicProcedureWithTelemetry`
+ * procedures receive it (the runner injects it per call); plain `publicProcedure`
+ * procedures do not, so `actionContext` is modeled as an additive enrichment
+ * (see {@link WithTelemetry}) rather than a field on the base `RouterContext`.
  */
 export interface RpcEnrichment {
     actionContext: IActionContext;
 }
+
+/**
+ * A view's `RouterContext` as seen inside a `publicProcedureWithTelemetry`
+ * procedure: the base context plus the {@link RpcEnrichment} the telemetry runner
+ * injects (`actionContext`).
+ *
+ * Narrow to it only in instrumented procedures:
+ *
+ * ```ts
+ * getData: publicProcedureWithTelemetry.query(({ ctx }) => {
+ *   const myCtx = ctx as WithTelemetry<RouterContext>;
+ *   myCtx.actionContext.telemetry.properties.x = '1';
+ * });
+ * ```
+ *
+ * Plain `publicProcedure` procedures narrow to the bare `RouterContext` instead,
+ * which has no `actionContext` — so reading it there is a compile error rather
+ * than a runtime `undefined`.
+ */
+export type WithTelemetry<T> = T & RpcEnrichment;
 
 /**
  * DocumentDB telemetry adapter for the framework's `telemetryMiddlewareBody`.

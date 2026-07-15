@@ -43,7 +43,7 @@ export function openDocumentWebview(
     // (in response to a tRPC call), well after the handle is assigned below.
     const handle: { controller?: AppWebviewController<DocumentsViewWebviewConfigurationType> } = {};
 
-    const trpcContext: Omit<RouterContext, 'actionContext'> = {
+    const trpcContext: RouterContext = {
         dbExperience: API.DocumentDB,
         webviewName: 'documentView',
         clusterId: initialData.clusterId,

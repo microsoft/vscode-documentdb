@@ -57,13 +57,18 @@ export type RouterContext = BaseRouterContext & {
 
 ```typescript
 import { z } from 'zod';
-import { publicProcedure, publicProcedureWithTelemetry, router } from '../../_integration/appRouter';
+import {
+  publicProcedure,
+  publicProcedureWithTelemetry,
+  router,
+  type WithTelemetry,
+} from '../../_integration/appRouter';
 import { type RouterContext } from './myViewRouter';
 
 export const myViewRouter = router({
   // Query with telemetry (preferred for operations that touch external services)
   getData: publicProcedureWithTelemetry.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
-    const myCtx = ctx as RouterContext;
+    const myCtx = ctx as WithTelemetry<RouterContext>;
     // myCtx.actionContext (the full IActionContext) is guaranteed present
     // myCtx.signal is the AbortSignal for cancellation
     return { data: 'result' };
@@ -164,10 +169,12 @@ export type WebviewName = keyof typeof WebviewRegistry;
 
 `publicProcedureWithTelemetry` is `publicProcedure.use(telemetryMiddlewareBody(documentDbTelemetryRunner, ...))` (built in `trpc.ts`). The framework's `telemetryMiddlewareBody` delegates to the DocumentDB `TelemetryRunner`, which wraps the call in `callWithTelemetryAndErrorHandling`, contributes the full `IActionContext` to `ctx.actionContext`, auto-generates a telemetry event named `documentDB.rpc.{type}.{path}`, and records errors, duration, and abort status.
 
+`actionContext` is **not** a field on the base `RouterContext` — it is an additive enrichment. Narrow to `WithTelemetry<RouterContext>` (`= RouterContext & { actionContext }`) in an instrumented procedure to read it; a plain `publicProcedure` procedure narrows to bare `RouterContext`, so reading `actionContext` there is a compile error instead of a runtime `undefined`.
+
 Access telemetry safely:
 
 ```typescript
-const myCtx = ctx as RouterContext;
+const myCtx = ctx as WithTelemetry<RouterContext>;
 myCtx.actionContext.telemetry.properties.myCustomProp = 'value';
 myCtx.actionContext.telemetry.measurements.itemCount = items.length;
 ```
@@ -280,7 +287,7 @@ export const MyComponent = () => {
 
 ## Common Pitfalls
 
-- **Never use `any`** in procedure context casts — narrow with `ctx as RouterContext` and read telemetry via `ctx.actionContext.telemetry` (only on `publicProcedureWithTelemetry` procedures)
+- **Never use `any`** in procedure context casts — narrow with `ctx as WithTelemetry<RouterContext>` when the procedure reads telemetry (`ctx.actionContext.telemetry`), or `ctx as RouterContext` otherwise
 - **Always prefer `publicProcedureWithTelemetry`** unless you have a specific reason not to
 - **Always check `myCtx.signal?.aborted`** in long-running loops — not checking causes wasted work after client cancels
 - **Do not mutate the shared `context` object** — `WebviewController` clones it per-operation already, but router code should treat `ctx` as read-only

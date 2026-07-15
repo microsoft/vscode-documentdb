@@ -3,7 +3,6 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import { EJSON } from 'bson';
 import { type Document } from 'mongodb';
@@ -13,17 +12,9 @@ import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirm
 import { promptAfterActionEventually } from '../../../utils/survey';
 import { UsageImpact } from '../../../utils/surveyTypes';
 import { type BaseRouterContext } from '../../_integration/appRouter';
-import { publicProcedure, publicProcedureWithTelemetry, router } from '../../_integration/trpc';
+import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 export type RouterContext = BaseRouterContext & {
-    /**
-     * The full `IActionContext` for the current RPC call, contributed by the
-     * DocumentDB telemetry runner for `publicProcedureWithTelemetry` procedures.
-     * Read `actionContext.telemetry` and `actionContext.errorHandling`. The view
-     * controller builds the root context without it (`Omit<RouterContext,
-     * 'actionContext'>`); it is injected per call before procedures run.
-     */
-    actionContext: IActionContext;
     /**
      * Stable cluster identifier for cache/client lookups.
      * Use this for ClustersClient.getClient() and CredentialCache operations.
@@ -48,8 +39,8 @@ export type RouterContext = BaseRouterContext & {
 };
 
 export const documentsViewRouter = router({
-    getInfo: publicProcedure.query(({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+    getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
     }),

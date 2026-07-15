@@ -44,7 +44,7 @@ import {
 } from '../../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
-import { mergeRouters, publicProcedureWithTelemetry, router } from '../../../_integration/trpc';
+import { mergeRouters, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { type RouterContext } from '../collectionViewRouter';
 import { queryInsightsEventsRouter } from './queryInsightsEventsRouter';
 
@@ -106,7 +106,7 @@ export const queryInsightsQueriesRouter = router({
      * Documents returned is NOT available in Stage 1 - only in Stage 2 with executionStats
      */
     getQueryInsightsStage1: publicProcedureWithTelemetry.query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+        const myCtx = ctx as WithTelemetry<RouterContext>;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         ext.outputChannel.trace(
@@ -218,7 +218,7 @@ export const queryInsightsQueriesRouter = router({
      * Note: This executes the query with executionStats verbosity
      */
     getQueryInsightsStage2: publicProcedureWithTelemetry.query(async ({ ctx }) => {
-        const myCtx = ctx as RouterContext;
+        const myCtx = ctx as WithTelemetry<RouterContext>;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         ext.outputChannel.trace(
