@@ -6,13 +6,19 @@ changes; each is listed here with a copyable before/after.
 
 ---
 
-## `0.9.1` → `0.9.2`
+## `0.9.1` → `0.10.0`
 
 This release makes the **telemetry middleware a thin delegator** and the
 **`TelemetryRunner` generic**, renames the **logger hook**, and adds
 **`mergeRouters`** plus an **`AnyRouter`** re-export. The transport, the React
 hooks, `TypedEventSink`, `openWebview` / `WebviewController`, and the wire types
 are unchanged.
+
+Because it removes and reshapes public APIs, it ships as a **minor** bump
+(`0.10.0`) rather than a patch: a patch such as `0.9.2` satisfies the common
+`^0.9.1` caret range (`>=0.9.1 <0.10.0`) and would deliver these breaking
+changes to consumers on a clean install without any manifest edit. Bumping the
+minor moves the release outside that range so upgrades are opt-in.
 
 ### 1. Telemetry: generic `TelemetryRunner` + curried body (breaking)
 
@@ -59,7 +65,7 @@ someProcedure.query(({ ctx }) => {
 });
 ```
 
-**After (`0.9.2`):**
+**After (`0.10.0`):**
 
 ```ts
 import { getInvocationSignal, telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
