@@ -37,8 +37,8 @@ import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
 // Re-export tRPC primitives for backward compatibility with existing imports.
 // Prefer importing directly from `./trpc` in new code.
-export { publicProcedure, publicProcedureWithTelemetry, router };
 export type { WithTelemetry } from './trpc';
+export { publicProcedure, publicProcedureWithTelemetry, router };
 
 /**
  * DocumentDB-flavoured router context. Extends the framework's
