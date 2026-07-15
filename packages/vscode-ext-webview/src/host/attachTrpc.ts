@@ -23,7 +23,7 @@ import { type Disposable, type WebviewPanel } from 'vscode';
 import { type BaseRouterContext } from '../shared/BaseRouterContext';
 import { createCallerFactory as defaultCreateCallerFactory } from '../shared/initWebviewTrpc';
 import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
-import { type ProcedureLogEntry, type ProcedureLogger } from './middleware/logging';
+import { type ProcedureLogEntry, type ProcedureLogger, type ProcedureStartEntry } from './middleware/logging';
 import { type ProcedureType } from './middleware/types';
 
 /**
@@ -160,12 +160,15 @@ function isTransportRequestMessage(message: unknown): message is VsCodeLinkReque
  *                        shared default instance. Pass the one from your own
  *                        `initWebviewTrpc(...)` result when your router is built
  *                        with a typed context.
- * @param logger        - optional {@link ProcedureLogger}. When provided, one
- *                        structured entry is logged per completed query,
- *                        mutation, and subscription (the zero-config console
- *                        telemetry path; {@link WebviewController} defaults it to
- *                        {@link consoleProcedureLogger}). Omit it to disable
- *                        dispatch-level logging entirely.
+ * @param logger        - optional {@link ProcedureLogger}. When provided, its
+ *                        optional `onStart` fires once before each query,
+ *                        mutation, and subscription runs, and its optional
+ *                        `onEnd` fires once per completed operation (the
+ *                        zero-config console telemetry path; {@link WebviewController}
+ *                        defaults it to {@link consoleProcedureLogger}). Both hooks
+ *                        are independent, so a logger may implement either or
+ *                        both. Omit the logger to disable dispatch-level logging
+ *                        entirely.
  */
 export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRouterContext>(
     panel: WebviewPanel,
@@ -197,6 +200,18 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
     };
 
     /**
+     * Fires the optional {@link ProcedureLogger.onStart} hook once, before the
+     * procedure runs. Paired one-to-one with {@link logProcedure} (`onEnd`): every
+     * dispatched query, mutation, and subscription that will eventually log a
+     * completion first logs a start, including operations whose setup fails (the
+     * matching `onEnd` still fires from the handler's catch). Start entries carry
+     * only `type` and `path` because no duration or outcome exists yet.
+     */
+    const logProcedureStart = (entry: ProcedureStartEntry): void => {
+        logger?.onStart?.(entry);
+    };
+
+    /**
      * Logs a completed procedure through the optional {@link ProcedureLogger},
      * stamping it with the number of concurrent in-flight operations (R766-S04).
      * Every log site fires while the operation is still tracked, so the count
@@ -210,6 +225,10 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
         // In v12, tRPC will have better cancellation support. For now, we use AbortController.
         const abortController = new AbortController();
         const start = Date.now();
+
+        // Fire the start hook once, before setup, so an early failure still yields a
+        // matching start/end pair (the outer catch logs the completion).
+        logProcedureStart({ type: 'subscription', path: message.op.path });
 
         try {
             // Clone context so the signal is per-operation and does not mutate the shared context object
@@ -322,6 +341,10 @@ export function attachTrpc<TRouter extends AnyRouter, TContext extends BaseRoute
         const abortController = new AbortController();
         activeOperations.set(message.id, abortController);
         const start = Date.now();
+
+        // Fire the start hook once, before the procedure runs, so it is paired
+        // one-to-one with the completion logged below (on success or in catch).
+        logProcedureStart({ type: message.op.type as ProcedureType, path: message.op.path });
 
         try {
             // Clone context so the signal is per-operation and does not mutate the shared context object

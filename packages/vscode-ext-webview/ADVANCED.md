@@ -194,7 +194,15 @@ Both `onStart` and `onEnd` are optional — implement only the hook you need
 
 You can also pass a `ProcedureLogger` as the `telemetry` option to `openWebview`
 / `WebviewController` (or the last argument to `attachTrpc`) to log at the
-dispatch layer without touching procedure definitions.
+dispatch layer without touching procedure definitions. At the dispatch layer the
+transport itself invokes the hooks: `onStart` fires exactly once before each
+query, mutation, and subscription runs, and `onEnd` fires exactly once when it
+completes (success, failure, or cancellation). The two are paired one-to-one even
+when procedure setup fails — an early failure still produces its `onStart` and a
+matching `onEnd` with `ok: false`. Because both hooks are independent and
+optional, an `onStart`-only logger receives start events at the dispatch layer,
+and dispatch `onEnd` entries additionally carry a `concurrent` in-flight gauge
+(see the `ProcedureLogEntry.concurrent` field).
 
 ### Analytics: `telemetryMiddlewareBody` + `TelemetryRunner`
 
