@@ -21,17 +21,17 @@ useTrpcClient() hook                      WebviewController
 
 **Key files** (read as needed for implementation details):
 
-| File                                                             | Purpose                                                                                                                |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `@microsoft/vscode-ext-webview` (shared)                         | tRPC init via `initWebviewTrpc`, `publicProcedure`, `router`, `BaseRouterContext`                                      |
-| `@microsoft/vscode-ext-webview/host` (telemetry)                 | `telemetryMiddlewareBody`, `ProcedureLogger`, `TelemetryRunner` (consumer builds `publicProcedureWithTelemetry`)       |
-| `src/webviews/_integration/trpc.ts`                        | Consumer tRPC instance: `publicProcedureWithTelemetry`, the DocumentDB `TelemetryRunner`, and the `RpcEnrichment` shape it contributes to `ctx.actionContext`              |
-| `src/webviews/_integration/appRouter.ts`                   | Root router + `publicProcedureWithTelemetry` wiring + DocumentDB `BaseRouterContext`                                   |
-| `src/webviews/_integration/configuration.ts`               | Consumer-owned knobs (telemetry namespace, bundle layout, dev-server host)                                             |
-| `@microsoft/vscode-ext-webview/host` (WebviewController)         | `WebviewController` + `openWebview` factory: WebviewPanel lifecycle, tRPC dispatcher (queries, mutations, subscriptions, abort) |
-| `src/webviews/_integration/openAppWebview.ts`              | DocumentDB factory preset that pre-fills router + bundle layout (`openAppWebview`)                                     |
-| `src/webviews/_integration/useTrpcClient.ts`               | React hook providing the tRPC client (pre-typed against `AppRouter`)                                                   |
-| `@microsoft/vscode-ext-webview/webview` (vscodeLink)             | Custom tRPC link bridging `postMessage` transport                                                                      |
+| File                                                     | Purpose                                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@microsoft/vscode-ext-webview` (shared)                 | tRPC init via `initWebviewTrpc`, `publicProcedure`, `router`, `BaseRouterContext`                                                                             |
+| `@microsoft/vscode-ext-webview/host` (telemetry)         | `telemetryMiddlewareBody`, `ProcedureLogger`, `TelemetryRunner` (consumer builds `publicProcedureWithTelemetry`)                                              |
+| `src/webviews/_integration/trpc.ts`                      | Consumer tRPC instance: `publicProcedureWithTelemetry`, the DocumentDB `TelemetryRunner`, and the `RpcEnrichment` shape it contributes to `ctx.actionContext` |
+| `src/webviews/_integration/appRouter.ts`                 | Root router + `publicProcedureWithTelemetry` wiring + DocumentDB `BaseRouterContext`                                                                          |
+| `src/webviews/_integration/configuration.ts`             | Consumer-owned knobs (telemetry namespace, bundle layout, dev-server host)                                                                                    |
+| `@microsoft/vscode-ext-webview/host` (WebviewController) | `WebviewController` + `openWebview` factory: WebviewPanel lifecycle, tRPC dispatcher (queries, mutations, subscriptions, abort)                               |
+| `src/webviews/_integration/openAppWebview.ts`            | DocumentDB factory preset that pre-fills router + bundle layout (`openAppWebview`)                                                                            |
+| `src/webviews/_integration/useTrpcClient.ts`             | React hook providing the tRPC client (pre-typed against `AppRouter`)                                                                                          |
+| `@microsoft/vscode-ext-webview/webview` (vscodeLink)     | Custom tRPC link bridging `postMessage` transport                                                                                                             |
 
 ## Creating a New Router
 
@@ -157,10 +157,10 @@ export type WebviewName = keyof typeof WebviewRegistry;
 
 ## Telemetry: `publicProcedure` vs `publicProcedureWithTelemetry`
 
-| Base                           | When to use                                                                  | `ctx.actionContext`                                        |
-| ------------------------------ | ---------------------------------------------------------------------------- | ---------------------------------------------------------- |
-| `publicProcedure`              | Fire-and-forget, no external calls, telemetry reported separately            | absent (do not read it)                                    |
-| `publicProcedureWithTelemetry` | **Default choice.** Any procedure touching DB, network, or user-visible work | Guaranteed, injected by the DocumentDB `TelemetryRunner`   |
+| Base                           | When to use                                                                  | `ctx.actionContext`                                      |
+| ------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `publicProcedure`              | Fire-and-forget, no external calls, telemetry reported separately            | absent (do not read it)                                  |
+| `publicProcedureWithTelemetry` | **Default choice.** Any procedure touching DB, network, or user-visible work | Guaranteed, injected by the DocumentDB `TelemetryRunner` |
 
 `publicProcedureWithTelemetry` is `publicProcedure.use(telemetryMiddlewareBody(documentDbTelemetryRunner, ...))` (built in `trpc.ts`). The framework's `telemetryMiddlewareBody` delegates to the DocumentDB `TelemetryRunner`, which wraps the call in `callWithTelemetryAndErrorHandling`, contributes the full `IActionContext` to `ctx.actionContext`, auto-generates a telemetry event named `documentDB.rpc.{type}.{path}`, and records errors, duration, and abort status.
 
