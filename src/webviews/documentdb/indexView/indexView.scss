@@ -42,6 +42,12 @@
         gap: 8px;
         flex-shrink: 0;
 
+        // Fluent buttons default to a semibold weight; keep the filter-row
+        // toggles and the Clear button at the regular weight for a lighter look.
+        .fui-Button {
+            font-weight: var(--fontWeightRegular);
+        }
+
         .indexFilterInput {
             flex: 1 1 auto;
             min-width: 0;

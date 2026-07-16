@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Button, SearchBox, Toolbar, ToolbarToggleButton, Tooltip } from '@fluentui/react-components';
-import { DismissRegular, EyeOffRegular, PulseRegular } from '@fluentui/react-icons';
+import { ArrowResetRegular, EyeOffRegular, PulseRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
@@ -45,7 +45,7 @@ export const IndexListFilterBar = ({
 
     return (
         <Toolbar
-            size="small"
+            size="medium"
             className="indexToolbar"
             aria-label={l10n.t('Filter indexes')}
             checkedValues={{ quick: checked }}
@@ -66,22 +66,27 @@ export const IndexListFilterBar = ({
                 aria-label={l10n.t('Filter indexes')}
             />
 
-            <ToolbarToggleButton name="quick" value="hidden" appearance="subtle" icon={<EyeOffRegular />}>
-                {l10n.t('Hidden')}
-            </ToolbarToggleButton>
-            <ToolbarToggleButton name="quick" value="unused" appearance="subtle" icon={<PulseRegular />}>
-                {l10n.t('Unused')}
-            </ToolbarToggleButton>
+            <Tooltip content={l10n.t('Show only hidden indexes')} relationship="description" withArrow>
+                <ToolbarToggleButton name="quick" value="hidden" appearance="subtle" icon={<EyeOffRegular />}>
+                    {l10n.t('Hidden')}
+                </ToolbarToggleButton>
+            </Tooltip>
+            <Tooltip content={l10n.t('Show only unused indexes')} relationship="description" withArrow>
+                <ToolbarToggleButton name="quick" value="unused" appearance="subtle" icon={<PulseRegular />}>
+                    {l10n.t('Unused')}
+                </ToolbarToggleButton>
+            </Tooltip>
 
-            <Tooltip content={l10n.t('Clear filters')} relationship="label">
+            <Tooltip content={l10n.t('Clear all filters')} relationship="description" withArrow>
                 <Button
                     className="indexFilterClear"
                     appearance="subtle"
-                    icon={<DismissRegular />}
+                    icon={<ArrowResetRegular />}
                     disabled={!hasActiveFilters}
-                    aria-label={l10n.t('Clear filters')}
                     onClick={onClearFilters}
-                />
+                >
+                    {l10n.t('Clear filters')}
+                </Button>
             </Tooltip>
         </Toolbar>
     );
