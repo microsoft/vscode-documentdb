@@ -33,9 +33,11 @@
         row-gap: 10px;
     }
 
-    // Filter row: the filter box takes the full width minus the toggles, which
-    // sit on the right. No divider (kept as one clean flex row).
+    // Filter row: the filter box grows to fill the full width; the quick
+    // toggles and the Clear button sit on the right. No divider.
     .indexToolbar {
+        width: 100%;
+        box-sizing: border-box;
         padding: 0 10px;
         gap: 8px;
         flex-shrink: 0;
@@ -43,6 +45,11 @@
         .indexFilterInput {
             flex: 1 1 auto;
             min-width: 0;
+            max-width: none;
+        }
+
+        .indexFilterClear {
+            flex-shrink: 0;
         }
     }
 

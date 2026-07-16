@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { SearchBox, Toolbar, ToolbarToggleButton } from '@fluentui/react-components';
-import { EyeOffRegular, PulseRegular } from '@fluentui/react-icons';
+import { Button, SearchBox, Toolbar, ToolbarToggleButton, Tooltip } from '@fluentui/react-components';
+import { DismissRegular, EyeOffRegular, PulseRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
@@ -21,22 +21,27 @@ export interface IndexListFilterBarProps {
     onFilterTextChange: (value: string) => void;
     quickFilters: QuickFilters;
     onQuickFiltersChange: (next: QuickFilters) => void;
+    /** Resets the filter text and quick-filter toggles. */
+    onClearFilters: () => void;
 }
 
 /**
  * The filter row for the index list: a text filter box that grows to fill the
- * available width, with the quick Hidden / Unused toggles pinned to the right.
- * Fully controlled by {@link IndexList}.
+ * available width, the quick Hidden / Unused toggles, and a Clear button pinned
+ * to the far right. Fully controlled by {@link IndexList}.
  */
 export const IndexListFilterBar = ({
     filterText,
     onFilterTextChange,
     quickFilters,
     onQuickFiltersChange,
+    onClearFilters,
 }: IndexListFilterBarProps): JSX.Element => {
     const checked: string[] = [];
     if (quickFilters.hidden) checked.push('hidden');
     if (quickFilters.unused) checked.push('unused');
+
+    const hasActiveFilters = filterText.length > 0 || quickFilters.hidden || quickFilters.unused;
 
     return (
         <Toolbar
@@ -67,6 +72,17 @@ export const IndexListFilterBar = ({
             <ToolbarToggleButton name="quick" value="unused" appearance="subtle" icon={<PulseRegular />}>
                 {l10n.t('Unused')}
             </ToolbarToggleButton>
+
+            <Tooltip content={l10n.t('Clear filters')} relationship="label">
+                <Button
+                    className="indexFilterClear"
+                    appearance="subtle"
+                    icon={<DismissRegular />}
+                    disabled={!hasActiveFilters}
+                    aria-label={l10n.t('Clear filters')}
+                    onClick={onClearFilters}
+                />
+            </Tooltip>
         </Toolbar>
     );
 };

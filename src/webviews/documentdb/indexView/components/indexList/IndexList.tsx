@@ -88,6 +88,10 @@ export const IndexList = ({ indexes, onDelete, onToggleHidden, onStateChange }: 
                 onFilterTextChange={setFilterText}
                 quickFilters={quickFilters}
                 onQuickFiltersChange={setQuickFilters}
+                onClearFilters={() => {
+                    setFilterText('');
+                    setQuickFilters({ hidden: false, unused: false });
+                }}
             />
             <div className="indexContentContainer">
                 <IndexTable indexes={shown} onDelete={onDelete} onToggleHidden={onToggleHidden} />
