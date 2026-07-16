@@ -20,7 +20,6 @@ import {
     MessageBarTitle,
     Option,
     Switch,
-    Textarea,
     Tooltip,
 } from '@fluentui/react-components';
 import { AddRegular, DeleteRegular } from '@fluentui/react-icons';
@@ -117,7 +116,6 @@ export const CreateIndexDialog = ({
 }: CreateIndexDialogProps): JSX.Element => {
     const [fields, setFields] = useState<FieldDraft[]>([INITIAL_FIELD()]);
     const [name, setName] = useState('');
-    const [notes, setNotes] = useState('');
     const [unique, setUnique] = useState(false);
     const [sparse, setSparse] = useState(false);
     const [ttlSeconds, setTtlSeconds] = useState<string>('');
@@ -128,7 +126,6 @@ export const CreateIndexDialog = ({
     const reset = (): void => {
         setFields([INITIAL_FIELD()]);
         setName('');
-        setNotes('');
         setUnique(false);
         setSparse(false);
         setTtlSeconds('');
@@ -186,7 +183,6 @@ export const CreateIndexDialog = ({
                 })),
                 type: resolvedType,
                 name: name.trim() || undefined,
-                notes: notes.trim() || undefined,
             };
             if (resolvedType === 'singleField') {
                 payload.unique = unique;
@@ -345,10 +341,6 @@ export const CreateIndexDialog = ({
                                 hint={l10n.t('If left empty, the server generates a name from the field list.')}
                             >
                                 <Input value={name} onChange={(e) => setName(e.target.value)} />
-                            </Field>
-
-                            <Field label={l10n.t('Notes (optional)')}>
-                                <Textarea value={notes} onChange={(_, data) => setNotes(data.value)} rows={2} />
                             </Field>
                         </div>
                     </DialogContent>

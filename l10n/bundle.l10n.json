@@ -1014,8 +1014,6 @@
   "Not signed in to {0}. Please authenticate first.": "Not signed in to {0}. Please authenticate first.",
   "Note: This confirmation type can be configured in the extension settings.": "Note: This confirmation type can be configured in the extension settings.",
   "Note: You can disable these URL handling confirmations in the extension settings.": "Note: You can disable these URL handling confirmations in the extension settings.",
-  "Notes": "Notes",
-  "Notes (optional)": "Notes (optional)",
   "Number of documents returned by the query": "Number of documents returned by the query",
   "Number of documents scanned to find matching results. Should be close to documents returned for optimal performance.": "Number of documents scanned to find matching results. Should be close to documents returned for optimal performance.",
   "Number of index keys scanned during query execution. Lower is better.": "Number of index keys scanned during query execution. Lower is better.",

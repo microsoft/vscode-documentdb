@@ -27,8 +27,6 @@ export interface IndexRow {
     usageOps?: number;
     /** ISO timestamp string from which usage stats started accumulating. */
     usageSince?: string;
-    /** Optional user-supplied notes (currently a placeholder for future persistence). */
-    notes?: string;
     /** True for the special `_id_` index — cannot be dropped, hidden, or edited. */
     isDefault: boolean;
     /** Whether the underlying server reported stats successfully. */
@@ -57,7 +55,6 @@ export interface CreateIndexInput {
     fields: Array<{ field: string; direction: SortDirection }>;
     type: CreateIndexType;
     name?: string;
-    notes?: string;
     unique?: boolean;
     sparse?: boolean;
     expireAfterSeconds?: number;

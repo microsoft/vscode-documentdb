@@ -32,10 +32,9 @@
  *         confirm DocumentDB behaviour and surface a better error if needed.
  *      2. `hideIndex` / `unhideIndex` rely on server-side `collMod`; gate them
  *         off for cluster tiers that don't support it.
- *      3. `IndexRow.notes` is read-only today; persistence layer TBD.
- *      4. Search-index types (`$search`, vector) aren't surfaced — the table
+ *      3. Search-index types (`$search`, vector) aren't surfaced — the table
  *         filter ignores them on purpose for v1.
- *      5. Edit-then-recreate flow is not implemented in the UI; the delete +
+ *      4. Edit-then-recreate flow is not implemented in the UI; the delete +
  *         create round-trip is the current workaround.
  * =============================================================================
  */
@@ -78,7 +77,6 @@ const CreateIndexInputSchema = z.object({
         .min(1),
     type: z.enum(['singleField', 'ttl', 'geospatial', 'text']),
     name: z.string().optional(),
-    notes: z.string().optional(),
     unique: z.boolean().optional(),
     sparse: z.boolean().optional(),
     expireAfterSeconds: z.number().int().nonnegative().optional(),

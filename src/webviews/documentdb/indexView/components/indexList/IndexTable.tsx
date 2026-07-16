@@ -60,7 +60,6 @@ const COLUMN_IDS = {
     type: 'type',
     memory: 'memory',
     usage: 'usage',
-    notes: 'notes',
     actions: 'actions',
 } as const;
 
@@ -74,7 +73,6 @@ const COLUMNS: TableColumnDefinition<IndexRow>[] = [
     createTableColumn<IndexRow>({ columnId: COLUMN_IDS.type }),
     createTableColumn<IndexRow>({ columnId: COLUMN_IDS.memory }),
     createTableColumn<IndexRow>({ columnId: COLUMN_IDS.usage }),
-    createTableColumn<IndexRow>({ columnId: COLUMN_IDS.notes }),
     createTableColumn<IndexRow>({ columnId: COLUMN_IDS.actions }),
 ];
 
@@ -86,7 +84,6 @@ const COLUMN_SIZING_OPTIONS: TableColumnSizingOptions = {
     [COLUMN_IDS.type]: { idealWidth: 140, minWidth: 100, defaultWidth: 140 },
     [COLUMN_IDS.memory]: { idealWidth: 110, minWidth: 80, defaultWidth: 110 },
     [COLUMN_IDS.usage]: { idealWidth: 110, minWidth: 80, defaultWidth: 110 },
-    [COLUMN_IDS.notes]: { idealWidth: 220, minWidth: 100, defaultWidth: 220 },
     [COLUMN_IDS.actions]: { idealWidth: 110, minWidth: 90, defaultWidth: 110 },
 };
 
@@ -148,9 +145,6 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                         className="usageCell"
                     >
                         {l10n.t('Usage')}
-                    </TableHeaderCell>
-                    <TableHeaderCell {...columnSizing_unstable.getTableHeaderCellProps(COLUMN_IDS.notes)}>
-                        {l10n.t('Notes')}
                     </TableHeaderCell>
                     <TableHeaderCell {...columnSizing_unstable.getTableHeaderCellProps(COLUMN_IDS.actions)}>
                         {l10n.t('Actions')}
@@ -214,9 +208,6 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                                     >
                                         <span>{formatOps(idx.usageOps)}</span>
                                     </Tooltip>
-                                </TableCell>
-                                <TableCell {...columnSizing_unstable.getTableCellProps(COLUMN_IDS.notes)}>
-                                    <TableCellLayout truncate>{idx.notes ?? ''}</TableCellLayout>
                                 </TableCell>
                                 <TableCell {...columnSizing_unstable.getTableCellProps(COLUMN_IDS.actions)}>
                                     <div className="actionsCell">
