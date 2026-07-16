@@ -34,7 +34,7 @@ export const IndexPropertiesView = ({ index }: IndexPropertiesViewProps): JSX.El
     return (
         <div className="indexPropertiesCell">
             {labels.map((label) => (
-                <Badge key={label} appearance="outline" color="informative" shape="rounded" size="small">
+                <Badge key={label} appearance="outline" color="informative" shape="rounded" size="medium">
                     {label}
                 </Badge>
             ))}

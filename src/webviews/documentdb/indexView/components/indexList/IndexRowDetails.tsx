@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Badge, Button, Card } from '@fluentui/react-components';
-import { BracesRegular } from '@fluentui/react-icons';
+import { EyeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
@@ -48,8 +48,19 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
 
     return (
         <Card className="indexDetailsCard" appearance="filled">
-            <div className="detailSection">
+            <div className="detailHeaderRow">
                 <div className="detailSectionLabel">{l10n.t('Fields')}</div>
+                <Button
+                    size="small"
+                    appearance="subtle"
+                    icon={<EyeRegular />}
+                    onClick={openRawDefinition}
+                    className="detailRawButton"
+                >
+                    {l10n.t('View Raw Index Definition')}
+                </Button>
+            </div>
+            <div className="detailSection">
                 <div className="keyBadges" role="group" aria-label={l10n.t('Indexed fields')}>
                     {index.key.map(({ field, direction }) => {
                         const { glyph, aria } = describeDirection(direction);
@@ -111,12 +122,6 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
                     </div>
                 )}
             </dl>
-
-            <div className="detailActions">
-                <Button size="small" appearance="subtle" icon={<BracesRegular />} onClick={openRawDefinition}>
-                    {l10n.t('View raw definition')}
-                </Button>
-            </div>
         </Card>
     );
 };

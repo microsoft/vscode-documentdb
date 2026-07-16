@@ -150,6 +150,16 @@
         }
 
         /*
+         * Bolden the header column names. Fluent's TableHeaderCell renders the
+         * label inside a `.fui-TableHeaderCell__button` element that sets its
+         * own weight, so we target both the cell and that inner element.
+         */
+        th,
+        .fui-TableHeaderCell__button {
+            font-weight: var(--fontWeightSemibold);
+        }
+
+        /*
          * Alternating row backgrounds — mirrors the VS Code tree-view
          * convention used in the Results tab. Parity is computed in the
          * component (rowEven / rowOdd) from the data index so that the
@@ -274,8 +284,22 @@
             font-family: var(--fontFamilyMonospace);
         }
 
-        .detailActions {
+        // Header row: section label on the left, raw-definition button pinned
+        // to the top-right of the card.
+        .detailHeaderRow {
             display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+
+            // Label sits inline with the button here, so drop its bottom margin.
+            .detailSectionLabel {
+                margin-bottom: 0;
+            }
+        }
+
+        .detailRawButton {
+            flex-shrink: 0;
         }
     }
 

@@ -355,7 +355,10 @@ export const indexViewRouter = router({
                 throw new Error(l10n.t('Index "{0}" was not found.', input.indexName));
             }
 
-            const { type: _type, ...definition } = match;
+            // Strip our synthetic `type` discriminator so only the real,
+            // server-reported fields are shown.
+            const definition: Record<string, unknown> = { ...match };
+            delete definition.type;
             const prettyJson = JSON.stringify(definition, null, 4);
 
             const vscode = await import('vscode');
