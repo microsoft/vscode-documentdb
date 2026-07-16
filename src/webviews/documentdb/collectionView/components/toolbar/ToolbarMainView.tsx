@@ -39,7 +39,7 @@ import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useContext, type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
-import { OPEN_CREATE_INDEX_EVENT } from '../../../indexView/constants';
+import { OPEN_CREATE_INDEX_EVENT, REFRESH_INDEXES_EVENT } from '../../../indexView/constants';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
@@ -123,6 +123,14 @@ const ToolbarQueryOperations = ({ selectedTab }: ToolbarMainViewProps): JSX.Elem
     };
 
     const handleRefreshResults = () => {
+        // On the Indexes tab, "Refresh" reloads the index list instead of the
+        // query results. We dispatch a window-level CustomEvent that IndexesTab
+        // listens for, keeping the toolbar decoupled from the tab internals.
+        if (selectedTab === 'tab_indexes') {
+            window.dispatchEvent(new CustomEvent(REFRESH_INDEXES_EVENT));
+            return;
+        }
+
         // basically, do not modify the query at all, do not use the input from the editor
         setCurrentContext((prev) => ({
             ...prev,

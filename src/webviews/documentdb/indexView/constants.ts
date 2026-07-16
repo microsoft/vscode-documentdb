@@ -43,3 +43,9 @@ export const DESC_DIRECTION = -1 as const;
  * without requiring a shared React context.
  */
 export const OPEN_CREATE_INDEX_EVENT = 'documentdb:openCreateIndex';
+
+/**
+ * Cross-component event used by the CollectionView toolbar to refresh the
+ * index list inside IndexesTab when the Indexes tab is active.
+ */
+export const REFRESH_INDEXES_EVENT = 'documentdb:refreshIndexes';

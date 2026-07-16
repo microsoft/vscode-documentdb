@@ -8,6 +8,7 @@ import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { type IndexRow } from '../../types';
 import { IndexListFilterBar, type QuickFilters } from './IndexListFilterBar';
 import { IndexTable } from './IndexTable';
+import { IndexTableSkeleton } from './IndexTableSkeleton';
 
 /** Snapshot of the list's filter inputs and resulting counts, surfaced to the parent. */
 export interface IndexListState {
@@ -25,6 +26,8 @@ export interface IndexListProps {
     indexes: ReadonlyArray<IndexRow>;
     onDelete: (index: IndexRow) => void;
     onToggleHidden: (index: IndexRow) => void;
+    /** When true, the table is replaced with a loading skeleton and the count is hidden. */
+    isLoading?: boolean;
     /**
      * Notified whenever the filter inputs or the visible/total counts change.
      * Lets the host surface counts / toggle state (e.g. in the metrics row)
@@ -41,7 +44,13 @@ export interface IndexListProps {
  * {@link IndexListProps.onStateChange}. Kept in its own folder so the list UI
  * can evolve independently of the rest of the Index Management tab.
  */
-export const IndexList = ({ indexes, onDelete, onToggleHidden, onStateChange }: IndexListProps): JSX.Element => {
+export const IndexList = ({
+    indexes,
+    onDelete,
+    onToggleHidden,
+    isLoading = false,
+    onStateChange,
+}: IndexListProps): JSX.Element => {
     const [filterText, setFilterText] = useState('');
     const [quickFilters, setQuickFilters] = useState<QuickFilters>({ hidden: false, unused: false });
 
@@ -94,11 +103,17 @@ export const IndexList = ({ indexes, onDelete, onToggleHidden, onStateChange }: 
                 }}
             />
             <div className="indexContentContainer">
-                <IndexTable indexes={shown} onDelete={onDelete} onToggleHidden={onToggleHidden} />
+                {isLoading ? (
+                    <IndexTableSkeleton />
+                ) : (
+                    <IndexTable indexes={shown} onDelete={onDelete} onToggleHidden={onToggleHidden} />
+                )}
             </div>
-            <div className="indexListCount" aria-live="polite">
-                {l10n.t('Showing {0} of {1} indexes', shown.length, indexes.length)}
-            </div>
+            {!isLoading && (
+                <div className="indexListCount" aria-live="polite">
+                    {l10n.t('Showing {0} of {1} indexes', shown.length, indexes.length)}
+                </div>
+            )}
         </div>
     );
 };

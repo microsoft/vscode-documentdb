@@ -11,7 +11,7 @@ import { ConfirmDialog } from './components/ConfirmDialog';
 import { CreateIndexDialog } from './components/CreateIndexDialog';
 import { IndexList } from './components/indexList';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
-import { OPEN_CREATE_INDEX_EVENT } from './constants';
+import { OPEN_CREATE_INDEX_EVENT, REFRESH_INDEXES_EVENT } from './constants';
 import './indexView.scss';
 import { type CreateIndexInput, type IndexRow } from './types';
 
@@ -65,6 +65,9 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
     /** Fetch the merged real + simulated index list and update state. */
     const refresh = useCallback(async (): Promise<void> => {
         setIsLoading(true);
+        // Clear existing rows so the loading skeleton (rather than stale data)
+        // is shown while the fresh list is fetched.
+        setIndexes([]);
         try {
             const rows = await trpcClient.mongoClusters.indexView.listIndexes.query();
             setIndexes(rows);
@@ -111,6 +114,16 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
         window.addEventListener(OPEN_CREATE_INDEX_EVENT, handler);
         return () => window.removeEventListener(OPEN_CREATE_INDEX_EVENT, handler);
     }, [openCreateDialog]);
+
+    // Listen for the toolbar-driven "Refresh" event so the primary CollectionView
+    // toolbar refreshes this tab's index list when it is the active tab.
+    useEffect(() => {
+        const handler = (): void => {
+            void refresh();
+        };
+        window.addEventListener(REFRESH_INDEXES_EVENT, handler);
+        return () => window.removeEventListener(REFRESH_INDEXES_EVENT, handler);
+    }, [refresh]);
 
     /** Submit handler for the Create Index dialog. Re-throws so the dialog can stay open on error. */
     const handleCreateSubmit = useCallback(
@@ -182,6 +195,7 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
             {/* Filter row + details table, wrapped as a self-contained component. */}
             <IndexList
                 indexes={indexes}
+                isLoading={isLoading}
                 onDelete={(idx) => setModal({ kind: 'delete', index: idx })}
                 onToggleHidden={(idx) => void handleToggleHidden(idx)}
             />

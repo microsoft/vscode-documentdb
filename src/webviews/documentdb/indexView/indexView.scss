@@ -71,6 +71,21 @@
         font-size: var(--fontSizeBase300);
     }
 
+    // Loading placeholder for the table area. Mirrors the Results tab skeleton:
+    // a header row followed by a grid of shimmering rows.
+    .indexTableSkeleton {
+        .indexSkeletonHeaderRow {
+            align-items: center;
+            padding-bottom: 10px;
+        }
+
+        .indexSkeletonGrid {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr 1fr;
+            gap: 10px;
+        }
+    }
+
     // Wraps the top-of-dashboard summary cards. The MetricsRow grid itself
     // has no horizontal padding, so we align it with the table's gutter here.
     .indexMetricsRowContainer {
