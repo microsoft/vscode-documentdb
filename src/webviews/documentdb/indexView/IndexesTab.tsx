@@ -8,7 +8,7 @@ import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { ConfirmDialog } from './components/ConfirmDialog';
-import { CreateIndexDialog } from './components/CreateIndexDialog';
+import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList } from './components/indexList';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
 import { OPEN_CREATE_INDEX_EVENT, REFRESH_INDEXES_EVENT } from './constants';
@@ -130,8 +130,13 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
         async (input: CreateIndexInput): Promise<void> => {
             setModalBusy(true);
             try {
-                await trpcClient.mongoClusters.indexView.createIndex.mutate(input);
+                const result = await trpcClient.mongoClusters.indexView.createIndex.mutate(input);
                 setModal({ kind: 'none' });
+                void trpcClient.common.displayInformationMessage.mutate({
+                    message: result.indexName
+                        ? l10n.t('Index "{0}" created.', result.indexName)
+                        : l10n.t('Index created.'),
+                });
                 await refresh();
             } catch (error) {
                 showError(l10n.t('Failed to create index.'), error);
@@ -200,7 +205,7 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
                 onToggleHidden={(idx) => void handleToggleHidden(idx)}
             />
 
-            <CreateIndexDialog
+            <CreateIndexDrawer
                 open={modal.kind === 'create'}
                 fieldSuggestions={fieldSuggestions}
                 documentCount={documentCount}

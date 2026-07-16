@@ -156,6 +156,15 @@ const commonRouter = router({
                 detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
             });
         }),
+    displayInformationMessage: publicProcedure
+        .input(
+            z.object({
+                message: z.string(),
+            }),
+        )
+        .mutation(({ input }) => {
+            void vscode.window.showInformationMessage(input.message);
+        }),
     surveyPing: publicProcedure
         .input(
             z.object({

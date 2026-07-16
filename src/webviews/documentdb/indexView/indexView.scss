@@ -310,14 +310,54 @@
     }
 }
 
-.createIndexDialog {
+// Create Index drawer (Fluent OverlayDrawer, pinned to the panel's right edge).
+.createIndexDrawer {
+    // The body scrolls vertically when the form grows taller than the drawer.
+    .createIndexDrawerBody {
+        overflow-y: auto;
+    }
+
+    // Action bar pinned below the scrolling body.
+    .createIndexDrawerFooter {
+        display: flex;
+        gap: 8px;
+        padding: 16px 24px;
+        border-top: 1px solid var(--colorNeutralStroke2);
+        flex-shrink: 0;
+    }
+}
+
+.createIndexForm {
     display: flex;
     flex-direction: column;
-    row-gap: 10px;
+    row-gap: 20px;
+
+    // A titled input section: bold title, muted one-line explanation, then inputs.
+    .drawerSection {
+        display: flex;
+        flex-direction: column;
+        row-gap: 6px;
+    }
+
+    .drawerSectionTitle {
+        font-weight: var(--fontWeightSemibold);
+        font-size: var(--fontSizeBase300);
+    }
+
+    .drawerSectionHint {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+    }
+
+    .drawerSectionBody {
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+        margin-top: 2px;
+    }
 
     /*
      * Stack of field rows. Each row is [combobox] [type dropdown] [delete].
-     * Spacing here matches the dialog's row-gap for visual rhythm.
      */
     .indexFieldsList {
         display: flex;
