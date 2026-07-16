@@ -189,22 +189,20 @@
 
         /*
          * Detail sub-row: the field list lives in a full-width card
-         * (`.indexDetailsCard`) so the expansion reads as one smooth block.
-         * The cell itself only supplies light padding around that card.
+         * (`.indexDetailsCard`). The cell's generous left padding indents the
+         * card so its left edge lines up with the Name column content (past
+         * the chevron column). Tweak the `50px` left value if it drifts.
          */
         .fieldsDetailRow .fieldsDetailCell {
-            padding: 2px 8px 10px;
+            padding: 8px 8px 10px 50px;
         }
 
         .indexDetailsCard {
             width: 100%;
             box-sizing: border-box;
-            /*
-             * Left padding is a best-effort offset to line the card content up
-             * with the Name column (after the 40px chevron column + the cell's
-             * own 8px). Tweak this `40px` visually if it drifts.
-             */
-            padding: 12px 16px 12px 40px;
+            /* Uniform inner padding — the column alignment is handled by the
+               cell's left padding above, so the card itself stays symmetric. */
+            padding: 12px 16px 12px 16px;
         }
 
         .fieldsDetailGrid {
