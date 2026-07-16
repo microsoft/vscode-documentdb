@@ -20,7 +20,7 @@ import {
     Switch,
     Tooltip,
 } from '@fluentui/react-components';
-import { AddRegular, ArrowResetRegular, DeleteRegular, DismissRegular } from '@fluentui/react-icons';
+import { AddRegular, ArrowResetRegular, DeleteRegular, PanelRightContractRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useMemo, useState, type JSX, type ReactNode } from 'react';
 import { ASC_DIRECTION, DESC_DIRECTION, LARGE_COLLECTION_THRESHOLD_DOCS } from '../constants';
@@ -238,13 +238,15 @@ export const CreateIndexDrawer = ({
             <DrawerHeader>
                 <DrawerHeaderTitle
                     action={
-                        <Button
-                            appearance="subtle"
-                            aria-label={l10n.t('Close')}
-                            icon={<DismissRegular />}
-                            disabled={submitting}
-                            onClick={handleCancel}
-                        />
+                        <Tooltip content={l10n.t('Hide')} relationship="label" withArrow>
+                            <Button
+                                appearance="subtle"
+                                aria-label={l10n.t('Hide')}
+                                icon={<PanelRightContractRegular />}
+                                disabled={submitting}
+                                onClick={handleCancel}
+                            />
+                        </Tooltip>
                     }
                 >
                     {l10n.t('Create Index')}
