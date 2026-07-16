@@ -48,7 +48,7 @@ import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
-import { type CreateIndexInput, type IndexRow } from './types';
+import { type CreateIndexInput, type FieldIndexType, type IndexRow } from './types';
 
 export type RouterContext = BaseRouterContext & {
     /** Stable cluster identifier for cache/client lookups. */
@@ -64,22 +64,23 @@ export type RouterContext = BaseRouterContext & {
  * keeps the procedure declarations terse and re-uses the same instance for
  * every call.
  */
-const SortDirectionSchema = z.union([z.literal(1), z.literal(-1)]);
+const FieldIndexTypeSchema = z.enum(['asc', 'desc', 'text', '2dsphere', 'hashed']);
 
 const CreateIndexInputSchema = z.object({
     fields: z
         .array(
             z.object({
                 field: z.string().min(1),
-                direction: SortDirectionSchema,
+                type: FieldIndexTypeSchema,
             }),
         )
         .min(1),
-    type: z.enum(['singleField', 'ttl', 'geospatial', 'text']),
     name: z.string().optional(),
     unique: z.boolean().optional(),
     sparse: z.boolean().optional(),
     expireAfterSeconds: z.number().int().nonnegative().optional(),
+    partialFilterExpression: z.record(z.string(), z.unknown()).optional(),
+    collation: z.record(z.string(), z.unknown()).optional(),
 });
 
 /** Convert a raw IndexItemModel to the IndexRow shape used by the webview. */
@@ -118,27 +119,34 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
 }
 
 /**
- * Build an `IndexSpecification` from the dialog input. The wire-level
- * direction value depends on the index type: text and geospatial keys use
- * string sentinels, traditional indexes use ±1.
+ * Map a per-field index type onto its wire-level key value. Ordinary keys use
+ * ±1; the special types use their sentinel strings.
+ */
+function fieldTypeToKeyValue(type: FieldIndexType): number | string {
+    switch (type) {
+        case 'asc':
+            return 1;
+        case 'desc':
+            return -1;
+        case 'text':
+            return 'text';
+        case '2dsphere':
+            return '2dsphere';
+        case 'hashed':
+            return 'hashed';
+    }
+}
+
+/**
+ * Build an `IndexSpecification` from the drawer input. Each field carries its
+ * own type (direction or sentinel); TTL, unique, sparse, partial filter and
+ * collation are index-level options applied to the whole index.
  */
 function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
     const key: Record<string, number | string> = {};
 
     for (const entry of input.fields) {
-        switch (input.type) {
-            case 'text':
-                key[entry.field] = 'text';
-                break;
-            case 'geospatial':
-                key[entry.field] = '2dsphere';
-                break;
-            case 'singleField':
-            case 'ttl':
-            default:
-                key[entry.field] = entry.direction;
-                break;
-        }
+        key[entry.field] = fieldTypeToKeyValue(entry.type);
     }
 
     const spec: IndexSpecification = { key };
@@ -151,8 +159,14 @@ function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
     if (input.sparse) {
         spec.sparse = true;
     }
-    if (input.type === 'ttl' && typeof input.expireAfterSeconds === 'number') {
+    if (typeof input.expireAfterSeconds === 'number') {
         spec.expireAfterSeconds = input.expireAfterSeconds;
+    }
+    if (input.partialFilterExpression) {
+        spec.partialFilterExpression = input.partialFilterExpression;
+    }
+    if (input.collation) {
+        spec.collation = input.collation;
     }
     return spec;
 }
@@ -281,24 +295,24 @@ export const indexViewRouter = router({
      * BACKEND INTEGRATION POINT — createIndex
      * -----------------------------------------------------------------
      * Calls ClustersClient.createIndex(databaseName, collectionName, spec).
-     * `spec` is built by buildIndexSpec() above which maps the UI inputs
-     * (`singleField` / `ttl` / `text` / `geospatial`) onto the wire shape
-     * (±1 vs 'text' vs '2dsphere'). If the backend response contains
-     * `result.note` we treat the call as failed and surface the note as
-     * the error message (DocumentDB returns warnings/errors here today).
+     * `spec` is built by buildIndexSpec() above which maps each field's type
+     * (asc/desc/text/2dsphere/hashed) onto the wire key value and forwards the
+     * index-level options (unique/sparse/TTL/partial filter/collation). If the
+     * backend response contains `result.note` we treat the call as failed and
+     * surface the note as the error message (DocumentDB returns warnings/errors
+     * here today).
      *
      * UI contract: success → `{ ok: true, indexName }`. Failure → throw
-     * with a localised user-facing message; the dialog stays open.
-     *
-     * TODO(backend): confirm partial-index options (partialFilterExpression)
-     * are not silently dropped — the dialog does not expose them yet.
+     * with a localised user-facing message; the drawer stays open.
      */
     createIndex: publicProcedureWithTelemetry.input(CreateIndexInputSchema).mutation(async ({ input, ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
         const client = await ClustersClient.getClient(myCtx.clusterId);
         const spec = buildIndexSpec(input);
 
-        myCtx.telemetry.properties.indexType = input.type;
+        myCtx.telemetry.properties.fieldTypes = input.fields.map((f) => f.type).join(',');
+        myCtx.telemetry.properties.compound = String(input.fields.length > 1);
+        myCtx.telemetry.properties.ttl = String(typeof input.expireAfterSeconds === 'number');
         myCtx.telemetry.measurements.fieldCount = input.fields.length;
 
         const result = await client.createIndex(myCtx.databaseName, myCtx.collectionName, spec);

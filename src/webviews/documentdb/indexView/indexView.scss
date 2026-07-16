@@ -312,6 +312,13 @@
 
 // Create Index drawer (Fluent OverlayDrawer, pinned to the panel's right edge).
 .createIndexDrawer {
+    // Header quick actions (Back / Hide) sit together in the header action slot.
+    .drawerHeaderActions {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+    }
+
     // The body scrolls vertically when the form grows taller than the drawer.
     .createIndexDrawerBody {
         overflow-y: auto;
@@ -372,17 +379,104 @@
         gap: 10px;
     }
 
+    // The field-name combobox grows to fill the row.
     .fieldGrow {
         flex: 1 1 0;
+        min-width: 0;
+    }
+
+    // The per-field type dropdown has a fixed, compact width.
+    .fieldType {
+        flex: 0 0 180px;
         min-width: 0;
     }
 
     .typeOptions {
         display: flex;
         flex-direction: column;
-        row-gap: 10px;
-        padding: 10px;
+        row-gap: 12px;
+        padding: 12px;
         background-color: var(--colorNeutralBackground2);
         border-radius: 4px;
+    }
+
+    // A single option (switch) plus any inline hint / revealed input.
+    .optionItem {
+        display: flex;
+        flex-direction: column;
+        row-gap: 6px;
+    }
+
+    .optionHint {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+        padding-left: 44px;
+    }
+
+    // "Advanced settings ›" navigation entry that pushes the advanced sub-page.
+    .advancedEntry {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        width: 100%;
+        padding: 12px;
+        background-color: var(--colorNeutralBackground2);
+        border: 1px solid var(--colorNeutralStroke2);
+        border-radius: 4px;
+        cursor: pointer;
+        color: inherit;
+        font-family: inherit;
+        text-align: left;
+
+        &:hover {
+            background-color: var(--colorNeutralBackground2Hover);
+        }
+
+        &:focus-visible {
+            outline: 2px solid var(--colorStrokeFocus2);
+            outline-offset: 2px;
+        }
+    }
+
+    .advancedEntryIcon {
+        flex-shrink: 0;
+        font-size: 20px;
+        color: var(--colorNeutralForeground2);
+    }
+
+    .advancedEntryText {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-width: 0;
+    }
+
+    .advancedEntryTitle {
+        font-weight: var(--fontWeightSemibold);
+        font-size: var(--fontSizeBase300);
+    }
+
+    .advancedEntrySub {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+    }
+
+    .advancedEntryBadge {
+        flex-shrink: 0;
+        font-size: var(--fontSizeBase200);
+        padding: 2px 8px;
+        border-radius: 10px;
+        background-color: var(--colorNeutralBackground4);
+        color: var(--colorNeutralForeground2);
+    }
+
+    .advancedEntryBadgeError {
+        background-color: var(--colorStatusDangerBackground2);
+        color: var(--colorStatusDangerForeground2);
+    }
+
+    .advancedEntryChevron {
+        flex-shrink: 0;
+        color: var(--colorNeutralForeground3);
     }
 }

@@ -53,15 +53,32 @@ export type IndexTypeBadge =
 /** Sort direction stored alongside a field in the create-index form. */
 export type SortDirection = 1 | -1;
 
-/** Index type choice for the Create Index modal. */
-export type CreateIndexType = 'singleField' | 'ttl' | 'geospatial' | 'text';
+/**
+ * Per-field index type in the Create Index form. `asc`/`desc` are ordinary
+ * b-tree keys; `text`/`2dsphere`/`hashed` are special key types applied to the
+ * field they sit on. This mirrors the driver's key spec, where each field maps
+ * to a direction (±1) or a type sentinel string.
+ */
+export type FieldIndexType = 'asc' | 'desc' | 'text' | '2dsphere' | 'hashed';
 
-/** Payload sent from the webview when the user submits the Create Index dialog. */
+/** One key in the create-index form: a field path plus its per-field type. */
+export interface CreateIndexField {
+    field: string;
+    type: FieldIndexType;
+}
+
+/**
+ * Payload sent from the webview when the user submits the Create Index drawer.
+ * Field types live on each key; TTL, unique, sparse, partial filter and
+ * collation are index-level options — matching the driver's two-argument
+ * `createIndex(keys, options)` shape rather than a single "index type".
+ */
 export interface CreateIndexInput {
-    fields: Array<{ field: string; direction: SortDirection }>;
-    type: CreateIndexType;
+    fields: CreateIndexField[];
     name?: string;
     unique?: boolean;
     sparse?: boolean;
     expireAfterSeconds?: number;
+    partialFilterExpression?: Record<string, unknown>;
+    collation?: Record<string, unknown>;
 }
