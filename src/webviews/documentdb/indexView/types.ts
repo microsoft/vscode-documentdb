@@ -21,6 +21,12 @@ export interface IndexRow {
     sparse: boolean;
     /** TTL in seconds (only present on TTL indexes). */
     expireAfterSeconds?: number;
+    /** Partial-index filter document (only present on partial indexes). */
+    partialFilterExpression?: Record<string, unknown>;
+    /** Custom collation document (only present when the index defines one). */
+    collation?: Record<string, unknown>;
+    /** Wildcard projection document (only present on wildcard indexes with a projection). */
+    wildcardProjection?: Record<string, unknown>;
     /** Bytes consumed by this index in storage (from collStats.indexSizes). */
     sizeBytes?: number;
     /** Number of times the index has been used since `usageSince`. */

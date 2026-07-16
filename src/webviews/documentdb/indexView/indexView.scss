@@ -129,7 +129,10 @@
             width: 40px;
         }
         .colType {
-            width: 150px;
+            width: 130px;
+        }
+        .colProperties {
+            width: 170px;
         }
         .colMemory {
             width: 100px;
@@ -187,6 +190,16 @@
             text-align: left;
         }
 
+        /* Properties column: word-only option badges that wrap within the cell. */
+        .indexPropertiesCell {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 4px;
+        }
+        .indexPropertiesEmpty {
+            color: var(--colorNeutralForeground4);
+        }
+
         /*
          * Detail sub-row: the field list lives in a full-width card
          * (`.indexDetailsCard`). The cell's generous left padding indents the
@@ -203,44 +216,66 @@
             /* Uniform inner padding — the column alignment is handled by the
                cell's left padding above, so the card itself stays symmetric. */
             padding: 12px 16px 12px 16px;
+            row-gap: 12px;
         }
 
-        .fieldsDetailGrid {
-            display: grid;
-            grid-template-columns: minmax(180px, 1fr) minmax(80px, auto);
-            column-gap: 24px;
-            row-gap: 4px;
-            max-width: 640px;
-        }
-
-        .fieldsDetailHeader {
+        // Small caption above a detail section (e.g. "Fields").
+        .detailSectionLabel {
             font-weight: var(--fontWeightSemibold);
             color: var(--colorNeutralForeground3);
             font-size: var(--fontSizeBase200);
+            margin-bottom: 6px;
         }
 
-        .fieldsDetailField {
+        // Index key definition rendered as inline, wrapping badges.
+        .keyBadges {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+        }
+
+        .keyBadgeField {
             font-family: var(--fontFamilyMonospace);
-            font-size: var(--fontSizeBase200);
-            word-break: break-all;
         }
 
-        .fieldsDetailDirection {
+        .keyBadgeDir {
+            margin-left: 6px;
+            opacity: 0.8;
+        }
+
+        // Present-only facts list (definition list).
+        .detailFacts {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            margin: 0;
+        }
+
+        .detailFact {
+            display: flex;
+            gap: 8px;
+            font-size: var(--fontSizeBase200);
+
+            dt {
+                flex: 0 0 auto;
+                font-weight: var(--fontWeightSemibold);
+                color: var(--colorNeutralForeground3);
+            }
+
+            dd {
+                margin: 0;
+                color: var(--colorNeutralForeground2);
+                min-width: 0;
+                word-break: break-word;
+            }
+        }
+
+        .detailFactCode {
             font-family: var(--fontFamilyMonospace);
-            font-size: var(--fontSizeBase200);
-            color: var(--colorNeutralForeground2);
         }
 
-        /* "Created" row inside the detail panel, below the field grid */
-        .fieldsDetailMeta {
-            margin-top: 8px;
-            font-size: var(--fontSizeBase200);
-            color: var(--colorNeutralForeground2);
-        }
-
-        .fieldsDetailMetaLabel {
-            font-weight: var(--fontWeightSemibold);
-            color: var(--colorNeutralForeground3);
+        .detailActions {
+            display: flex;
         }
     }
 

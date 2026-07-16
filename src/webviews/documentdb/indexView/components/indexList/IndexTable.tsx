@@ -24,8 +24,9 @@ import {
 import * as l10n from '@vscode/l10n';
 import { Fragment, useState, type JSX } from 'react';
 import { type IndexRow } from '../../types';
-import { formatBytes, formatOps, formatSinceTooltip } from '../../utils/format';
+import { formatBytes, formatOps } from '../../utils/format';
 import { classifyIndex } from '../../utils/indexType';
+import { IndexPropertiesView } from './IndexPropertiesView';
 import { IndexRowDetails } from './IndexRowDetails';
 import { IndexTypeBadgeView } from './IndexTypeBadgeView';
 
@@ -65,6 +66,7 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                 <col className="colExpand" />
                 <col className="colName" />
                 <col className="colType" />
+                <col className="colProperties" />
                 <col className="colMemory" />
                 <col className="colUsage" />
                 <col className="colActions" />
@@ -76,7 +78,8 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                     {/* Name column is intentionally wide — real-world index names can be 80+ chars */}
                     <TableHeaderCell className="nameHeaderCell">{l10n.t('Name')}</TableHeaderCell>
                     <TableHeaderCell>{l10n.t('Type')}</TableHeaderCell>
-                    <TableHeaderCell>{l10n.t('Memory')}</TableHeaderCell>
+                    <TableHeaderCell>{l10n.t('Properties')}</TableHeaderCell>
+                    <TableHeaderCell>{l10n.t('Size')}</TableHeaderCell>
                     <TableHeaderCell className="usageCell">{l10n.t('Usage')}</TableHeaderCell>
                     <TableHeaderCell>{l10n.t('Actions')}</TableHeaderCell>
                 </TableRow>
@@ -118,15 +121,12 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                                 <TableCell>
                                     <IndexTypeBadgeView type={badge} />
                                 </TableCell>
+                                <TableCell>
+                                    <IndexPropertiesView index={idx} />
+                                </TableCell>
                                 <TableCell>{formatBytes(idx.sizeBytes)}</TableCell>
                                 <TableCell className="usageCell">
-                                    <Tooltip
-                                        content={formatSinceTooltip(idx.usageSince)}
-                                        relationship="description"
-                                        withArrow
-                                    >
-                                        <span>{formatOps(idx.usageOps)}</span>
-                                    </Tooltip>
+                                    <span>{formatOps(idx.usageOps)}</span>
                                 </TableCell>
                                 <TableCell>
                                     <div className="actionsCell">
@@ -181,7 +181,7 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                                 // Reuse the parent row's zebra class so the detail row
                                 // visually belongs to it.
                                 <TableRow key={`${idx.name}-fields`} className={`fieldsDetailRow ${rowClass}`}>
-                                    <TableCell colSpan={6} className="fieldsDetailCell">
+                                    <TableCell colSpan={7} className="fieldsDetailCell">
                                         <IndexRowDetails index={idx} />
                                     </TableCell>
                                 </TableRow>

@@ -99,12 +99,22 @@ function toIndexRow(
         unique: raw.unique === true,
         sparse: raw.sparse === true,
         expireAfterSeconds: typeof raw.expireAfterSeconds === 'number' ? raw.expireAfterSeconds : undefined,
+        partialFilterExpression: asRecord(raw.partialFilterExpression),
+        collation: asRecord(raw.collation),
+        wildcardProjection: asRecord(raw.wildcardProjection),
         sizeBytes,
         usageOps: usage?.ops,
         usageSince: usage?.since,
         isDefault: raw.name === '_id_',
         statsAvailable: usage !== undefined,
     };
+}
+
+/** Narrow an unknown index option to a plain object, or `undefined` otherwise. */
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+    return typeof value === 'object' && value !== null && !Array.isArray(value)
+        ? (value as Record<string, unknown>)
+        : undefined;
 }
 
 /**
@@ -322,6 +332,36 @@ export const indexViewRouter = router({
                 const message = typeof result.note === 'string' ? result.note : l10n.t('Failed to delete index.');
                 throw new Error(message);
             }
+            return { ok: true };
+        }),
+
+    /**
+     * BACKEND INTEGRATION POINT — openIndexDefinition
+     * -----------------------------------------------------------------
+     * Opens the raw, server-reported index definition in a new untitled
+     * JSON document so the user can inspect any options the UI does not
+     * render explicitly. Re-fetches the live list and matches by name so
+     * the output is always current; the synthetic `type` discriminator we
+     * add in `listIndexes` is stripped so only real fields are shown.
+     */
+    openIndexDefinition: publicProcedureWithTelemetry
+        .input(z.object({ indexName: z.string().min(1) }))
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const rawIndexes = await client.listIndexes(myCtx.databaseName, myCtx.collectionName);
+            const match = rawIndexes.find((idx) => idx.name === input.indexName);
+            if (!match) {
+                throw new Error(l10n.t('Index "{0}" was not found.', input.indexName));
+            }
+
+            const { type: _type, ...definition } = match;
+            const prettyJson = JSON.stringify(definition, null, 4);
+
+            const vscode = await import('vscode');
+            const doc = await vscode.workspace.openTextDocument({ content: prettyJson, language: 'json' });
+            await vscode.window.showTextDocument(doc);
+
             return { ok: true };
         }),
 
