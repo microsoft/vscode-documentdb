@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Caption1, SearchBox, Toolbar, ToolbarDivider, ToolbarToggleButton } from '@fluentui/react-components';
+import { SearchBox, Toolbar, ToolbarToggleButton } from '@fluentui/react-components';
 import { EyeOffRegular, PulseRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
@@ -21,23 +21,18 @@ export interface IndexListFilterBarProps {
     onFilterTextChange: (value: string) => void;
     quickFilters: QuickFilters;
     onQuickFiltersChange: (next: QuickFilters) => void;
-    /** Total number of indexes (before filtering). */
-    totalCount: number;
-    /** Number of indexes shown after the current filters. */
-    shownCount: number;
 }
 
 /**
- * The filter row for the index list: a text filter box, quick Hidden / Unused
- * toggles, and a live "showing X of Y" count. Fully controlled by {@link IndexList}.
+ * The filter row for the index list: a text filter box that grows to fill the
+ * available width, with the quick Hidden / Unused toggles pinned to the right.
+ * Fully controlled by {@link IndexList}.
  */
 export const IndexListFilterBar = ({
     filterText,
     onFilterTextChange,
     quickFilters,
     onQuickFiltersChange,
-    totalCount,
-    shownCount,
 }: IndexListFilterBarProps): JSX.Element => {
     const checked: string[] = [];
     if (quickFilters.hidden) checked.push('hidden');
@@ -66,20 +61,12 @@ export const IndexListFilterBar = ({
                 aria-label={l10n.t('Filter indexes')}
             />
 
-            <ToolbarDivider />
-
             <ToolbarToggleButton name="quick" value="hidden" appearance="subtle" icon={<EyeOffRegular />}>
                 {l10n.t('Hidden')}
             </ToolbarToggleButton>
             <ToolbarToggleButton name="quick" value="unused" appearance="subtle" icon={<PulseRegular />}>
                 {l10n.t('Unused')}
             </ToolbarToggleButton>
-
-            <div className="indexFilterSpacer" />
-
-            <Caption1 className="indexFilterCount" aria-live="polite">
-                {l10n.t('Showing {0} of {1}', shownCount, totalCount)}
-            </Caption1>
         </Toolbar>
     );
 };

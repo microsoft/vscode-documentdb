@@ -23,8 +23,8 @@
         padding: 0 10px;
     }
 
-    // Self-contained index list (filter row + details table). Grows to fill the
-    // remaining height so the table scrolls within it.
+    // Self-contained index list (filter row + details table + count). Grows to
+    // fill the remaining height.
     .indexList {
         display: flex;
         flex-direction: column;
@@ -33,34 +33,35 @@
         row-gap: 10px;
     }
 
-    // Filter row between the metrics row and the table: filter box + quick
-    // toggles + a "showing X of Y" count.
+    // Filter row: the filter box takes the full width minus the toggles, which
+    // sit on the right. No divider (kept as one clean flex row).
     .indexToolbar {
         padding: 0 10px;
         gap: 8px;
-        flex-wrap: wrap;
+        flex-shrink: 0;
 
         .indexFilterInput {
-            max-width: 280px;
-            flex: 0 1 280px;
-        }
-
-        .indexFilterSpacer {
             flex: 1 1 auto;
-        }
-
-        .indexFilterCount {
-            color: var(--colorNeutralForeground3);
-            white-space: nowrap;
+            min-width: 0;
         }
     }
 
+    // The table area only takes the height it needs (it scrolls when tall), so
+    // the count below shifts up as the list shrinks rather than staying pinned.
     .indexContentContainer {
-        flex-grow: 1;
-        flex-shrink: 1;
+        flex: 0 1 auto;
         min-height: 0;
         overflow: auto;
         padding: 0 10px;
+    }
+
+    // Centered "showing X of Y" count, sized so it's clearly visible.
+    .indexListCount {
+        flex-shrink: 0;
+        text-align: center;
+        padding: 4px 10px;
+        color: var(--colorNeutralForeground2);
+        font-size: var(--fontSizeBase300);
     }
 
     // Wraps the top-of-dashboard summary cards. The MetricsRow grid itself

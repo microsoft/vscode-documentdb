@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import * as l10n from '@vscode/l10n';
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { type IndexRow } from '../../types';
 import { IndexListFilterBar, type QuickFilters } from './IndexListFilterBar';
@@ -87,11 +88,12 @@ export const IndexList = ({ indexes, onDelete, onToggleHidden, onStateChange }: 
                 onFilterTextChange={setFilterText}
                 quickFilters={quickFilters}
                 onQuickFiltersChange={setQuickFilters}
-                totalCount={indexes.length}
-                shownCount={shown.length}
             />
             <div className="indexContentContainer">
                 <IndexTable indexes={shown} onDelete={onDelete} onToggleHidden={onToggleHidden} />
+            </div>
+            <div className="indexListCount" aria-live="polite">
+                {l10n.t('Showing {0} of {1} indexes', shown.length, indexes.length)}
             </div>
         </div>
     );
