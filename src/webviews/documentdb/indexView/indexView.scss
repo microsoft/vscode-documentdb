@@ -65,6 +65,10 @@
         flex: 0 1 auto;
         min-height: 0;
         overflow: auto;
+        // Reserve space for the vertical scrollbar at all times so expanding a
+        // row (which makes the list taller and reveals the scrollbar) does not
+        // shrink the content width and reflow the table.
+        scrollbar-gutter: stable;
         padding: 0 10px;
     }
 
@@ -111,6 +115,32 @@
     }
 
     .indexTable {
+        /*
+         * Fill the width we're given and never overflow horizontally.
+         * `table-layout: fixed` makes the browser honour the <colgroup>
+         * widths below; the name column has no explicit width, so it
+         * absorbs whatever space is left over (and shrinks first when the
+         * panel is narrow, wrapping its text rather than adding a scrollbar).
+         */
+        width: 100%;
+        table-layout: fixed;
+
+        .colExpand {
+            width: 40px;
+        }
+        .colType {
+            width: 150px;
+        }
+        .colMemory {
+            width: 100px;
+        }
+        .colUsage {
+            width: 100px;
+        }
+        .colActions {
+            width: 96px;
+        }
+
         td,
         th {
             vertical-align: middle;
@@ -130,17 +160,10 @@
         }
 
         /*
-         * Name column gets a generous fixed width — real index names
-         * such as the auto-generated `field1_1_field2_-1_field3_1` can
-         * easily exceed 80 chars; we'd rather let them wrap inside their
-         * own column than have them push every other column off-screen.
-         */
-        /*
-         * Name column: Fluent's `useTableColumnSizing_unstable` hook
-         * controls the actual width (initial 320px, user-resizable down
-         * to 120px). We only set `word-break` here so long auto-generated
-         * names like `field1_1_field2_-1_field3_1` wrap inside the cell
-         * instead of forcing horizontal scroll.
+         * Name column: width is driven by the fluid table layout (it takes
+         * the leftover space). We only set `word-break` here so long
+         * auto-generated names like `field1_1_field2_-1_field3_1` wrap inside
+         * the cell instead of forcing horizontal scroll.
          */
         .nameHeaderCell,
         .nameCell {
@@ -165,15 +188,23 @@
         }
 
         /*
-         * Tree-style detail row that mirrors the Results tab tree view:
-         * indented under its parent, laid out as a two-column grid
-         * (Field, Order). Background is inherited from the parent row's
-         * zebra class so the pair reads as a single unit.
+         * Detail sub-row: the field list lives in a full-width card
+         * (`.indexDetailsCard`) so the expansion reads as one smooth block.
+         * The cell itself only supplies light padding around that card.
          */
         .fieldsDetailRow .fieldsDetailCell {
-            padding-left: 40px; /* visual indent under the chevron column */
-            padding-top: 8px;
-            padding-bottom: 8px;
+            padding: 2px 8px 10px;
+        }
+
+        .indexDetailsCard {
+            width: 100%;
+            box-sizing: border-box;
+            /*
+             * Left padding is a best-effort offset to line the card content up
+             * with the Name column (after the 40px chevron column + the cell's
+             * own 8px). Tweak this `40px` visually if it drifts.
+             */
+            padding: 12px 16px 12px 40px;
         }
 
         .fieldsDetailGrid {
