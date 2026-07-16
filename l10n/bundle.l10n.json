@@ -1253,6 +1253,7 @@
   "Show Details": "Show Details",
   "Show Output": "Show Output",
   "Show Stage Details": "Show Stage Details",
+  "Showing {0} of {1}": "Showing {0} of {1}",
   "Showing first {0} documents (batch size). To change: Settings → 'documentDB.batchSize'": "Showing first {0} documents (batch size). To change: Settings → 'documentDB.batchSize'",
   "Sign in to additional accounts or authenticate with other tenants to see more options.": "Sign in to additional accounts or authenticate with other tenants to see more options.",
   "Sign in to additional accounts or authenticate with other tenants to see more subscriptions.": "Sign in to additional accounts or authenticate with other tenants to see more subscriptions.",

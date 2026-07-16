@@ -23,8 +23,18 @@
         padding: 0 10px;
     }
 
-    // Filter row between the metrics row and the table: filter box + filter
-    // controls (index-type menu, quick toggles).
+    // Self-contained index list (filter row + details table). Grows to fill the
+    // remaining height so the table scrolls within it.
+    .indexList {
+        display: flex;
+        flex-direction: column;
+        flex: 1 1 auto;
+        min-height: 0;
+        row-gap: 10px;
+    }
+
+    // Filter row between the metrics row and the table: filter box + quick
+    // toggles + a "showing X of Y" count.
     .indexToolbar {
         padding: 0 10px;
         gap: 8px;
@@ -33,6 +43,15 @@
         .indexFilterInput {
             max-width: 280px;
             flex: 0 1 280px;
+        }
+
+        .indexFilterSpacer {
+            flex: 1 1 auto;
+        }
+
+        .indexFilterCount {
+            color: var(--colorNeutralForeground3);
+            white-space: nowrap;
         }
     }
 

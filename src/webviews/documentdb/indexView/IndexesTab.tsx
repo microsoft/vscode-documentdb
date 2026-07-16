@@ -9,9 +9,8 @@ import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { ConfirmDialog } from './components/ConfirmDialog';
 import { CreateIndexDialog } from './components/CreateIndexDialog';
+import { IndexList } from './components/indexList';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
-import { IndexTable } from './components/IndexTable';
-import { IndexToolbar } from './components/IndexToolbar';
 import { OPEN_CREATE_INDEX_EVENT } from './constants';
 import './indexView.scss';
 import { type CreateIndexInput, type IndexRow } from './types';
@@ -47,9 +46,6 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
     const [isLoading, setIsLoading] = useState(true);
     const [modal, setModal] = useState<ModalState>({ kind: 'none' });
     const [modalBusy, setModalBusy] = useState(false);
-
-    // Filter text for the toolbar's filter box (not wired to filtering yet).
-    const [filterText, setFilterText] = useState('');
 
     // Field suggestions (from SchemaStore) and the collection's document
     // count drive the Create Index dialog. They are pre-fetched when the
@@ -183,17 +179,12 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
                 <IndexMetricsRow indexes={indexes} isLoading={isLoading} />
             </div>
 
-            {/* Filter row: filter box + (not-yet-wired) filter toggles. */}
-            <IndexToolbar filterText={filterText} onFilterTextChange={setFilterText} />
-
-            {/* Index table. */}
-            <div className="indexContentContainer">
-                <IndexTable
-                    indexes={indexes}
-                    onDelete={(idx) => setModal({ kind: 'delete', index: idx })}
-                    onToggleHidden={(idx) => void handleToggleHidden(idx)}
-                />
-            </div>
+            {/* Filter row + details table, wrapped as a self-contained component. */}
+            <IndexList
+                indexes={indexes}
+                onDelete={(idx) => setModal({ kind: 'delete', index: idx })}
+                onToggleHidden={(idx) => void handleToggleHidden(idx)}
+            />
 
             <CreateIndexDialog
                 open={modal.kind === 'create'}

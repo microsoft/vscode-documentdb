@@ -28,9 +28,9 @@ import {
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { Fragment, useState, type JSX } from 'react';
-import { type IndexRow } from '../types';
-import { formatBytes, formatDate, formatOps, formatSinceTooltip } from '../utils/format';
-import { classifyIndex } from '../utils/indexType';
+import { type IndexRow } from '../../types';
+import { formatBytes, formatDate, formatOps, formatSinceTooltip } from '../../utils/format';
+import { classifyIndex } from '../../utils/indexType';
 import { IndexTypeBadgeView } from './IndexTypeBadgeView';
 
 export interface IndexTableProps {

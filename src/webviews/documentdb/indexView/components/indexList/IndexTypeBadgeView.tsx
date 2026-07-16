@@ -5,7 +5,7 @@
 
 import { Badge, type BadgeProps } from '@fluentui/react-components';
 import { type JSX } from 'react';
-import { type IndexTypeBadge } from '../types';
+import { type IndexTypeBadge } from '../../types';
 
 /**
  * Colour token for the type badge.
