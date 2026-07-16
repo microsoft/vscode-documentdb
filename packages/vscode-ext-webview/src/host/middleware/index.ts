@@ -10,12 +10,18 @@
  * `publicProcedure.use((opts) => body(opts, adapter))`.
  */
 
-export { consoleProcedureLogger, loggingMiddlewareBody, type ProcedureLogEntry, type ProcedureLogger } from './logging';
+export {
+    consoleProcedureLogger,
+    loggingMiddlewareBody,
+    type ProcedureLogEntry,
+    type ProcedureLogger,
+    type ProcedureStartEntry,
+} from './logging';
 export {
     telemetryMiddlewareBody,
     type ProcedureTelemetry,
+    type TelemetryMiddlewareOptions,
     type TelemetryRunner,
-    type WithTelemetry,
 } from './telemetry';
 export {
     getInvocationSignal,

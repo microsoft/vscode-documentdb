@@ -38,6 +38,8 @@ import { type BaseRouterContext } from './BaseRouterContext';
  *
  * - `router` builds (sub)routers;
  * - `publicProcedure` is the base procedure (`ctx` is typed as `TContext`);
+ * - `mergeRouters` composes several routers into one (used to fold a view's
+ *   push/subscription router into its main query/mutation router);
  * - `createCallerFactory` builds a server-side caller for a router (used by
  *   the host dispatcher to invoke procedures);
  * - `middleware` builds reusable middleware bound to this instance.
@@ -56,6 +58,7 @@ export function initWebviewTrpc<TContext extends BaseRouterContext = BaseRouterC
 
     return {
         router: t.router,
+        mergeRouters: t.mergeRouters,
         publicProcedure: t.procedure,
         createCallerFactory: t.createCallerFactory,
         middleware: t.middleware,
@@ -74,6 +77,9 @@ const defaultTrpc = initWebviewTrpc();
 
 /** Convenience `router` builder bound to the default {@link BaseRouterContext}. */
 export const router = defaultTrpc.router;
+
+/** Convenience `mergeRouters` helper bound to the default {@link BaseRouterContext}. */
+export const mergeRouters = defaultTrpc.mergeRouters;
 
 /** Convenience base procedure bound to the default {@link BaseRouterContext}. */
 export const publicProcedure = defaultTrpc.publicProcedure;

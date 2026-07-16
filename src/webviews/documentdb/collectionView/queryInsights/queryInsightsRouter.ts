@@ -44,9 +44,9 @@ import {
 } from '../../../../documentdb/queryInsights/transformations';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
+import { mergeRouters, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../../_integration/trpc';
 import { type RouterContext } from '../collectionViewRouter';
-import { queryInsightsEventsRoutes } from './queryInsightsEventsRouter';
+import { queryInsightsEventsRouter } from './queryInsightsEventsRouter';
 
 /**
  * Debug helper: Read debug override file for Query Insights testing
@@ -91,7 +91,7 @@ function readQueryInsightsDebugFile(filename: string): Document | null {
     }
 }
 
-export const queryInsightsRouter = router({
+export const queryInsightsQueriesRouter = router({
     /**
      * Query Insights Stage 1 - Initial View
      * Returns cheap query plan data using explain("queryPlanner")
@@ -129,7 +129,7 @@ export const queryInsightsRouter = router({
         const session: ClusterSession = ClusterSession.getSession(sessionId);
         const clusterMetadata = await session.getClient().getClusterMetadata();
 
-        myCtx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+        myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
         if (clusterMetadata?.domainInfo_api === 'RU') {
             // TODO: Platform identification improvements needed
             // 1. Create a centralized platform detection service (ClusterSession.getPlatformType())
@@ -246,7 +246,7 @@ export const queryInsightsRouter = router({
             const session: ClusterSession = ClusterSession.getSession(sessionId);
 
             const clusterMetadata = await session.getClient().getClusterMetadata();
-            myCtx.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
+            myCtx.actionContext.telemetry.properties.platform = clusterMetadata?.domainInfo_api ?? 'unknown';
 
             // Get query parameters from session with parsed BSON objects
             const queryParams = session.getCurrentFindQueryParamsWithObjects();
@@ -328,37 +328,38 @@ export const queryInsightsRouter = router({
 
         // --- Stage 2 telemetry ---
         // Performance metrics (safe to aggregate, no PII/OII)
-        myCtx.telemetry.properties.performanceScore = transformed.efficiencyAnalysis.performanceRating.score;
-        myCtx.telemetry.properties.executionStrategy = transformed.executionStrategy;
-        myCtx.telemetry.properties.indexUsed = transformed.indexUsed ? 'true' : 'false';
-        myCtx.telemetry.properties.hadCollectionScan = transformed.hadCollectionScan ? 'true' : 'false';
-        myCtx.telemetry.properties.hadInMemorySort = transformed.hadInMemorySort ? 'true' : 'false';
-        myCtx.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
-        myCtx.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
-        myCtx.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
+        myCtx.actionContext.telemetry.properties.performanceScore =
+            transformed.efficiencyAnalysis.performanceRating.score;
+        myCtx.actionContext.telemetry.properties.executionStrategy = transformed.executionStrategy;
+        myCtx.actionContext.telemetry.properties.indexUsed = transformed.indexUsed ? 'true' : 'false';
+        myCtx.actionContext.telemetry.properties.hadCollectionScan = transformed.hadCollectionScan ? 'true' : 'false';
+        myCtx.actionContext.telemetry.properties.hadInMemorySort = transformed.hadInMemorySort ? 'true' : 'false';
+        myCtx.actionContext.telemetry.properties.isCoveringQuery = transformed.isCoveringQuery ? 'true' : 'false';
+        myCtx.actionContext.telemetry.properties.fetchOverheadKind = transformed.efficiencyAnalysis.fetchOverheadKind;
+        myCtx.actionContext.telemetry.properties.isSharded = transformed.isSharded ? 'true' : 'false';
 
-        myCtx.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
-        myCtx.telemetry.measurements.documentsReturned = transformed.documentsReturned;
-        myCtx.telemetry.measurements.totalDocsExamined = transformed.totalDocsExamined;
-        myCtx.telemetry.measurements.totalKeysExamined = transformed.totalKeysExamined;
-        myCtx.telemetry.measurements.examinedToReturnedRatio = transformed.examinedToReturnedRatio;
-        myCtx.telemetry.measurements.diagnosticBadgeCount =
+        myCtx.actionContext.telemetry.measurements.executionTimeMs = transformed.executionTimeMs;
+        myCtx.actionContext.telemetry.measurements.documentsReturned = transformed.documentsReturned;
+        myCtx.actionContext.telemetry.measurements.totalDocsExamined = transformed.totalDocsExamined;
+        myCtx.actionContext.telemetry.measurements.totalKeysExamined = transformed.totalKeysExamined;
+        myCtx.actionContext.telemetry.measurements.examinedToReturnedRatio = transformed.examinedToReturnedRatio;
+        myCtx.actionContext.telemetry.measurements.diagnosticBadgeCount =
             transformed.efficiencyAnalysis.performanceRating.diagnostics.length;
 
         if (totalCollectionDocs !== undefined) {
-            myCtx.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
+            myCtx.actionContext.telemetry.measurements.totalCollectionDocs = totalCollectionDocs;
         }
 
         const selectivityPercent = transformed.efficiencyAnalysis.selectivity;
         if (selectivityPercent !== null && selectivityPercent !== undefined) {
-            myCtx.telemetry.measurements.selectivityPercent = selectivityPercent;
+            myCtx.actionContext.telemetry.measurements.selectivityPercent = selectivityPercent;
         }
 
         // Badge IDs (safe categorical data, no PII)
         const diagnosticIds = transformed.efficiencyAnalysis.performanceRating.diagnostics
             .map((d) => d.diagnosticId)
             .join(',');
-        myCtx.telemetry.properties.diagnosticBadgeIds = diagnosticIds;
+        myCtx.actionContext.telemetry.properties.diagnosticBadgeIds = diagnosticIds;
 
         // Count badges by type
         const badgesByType = transformed.efficiencyAnalysis.performanceRating.diagnostics.reduce(
@@ -368,9 +369,9 @@ export const queryInsightsRouter = router({
             },
             {} as Record<string, number>,
         );
-        myCtx.telemetry.measurements.positiveBadgeCount = badgesByType['positive'] ?? 0;
-        myCtx.telemetry.measurements.neutralBadgeCount = badgesByType['neutral'] ?? 0;
-        myCtx.telemetry.measurements.negativeBadgeCount = badgesByType['negative'] ?? 0;
+        myCtx.actionContext.telemetry.measurements.positiveBadgeCount = badgesByType['positive'] ?? 0;
+        myCtx.actionContext.telemetry.measurements.neutralBadgeCount = badgesByType['neutral'] ?? 0;
+        myCtx.actionContext.telemetry.measurements.negativeBadgeCount = badgesByType['negative'] ?? 0;
 
         ext.outputChannel.trace(
             l10n.t(
@@ -400,7 +401,7 @@ export const queryInsightsRouter = router({
             }),
         )
         .mutation(async ({ ctx, input }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
             const { sessionId, clusterId } = myCtx;
             const { actionId, payload } = input;
 
@@ -412,9 +413,12 @@ export const queryInsightsRouter = router({
 
             return result;
         }),
-
-    // Push-style (subscription) procedures live in a sibling file per D12 /
-    // the package README convention. Spread here so the webview-visible
-    // paths stay flat (e.g. `collectionView.queryInsights.streamStage3`).
-    ...queryInsightsEventsRoutes,
 });
+
+/**
+ * The full Query Insights router: the query/mutation procedures above merged
+ * with the push-style (subscription) procedures from the sibling
+ * `queryInsightsEventsRouter`, via the framework's `mergeRouters`. Merging keeps
+ * the webview-visible paths flat (e.g. `collectionView.queryInsights.streamStage3`).
+ */
+export const queryInsightsRouter = mergeRouters(queryInsightsQueriesRouter, queryInsightsEventsRouter);
