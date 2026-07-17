@@ -20,6 +20,7 @@ import {
     Switch,
     Textarea,
     Tooltip,
+    type ComboboxProps,
 } from '@fluentui/react-components';
 import {
     AddRegular,
@@ -109,15 +110,14 @@ function DrawerSection({ title, hint, children }: { title: string; hint?: string
 }
 
 /**
- * One index-level option: a compact switch with a short label, an always-on
- * description, an optional reason shown when the option is disabled, and any
- * revealed input. Everything below the switch lives in a single
- * `.optionDetail` container so the indentation and spacing are tuned in one
- * place rather than per option.
+ * One index-level option: a compact switch whose label carries a short
+ * parenthetical explanation, plus an optional reason shown when the option is
+ * disabled and any revealed input. The detail container is rendered only when
+ * there is something to show, and lives in a single `.optionDetail` block so
+ * its layout is tuned in one place.
  */
 function OptionRow({
     label,
-    description,
     checked,
     disabled = false,
     disabledReason,
@@ -125,13 +125,14 @@ function OptionRow({
     children,
 }: {
     label: string;
-    description: string;
     checked: boolean;
     disabled?: boolean;
     disabledReason?: string;
     onToggle: (checked: boolean) => void;
     children?: ReactNode;
 }): JSX.Element {
+    const reason = disabled && disabledReason !== undefined ? disabledReason : undefined;
+    const hasDetail = reason !== undefined || Boolean(children);
     return (
         <div className="optionItem">
             <Switch
@@ -141,12 +142,71 @@ function OptionRow({
                 onChange={(_, data) => onToggle(data.checked)}
                 label={label}
             />
-            <div className="optionDetail">
-                <div className="optionDescription">{description}</div>
-                {disabled && disabledReason !== undefined && <div className="optionDescription">{disabledReason}</div>}
-                {children}
-            </div>
+            {hasDetail && (
+                <div className="optionDetail">
+                    {reason !== undefined && <div className="optionDescription">{reason}</div>}
+                    {children}
+                </div>
+            )}
         </div>
+    );
+}
+
+/**
+ * Field-name entry for a single index key. A freeform Combobox that filters the
+ * schema suggestions as the user types and offers a `Use "…"` option so a value
+ * that is not in the suggestion list can be committed explicitly.
+ */
+function FieldNameCombobox({
+    value,
+    suggestions,
+    onChange,
+}: {
+    value: string;
+    suggestions: ReadonlyArray<string>;
+    onChange: (value: string) => void;
+}): JSX.Element {
+    const [matching, setMatching] = useState<ReadonlyArray<string>>(suggestions);
+    const [customValue, setCustomValue] = useState<string | undefined>(undefined);
+
+    const handleInput: ComboboxProps['onChange'] = (event) => {
+        const next = event.target.value;
+        onChange(next);
+        const needle = next.trim().toLowerCase();
+        const matches = suggestions.filter((option) => option.toLowerCase().includes(needle));
+        setMatching(matches);
+        setCustomValue(
+            needle.length > 0 && !suggestions.some((o) => o.toLowerCase() === needle) ? next.trim() : undefined,
+        );
+    };
+
+    const handleSelect: ComboboxProps['onOptionSelect'] = (_, data) => {
+        onChange(data.optionText ?? '');
+        setCustomValue(undefined);
+    };
+
+    return (
+        <Combobox
+            className="fieldGrow"
+            freeform
+            placeholder={l10n.t('Select or type a field name')}
+            value={value}
+            selectedOptions={value ? [value] : []}
+            onChange={handleInput}
+            onOptionSelect={handleSelect}
+            aria-label={l10n.t('Field name')}
+        >
+            {customValue !== undefined ? (
+                <Option key="__custom" text={customValue}>
+                    {l10n.t('Use "{0}"', customValue)}
+                </Option>
+            ) : null}
+            {matching.map((option) => (
+                <Option key={option} text={option}>
+                    {option}
+                </Option>
+            ))}
+        </Combobox>
     );
 }
 
@@ -361,24 +421,11 @@ export const CreateIndexDrawer = ({
                             <div className="indexFieldsList">
                                 {fields.map((draft) => (
                                     <div key={draft.id} className="fieldRow">
-                                        <Combobox
-                                            className="fieldGrow"
-                                            freeform
-                                            placeholder={l10n.t('Select or type a field name')}
+                                        <FieldNameCombobox
                                             value={draft.field}
-                                            selectedOptions={draft.field ? [draft.field] : []}
-                                            onOptionSelect={(_, data) =>
-                                                updateField(draft.id, { field: data.optionValue ?? '' })
-                                            }
-                                            onChange={(e) => updateField(draft.id, { field: e.target.value })}
-                                            aria-label={l10n.t('Field name')}
-                                        >
-                                            {fieldSuggestions.map((s) => (
-                                                <Option key={s} value={s}>
-                                                    {s}
-                                                </Option>
-                                            ))}
-                                        </Combobox>
+                                            suggestions={fieldSuggestions}
+                                            onChange={(v) => updateField(draft.id, { field: v })}
+                                        />
                                         <Dropdown
                                             className="fieldType"
                                             selectedOptions={[draft.type]}
@@ -424,24 +471,19 @@ export const CreateIndexDrawer = ({
                         >
                             <div className="typeOptions">
                                 <OptionRow
-                                    label={l10n.t('Unique')}
-                                    description={l10n.t(
-                                        'Reject documents with duplicate values for the indexed fields.',
-                                    )}
+                                    label={l10n.t('Unique (rejects duplicate values)')}
                                     checked={unique}
                                     onToggle={setUnique}
                                 />
                                 <OptionRow
-                                    label={l10n.t('Sparse')}
-                                    description={l10n.t('Only index documents that contain the indexed field.')}
+                                    label={l10n.t('Sparse (only indexes documents that contain the field)')}
                                     checked={sparse && !sparseDisabled}
                                     disabled={sparseDisabled}
                                     disabledReason={l10n.t('Not available together with a partial filter expression.')}
                                     onToggle={setSparse}
                                 />
                                 <OptionRow
-                                    label={l10n.t('TTL')}
-                                    description={l10n.t('Automatically delete documents after they reach a given age.')}
+                                    label={l10n.t('TTL (auto-deletes documents after a set age)')}
                                     checked={ttlActive}
                                     disabled={!isSingleBTree}
                                     disabledReason={l10n.t('Requires a single ascending or descending field.')}
@@ -468,8 +510,7 @@ export const CreateIndexDrawer = ({
                                     )}
                                 </OptionRow>
                                 <OptionRow
-                                    label={l10n.t('Name')}
-                                    description={l10n.t('Set a custom index name instead of the generated one.')}
+                                    label={l10n.t('Name (use a custom index name)')}
                                     checked={nameEnabled}
                                     onToggle={setNameEnabled}
                                 >
