@@ -115,11 +115,49 @@ while the user types.
   tooltips that spell out the field name and index type in words (e.g. an up
   arrow reads as "ascending"), so the direction glyphs are not the only cue.
 
+### Build status (ready / building / creating)
+
+Each row now carries a leading status indicator so the user can tell at a glance
+whether an index is usable or still coming up:
+
+- **Ready** — a green check icon in front of the name.
+- **Building** — a small badge with a self-rotating spinner and a "Building"
+  label. This is driven by the `building` flag that the server's `$indexStats`
+  aggregation already reports (it is present only while a build is in progress);
+  we simply surface it on `IndexStats` and map it onto a new `IndexRow.state`.
+- **Creating** — an optimistic, client-only row shown the instant a create is
+  submitted, so the action feels responsive during the window before the server
+  reports the new index. It carries the derived (or user-provided) index name and
+  key, is reconciled to the server's actual name on success, and is dropped once
+  the real index appears in a fetch. Actions are disabled on this placeholder row.
+
+While anything is building or creating, the tab re-polls the list on a short
+interval (recursive `setTimeout`, not `setInterval`, so polls never overlap) and
+stops as soon as nothing is active, so a build resolves to "ready" without the
+user pressing refresh.
+
+This design was informed only by the **server APIs available to us**
+(`listIndexes` for inventory, `$indexStats` for the `building` flag and usage,
+`collStats` for size). We deliberately kept it to the happy path: knowing whether
+an index is ready or still working already adds real value, and it needs no extra
+privileges beyond the `$indexStats` call the list already makes.
+
+The list skeleton is now reserved for the **first** load only. Later refreshes
+and mutations (hide / unhide / delete / create) update the rows in place — the
+same lesson applied to the CollectionView data grid — because reloading the whole
+list into a skeleton on every change was too noisy. The top progress bar still
+gives a subtle refresh cue, and the summary metrics keep their skeleton.
+
 ---
 
 ## Follow-ups (not in this PR)
 
-- Index-build progress / status monitoring (whether an index is still building)
-  is a natural next step and is being researched separately.
+- **Per-build progress (percentage / elapsed time).** A `$currentOp` query
+  against the `admin` database can expose `secs_running` and sometimes a
+  `progress.done/total` fraction for an active `createIndexes` operation. It would
+  layer on top of the current ready/building/creating states as a best-effort,
+  permission-tiered enhancement (it needs the `inprog` privilege for full
+  visibility, with a current-user fallback). Value versus complexity is still
+  under discussion — the ready/building signal already covers the common case.
 - Smart completions for the partial filter, and schema-aware completions for
   collation, can build on the `EditorType.Json` seam described above.
