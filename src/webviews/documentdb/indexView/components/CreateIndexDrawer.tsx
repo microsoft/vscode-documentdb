@@ -20,7 +20,6 @@ import {
     Switch,
     Textarea,
     Tooltip,
-    type ComboboxProps,
 } from '@fluentui/react-components';
 import {
     AddRegular,
@@ -156,6 +155,10 @@ function OptionRow({
  * Field-name entry for a single index key. A freeform Combobox that filters the
  * schema suggestions as the user types and offers a `Use "…"` option so a value
  * that is not in the suggestion list can be committed explicitly.
+ *
+ * The filtered list and the custom-value affordance are derived from props (no
+ * local state) so an async-loaded suggestion list is always reflected and there
+ * is nothing to fall out of sync.
  */
 function FieldNameCombobox({
     value,
@@ -166,24 +169,12 @@ function FieldNameCombobox({
     suggestions: ReadonlyArray<string>;
     onChange: (value: string) => void;
 }): JSX.Element {
-    const [matching, setMatching] = useState<ReadonlyArray<string>>(suggestions);
-    const [customValue, setCustomValue] = useState<string | undefined>(undefined);
-
-    const handleInput: ComboboxProps['onChange'] = (event) => {
-        const next = event.target.value;
-        onChange(next);
-        const needle = next.trim().toLowerCase();
-        const matches = suggestions.filter((option) => option.toLowerCase().includes(needle));
-        setMatching(matches);
-        setCustomValue(
-            needle.length > 0 && !suggestions.some((o) => o.toLowerCase() === needle) ? next.trim() : undefined,
-        );
-    };
-
-    const handleSelect: ComboboxProps['onOptionSelect'] = (_, data) => {
-        onChange(data.optionText ?? '');
-        setCustomValue(undefined);
-    };
+    const needle = value.trim().toLowerCase();
+    const matching = useMemo(
+        () => (needle === '' ? suggestions : suggestions.filter((option) => option.toLowerCase().includes(needle))),
+        [suggestions, needle],
+    );
+    const showCustom = needle !== '' && !suggestions.some((option) => option.toLowerCase() === needle);
 
     return (
         <Combobox
@@ -191,13 +182,13 @@ function FieldNameCombobox({
             freeform
             placeholder={l10n.t('Select or type a field name')}
             value={value}
-            onChange={handleInput}
-            onOptionSelect={handleSelect}
+            onChange={(event) => onChange(event.target.value)}
+            onOptionSelect={(_, data) => onChange(data.optionText ?? '')}
             aria-label={l10n.t('Field name')}
         >
-            {customValue !== undefined ? (
-                <Option key="__custom" text={customValue}>
-                    {l10n.t('Use "{0}"', customValue)}
+            {showCustom ? (
+                <Option key="__custom" text={value.trim()}>
+                    {l10n.t('Use "{0}"', value.trim())}
                 </Option>
             ) : null}
             {matching.map((option) => (
