@@ -19,7 +19,6 @@ import {
     Option,
     OverlayDrawer,
     Switch,
-    Textarea,
     Tooltip,
 } from '@fluentui/react-components';
 import {
@@ -39,6 +38,7 @@ import * as l10n from '@vscode/l10n';
 import { useMemo, useState, type JSX, type ReactNode } from 'react';
 import { LARGE_COLLECTION_THRESHOLD_DOCS } from '../constants';
 import { type CreateIndexInput, type FieldIndexType } from '../types';
+import { JsonInputEditor } from './JsonInputEditor';
 
 /** Which pane of the drawer is visible. Advanced is a pushed sub-page. */
 type DrawerPage = 'main' | 'advanced';
@@ -579,11 +579,11 @@ export const CreateIndexDrawer = ({
                             hint={l10n.t('Only index documents that match this filter. Enter a JSON object.')}
                         >
                             <Field validationState={partial.error ? 'error' : 'none'} validationMessage={partial.error}>
-                                <Textarea
-                                    resize="vertical"
+                                <JsonInputEditor
                                     value={partialText}
+                                    onChange={setPartialText}
                                     placeholder={'{ "status": { "$eq": "active" } }'}
-                                    onChange={(e) => setPartialText(e.target.value)}
+                                    ariaLabel={l10n.t('Partial filter expression: enter a JSON object')}
                                 />
                             </Field>
                         </DrawerSection>
@@ -596,11 +596,11 @@ export const CreateIndexDrawer = ({
                                 validationState={collation.error ? 'error' : 'none'}
                                 validationMessage={collation.error}
                             >
-                                <Textarea
-                                    resize="vertical"
+                                <JsonInputEditor
                                     value={collationText}
+                                    onChange={setCollationText}
                                     placeholder={'{ "locale": "en", "strength": 2 }'}
-                                    onChange={(e) => setCollationText(e.target.value)}
+                                    ariaLabel={l10n.t('Collation: enter a JSON object')}
                                 />
                             </Field>
                         </DrawerSection>
