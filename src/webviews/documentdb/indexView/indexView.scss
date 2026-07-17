@@ -399,7 +399,7 @@
         row-gap: 12px;
         padding: 12px;
         background-color: var(--colorNeutralBackground2);
-        border-radius: 4px;
+        border-radius: var(--borderRadiusMedium);
     }
 
     // A single option: the switch plus its indented detail container.
@@ -446,7 +446,7 @@
         padding: 12px;
         background-color: var(--colorNeutralBackground2);
         border: 1px solid var(--colorNeutralStroke2);
-        border-radius: 4px;
+        border-radius: var(--borderRadiusMedium);
         cursor: pointer;
         color: inherit;
         font-family: inherit;

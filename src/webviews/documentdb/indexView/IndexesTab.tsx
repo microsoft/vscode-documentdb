@@ -188,6 +188,28 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
         [trpcClient, refresh, showError],
     );
 
+    /**
+     * Prepare the create-index command in a playground or interactive shell.
+     * The command is built server-side from the same input as a direct create;
+     * on success the drawer closes since the task is handed off elsewhere.
+     */
+    const handlePrepareInTarget = useCallback(
+        async (target: 'playground' | 'shell', input: CreateIndexInput): Promise<void> => {
+            try {
+                if (target === 'playground') {
+                    await trpcClient.mongoClusters.indexView.openCreateInPlayground.mutate(input);
+                } else {
+                    await trpcClient.mongoClusters.indexView.openCreateInShell.mutate(input);
+                }
+                setModal({ kind: 'none' });
+            } catch (error) {
+                showError(l10n.t('Failed to prepare the index command.'), error);
+                throw error;
+            }
+        },
+        [trpcClient, showError],
+    );
+
     return (
         <div className="indexView">
             {isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
@@ -211,6 +233,7 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
                 documentCount={documentCount}
                 onCancel={() => setModal({ kind: 'none' })}
                 onSubmit={handleCreateSubmit}
+                onPrepareInTarget={handlePrepareInTarget}
             />
 
             <ConfirmDialog

@@ -43,7 +43,9 @@ import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
 import { ClustersClient, type IndexItemModel } from '../../../documentdb/ClustersClient';
 import { type IndexSpecification } from '../../../documentdb/LlmEnhancedFeatureApis';
+import { PlaygroundCommandIds } from '../../../documentdb/playground/constants';
 import { SchemaStore } from '../../../documentdb/SchemaStore';
+import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
@@ -53,6 +55,8 @@ import { type CreateIndexInput, type FieldIndexType, type IndexRow } from './typ
 export type RouterContext = BaseRouterContext & {
     /** Stable cluster identifier for cache/client lookups. */
     clusterId: string;
+    /** Human-readable cluster name, forwarded to playground/shell hand-offs. */
+    clusterDisplayName: string;
     /** Identifies which tree view this cluster belongs to. */
     viewId: string;
     databaseName: string;
@@ -169,6 +173,23 @@ function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
         spec.collation = input.collation;
     }
     return spec;
+}
+
+/**
+ * Render a `createIndex` invocation as a shell/playground command string built
+ * from the same spec used for the direct create, so the prepared command is
+ * identical to what the drawer would submit. The options argument is omitted
+ * when the index has no index-level options.
+ */
+function buildCreateIndexShellCommand(collectionName: string, input: CreateIndexInput): string {
+    const spec = buildIndexSpec(input);
+    const { key, ...options } = spec;
+    const collection = JSON.stringify(collectionName);
+    const keyJson = JSON.stringify(key);
+    if (Object.keys(options).length === 0) {
+        return `db.getCollection(${collection}).createIndex(${keyJson})`;
+    }
+    return `db.getCollection(${collection}).createIndex(${keyJson}, ${JSON.stringify(options)})`;
 }
 
 export const indexViewRouter = router({
@@ -321,6 +342,51 @@ export const indexViewRouter = router({
             throw new Error(message);
         }
         return { ok: true, indexName: result.indexName };
+    }),
+
+    /**
+     * BACKEND INTEGRATION POINT — openCreateInPlayground
+     * -----------------------------------------------------------------
+     * Prepares (does not run) the createIndex command in a new query
+     * playground, using the same cross-feature hand-off the collection view
+     * uses. The user reviews and runs it there.
+     */
+    openCreateInPlayground: publicProcedureWithTelemetry
+        .input(CreateIndexInputSchema)
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            myCtx.telemetry.properties.activationSource = 'indexViewCreateDrawer';
+            const content = buildCreateIndexShellCommand(myCtx.collectionName, input);
+            const vscode = await import('vscode');
+            await vscode.commands.executeCommand(PlaygroundCommandIds.newWithContent, {
+                clusterId: myCtx.clusterId,
+                clusterDisplayName: myCtx.clusterDisplayName,
+                databaseName: myCtx.databaseName,
+                content,
+                viewId: myCtx.viewId,
+            });
+            return { ok: true };
+        }),
+
+    /**
+     * BACKEND INTEGRATION POINT — openCreateInShell
+     * -----------------------------------------------------------------
+     * Prepares (does not run) the createIndex command in an interactive
+     * shell, mirroring the collection view's "open in shell" hand-off.
+     */
+    openCreateInShell: publicProcedureWithTelemetry.input(CreateIndexInputSchema).mutation(async ({ input, ctx }) => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        myCtx.telemetry.properties.activationSource = 'indexViewCreateDrawer';
+        const initialInput = buildCreateIndexShellCommand(myCtx.collectionName, input);
+        const vscode = await import('vscode');
+        await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
+            clusterId: myCtx.clusterId,
+            clusterDisplayName: myCtx.clusterDisplayName,
+            databaseName: myCtx.databaseName,
+            viewId: myCtx.viewId,
+            initialInput,
+        });
+        return { ok: true };
     }),
 
     /**

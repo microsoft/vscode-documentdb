@@ -12,14 +12,21 @@ import {
     Dropdown,
     Field,
     Input,
+    Menu,
+    MenuItem,
+    MenuList,
+    MenuPopover,
+    MenuTrigger,
     MessageBar,
     MessageBarBody,
     MessageBarTitle,
     Option,
     OverlayDrawer,
+    SplitButton,
     Switch,
     Textarea,
     Tooltip,
+    type MenuButtonProps,
 } from '@fluentui/react-components';
 import {
     AddRegular,
@@ -28,8 +35,10 @@ import {
     CheckmarkCircleRegular,
     ChevronRightRegular,
     DeleteRegular,
+    KeyboardRegular,
     PanelRightContractRegular,
     SettingsRegular,
+    WindowConsoleRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useMemo, useState, type JSX, type ReactNode } from 'react';
@@ -211,6 +220,8 @@ export interface CreateIndexDrawerProps {
     documentCount: number;
     onCancel: () => void;
     onSubmit: (input: CreateIndexInput) => Promise<void>;
+    /** Prepare the create-index command in a playground or interactive shell. */
+    onPrepareInTarget: (target: 'playground' | 'shell', input: CreateIndexInput) => Promise<void>;
 }
 
 /**
@@ -229,6 +240,7 @@ export const CreateIndexDrawer = ({
     documentCount,
     onCancel,
     onSubmit,
+    onPrepareInTarget,
 }: CreateIndexDrawerProps): JSX.Element => {
     const [page, setPage] = useState<DrawerPage>('main');
     const [fields, setFields] = useState<FieldDraft[]>([INITIAL_FIELD()]);
@@ -309,35 +321,57 @@ export const CreateIndexDrawer = ({
 
     const canSubmit = completedRows.length > 0 && ttlNumberValid && !partial.error && !collation.error && !submitting;
 
+    // Assemble the payload once; shared by the direct create and the
+    // playground/shell hand-offs so all three produce an identical index.
+    const buildPayload = (): CreateIndexInput => {
+        const payload: CreateIndexInput = {
+            fields: completedRows.map((r) => ({ field: r.field.trim(), type: r.type })),
+        };
+        if (nameEnabled && name.trim() !== '') {
+            payload.name = name.trim();
+        }
+        if (unique) {
+            payload.unique = true;
+        }
+        if (sparse && !sparseDisabled) {
+            payload.sparse = true;
+        }
+        if (ttlActive && ttlNumberValid) {
+            payload.expireAfterSeconds = Number.parseInt(ttlSeconds, 10);
+        }
+        if (partial.value) {
+            payload.partialFilterExpression = partial.value;
+        }
+        if (collation.value) {
+            payload.collation = collation.value;
+        }
+        return payload;
+    };
+
     const handleSubmit = async (): Promise<void> => {
         if (!canSubmit) {
             return;
         }
         setSubmitting(true);
         try {
-            const payload: CreateIndexInput = {
-                fields: completedRows.map((r) => ({ field: r.field.trim(), type: r.type })),
-            };
-            if (nameEnabled && name.trim() !== '') {
-                payload.name = name.trim();
-            }
-            if (unique) {
-                payload.unique = true;
-            }
-            if (sparse && !sparseDisabled) {
-                payload.sparse = true;
-            }
-            if (ttlActive && ttlNumberValid) {
-                payload.expireAfterSeconds = Number.parseInt(ttlSeconds, 10);
-            }
-            if (partial.value) {
-                payload.partialFilterExpression = partial.value;
-            }
-            if (collation.value) {
-                payload.collation = collation.value;
-            }
-            await onSubmit(payload);
+            await onSubmit(buildPayload());
             reset();
+        } catch {
+            // The parent surfaces the error; keep the form so the user can retry.
+        } finally {
+            setSubmitting(false);
+        }
+    };
+
+    // Prepare the create-index command in a playground or interactive shell so
+    // the user can review and run it there instead of submitting directly.
+    const handleCreateIn = async (target: 'playground' | 'shell'): Promise<void> => {
+        if (!canSubmit) {
+            return;
+        }
+        setSubmitting(true);
+        try {
+            await onPrepareInTarget(target, buildPayload());
         } catch {
             // The parent surfaces the error; keep the form so the user can retry.
         } finally {
@@ -586,9 +620,43 @@ export const CreateIndexDrawer = ({
                     </Button>
                 ) : (
                     <>
-                        <Button appearance="primary" onClick={() => void handleSubmit()} disabled={!canSubmit}>
-                            {submitting ? l10n.t('Creating…') : l10n.t('Create Index')}
-                        </Button>
+                        <Menu positioning="below-end">
+                            <MenuTrigger disableButtonEnhancement>
+                                {(triggerProps: MenuButtonProps) => (
+                                    <SplitButton
+                                        appearance="primary"
+                                        menuButton={triggerProps}
+                                        primaryActionButton={{
+                                            onClick: () => void handleSubmit(),
+                                            disabled: !canSubmit,
+                                        }}
+                                    >
+                                        {submitting ? l10n.t('Creating…') : l10n.t('Create Index')}
+                                    </SplitButton>
+                                )}
+                            </MenuTrigger>
+                            <MenuPopover>
+                                <MenuList>
+                                    <MenuItem disabled={!canSubmit} onClick={() => void handleSubmit()}>
+                                        {l10n.t('Create Index')}
+                                    </MenuItem>
+                                    <MenuItem
+                                        icon={<KeyboardRegular />}
+                                        disabled={!canSubmit}
+                                        onClick={() => void handleCreateIn('playground')}
+                                    >
+                                        {l10n.t('Create in the playground')}
+                                    </MenuItem>
+                                    <MenuItem
+                                        icon={<WindowConsoleRegular />}
+                                        disabled={!canSubmit}
+                                        onClick={() => void handleCreateIn('shell')}
+                                    >
+                                        {l10n.t('Create in the shell')}
+                                    </MenuItem>
+                                </MenuList>
+                            </MenuPopover>
+                        </Menu>
                         <Button
                             appearance="secondary"
                             icon={<ArrowResetRegular />}
