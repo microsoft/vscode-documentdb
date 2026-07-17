@@ -300,19 +300,24 @@ export const CreateIndexDrawer = ({
     // TTL is only valid on a single-field b-tree index.
     const isSingleBTree = completedRows.length === 1 && isBTreeType(completedRows[0].type);
 
-    // Sparse and a partial filter are mutually exclusive on the server. We only
-    // check for meaningful content — the extension side parses and validates it.
-    const sparseDisabled = !isBlankJsonObject(partialText);
+    // Single source of truth for "is this advanced option meaningfully set?" —
+    // a blank object ({} / whitespace) counts as not set. Used everywhere so the
+    // Advanced entry badge, its summary, and the payload never disagree.
+    const hasPartialFilter = !isBlankJsonObject(partialText);
+    const hasCollation = !isBlankJsonObject(collationText);
+
+    // Sparse and a partial filter are mutually exclusive on the server.
+    const sparseDisabled = hasPartialFilter;
     const ttlActive = ttlEnabled && isSingleBTree;
     const ttlNumberValid = !ttlActive || (ttlSeconds.trim() !== '' && Number.parseInt(ttlSeconds, 10) > 0);
 
-    const advancedHasContent = !isBlankJsonObject(partialText) || !isBlankJsonObject(collationText);
+    const advancedHasContent = hasPartialFilter || hasCollation;
 
     // Which advanced settings are populated — surfaced on the entry so the user
     // can tell at a glance that something is configured behind it.
     const advancedSummary = [
-        partialText.trim() !== '' ? l10n.t('Partial filter') : undefined,
-        collationText.trim() !== '' ? l10n.t('Collation') : undefined,
+        hasPartialFilter ? l10n.t('Partial filter') : undefined,
+        hasCollation ? l10n.t('Collation') : undefined,
     ]
         .filter((part): part is string => part !== undefined)
         .join(' · ');
@@ -337,10 +342,10 @@ export const CreateIndexDrawer = ({
         if (ttlActive && ttlNumberValid) {
             payload.expireAfterSeconds = Number.parseInt(ttlSeconds, 10);
         }
-        if (!isBlankJsonObject(partialText)) {
+        if (hasPartialFilter) {
             payload.partialFilterExpression = partialText.trim();
         }
-        if (!isBlankJsonObject(collationText)) {
+        if (hasCollation) {
             payload.collation = collationText.trim();
         }
         return payload;
@@ -578,7 +583,7 @@ export const CreateIndexDrawer = ({
                         <DrawerSection
                             title={l10n.t('Partial filter expression')}
                             hint={l10n.t('Only index documents that match this filter. Enter a JSON object.')}
-                            example={'{ "status": { "$eq": "active" } }'}
+                            example={"{ status: { $eq: 'active' } }"}
                         >
                             <JsonInputEditor
                                 value={partialText}
@@ -590,7 +595,7 @@ export const CreateIndexDrawer = ({
                         <DrawerSection
                             title={l10n.t('Collation')}
                             hint={l10n.t('Language-specific comparison rules. Enter a JSON object.')}
-                            example={'{ "locale": "en", "strength": 2 }'}
+                            example={"{ locale: 'en', strength: 2 }"}
                         >
                             <JsonInputEditor
                                 value={collationText}
