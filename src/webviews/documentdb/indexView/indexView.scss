@@ -403,10 +403,14 @@
     }
 
     // A single option: the switch plus its indented detail container.
+    // No row-gap here: Fluent's Switch already reserves vertical space below
+    // its label as part of the toggle's tap-target geometry, so an extra gap
+    // would double the spacing. Let that intrinsic spacing be the separation
+    // instead of fighting it with negative margins.
     .optionItem {
         display: flex;
         flex-direction: column;
-        row-gap: 6px;
+        row-gap: 0;
     }
 
     // The one place to tune the layout of every option's description, disabled
