@@ -5,7 +5,7 @@
 
 import { ProgressBar } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { useCallback, useEffect, useState, type JSX } from 'react';
+import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList } from './components/indexList';
@@ -33,9 +33,15 @@ type ModalState = { kind: 'none' } | { kind: 'create' };
 export const IndexesTab = (): JSX.Element => {
     const trpcClient = useTrpcClient();
 
-    // Index list, loading state, and the unified dialog state.
+    // Index list, loading state, and the unified dialog state. We distinguish
+    // the *first* load (which shows skeletons) from later refreshes/mutations
+    // (which keep the existing rows visible and only show a thin progress bar) —
+    // reloading the whole list into a skeleton on every hide/delete/create is
+    // too noisy, the same lesson learned for the CollectionView data grid.
     const [indexes, setIndexes] = useState<ReadonlyArray<IndexRow>>([]);
-    const [isLoading, setIsLoading] = useState(true);
+    const [isInitialLoading, setIsInitialLoading] = useState(true);
+    const [isRefreshing, setIsRefreshing] = useState(false);
+    const hasLoadedRef = useRef(false);
     const [modal, setModal] = useState<ModalState>({ kind: 'none' });
 
     // Field suggestions (from SchemaStore) and the collection's document
@@ -53,19 +59,29 @@ export const IndexesTab = (): JSX.Element => {
         [trpcClient],
     );
 
-    /** Fetch the merged real + simulated index list and update state. */
+    /** Fetch the index list. The first load shows a skeleton; later refreshes
+     * keep the current rows on screen and only surface a thin progress bar. */
     const refresh = useCallback(async (): Promise<void> => {
-        setIsLoading(true);
-        // Clear existing rows so the loading skeleton (rather than stale data)
-        // is shown while the fresh list is fetched.
-        setIndexes([]);
+        const initial = !hasLoadedRef.current;
+        if (initial) {
+            // Clear so the skeleton (rather than stale data) shows on first load.
+            setIsInitialLoading(true);
+            setIndexes([]);
+        } else {
+            setIsRefreshing(true);
+        }
         try {
             const rows = await trpcClient.mongoClusters.indexView.listIndexes.query();
             setIndexes(rows);
+            hasLoadedRef.current = true;
         } catch (error) {
             showError(l10n.t('Failed to load indexes.'), error);
         } finally {
-            setIsLoading(false);
+            if (initial) {
+                setIsInitialLoading(false);
+            } else {
+                setIsRefreshing(false);
+            }
         }
     }, [trpcClient, showError]);
 
@@ -210,17 +226,21 @@ export const IndexesTab = (): JSX.Element => {
 
     return (
         <div className="indexView">
-            {isLoading && <ProgressBar thickness="large" shape="square" className="progressBar" />}
+            {(isInitialLoading || isRefreshing) && (
+                <ProgressBar thickness="large" shape="square" className="progressBar" />
+            )}
 
             {/* First row: summary metric cards (mirrors the Query Insights layout). */}
             <div className="indexMetricsRowContainer">
-                <IndexMetricsRow indexes={indexes} isLoading={isLoading} />
+                <IndexMetricsRow indexes={indexes} isLoading={isInitialLoading} />
             </div>
 
-            {/* Filter row + details table, wrapped as a self-contained component. */}
+            {/* Filter row + details table, wrapped as a self-contained component.
+                The list skeleton is reserved for the first load; later refreshes
+                and mutations update the rows in place without flashing a skeleton. */}
             <IndexList
                 indexes={indexes}
-                isLoading={isLoading}
+                isLoading={isInitialLoading}
                 onDelete={(idx) => void handleDelete(idx)}
                 onToggleHidden={(idx) => void handleToggleHidden(idx)}
             />
