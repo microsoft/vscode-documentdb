@@ -37,6 +37,13 @@ export interface IndexRow {
     isDefault: boolean;
     /** Whether the underlying server reported stats successfully. */
     statsAvailable: boolean;
+    /**
+     * Build state of the index:
+     * - `ready` — a normal, usable index (default when the server reports nothing special).
+     * - `building` — the server reports this index as still building (`$indexStats.building`).
+     * - `creating` — a client-only optimistic row shown while a just-submitted create is in flight.
+     */
+    state?: 'ready' | 'building' | 'creating';
 }
 
 /** Logical badge category used for the colour-coded Type column. */

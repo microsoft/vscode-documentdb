@@ -28,6 +28,7 @@ import { formatBytes, formatOps } from '../../utils/format';
 import { classifyIndex } from '../../utils/indexType';
 import { IndexPropertiesView } from './IndexPropertiesView';
 import { IndexRowDetails } from './IndexRowDetails';
+import { IndexStatusIndicator } from './IndexStatusIndicator';
 import { IndexTypeBadgeView } from './IndexTypeBadgeView';
 
 export interface IndexTableProps {
@@ -88,6 +89,9 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                 {indexes.map((idx, rowIdx) => {
                     const badge = classifyIndex(idx);
                     const isProtected = idx.isDefault;
+                    // Optimistic "Creating…" rows have no server-side index yet, so
+                    // actions that operate on a live index are disabled.
+                    const isPending = idx.state === 'creating';
                     const isExpanded = expanded.has(idx.name);
                     // Compute zebra parity from the data index (not the DOM
                     // position) so an inserted detail row never breaks the
@@ -116,7 +120,9 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                                     />
                                 </TableCell>
                                 <TableCell className="nameCell">
-                                    <TableCellLayout truncate>{idx.name}</TableCellLayout>
+                                    <TableCellLayout truncate media={<IndexStatusIndicator state={idx.state} />}>
+                                        {idx.name}
+                                    </TableCellLayout>
                                 </TableCell>
                                 <TableCell>
                                     <IndexTypeBadgeView type={badge} />
@@ -144,7 +150,7 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                                                 size="small"
                                                 icon={<DeleteRegular />}
                                                 aria-label={l10n.t('Delete index {0}', idx.name)}
-                                                disabled={isProtected}
+                                                disabled={isProtected || isPending}
                                                 onClick={() => onDelete(idx)}
                                             />
                                         </Tooltip>
@@ -168,7 +174,7 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                                                         ? l10n.t('Unhide index {0}', idx.name)
                                                         : l10n.t('Hide index {0}', idx.name)
                                                 }
-                                                disabled={isProtected}
+                                                disabled={isProtected || isPending}
                                                 onClick={() => onToggleHidden(idx)}
                                             />
                                         </Tooltip>

@@ -5,15 +5,49 @@
 
 import { ProgressBar } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
-import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList } from './components/indexList';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
 import { OPEN_CREATE_INDEX_EVENT, REFRESH_INDEXES_EVENT } from './constants';
 import './indexView.scss';
-import { type CreateIndexInput, type IndexRow } from './types';
+import { type CreateIndexInput, type FieldIndexType, type IndexRow } from './types';
 import { formatBytes, formatOps } from './utils/format';
+
+/** How often to re-poll while at least one index is building or being created. */
+const BUILD_POLL_INTERVAL_MS = 5000;
+
+/** An optimistic, client-only pending index shown while a create is in flight. */
+interface PendingCreate {
+    name: string;
+    key: ReadonlyArray<{ field: string; direction: number | string }>;
+}
+
+/** Map a per-field index type onto its wire-level key value (mirrors the router). */
+function keyDirection(type: FieldIndexType): number | string {
+    if (type === 'asc') {
+        return 1;
+    }
+    if (type === 'desc') {
+        return -1;
+    }
+    return type;
+}
+
+/**
+ * Derive the optimistic pending row from the submitted input. Uses the provided
+ * name when set, otherwise the driver's default `field_dir_field_dir` naming so
+ * the placeholder row matches the index the server will report.
+ */
+function pendingCreateFromInput(input: CreateIndexInput): PendingCreate {
+    const key = input.fields.map((f) => ({ field: f.field, direction: keyDirection(f.type) }));
+    const name =
+        input.name && input.name.trim() !== ''
+            ? input.name.trim()
+            : input.fields.map((f) => `${f.field}_${keyDirection(f.type)}`).join('_');
+    return { name, key };
+}
 
 /**
  * Discriminated union describing which dialog (if any) is currently open
@@ -43,6 +77,11 @@ export const IndexesTab = (): JSX.Element => {
     const [isRefreshing, setIsRefreshing] = useState(false);
     const hasLoadedRef = useRef(false);
     const [modal, setModal] = useState<ModalState>({ kind: 'none' });
+
+    // Optimistic "Creating…" rows: shown the instant a create is submitted and
+    // dropped once the real index appears in a later fetch. Merged into the
+    // displayed list below.
+    const [pendingCreates, setPendingCreates] = useState<ReadonlyArray<PendingCreate>>([]);
 
     // Field suggestions (from SchemaStore) and the collection's document
     // count drive the Create Index dialog. They are pre-fetched when the
@@ -132,12 +171,66 @@ export const IndexesTab = (): JSX.Element => {
         return () => window.removeEventListener(REFRESH_INDEXES_EVENT, handler);
     }, [refresh]);
 
+    // The list shown to the user = the real indexes plus any optimistic
+    // "Creating…" rows whose index has not yet appeared in a fetch.
+    const displayIndexes = useMemo<ReadonlyArray<IndexRow>>(() => {
+        if (pendingCreates.length === 0) {
+            return indexes;
+        }
+        const existing = new Set(indexes.map((i) => i.name));
+        const creatingRows: IndexRow[] = pendingCreates
+            .filter((p) => !existing.has(p.name))
+            .map((p) => ({
+                name: p.name,
+                key: p.key,
+                hidden: false,
+                unique: false,
+                sparse: false,
+                isDefault: false,
+                statsAvailable: false,
+                state: 'creating',
+            }));
+        return [...indexes, ...creatingRows];
+    }, [indexes, pendingCreates]);
+
+    // Drop optimistic rows once the real index shows up in a fetch.
+    useEffect(() => {
+        if (pendingCreates.length === 0) {
+            return;
+        }
+        const existing = new Set(indexes.map((i) => i.name));
+        setPendingCreates((prev) => prev.filter((p) => !existing.has(p.name)));
+    }, [indexes, pendingCreates.length]);
+
+    // While anything is building or being created, re-poll on an interval so a
+    // build resolves to "ready" without the user hitting refresh. The effect
+    // re-arms after each fetch and stops as soon as nothing is active.
+    useEffect(() => {
+        const active = displayIndexes.some((i) => i.state === 'building' || i.state === 'creating');
+        if (!active) {
+            return;
+        }
+        const timer = setTimeout(() => void refresh(), BUILD_POLL_INTERVAL_MS);
+        return () => clearTimeout(timer);
+    }, [displayIndexes, refresh]);
+
     /** Submit handler for the Create Index dialog. Re-throws so the dialog can stay open on error. */
     const handleCreateSubmit = useCallback(
         async (input: CreateIndexInput): Promise<void> => {
+            // Show an optimistic "Creating…" row immediately so the action feels
+            // responsive while the server builds the index.
+            const pending = pendingCreateFromInput(input);
+            setPendingCreates((prev) => [...prev.filter((p) => p.name !== pending.name), pending]);
             try {
                 const result = await trpcClient.mongoClusters.indexView.createIndex.mutate(input);
                 setModal({ kind: 'none' });
+                // Reconcile the optimistic row's name with the server's actual name
+                // so it is pruned correctly once the real index is fetched.
+                if (result.indexName && result.indexName !== pending.name) {
+                    setPendingCreates((prev) =>
+                        prev.map((p) => (p.name === pending.name ? { ...p, name: result.indexName as string } : p)),
+                    );
+                }
                 void trpcClient.common.displayInformationMessage.mutate({
                     message: result.indexName
                         ? l10n.t('Index "{0}" created.', result.indexName)
@@ -145,6 +238,7 @@ export const IndexesTab = (): JSX.Element => {
                 });
                 await refresh();
             } catch (error) {
+                setPendingCreates((prev) => prev.filter((p) => p.name !== pending.name));
                 showError(l10n.t('Failed to create index.'), error);
                 throw error;
             }
@@ -232,14 +326,14 @@ export const IndexesTab = (): JSX.Element => {
 
             {/* First row: summary metric cards (mirrors the Query Insights layout). */}
             <div className="indexMetricsRowContainer">
-                <IndexMetricsRow indexes={indexes} isLoading={isInitialLoading} />
+                <IndexMetricsRow indexes={displayIndexes} isLoading={isInitialLoading} />
             </div>
 
             {/* Filter row + details table, wrapped as a self-contained component.
                 The list skeleton is reserved for the first load; later refreshes
                 and mutations update the rows in place without flashing a skeleton. */}
             <IndexList
-                indexes={indexes}
+                indexes={displayIndexes}
                 isLoading={isInitialLoading}
                 onDelete={(idx) => void handleDelete(idx)}
                 onToggleHidden={(idx) => void handleToggleHidden(idx)}

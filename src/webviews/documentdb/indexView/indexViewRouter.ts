@@ -95,6 +95,7 @@ function toIndexRow(
     raw: IndexItemModel,
     sizeBytes: number | undefined,
     usage: { ops: number; since: string } | undefined,
+    building: boolean,
 ): IndexRow {
     const keyEntries: ReadonlyArray<{ field: string; direction: number | string }> = raw.key
         ? Object.entries(raw.key).map(([field, direction]) => ({ field, direction }))
@@ -115,6 +116,7 @@ function toIndexRow(
         usageSince: usage?.since,
         isDefault: raw.name === '_id_',
         statsAvailable: usage !== undefined,
+        state: building ? 'building' : 'ready',
     };
 }
 
@@ -298,9 +300,13 @@ export const indexViewRouter = router({
         }
 
         const usageByName = new Map<string, { ops: number; since: string }>();
+        const buildingNames = new Set<string>();
         try {
             const indexStats = await client.getIndexStats(myCtx.databaseName, myCtx.collectionName);
             for (const stat of indexStats) {
+                if (stat.building === true) {
+                    buildingNames.add(stat.name);
+                }
                 if (stat.accesses === 'N/A') {
                     continue;
                 }
@@ -317,7 +323,7 @@ export const indexViewRouter = router({
         }
 
         const rows: IndexRow[] = rawIndexes.map((idx) =>
-            toIndexRow(idx, indexSizes[idx.name], usageByName.get(idx.name)),
+            toIndexRow(idx, indexSizes[idx.name], usageByName.get(idx.name), buildingNames.has(idx.name)),
         );
 
         myCtx.telemetry.measurements.indexCount = rows.length;
