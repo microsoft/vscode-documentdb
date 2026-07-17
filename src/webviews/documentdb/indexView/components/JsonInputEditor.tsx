@@ -12,35 +12,7 @@ import {
     EditorType,
     LANGUAGE_ID,
     registerDocumentDBQueryLanguage,
-    validateExpression,
-    type Diagnostic,
 } from '../../../query-language-support';
-
-/**
- * Converts a validator {@link Diagnostic} into a Monaco marker so syntax
- * problems surface as squiggles in the editor.
- */
-function toMonacoMarker(
-    diagnostic: Diagnostic,
-    model: monacoEditor.editor.ITextModel,
-    monaco: typeof monacoEditor,
-): monacoEditor.editor.IMarkerData {
-    const startPos = model.getPositionAt(diagnostic.startOffset);
-    const endPos = model.getPositionAt(diagnostic.endOffset);
-    return {
-        severity:
-            diagnostic.severity === 'error'
-                ? monaco.MarkerSeverity.Error
-                : diagnostic.severity === 'warning'
-                  ? monaco.MarkerSeverity.Warning
-                  : monaco.MarkerSeverity.Info,
-        message: diagnostic.message,
-        startLineNumber: startPos.lineNumber,
-        startColumn: startPos.column,
-        endLineNumber: endPos.lineNumber,
-        endColumn: endPos.column,
-    };
-}
 
 interface JsonInputEditorProps {
     /** Current text content of the editor. */
@@ -75,14 +47,15 @@ const monacoOptions: monacoEditor.editor.IStandaloneEditorConstructionOptions = 
  * A compact, plain-JSON editor for the Create Index drawer's advanced fields.
  *
  * It reuses the shared `documentdb-query` language purely for relaxed-JSON
- * highlighting and bracket handling. Completions and hover docs are suppressed
- * for the {@link EditorType.Json} model URI, so the editor makes no false
- * promise of smartness — it only accepts and syntax-checks JSON-like input.
+ * highlighting and bracket handling. Completions, hover docs, and validation
+ * are all suppressed for the {@link EditorType.Json} model URI, so the editor
+ * makes no false promise of smartness — it simply accepts JSON-like input,
+ * which the extension side parses (loosely) when the index is created.
  */
 export const JsonInputEditor = ({ value, onChange, placeholder, ariaLabel }: JsonInputEditorProps): JSX.Element => {
     const sessionId = useId();
     const onChangeRef = useRef(onChange);
-    const validationCleanupRef = useRef<(() => void) | null>(null);
+    const disposeRef = useRef<(() => void) | null>(null);
 
     useEffect(() => {
         onChangeRef.current = onChange;
@@ -90,7 +63,7 @@ export const JsonInputEditor = ({ value, onChange, placeholder, ariaLabel }: Jso
 
     useEffect(() => {
         return () => {
-            validationCleanupRef.current?.();
+            disposeRef.current?.();
         };
     }, []);
 
@@ -113,20 +86,10 @@ export const JsonInputEditor = ({ value, onChange, placeholder, ariaLabel }: Jso
                 }
                 editor.setModel(model);
 
-                // Debounced syntax validation → Monaco markers.
-                let validationTimeout: ReturnType<typeof setTimeout>;
                 const disposable = editor.onDidChangeModelContent(() => {
-                    const currentValue = editor.getValue();
-                    onChangeRef.current(currentValue);
-                    clearTimeout(validationTimeout);
-                    validationTimeout = setTimeout(() => {
-                        const diagnostics = validateExpression(currentValue);
-                        const markers = diagnostics.map((d) => toMonacoMarker(d, model, monaco));
-                        monaco.editor.setModelMarkers(model, 'documentdb-query', markers);
-                    }, 300);
+                    onChangeRef.current(editor.getValue());
                 });
-                validationCleanupRef.current = () => {
-                    clearTimeout(validationTimeout);
+                disposeRef.current = () => {
                     disposable.dispose();
                     model.dispose();
                 };

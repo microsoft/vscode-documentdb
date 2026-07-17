@@ -85,22 +85,6 @@ function isBTreeType(type: FieldIndexType): boolean {
  * Parse a JSON-object text field (partial filter / collation). Empty input is
  * valid (the option is simply omitted); non-empty input must be a JSON object.
  */
-function parseJsonObject(text: string): { value?: Record<string, unknown>; error?: string } {
-    const trimmed = text.trim();
-    if (trimmed === '') {
-        return {};
-    }
-    try {
-        const parsed: unknown = JSON.parse(trimmed);
-        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-            return { error: l10n.t('Enter a JSON object.') };
-        }
-        return { value: parsed as Record<string, unknown> };
-    } catch {
-        return { error: l10n.t('Invalid JSON.') };
-    }
-}
-
 /** A titled form section with a short explanation above its inputs. */
 function DrawerSection({ title, hint, children }: { title: string; hint?: string; children: ReactNode }): JSX.Element {
     return (
@@ -294,16 +278,13 @@ export const CreateIndexDrawer = ({
     // TTL is only valid on a single-field b-tree index.
     const isSingleBTree = completedRows.length === 1 && isBTreeType(completedRows[0].type);
 
-    const partial = useMemo(() => parseJsonObject(partialText), [partialText]);
-    const collation = useMemo(() => parseJsonObject(collationText), [collationText]);
-
-    // Sparse and a partial filter are mutually exclusive on the server.
-    const sparseDisabled = partial.value !== undefined;
+    // Sparse and a partial filter are mutually exclusive on the server. We only
+    // check for the presence of text — the extension side parses and validates it.
+    const sparseDisabled = partialText.trim() !== '';
     const ttlActive = ttlEnabled && isSingleBTree;
     const ttlNumberValid = !ttlActive || (ttlSeconds.trim() !== '' && Number.parseInt(ttlSeconds, 10) > 0);
 
     const advancedHasContent = partialText.trim() !== '' || collationText.trim() !== '';
-    const advancedHasError = partial.error !== undefined || collation.error !== undefined;
 
     // Which advanced settings are populated — surfaced on the entry so the user
     // can tell at a glance that something is configured behind it.
@@ -314,7 +295,7 @@ export const CreateIndexDrawer = ({
         .filter((part): part is string => part !== undefined)
         .join(' · ');
 
-    const canSubmit = completedRows.length > 0 && ttlNumberValid && !partial.error && !collation.error && !submitting;
+    const canSubmit = completedRows.length > 0 && ttlNumberValid && !submitting;
 
     // Assemble the payload once; shared by the direct create and the
     // playground/shell hand-offs so all three produce an identical index.
@@ -334,11 +315,11 @@ export const CreateIndexDrawer = ({
         if (ttlActive && ttlNumberValid) {
             payload.expireAfterSeconds = Number.parseInt(ttlSeconds, 10);
         }
-        if (partial.value) {
-            payload.partialFilterExpression = partial.value;
+        if (partialText.trim() !== '') {
+            payload.partialFilterExpression = partialText.trim();
         }
-        if (collation.value) {
-            payload.collation = collation.value;
+        if (collationText.trim() !== '') {
+            payload.collation = collationText.trim();
         }
         return payload;
     };
@@ -561,9 +542,7 @@ export const CreateIndexDrawer = ({
                                         : l10n.t('Partial filter expression, custom collation')}
                                 </span>
                             </span>
-                            {advancedHasError ? (
-                                <span className="advancedEntryBadge advancedEntryBadgeError">{l10n.t('Error')}</span>
-                            ) : advancedHasContent ? (
+                            {advancedHasContent ? (
                                 <span className="advancedEntryBadge advancedEntryBadgeSet">
                                     <CheckmarkCircleRegular />
                                     {l10n.t('Configured')}
@@ -578,31 +557,24 @@ export const CreateIndexDrawer = ({
                             title={l10n.t('Partial filter expression')}
                             hint={l10n.t('Only index documents that match this filter. Enter a JSON object.')}
                         >
-                            <Field validationState={partial.error ? 'error' : 'none'} validationMessage={partial.error}>
-                                <JsonInputEditor
-                                    value={partialText}
-                                    onChange={setPartialText}
-                                    placeholder={'{ "status": { "$eq": "active" } }'}
-                                    ariaLabel={l10n.t('Partial filter expression: enter a JSON object')}
-                                />
-                            </Field>
+                            <JsonInputEditor
+                                value={partialText}
+                                onChange={setPartialText}
+                                placeholder={'{ "status": { "$eq": "active" } }'}
+                                ariaLabel={l10n.t('Partial filter expression: enter a JSON object')}
+                            />
                         </DrawerSection>
 
                         <DrawerSection
                             title={l10n.t('Collation')}
                             hint={l10n.t('Language-specific comparison rules. Enter a JSON object.')}
                         >
-                            <Field
-                                validationState={collation.error ? 'error' : 'none'}
-                                validationMessage={collation.error}
-                            >
-                                <JsonInputEditor
-                                    value={collationText}
-                                    onChange={setCollationText}
-                                    placeholder={'{ "locale": "en", "strength": 2 }'}
-                                    ariaLabel={l10n.t('Collation: enter a JSON object')}
-                                />
-                            </Field>
+                            <JsonInputEditor
+                                value={collationText}
+                                onChange={setCollationText}
+                                placeholder={'{ "locale": "en", "strength": 2 }'}
+                                ariaLabel={l10n.t('Collation: enter a JSON object')}
+                            />
                         </DrawerSection>
                     </div>
                 )}

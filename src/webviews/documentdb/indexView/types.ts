@@ -79,6 +79,8 @@ export interface CreateIndexInput {
     unique?: boolean;
     sparse?: boolean;
     expireAfterSeconds?: number;
-    partialFilterExpression?: Record<string, unknown>;
-    collation?: Record<string, unknown>;
+    /** Raw partial-filter JSON text, parsed (loosely) on the extension side. */
+    partialFilterExpression?: string;
+    /** Raw collation JSON text, parsed (loosely) on the extension side. */
+    collation?: string;
 }

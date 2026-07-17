@@ -39,6 +39,7 @@
  * =============================================================================
  */
 
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
 import { ClustersClient, type IndexItemModel } from '../../../documentdb/ClustersClient';
@@ -83,8 +84,8 @@ const CreateIndexInputSchema = z.object({
     unique: z.boolean().optional(),
     sparse: z.boolean().optional(),
     expireAfterSeconds: z.number().int().nonnegative().optional(),
-    partialFilterExpression: z.record(z.string(), z.unknown()).optional(),
-    collation: z.record(z.string(), z.unknown()).optional(),
+    partialFilterExpression: z.string().optional(),
+    collation: z.string().optional(),
 });
 
 /** Convert a raw IndexItemModel to the IndexRow shape used by the webview. */
@@ -142,6 +143,30 @@ function fieldTypeToKeyValue(type: FieldIndexType): number | string {
 }
 
 /**
+ * Parse a raw JSON option string from the drawer into a plain object using the
+ * loose shell-BSON parser (unquoted keys, single quotes, BSON constructors are
+ * all accepted). Empty input yields `undefined`; anything that doesn't parse to
+ * a plain object throws a localized error surfaced by the create mutation.
+ */
+function parseOptionObject(text: string | undefined, label: string): Record<string, unknown> | undefined {
+    const trimmed = text?.trim();
+    if (!trimmed) {
+        return undefined;
+    }
+    let parsed: unknown;
+    try {
+        parsed = parseShellBSON(trimmed, { mode: ParseMode.Loose });
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(l10n.t('Invalid {0}: {1}', label, message));
+    }
+    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error(l10n.t('Invalid {0}: expected a JSON object.', label));
+    }
+    return parsed as Record<string, unknown>;
+}
+
+/**
  * Build an `IndexSpecification` from the drawer input. Each field carries its
  * own type (direction or sentinel); TTL, unique, sparse, partial filter and
  * collation are index-level options applied to the whole index.
@@ -166,11 +191,16 @@ function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
     if (typeof input.expireAfterSeconds === 'number') {
         spec.expireAfterSeconds = input.expireAfterSeconds;
     }
-    if (input.partialFilterExpression) {
-        spec.partialFilterExpression = input.partialFilterExpression;
+    const partialFilterExpression = parseOptionObject(
+        input.partialFilterExpression,
+        l10n.t('partial filter expression'),
+    );
+    if (partialFilterExpression) {
+        spec.partialFilterExpression = partialFilterExpression;
     }
-    if (input.collation) {
-        spec.collation = input.collation;
+    const collation = parseOptionObject(input.collation, l10n.t('collation'));
+    if (collation) {
+        spec.collation = collation;
     }
     return spec;
 }
