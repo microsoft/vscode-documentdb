@@ -134,19 +134,14 @@
         table-layout: fixed;
 
         // Leading status indicator in the name cell: a green check for ready
-        // indexes, or a compact spinner badge while building / creating.
+        // indexes, or a spinner (tooltip: Building/Creating index) while in progress.
         .indexStatusReady {
             color: var(--colorStatusSuccessForeground1);
             font-size: 16px;
         }
 
-        .indexStatusBadge {
+        .indexStatusSpinner {
             display: inline-flex;
-            align-items: center;
-            gap: 4px;
-            color: var(--colorNeutralForeground2);
-            font-size: var(--fontSizeBase200);
-            white-space: nowrap;
         }
 
         .colExpand {
