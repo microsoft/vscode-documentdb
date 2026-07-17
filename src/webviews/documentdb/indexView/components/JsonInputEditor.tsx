@@ -19,8 +19,6 @@ interface JsonInputEditorProps {
     value: string;
     /** Called with the new text whenever the content changes. */
     onChange: (value: string) => void;
-    /** Placeholder shown while the editor is empty. */
-    placeholder?: string;
     /** Accessible label announced to screen readers. */
     ariaLabel: string;
 }
@@ -52,7 +50,7 @@ const monacoOptions: monacoEditor.editor.IStandaloneEditorConstructionOptions = 
  * makes no false promise of smartness — it simply accepts JSON-like input,
  * which the extension side parses (loosely) when the index is created.
  */
-export const JsonInputEditor = ({ value, onChange, placeholder, ariaLabel }: JsonInputEditorProps): JSX.Element => {
+export const JsonInputEditor = ({ value, onChange, ariaLabel }: JsonInputEditorProps): JSX.Element => {
     const sessionId = useId();
     const onChangeRef = useRef(onChange);
     const disposeRef = useRef<(() => void) | null>(null);
@@ -73,7 +71,7 @@ export const JsonInputEditor = ({ value, onChange, placeholder, ariaLabel }: Jso
             width={'100%'}
             language={LANGUAGE_ID}
             adaptiveHeight={{ enabled: true, minLines: 2, maxLines: 8, lineHeight: 19 }}
-            options={{ ...monacoOptions, placeholder, ariaLabel }}
+            options={{ ...monacoOptions, ariaLabel }}
             onMount={(editor, monaco) => {
                 // Register the shared language (idempotent). No completion/hover
                 // callbacks are wired — this editor type serves none.

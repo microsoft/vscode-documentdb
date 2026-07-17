@@ -86,14 +86,36 @@ function isBTreeType(type: FieldIndexType): boolean {
  * valid (the option is simply omitted); non-empty input must be a JSON object.
  */
 /** A titled form section with a short explanation above its inputs. */
-function DrawerSection({ title, hint, children }: { title: string; hint?: string; children: ReactNode }): JSX.Element {
+function DrawerSection({
+    title,
+    hint,
+    example,
+    children,
+}: {
+    title: string;
+    hint?: string;
+    /** A small, always-visible example rendered in monospace above the inputs. */
+    example?: string;
+    children: ReactNode;
+}): JSX.Element {
     return (
         <section className="drawerSection">
             <div className="drawerSectionTitle">{title}</div>
             {hint && <div className="drawerSectionHint">{hint}</div>}
+            {example && <code className="drawerSectionExample">{example}</code>}
             <div className="drawerSectionBody">{children}</div>
         </section>
     );
+}
+
+/**
+ * True when the text is either empty or an empty JSON object (`{}` with any
+ * inner/outer whitespace). Such values are treated as "not set" so they never
+ * mark the Advanced section as configured or get sent to the server.
+ */
+function isBlankJsonObject(text: string): boolean {
+    const trimmed = text.trim();
+    return trimmed === '' || /^\{\s*\}$/.test(trimmed);
 }
 
 /**
@@ -230,8 +252,8 @@ export const CreateIndexDrawer = ({
     const [ttlEnabled, setTtlEnabled] = useState(false);
     // Seeded with a sensible default so the TTL input never opens in an error state.
     const [ttlSeconds, setTtlSeconds] = useState<string>('3600');
-    const [partialText, setPartialText] = useState('');
-    const [collationText, setCollationText] = useState('');
+    const [partialText, setPartialText] = useState('{  }');
+    const [collationText, setCollationText] = useState('{  }');
     const [submitting, setSubmitting] = useState(false);
 
     const typeLabels = useMemo(() => buildTypeLabels(), []);
@@ -245,8 +267,8 @@ export const CreateIndexDrawer = ({
         setSparse(false);
         setTtlEnabled(false);
         setTtlSeconds('3600');
-        setPartialText('');
-        setCollationText('');
+        setPartialText('{  }');
+        setCollationText('{  }');
         setSubmitting(false);
     };
 
@@ -279,12 +301,12 @@ export const CreateIndexDrawer = ({
     const isSingleBTree = completedRows.length === 1 && isBTreeType(completedRows[0].type);
 
     // Sparse and a partial filter are mutually exclusive on the server. We only
-    // check for the presence of text — the extension side parses and validates it.
-    const sparseDisabled = partialText.trim() !== '';
+    // check for meaningful content — the extension side parses and validates it.
+    const sparseDisabled = !isBlankJsonObject(partialText);
     const ttlActive = ttlEnabled && isSingleBTree;
     const ttlNumberValid = !ttlActive || (ttlSeconds.trim() !== '' && Number.parseInt(ttlSeconds, 10) > 0);
 
-    const advancedHasContent = partialText.trim() !== '' || collationText.trim() !== '';
+    const advancedHasContent = !isBlankJsonObject(partialText) || !isBlankJsonObject(collationText);
 
     // Which advanced settings are populated — surfaced on the entry so the user
     // can tell at a glance that something is configured behind it.
@@ -315,10 +337,10 @@ export const CreateIndexDrawer = ({
         if (ttlActive && ttlNumberValid) {
             payload.expireAfterSeconds = Number.parseInt(ttlSeconds, 10);
         }
-        if (partialText.trim() !== '') {
+        if (!isBlankJsonObject(partialText)) {
             payload.partialFilterExpression = partialText.trim();
         }
-        if (collationText.trim() !== '') {
+        if (!isBlankJsonObject(collationText)) {
             payload.collation = collationText.trim();
         }
         return payload;
@@ -556,11 +578,11 @@ export const CreateIndexDrawer = ({
                         <DrawerSection
                             title={l10n.t('Partial filter expression')}
                             hint={l10n.t('Only index documents that match this filter. Enter a JSON object.')}
+                            example={'{ "status": { "$eq": "active" } }'}
                         >
                             <JsonInputEditor
                                 value={partialText}
                                 onChange={setPartialText}
-                                placeholder={'{ "status": { "$eq": "active" } }'}
                                 ariaLabel={l10n.t('Partial filter expression: enter a JSON object')}
                             />
                         </DrawerSection>
@@ -568,11 +590,11 @@ export const CreateIndexDrawer = ({
                         <DrawerSection
                             title={l10n.t('Collation')}
                             hint={l10n.t('Language-specific comparison rules. Enter a JSON object.')}
+                            example={'{ "locale": "en", "strength": 2 }'}
                         >
                             <JsonInputEditor
                                 value={collationText}
                                 onChange={setCollationText}
-                                placeholder={'{ "locale": "en", "strength": 2 }'}
                                 ariaLabel={l10n.t('Collation: enter a JSON object')}
                             />
                         </DrawerSection>

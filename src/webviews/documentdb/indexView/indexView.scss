@@ -363,6 +363,15 @@
         font-size: var(--fontSizeBase200);
     }
 
+    // A small, always-visible worked example shown above the editor.
+    .drawerSectionExample {
+        color: var(--colorNeutralForeground3);
+        font-family: var(--fontFamilyMonospace);
+        font-size: var(--fontSizeBase200);
+        white-space: pre-wrap;
+        word-break: break-word;
+    }
+
     .drawerSectionBody {
         display: flex;
         flex-direction: column;
