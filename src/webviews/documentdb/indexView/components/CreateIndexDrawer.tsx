@@ -25,6 +25,7 @@ import {
     AddRegular,
     ArrowLeftRegular,
     ArrowResetRegular,
+    CheckmarkCircleRegular,
     ChevronRightRegular,
     DeleteRegular,
     PanelRightContractRegular,
@@ -140,7 +141,8 @@ export const CreateIndexDrawer = ({
     const [unique, setUnique] = useState(false);
     const [sparse, setSparse] = useState(false);
     const [ttlEnabled, setTtlEnabled] = useState(false);
-    const [ttlSeconds, setTtlSeconds] = useState<string>('');
+    // Seeded with a sensible default so the TTL input never opens in an error state.
+    const [ttlSeconds, setTtlSeconds] = useState<string>('3600');
     const [partialText, setPartialText] = useState('');
     const [collationText, setCollationText] = useState('');
     const [submitting, setSubmitting] = useState(false);
@@ -154,7 +156,7 @@ export const CreateIndexDrawer = ({
         setUnique(false);
         setSparse(false);
         setTtlEnabled(false);
-        setTtlSeconds('');
+        setTtlSeconds('3600');
         setPartialText('');
         setCollationText('');
         setSubmitting(false);
@@ -198,6 +200,15 @@ export const CreateIndexDrawer = ({
 
     const advancedHasContent = partialText.trim() !== '' || collationText.trim() !== '';
     const advancedHasError = partial.error !== undefined || collation.error !== undefined;
+
+    // Which advanced settings are populated — surfaced on the entry so the user
+    // can tell at a glance that something is configured behind it.
+    const advancedSummary = [
+        partialText.trim() !== '' ? l10n.t('Partial filter') : undefined,
+        collationText.trim() !== '' ? l10n.t('Collation') : undefined,
+    ]
+        .filter((part): part is string => part !== undefined)
+        .join(' · ');
 
     const canSubmit = completedRows.length > 0 && ttlNumberValid && !partial.error && !collation.error && !submitting;
 
@@ -341,21 +352,16 @@ export const CreateIndexDrawer = ({
                                                 </Option>
                                             ))}
                                         </Dropdown>
-                                        {fields.length > 1 && (
-                                            <Tooltip
-                                                content={l10n.t('Remove field')}
-                                                relationship="description"
-                                                withArrow
-                                            >
-                                                <Button
-                                                    appearance="subtle"
-                                                    size="small"
-                                                    icon={<DeleteRegular />}
-                                                    aria-label={l10n.t('Remove field')}
-                                                    onClick={() => removeField(draft.id)}
-                                                />
-                                            </Tooltip>
-                                        )}
+                                        <Tooltip content={l10n.t('Remove field')} relationship="description" withArrow>
+                                            <Button
+                                                appearance="subtle"
+                                                size="small"
+                                                icon={<DeleteRegular />}
+                                                aria-label={l10n.t('Remove field')}
+                                                disabled={fields.length <= 1}
+                                                onClick={() => removeField(draft.id)}
+                                            />
+                                        </Tooltip>
                                     </div>
                                 ))}
                             </div>
@@ -402,23 +408,25 @@ export const CreateIndexDrawer = ({
                                         </div>
                                     )}
                                     {ttlActive && (
-                                        <Field
-                                            label={l10n.t('Expire after (seconds)')}
-                                            required
-                                            validationState={ttlNumberValid ? 'none' : 'error'}
-                                            validationMessage={
-                                                ttlNumberValid
-                                                    ? undefined
-                                                    : l10n.t('Enter a positive number of seconds.')
-                                            }
-                                        >
-                                            <Input
-                                                type="number"
-                                                min={1}
-                                                value={ttlSeconds}
-                                                onChange={(e) => setTtlSeconds(e.target.value)}
-                                            />
-                                        </Field>
+                                        <div className="optionRevealed">
+                                            <Field
+                                                label={l10n.t('Expire after (seconds)')}
+                                                required
+                                                validationState={ttlNumberValid ? 'none' : 'error'}
+                                                validationMessage={
+                                                    ttlNumberValid
+                                                        ? undefined
+                                                        : l10n.t('Enter a positive number of seconds.')
+                                                }
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    value={ttlSeconds}
+                                                    onChange={(e) => setTtlSeconds(e.target.value)}
+                                                />
+                                            </Field>
+                                        </div>
                                     )}
                                 </div>
                             </div>
@@ -442,13 +450,18 @@ export const CreateIndexDrawer = ({
                             <span className="advancedEntryText">
                                 <span className="advancedEntryTitle">{l10n.t('Advanced settings')}</span>
                                 <span className="advancedEntrySub">
-                                    {l10n.t('Partial filter expression, custom collation')}
+                                    {advancedSummary !== ''
+                                        ? advancedSummary
+                                        : l10n.t('Partial filter expression, custom collation')}
                                 </span>
                             </span>
                             {advancedHasError ? (
                                 <span className="advancedEntryBadge advancedEntryBadgeError">{l10n.t('Error')}</span>
                             ) : advancedHasContent ? (
-                                <span className="advancedEntryBadge">{l10n.t('Set')}</span>
+                                <span className="advancedEntryBadge advancedEntryBadgeSet">
+                                    <CheckmarkCircleRegular />
+                                    {l10n.t('Configured')}
+                                </span>
                             ) : null}
                             <ChevronRightRegular className="advancedEntryChevron" />
                         </button>
@@ -490,12 +503,25 @@ export const CreateIndexDrawer = ({
             </DrawerBody>
 
             <div className="createIndexDrawerFooter">
-                <Button appearance="primary" onClick={() => void handleSubmit()} disabled={!canSubmit}>
-                    {submitting ? l10n.t('Creating…') : l10n.t('Create Index')}
-                </Button>
-                <Button appearance="secondary" icon={<ArrowResetRegular />} disabled={submitting} onClick={reset}>
-                    {l10n.t('Reset form')}
-                </Button>
+                {page === 'advanced' ? (
+                    <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => setPage('main')}>
+                        {l10n.t('Back to Create Index')}
+                    </Button>
+                ) : (
+                    <>
+                        <Button appearance="primary" onClick={() => void handleSubmit()} disabled={!canSubmit}>
+                            {submitting ? l10n.t('Creating…') : l10n.t('Create Index')}
+                        </Button>
+                        <Button
+                            appearance="secondary"
+                            icon={<ArrowResetRegular />}
+                            disabled={submitting}
+                            onClick={reset}
+                        >
+                            {l10n.t('Reset form')}
+                        </Button>
+                    </>
+                )}
             </div>
         </OverlayDrawer>
     );

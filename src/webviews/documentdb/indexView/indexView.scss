@@ -385,10 +385,12 @@
         min-width: 0;
     }
 
-    // The per-field type dropdown has a fixed, compact width.
+    // The per-field type dropdown is wide enough to hold the longest option
+    // label ("Geospatial (2dsphere)") on a single line without wrapping.
     .fieldType {
-        flex: 0 0 180px;
+        flex: 0 0 210px;
         min-width: 0;
+        white-space: nowrap;
     }
 
     .typeOptions {
@@ -407,9 +409,14 @@
         row-gap: 6px;
     }
 
+    // Hint text and revealed inputs align with the switch label (past the toggle).
     .optionHint {
         color: var(--colorNeutralForeground3);
         font-size: var(--fontSizeBase200);
+        padding-left: 44px;
+    }
+
+    .optionRevealed {
         padding-left: 44px;
     }
 
@@ -463,11 +470,19 @@
 
     .advancedEntryBadge {
         flex-shrink: 0;
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
         font-size: var(--fontSizeBase200);
         padding: 2px 8px;
         border-radius: 10px;
         background-color: var(--colorNeutralBackground4);
         color: var(--colorNeutralForeground2);
+    }
+
+    .advancedEntryBadgeSet {
+        background-color: var(--colorStatusSuccessBackground2);
+        color: var(--colorStatusSuccessForeground2);
     }
 
     .advancedEntryBadgeError {
