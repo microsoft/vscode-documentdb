@@ -461,22 +461,24 @@ export const CreateIndexDrawer = ({
                         >
                             <div className="typeOptions">
                                 <OptionRow
-                                    label={l10n.t('Unique (rejects duplicate values)')}
+                                    label={l10n.t('Unique - rejects duplicate values')}
                                     checked={unique}
                                     onToggle={setUnique}
                                 />
                                 <OptionRow
-                                    label={l10n.t('Sparse (only indexes documents that contain the field)')}
+                                    label={l10n.t('Sparse - only indexes documents that contain the field')}
                                     checked={sparse && !sparseDisabled}
                                     disabled={sparseDisabled}
-                                    disabledReason={l10n.t('Not available together with a partial filter expression.')}
+                                    disabledReason={l10n.t(
+                                        'Sparse is not available together with a partial filter expression.',
+                                    )}
                                     onToggle={setSparse}
                                 />
                                 <OptionRow
-                                    label={l10n.t('TTL (auto-deletes documents after a set age)')}
+                                    label={l10n.t('TTL - auto-deletes documents after a set age')}
                                     checked={ttlActive}
                                     disabled={!isSingleBTree}
-                                    disabledReason={l10n.t('Requires a single ascending or descending field.')}
+                                    disabledReason={l10n.t('TTL Requires a single ascending or descending field.')}
                                     onToggle={setTtlEnabled}
                                 >
                                     {ttlActive && (
@@ -500,7 +502,7 @@ export const CreateIndexDrawer = ({
                                     )}
                                 </OptionRow>
                                 <OptionRow
-                                    label={l10n.t('Name (use a custom index name)')}
+                                    label={l10n.t('Name - use a custom index name')}
                                     checked={nameEnabled}
                                     onToggle={setNameEnabled}
                                 >
