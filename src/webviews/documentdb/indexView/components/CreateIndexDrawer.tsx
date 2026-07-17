@@ -139,7 +139,10 @@ function OptionRow({
                 checked={checked}
                 disabled={disabled}
                 onChange={(_, data) => onToggle(data.checked)}
-                label={label}
+                // The small size shrinks the label to fontSizeBase200; override just
+                // the font-size back to the default via the label slot, keeping the
+                // small line-height so the label stays aligned with the toggle.
+                label={{ children: label, className: 'optionSwitchLabel' }}
             />
             {hasDetail && (
                 <div className="optionDetail">

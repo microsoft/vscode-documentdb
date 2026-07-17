@@ -413,6 +413,14 @@
         row-gap: 0;
     }
 
+    // Restore the default label font-size on the small switch. Only the font
+    // size is overridden (not line-height) so the compact small line box — and
+    // thus the label's vertical alignment with the toggle — is preserved. The
+    // two-class selector outweighs Fluent's single-class size style.
+    .optionSwitchLabel {
+        font-size: var(--fontSizeBase300);
+    }
+
     // The one place to tune the layout of every option's description, disabled
     // reason, and revealed input. Aligns past the toggle with 20px of extra
     // breathing room so the content sits clear of the switch label.
