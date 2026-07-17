@@ -3,21 +3,41 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Badge, Button, Card } from '@fluentui/react-components';
+import { Badge, Button, Card, Tooltip } from '@fluentui/react-components';
 import { EyeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
+import '../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
 import { formatDate, formatOps } from '../../utils/format';
 
-/** Direction glyph + accessible wording for a single key entry. */
-function describeDirection(direction: number | string): { glyph: string; aria: string } {
-    if (direction === 1) return { glyph: '↑', aria: l10n.t('ascending') };
-    if (direction === -1) return { glyph: '↓', aria: l10n.t('descending') };
-    // Special index kinds (text / 2dsphere / 2d / hashed …) carry the kind as
-    // the "direction" value — surface it verbatim.
-    return { glyph: String(direction), aria: String(direction) };
+/**
+ * Describe a single key entry: the compact glyph shown on the badge and the
+ * plain-language name of the index type for the tooltip / screen readers.
+ * `↑`/`↓` are obvious to some but not everyone, so the words carry the meaning.
+ */
+function describeKeyType(direction: number | string): { glyph: string; label: string } {
+    if (direction === 1) {
+        return { glyph: '↑', label: l10n.t('ascending') };
+    }
+    if (direction === -1) {
+        return { glyph: '↓', label: l10n.t('descending') };
+    }
+    switch (direction) {
+        case 'text':
+            return { glyph: 'text', label: l10n.t('text') };
+        case '2dsphere':
+            return { glyph: '2dsphere', label: l10n.t('2dsphere (geospatial)') };
+        case '2d':
+            return { glyph: '2d', label: l10n.t('2d (geospatial)') };
+        case 'geoHaystack':
+            return { glyph: 'geoHaystack', label: l10n.t('geoHaystack (geospatial)') };
+        case 'hashed':
+            return { glyph: 'hashed', label: l10n.t('hashed') };
+        default:
+            return { glyph: String(direction), label: String(direction) };
+    }
 }
 
 export interface IndexRowDetailsProps {
@@ -63,22 +83,32 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
             <div className="detailSection">
                 <div className="keyBadges" role="group" aria-label={l10n.t('Indexed fields')}>
                     {index.key.map(({ field, direction }) => {
-                        const { glyph, aria } = describeDirection(direction);
+                        const { glyph, label } = describeKeyType(direction);
+                        const description = l10n.t('Field "{0}", {1} index', field, label);
                         return (
-                            <Badge
+                            <Tooltip
                                 key={`${field}:${String(direction)}`}
-                                className="keyBadge"
-                                appearance="tint"
-                                color="informative"
-                                shape="rounded"
-                                size="medium"
-                                aria-label={l10n.t('{0}, {1}', field, aria)}
+                                content={description}
+                                relationship="label"
+                                withArrow
                             >
-                                <span className="keyBadgeField">{field}</span>
-                                <span className="keyBadgeDir" aria-hidden="true">
-                                    {glyph}
-                                </span>
-                            </Badge>
+                                <Badge
+                                    className="keyBadge focusableBadge"
+                                    appearance="tint"
+                                    color="informative"
+                                    shape="rounded"
+                                    size="medium"
+                                    tabIndex={0}
+                                    aria-label={description}
+                                >
+                                    <span className="keyBadgeField" aria-hidden="true">
+                                        {field}
+                                    </span>
+                                    <span className="keyBadgeDir" aria-hidden="true">
+                                        {glyph}
+                                    </span>
+                                </Badge>
+                            </Tooltip>
                         );
                     })}
                 </div>
