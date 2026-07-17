@@ -108,12 +108,12 @@ export const IndexList = ({
                 ) : (
                     <IndexTable indexes={shown} onDelete={onDelete} onToggleHidden={onToggleHidden} />
                 )}
+                {!isLoading && (
+                    <div className="indexListCount" aria-live="polite">
+                        {l10n.t('Showing {0} of {1} indexes', shown.length, indexes.length)}
+                    </div>
+                )}
             </div>
-            {!isLoading && (
-                <div className="indexListCount" aria-live="polite">
-                    {l10n.t('Showing {0} of {1} indexes', shown.length, indexes.length)}
-                </div>
-            )}
         </div>
     );
 };

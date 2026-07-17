@@ -10,7 +10,12 @@
 
     display: flex;
     flex-direction: column;
-    height: 100vh;
+    // Fill the height left over in the CollectionView flex column (below the
+    // toolbar and tab strip) rather than claiming the full viewport — a 100vh
+    // here would overflow the clipped parent and push the list's footer count
+    // out of reach.
+    flex: 1 1 auto;
+    min-height: 0;
     row-gap: 10px;
     padding-top: 10px;
 
@@ -59,10 +64,12 @@
         }
     }
 
-    // The table area only takes the height it needs (it scrolls when tall), so
-    // the count below shifts up as the list shrinks rather than staying pinned.
+    // The scrollable list region. It fills the height left over below the
+    // filter row and scrolls internally when the table is tall. The "showing
+    // X of Y" count lives inside this area (after the table) so it scrolls
+    // into view at the end of the list rather than being pinned out of reach.
     .indexContentContainer {
-        flex: 0 1 auto;
+        flex: 1 1 auto;
         min-height: 0;
         overflow: auto;
         // Reserve space for the vertical scrollbar at all times so expanding a
@@ -72,11 +79,11 @@
         padding: 0 10px;
     }
 
-    // Centered "showing X of Y" count, sized so it's clearly visible.
+    // Centered "showing X of Y" count, sized so it's clearly visible. Rendered
+    // at the bottom of the scrollable list area.
     .indexListCount {
-        flex-shrink: 0;
         text-align: center;
-        padding: 4px 10px;
+        padding: 8px 10px 4px;
         color: var(--colorNeutralForeground2);
         font-size: var(--fontSizeBase300);
     }
@@ -99,6 +106,7 @@
     // Wraps the top-of-dashboard summary cards. The MetricsRow grid itself
     // has no horizontal padding, so we align it with the table's gutter here.
     .indexMetricsRowContainer {
+        flex-shrink: 0;
         padding: 0 10px;
     }
 
