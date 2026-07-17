@@ -402,22 +402,26 @@
         border-radius: 4px;
     }
 
-    // A single option (switch) plus any inline hint / revealed input.
+    // A single option: the switch plus its indented detail container.
     .optionItem {
         display: flex;
         flex-direction: column;
         row-gap: 6px;
     }
 
-    // Hint text and revealed inputs align with the switch label (past the toggle).
-    .optionHint {
-        color: var(--colorNeutralForeground3);
-        font-size: var(--fontSizeBase200);
-        padding-left: 44px;
+    // The one place to tune the layout of every option's description, disabled
+    // reason, and revealed input. Aligns past the toggle with 20px of extra
+    // breathing room so the content sits clear of the switch label.
+    .optionDetail {
+        display: flex;
+        flex-direction: column;
+        row-gap: 6px;
+        padding-left: 64px;
     }
 
-    .optionRevealed {
-        padding-left: 44px;
+    .optionDescription {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
     }
 
     // "Advanced settings ›" navigation entry that pushes the advanced sub-page.

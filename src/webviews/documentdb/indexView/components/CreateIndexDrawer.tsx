@@ -108,6 +108,48 @@ function DrawerSection({ title, hint, children }: { title: string; hint?: string
     );
 }
 
+/**
+ * One index-level option: a compact switch with a short label, an always-on
+ * description, an optional reason shown when the option is disabled, and any
+ * revealed input. Everything below the switch lives in a single
+ * `.optionDetail` container so the indentation and spacing are tuned in one
+ * place rather than per option.
+ */
+function OptionRow({
+    label,
+    description,
+    checked,
+    disabled = false,
+    disabledReason,
+    onToggle,
+    children,
+}: {
+    label: string;
+    description: string;
+    checked: boolean;
+    disabled?: boolean;
+    disabledReason?: string;
+    onToggle: (checked: boolean) => void;
+    children?: ReactNode;
+}): JSX.Element {
+    return (
+        <div className="optionItem">
+            <Switch
+                size="small"
+                checked={checked}
+                disabled={disabled}
+                onChange={(_, data) => onToggle(data.checked)}
+                label={label}
+            />
+            <div className="optionDetail">
+                <div className="optionDescription">{description}</div>
+                {disabled && disabledReason !== undefined && <div className="optionDescription">{disabledReason}</div>}
+                {children}
+            </div>
+        </div>
+    );
+}
+
 export interface CreateIndexDrawerProps {
     open: boolean;
     /** Suggested field names from the schema scanner. */
@@ -138,6 +180,7 @@ export const CreateIndexDrawer = ({
     const [page, setPage] = useState<DrawerPage>('main');
     const [fields, setFields] = useState<FieldDraft[]>([INITIAL_FIELD()]);
     const [name, setName] = useState('');
+    const [nameEnabled, setNameEnabled] = useState(false);
     const [unique, setUnique] = useState(false);
     const [sparse, setSparse] = useState(false);
     const [ttlEnabled, setTtlEnabled] = useState(false);
@@ -153,6 +196,7 @@ export const CreateIndexDrawer = ({
         setPage('main');
         setFields([INITIAL_FIELD()]);
         setName('');
+        setNameEnabled(false);
         setUnique(false);
         setSparse(false);
         setTtlEnabled(false);
@@ -220,8 +264,10 @@ export const CreateIndexDrawer = ({
         try {
             const payload: CreateIndexInput = {
                 fields: completedRows.map((r) => ({ field: r.field.trim(), type: r.type })),
-                name: name.trim() || undefined,
             };
+            if (nameEnabled && name.trim() !== '') {
+                payload.name = name.trim();
+            }
             if (unique) {
                 payload.unique = true;
             }
@@ -377,72 +423,67 @@ export const CreateIndexDrawer = ({
                             hint={l10n.t('Index-level properties applied to the whole index.')}
                         >
                             <div className="typeOptions">
-                                <Switch
+                                <OptionRow
+                                    label={l10n.t('Unique')}
+                                    description={l10n.t(
+                                        'Reject documents with duplicate values for the indexed fields.',
+                                    )}
                                     checked={unique}
-                                    onChange={(_, data) => setUnique(data.checked)}
-                                    label={l10n.t('Unique — reject duplicate values')}
+                                    onToggle={setUnique}
                                 />
-                                <div className="optionItem">
-                                    <Switch
-                                        checked={sparse && !sparseDisabled}
-                                        disabled={sparseDisabled}
-                                        onChange={(_, data) => setSparse(data.checked)}
-                                        label={l10n.t('Sparse — only index documents that contain the field')}
-                                    />
-                                    {sparseDisabled && (
-                                        <div className="optionHint">
-                                            {l10n.t('Not available together with a partial filter expression.')}
-                                        </div>
-                                    )}
-                                </div>
-                                <div className="optionItem">
-                                    <Switch
-                                        checked={ttlActive}
-                                        disabled={!isSingleBTree}
-                                        onChange={(_, data) => setTtlEnabled(data.checked)}
-                                        label={l10n.t('TTL — automatically delete documents after an age')}
-                                    />
-                                    {!isSingleBTree && (
-                                        <div className="optionHint">
-                                            {l10n.t('TTL requires a single ascending or descending field.')}
-                                        </div>
-                                    )}
+                                <OptionRow
+                                    label={l10n.t('Sparse')}
+                                    description={l10n.t('Only index documents that contain the indexed field.')}
+                                    checked={sparse && !sparseDisabled}
+                                    disabled={sparseDisabled}
+                                    disabledReason={l10n.t('Not available together with a partial filter expression.')}
+                                    onToggle={setSparse}
+                                />
+                                <OptionRow
+                                    label={l10n.t('TTL')}
+                                    description={l10n.t('Automatically delete documents after they reach a given age.')}
+                                    checked={ttlActive}
+                                    disabled={!isSingleBTree}
+                                    disabledReason={l10n.t('Requires a single ascending or descending field.')}
+                                    onToggle={setTtlEnabled}
+                                >
                                     {ttlActive && (
-                                        <div className="optionRevealed">
-                                            <Field
-                                                label={l10n.t('Expire after (seconds)')}
-                                                required
-                                                validationState={ttlNumberValid ? 'none' : 'error'}
-                                                validationMessage={
-                                                    ttlNumberValid
-                                                        ? undefined
-                                                        : l10n.t('Enter a positive number of seconds.')
-                                                }
-                                            >
-                                                <Input
-                                                    type="number"
-                                                    min={1}
-                                                    value={ttlSeconds}
-                                                    onChange={(e) => setTtlSeconds(e.target.value)}
-                                                />
-                                            </Field>
-                                        </div>
+                                        <Field
+                                            label={l10n.t('Expire after (seconds)')}
+                                            required
+                                            validationState={ttlNumberValid ? 'none' : 'error'}
+                                            validationMessage={
+                                                ttlNumberValid
+                                                    ? undefined
+                                                    : l10n.t('Enter a positive number of seconds.')
+                                            }
+                                        >
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                value={ttlSeconds}
+                                                onChange={(e) => setTtlSeconds(e.target.value)}
+                                            />
+                                        </Field>
                                     )}
-                                </div>
+                                </OptionRow>
+                                <OptionRow
+                                    label={l10n.t('Name')}
+                                    description={l10n.t('Set a custom index name instead of the generated one.')}
+                                    checked={nameEnabled}
+                                    onToggle={setNameEnabled}
+                                >
+                                    {nameEnabled && (
+                                        <Field>
+                                            <Input
+                                                value={name}
+                                                placeholder={l10n.t('Index name')}
+                                                onChange={(e) => setName(e.target.value)}
+                                            />
+                                        </Field>
+                                    )}
+                                </OptionRow>
                             </div>
-                        </DrawerSection>
-
-                        <DrawerSection
-                            title={l10n.t('Name')}
-                            hint={l10n.t('Optional. If left empty, the server generates a name from the field list.')}
-                        >
-                            <Field>
-                                <Input
-                                    value={name}
-                                    placeholder={l10n.t('Index name')}
-                                    onChange={(e) => setName(e.target.value)}
-                                />
-                            </Field>
                         </DrawerSection>
 
                         <button type="button" className="advancedEntry" onClick={() => setPage('advanced')}>
