@@ -6,6 +6,7 @@
 import {
     Button,
     Combobox,
+    Divider,
     DrawerBody,
     DrawerHeader,
     DrawerHeaderTitle,
@@ -640,6 +641,7 @@ export const CreateIndexDrawer = ({
                                 onClick={() => void handleCreateIn('shell')}
                             />
                         </Tooltip>
+                        <Divider vertical className="createIndexFooterDivider" />
                         <Button
                             appearance="secondary"
                             icon={<ArrowResetRegular />}
