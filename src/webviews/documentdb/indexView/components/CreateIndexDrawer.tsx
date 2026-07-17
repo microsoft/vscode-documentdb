@@ -12,21 +12,14 @@ import {
     Dropdown,
     Field,
     Input,
-    Menu,
-    MenuItem,
-    MenuList,
-    MenuPopover,
-    MenuTrigger,
     MessageBar,
     MessageBarBody,
     MessageBarTitle,
     Option,
     OverlayDrawer,
-    SplitButton,
     Switch,
     Textarea,
     Tooltip,
-    type MenuButtonProps,
 } from '@fluentui/react-components';
 import {
     AddRegular,
@@ -37,6 +30,7 @@ import {
     DeleteRegular,
     KeyboardRegular,
     PanelRightContractRegular,
+    SendRegular,
     SettingsRegular,
     WindowConsoleRegular,
 } from '@fluentui/react-icons';
@@ -620,43 +614,32 @@ export const CreateIndexDrawer = ({
                     </Button>
                 ) : (
                     <>
-                        <Menu positioning="below-end">
-                            <MenuTrigger disableButtonEnhancement>
-                                {(triggerProps: MenuButtonProps) => (
-                                    <SplitButton
-                                        appearance="primary"
-                                        menuButton={triggerProps}
-                                        primaryActionButton={{
-                                            onClick: () => void handleSubmit(),
-                                            disabled: !canSubmit,
-                                        }}
-                                    >
-                                        {submitting ? l10n.t('Creating…') : l10n.t('Create Index')}
-                                    </SplitButton>
-                                )}
-                            </MenuTrigger>
-                            <MenuPopover>
-                                <MenuList>
-                                    <MenuItem disabled={!canSubmit} onClick={() => void handleSubmit()}>
-                                        {l10n.t('Create Index')}
-                                    </MenuItem>
-                                    <MenuItem
-                                        icon={<KeyboardRegular />}
-                                        disabled={!canSubmit}
-                                        onClick={() => void handleCreateIn('playground')}
-                                    >
-                                        {l10n.t('Create in the playground')}
-                                    </MenuItem>
-                                    <MenuItem
-                                        icon={<WindowConsoleRegular />}
-                                        disabled={!canSubmit}
-                                        onClick={() => void handleCreateIn('shell')}
-                                    >
-                                        {l10n.t('Create in the shell')}
-                                    </MenuItem>
-                                </MenuList>
-                            </MenuPopover>
-                        </Menu>
+                        <Button
+                            appearance="primary"
+                            icon={<SendRegular />}
+                            onClick={() => void handleSubmit()}
+                            disabled={!canSubmit}
+                        >
+                            {submitting ? l10n.t('Creating…') : l10n.t('Create Index')}
+                        </Button>
+                        <Tooltip content={l10n.t('Create in the playground')} relationship="label" withArrow>
+                            <Button
+                                appearance="secondary"
+                                icon={<KeyboardRegular />}
+                                aria-label={l10n.t('Create in the playground')}
+                                disabled={!canSubmit}
+                                onClick={() => void handleCreateIn('playground')}
+                            />
+                        </Tooltip>
+                        <Tooltip content={l10n.t('Create in the shell')} relationship="label" withArrow>
+                            <Button
+                                appearance="secondary"
+                                icon={<WindowConsoleRegular />}
+                                aria-label={l10n.t('Create in the shell')}
+                                disabled={!canSubmit}
+                                onClick={() => void handleCreateIn('shell')}
+                            />
+                        </Tooltip>
                         <Button
                             appearance="secondary"
                             icon={<ArrowResetRegular />}
