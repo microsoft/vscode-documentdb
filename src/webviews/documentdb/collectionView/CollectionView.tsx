@@ -730,7 +730,7 @@ export const CollectionView = (): JSX.Element => {
                     </>
                 )}
 
-                {selectedTab === 'tab_indexes' && <IndexesTab collectionName={configuration.collectionName} />}
+                {selectedTab === 'tab_indexes' && <IndexesTab />}
 
                 {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
             </div>

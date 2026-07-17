@@ -7,13 +7,13 @@ import { ProgressBar } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
-import { ConfirmDialog } from './components/ConfirmDialog';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList } from './components/indexList';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
 import { OPEN_CREATE_INDEX_EVENT, REFRESH_INDEXES_EVENT } from './constants';
 import './indexView.scss';
 import { type CreateIndexInput, type IndexRow } from './types';
+import { formatBytes, formatOps } from './utils/format';
 
 /**
  * Discriminated union describing which dialog (if any) is currently open
@@ -21,31 +21,22 @@ import { type CreateIndexInput, type IndexRow } from './types';
  * variable avoids three otherwise-correlated boolean flags drifting out
  * of sync.
  */
-type ModalState = { kind: 'none' } | { kind: 'create' } | { kind: 'delete'; index: IndexRow };
-
-export interface IndexesTabProps {
-    /** Display name shown in dialog copy and used to scope tRPC calls server-side. */
-    collectionName: string;
-}
+type ModalState = { kind: 'none' } | { kind: 'create' };
 
 /**
  * Index Management panel rendered inside the CollectionView's tab strip
  * (between "Results" and "Query Insights"). Talks to the shared
  * `mongoClusters.indexView.*` tRPC router — the procedures pick up the
  * cluster / db / collection coordinates from the CollectionView's
- * router context, so this component only needs the collection name for
- * UI copy.
+ * router context, so this component needs no props of its own.
  */
-export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => {
+export const IndexesTab = (): JSX.Element => {
     const trpcClient = useTrpcClient();
 
-    // Index list, loading state, and the unified dialog state. Dialog
-    // operations also expose a separate `modalBusy` flag so the dialog
-    // can disable its buttons while a mutation is in flight.
+    // Index list, loading state, and the unified dialog state.
     const [indexes, setIndexes] = useState<ReadonlyArray<IndexRow>>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [modal, setModal] = useState<ModalState>({ kind: 'none' });
-    const [modalBusy, setModalBusy] = useState(false);
 
     // Field suggestions (from SchemaStore) and the collection's document
     // count drive the Create Index dialog. They are pre-fetched when the
@@ -128,7 +119,6 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
     /** Submit handler for the Create Index dialog. Re-throws so the dialog can stay open on error. */
     const handleCreateSubmit = useCallback(
         async (input: CreateIndexInput): Promise<void> => {
-            setModalBusy(true);
             try {
                 const result = await trpcClient.mongoClusters.indexView.createIndex.mutate(input);
                 setModal({ kind: 'none' });
@@ -141,39 +131,47 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
             } catch (error) {
                 showError(l10n.t('Failed to create index.'), error);
                 throw error;
-            } finally {
-                setModalBusy(false);
             }
         },
         [trpcClient, refresh, showError],
     );
 
-    /** Final step of the delete-confirm flow. */
-    const handleDeleteConfirm = useCallback(async (): Promise<void> => {
-        if (modal.kind !== 'delete') {
-            return;
-        }
-        const indexName = modal.index.name;
-        setModalBusy(true);
-        try {
-            await trpcClient.mongoClusters.indexView.dropIndex.mutate({ indexName });
-            setModal({ kind: 'none' });
-            await refresh();
-        } catch (error) {
-            showError(l10n.t('Failed to delete index "{0}".', indexName), error);
-        } finally {
-            setModalBusy(false);
-        }
-    }, [modal, trpcClient, refresh, showError]);
+    /** Delete an index. Confirmation happens on the extension host (modal). */
+    const handleDelete = useCallback(
+        async (index: IndexRow): Promise<void> => {
+            const indexName = index.name;
+            try {
+                const result = await trpcClient.mongoClusters.indexView.dropIndex.mutate({ indexName });
+                if (result.cancelled) {
+                    return;
+                }
+                void trpcClient.common.displayInformationMessage.mutate({
+                    message: l10n.t('Index "{0}" deleted.', indexName),
+                });
+                await refresh();
+            } catch (error) {
+                showError(l10n.t('Failed to delete index "{0}".', indexName), error);
+            }
+        },
+        [trpcClient, refresh, showError],
+    );
 
-    /** Hide / unhide toggle. The router decides which mutation to invoke. */
+    /** Hide / unhide toggle. Confirmation happens on the extension host (modal). */
     const handleToggleHidden = useCallback(
         async (index: IndexRow): Promise<void> => {
+            const details = { sizeText: formatBytes(index.sizeBytes), usageText: formatOps(index.usageOps) };
             try {
-                if (index.hidden) {
-                    await trpcClient.mongoClusters.indexView.unhideIndex.mutate({ indexName: index.name });
-                } else {
-                    await trpcClient.mongoClusters.indexView.hideIndex.mutate({ indexName: index.name });
+                const result = index.hidden
+                    ? await trpcClient.mongoClusters.indexView.unhideIndex.mutate({
+                          indexName: index.name,
+                          ...details,
+                      })
+                    : await trpcClient.mongoClusters.indexView.hideIndex.mutate({
+                          indexName: index.name,
+                          ...details,
+                      });
+                if (result.cancelled) {
+                    return;
                 }
                 await refresh();
             } catch (error) {
@@ -223,7 +221,7 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
             <IndexList
                 indexes={indexes}
                 isLoading={isLoading}
-                onDelete={(idx) => setModal({ kind: 'delete', index: idx })}
+                onDelete={(idx) => void handleDelete(idx)}
                 onToggleHidden={(idx) => void handleToggleHidden(idx)}
             />
 
@@ -234,25 +232,6 @@ export const IndexesTab = ({ collectionName }: IndexesTabProps): JSX.Element => 
                 onCancel={() => setModal({ kind: 'none' })}
                 onSubmit={handleCreateSubmit}
                 onPrepareInTarget={handlePrepareInTarget}
-            />
-
-            <ConfirmDialog
-                open={modal.kind === 'delete'}
-                title={l10n.t('Delete index?')}
-                body={
-                    modal.kind === 'delete'
-                        ? l10n.t(
-                              'Delete index "{0}" from collection "{1}"? This cannot be undone.',
-                              modal.index.name,
-                              collectionName,
-                          )
-                        : ''
-                }
-                confirmLabel={l10n.t('Delete')}
-                destructive
-                busy={modalBusy}
-                onConfirm={() => void handleDeleteConfirm()}
-                onCancel={() => setModal({ kind: 'none' })}
             />
         </div>
     );
