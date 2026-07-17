@@ -191,7 +191,6 @@ function FieldNameCombobox({
             freeform
             placeholder={l10n.t('Select or type a field name')}
             value={value}
-            selectedOptions={value ? [value] : []}
             onChange={handleInput}
             onOptionSelect={handleSelect}
             aria-label={l10n.t('Field name')}
