@@ -15,7 +15,44 @@ import { DynamicThemeProvider } from './theme/DynamicThemeProvider';
 
 export type ViewKey = WebviewName;
 
+/**
+ * Swallow the benign "ResizeObserver loop …" browser warning.
+ *
+ * Fluent UI drives popup positioning (Combobox / Dropdown / Menu / Tooltip) from
+ * inside a `ResizeObserver` callback. When opening a popup — e.g. giving a
+ * Combobox focus — nudges layout enough to schedule another resize in the same
+ * frame, the browser emits a non-fatal `ErrorEvent` whose message is
+ * "ResizeObserver loop completed with undelivered notifications" (or, on some
+ * engines, "ResizeObserver loop limit exceeded"). The observer simply continues
+ * on the next frame, but the event otherwise bubbles to the global error stream
+ * (devtools "Uncaught", any `window` error listener, the framework's error → host
+ * telemetry bridge, and hence any error notification surface).
+ *
+ * We stop **only** this one message from propagating; every other error is left
+ * completely untouched. The listener is registered in the capture phase before
+ * React mounts so it runs ahead of the framework's own handler.
+ */
+let resizeObserverLoopGuardInstalled = false;
+function installResizeObserverLoopGuard(): void {
+    if (resizeObserverLoopGuardInstalled || typeof window === 'undefined') {
+        return;
+    }
+    resizeObserverLoopGuardInstalled = true;
+    const isResizeObserverLoop = /^ResizeObserver loop/;
+    window.addEventListener(
+        'error',
+        (event: ErrorEvent) => {
+            if (typeof event.message === 'string' && isResizeObserverLoop.test(event.message)) {
+                event.stopImmediatePropagation();
+                event.preventDefault();
+            }
+        },
+        true, // capture phase, so we pre-empt the framework's error → host bridge
+    );
+}
+
 export function render<V extends ViewKey>(key: V, vscodeApi: WebviewApi<WebviewState>, rootId = 'root'): void {
+    installResizeObserverLoopGuard();
     l10n.config({
         contents: (globalThis.l10n_bundle as l10nJsonFormat) ?? {},
     });
