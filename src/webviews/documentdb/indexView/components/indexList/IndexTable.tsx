@@ -67,16 +67,41 @@ export const IndexTable = ({
 
     // Scroll the requested row into view the first time it is available.
     // `block: 'nearest'` is a no-op when the row is already visible, so we never
-    // scroll a row that is already on screen.
+    // yank a row that is already on screen.
+    //
+    // The scroll is deferred to after paint (with a one-frame retry) because the
+    // target is usually a *just-inserted* optimistic row: on the render where
+    // `scrollToName` first changes, that row may not be laid out at its final
+    // (alphabetically-sorted) position yet — or its name may still be
+    // reconciling to the server's — so an immediate `scrollIntoView` runs
+    // against a stale layout and appears to do nothing.
     useEffect(() => {
         if (!scrollToName || scrollToName === lastScrolledRef.current) {
             return;
         }
-        const el = rowRefs.current.get(scrollToName);
-        if (el) {
-            lastScrolledRef.current = scrollToName;
-            el.scrollIntoView({ block: 'nearest' });
-        }
+        const target = scrollToName;
+        let raf2 = 0;
+        const scrollNow = (): boolean => {
+            const el = rowRefs.current.get(target);
+            if (!el) {
+                return false;
+            }
+            lastScrolledRef.current = target;
+            el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+            return true;
+        };
+        const raf1 = requestAnimationFrame(() => {
+            if (!scrollNow()) {
+                // Row not mounted yet — try once more on the next frame.
+                raf2 = requestAnimationFrame(scrollNow);
+            }
+        });
+        return () => {
+            cancelAnimationFrame(raf1);
+            if (raf2) {
+                cancelAnimationFrame(raf2);
+            }
+        };
     }, [scrollToName, indexes]);
 
     const toggleExpanded = (name: string): void => {
