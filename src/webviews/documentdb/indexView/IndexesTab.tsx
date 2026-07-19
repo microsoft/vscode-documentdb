@@ -24,9 +24,6 @@ const BUILD_POLL_INTERVAL_MS = 5000;
  */
 const MIN_ACTION_VISIBLE_MS = 2000;
 
-/** How long a freshly-created index stays highlighted so the user can spot it. */
-const NEW_INDEX_HIGHLIGHT_MS = 6000;
-
 /**
  * How long the Create drawer stays open after submit before it hides itself.
  * A foreground index build can take longer than we want to hold the drawer, so
@@ -108,21 +105,22 @@ export const IndexesTab = (): JSX.Element => {
     // create leaves it untouched so re-opening the drawer pre-populates it.
     const [createResetSignal, setCreateResetSignal] = useState(0);
 
-    // Names of rows to visually highlight (a create/delete/hide/unhide just
-    // touched them) and the one name to scroll into view when it appears.
-    const [highlightedNames, setHighlightedNames] = useState<ReadonlySet<string>>(() => new Set());
+    // Names of rows with an action in flight (delete / hide / unhide): shown
+    // with a spinner instead of the ready check. The one name to scroll into
+    // view when it appears is tracked separately.
+    const [busyNames, setBusyNames] = useState<ReadonlySet<string>>(() => new Set());
     const [scrollToName, setScrollToName] = useState<string | undefined>(undefined);
 
-    const addHighlight = useCallback((name: string): void => {
-        setHighlightedNames((prev) => {
+    const addBusy = useCallback((name: string): void => {
+        setBusyNames((prev) => {
             const next = new Set(prev);
             next.add(name);
             return next;
         });
     }, []);
 
-    const removeHighlight = useCallback((name: string): void => {
-        setHighlightedNames((prev) => {
+    const removeBusy = useCallback((name: string): void => {
+        setBusyNames((prev) => {
             if (!prev.has(name)) {
                 return prev;
             }
@@ -294,14 +292,12 @@ export const IndexesTab = (): JSX.Element => {
                             ? l10n.t('Index "{0}" created.', result.indexName)
                             : l10n.t('Index created.'),
                     });
-                    // Highlight the new index and scroll it into view (if off-screen)
-                    // so the user can spot it in the alphabetical list. We do NOT
-                    // refresh here — the build poll refreshes after ~5s, so the
-                    // "Creating…" placeholder stays visible even for a fast build,
-                    // which is what actually draws the eye to the new row.
-                    addHighlight(finalName);
+                    // Scroll the new index into view (if off-screen) so the user
+                    // can spot it in the alphabetical list. We do NOT refresh here
+                    // — the build poll refreshes after ~5s, so the "Creating…"
+                    // spinner stays visible even for a fast build, which is what
+                    // actually draws the eye to the new row.
                     setScrollToName(finalName);
-                    setTimeout(() => removeHighlight(finalName), NEW_INDEX_HIGHLIGHT_MS);
                     // Clear the form now that the create succeeded.
                     setCreateResetSignal((n) => n + 1);
                 },
@@ -335,21 +331,21 @@ export const IndexesTab = (): JSX.Element => {
                 if (result.cancelled) {
                     return;
                 }
-                // Deleting is quick; highlight the doomed row and hold it for a
-                // minimum window so the user registers which one is going.
-                addHighlight(indexName);
+                // Deleting is quick; show a spinner on the doomed row and hold it
+                // for a minimum window so the user registers which one is going.
+                addBusy(indexName);
                 await delay(MIN_ACTION_VISIBLE_MS);
                 void trpcClient.common.displayInformationMessage.mutate({
                     message: l10n.t('Index "{0}" deleted.', indexName),
                 });
                 await refresh();
-                removeHighlight(indexName);
+                removeBusy(indexName);
             } catch (error) {
-                removeHighlight(indexName);
+                removeBusy(indexName);
                 showError(l10n.t('Failed to delete index "{0}".', indexName), error);
             }
         },
-        [trpcClient, refresh, showError, addHighlight, removeHighlight],
+        [trpcClient, refresh, showError, addBusy, removeBusy],
     );
 
     /** Hide / unhide toggle. Confirmation happens on the extension host (modal). */
@@ -369,14 +365,14 @@ export const IndexesTab = (): JSX.Element => {
                 if (result.cancelled) {
                     return;
                 }
-                // Highlight the affected row and hold it for a minimum window so
-                // the toggle is perceptible before the list refreshes.
-                addHighlight(index.name);
+                // Show a spinner on the affected row and hold it for a minimum
+                // window so the toggle is perceptible before the list refreshes.
+                addBusy(index.name);
                 await delay(MIN_ACTION_VISIBLE_MS);
                 await refresh();
-                removeHighlight(index.name);
+                removeBusy(index.name);
             } catch (error) {
-                removeHighlight(index.name);
+                removeBusy(index.name);
                 showError(
                     index.hidden
                         ? l10n.t('Failed to unhide index "{0}".', index.name)
@@ -385,7 +381,7 @@ export const IndexesTab = (): JSX.Element => {
                 );
             }
         },
-        [trpcClient, refresh, showError, addHighlight, removeHighlight],
+        [trpcClient, refresh, showError, addBusy, removeBusy],
     );
 
     /**
@@ -427,7 +423,7 @@ export const IndexesTab = (): JSX.Element => {
             <IndexList
                 indexes={displayIndexes}
                 isLoading={isInitialLoading}
-                highlightedNames={highlightedNames}
+                busyNames={busyNames}
                 scrollToName={scrollToName}
                 onDelete={(idx) => void handleDelete(idx)}
                 onToggleHidden={(idx) => void handleToggleHidden(idx)}

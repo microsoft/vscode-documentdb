@@ -28,8 +28,8 @@ export interface IndexListProps {
     onToggleHidden: (index: IndexRow) => void;
     /** When true, the table is replaced with a loading skeleton and the count is hidden. */
     isLoading?: boolean;
-    /** Names of rows to visually highlight (recently created / acted upon). */
-    highlightedNames?: ReadonlySet<string>;
+    /** Names of rows with an action in flight (delete / hide / unhide) — shown with a spinner. */
+    busyNames?: ReadonlySet<string>;
     /** Name of a row to scroll into view once (if it is off-screen). */
     scrollToName?: string;
     /**
@@ -53,7 +53,7 @@ export const IndexList = ({
     onDelete,
     onToggleHidden,
     isLoading = false,
-    highlightedNames,
+    busyNames,
     scrollToName,
     onStateChange,
 }: IndexListProps): JSX.Element => {
@@ -116,7 +116,7 @@ export const IndexList = ({
                         indexes={shown}
                         onDelete={onDelete}
                         onToggleHidden={onToggleHidden}
-                        highlightedNames={highlightedNames}
+                        busyNames={busyNames}
                         scrollToName={scrollToName}
                     />
                 )}

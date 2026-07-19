@@ -12,13 +12,26 @@ import { type IndexRow } from '../../types';
 /**
  * Leading status indicator shown in front of an index name.
  *
- * - `ready` (or unset) → a green check icon, signalling the index is usable.
  * - `building` / `creating` → a spinner whose tooltip reads "Building index" /
- *   "Creating index", signalling that something is happening to the index.
+ *   "Creating index", signalling the index is coming into existence.
+ * - `busy` (a delete / hide / unhide is in flight) → the same spinner with an
+ *   "Updating index" tooltip, so a transient action reads the same as a build.
+ * - `ready` (or unset) → a green check icon, signalling the index is usable.
  */
-export const IndexStatusIndicator = ({ state }: { state?: IndexRow['state'] }): JSX.Element => {
-    if (state === 'building' || state === 'creating') {
-        const label = state === 'creating' ? l10n.t('Creating index') : l10n.t('Building index');
+export const IndexStatusIndicator = ({
+    state,
+    busy = false,
+}: {
+    state?: IndexRow['state'];
+    busy?: boolean;
+}): JSX.Element => {
+    if (state === 'building' || state === 'creating' || busy) {
+        const label =
+            state === 'creating'
+                ? l10n.t('Creating index')
+                : state === 'building'
+                  ? l10n.t('Building index')
+                  : l10n.t('Updating index');
         return (
             <Tooltip content={label} relationship="label" withArrow>
                 <Spinner size="extra-tiny" aria-label={label} className="indexStatusSpinner" />

@@ -35,8 +35,8 @@ export interface IndexTableProps {
     indexes: ReadonlyArray<IndexRow>;
     onDelete: (index: IndexRow) => void;
     onToggleHidden: (index: IndexRow) => void;
-    /** Names of rows to visually highlight (recently created / acted upon). */
-    highlightedNames?: ReadonlySet<string>;
+    /** Names of rows with an action in flight (delete / hide / unhide) — shown with a spinner. */
+    busyNames?: ReadonlySet<string>;
     /** Name of a row to scroll into view once (only if it is off-screen). */
     scrollToName?: string;
 }
@@ -52,7 +52,7 @@ export const IndexTable = ({
     indexes,
     onDelete,
     onToggleHidden,
-    highlightedNames,
+    busyNames,
     scrollToName,
 }: IndexTableProps): JSX.Element => {
     // Set of currently-expanded index names. Kept in component state so
@@ -127,12 +127,14 @@ export const IndexTable = ({
                     // position) so an inserted detail row never breaks the
                     // alternating pattern.
                     const rowClass = rowIdx % 2 === 0 ? 'rowEven' : 'rowOdd';
-                    const isHighlighted = highlightedNames?.has(idx.name) ?? false;
+                    // A delete / hide / unhide in flight shows a spinner in the
+                    // status column (in place of the ready check) for this row.
+                    const isBusy = busyNames?.has(idx.name) ?? false;
                     return (
                         <Fragment key={idx.name}>
                             <TableRow
                                 key={idx.name}
-                                className={`${rowClass}${isHighlighted ? ' indexRowHighlight' : ''}`}
+                                className={rowClass}
                                 ref={(el: HTMLTableRowElement | null) => {
                                     if (el) {
                                         rowRefs.current.set(idx.name, el);
@@ -161,7 +163,10 @@ export const IndexTable = ({
                                     />
                                 </TableCell>
                                 <TableCell className="nameCell">
-                                    <TableCellLayout truncate media={<IndexStatusIndicator state={idx.state} />}>
+                                    <TableCellLayout
+                                        truncate
+                                        media={<IndexStatusIndicator state={idx.state} busy={isBusy} />}
+                                    >
                                         {idx.name}
                                     </TableCellLayout>
                                 </TableCell>

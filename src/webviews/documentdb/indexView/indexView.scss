@@ -192,19 +192,6 @@
         }
 
         /*
-         * Row highlight for a recently created / acted-upon index. Overrides the
-         * zebra background (placed after it so equal specificity resolves here).
-         * The transition on the cells gives a smooth ~200ms fade-in of the
-         * accent tint (and a fade-out when the highlight is cleared).
-         */
-        tbody td {
-            transition: background-color 200ms ease;
-        }
-        .indexRowHighlight > td {
-            background-color: var(--colorBrandBackground2);
-        }
-
-        /*
          * Name column: width is driven by the fluid table layout (it takes
          * the leftover space). We only set `word-break` here so long
          * auto-generated names like `field1_1_field2_-1_field3_1` wrap inside
