@@ -28,6 +28,10 @@ export interface IndexListProps {
     onToggleHidden: (index: IndexRow) => void;
     /** When true, the table is replaced with a loading skeleton and the count is hidden. */
     isLoading?: boolean;
+    /** Names of rows to visually highlight (recently created / acted upon). */
+    highlightedNames?: ReadonlySet<string>;
+    /** Name of a row to scroll into view once (if it is off-screen). */
+    scrollToName?: string;
     /**
      * Notified whenever the filter inputs or the visible/total counts change.
      * Lets the host surface counts / toggle state (e.g. in the metrics row)
@@ -49,6 +53,8 @@ export const IndexList = ({
     onDelete,
     onToggleHidden,
     isLoading = false,
+    highlightedNames,
+    scrollToName,
     onStateChange,
 }: IndexListProps): JSX.Element => {
     const [filterText, setFilterText] = useState('');
@@ -106,7 +112,13 @@ export const IndexList = ({
                 {isLoading ? (
                     <IndexTableSkeleton />
                 ) : (
-                    <IndexTable indexes={shown} onDelete={onDelete} onToggleHidden={onToggleHidden} />
+                    <IndexTable
+                        indexes={shown}
+                        onDelete={onDelete}
+                        onToggleHidden={onToggleHidden}
+                        highlightedNames={highlightedNames}
+                        scrollToName={scrollToName}
+                    />
                 )}
                 {!isLoading && (
                     <div className="indexListCount" aria-live="polite">

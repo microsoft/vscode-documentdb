@@ -22,7 +22,7 @@ import {
     EyeRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { Fragment, useState, type JSX } from 'react';
+import { Fragment, useEffect, useRef, useState, type JSX } from 'react';
 import { type IndexRow } from '../../types';
 import { formatBytes, formatOps } from '../../utils/format';
 import { classifyIndex } from '../../utils/indexType';
@@ -35,6 +35,10 @@ export interface IndexTableProps {
     indexes: ReadonlyArray<IndexRow>;
     onDelete: (index: IndexRow) => void;
     onToggleHidden: (index: IndexRow) => void;
+    /** Names of rows to visually highlight (recently created / acted upon). */
+    highlightedNames?: ReadonlySet<string>;
+    /** Name of a row to scroll into view once (only if it is off-screen). */
+    scrollToName?: string;
 }
 
 /**
@@ -44,10 +48,36 @@ export interface IndexTableProps {
  * and the name column absorbs any slack — no horizontal scrollbar.
  */
 
-export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProps): JSX.Element => {
+export const IndexTable = ({
+    indexes,
+    onDelete,
+    onToggleHidden,
+    highlightedNames,
+    scrollToName,
+}: IndexTableProps): JSX.Element => {
     // Set of currently-expanded index names. Kept in component state so
     // expansion survives table re-renders driven by data refresh.
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+
+    // DOM refs per row so we can scroll a freshly-created index into view.
+    const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
+    // Guards against scrolling the same target more than once (e.g. on later
+    // refreshes) so we never yank the viewport after the initial reveal.
+    const lastScrolledRef = useRef<string | undefined>(undefined);
+
+    // Scroll the requested row into view the first time it is available.
+    // `block: 'nearest'` is a no-op when the row is already visible, so we never
+    // scroll a row that is already on screen.
+    useEffect(() => {
+        if (!scrollToName || scrollToName === lastScrolledRef.current) {
+            return;
+        }
+        const el = rowRefs.current.get(scrollToName);
+        if (el) {
+            lastScrolledRef.current = scrollToName;
+            el.scrollIntoView({ block: 'nearest' });
+        }
+    }, [scrollToName, indexes]);
 
     const toggleExpanded = (name: string): void => {
         setExpanded((prev) => {
@@ -97,9 +127,20 @@ export const IndexTable = ({ indexes, onDelete, onToggleHidden }: IndexTableProp
                     // position) so an inserted detail row never breaks the
                     // alternating pattern.
                     const rowClass = rowIdx % 2 === 0 ? 'rowEven' : 'rowOdd';
+                    const isHighlighted = highlightedNames?.has(idx.name) ?? false;
                     return (
                         <Fragment key={idx.name}>
-                            <TableRow key={idx.name} className={rowClass}>
+                            <TableRow
+                                key={idx.name}
+                                className={`${rowClass}${isHighlighted ? ' indexRowHighlight' : ''}`}
+                                ref={(el: HTMLTableRowElement | null) => {
+                                    if (el) {
+                                        rowRefs.current.set(idx.name, el);
+                                    } else {
+                                        rowRefs.current.delete(idx.name);
+                                    }
+                                }}
+                            >
                                 <TableCell className="expandCell">
                                     {/*
                                      * Per-row expand toggle. Mirrors the Results-tab tree-view

@@ -19,6 +19,15 @@ import { formatBytes, formatOps } from './utils/format';
 const BUILD_POLL_INTERVAL_MS = 5000;
 
 /**
+ * Minimum time a row's action highlight (deleting / hiding / unhiding) stays
+ * visible before we refresh, so a quick server operation is still perceptible.
+ */
+const MIN_ACTION_VISIBLE_MS = 2000;
+
+/** How long a freshly-created index stays highlighted so the user can spot it. */
+const NEW_INDEX_HIGHLIGHT_MS = 6000;
+
+/**
  * How long the Create drawer stays open after submit before it hides itself.
  * A foreground index build can take longer than we want to hold the drawer, so
  * we close on whichever comes first: the create settling, or this grace period.
@@ -98,6 +107,30 @@ export const IndexesTab = (): JSX.Element => {
     // Bumped after a successful create to clear the drawer's form. A failed
     // create leaves it untouched so re-opening the drawer pre-populates it.
     const [createResetSignal, setCreateResetSignal] = useState(0);
+
+    // Names of rows to visually highlight (a create/delete/hide/unhide just
+    // touched them) and the one name to scroll into view when it appears.
+    const [highlightedNames, setHighlightedNames] = useState<ReadonlySet<string>>(() => new Set());
+    const [scrollToName, setScrollToName] = useState<string | undefined>(undefined);
+
+    const addHighlight = useCallback((name: string): void => {
+        setHighlightedNames((prev) => {
+            const next = new Set(prev);
+            next.add(name);
+            return next;
+        });
+    }, []);
+
+    const removeHighlight = useCallback((name: string): void => {
+        setHighlightedNames((prev) => {
+            if (!prev.has(name)) {
+                return prev;
+            }
+            const next = new Set(prev);
+            next.delete(name);
+            return next;
+        });
+    }, []);
 
     // Field suggestions (from SchemaStore) and the collection's document
     // count drive the Create Index dialog. They are pre-fetched when the
@@ -250,6 +283,7 @@ export const IndexesTab = (): JSX.Element => {
             // Handle the eventual result independently of when the drawer closes.
             void mutation.then(
                 (result) => {
+                    const finalName = result.indexName ?? pending.name;
                     if (result.indexName && result.indexName !== pending.name) {
                         setPendingCreates((prev) =>
                             prev.map((p) => (p.name === pending.name ? { ...p, name: result.indexName as string } : p)),
@@ -260,7 +294,14 @@ export const IndexesTab = (): JSX.Element => {
                             ? l10n.t('Index "{0}" created.', result.indexName)
                             : l10n.t('Index created.'),
                     });
-                    void refresh();
+                    // Highlight the new index and scroll it into view (if off-screen)
+                    // so the user can spot it in the alphabetical list. We do NOT
+                    // refresh here — the build poll refreshes after ~5s, so the
+                    // "Creating…" placeholder stays visible even for a fast build,
+                    // which is what actually draws the eye to the new row.
+                    addHighlight(finalName);
+                    setScrollToName(finalName);
+                    setTimeout(() => removeHighlight(finalName), NEW_INDEX_HIGHLIGHT_MS);
                     // Clear the form now that the create succeeded.
                     setCreateResetSignal((n) => n + 1);
                 },
@@ -294,15 +335,21 @@ export const IndexesTab = (): JSX.Element => {
                 if (result.cancelled) {
                     return;
                 }
+                // Deleting is quick; highlight the doomed row and hold it for a
+                // minimum window so the user registers which one is going.
+                addHighlight(indexName);
+                await delay(MIN_ACTION_VISIBLE_MS);
                 void trpcClient.common.displayInformationMessage.mutate({
                     message: l10n.t('Index "{0}" deleted.', indexName),
                 });
                 await refresh();
+                removeHighlight(indexName);
             } catch (error) {
+                removeHighlight(indexName);
                 showError(l10n.t('Failed to delete index "{0}".', indexName), error);
             }
         },
-        [trpcClient, refresh, showError],
+        [trpcClient, refresh, showError, addHighlight, removeHighlight],
     );
 
     /** Hide / unhide toggle. Confirmation happens on the extension host (modal). */
@@ -322,8 +369,14 @@ export const IndexesTab = (): JSX.Element => {
                 if (result.cancelled) {
                     return;
                 }
+                // Highlight the affected row and hold it for a minimum window so
+                // the toggle is perceptible before the list refreshes.
+                addHighlight(index.name);
+                await delay(MIN_ACTION_VISIBLE_MS);
                 await refresh();
+                removeHighlight(index.name);
             } catch (error) {
+                removeHighlight(index.name);
                 showError(
                     index.hidden
                         ? l10n.t('Failed to unhide index "{0}".', index.name)
@@ -332,7 +385,7 @@ export const IndexesTab = (): JSX.Element => {
                 );
             }
         },
-        [trpcClient, refresh, showError],
+        [trpcClient, refresh, showError, addHighlight, removeHighlight],
     );
 
     /**
@@ -374,6 +427,8 @@ export const IndexesTab = (): JSX.Element => {
             <IndexList
                 indexes={displayIndexes}
                 isLoading={isInitialLoading}
+                highlightedNames={highlightedNames}
+                scrollToName={scrollToName}
                 onDelete={(idx) => void handleDelete(idx)}
                 onToggleHidden={(idx) => void handleToggleHidden(idx)}
             />
