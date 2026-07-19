@@ -98,6 +98,12 @@ export const IndexesTab = (): JSX.Element => {
     // create leaves it untouched so re-opening the drawer pre-populates it.
     const [createResetSignal, setCreateResetSignal] = useState(0);
 
+    // Whether the next time the create drawer opens it should KEEP the current
+    // form (rather than start fresh). Set when the user cancels (an accidental
+    // close should not lose work) or when a create fails (so they can retry).
+    // A successful create leaves it false, so the next open is a clean slate.
+    const preserveFormRef = useRef(false);
+
     // Names of rows with an action in flight (delete / hide / unhide): shown
     // with a spinner instead of the ready check. The one name to scroll into
     // view when it appears is tracked separately.
@@ -177,6 +183,14 @@ export const IndexesTab = (): JSX.Element => {
      * opens with whatever data was retrievable.
      */
     const openCreateDialog = useCallback(async (): Promise<void> => {
+        // Start each create session from a clean form unless the previous close
+        // asked to preserve it (an accidental cancel, or a failed submit the
+        // user can retry). A successful create leaves the flag clear, so the
+        // next open is empty.
+        if (!preserveFormRef.current) {
+            setCreateResetSignal((n) => n + 1);
+        }
+        preserveFormRef.current = false;
         try {
             const [suggestions, count] = await Promise.all([
                 trpcClient.mongoClusters.indexView.getFieldSuggestions.query(),
@@ -292,12 +306,13 @@ export const IndexesTab = (): JSX.Element => {
                     // spinner stays visible even for a fast build, which is what
                     // actually draws the eye to the new row.
                     setScrollToName(finalName);
-                    // Clear the form now that the create succeeded.
-                    setCreateResetSignal((n) => n + 1);
+                    // A successful create means the next open starts fresh.
+                    preserveFormRef.current = false;
                 },
                 (error) => {
                     // Drop the optimistic row and surface the failure in a modal.
                     // The drawer keeps its form data, so the next open is pre-filled.
+                    preserveFormRef.current = true;
                     setPendingCreates((prev) => prev.filter((p) => p.name !== pending.name));
                     void refresh();
                     showError(l10n.t('Failed to create index.'), error, { modal: true });
@@ -425,7 +440,12 @@ export const IndexesTab = (): JSX.Element => {
                 open={modal.kind === 'create'}
                 fieldSuggestions={fieldSuggestions}
                 documentCount={documentCount}
-                onCancel={() => setModal({ kind: 'none' })}
+                onCancel={() => {
+                    // Closing without submitting preserves the form so an
+                    // accidental close does not lose work; the next open keeps it.
+                    preserveFormRef.current = true;
+                    setModal({ kind: 'none' });
+                }}
                 onSubmit={handleCreateSubmit}
                 onPrepareInTarget={handlePrepareInTarget}
                 resetSignal={createResetSignal}

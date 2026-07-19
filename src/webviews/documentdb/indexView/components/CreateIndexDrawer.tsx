@@ -307,6 +307,13 @@ export const CreateIndexDrawer = ({
         setFields((prev) => (prev.length > 1 ? prev.filter((f) => f.id !== id) : prev));
     };
 
+    // Reset a single row back to its empty state. Used for the lone first field,
+    // where there is nothing to delete but the user still needs a way to clear
+    // what they typed.
+    const clearField = (id: string): void => {
+        setFields((prev) => prev.map((f) => (f.id === id ? { ...f, field: '', type: 'asc' } : f)));
+    };
+
     const updateField = (id: string, patch: Partial<Omit<FieldDraft, 'id'>>): void => {
         setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
     };
@@ -492,16 +499,43 @@ export const CreateIndexDrawer = ({
                                                 </Option>
                                             ))}
                                         </Dropdown>
-                                        <Tooltip content={l10n.t('Remove field')} relationship="description" withArrow>
-                                            <Button
-                                                appearance="subtle"
-                                                size="small"
-                                                icon={<DeleteRegular />}
-                                                aria-label={l10n.t('Remove field')}
-                                                disabled={fields.length <= 1}
-                                                onClick={() => removeField(draft.id)}
-                                            />
-                                        </Tooltip>
+                                        {/*
+                                         * With a single field there is nothing to
+                                         * delete, so offer a "clear" affordance to
+                                         * reset that lone row instead of a disabled
+                                         * delete button. Once a second field exists,
+                                         * every row (including the first) can be
+                                         * deleted, so show the delete button.
+                                         */}
+                                        {fields.length <= 1 ? (
+                                            <Tooltip
+                                                content={l10n.t('Clear field')}
+                                                relationship="description"
+                                                withArrow
+                                            >
+                                                <Button
+                                                    appearance="subtle"
+                                                    size="small"
+                                                    icon={<ArrowResetRegular />}
+                                                    aria-label={l10n.t('Clear field')}
+                                                    onClick={() => clearField(draft.id)}
+                                                />
+                                            </Tooltip>
+                                        ) : (
+                                            <Tooltip
+                                                content={l10n.t('Remove field')}
+                                                relationship="description"
+                                                withArrow
+                                            >
+                                                <Button
+                                                    appearance="subtle"
+                                                    size="small"
+                                                    icon={<DeleteRegular />}
+                                                    aria-label={l10n.t('Remove field')}
+                                                    onClick={() => removeField(draft.id)}
+                                                />
+                                            </Tooltip>
+                                        )}
                                     </div>
                                 ))}
                             </div>
