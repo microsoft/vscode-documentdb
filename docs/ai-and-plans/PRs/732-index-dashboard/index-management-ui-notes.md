@@ -89,17 +89,67 @@ without touching this plain base. Live inline validation was dropped on purpose;
 malformed JSON surfaces once, at create time, as an error rather than nagging
 while the user types.
 
-### Safe, host-side confirmations
+### Safe, host-side confirmations (unified across webview + tree view)
 
-- **Delete** now confirms on the extension host using the user's configured
-  confirmation style (word / challenge / click) via `getConfirmationAsInSettings`,
-  matching the tree-view "Delete index" command. The in-webview confirm dialog
-  was removed.
-- **Hide / Unhide** confirm through a modal VS Code dialog whose detail lists the
-  index name, size, and usage (one per line) plus a short note about the effect,
-  with a `Hide` / `Unhide` action and `Cancel`.
+- **Delete, Hide, and Unhide all confirm through one shared modal dialog**
+  (`confirmIndexAction` in `src/utils/dialogs/confirmIndexAction.ts`). The dialog
+  body lists the index name (and collection, when known), its **size** and
+  **usage** — one per line — followed by a short note describing the effect, with
+  a `Delete` / `Hide` / `Unhide` action and `Cancel`. This replaced the earlier
+  split where delete used the settings-style word/challenge/click prompt and
+  hide/unhide used a separate modal, so every index action now reads
+  consistently.
+- The **same helper is used by the tree-view commands** (`index.dropIndex`,
+  `index.hideIndex`, `index.unhideIndex`), so deleting/hiding/unhiding an index
+  from the Explorer tree shows the identical dialog as the webview.
+- The tree `IndexItem` only carries the raw index definition, so the tree
+  commands fetch size + usage **on demand** at confirm time via a small shared
+  helper (`getIndexConfirmationStats` in `src/commands/index.shared/`) that reuses
+  the same `collStats` / `$indexStats` calls and formatters the webview uses.
+  Both calls are optional and wrapped in try/catch; on failure (or an
+  unsupported tier) the field falls back to a dash.
+- Tradeoff worth noting: unifying on this modal means tree-view **delete** no
+  longer honors the configurable word/challenge confirmation style. This was a
+  deliberate choice for consistency with hide/unhide; it can be revisited if a
+  stronger typed confirmation for destructive delete is wanted.
 - All three mutations report a `cancelled` result so the webview can skip its
   success toast and refresh when the user backs out.
+
+### Row status: spinner in place of tint
+
+- Create / delete / hide / unhide no longer tint the affected row. Instead, a
+  transient action shows the **same leading spinner** used for building/creating
+  indexes (in place of the ready check), with a tooltip describing the action.
+  Delete/hide/unhide hold that spinner for a short minimum window so a fast
+  server operation is still perceptible; a freshly created row keeps its
+  "Creating…" spinner until the build poll refreshes. The green ready state is a
+  `CheckmarkCircleFilled` Fluent icon.
+- The Create drawer now closes **immediately** on submit — a foreground build can
+  outlast any reasonable hold, and the optimistic "Creating…" row already
+  reflects the in-flight create. The result is handled in the background (success
+  toast, or a modal error dialog that preserves the form so re-opening
+  pre-populates it). The list is sorted alphabetically by name so a new index
+  lands in a predictable place, and it is scrolled into view if off-screen.
+
+### Readable JSON previews in the detail card
+
+- The detail card previously rendered an index's partial filter and collation
+  with raw `JSON.stringify` (`{"locale":"en","strength":2}`). A small display
+  helper, `formatShellJson` (in `indexView/utils/format.ts`), now renders them as
+  compact shell-style object literals — `{ locale: 'en', strength: 2 }` —
+  unquoting identifier keys, single-quoting string values, and spacing braces /
+  commas. It is display-only (not a parser round-trip) and falls back to
+  `JSON.stringify` for exotic types.
+- Applied to the **index detail card** (partial filter + collation). It could
+  also be applied to: the "Properties" column tooltips, the raw index definition
+  opened via `openIndexDefinition` (though that intentionally shows exact
+  server JSON), the create-in-playground / create-in-shell command preview, and
+  anywhere else index option objects are shown inline to the user.
+
+### Empty properties cell
+
+- The Properties column now renders **nothing** for a plain index (no options
+  set) instead of an em-dash placeholder, keeping the list quiet.
 
 ### Scrolling fix
 

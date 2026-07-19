@@ -64,3 +64,58 @@ export function formatSinceTooltip(iso: string | undefined): string {
     }
     return l10n.t('Usage counted since {0}', parsed.toLocaleString());
 }
+
+/** A JS identifier that can appear unquoted as an object key (e.g. `locale`, `$eq`). */
+const IDENTIFIER_KEY = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
+
+/** Single-quote a string value, escaping backslashes and single quotes. */
+function singleQuote(value: string): string {
+    return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
+}
+
+/**
+ * Render a value as a compact, shell-style object literal that is easier to
+ * read than raw `JSON.stringify` output — e.g. `{ locale: 'en', strength: 2 }`
+ * instead of `{"locale":"en","strength":2}`.
+ *
+ * Formatting rules (single line, no indentation):
+ * - object keys are left unquoted when they are valid identifiers, otherwise
+ *   single-quoted;
+ * - string values are single-quoted;
+ * - numbers, booleans and `null` are printed verbatim;
+ * - objects render as `{ k: v, ... }` and arrays as `[a, b, ...]`, with empty
+ *   containers collapsing to `{}` / `[]`.
+ *
+ * This is display-only (not a parser round-trip) and intentionally shallow on
+ * exotic types: anything it does not recognise falls back to `JSON.stringify`.
+ */
+export function formatShellJson(value: unknown): string {
+    if (value === null) {
+        return 'null';
+    }
+    if (typeof value === 'string') {
+        return singleQuote(value);
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+        return String(value);
+    }
+    if (Array.isArray(value)) {
+        if (value.length === 0) {
+            return '[]';
+        }
+        return `[${value.map((item) => formatShellJson(item)).join(', ')}]`;
+    }
+    if (typeof value === 'object') {
+        const entries = Object.entries(value as Record<string, unknown>);
+        if (entries.length === 0) {
+            return '{}';
+        }
+        const parts = entries.map(([key, val]) => {
+            const renderedKey = IDENTIFIER_KEY.test(key) ? key : singleQuote(key);
+            return `${renderedKey}: ${formatShellJson(val)}`;
+        });
+        return `{ ${parts.join(', ')} }`;
+    }
+    // Unknown / exotic type (undefined, function, symbol, bigint): best effort.
+    return JSON.stringify(value) ?? String(value);
+}

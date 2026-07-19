@@ -10,7 +10,7 @@ import { type JSX } from 'react';
 import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import '../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
-import { formatDate, formatOps } from '../../utils/format';
+import { formatDate, formatOps, formatShellJson } from '../../utils/format';
 
 /**
  * Describe a single key entry: the compact glyph shown on the badge and the
@@ -139,7 +139,7 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
                     <div className="detailFact">
                         <dt>{l10n.t('Partial filter')}</dt>
                         <dd>
-                            <code className="detailFactCode">{JSON.stringify(index.partialFilterExpression)}</code>
+                            <code className="detailFactCode">{formatShellJson(index.partialFilterExpression)}</code>
                         </dd>
                     </div>
                 )}
@@ -147,7 +147,7 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
                     <div className="detailFact">
                         <dt>{l10n.t('Collation')}</dt>
                         <dd>
-                            <code className="detailFactCode">{JSON.stringify(index.collation)}</code>
+                            <code className="detailFactCode">{formatShellJson(index.collation)}</code>
                         </dd>
                     </div>
                 )}
