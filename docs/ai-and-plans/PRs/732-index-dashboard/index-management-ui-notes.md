@@ -2,19 +2,27 @@
 
 **Branch:** `dev/khelanmodi/index-management-ui`
 **Base:** `main`
-**Date:** 2026-07-17
 **PR URL:** https://github.com/microsoft/vscode-documentdb/pull/732
+
+> This document is the consolidated design log for the PR. It records the
+> **final decisions** first, then a **"tried and abandoned"** section that
+> captures the ideas we experimented with, changed our minds on, and why — so a
+> reader does not have to reconstruct the history from the diff.
 
 ---
 
 ## Why
 
-The CollectionView could browse and query documents but offered no way to inspect
-or manage a collection's indexes without dropping to a shell. This PR adds an
-**Indexes** tab to the CollectionView that lists a collection's indexes with
-their size and usage, and lets the user create, delete, hide, and unhide them
-from the UI. The goal is the 80% happy path: make the common index operations
-discoverable and safe, and defer deep index-build telemetry to a follow-up.
+The CollectionView could browse and query documents but offered no way to
+inspect or manage a collection's indexes without dropping to a shell. This PR
+adds an **Indexes** tab to the CollectionView that lists a collection's indexes
+with their size and usage, and lets the user create, delete, hide, and unhide
+them from the UI.
+
+Guiding principle: **the 80% happy path**. Make the common index operations
+discoverable and safe using only the server APIs already available to us
+(`listIndexes`, `$indexStats`, `collStats`), and defer deep index-build
+telemetry to a follow-up.
 
 The index metadata (types, properties) is backed by the operator registry work
 documented separately in this folder (`documentdb-supported-indexes.md`,
@@ -22,197 +30,235 @@ documented separately in this folder (`documentdb-supported-indexes.md`,
 
 ---
 
-## What was done
+## What shipped (final decisions)
 
-### Index list, metrics, and detail view
+### 1. Index list, metrics, and detail view
 
-- Added the **Indexes** tab to the CollectionView tab strip (between Documents
-  and Query Insights). The tab talks to a dedicated `mongoClusters.indexView.*`
-  tRPC router; the router picks up the cluster / database / collection
-  coordinates from the CollectionView's router context, so the tab needs no
-  props of its own.
+- An **Indexes** tab in the CollectionView tab strip (between Documents and
+  Query Insights), talking to a dedicated `mongoClusters.indexView.*` tRPC
+  router. The router picks up the cluster / database / collection coordinates
+  from the CollectionView's router context, so the tab needs no props of its own.
 - A top **metrics row** summarizes the collection's indexes (mirrors the Query
   Insights layout).
-- A **filter row** (free-text + quick toggles for hidden / unused) sits above a
-  fluid, full-width details table. Each row expands to a detail card showing the
-  key fields, usage, size, and any index-level options.
-- Per-index **size** and **usage** come from `collStats` / `$indexStats` assembled
-  on the extension side and returned as a flat `IndexRow`, so the React layer
-  never handles wire-level command names.
-- A loading skeleton and an explicit refresh path (driven by the CollectionView
-  toolbar via window events) keep the list current.
+- A **filter row** (free-text + quick toggles for hidden / unused) above a
+  fluid, full-width table. Each row expands to a **detail card** with the key
+  fields, usage, size, and any index-level options.
+- Per-index **size** and **usage** are assembled on the extension side from
+  `collStats` / `$indexStats` and returned as a flat `IndexRow`, so the React
+  layer never handles wire-level command names.
+- The list is sorted **alphabetically by name** so a new index lands in a
+  predictable place.
 
-### Create Index drawer, modeled on the driver API
+### 2. Create Index drawer, modeled on the driver API
 
-- The create experience is a Fluent **OverlayDrawer** pinned to the right edge.
-  Its shape deliberately mirrors the driver's two-argument
-  `createIndex(keys, options)` contract rather than a single flat "index type":
+- A Fluent **OverlayDrawer** pinned to the right edge. Its shape mirrors the
+  driver's two-argument `createIndex(keys, options)` contract rather than a
+  single flat "index type":
   - **Per-field key + type** (ascending / descending / text / 2dsphere / hashed)
-    lives on each field row.
+    on each field row.
   - **Index-level options** (unique, sparse, TTL, name, partial filter,
-    collation) are separate, because they apply to the whole index, not a field.
-- TTL is surfaced only when it is actually valid (a single-field b-tree index),
-  which keeps the form honest about what the server will accept.
-- Rarely-needed options (partial filter expression, collation) live on a pushed
-  **Advanced** sub-page rather than cluttering the main pane.
+    collation) kept separate, because they apply to the whole index.
+- TTL is surfaced only when valid (a single-field b-tree index).
+- Rarely-needed options (partial filter, collation) live on a pushed
+  **Advanced** sub-page.
 - The same assembled payload feeds three actions: create directly, or hand the
   built `createIndex(...)` command off to a **playground** or the **interactive
-  shell** for users who prefer to run it themselves.
+  shell**.
+- **Fresh vs. preserved form (final rule):** opening the drawer for a create
+  starts from a **clean form**, *unless* the previous close asked to preserve it.
+  Preserve is requested on an accidental **cancel** (don't lose work) and on a
+  **failed submit** (so the user can retry). A **successful** create leaves the
+  form clear, so the next open is empty. This lives in `IndexesTab` as a
+  `preserveFormRef` gate that bumps the drawer's `resetSignal` at open time (see
+  the abandoned-experiment note on why this moved from close-time).
+- **Lone field row:** with a single field there is nothing to delete, so the row
+  shows a **Clear field** (reset) button that empties that row; once a second
+  field exists, every row (including the first) shows the enabled **Remove
+  field** delete button.
 
-### Advanced section: plain, relaxed-JSON editors (no false smartness)
+### 3. Advanced section: plain, relaxed-JSON editors (no false smartness)
 
-- The partial filter expression and collation inputs are **Monaco editors that
-  reuse the shared `documentdb-query` language** — but through a new, dedicated
-  `EditorType.Json` tag on that same language (same language id, same JavaScript
-  Monarch tokenizer, same bracket handling).
-- For that tag, completions and hover docs are **intentionally suppressed**. The
-  editor gives relaxed-JSON highlighting and bracket auto-closing, and nothing
-  more.
-- Raw text is sent to the extension host, which parses it **loosely** with
-  `@mongodb-js/shell-bson-parser` (`ParseMode.Loose`) — the same parser the
-  find / project / sort editors rely on — so unquoted keys, single quotes, and
-  BSON constructors all work end to end.
-- Ghost/placeholder text was removed (it double-rendered on remount and is poor
-  for accessibility). Instead each field starts with `{  }`, shows a small,
-  always-visible worked example above the editor, and treats a blank object
-  (`{}` / whitespace) as "not set" so it never falsely reports as configured.
+- The partial filter and collation inputs are **Monaco editors that reuse the
+  shared `documentdb-query` language** through a dedicated `EditorType.Json` tag
+  (same language id, same JavaScript Monarch tokenizer, same bracket handling).
+- For that tag, completions and hover docs are **intentionally suppressed** —
+  relaxed-JSON highlighting and bracket auto-closing, nothing more.
+- Raw text is parsed **loosely** on the host with `@mongodb-js/shell-bson-parser`
+  (`ParseMode.Loose`) — the same parser the find / project / sort editors use —
+  so unquoted keys, single quotes, and BSON constructors work end to end.
+- Each field starts with `{  }` and shows a small always-visible worked example
+  above the editor; a blank object (`{}` / whitespace) is treated as "not set".
 
-**Reasoning for JSON-only (not autocompletion) in the advanced section:** a
-partial filter is genuinely a query filter and *could* eventually get the same
-field/operator completions as the find editor; collation is a fixed-schema
+**Why JSON-only, not autocompletion:** a partial filter is genuinely a query
+filter and *could* later get find-style completions; collation is a fixed-schema
 object that is not a query at all. Rather than ship half-smart completions that
 imply more intelligence than exists — or block relaxed input behind a strict
-`JSON.parse` — the advanced editors are honest "just JSON" inputs for now. The
-`EditorType.Json` seam is additive: a future iteration can promote the partial
-filter to a smarter type and give collation its own schema-aware completions
-without touching this plain base. Live inline validation was dropped on purpose;
-malformed JSON surfaces once, at create time, as an error rather than nagging
-while the user types.
+`JSON.parse` — these are honest "just JSON" inputs for now. The `EditorType.Json`
+seam is additive: a future iteration can promote the partial filter to a smarter
+type without touching this plain base.
 
-### Safe, host-side confirmations (unified across webview + tree view)
+### 4. Safe, host-side confirmations (unified across webview + tree view)
 
 - **Delete, Hide, and Unhide all confirm through one shared modal dialog**
-  (`confirmIndexAction` in `src/utils/dialogs/confirmIndexAction.ts`). The dialog
-  body lists the index name (and collection, when known), its **size** and
-  **usage** — one per line — followed by a short note describing the effect, with
-  a `Delete` / `Hide` / `Unhide` action and `Cancel`. This replaced the earlier
-  split where delete used the settings-style word/challenge/click prompt and
-  hide/unhide used a separate modal, so every index action now reads
-  consistently.
-- The **same helper is used by the tree-view commands** (`index.dropIndex`,
-  `index.hideIndex`, `index.unhideIndex`), so deleting/hiding/unhiding an index
-  from the Explorer tree shows the identical dialog as the webview.
+  (`confirmIndexAction` in `src/utils/dialogs/confirmIndexAction.ts`). The body
+  lists the index name (and collection, when known), its **size** and **usage** —
+  one per line — plus a short effect note, with a `Delete` / `Hide` / `Unhide`
+  action and `Cancel`.
+- The **same helper backs the tree-view commands** (`index.dropIndex`,
+  `index.hideIndex`, `index.unhideIndex`), so the Explorer tree shows the
+  identical dialog as the webview.
 - The tree `IndexItem` only carries the raw index definition, so the tree
-  commands fetch size + usage **on demand** at confirm time via a small shared
-  helper (`getIndexConfirmationStats` in `src/commands/index.shared/`) that reuses
-  the same `collStats` / `$indexStats` calls and formatters the webview uses.
-  Both calls are optional and wrapped in try/catch; on failure (or an
-  unsupported tier) the field falls back to a dash.
-- Tradeoff worth noting: unifying on this modal means tree-view **delete** no
-  longer honors the configurable word/challenge confirmation style. This was a
-  deliberate choice for consistency with hide/unhide; it can be revisited if a
-  stronger typed confirmation for destructive delete is wanted.
+  commands fetch size + usage **on demand** at confirm time via
+  `getIndexConfirmationStats` (`src/commands/index.shared/`), reusing the same
+  `collStats` / `$indexStats` calls and formatters. Both calls are optional and
+  wrapped in try/catch; on failure (or an unsupported tier) the field shows a dash.
 - All three mutations report a `cancelled` result so the webview can skip its
   success toast and refresh when the user backs out.
+- **Known tradeoff:** unifying on this modal means tree-view **delete** no longer
+  honors the configurable word/challenge confirmation style. Deliberate, for
+  consistency with hide/unhide; revisit if a stronger typed confirmation for
+  destructive delete is wanted.
 
-### Row status: spinner in place of tint
+### 5. Row status: a single spinner vocabulary
 
-- Create / delete / hide / unhide no longer tint the affected row. Instead, a
-  transient action shows the **same leading spinner** used for building/creating
-  indexes (in place of the ready check), with a tooltip describing the action.
-  Delete/hide/unhide hold that spinner for a short minimum window so a fast
-  server operation is still perceptible; a freshly created row keeps its
-  "Creating…" spinner until the build poll refreshes. The green ready state is a
-  `CheckmarkCircleFilled` Fluent icon.
-- The Create drawer now closes **immediately** on submit — a foreground build can
-  outlast any reasonable hold, and the optimistic "Creating…" row already
-  reflects the in-flight create. The result is handled in the background (success
-  toast, or a modal error dialog that preserves the form so re-opening
-  pre-populates it). The list is sorted alphabetically by name so a new index
-  lands in a predictable place, and it is scrolled into view if off-screen.
+- Each row carries a leading status indicator:
+  - **Ready** — a green `CheckmarkCircleFilled` Fluent icon.
+  - **Building** — a spinner with a "Building index" tooltip, driven by the
+    `building` flag `$indexStats` already reports (present only while a build is
+    in progress); surfaced on `IndexStats` and mapped to `IndexRow.state`.
+  - **Creating** — an optimistic, client-only row shown the instant a create is
+    submitted, reconciled to the server's actual name on success and dropped once
+    the real index appears. Actions are disabled on this placeholder.
+- **Transient delete / hide / unhide** reuse the **same spinner** (in place of
+  the ready check) for a short minimum window, so a fast server operation is
+  still perceptible. There is no separate "row tint" concept (see abandoned).
+- While anything is building or creating, the tab **re-polls** on a short
+  interval (recursive `setTimeout`, not `setInterval`, so polls never overlap)
+  and stops as soon as nothing is active, so a build resolves to "ready" without
+  a manual refresh.
+- The list **skeleton is reserved for the first load only**. Later refreshes and
+  mutations update rows in place (a thin top progress bar is the refresh cue) —
+  reloading into a skeleton on every change was too noisy (same lesson as the
+  CollectionView data grid).
 
-### Readable JSON previews in the detail card
+### 6. Create submit + reveal flow
 
-- The detail card previously rendered an index's partial filter and collation
-  with raw `JSON.stringify` (`{"locale":"en","strength":2}`). A small display
-  helper, `formatShellJson` (in `indexView/utils/format.ts`), now renders them as
-  compact shell-style object literals — `{ locale: 'en', strength: 2 }` —
-  unquoting identifier keys, single-quoting string values, and spacing braces /
-  commas. It is display-only (not a parser round-trip) and falls back to
-  `JSON.stringify` for exotic types.
-- Applied to the **index detail card** — the partial filter, collation, and
-  wildcard projection previews — and to the **Properties column badge tooltips**:
-  hovering the `Partial`, `Collation`, or `Wildcard` badge shows the readable,
-  shell-style object behind it. The wildcard projection is now surfaced in both
-  places (it was previously carried on `IndexRow` but never shown).
-- It could still be applied to the create-in-playground / create-in-shell command
-  preview (though that is meant to be pasteable shell, so it is a judgment call)
-  and anywhere else index option objects are shown inline. Not recommended for
-  the raw index definition opened via `openIndexDefinition`, which intentionally
-  shows exact server JSON.
+- The drawer closes **immediately** on submit — a foreground build can outlast
+  any reasonable hold, and the optimistic "Creating…" row already reflects the
+  in-flight create. The result is handled in the background: a success toast, or
+  a modal error dialog (with the form preserved for retry).
+- A newly created index is **scrolled into view only if off-screen**
+  (`scrollIntoView({ block: 'nearest' })`). The scroll is **deferred to after
+  paint with a one-frame retry** because the target is a just-inserted,
+  alphabetically-sorted optimistic row that may not be laid out (or may still be
+  reconciling its name) on the render where the request first fires; running the
+  scroll immediately hit a stale layout and did nothing. `behavior: 'smooth'`
+  makes an actual scroll perceptible.
 
-### Empty properties cell
+### 7. Readable JSON previews
 
-- The Properties column now renders **nothing** for a plain index (no options
-  set) instead of an em-dash placeholder, keeping the list quiet.
+- `formatShellJson` (`indexView/utils/format.ts`) renders option objects as
+  compact shell-style literals — `{ locale: 'en', strength: 2 }` instead of
+  `{"locale":"en","strength":2}` — unquoting identifier keys, single-quoting
+  strings, spacing braces / commas. Display-only; falls back to `JSON.stringify`
+  for exotic types.
+- Applied to the **detail card** (partial filter, collation, wildcard
+  projection) and to the **Properties column badge tooltips** (`Partial`,
+  `Collation`, `Wildcard`). The wildcard projection — previously carried on
+  `IndexRow` but never rendered — is now surfaced in both places.
+- Intentionally **not** applied to the raw index definition opened via
+  `openIndexDefinition`, which shows exact server JSON on purpose.
 
-### Scrolling fix
+### 8. Smaller polish
 
-- The tab filled `100vh` while nested inside the CollectionView's own `100vh`,
-  clipped flex column — so it overflowed the bottom and pushed the list's footer
-  count out of reach. The tab now fills the *remaining* height (`flex: 1 1 auto;
-  min-height: 0`), the list body is the single scroll region, and the
-  "Showing X of Y" count lives inside that scroll area so it is always reachable.
+- **Empty Properties cell** renders nothing for a plain index (no options),
+  instead of an em-dash placeholder.
+- **Accessibility:** key badges use the shared focusable-badge pattern with
+  tooltips spelling out the field name and index type in words (an up arrow reads
+  as "ascending"), so glyphs are not the only cue.
+- **Layout/scroll fix:** the tab used to fill `100vh` while nested in the
+  CollectionView's own clipped `100vh` flex column, pushing the footer count out
+  of reach. It now fills the *remaining* height (`flex: 1 1 auto; min-height: 0`),
+  the list body is the single scroll region, and the "Showing X of Y" count sits
+  inside that scroll area.
 
-### Accessibility
+---
 
-- Key badges in the detail card use the shared focusable-badge pattern with
-  tooltips that spell out the field name and index type in words (e.g. an up
-  arrow reads as "ascending"), so the direction glyphs are not the only cue.
+## Tried and abandoned (and why)
 
-### Build status (ready / building / creating)
+We iterated on the UX several times. These are the notable changes of mind, kept
+here so the final code does not look arbitrary:
 
-Each row now carries a leading status indicator so the user can tell at a glance
-whether an index is usable or still coming up:
+- **Row background tint for touched rows → spinner.** We first highlighted
+  created / deleted / hidden / unhidden rows with an accented background tint (a
+  200 ms fade-in). Once creating/building already showed a spinner, the tint was
+  a second, redundant vocabulary. Dropped it and reused the **spinner** for all
+  transient states; the ready state stays a green check. Simpler and consistent.
 
-- **Ready** — a green check icon in front of the name.
-- **Building** — a small badge with a self-rotating spinner and a "Building"
-  label. This is driven by the `building` flag that the server's `$indexStats`
-  aggregation already reports (it is present only while a build is in progress);
-  we simply surface it on `IndexStats` and map it onto a new `IndexRow.state`.
-- **Creating** — an optimistic, client-only row shown the instant a create is
-  submitted, so the action feels responsive during the window before the server
-  reports the new index. It carries the derived (or user-provided) index name and
-  key, is reconciled to the server's actual name on success, and is dropped once
-  the real index appears in a fetch. Actions are disabled on this placeholder row.
+- **Delete via the settings-style word/challenge confirmation → unified modal.**
+  Delete originally used `getConfirmationAsInSettings` (word / challenge / click)
+  while hide/unhide used a detailed modal. Two confirmation styles for three
+  similar actions read inconsistently, and delete's dialog lacked the size/usage
+  detail. We unified on **one modal** (`confirmIndexAction`) for all three, in
+  both the webview and the tree. Accepted tradeoff: delete loses the configurable
+  typed confirmation (noted above).
 
-While anything is building or creating, the tab re-polls the list on a short
-interval (recursive `setTimeout`, not `setInterval`, so polls never overlap) and
-stops as soon as nothing is active, so a build resolves to "ready" without the
-user pressing refresh.
+- **Drawer close on `min(2s, settle)` grace race → immediate close.** We briefly
+  held the drawer open until the create settled or a 2 s grace elapsed, whichever
+  came first. Since a foreground build can take much longer and the optimistic
+  "Creating…" row already communicates progress, holding the drawer added nothing.
+  The drawer now closes **immediately**; the result is handled in the background.
 
-This design was informed only by the **server APIs available to us**
-(`listIndexes` for inventory, `$indexStats` for the `building` flag and usage,
-`collStats` for size). We deliberately kept it to the happy path: knowing whether
-an index is ready or still working already adds real value, and it needs no extra
-privileges beyond the `$indexStats` call the list already makes.
+- **Clear-the-form-on-success at close time → reset at open time.** The form was
+  cleared by bumping a `resetSignal` in the create **success** handler (which
+  fires while the drawer is already closed). That left a gap: reopening quickly
+  could still show stale values, and a late reset could wipe the form while the
+  user was looking at it. We moved the decision to **drawer-open time**, gated by
+  `preserveFormRef` (preserve after cancel/failure, fresh after success). More
+  predictable, and it fixed the "reopen shows old data" report.
 
-The list skeleton is now reserved for the **first** load only. Later refreshes
-and mutations (hide / unhide / delete / create) update the rows in place — the
-same lesson applied to the CollectionView data grid — because reloading the whole
-list into a skeleton on every change was too noisy. The top progress bar still
-gives a subtle refresh cue, and the summary metrics keep their skeleton.
+- **Immediate `scrollIntoView` on create → deferred (rAF) with retry.** The
+  reveal appeared to do nothing because it ran against a stale layout for the
+  just-inserted/renamed row. Deferring to after paint (plus a one-frame retry and
+  smooth behavior) made it reliable. We kept `block: 'nearest'` on purpose so a
+  row that is already visible is never yanked.
+
+- **Live inline JSON validation + ghost/placeholder text → neither.** An earlier
+  advanced editor validated JSON as the user typed and used Monaco ghost text for
+  the example. Ghost text double-rendered on remount and is poor for a screen
+  reader; live validation nagged while typing and fought the relaxed-JSON goal.
+  We removed both: the example is a plain always-visible line, and malformed JSON
+  surfaces **once**, at create time, as an error.
+
+- **A dedicated index `EditorType` → plain `EditorType.Json` on the shared
+  language.** We considered a bespoke editor type/language for index options.
+  Reusing the existing `documentdb-query` language with a plain `Json` tag (and
+  suppressed completions) was far less code and left a clean seam for future
+  smart completions.
+
+- **Colour-coded type badges → one neutral tint.** Per-type colours (e.g.
+  Wildcard → orange "severe", Hashed → red "danger") implied those indexes were
+  problematic and encoded category by colour (inaccessible). Every type now uses
+  one neutral tint; the label (and card icon) carries the meaning.
+
+- **Em-dash placeholder for an empty Properties cell → nothing.** The `—`
+  placeholder added visual noise for the common plain-index case; the cell is now
+  simply empty.
 
 ---
 
 ## Follow-ups (not in this PR)
 
 - **Per-build progress (percentage / elapsed time).** A `$currentOp` query
-  against the `admin` database can expose `secs_running` and sometimes a
-  `progress.done/total` fraction for an active `createIndexes` operation. It would
-  layer on top of the current ready/building/creating states as a best-effort,
-  permission-tiered enhancement (it needs the `inprog` privilege for full
-  visibility, with a current-user fallback). Value versus complexity is still
-  under discussion — the ready/building signal already covers the common case.
-- Smart completions for the partial filter, and schema-aware completions for
-  collation, can build on the `EditorType.Json` seam described above.
+  against `admin` can expose `secs_running` and sometimes a `progress.done/total`
+  fraction for an active `createIndexes` operation. It would layer on top of the
+  ready/building/creating states as a best-effort, permission-tiered enhancement
+  (needs the `inprog` privilege for full visibility, with a current-user
+  fallback). Value vs. complexity is still under discussion — the ready/building
+  signal already covers the common case.
+- **Smart completions** for the partial filter, and schema-aware completions for
+  collation, can build on the `EditorType.Json` seam.
+- **`formatShellJson` on the playground/shell command preview** — a judgment call,
+  since that text is meant to be pasteable shell.
+- **Stronger typed confirmation for destructive delete** — if we want it back for
+  delete without splitting the unified dialog style.
