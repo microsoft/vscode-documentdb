@@ -1612,6 +1612,8 @@
   "We found {0} naming conflict(s) in \"{1}\". To move these items, please rename them or choose a different folder:": "We found {0} naming conflict(s) in \"{1}\". To move these items, please rename them or choose a different folder:",
   "What's New": "What's New",
   "Where to save the exported documents?": "Where to save the exported documents?",
+  "Wildcard": "Wildcard",
+  "Wildcard projection": "Wildcard projection",
   "with Popover": "with Popover",
   "Worker is not running": "Worker is not running",
   "Working...": "Working...",

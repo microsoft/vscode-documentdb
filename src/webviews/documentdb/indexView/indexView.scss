@@ -326,6 +326,15 @@
     }
 }
 
+// Property-badge tooltip body (partial filter / collation / wildcard projection).
+// Fluent v9 portals tooltips to the document body, so this lives at the top
+// level rather than nested under `.indexView`.
+.indexPropertiesTooltipCode {
+    font-family: var(--fontFamilyMonospace);
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
 // Create Index drawer (Fluent OverlayDrawer, pinned to the panel's right edge).
 .createIndexDrawer {
     // Header quick actions (Back / Hide) sit together in the header action slot.

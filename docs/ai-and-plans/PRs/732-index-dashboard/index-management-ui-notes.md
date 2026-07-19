@@ -140,11 +140,16 @@ while the user types.
   unquoting identifier keys, single-quoting string values, and spacing braces /
   commas. It is display-only (not a parser round-trip) and falls back to
   `JSON.stringify` for exotic types.
-- Applied to the **index detail card** (partial filter + collation). It could
-  also be applied to: the "Properties" column tooltips, the raw index definition
-  opened via `openIndexDefinition` (though that intentionally shows exact
-  server JSON), the create-in-playground / create-in-shell command preview, and
-  anywhere else index option objects are shown inline to the user.
+- Applied to the **index detail card** — the partial filter, collation, and
+  wildcard projection previews — and to the **Properties column badge tooltips**:
+  hovering the `Partial`, `Collation`, or `Wildcard` badge shows the readable,
+  shell-style object behind it. The wildcard projection is now surfaced in both
+  places (it was previously carried on `IndexRow` but never shown).
+- It could still be applied to the create-in-playground / create-in-shell command
+  preview (though that is meant to be pasteable shell, so it is a judgment call)
+  and anywhere else index option objects are shown inline. Not recommended for
+  the raw index definition opened via `openIndexDefinition`, which intentionally
+  shows exact server JSON.
 
 ### Empty properties cell
 

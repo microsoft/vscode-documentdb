@@ -151,6 +151,14 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
                         </dd>
                     </div>
                 )}
+                {index.wildcardProjection && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Wildcard projection')}</dt>
+                        <dd>
+                            <code className="detailFactCode">{formatShellJson(index.wildcardProjection)}</code>
+                        </dd>
+                    </div>
+                )}
             </dl>
         </Card>
     );
