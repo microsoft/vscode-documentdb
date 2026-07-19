@@ -39,7 +39,6 @@
  * =============================================================================
  */
 
-import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
@@ -49,7 +48,7 @@ import { PlaygroundCommandIds } from '../../../documentdb/playground/constants';
 import { SchemaStore } from '../../../documentdb/SchemaStore';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
-import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
+import { confirmIndexAction } from '../../../utils/dialogs/confirmIndexAction';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
@@ -207,36 +206,6 @@ function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
         spec.collation = collation;
     }
     return spec;
-}
-
-/**
- * Confirm a hide / unhide via a modal VS Code dialog. The detail lists the
- * index name, its size, and its usage (one per line) plus a short note about
- * the effect. Returns true when the user picks the Hide / Unhide action.
- */
-async function confirmHideToggle(
-    action: 'hide' | 'unhide',
-    indexName: string,
-    sizeText: string | undefined,
-    usageText: string | undefined,
-): Promise<boolean> {
-    const dash = l10n.t('—');
-    const detail = [
-        l10n.t('Index: {0}', indexName),
-        l10n.t('Size: {0}', sizeText && sizeText.trim() !== '' ? sizeText : dash),
-        l10n.t('Usage: {0}', usageText && usageText.trim() !== '' ? usageText : dash),
-        '',
-        action === 'hide'
-            ? l10n.t('Hiding prevents the query planner from using this index.')
-            : l10n.t('Unhiding makes this index available to the query planner again.'),
-    ].join('\n');
-
-    const title = action === 'hide' ? l10n.t('Hide index?') : l10n.t('Unhide index?');
-    const actionLabel = action === 'hide' ? l10n.t('Hide') : l10n.t('Unhide');
-
-    const vscode = await import('vscode');
-    const result = await vscode.window.showWarningMessage(title, { modal: true, detail }, actionLabel);
-    return result === actionLabel;
 }
 
 /**
@@ -468,31 +437,27 @@ export const indexViewRouter = router({
      * Failure → throw with a localised message; the confirm dialog stays.
      */
     dropIndex: publicProcedureWithTelemetry
-        .input(z.object({ indexName: z.string().min(1) }))
+        .input(
+            z.object({
+                indexName: z.string().min(1),
+                sizeText: z.string().optional(),
+                usageText: z.string().optional(),
+            }),
+        )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index cannot be deleted.'));
             }
 
-            // Confirm on the extension host using the user's configured
-            // confirmation style (word / challenge / click), mirroring the
-            // tree-view "Delete index" command.
-            let confirmed = false;
-            try {
-                confirmed = await getConfirmationAsInSettings(
-                    l10n.t('Delete index?'),
-                    l10n.t('Delete index "{0}" from collection "{1}"?', input.indexName, myCtx.collectionName) +
-                        '\n' +
-                        l10n.t('This cannot be undone.'),
-                    'delete',
-                );
-            } catch (error) {
-                if (error instanceof UserCancelledError) {
-                    return { ok: true, cancelled: true };
-                }
-                throw error;
-            }
+            // Confirm on the extension host using the same modal detail dialog
+            // as hide / unhide, so every index action reads consistently.
+            const confirmed = await confirmIndexAction('delete', {
+                indexName: input.indexName,
+                collectionName: myCtx.collectionName,
+                sizeText: input.sizeText,
+                usageText: input.usageText,
+            });
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }
@@ -561,7 +526,12 @@ export const indexViewRouter = router({
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index cannot be hidden.'));
             }
-            const confirmed = await confirmHideToggle('hide', input.indexName, input.sizeText, input.usageText);
+            const confirmed = await confirmIndexAction('hide', {
+                indexName: input.indexName,
+                collectionName: myCtx.collectionName,
+                sizeText: input.sizeText,
+                usageText: input.usageText,
+            });
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }
@@ -580,7 +550,12 @@ export const indexViewRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            const confirmed = await confirmHideToggle('unhide', input.indexName, input.sizeText, input.usageText);
+            const confirmed = await confirmIndexAction('unhide', {
+                indexName: input.indexName,
+                collectionName: myCtx.collectionName,
+                sizeText: input.sizeText,
+                usageText: input.usageText,
+            });
             if (!confirmed) {
                 return { ok: true, cancelled: true };
             }

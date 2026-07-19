@@ -24,13 +24,6 @@ const BUILD_POLL_INTERVAL_MS = 5000;
  */
 const MIN_ACTION_VISIBLE_MS = 2000;
 
-/**
- * How long the Create drawer stays open after submit before it hides itself.
- * A foreground index build can take longer than we want to hold the drawer, so
- * we close on whichever comes first: the create settling, or this grace period.
- */
-const DRAWER_CLOSE_GRACE_MS = 2000;
-
 /** Resolve after `ms` milliseconds. */
 function delay(ms: number): Promise<void> {
     return new Promise((resolve) => setTimeout(resolve, ms));
@@ -263,11 +256,11 @@ export const IndexesTab = (): JSX.Element => {
     /**
      * Submit handler for the Create Index dialog.
      *
-     * A foreground build can outlast the drawer, so we do NOT hold the drawer
-     * open for the whole create. Instead we close it on whichever comes first:
-     * the create settling, or a short grace period. The final result is handled
-     * in the background — a success toast + refresh, or a modal error dialog
-     * while the form data is preserved so re-opening the drawer pre-populates it.
+     * The drawer closes immediately on submit — a foreground build can outlast
+     * any reasonable hold, and the optimistic "Creating…" row already reflects
+     * the in-flight create. The final result is handled in the background — a
+     * success toast, or a modal error dialog while the form data is preserved so
+     * re-opening the drawer pre-populates it.
      */
     const handleCreateSubmit = useCallback(
         async (input: CreateIndexInput): Promise<void> => {
@@ -278,7 +271,8 @@ export const IndexesTab = (): JSX.Element => {
 
             const mutation = trpcClient.mongoClusters.indexView.createIndex.mutate(input);
 
-            // Handle the eventual result independently of when the drawer closes.
+            // Handle the eventual result independently of the drawer, which we
+            // close right away below.
             void mutation.then(
                 (result) => {
                     const finalName = result.indexName ?? pending.name;
@@ -310,13 +304,7 @@ export const IndexesTab = (): JSX.Element => {
                 },
             );
 
-            // Close the drawer once the create settles or the grace period elapses,
-            // whichever is first. `settled` never rejects so the race is clean.
-            const settled = mutation.then(
-                () => undefined,
-                () => undefined,
-            );
-            await Promise.race([settled, delay(DRAWER_CLOSE_GRACE_MS)]);
+            // Close the drawer immediately; the create continues in the background.
             setModal({ kind: 'none' });
         },
         [trpcClient, refresh, showError],
@@ -327,7 +315,11 @@ export const IndexesTab = (): JSX.Element => {
         async (index: IndexRow): Promise<void> => {
             const indexName = index.name;
             try {
-                const result = await trpcClient.mongoClusters.indexView.dropIndex.mutate({ indexName });
+                const result = await trpcClient.mongoClusters.indexView.dropIndex.mutate({
+                    indexName,
+                    sizeText: formatBytes(index.sizeBytes),
+                    usageText: formatOps(index.usageOps),
+                });
                 if (result.cancelled) {
                     return;
                 }
