@@ -27,8 +27,8 @@ export const IndexPropertiesView = ({ index }: IndexPropertiesViewProps): JSX.El
     if (index.hidden) labels.push(l10n.t('Hidden'));
 
     if (labels.length === 0) {
-        // Keep the cell visually quiet for plain indexes.
-        return <span className="indexPropertiesEmpty">—</span>;
+        // Nothing to show for a plain index — keep the cell empty.
+        return <></>;
     }
 
     return (
