@@ -18,6 +18,18 @@ import { formatBytes, formatOps } from './utils/format';
 /** How often to re-poll while at least one index is building or being created. */
 const BUILD_POLL_INTERVAL_MS = 5000;
 
+/**
+ * How long the Create drawer stays open after submit before it hides itself.
+ * A foreground index build can take longer than we want to hold the drawer, so
+ * we close on whichever comes first: the create settling, or this grace period.
+ */
+const DRAWER_CLOSE_GRACE_MS = 2000;
+
+/** Resolve after `ms` milliseconds. */
+function delay(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
 /** An optimistic, client-only pending index shown while a create is in flight. */
 interface PendingCreate {
     name: string;
@@ -83,17 +95,21 @@ export const IndexesTab = (): JSX.Element => {
     // displayed list below.
     const [pendingCreates, setPendingCreates] = useState<ReadonlyArray<PendingCreate>>([]);
 
+    // Bumped after a successful create to clear the drawer's form. A failed
+    // create leaves it untouched so re-opening the drawer pre-populates it.
+    const [createResetSignal, setCreateResetSignal] = useState(0);
+
     // Field suggestions (from SchemaStore) and the collection's document
     // count drive the Create Index dialog. They are pre-fetched when the
     // dialog opens and intentionally left stale afterwards.
     const [fieldSuggestions, setFieldSuggestions] = useState<ReadonlyArray<string>>([]);
     const [documentCount, setDocumentCount] = useState<number>(0);
 
-    /** Surface a non-modal error toast for any failed tRPC call. */
+    /** Surface an error for a failed tRPC call, as a toast or (opt-in) a modal. */
     const showError = useCallback(
-        (message: string, error: unknown): void => {
+        (message: string, error: unknown, opts?: { modal?: boolean }): void => {
             const cause = error instanceof Error ? error.message : String(error);
-            void trpcClient.common.displayErrorMessage.mutate({ message, modal: false, cause });
+            void trpcClient.common.displayErrorMessage.mutate({ message, modal: opts?.modal ?? false, cause });
         },
         [trpcClient],
     );
@@ -172,11 +188,9 @@ export const IndexesTab = (): JSX.Element => {
     }, [refresh]);
 
     // The list shown to the user = the real indexes plus any optimistic
-    // "Creating…" rows whose index has not yet appeared in a fetch.
+    // "Creating…" rows whose index has not yet appeared in a fetch, sorted
+    // alphabetically by name so a new index lands in a predictable place.
     const displayIndexes = useMemo<ReadonlyArray<IndexRow>>(() => {
-        if (pendingCreates.length === 0) {
-            return indexes;
-        }
         const existing = new Set(indexes.map((i) => i.name));
         const creatingRows: IndexRow[] = pendingCreates
             .filter((p) => !existing.has(p.name))
@@ -190,7 +204,8 @@ export const IndexesTab = (): JSX.Element => {
                 statsAvailable: false,
                 state: 'creating',
             }));
-        return [...indexes, ...creatingRows];
+        const merged = creatingRows.length > 0 ? [...indexes, ...creatingRows] : [...indexes];
+        return merged.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
     }, [indexes, pendingCreates]);
 
     // Drop optimistic rows once the real index shows up in a fetch.
@@ -214,34 +229,58 @@ export const IndexesTab = (): JSX.Element => {
         return () => clearTimeout(timer);
     }, [displayIndexes, refresh]);
 
-    /** Submit handler for the Create Index dialog. Re-throws so the dialog can stay open on error. */
+    /**
+     * Submit handler for the Create Index dialog.
+     *
+     * A foreground build can outlast the drawer, so we do NOT hold the drawer
+     * open for the whole create. Instead we close it on whichever comes first:
+     * the create settling, or a short grace period. The final result is handled
+     * in the background — a success toast + refresh, or a modal error dialog
+     * while the form data is preserved so re-opening the drawer pre-populates it.
+     */
     const handleCreateSubmit = useCallback(
         async (input: CreateIndexInput): Promise<void> => {
             // Show an optimistic "Creating…" row immediately so the action feels
             // responsive while the server builds the index.
             const pending = pendingCreateFromInput(input);
             setPendingCreates((prev) => [...prev.filter((p) => p.name !== pending.name), pending]);
-            try {
-                const result = await trpcClient.mongoClusters.indexView.createIndex.mutate(input);
-                setModal({ kind: 'none' });
-                // Reconcile the optimistic row's name with the server's actual name
-                // so it is pruned correctly once the real index is fetched.
-                if (result.indexName && result.indexName !== pending.name) {
-                    setPendingCreates((prev) =>
-                        prev.map((p) => (p.name === pending.name ? { ...p, name: result.indexName as string } : p)),
-                    );
-                }
-                void trpcClient.common.displayInformationMessage.mutate({
-                    message: result.indexName
-                        ? l10n.t('Index "{0}" created.', result.indexName)
-                        : l10n.t('Index created.'),
-                });
-                await refresh();
-            } catch (error) {
-                setPendingCreates((prev) => prev.filter((p) => p.name !== pending.name));
-                showError(l10n.t('Failed to create index.'), error);
-                throw error;
-            }
+
+            const mutation = trpcClient.mongoClusters.indexView.createIndex.mutate(input);
+
+            // Handle the eventual result independently of when the drawer closes.
+            void mutation.then(
+                (result) => {
+                    if (result.indexName && result.indexName !== pending.name) {
+                        setPendingCreates((prev) =>
+                            prev.map((p) => (p.name === pending.name ? { ...p, name: result.indexName as string } : p)),
+                        );
+                    }
+                    void trpcClient.common.displayInformationMessage.mutate({
+                        message: result.indexName
+                            ? l10n.t('Index "{0}" created.', result.indexName)
+                            : l10n.t('Index created.'),
+                    });
+                    void refresh();
+                    // Clear the form now that the create succeeded.
+                    setCreateResetSignal((n) => n + 1);
+                },
+                (error) => {
+                    // Drop the optimistic row and surface the failure in a modal.
+                    // The drawer keeps its form data, so the next open is pre-filled.
+                    setPendingCreates((prev) => prev.filter((p) => p.name !== pending.name));
+                    void refresh();
+                    showError(l10n.t('Failed to create index.'), error, { modal: true });
+                },
+            );
+
+            // Close the drawer once the create settles or the grace period elapses,
+            // whichever is first. `settled` never rejects so the race is clean.
+            const settled = mutation.then(
+                () => undefined,
+                () => undefined,
+            );
+            await Promise.race([settled, delay(DRAWER_CLOSE_GRACE_MS)]);
+            setModal({ kind: 'none' });
         },
         [trpcClient, refresh, showError],
     );
@@ -346,6 +385,7 @@ export const IndexesTab = (): JSX.Element => {
                 onCancel={() => setModal({ kind: 'none' })}
                 onSubmit={handleCreateSubmit}
                 onPrepareInTarget={handlePrepareInTarget}
+                resetSignal={createResetSignal}
             />
         </div>
     );

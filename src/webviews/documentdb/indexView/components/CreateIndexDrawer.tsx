@@ -35,7 +35,7 @@ import {
     WindowConsoleRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useMemo, useState, type JSX, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
 import { LARGE_COLLECTION_THRESHOLD_DOCS } from '../constants';
 import { type CreateIndexInput, type FieldIndexType } from '../types';
 import { JsonInputEditor } from './JsonInputEditor';
@@ -223,6 +223,12 @@ export interface CreateIndexDrawerProps {
     onSubmit: (input: CreateIndexInput) => Promise<void>;
     /** Prepare the create-index command in a playground or interactive shell. */
     onPrepareInTarget: (target: 'playground' | 'shell', input: CreateIndexInput) => Promise<void>;
+    /**
+     * Monotonic counter bumped by the parent after a *successful* create. Each
+     * increment clears the form. The drawer never resets itself on submit, so a
+     * failed create leaves the form intact for the user to retry on re-open.
+     */
+    resetSignal?: number;
 }
 
 /**
@@ -242,6 +248,7 @@ export const CreateIndexDrawer = ({
     onCancel,
     onSubmit,
     onPrepareInTarget,
+    resetSignal,
 }: CreateIndexDrawerProps): JSX.Element => {
     const [page, setPage] = useState<DrawerPage>('main');
     const [fields, setFields] = useState<FieldDraft[]>([INITIAL_FIELD()]);
@@ -258,7 +265,7 @@ export const CreateIndexDrawer = ({
 
     const typeLabels = useMemo(() => buildTypeLabels(), []);
 
-    const reset = (): void => {
+    const reset = useCallback((): void => {
         setPage('main');
         setFields([INITIAL_FIELD()]);
         setName('');
@@ -270,7 +277,18 @@ export const CreateIndexDrawer = ({
         setPartialText('{  }');
         setCollationText('{  }');
         setSubmitting(false);
-    };
+    }, []);
+
+    // The parent clears the form after a successful create by bumping
+    // `resetSignal`; a failed create never bumps it, so the form is preserved
+    // for the user to retry when they re-open the drawer.
+    const prevResetSignal = useRef(resetSignal);
+    useEffect(() => {
+        if (resetSignal !== undefined && resetSignal !== prevResetSignal.current) {
+            prevResetSignal.current = resetSignal;
+            reset();
+        }
+    }, [resetSignal, reset]);
 
     // Closing preserves the form; only an explicit reset (or a successful
     // create) clears it.
@@ -358,7 +376,6 @@ export const CreateIndexDrawer = ({
         setSubmitting(true);
         try {
             await onSubmit(buildPayload());
-            reset();
         } catch {
             // The parent surfaces the error; keep the form so the user can retry.
         } finally {
