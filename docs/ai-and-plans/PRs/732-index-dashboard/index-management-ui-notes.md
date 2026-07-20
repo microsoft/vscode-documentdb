@@ -247,6 +247,82 @@ here so the final code does not look arbitrary:
 
 ---
 
+## Dev-tooling discovery: the ResizeObserver overlay & a CSP `unsafe-eval` gotcha
+
+Focusing the Create Index drawer's field-name Combobox sometimes popped the
+webpack dev-server error overlay with `ResizeObserver loop completed with
+undelivered notifications`. Chasing that produced a genuinely useful discovery
+about dev tooling under the webview's Content Security Policy. Recording the full
+arc because we changed approach three times and briefly broke rendering.
+
+**What the warning actually is.** `ResizeObserver` callbacks run after layout,
+before paint. If a callback resizes an observed element, the browser re-observes;
+to avoid an in-frame infinite loop it **defers** the remaining notifications to
+the next frame and emits this non-fatal `ErrorEvent`. Nothing is dropped — the
+layout still converges a frame later. It is emitted by Fluent UI's popup
+positioning (`@fluentui/react-positioning` → Floating UI `autoUpdate`), which
+observes the trigger + popup and repositions on resize. A one-shot on popup-open
+is benign; only a *continuous, every-frame* stream is a real loop (jank / pegged
+CPU). Blip vs. runaway differ only by **rate**, not message.
+
+**It was only ever a dev-server overlay**, not a VS Code notification: our
+`webpack.config.views.js` sets `devServer.client.overlay`, and that client hooks
+`window` 'error'. Production ships no dev server, so users never see it.
+
+**Attempts (in order):**
+
+1. **Global `window` 'error' swallow** (capture phase, `stopImmediatePropagation`
+   + `preventDefault` on `/^ResizeObserver loop/`). Worked, but it was an
+   app-wide, prod-shipping suppressor that also hid the message from the devtools
+   console — heavier and blunter than the problem.
+2. **`overlay.runtimeErrors` *function* filter** — the natural per-error hook.
+   **This broke rendering entirely.** See the gotcha below.
+3. **Final: `overlay.runtimeErrors: false`** (a boolean) + a **dev-only rate
+   detector**. The runtime-error overlay is off (so the benign blip never shows),
+   compile error/warning overlays stay, the raw message still reaches the devtools
+   console, and `installResizeObserverLoopDetector` (installed behind
+   `process.env.NODE_ENV !== 'production'`, dead-code-eliminated from production)
+   `console.warn`s once per burst if the rate crosses ~5/s — i.e. it stays silent
+   for interaction blips and shouts only for a *real* loop.
+
+**The gotcha (the actual discovery): a *function* dev-server option is
+incompatible with the webview CSP.** webpack-dev-server evaluates `overlay`
+on the **client**, but the config lives on the **server**, so it serializes the
+option into the client's connection URL. A function can't travel as data, so it
+is **stringified**:
+
+```
+…&overlay={"errors":true,"warnings":true,
+  "runtimeErrors":"(error) => !/^ResizeObserver loop/.test(error.message)"}…
+```
+
+The client then rebuilds it with `new Function('return ' + str)()` (in
+`decodeOverlayOptions`). The webview CSP is `script-src 'self' … 'nonce-…'` with
+**no `'unsafe-eval'`**, so `new Function` throws
+`EvalError: Evaluating a string as JavaScript violates … 'unsafe-eval'`. Because
+that runs during the dev client's own bootstrap, the failure halts startup and
+the **whole webview renders blank** — not merely "no overlay". A boolean/string
+option travels as data and needs no eval, so it is safe; a function never is.
+
+**Operational lesson that cost us time:** `webpack serve` reads
+`webpack.config.views.js` **only at startup**. Editing the file, rebuilding app
+code, or even `git checkout`-ing another commit does **not** re-read it — the
+running server kept serving the eval-crashing client until `watch:views` was
+fully **stopped and restarted**. When debugging dev-server behavior, restart the
+server, don't just rebuild.
+
+**Takeaways for future webview dev tooling:**
+
+- Under the webview CSP (no `unsafe-eval`), **never pass a function to a
+  dev-server option** that is delivered to the client (`overlay.runtimeErrors`,
+  etc.); it becomes `new Function` and crashes the dev client. Prefer
+  booleans/strings.
+- A crashing dev-server client blanks the **whole** webview; a blank page with an
+  `EvalError` in `decodeOverlayOptions` points at dev-server config, not app code.
+- Dev-server config changes require a **full server restart**, not a rebuild.
+
+---
+
 ## Follow-ups (not in this PR)
 
 - **Per-build progress (percentage / elapsed time).** A `$currentOp` query
