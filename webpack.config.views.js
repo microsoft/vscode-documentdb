@@ -96,7 +96,17 @@ module.exports = (env, { mode }) => {
             hot: true,
             host: '127.0.0.1',
             client: {
-                overlay: true,
+                overlay: {
+                    // Ignore the benign, self-resolving "ResizeObserver loop …"
+                    // warning. It is emitted by Fluent UI's popup positioning
+                    // (Combobox / Dropdown / Menu) when opening a popup nudges
+                    // layout enough to need a second frame to settle — the spec
+                    // defers (does not drop) those notifications, so it is not a
+                    // real error. This only hides it from the dev-server overlay;
+                    // the message still appears in the devtools console, and every
+                    // other runtime error still surfaces normally.
+                    runtimeErrors: (error) => !(error?.message && /^ResizeObserver loop/.test(error.message)),
+                },
             },
             compress: true,
             port: 18080,
