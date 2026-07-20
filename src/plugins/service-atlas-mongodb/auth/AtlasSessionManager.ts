@@ -4,13 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import {
-    SECRET_KEY_PREFIX,
-    STATE_AUTH_METHOD,
-    STATE_SELECTED_ORG_ID,
-    STATE_SELECTED_PROJECTS,
-    STATE_USER_DISPLAY_NAME,
-} from '../config';
+import { SECRET_KEY_PREFIX, STATE_AUTH_METHOD, STATE_USER_DISPLAY_NAME } from '../config';
 import {
     AtlasSessionState,
     type AtlasApiKeySession,
@@ -36,7 +30,6 @@ const SA_EXPIRES_AT_KEY = `${SECRET_KEY_PREFIX}.serviceaccount.expiresAt`;
 export class AtlasSessionManager {
     private _state: AtlasSessionState = AtlasSessionState.None;
     private _stateBeforeAuthenticating: AtlasSessionState = AtlasSessionState.None;
-    private _suppressAutoPrompt = false;
     private _cachedSession: AtlasSession | undefined;
 
     private readonly _onDidChangeSession = new vscode.EventEmitter<AtlasSessionState>();
@@ -87,6 +80,22 @@ export class AtlasSessionManager {
     }
 
     /**
+     * Stores API Key credentials so a failed validation can be retried after the user updates
+     * their Atlas access settings.
+     */
+    public async storeApiKeyCredentialsForRetry(publicKey: string, privateKey: string): Promise<void> {
+        await Promise.all([
+            this.secretStorage.store(APIKEY_PUBLIC_KEY, publicKey),
+            this.secretStorage.store(APIKEY_PRIVATE_KEY, privateKey),
+        ]);
+
+        await this.globalState.update(STATE_AUTH_METHOD, 'apikey' satisfies AtlasAuthMethod);
+
+        this._cachedSession = undefined;
+        this.transitionTo(AtlasSessionState.Expired);
+    }
+
+    /**
      * Stores Service Account credentials and transitions to Active state.
      */
     public async storeServiceAccountCredentials(
@@ -108,6 +117,24 @@ export class AtlasSessionManager {
 
         this._cachedSession = { type: 'serviceaccount', accessToken };
         this.transitionTo(AtlasSessionState.Active);
+    }
+
+    /**
+     * Stores Service Account credentials before obtaining a token, allowing token acquisition
+     * to be retried after the account is corrected in Atlas.
+     */
+    public async storeServiceAccountCredentialsForRetry(clientId: string, clientSecret: string): Promise<void> {
+        await Promise.all([
+            this.secretStorage.store(SA_CLIENT_ID_KEY, clientId),
+            this.secretStorage.store(SA_CLIENT_SECRET_KEY, clientSecret),
+            this.secretStorage.delete(SA_ACCESS_TOKEN_KEY),
+            this.secretStorage.delete(SA_EXPIRES_AT_KEY),
+        ]);
+
+        await this.globalState.update(STATE_AUTH_METHOD, 'serviceaccount' satisfies AtlasAuthMethod);
+
+        this._cachedSession = undefined;
+        this.transitionTo(AtlasSessionState.Expired);
     }
 
     /**
@@ -138,6 +165,30 @@ export class AtlasSessionManager {
     }
 
     /**
+     * Returns whether credentials are available for a retry even when no active session exists.
+     */
+    public async hasStoredCredentials(): Promise<boolean> {
+        const authMethod = this.getAuthMethod();
+        if (authMethod === 'apikey') {
+            const [publicKey, privateKey] = await Promise.all([
+                this.secretStorage.get(APIKEY_PUBLIC_KEY),
+                this.secretStorage.get(APIKEY_PRIVATE_KEY),
+            ]);
+            return Boolean(publicKey && privateKey);
+        }
+
+        if (authMethod === 'serviceaccount') {
+            const [clientId, clientSecret] = await Promise.all([
+                this.secretStorage.get(SA_CLIENT_ID_KEY),
+                this.secretStorage.get(SA_CLIENT_SECRET_KEY),
+            ]);
+            return Boolean(clientId && clientSecret);
+        }
+
+        return false;
+    }
+
+    /**
      * Stores the user display name (email or API key identifier) for UI display.
      */
     public async setUserDisplayName(displayName: string): Promise<void> {
@@ -149,34 +200,6 @@ export class AtlasSessionManager {
      */
     public getUserDisplayName(): string | undefined {
         return this.globalState.get<string>(STATE_USER_DISPLAY_NAME);
-    }
-
-    /**
-     * Gets the set of project IDs selected for filtering (undefined = show all).
-     */
-    public getSelectedProjectIds(): string[] | undefined {
-        return this.globalState.get<string[]>(STATE_SELECTED_PROJECTS);
-    }
-
-    /**
-     * Stores the set of project IDs to display (undefined = show all).
-     */
-    public async setSelectedProjectIds(projectIds: string[] | undefined): Promise<void> {
-        await this.globalState.update(STATE_SELECTED_PROJECTS, projectIds);
-    }
-
-    /**
-     * Gets the selected organization ID for filtering (undefined = show all orgs).
-     */
-    public getSelectedOrgId(): string | undefined {
-        return this.globalState.get<string>(STATE_SELECTED_ORG_ID);
-    }
-
-    /**
-     * Stores the selected organization ID (undefined = show all orgs).
-     */
-    public async setSelectedOrgId(orgId: string | undefined): Promise<void> {
-        await this.globalState.update(STATE_SELECTED_ORG_ID, orgId);
     }
 
     /**
@@ -211,25 +234,8 @@ export class AtlasSessionManager {
      */
     public cancelAuthentication(): void {
         if (this._state === AtlasSessionState.Authenticating) {
-            // Reverting fires a session-change event, which refreshes the discovery tree.
-            // Suppress the next auto-prompt so that refresh shows the sign-in node instead of
-            // immediately re-opening the authentication prompt (which would loop on cancel).
-            this._suppressAutoPrompt = true;
             this.transitionTo(this._stateBeforeAuthenticating);
         }
-    }
-
-    /**
-     * Returns whether the next discovery-tree auto-prompt should be suppressed (consuming the
-     * flag). Set right after a cancelled sign-in so the cancel-triggered refresh does not
-     * immediately re-open the authentication prompt.
-     */
-    public consumeSuppressAutoPrompt(): boolean {
-        if (this._suppressAutoPrompt) {
-            this._suppressAutoPrompt = false;
-            return true;
-        }
-        return false;
     }
 
     /**
@@ -303,13 +309,9 @@ export class AtlasSessionManager {
             );
 
             return this._cachedSession as AtlasServiceAccountSession;
-        } catch (error) {
-            // If credentials are rejected, sign out
-            if (error instanceof Error && error.message.includes('invalid_client')) {
-                await this.signOut();
-            } else {
-                this.transitionTo(AtlasSessionState.Expired);
-            }
+        } catch {
+            // Keep submitted credentials so the user can correct Atlas-side access and retry.
+            this.transitionTo(AtlasSessionState.Expired);
             return undefined;
         }
     }

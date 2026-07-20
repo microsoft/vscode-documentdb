@@ -8,19 +8,23 @@ import { Views } from '../../../documentdb/Views';
 import { AtlasExperience } from '../../../DocumentDBExperiences';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
-import { type TreeElementWithContextValue } from '../../../tree/TreeElementWithContextValue';
+import {
+    isTreeElementWithContextValue,
+    type TreeElementWithContextValue,
+} from '../../../tree/TreeElementWithContextValue';
+import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
-import { AtlasSessionState } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { createAtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasClusterItem } from './AtlasClusterItem';
+import { showAtlasLoadFailure } from './showAtlasLoadFailure';
 
 /**
  * Tree item representing a MongoDB Atlas project.
  * On expand, fetches and displays clusters within the project.
  */
-export class AtlasProjectItem implements TreeElement, TreeElementWithContextValue {
+export class AtlasProjectItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string = 'enableRefreshCommand;treeItem_atlasProject';
 
@@ -36,14 +40,11 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
     async getChildren(): Promise<ExtTreeElementBase[]> {
         const session = await this.sessionManager.getSession();
         if (!session) {
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/no-session`,
-                    label: vscode.l10n.t('Please sign in to MongoDB Atlas again.'),
-                    iconPath: new vscode.ThemeIcon('warning'),
-                }),
-            ];
+            await showAtlasLoadFailure(
+                vscode.l10n.t('Failed to load MongoDB Atlas clusters.'),
+                vscode.l10n.t('Atlas session is not available.'),
+            );
+            return [this.createRetryNode()];
         }
 
         try {
@@ -74,42 +75,20 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                 });
         } catch (error) {
             if (error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403)) {
-                // The client already attempted a silent token refresh + retry before throwing.
-                // Only when the refresh token is completely rejected does the session manager
-                // sign out (state === None) — in that case prompt the user to sign in again.
-                if (this.sessionManager.state === AtlasSessionState.None) {
-                    return [
-                        createGenericElementWithContext({
-                            contextValue: 'error',
-                            id: `${this.id}/auth-error`,
-                            label: vscode.l10n.t('Please sign in to MongoDB Atlas again.'),
-                            iconPath: new vscode.ThemeIcon('error'),
-                        }),
-                    ];
-                }
-
-                // Transient failure or insufficient permissions — keep the session intact
-                // and surface the error without forcing a re-authentication.
-                return [
-                    createGenericElementWithContext({
-                        contextValue: 'error',
-                        id: `${this.id}/auth-error`,
-                        label: error.message,
-                        iconPath: new vscode.ThemeIcon('error'),
-                    }),
-                ];
+                await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas clusters.'), error.message);
+                return [this.createRetryNode()];
             }
 
             const errorMessage = error instanceof Error ? error.message : String(error);
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'error',
-                    id: `${this.id}/error`,
-                    label: vscode.l10n.t('Failed to load clusters: {0}', errorMessage),
-                    iconPath: new vscode.ThemeIcon('error'),
-                }),
-            ];
+            await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas clusters.'), errorMessage);
+            return [this.createRetryNode()];
         }
+    }
+
+    public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
+        return (
+            children?.some((child) => isTreeElementWithContextValue(child) && child.contextValue === 'error') ?? false
+        );
     }
 
     public getTreeItem(): vscode.TreeItem {
@@ -124,5 +103,16 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
             iconPath: new vscode.ThemeIcon('project'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    private createRetryNode(): TreeElement & TreeElementWithContextValue {
+        return createGenericElementWithContext({
+            contextValue: 'error',
+            id: `${this.id}/retry`,
+            label: vscode.l10n.t('Click here to retry'),
+            iconPath: new vscode.ThemeIcon('refresh'),
+            commandId: 'vscode-documentdb.command.internal.retry',
+            commandArgs: [this],
+        });
     }
 }

@@ -12,22 +12,20 @@ import {
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
-import { promptAtlasAuthMethod } from '../auth/AtlasAuthQuickPick';
 import { AtlasSessionState } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
-import { executeAtlasAuthFlow } from '../auth/executeAtlasAuthFlow';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { AtlasProjectItem } from './AtlasProjectItem';
+import { showAtlasLoadFailure } from './showAtlasLoadFailure';
 
 /**
  * Root tree item for the MongoDB Atlas discovery provider.
- * Handles authentication gating — on expand, ensures a valid session exists
- * before fetching and displaying projects.
+ * Handles authentication gating before fetching and displaying projects.
  */
 export class AtlasServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
     public contextValue: string =
-        'enableRefreshCommand;enableManageCredentialsCommand;enableFilterCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem';
+        'enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem';
 
     constructor(
         private readonly sessionManager: AtlasSessionManager,
@@ -37,25 +35,12 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        // Attempt to get or establish a session
-        let session = await this.sessionManager.getSession();
+        const session = await this.sessionManager.getSession();
 
         if (!session) {
-            // A sign-in was just cancelled — the resulting refresh should show the sign-in
-            // node rather than immediately re-opening the auth prompt.
-            if (this.sessionManager.consumeSuppressAutoPrompt()) {
-                return [this.createSignInNode()];
+            if (await this.sessionManager.hasStoredCredentials()) {
+                return [this.createRetryNode(), this.createUpdateCredentialsNode()];
             }
-
-            // No session — prompt user to authenticate
-            const authenticated = await this.promptAuthentication();
-            if (!authenticated) {
-                return [this.createSignInNode()];
-            }
-            session = await this.sessionManager.getSession();
-        }
-
-        if (!session) {
             return [this.createSignInNode()];
         }
 
@@ -90,58 +75,37 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
                 // Transient failure or insufficient permissions — keep the session intact and
                 // offer a retry instead of forcing the user to re-authenticate.
-                await this.showLoadFailure(error.message);
-                return [this.createRetryNode()];
+                await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), error.message);
+                return [this.createRetryNode(), this.createUpdateCredentialsNode()];
             }
 
             const errorMessage = error instanceof Error ? error.message : String(error);
-            await this.showLoadFailure(errorMessage);
-            return [this.createRetryNode()];
+            await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), errorMessage);
+            return [this.createRetryNode(), this.createUpdateCredentialsNode()];
         }
     }
 
     /**
      * Fetches projects and organizations from Atlas, returning tree items.
-     * Applies org filter (from Manage Credentials → Organizations) and/or
-     * project filter (from the Filter icon) if configured.
      */
     private async fetchProjectItems(client: AtlasApiClient): Promise<ExtTreeElementBase[]> {
         const [projects, orgs] = await Promise.all([client.listProjects(), client.listOrganizations()]);
 
         if (projects.length === 0) {
+            const hasVisibleOrganizations = orgs.length > 0;
             return [
                 createGenericElementWithContext({
                     contextValue: 'info',
-                    id: `${this.id}/no-projects`,
-                    label: vscode.l10n.t('No projects found'),
-                    description: vscode.l10n.t('Create a project in the Atlas console'),
+                    id: `${this.id}/${hasVisibleOrganizations ? 'no-visible-projects' : 'no-projects'}`,
+                    label: hasVisibleOrganizations
+                        ? vscode.l10n.t('No projects visible to this API key')
+                        : vscode.l10n.t('No projects found'),
+                    tooltip: hasVisibleOrganizations
+                        ? vscode.l10n.t(
+                              'This API key can access organizations, but it cannot view any projects. Check the project access and roles for this key.',
+                          )
+                        : vscode.l10n.t('Create a project in the Atlas console'),
                     iconPath: new vscode.ThemeIcon('info'),
-                }),
-            ];
-        }
-
-        // Apply organization filter (set via Manage Credentials → Organizations)
-        const selectedOrgId = this.sessionManager.getSelectedOrgId();
-        let filteredProjects =
-            selectedOrgId === undefined ? projects : projects.filter((project) => project.orgId === selectedOrgId);
-
-        // Apply project filter (set via Filter icon)
-        const selectedProjectIds = this.sessionManager.getSelectedProjectIds();
-        if (selectedProjectIds !== undefined) {
-            filteredProjects = filteredProjects.filter((project) => selectedProjectIds.includes(project.id));
-        }
-
-        if (filteredProjects.length === 0) {
-            const message = selectedOrgId
-                ? vscode.l10n.t('No projects found for the selected organization')
-                : vscode.l10n.t('All projects are hidden by filter');
-            return [
-                createGenericElementWithContext({
-                    contextValue: 'info',
-                    id: `${this.id}/all-filtered`,
-                    label: message,
-                    description: vscode.l10n.t('Use the filter button to adjust'),
-                    iconPath: new vscode.ThemeIcon('filter'),
                 }),
             ];
         }
@@ -149,7 +113,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         // Build org name lookup for project descriptions
         const orgNameMap = new Map(orgs.map((org) => [org.id, org.name]));
 
-        return filteredProjects
+        return projects
             .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
             .map(
                 (project) => new AtlasProjectItem(this.id, project, this.sessionManager, orgNameMap.get(project.orgId)),
@@ -171,19 +135,6 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             iconPath: new vscode.ThemeIcon('cloud'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
-    }
-
-    /**
-     * Prompts user for authentication method and executes the chosen flow.
-     */
-    private async promptAuthentication(): Promise<boolean> {
-        const authMethod = await promptAtlasAuthMethod();
-
-        if (!authMethod) {
-            return false; // User cancelled
-        }
-
-        return executeAtlasAuthFlow(authMethod, this.sessionManager);
     }
 
     private createSignInNode(): TreeElement & TreeElementWithContextValue {
@@ -208,13 +159,14 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         });
     }
 
-    private async showLoadFailure(errorMessage: string): Promise<void> {
-        await vscode.window.showErrorMessage(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), {
-            modal: true,
-            detail:
-                vscode.l10n.t('Revisit credentials and filters, then try again.') +
-                '\n\n' +
-                vscode.l10n.t('Error: {0}', errorMessage),
+    private createUpdateCredentialsNode(): TreeElement & TreeElementWithContextValue {
+        return createGenericElementWithContext({
+            contextValue: 'error',
+            id: `${this.id}/update-credentials`,
+            label: vscode.l10n.t('Update credentials'),
+            iconPath: new vscode.ThemeIcon('key'),
+            commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+            commandArgs: [this],
         });
     }
 

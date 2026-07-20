@@ -35,6 +35,4 @@ export const SECRET_KEY_PREFIX = 'atlas-mongodb';
 
 /** Global state keys */
 export const STATE_AUTH_METHOD = `${SECRET_KEY_PREFIX}.authMethod`;
-export const STATE_SELECTED_PROJECTS = `${SECRET_KEY_PREFIX}.selectedProjects`;
-export const STATE_SELECTED_ORG_ID = `${SECRET_KEY_PREFIX}.selectedOrgId`;
 export const STATE_USER_DISPLAY_NAME = `${SECRET_KEY_PREFIX}.userDisplayName`;
