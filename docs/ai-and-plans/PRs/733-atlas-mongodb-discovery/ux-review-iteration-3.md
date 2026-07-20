@@ -205,7 +205,7 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | ✅ Implemented                                                                              |
 | 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | 🟠 Open                                                                                     |
 | 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) |
-| 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | 🟡 Open (soft)                                                                              |
+| 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | ✅ Implemented                                                                              |
 | 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft)                                                                              |
 | 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | ~15     | 🗣️ #5     | 🟡 Open (soft)                                                                              |
 | 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | ~5      | —         | 🟠 Open                                                                                     |
@@ -297,7 +297,7 @@ the previous (see [Sequencing](#sequencing-suggested)).
 
 | Order | Item                                                                            | Touches                                                                                                 | \u2248 Files | Parallel within bundle?                        |
 | ----- | ------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------- |
-| 1     | **Item 6** — guided webview for credential entry (hosts "Add" / "Update creds") | new webview (React + tRPC router + controller), `AtlasApiKeyFlow`                                       | ~15          | **Strictly sequential** — do first             |
+| 1     | **Item 6** — guided webview for credential entry (hosts "Add" / "Update creds") | new webview (React + tRPC router + controller), `AtlasApiKeyFlow`, `AtlasServiceAccountFlow`            | ~15          | ✅ Implemented — do first                      |
 | 2     | **Item 7** — multi-credential management on the shared `StorageService`         | `AtlasSessionManager` → N-credential store, `configureCredentials` wizard, API client, tree attribution | ~20          | After 6 — the webview is the "Add" surface     |
 | 3     | **Item 8** — Tree/List view toggle + org level                                  | new `AtlasOrgItem`, `config.ts`, 2 commands, `package.json`, `AtlasProjectItem`/`AtlasClusterItem`      | ~15          | After 7 — needs the org-aware credential model |
 
@@ -524,7 +524,7 @@ future permissions diagnostics. **Verification:** `npm run build` passed.
 
 ### 6. Rework credential entry as a guided webview (tell the user where to get the keys) 🗣️
 
-**Priority:** P2 · **Status:** 🟡 Open (soft) · **Complexity:** ~15 files · **Reviewer #2**
+**Priority:** P2 · **Status:** ✅ Implemented · **Complexity:** ~15 files · **Reviewer #2**
 
 **Observation:** _"The sign-in QuickPick will have to be redone as a webview. It's currently
 too hard for the user to know what to do — the QuickPick doesn't share enough context on
@@ -544,6 +544,37 @@ extension host and only render the form in the webview (per Reviewer #6's "I don
 move everything into a webview"). This is the natural home for the **retry / update-credentials**
 affordance from item 2. See [O3](#o3-credentialentry-surface-webview-vs-quickpick-item-6).
 _Likely a follow-up PR, not a release blocker — confirm scope._
+
+> **Decision (Iteration 3 — Option C):** Adopt the **hybrid approach**: the auth-method
+> chooser (`promptAtlasAuthMethod`) and the manage-credentials list (`configureCredentials`)
+> **remain QuickPicks** — they are simple list selections that need no extra help text.
+> Only the **add/edit credential form** becomes a guided webview. This keeps the existing
+> `executeAtlasAuthFlow(method, sessionManager): Promise<boolean>` contract intact so every
+> caller — the discovery tree, the retry node, the wizard — works without change.
+> Single-session storage is retained (multi-credential store is deferred to item 7).
+> The webview opens as an **editor-tab panel** (not a modal); credentials are validated
+> host-side before storage; the panel self-closes on success and resolves `true` to the
+> caller, or resolves `false` when the user closes it without completing.
+> **Reason:** the QuickPick method-chooser is already an appropriate surface (two options,
+> no help needed); replacing it with a multi-step webview wizard would add friction without
+> adding value. The form itself is where users need guidance — that is what becomes a webview.
+
+✅ **Implemented (Iteration 3):** Seven files were created or modified:
+
+_New files:_
+
+- [`src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts`](../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts) — host-side tRPC router. `RouterContext` carries a live `AtlasSessionManager` reference and a `onCredentialsStored` one-shot callback (both survive the shallow context clone in `attachTrpc`). Two mutations: `submitApiKey` (trims keys, stores for retry first via `storeApiKeyCredentialsForRetry`, validates against `AtlasApiClient.listProjects`, then calls `storeApiKeyCredentials` + `onCredentialsStored`) and `submitServiceAccount` (same pattern via `fetchServiceAccountToken`). On 401/403, `describeAtlasError` appends an Access-List/permissions hint. Telemetry records `authMethod` and `authSuccess`.
+- [`src/webviews/documentdb/atlasCredentials/atlasCredentialsController.ts`](../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsController.ts) — exports `AtlasCredentialsWebviewConfig` (JSON-safe, carries only `authMethod`) and `openAtlasCredentialsWebview(authMethod, sessionManager): Promise<boolean>`. Wraps the panel in a `Promise`; `onCredentialsStored` resolves `true` and disposes the panel on the next tick (so the mutation response reaches the webview first); `onDisposed` resolves `false`.
+- [`src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx`](../../../../src/webviews/documentdb/atlasCredentials/AtlasCredentialsView.tsx) — React form (Fluent UI v9). Layout: title → brief intro text → collapsible `<details>` step-by-step guide (4 steps; step 2 has a nested sub-list for org creation) → documentation + console links → form fields → Connect button + spinner → permission hint. The step-by-step guide covers the full journey from sign-in through IDENTITY & ACCESS → Applications → the correct tab. Both auth methods share steps 1–3; step 4 diverges (API Keys tab vs. Service Accounts tab). Inline `MessageBar` shows validation errors without closing the form. On success the host disposes the panel — no client-side navigation needed.
+
+_Modified files:_
+
+- [`src/webviews/_integration/appRouter.ts`](../../../../src/webviews/_integration/appRouter.ts) — registered `atlasCredentialsRouter` as a top-level key alongside `common` and `mongoClusters`.
+- [`src/webviews/_integration/WebviewRegistry.ts`](../../../../src/webviews/_integration/WebviewRegistry.ts) — registered `atlasCredentials: AtlasCredentialsView`.
+- [`src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasApiKeyFlow.ts) — rewritten: calls `sessionManager.setAuthenticating()`, opens `openAtlasCredentialsWebview('apikey', sessionManager)`, on `false` calls `cancelAuthentication()` and returns `false`; on `true` shows the success toast and returns `true`. All input-box and standalone-validation logic removed.
+- [`src/plugins/service-atlas-mongodb/auth/AtlasServiceAccountFlow.ts`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasServiceAccountFlow.ts) — rewritten analogously for `'serviceaccount'`.
+
+**Verification:** `npm run l10n` (1619 keys), `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
 
 ---
 
