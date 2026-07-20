@@ -78,10 +78,14 @@ and call procedures with `useTrpcClient`.
 npm install @microsoft/vscode-ext-webview
 ```
 
-The package declares `react`, `@trpc/client`, and `@trpc/server` as peer
-dependencies. Bring whatever versions you use yourself; the package will not
-pull duplicates into your webview bundle. `react-dom` is not a peer of this
-package; it is a transitive concern of any React DOM app shell.
+The package declares `@trpc/client`, `@trpc/server`, `react`, and
+`vscode-webview` as peer dependencies. Bring whatever versions you use yourself;
+the package will not pull duplicates into your webview bundle. `react` and
+`vscode-webview` are optional peers (see [Peer dependencies](#peer-dependencies)
+below): both are used only by the `./react` surface, so a host-only consumer or
+a framework-agnostic `./webview` consumer needs neither and gets no missing-peer
+warning. `react-dom` is not a peer of this package; it is a transitive concern
+of any React DOM app shell.
 
 **2. Define the router (extension host)**
 
@@ -290,10 +294,7 @@ failures tracked — **off by default** so you are not opted into events you may
 not want:
 
 ```tsx
-<WithWebviewContext
-  vscodeApi={vscodeApi}
-  onObserverError={(error, { info, phase }) => report(info.path, phase, error)}
->
+<WithWebviewContext vscodeApi={vscodeApi} onObserverError={(error, { info, phase }) => report(info.path, phase, error)}>
   <App />
 </WithWebviewContext>
 ```
@@ -317,7 +318,7 @@ import { openWebview, type ProcedureLogger } from '@microsoft/vscode-ext-webview
 
 const channel = vscode.window.createOutputChannel('My View');
 const logger: ProcedureLogger = {
-  log: (e) => channel.appendLine(`${e.type} ${e.path} ${e.durationMs}ms ${e.ok ? 'ok' : 'FAIL'}`),
+  onEnd: (e) => channel.appendLine(`${e.type} ${e.path} ${e.durationMs}ms ${e.ok ? 'ok' : 'FAIL'}`),
 };
 
 openWebview(ctx, {
@@ -329,40 +330,48 @@ openWebview(ctx, {
 ### Telemetry (Application Insights via `@microsoft/vscode-azext-utils`)
 
 For structured analytics, wire the instance-agnostic `telemetryMiddlewareBody`
-onto your procedures with a `TelemetryRunner` adapter. The runner establishes the
-telemetry scope; the body times each call, records `Canceled` / `Failed`, and
-injects a telemetry bag into `ctx.telemetry`. Most VS Code extensions route this
-through `callWithTelemetryAndErrorHandling`:
+onto your procedures with a `TelemetryRunner` adapter. The body is a thin
+delegator: it resolves the telemetry event id and hands control to your runner.
+The runner establishes the telemetry scope, contributes whatever it likes to the
+procedure context via `invoke(enrichment)`, and classifies the outcome from the
+returned result. Most VS Code extensions route this through
+`callWithTelemetryAndErrorHandling`, which records `duration` for free:
 
 ```ts
-import { callWithTelemetryAndErrorHandling } from '@microsoft/vscode-azext-utils';
+import { callWithTelemetryAndErrorHandling, type IActionContext } from '@microsoft/vscode-azext-utils';
 import { initWebviewTrpc } from '@microsoft/vscode-ext-webview';
-import { telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
+import { getInvocationSignal, telemetryMiddlewareBody, type TelemetryRunner } from '@microsoft/vscode-ext-webview/host';
 
-const runner: TelemetryRunner = {
-  async run(invocation, execute) {
-    const result = await callWithTelemetryAndErrorHandling(
-      `myExt.rpc.${invocation.type}.${invocation.path}`,
-      async (context) => {
-        context.errorHandling.suppressDisplay = true;
-        return execute(context.telemetry); // hands the azext telemetry bag to the body
-      },
-    );
-    if (!result) throw new Error(`no telemetry result for ${invocation.path}`);
+const runner: TelemetryRunner<{ actionContext: IActionContext }> = {
+  async run(eventId, invocation, invoke) {
+    const result = await callWithTelemetryAndErrorHandling(eventId, async (actionContext) => {
+      actionContext.errorHandling.suppressDisplay = true;
+      const middlewareResult = await invoke({ actionContext }); // procedures read ctx.actionContext
+      const aborted = getInvocationSignal(invocation.ctx)?.aborted ?? false;
+      if (aborted) actionContext.telemetry.properties.result = 'Canceled';
+      else if (!middlewareResult.ok && middlewareResult.error) {
+        actionContext.telemetry.properties.result = 'Failed';
+        actionContext.telemetry.properties.error = middlewareResult.error.name ?? '';
+      }
+      return middlewareResult;
+    });
+    if (!result) throw new Error(`no telemetry result for ${eventId}`);
     return result;
   },
 };
 
 const { publicProcedure } = initWebviewTrpc<RouterContext>();
 // Build your router from `tracked` instead of the bare `publicProcedure`:
-export const tracked = publicProcedure.use((opts) => telemetryMiddlewareBody(opts, runner));
+export const tracked = publicProcedure.use(
+  telemetryMiddlewareBody(runner, { buildEventId: ({ type, path }) => `myExt.rpc.${type}.${path}` }),
+);
 ```
 
-Inside a procedure, read `ctx.telemetry` to add properties/measurements. The
-package types that slot minimally, so azext consumers usually re-type it to
-`ITelemetryContext` with a one-line `WithTelemetry<T>` helper — see
-[ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full worked adapter and a
-copyable helper.
+Inside a procedure, read the fields your runner contributed (here
+`ctx.actionContext`) to add properties/measurements. Declare that field on your
+router context type so procedures read it without a telemetry-specific cast — see
+[ADVANCED.md](./ADVANCED.md#telemetry-adapters) for the full worked adapter, and
+[MIGRATION.md](./MIGRATION.md) if you are upgrading from an earlier version.
 
 ## Entry points
 
@@ -418,12 +427,19 @@ import { useTrpcClient, useConfiguration, WithWebviewContext } from '@microsoft/
 
 ## Peer dependencies
 
-| Package          | Required version                       |
-| ---------------- | -------------------------------------- |
-| `react`          | `>=18.0.0` (only for `./react`)        |
-| `@trpc/client`   | `^11.0.0`                              |
-| `@trpc/server`   | `^11.0.0`                              |
-| `vscode-webview` | `^1.0.0` (optional, webview-side only) |
+| Package          | Version    | Optional?                                 |
+| ---------------- | ---------- | ----------------------------------------- |
+| `@trpc/client`   | `^11.0.0`  | Required — core transport                 |
+| `@trpc/server`   | `^11.0.0`  | Required — core transport                 |
+| `react`          | `>=18.0.0` | Optional — only for the `./react` surface |
+| `vscode-webview` | `^1.0.0`   | Optional — only for the `./react` surface |
+
+`react` and `vscode-webview` are declared optional via `peerDependenciesMeta`, so
+a consumer that only uses `./host` (or the framework-agnostic `./webview`) surface
+installs neither and sees no missing-peer warning. Both peers are referenced only
+by the `./react` surface (`vscode-webview` supplies the `WebviewApi` type used in
+`WithWebviewContext`); the `./webview` transport defines its own structural
+`VsCodeApiLike` instead, so it has no `vscode-webview` dependency.
 
 ## Scope
 
@@ -454,8 +470,27 @@ extensions are working examples of that layout against this package.
 
 ## Status
 
-`0.9.0-preview`. APIs are subject to change while the package is in preview. See
+`0.10.0`. APIs are subject to change while the package is in preview. See
 [ADVANCED.md](./ADVANCED.md) for the full set of primitives and patterns.
+
+## Contributors
+
+This package and the [vscode-webview-starter-kit](https://github.com/tnaum-ms/vscode-webview-starter-kit)
+built alongside it were a team effort:
+
+- [**tnaum-ms**](https://github.com/tnaum-ms) extracted the package from the
+  webview stack that ships in DocumentDB for VS Code, shaped the tRPC
+  integration and public API, and built the companion starter kit.
+- [**bk201-**](https://github.com/bk201-) built the dynamic theming system and,
+  with sevoku, test-drove the package in [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb),
+  helping show the path toward a more modular design.
+- [**guanzhousongmicrosoft**](https://github.com/guanzhousongmicrosoft) built
+  the npm release pipelines that publish the package.
+- [**sevoku**](https://github.com/sevoku) helped test-drive the package in
+  [Azure Cosmos DB for VS Code](https://github.com/microsoft/vscode-cosmosdb)
+  with bk201-, surfacing the modular direction.
+
+Thanks to everyone who contributed ideas, reviews, and feedback along the way.
 
 ## License
 

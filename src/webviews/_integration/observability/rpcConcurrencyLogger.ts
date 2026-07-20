@@ -46,7 +46,7 @@ import { WEBVIEW_CONFIG } from '../configuration';
  * framework's console logger, then records the concurrency gauge sample.
  */
 export const rpcConcurrencyLogger: ProcedureLogger = {
-    log(entry: ProcedureLogEntry): void {
+    onEnd(entry: ProcedureLogEntry): void {
         // R766-P05: the framework's console line is a per-op `console.log` on the
         // extension host. It is useful while debugging the extension but is dead
         // weight (string formatting + I/O) on a shipped, installed build where no
@@ -57,7 +57,7 @@ export const rpcConcurrencyLogger: ProcedureLogger = {
         // and the comparison is O(1). The telemetry gauge below stays
         // unconditional so production still records concurrency.
         if (ext.context.extensionMode !== vscode.ExtensionMode.Production) {
-            consoleProcedureLogger.log(entry);
+            consoleProcedureLogger.onEnd?.(entry);
         }
 
         // `concurrent` is only present on entries produced by the transport's

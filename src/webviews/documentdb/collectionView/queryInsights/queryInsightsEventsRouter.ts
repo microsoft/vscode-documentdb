@@ -12,10 +12,9 @@
  * (queries/mutations, in `queryInsightsRouter.ts`) separate from
  * "things the host pushes" (subscriptions, here).
  *
- * Export shape: a flat record of `{ procedureName: subscriptionProcedure }`
- * that the main router spreads into its own `router({ ... })` call. This
- * yields flat tRPC paths (e.g. `collectionView.queryInsights.streamStage3`)
- * without needing the (currently non-re-exported) `t.mergeRouters` helper.
+ * Export shape: a router built from these subscription procedures, merged
+ * into the main router with the framework's `mergeRouters`. This yields flat
+ * tRPC paths (e.g. `collectionView.queryInsights.streamStage3`).
  */
 
 import { z } from 'zod';
@@ -28,7 +27,7 @@ import { buildStaticAnalysisSummary } from '../../../../documentdb/queryInsights
 import { StreamingResponseParser } from '../../../../documentdb/queryInsights/streamingResponseParser';
 import { ext } from '../../../../extensionVariables';
 import { QueryInsightsAIService } from '../../../../services/ai/QueryInsightsAIService';
-import { publicProcedureWithTelemetry, type WithTelemetry } from '../../../_integration/trpc';
+import { publicProcedureWithTelemetry, router } from '../../../_integration/trpc';
 import { type RouterContext } from '../collectionViewRouter';
 import { type QueryInsightsStreamEvent } from '../types/queryInsightsStream';
 
@@ -45,8 +44,9 @@ const STATUS_EVENT_INTERVAL_MS = 250;
  *
  * Per plan §7 / WI-10, the auto rpc event
  * (`documentDB.rpc.subscription.collectionView.queryInsights.streamStage3`)
- * still fires but — because `trpcToTelemetry` wraps `opts.next()` which
- * for a subscription resolves at generator-creation time — carries ~0
+ * still fires but — because the telemetry middleware
+ * (`telemetryMiddlewareBody`) wraps the invocation, which for a
+ * subscription resolves at generator-creation time — carries ~0
  * duration and no custom measurements. This dedicated event is the
  * canonical source of all Stage 3 telemetry for the streaming path and
  * carries every key the buffered procedure's rpc event used to carry,
@@ -60,7 +60,7 @@ const STAGE3_COMPLETION_EVENT = 'documentDB.queryInsights.stage3.completed';
  * iteration and flushed once on subscription unwind (success or abort)
  * via {@link callWithTelemetryAndErrorHandling}. Keys mirror the ones
  * the (now-deleted) buffered `getQueryInsightsStage3` procedure used to
- * record onto `ctx.telemetry` 1:1 (plan §7), so the new event is a
+ * record onto `ctx.actionContext.telemetry` 1:1 (plan §7), so the new event is a
  * drop-in source for any telemetry query that targeted the old keys.
  */
 interface CompletionTelemetry {
@@ -73,12 +73,11 @@ function newCompletionTelemetry(): CompletionTelemetry {
 }
 
 /**
- * Record of push-style (subscription) procedures contributed by
- * `queryInsightsEventsRouter`. Spread into `queryInsightsRouter` so the
- * webview-visible paths stay flat (e.g.
- * `collectionView.queryInsights.streamStage3`).
+ * Router of push-style (subscription) procedures contributed by this file.
+ * Merged into `queryInsightsRouter` with `mergeRouters` so the webview-visible
+ * paths stay flat (e.g. `collectionView.queryInsights.streamStage3`).
  */
-export const queryInsightsEventsRoutes = {
+export const queryInsightsEventsRouter = router({
     /**
      * Stage 3 progressive streaming subscription.
      *
@@ -120,7 +119,7 @@ export const queryInsightsEventsRoutes = {
     streamStage3: publicProcedureWithTelemetry
         .input(z.object({ requestKey: z.string() }))
         .subscription(async function* ({ ctx, input }): AsyncGenerator<QueryInsightsStreamEvent, void, void> {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
             const { sessionId, databaseName, collectionName } = myCtx;
             const { requestKey } = input;
 
@@ -159,8 +158,9 @@ export const queryInsightsEventsRoutes = {
 
             // Dedicated completion-event accumulator (WI-10 / plan §7). The
             // surrounding subscription's auto rpc event fires with ~0
-            // duration and no measurements because `trpcToTelemetry` wraps
-            // `opts.next()` which resolves at generator-creation time; we
+            // duration and no measurements because the telemetry middleware
+            // (`telemetryMiddlewareBody`) wraps the invocation, which
+            // resolves at generator-creation time; we
             // flush this accumulator from the `finally` below so it
             // captures success, cancels, and the (rare) error path with
             // their final values + `outcome` + wall-clock `durationMs`.
@@ -613,4 +613,4 @@ export const queryInsightsEventsRoutes = {
                 flushCompletionEvent();
             }
         }),
-};
+});

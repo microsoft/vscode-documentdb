@@ -173,7 +173,7 @@ async function findCollectionNodeInTree(
 
 export const collectionsViewRouter = router({
     getInfo: publicProcedureWithTelemetry.query(({ ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = ctx as RouterContext;
 
         return l10n.t('Info from the webview: ') + JSON.stringify(myCtx);
     }),
@@ -193,7 +193,7 @@ export const collectionsViewRouter = router({
         )
         // procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             // Track execution intent for telemetry
             const executionIntent = input.executionIntent ?? 'pagination';
@@ -230,7 +230,7 @@ export const collectionsViewRouter = router({
     getFieldCompletionData: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
 
@@ -243,7 +243,7 @@ export const collectionsViewRouter = router({
         .input(z.array(z.string()))
         // procedure type
         .query(({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const tableData = session.getCurrentPageAsTable(input);
@@ -253,7 +253,7 @@ export const collectionsViewRouter = router({
     getCurrentPageAsTree: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const treeData = session.getCurrentPageAsTree();
@@ -263,7 +263,7 @@ export const collectionsViewRouter = router({
     getCurrentPageAsJson: publicProcedureWithTelemetry
         // procedure type
         .query(({ ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             const session: ClusterSession = ClusterSession.getSession(myCtx.sessionId);
             const jsonData = session.getCurrentPageAsJson();
@@ -273,7 +273,7 @@ export const collectionsViewRouter = router({
     addDocument: publicProcedureWithTelemetry
         // procedure type
         .mutation(({ ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -288,7 +288,7 @@ export const collectionsViewRouter = router({
         .input(z.string())
         // procedure type
         .mutation(({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -304,7 +304,7 @@ export const collectionsViewRouter = router({
         .input(z.string())
         // procedure type
         .mutation(({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             vscode.commands.executeCommand('vscode-documentdb.command.internal.documentView.open', {
                 clusterId: myCtx.clusterId,
@@ -320,7 +320,7 @@ export const collectionsViewRouter = router({
         .input(z.array(z.string())) // stands for string[]
         // procedure type
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             const confirmed = await getConfirmationAsInSettings(
                 l10n.t('Are you sure?'),
@@ -362,7 +362,7 @@ export const collectionsViewRouter = router({
         )
         //procedure type
         .query(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
             const collectionTreeNode = await findCollectionNodeInTree(
@@ -393,7 +393,7 @@ export const collectionsViewRouter = router({
         }),
 
     importDocuments: publicProcedureWithTelemetry.query(async ({ ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = ctx as RouterContext;
 
         // TODO: remove the dependency on the tree node, in the end it was here only to show progress on the 'tree item'
         const collectionTreeNode = await findCollectionNodeInTree(
@@ -428,7 +428,7 @@ export const collectionsViewRouter = router({
         )
         // handle generation request
         .query(async ({ input, ctx }) => {
-            const generationCtx = ctx as WithTelemetry<RouterContext>;
+            const generationCtx = ctx as RouterContext;
 
             const result = await callWithTelemetryAndErrorHandling(
                 'vscode-documentdb.collectionView.generateQuery',
@@ -519,7 +519,7 @@ export const collectionsViewRouter = router({
      * Opens the raw explain plan output in a new VS Code document
      */
     viewRawExplainOutput: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = ctx as RouterContext;
         const { sessionId, databaseName, collectionName } = myCtx;
 
         // Get ClusterSession
@@ -561,8 +561,8 @@ export const collectionsViewRouter = router({
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // ── Telemetry: activation source for cross-feature analytics ──
-            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
-            myCtx.telemetry.properties.hasFilter =
+            myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
+            myCtx.actionContext.telemetry.properties.hasFilter =
                 input.filter && input.filter.replace(/\s/g, '') !== '{}' ? 'true' : 'false';
 
             const query = buildFindExpression(
@@ -597,7 +597,7 @@ export const collectionsViewRouter = router({
             const myCtx = ctx as WithTelemetry<RouterContext>;
 
             // ── Telemetry: activation source for cross-feature analytics ──
-            myCtx.telemetry.properties.activationSource = 'collectionViewToolbar';
+            myCtx.actionContext.telemetry.properties.activationSource = 'collectionViewToolbar';
 
             const query = buildFindExpression(
                 myCtx.collectionName,
@@ -628,7 +628,7 @@ export const collectionsViewRouter = router({
             }),
         )
         .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const myCtx = ctx as RouterContext;
 
             const query = buildFindExpression(
                 myCtx.collectionName,
@@ -681,7 +681,7 @@ export const collectionsViewRouter = router({
         .mutation(({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
             // Suppress per-call tRPC telemetry — we accumulate instead
-            myCtx.telemetry.suppressAll = true;
+            myCtx.actionContext.telemetry.suppressAll = true;
 
             if (input.category === 'unknown') {
                 ext.outputChannel.appendLog(

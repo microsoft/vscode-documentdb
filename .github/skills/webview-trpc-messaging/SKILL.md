@@ -1,6 +1,6 @@
 ---
 name: webview-trpc-messaging
-description: Implements tRPC-based communication between VS Code extension host and React webviews. Use when creating new webview procedures (queries, mutations, subscriptions), adding a new webview router, wiring up a webview controller, using the tRPC client from React components, applying telemetry middleware (trpcToTelemetry), or supporting AbortSignal-based cancellation in webview operations.
+description: Implements tRPC-based communication between VS Code extension host and React webviews. Use when creating new webview procedures (queries, mutations, subscriptions), adding a new webview router, wiring up a webview controller, using the tRPC client from React components, applying telemetry middleware (telemetryMiddlewareBody), or supporting AbortSignal-based cancellation in webview operations.
 ---
 
 # Webview tRPC Messaging
@@ -21,17 +21,17 @@ useTrpcClient() hook                      WebviewController
 
 **Key files** (read as needed for implementation details):
 
-| File                                                             | Purpose                                                                                                                |
-| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------- |
-| `@microsoft/vscode-ext-webview` (shared)                         | tRPC init via `initWebviewTrpc`, `publicProcedure`, `router`, `BaseRouterContext`                                      |
-| `@microsoft/vscode-ext-webview/host` (telemetry)                 | `telemetryMiddlewareBody`, `ProcedureLogger`, `TelemetryRunner` (consumer builds `publicProcedureWithTelemetry`)       |
-| `src/webviews/_integration/trpc.ts`                        | Consumer tRPC instance: `publicProcedureWithTelemetry`, the DocumentDB `TelemetryRunner`, `WithTelemetry`              |
-| `src/webviews/_integration/appRouter.ts`                   | Root router + `publicProcedureWithTelemetry` wiring + DocumentDB `BaseRouterContext`                                   |
-| `src/webviews/_integration/configuration.ts`               | Consumer-owned knobs (telemetry namespace, bundle layout, dev-server host)                                             |
-| `@microsoft/vscode-ext-webview/host` (WebviewController)         | `WebviewController` + `openWebview` factory: WebviewPanel lifecycle, tRPC dispatcher (queries, mutations, subscriptions, abort) |
-| `src/webviews/_integration/openAppWebview.ts`              | DocumentDB factory preset that pre-fills router + bundle layout (`openAppWebview`)                                     |
-| `src/webviews/_integration/useTrpcClient.ts`               | React hook providing the tRPC client (pre-typed against `AppRouter`)                                                   |
-| `@microsoft/vscode-ext-webview/webview` (vscodeLink)             | Custom tRPC link bridging `postMessage` transport                                                                      |
+| File                                                     | Purpose                                                                                                                                                       |
+| -------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `@microsoft/vscode-ext-webview` (shared)                 | tRPC init via `initWebviewTrpc`, `publicProcedure`, `router`, `BaseRouterContext`                                                                             |
+| `@microsoft/vscode-ext-webview/host` (telemetry)         | `telemetryMiddlewareBody`, `ProcedureLogger`, `TelemetryRunner` (consumer builds `publicProcedureWithTelemetry`)                                              |
+| `src/webviews/_integration/trpc.ts`                      | Consumer tRPC instance: `publicProcedureWithTelemetry`, the DocumentDB `TelemetryRunner`, and the `RpcEnrichment` shape it contributes to `ctx.actionContext` |
+| `src/webviews/_integration/appRouter.ts`                 | Root router + `publicProcedureWithTelemetry` wiring + DocumentDB `BaseRouterContext`                                                                          |
+| `src/webviews/_integration/configuration.ts`             | Consumer-owned knobs (telemetry namespace, bundle layout, dev-server host)                                                                                    |
+| `@microsoft/vscode-ext-webview/host` (WebviewController) | `WebviewController` + `openWebview` factory: WebviewPanel lifecycle, tRPC dispatcher (queries, mutations, subscriptions, abort)                               |
+| `src/webviews/_integration/openAppWebview.ts`            | DocumentDB factory preset that pre-fills router + bundle layout (`openAppWebview`)                                                                            |
+| `src/webviews/_integration/useTrpcClient.ts`             | React hook providing the tRPC client (pre-typed against `AppRouter`)                                                                                          |
+| `@microsoft/vscode-ext-webview/webview` (vscodeLink)     | Custom tRPC link bridging `postMessage` transport                                                                                                             |
 
 ## Creating a New Router
 
@@ -57,13 +57,20 @@ export type RouterContext = BaseRouterContext & {
 
 ```typescript
 import { z } from 'zod';
-import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/appRouter';
+import {
+  publicProcedure,
+  publicProcedureWithTelemetry,
+  router,
+  type WithTelemetry,
+} from '../../_integration/appRouter';
+import { type RouterContext } from './myViewRouter';
 
 export const myViewRouter = router({
   // Query with telemetry (preferred for operations that touch external services)
   getData: publicProcedureWithTelemetry.input(z.object({ id: z.string() })).query(async ({ input, ctx }) => {
     const myCtx = ctx as WithTelemetry<RouterContext>;
-    // myCtx.telemetry is guaranteed present
+    // Instrumented procedure: myCtx.actionContext (the full IActionContext) is present.
+    myCtx.actionContext.telemetry.properties.itemId = input.id;
     // myCtx.signal is the AbortSignal for cancellation
     return { data: 'result' };
   }),
@@ -156,19 +163,21 @@ export type WebviewName = keyof typeof WebviewRegistry;
 
 ## Telemetry: `publicProcedure` vs `publicProcedureWithTelemetry`
 
-| Base                           | When to use                                                                  | `ctx.telemetry`                             |
-| ------------------------------ | ---------------------------------------------------------------------------- | ------------------------------------------- |
-| `publicProcedure`              | Fire-and-forget, no external calls, telemetry reported separately            | `undefined`                                 |
-| `publicProcedureWithTelemetry` | **Default choice.** Any procedure touching DB, network, or user-visible work | Guaranteed via `trpcToTelemetry` middleware |
+| Base                           | When to use                                                                  | `ctx.actionContext`                                      |
+| ------------------------------ | ---------------------------------------------------------------------------- | -------------------------------------------------------- |
+| `publicProcedure`              | Fire-and-forget, no external calls, telemetry reported separately            | absent (do not read it)                                  |
+| `publicProcedureWithTelemetry` | **Default choice.** Any procedure touching DB, network, or user-visible work | Guaranteed, injected by the DocumentDB `TelemetryRunner` |
 
-`trpcToTelemetry` (file-local, not exported) wraps the procedure in `callWithTelemetryAndErrorHandling`, auto-generating a telemetry event named `documentDB.rpc.{type}.{path}` and recording errors, duration, and abort status.
+`publicProcedureWithTelemetry` is `publicProcedure.use(telemetryMiddlewareBody(documentDbTelemetryRunner, ...))` (built in `trpc.ts`). The framework's `telemetryMiddlewareBody` delegates to the DocumentDB `TelemetryRunner`, which wraps the call in `callWithTelemetryAndErrorHandling`, contributes the full `IActionContext` to `ctx.actionContext`, auto-generates a telemetry event named `documentDB.rpc.{type}.{path}`, and records errors, duration, and abort status.
+
+`actionContext` is **not** a field on the base `RouterContext` — it is an additive enrichment. Narrow to `WithTelemetry<RouterContext>` (`= RouterContext & { actionContext }`) in an instrumented procedure to read it; a plain `publicProcedure` procedure narrows to bare `RouterContext`, so reading `actionContext` there is a compile error instead of a runtime `undefined`.
 
 Access telemetry safely:
 
 ```typescript
 const myCtx = ctx as WithTelemetry<RouterContext>;
-myCtx.telemetry.properties.myCustomProp = 'value';
-myCtx.telemetry.measurements.itemCount = items.length;
+myCtx.actionContext.telemetry.properties.myCustomProp = 'value';
+myCtx.actionContext.telemetry.measurements.itemCount = items.length;
 ```
 
 ## AbortSignal Support
@@ -197,7 +206,7 @@ sub.unsubscribe()  →  'subscription.stop'  →  abortController.abort()
 getData: publicProcedureWithTelemetry
     .input(z.object({ filter: z.record(z.unknown()) }))
     .query(async ({ input, ctx }) => {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = ctx as RouterContext;
 
         // Option 1: Pass to driver (preferred)
         const cursor = collection.find(input.filter, { signal: myCtx.signal });
@@ -225,7 +234,7 @@ const runQuery = async () => {
 };
 ```
 
-When `trpcToTelemetry` detects an aborted signal, it sets `telemetry.properties.aborted = 'true'` and `result = 'Canceled'` automatically.
+When `publicProcedureWithTelemetry` detects an aborted signal, the DocumentDB `TelemetryRunner` sets `telemetry.properties.aborted = 'true'` and `result = 'Canceled'` automatically.
 
 ## Subscriptions
 
@@ -236,7 +245,7 @@ Subscriptions stream multiple values from server to client using async generator
 streamData: publicProcedureWithTelemetry
     .input(z.object({ batchSize: z.number() }))
     .subscription(async function* ({ input, ctx }) {
-        const myCtx = ctx as WithTelemetry<RouterContext>;
+        const myCtx = ctx as RouterContext;
 
         for (let i = 0; i < total; i += input.batchSize) {
             if (myCtx.signal?.aborted) return; // check before each yield
@@ -279,7 +288,7 @@ export const MyComponent = () => {
 
 ## Common Pitfalls
 
-- **Never use `any`** in procedure context casts — use `WithTelemetry<RouterContext>` or `RouterContext`
+- **Never use `any`** in procedure context casts — narrow with `ctx as WithTelemetry<RouterContext>` when the procedure reads telemetry (`ctx.actionContext.telemetry`), or `ctx as RouterContext` otherwise
 - **Always prefer `publicProcedureWithTelemetry`** unless you have a specific reason not to
 - **Always check `myCtx.signal?.aborted`** in long-running loops — not checking causes wasted work after client cancels
 - **Do not mutate the shared `context` object** — `WebviewController` clones it per-operation already, but router code should treat `ctx` as read-only
