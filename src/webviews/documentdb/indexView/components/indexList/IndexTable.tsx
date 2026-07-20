@@ -5,6 +5,7 @@
 
 import {
     Button,
+    createTableColumn,
     Table,
     TableBody,
     TableCell,
@@ -13,6 +14,10 @@ import {
     TableHeaderCell,
     TableRow,
     Tooltip,
+    useTableFeatures,
+    useTableSort,
+    type TableColumnDefinition,
+    type TableColumnId,
 } from '@fluentui/react-components';
 import {
     ChevronDownRegular,
@@ -57,6 +62,47 @@ function relativeBarWidth(value: number | undefined, maximum: number | undefined
     return `${Math.max(MIN_POSITIVE_BAR_PERCENT, (value / maximum) * 100)}%`;
 }
 
+function compareOptionalNumbers(left: number | undefined, right: number | undefined): number {
+    return (left ?? Number.NEGATIVE_INFINITY) - (right ?? Number.NEGATIVE_INFINITY);
+}
+
+function propertySortKey(index: IndexRow): string {
+    return [
+        index.hidden ? 'hidden' : '',
+        index.unique ? 'unique' : '',
+        index.sparse ? 'sparse' : '',
+        index.expireAfterSeconds !== undefined ? 'ttl' : '',
+        index.partialFilterExpression !== undefined ? 'partial' : '',
+        index.collation !== undefined ? 'collation' : '',
+        index.wildcardProjection !== undefined ? 'wildcard' : '',
+    ]
+        .filter(Boolean)
+        .join(' ');
+}
+
+const columns: TableColumnDefinition<IndexRow>[] = [
+    createTableColumn<IndexRow>({
+        columnId: 'name',
+        compare: (left, right) => left.name.localeCompare(right.name),
+    }),
+    createTableColumn<IndexRow>({
+        columnId: 'type',
+        compare: (left, right) => classifyIndex(left).localeCompare(classifyIndex(right)),
+    }),
+    createTableColumn<IndexRow>({
+        columnId: 'properties',
+        compare: (left, right) => propertySortKey(left).localeCompare(propertySortKey(right)),
+    }),
+    createTableColumn<IndexRow>({
+        columnId: 'size',
+        compare: (left, right) => compareOptionalNumbers(left.sizeBytes, right.sizeBytes),
+    }),
+    createTableColumn<IndexRow>({
+        columnId: 'usage',
+        compare: (left, right) => compareOptionalNumbers(left.usageOps, right.usageOps),
+    }),
+];
+
 /**
  * Stable column identifiers, kept only for documentation / cell-class
  * alignment. Column widths are driven by the `<colgroup>` below plus CSS
@@ -76,6 +122,19 @@ export const IndexTable = ({
     // Set of currently-expanded index names. Kept in component state so
     // expansion survives table re-renders driven by data refresh.
     const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+
+    const {
+        getRows,
+        sort: { getSortDirection, toggleColumnSort, sort },
+    } = useTableFeatures({ columns, items: [...indexes] }, [
+        useTableSort({ defaultSortState: { sortColumn: 'name', sortDirection: 'ascending' } }),
+    ]);
+    const rows = sort(getRows());
+
+    const headerSortProps = (columnId: TableColumnId) => ({
+        onClick: (event: React.MouseEvent) => toggleColumnSort(event, columnId),
+        sortDirection: getSortDirection(columnId),
+    });
 
     // DOM refs per row so we can scroll a freshly-created index into view.
     const rowRefs = useRef<Map<string, HTMLTableRowElement>>(new Map());
@@ -135,7 +194,7 @@ export const IndexTable = ({
     };
 
     return (
-        <Table aria-label={l10n.t('Indexes')} size="small" className="indexTable" sortable={false}>
+        <Table aria-label={l10n.t('Indexes')} size="small" className="indexTable" sortable>
             <colgroup>
                 <col className="colExpand" />
                 <col className="colName" />
@@ -148,18 +207,22 @@ export const IndexTable = ({
             <TableHeader>
                 <TableRow>
                     {/* Empty header above the expand-chevron column */}
-                    <TableHeaderCell className="expandHeaderCell" aria-label={l10n.t('Expand row')} />
+                    <TableHeaderCell className="expandHeaderCell" aria-label={l10n.t('Expand row')} sortable={false} />
                     {/* Name column is intentionally wide — real-world index names can be 80+ chars */}
-                    <TableHeaderCell className="nameHeaderCell">{l10n.t('Name')}</TableHeaderCell>
-                    <TableHeaderCell>{l10n.t('Type')}</TableHeaderCell>
-                    <TableHeaderCell>{l10n.t('Properties')}</TableHeaderCell>
-                    <TableHeaderCell>{l10n.t('Size')}</TableHeaderCell>
-                    <TableHeaderCell className="usageCell">{l10n.t('Usage')}</TableHeaderCell>
-                    <TableHeaderCell>{l10n.t('Actions')}</TableHeaderCell>
+                    <TableHeaderCell className="nameHeaderCell" {...headerSortProps('name')}>
+                        {l10n.t('Name')}
+                    </TableHeaderCell>
+                    <TableHeaderCell {...headerSortProps('type')}>{l10n.t('Type')}</TableHeaderCell>
+                    <TableHeaderCell {...headerSortProps('properties')}>{l10n.t('Properties')}</TableHeaderCell>
+                    <TableHeaderCell {...headerSortProps('size')}>{l10n.t('Size')}</TableHeaderCell>
+                    <TableHeaderCell className="usageCell" {...headerSortProps('usage')}>
+                        {l10n.t('Usage')}
+                    </TableHeaderCell>
+                    <TableHeaderCell sortable={false}>{l10n.t('Actions')}</TableHeaderCell>
                 </TableRow>
             </TableHeader>
             <TableBody>
-                {indexes.map((idx, rowIdx) => {
+                {rows.map(({ item: idx }, rowIdx) => {
                     const badge = classifyIndex(idx);
                     const sizeBarWidth = relativeBarWidth(idx.sizeBytes, maxSizeBytes);
                     const usageBarWidth = relativeBarWidth(idx.usageOps, maxUsageOps);

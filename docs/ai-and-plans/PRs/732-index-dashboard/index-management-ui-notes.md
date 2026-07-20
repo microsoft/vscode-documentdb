@@ -55,8 +55,13 @@ documented separately in this folder (`documentdb-supported-indexes.md`,
   fill uses the VS Code accent colour and Fluent's medium corner radius. It is
   decorative (`aria-hidden`); the adjacent formatted value remains the
   accessible source of truth.
-- The list is sorted **alphabetically by name** so a new index lands in a
-  predictable place.
+- **Name, Type, Properties, Size, and Usage are sortable**, one column at a
+  time, using Fluent Table's native sort-header interaction and direction
+  indicators. The default is **Name ascending** so a new index lands in a
+  predictable place; clicking the active header toggles ascending/descending,
+  and clicking another sortable header moves the single active sort there.
+  Sort state is local to the mounted table and is not persisted in settings or
+  storage. Expand and Actions remain non-sortable.
 
 ### 2. Create Index drawer, modeled on the driver API
 
