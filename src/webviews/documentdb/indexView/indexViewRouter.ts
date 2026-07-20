@@ -295,7 +295,7 @@ export const indexViewRouter = router({
             toIndexRow(idx, indexSizes[idx.name], usageByName.get(idx.name), buildingNames.has(idx.name)),
         );
 
-        myCtx.telemetry.measurements.indexCount = rows.length;
+        myCtx.actionContext.telemetry.measurements.indexCount = rows.length;
         return rows;
     }),
 
@@ -368,10 +368,10 @@ export const indexViewRouter = router({
         const client = await ClustersClient.getClient(myCtx.clusterId);
         const spec = buildIndexSpec(input);
 
-        myCtx.telemetry.properties.fieldTypes = input.fields.map((f) => f.type).join(',');
-        myCtx.telemetry.properties.compound = String(input.fields.length > 1);
-        myCtx.telemetry.properties.ttl = String(typeof input.expireAfterSeconds === 'number');
-        myCtx.telemetry.measurements.fieldCount = input.fields.length;
+        myCtx.actionContext.telemetry.properties.fieldTypes = input.fields.map((f) => f.type).join(',');
+        myCtx.actionContext.telemetry.properties.compound = String(input.fields.length > 1);
+        myCtx.actionContext.telemetry.properties.ttl = String(typeof input.expireAfterSeconds === 'number');
+        myCtx.actionContext.telemetry.measurements.fieldCount = input.fields.length;
 
         const result = await client.createIndex(myCtx.databaseName, myCtx.collectionName, spec);
         if (result.ok === 0 || result.note) {
@@ -392,7 +392,7 @@ export const indexViewRouter = router({
         .input(CreateIndexInputSchema)
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            myCtx.telemetry.properties.activationSource = 'indexViewCreateDrawer';
+            myCtx.actionContext.telemetry.properties.activationSource = 'indexViewCreateDrawer';
             const content = buildCreateIndexShellCommand(myCtx.collectionName, input);
             const vscode = await import('vscode');
             await vscode.commands.executeCommand(PlaygroundCommandIds.newWithContent, {
@@ -413,7 +413,7 @@ export const indexViewRouter = router({
      */
     openCreateInShell: publicProcedureWithTelemetry.input(CreateIndexInputSchema).mutation(async ({ input, ctx }) => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
-        myCtx.telemetry.properties.activationSource = 'indexViewCreateDrawer';
+        myCtx.actionContext.telemetry.properties.activationSource = 'indexViewCreateDrawer';
         const initialInput = buildCreateIndexShellCommand(myCtx.collectionName, input);
         const vscode = await import('vscode');
         await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
