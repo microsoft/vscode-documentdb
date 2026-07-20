@@ -135,7 +135,7 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
                         <dd>{l10n.t('{0} seconds', index.expireAfterSeconds)}</dd>
                     </div>
                 )}
-                {index.partialFilterExpression && (
+                {index.state !== 'creating' && index.partialFilterExpression && (
                     <div className="detailFact">
                         <dt>{l10n.t('Partial filter')}</dt>
                         <dd>
@@ -143,7 +143,7 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
                         </dd>
                     </div>
                 )}
-                {index.collation && (
+                {index.state !== 'creating' && index.collation && (
                     <div className="detailFact">
                         <dt>{l10n.t('Collation')}</dt>
                         <dd>

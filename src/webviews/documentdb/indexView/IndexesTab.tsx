@@ -33,6 +33,11 @@ function delay(ms: number): Promise<void> {
 interface PendingCreate {
     name: string;
     key: ReadonlyArray<{ field: string; direction: number | string }>;
+    unique: boolean;
+    sparse: boolean;
+    expireAfterSeconds?: number;
+    hasPartialFilter: boolean;
+    hasCollation: boolean;
 }
 
 /** Map a per-field index type onto its wire-level key value (mirrors the router). */
@@ -57,7 +62,15 @@ function pendingCreateFromInput(input: CreateIndexInput): PendingCreate {
         input.name && input.name.trim() !== ''
             ? input.name.trim()
             : input.fields.map((f) => `${f.field}_${keyDirection(f.type)}`).join('_');
-    return { name, key };
+    return {
+        name,
+        key,
+        unique: input.unique ?? false,
+        sparse: input.sparse ?? false,
+        expireAfterSeconds: input.expireAfterSeconds,
+        hasPartialFilter: input.partialFilterExpression !== undefined,
+        hasCollation: input.collation !== undefined,
+    };
 }
 
 /**
@@ -226,8 +239,8 @@ export const IndexesTab = (): JSX.Element => {
     }, [refresh]);
 
     // The list shown to the user = the real indexes plus any optimistic
-    // "Creating…" rows whose index has not yet appeared in a fetch, sorted
-    // alphabetically by name so a new index lands in a predictable place.
+    // "Creating…" rows whose index has not yet appeared in a fetch. IndexTable
+    // is the sole owner of display ordering and applies whichever sort is active.
     const displayIndexes = useMemo<ReadonlyArray<IndexRow>>(() => {
         const existing = new Set(indexes.map((i) => i.name));
         const creatingRows: IndexRow[] = pendingCreates
@@ -236,14 +249,17 @@ export const IndexesTab = (): JSX.Element => {
                 name: p.name,
                 key: p.key,
                 hidden: false,
-                unique: false,
-                sparse: false,
+                unique: p.unique,
+                sparse: p.sparse,
+                expireAfterSeconds: p.expireAfterSeconds,
+                partialFilterExpression: p.hasPartialFilter ? {} : undefined,
+                collation: p.hasCollation ? {} : undefined,
+                usageOps: 0,
                 isDefault: false,
                 statsAvailable: false,
                 state: 'creating',
             }));
-        const merged = creatingRows.length > 0 ? [...indexes, ...creatingRows] : [...indexes];
-        return merged.sort((a, b) => a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }));
+        return creatingRows.length > 0 ? [...indexes, ...creatingRows] : indexes;
     }, [indexes, pendingCreates]);
 
     // Drop optimistic rows once the real index shows up in a fetch.
@@ -301,7 +317,7 @@ export const IndexesTab = (): JSX.Element => {
                             : l10n.t('Index created.'),
                     });
                     // Scroll the new index into view (if off-screen) so the user
-                    // can spot it in the alphabetical list. We do NOT refresh here
+                    // can spot it under the active sort. We do NOT refresh here
                     // — the build poll refreshes after ~5s, so the "Creating…"
                     // spinner stays visible even for a fast build, which is what
                     // actually draws the eye to the new row.

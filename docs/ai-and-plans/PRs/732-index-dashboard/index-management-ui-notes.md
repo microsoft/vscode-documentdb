@@ -62,6 +62,17 @@ documented separately in this folder (`documentdb-supported-indexes.md`,
   and clicking another sortable header moves the single active sort there.
   Sort state is local to the mounted table and is not persisted in settings or
   storage. Expand and Actions remain non-sortable.
+- Optimistic **Creating** rows participate in that same active sort; they are
+  not pinned or independently alphabetized. `IndexTable` is the sole owner of
+  display ordering. The placeholder retains every predictable submitted sort
+  field (name, key/type, unique, sparse, TTL, partial-filter/collation presence)
+  and starts usage at zero, so replacing it with the server row does not move it
+  under the normal Name sort or under Type, Properties, and usually Usage.
+  Size stays unavailable until the server reports it; when Size is the active
+  sort, settling into the correct position is the one unavoidable correction
+  because an index's built size cannot be predicted. Current filters remain
+  authoritative and may hide the optimistic row; creation does not clear or
+  bypass them.
 
 ### 2. Create Index drawer, modeled on the driver API
 

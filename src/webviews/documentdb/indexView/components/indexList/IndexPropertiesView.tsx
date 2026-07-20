@@ -32,11 +32,17 @@ export const IndexPropertiesView = ({ index }: IndexPropertiesViewProps): JSX.El
     if (index.unique) badges.push({ label: l10n.t('Unique') });
     if (index.sparse) badges.push({ label: l10n.t('Sparse') });
     if (index.partialFilterExpression) {
-        badges.push({ label: l10n.t('Partial'), tooltip: formatShellJson(index.partialFilterExpression) });
+        badges.push({
+            label: l10n.t('Partial'),
+            tooltip: index.state === 'creating' ? undefined : formatShellJson(index.partialFilterExpression),
+        });
     }
     if (index.expireAfterSeconds !== undefined) badges.push({ label: l10n.t('TTL') });
     if (index.collation) {
-        badges.push({ label: l10n.t('Collation'), tooltip: formatShellJson(index.collation) });
+        badges.push({
+            label: l10n.t('Collation'),
+            tooltip: index.state === 'creating' ? undefined : formatShellJson(index.collation),
+        });
     }
     if (index.wildcardProjection) {
         badges.push({ label: l10n.t('Wildcard'), tooltip: formatShellJson(index.wildcardProjection) });
