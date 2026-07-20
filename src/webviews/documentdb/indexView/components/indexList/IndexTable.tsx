@@ -33,12 +33,28 @@ import { IndexTypeBadgeView } from './IndexTypeBadgeView';
 
 export interface IndexTableProps {
     indexes: ReadonlyArray<IndexRow>;
+    /** Maximum known size across all indexes, used only for the relative-size visual. */
+    maxSizeBytes?: number;
+    /** Maximum known usage across all indexes, used only for the relative-usage visual. */
+    maxUsageOps?: number;
     onDelete: (index: IndexRow) => void;
     onToggleHidden: (index: IndexRow) => void;
     /** Names of rows with an action in flight (delete / hide / unhide) — shown with a spinner. */
     busyNames?: ReadonlySet<string>;
     /** Name of a row to scroll into view once (only if it is off-screen). */
     scrollToName?: string;
+}
+
+const MIN_POSITIVE_BAR_PERCENT = 20;
+
+function relativeBarWidth(value: number | undefined, maximum: number | undefined): string | undefined {
+    if (value === undefined || maximum === undefined || !Number.isFinite(value) || maximum <= 0 || value < 0) {
+        return undefined;
+    }
+    if (value === 0) {
+        return '0%';
+    }
+    return `${Math.max(MIN_POSITIVE_BAR_PERCENT, (value / maximum) * 100)}%`;
 }
 
 /**
@@ -50,6 +66,8 @@ export interface IndexTableProps {
 
 export const IndexTable = ({
     indexes,
+    maxSizeBytes,
+    maxUsageOps,
     onDelete,
     onToggleHidden,
     busyNames,
@@ -143,6 +161,8 @@ export const IndexTable = ({
             <TableBody>
                 {indexes.map((idx, rowIdx) => {
                     const badge = classifyIndex(idx);
+                    const sizeBarWidth = relativeBarWidth(idx.sizeBytes, maxSizeBytes);
+                    const usageBarWidth = relativeBarWidth(idx.usageOps, maxUsageOps);
                     const isProtected = idx.isDefault;
                     // Optimistic "Creating…" rows have no server-side index yet, so
                     // actions that operate on a live index are disabled.
@@ -201,9 +221,25 @@ export const IndexTable = ({
                                 <TableCell>
                                     <IndexPropertiesView index={idx} />
                                 </TableCell>
-                                <TableCell>{formatBytes(idx.sizeBytes)}</TableCell>
+                                <TableCell>
+                                    <div className="indexMetricValue">
+                                        <span className="indexMetricText">{formatBytes(idx.sizeBytes)}</span>
+                                        {sizeBarWidth !== undefined && (
+                                            <span className="relativeMetricTrack" aria-hidden="true">
+                                                <span className="relativeMetricBar" style={{ width: sizeBarWidth }} />
+                                            </span>
+                                        )}
+                                    </div>
+                                </TableCell>
                                 <TableCell className="usageCell">
-                                    <span>{formatOps(idx.usageOps)}</span>
+                                    <div className="indexMetricValue">
+                                        <span className="indexMetricText">{formatOps(idx.usageOps)}</span>
+                                        {usageBarWidth !== undefined && (
+                                            <span className="relativeMetricTrack" aria-hidden="true">
+                                                <span className="relativeMetricBar" style={{ width: usageBarWidth }} />
+                                            </span>
+                                        )}
+                                    </div>
                                 </TableCell>
                                 <TableCell>
                                     <div className="actionsCell">

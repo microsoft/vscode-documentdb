@@ -40,6 +40,13 @@ export interface IndexListProps {
     onStateChange?: (state: IndexListState) => void;
 }
 
+function maxKnownMetric(indexes: ReadonlyArray<IndexRow>, metric: 'sizeBytes' | 'usageOps'): number | undefined {
+    const values = indexes
+        .map((index) => index[metric])
+        .filter((value): value is number => value !== undefined && Number.isFinite(value));
+    return values.length === 0 ? undefined : Math.max(...values);
+}
+
 /**
  * Self-contained index list: owns the filter box + quick-filter toggles,
  * applies them to the provided indexes, and renders the details table.
@@ -59,6 +66,9 @@ export const IndexList = ({
 }: IndexListProps): JSX.Element => {
     const [filterText, setFilterText] = useState('');
     const [quickFilters, setQuickFilters] = useState<QuickFilters>({ hidden: false, unused: false });
+    // Keep visual metric scales stable while filters change which rows are visible.
+    const maxSizeBytes = maxKnownMetric(indexes, 'sizeBytes');
+    const maxUsageOps = maxKnownMetric(indexes, 'usageOps');
 
     const shown = useMemo(() => {
         const query = filterText.trim().toLowerCase();
@@ -114,6 +124,8 @@ export const IndexList = ({
                 ) : (
                     <IndexTable
                         indexes={shown}
+                        maxSizeBytes={maxSizeBytes}
+                        maxUsageOps={maxUsageOps}
                         onDelete={onDelete}
                         onToggleHidden={onToggleHidden}
                         busyNames={busyNames}

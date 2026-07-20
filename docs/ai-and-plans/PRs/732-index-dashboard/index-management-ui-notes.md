@@ -46,6 +46,15 @@ documented separately in this folder (`documentdb-supported-indexes.md`,
 - Per-index **size** and **usage** are assembled on the extension side from
   `collStats` / `$indexStats` and returned as a flat `IndexRow`, so the React
   layer never handles wire-level command names.
+- Size and usage values include compact **inline data bars** for visual
+  comparison. Each metric uses a linear scale against the largest known value
+  in the full loaded index set, so filtering rows never changes the scale. The
+  bar has a fixed 32 px range, with a 20% minimum fill for positive values; a
+  true zero remains empty and unavailable values show no bar. Values occupy a
+  fixed, right-aligned text slot so every bar starts at the same position. The
+  fill uses the VS Code accent colour and Fluent's medium corner radius. It is
+  decorative (`aria-hidden`); the adjacent formatted value remains the
+  accessible source of truth.
 - The list is sorted **alphabetically by name** so a new index lands in a
   predictable place.
 

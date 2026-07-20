@@ -219,6 +219,38 @@
             text-align: left;
         }
 
+        // Compact relative-size visual beside a metric's formatted value.
+        // The bar is decorative; the adjacent text remains the accessible value.
+        .indexMetricValue {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            min-width: 0;
+        }
+
+        .indexMetricText {
+            flex: 0 0 48px;
+            overflow: hidden;
+            text-align: right;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .relativeMetricTrack {
+            display: inline-flex;
+            flex: 0 0 32px;
+            align-items: center;
+            height: 8px;
+        }
+
+        .relativeMetricBar {
+            display: block;
+            min-width: 0;
+            height: 4px;
+            border-radius: var(--borderRadiusMedium);
+            background-color: var(--vscode-focusBorder);
+        }
+
         /* Properties column: word-only option badges that wrap within the cell. */
         .indexPropertiesCell {
             display: flex;
