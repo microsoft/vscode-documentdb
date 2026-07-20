@@ -6,23 +6,26 @@
 /**
  * Dev-only detector for a **genuine** ResizeObserver feedback loop.
  *
- * We filter the benign, one-shot "ResizeObserver loop …" warning out of the
- * webpack dev-server overlay (see `webpack.config.views.js`). That warning is
- * non-fatal — the spec defers, rather than drops, the pending notifications — so
- * hiding it removes overlay noise. The catch: filtering by message also hides a
- * *real*, continuous loop (a per-frame resize that pegs layout/CPU), because a
- * blip and a runaway loop emit the identical message; only the **rate** differs.
+ * The webview's Content Security Policy forbids `unsafe-eval`, so we cannot use
+ * webpack-dev-server's per-error `runtimeErrors` *function* to filter only the
+ * benign "ResizeObserver loop …" warning out of the overlay (the client rebuilds
+ * such a function with `new Function(...)`, which the CSP blocks). Instead the
+ * runtime-error overlay is disabled wholesale in `webpack.config.views.js`. That
+ * benign warning is non-fatal anyway — the spec defers, rather than drops, the
+ * pending notifications.
  *
- * This restores a signal for the real thing. It listens to the same `window`
- * 'error' events and warns **once per burst**, and only when they arrive faster
- * than any human interaction could produce. A single interaction (e.g. opening a
- * Combobox) emits one or two events and stays silent; a runaway loop emits a
- * steady stream and trips the threshold.
+ * With the runtime overlay off, we lose the overlay's cue for a *real*,
+ * continuous loop (a per-frame resize that pegs layout/CPU) too — a blip and a
+ * runaway loop emit the identical message; only the **rate** differs. This
+ * restores a signal for the real thing: it listens to `window` 'error' events
+ * and warns **once per burst**, and only when they arrive faster than any human
+ * interaction could produce. A single interaction (e.g. opening a Combobox)
+ * emits one or two events and stays silent; a runaway loop trips the threshold.
  *
  * It is passive (never calls `preventDefault` / `stopPropagation`), so the raw
- * message still reaches the devtools console and the overlay filter as before.
- * It is intended to be installed **only in development** — the sole caller guards
- * it with `process.env.NODE_ENV !== 'production'`, so the whole thing is
+ * message still reaches the devtools console. It is intended to be installed
+ * **only in development** — the sole caller guards it with
+ * `process.env.NODE_ENV !== 'production'`, so the whole thing is
  * dead-code-eliminated from the production bundle.
  */
 

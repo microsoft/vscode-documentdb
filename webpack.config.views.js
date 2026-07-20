@@ -97,15 +97,20 @@ module.exports = (env, { mode }) => {
             host: '127.0.0.1',
             client: {
                 overlay: {
-                    // Ignore the benign, self-resolving "ResizeObserver loop …"
-                    // warning. It is emitted by Fluent UI's popup positioning
-                    // (Combobox / Dropdown / Menu) when opening a popup nudges
-                    // layout enough to need a second frame to settle — the spec
-                    // defers (does not drop) those notifications, so it is not a
-                    // real error. This only hides it from the dev-server overlay;
-                    // the message still appears in the devtools console, and every
-                    // other runtime error still surfaces normally.
-                    runtimeErrors: (error) => !(error?.message && /^ResizeObserver loop/.test(error.message)),
+                    // Keep the compile error/warning overlays, but disable the
+                    // *runtime-error* overlay. We cannot use a `runtimeErrors`
+                    // FUNCTION to filter only the benign "ResizeObserver loop …"
+                    // warning: the webview's Content Security Policy forbids
+                    // `unsafe-eval`, and webpack-dev-server ships any function
+                    // filter to its client and rebuilds it with `new Function(...)`
+                    // — which the CSP blocks, crashing the dev client and the whole
+                    // webview render. A boolean is serialized as-is (no eval).
+                    //
+                    // Runtime errors (including that benign, self-resolving
+                    // ResizeObserver warning from Fluent's popup positioning) still
+                    // print to the devtools console, and a *sustained* loop is
+                    // flagged by installResizeObserverLoopDetector().
+                    runtimeErrors: false,
                 },
             },
             compress: true,
