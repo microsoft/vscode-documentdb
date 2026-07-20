@@ -18,6 +18,7 @@ here.
 | ----------------------------- | ------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `rpcConcurrencyLogger.ts`     | host    | The `ProcedureLogger` passed to `openAppWebview`. Delegates to the framework console logger, then feeds each dispatch entry's `concurrent` count into an accumulating-telemetry distribution (`concurrentRpcOps`) so peak / average in-flight RPC concurrency is observable across the fleet (R766-S04). |
 | `reportObserverError.ts`      | webview | The `ObserverErrorHandler` passed to `WithWebviewContext`'s `onObserverError`. Keeps the framework's structured `console.error` and additionally elevates a throwing RPC event observer to the browser global error stream via `reportError()`, without re-entering the tRPC channel (R766-N05).         |
+| `resizeObserverLoopDetector.ts` | webview | **Dev-only.** Detects a *sustained* ResizeObserver feedback loop by rate (the benign one-shot warning is filtered from the dev-server overlay in `webpack.config.views.js`). Passive `window` 'error' listener that `console.warn`s once per burst above a per-second threshold. Installed behind `process.env.NODE_ENV !== 'production'`, so it is dead-code-eliminated from production. |
 | `rpcConcurrencyLogger.test.ts` | host    | Unit tests for the concurrency logger (console delegation + gauge sampling, and that non-dispatch entries are ignored).                                                                                                                                                                                     |
 | `reportObserverError.test.ts` | webview | Unit tests for the observer-error sink (structured console line + guarded `reportError()` elevation).                                                                                                                                                                                                       |
 
@@ -28,3 +29,6 @@ here.
 - `reportObserverError` is wired in [`../../index.tsx`](../../index.tsx) on
   `WithWebviewContext`, so every DocumentDB webview surfaces event-observer
   failures instead of only isolating them.
+- `installResizeObserverLoopDetector` is called in
+  [`../../index.tsx`](../../index.tsx) behind a `process.env.NODE_ENV` guard, so
+  only development builds watch for a sustained ResizeObserver loop.
