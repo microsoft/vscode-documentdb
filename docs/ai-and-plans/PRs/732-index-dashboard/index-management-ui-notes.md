@@ -73,6 +73,12 @@ documented separately in this folder (`documentdb-supported-indexes.md`,
   because an index's built size cannot be predicted. Current filters remain
   authoritative and may hide the optimistic row; creation does not clear or
   bypass them.
+- **Column widths remain fixed and non-resizable.** Type and Properties each
+  use 130 px; Size and Usage each use 100 px; Expand and Actions stay compact.
+  Name receives the remaining width with a 130 px minimum allocation, and its
+  header stays on one line. Below the resulting 726 px table minimum, the
+  existing list container scrolls horizontally. This keeps the layout
+  predictable without adding resize state or custom width-balancing logic.
 
 ### 2. Create Index drawer, modeled on the driver API
 
@@ -269,6 +275,24 @@ here so the final code does not look arbitrary:
 - **Em-dash placeholder for an empty Properties cell → nothing.** The `—`
   placeholder added visual noise for the common plain-index case; the cell is now
   simply empty.
+
+- **Fluent resizable columns → fixed widths.** We upgraded to Fluent UI
+  `9.74.4` and prototyped `useTableColumnSizing_unstable` from the Resizable
+  Columns preview. The default `autoFitColumns` mode keeps the table inside its
+  container by redistributing every drag across other columns; with seven
+  columns, fixed Expand/Actions controls, and badge content, the grabbed edge
+  did not track the pointer predictably and neighboring columns changed too
+  aggressively. Disabling auto-fit made direct dragging predictable, but
+  required Fluent's non-native flex-table mode and allowed the table to grow
+  into horizontal overflow. During the prototype, our header truncation CSS
+  also exposed Fluent's internal `resize: horizontal` on sortable header
+  buttons, producing browser-native diagonal resize grips; that artifact was
+  fixable with `resize: none`, but underscored the extra styling and behavior we
+  would own around an unstable API. A controlled compromise (resize the target
+  plus one designated flexible column) would require custom sizing logic. That
+  additional implementation, accessibility, persistence, and testing work is
+  not worth it for this low-traffic feature, so we retained the simpler fixed
+  table and horizontal overflow only below its minimum usable width.
 
 ---
 
