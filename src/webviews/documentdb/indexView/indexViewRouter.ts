@@ -536,7 +536,11 @@ export const indexViewRouter = router({
                 return { ok: true, cancelled: true };
             }
             const client = await ClustersClient.getClient(myCtx.clusterId);
-            await client.hideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
+            const result = await client.hideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
+            if (result.ok === 0 || result.errmsg) {
+                const message = typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to hide index.');
+                throw new Error(message);
+            }
             return { ok: true, cancelled: false };
         }),
 
@@ -560,7 +564,11 @@ export const indexViewRouter = router({
                 return { ok: true, cancelled: true };
             }
             const client = await ClustersClient.getClient(myCtx.clusterId);
-            await client.unhideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
+            const result = await client.unhideIndex(myCtx.databaseName, myCtx.collectionName, input.indexName);
+            if (result.ok === 0 || result.errmsg) {
+                const message = typeof result.errmsg === 'string' ? result.errmsg : l10n.t('Failed to unhide index.');
+                throw new Error(message);
+            }
             return { ok: true, cancelled: false };
         }),
 });
