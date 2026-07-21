@@ -55,7 +55,7 @@ export function getKubernetesApiErrorMessage(error: unknown): string {
 }
 
 export function createKubernetesApiOperationError(message: string, cause: unknown): Error {
-    const error = new Error(message);
+    const error = new Error(message, { cause });
     if (isKubernetesApiTimeoutError(cause)) {
         error.name = KUBERNETES_API_TIMEOUT_ERROR_NAME;
     }
@@ -68,11 +68,12 @@ export function normalizeKubernetesApiError(error: unknown): Error {
     }
 
     if (!isAbortSignalTimeoutError(error)) {
-        return error instanceof Error ? error : new Error(String(error));
+        return error instanceof Error ? error : new Error(String(error), { cause: error });
     }
 
     const timeoutError = new Error(
         vscode.l10n.t('Operation timed out after {0} seconds.', String(KUBERNETES_API_TIMEOUT_SECONDS)),
+        { cause: error },
     );
     timeoutError.name = KUBERNETES_API_TIMEOUT_ERROR_NAME;
     return timeoutError;
