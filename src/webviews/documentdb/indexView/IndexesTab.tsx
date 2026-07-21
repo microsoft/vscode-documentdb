@@ -147,6 +147,7 @@ export const IndexesTab = (): JSX.Element => {
     // dialog opens and intentionally left stale afterwards.
     const [fieldSuggestions, setFieldSuggestions] = useState<ReadonlyArray<string>>([]);
     const [documentCount, setDocumentCount] = useState<number>(0);
+    const [pollGeneration, setPollGeneration] = useState(0);
 
     /** Surface an error for a failed tRPC call, as a toast or (opt-in) a modal. */
     const showError = useCallback(
@@ -279,9 +280,19 @@ export const IndexesTab = (): JSX.Element => {
         if (!active) {
             return;
         }
-        const timer = setTimeout(() => void refresh(), BUILD_POLL_INTERVAL_MS);
-        return () => clearTimeout(timer);
-    }, [displayIndexes, refresh]);
+        let cancelled = false;
+        const timer = setTimeout(() => {
+            void refresh().finally(() => {
+                if (!cancelled) {
+                    setPollGeneration((generation) => generation + 1);
+                }
+            });
+        }, BUILD_POLL_INTERVAL_MS);
+        return () => {
+            cancelled = true;
+            clearTimeout(timer);
+        };
+    }, [displayIndexes, pollGeneration, refresh]);
 
     /**
      * Submit handler for the Create Index dialog.
