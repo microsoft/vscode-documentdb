@@ -661,11 +661,14 @@ function getDkoServiceName(documentDbName: string): string {
 
 function buildDocumentDbConnectionParams(): string {
     const params = new URLSearchParams();
+    // Discovery resolves one reachable gateway endpoint (including localhost
+    // port-forwards), so pin the driver to that endpoint. DocumentDB gateways
+    // identify as isdbgrid and do not advertise a replica-set name or members;
+    // a hardcoded replicaSet would describe a topology discovery cannot verify.
     params.set('directConnection', 'true');
     params.set('authMechanism', 'SCRAM-SHA-256');
     params.set('tls', 'true');
     params.set('tlsAllowInvalidCertificates', 'true');
-    params.set('replicaSet', 'rs0');
     return params.toString();
 }
 

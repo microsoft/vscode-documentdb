@@ -33,6 +33,7 @@ describe('kubernetesApiTimeout', () => {
         const normalized = normalizeKubernetesApiError(rawError);
         expect(isKubernetesApiTimeoutError(normalized)).toBe(true);
         expect(normalized.message).toBe('Operation timed out after 30 seconds.');
+        expect(normalized.cause).toBe(rawError);
     });
 
     it('does not classify an arbitrary AbortError until it crosses a known API boundary', () => {
@@ -61,14 +62,23 @@ describe('kubernetesApiTimeout', () => {
 
         expect(isKubernetesApiTimeoutError(operationError)).toBe(true);
         expect(operationError.message).toBe('Failed to list namespaces: Operation timed out after 30 seconds.');
+        expect(operationError.cause).toBe(normalizedCause);
     });
 
     it('does not brand a contextual operation error from an unnormalized AbortError', () => {
-        const operationError = createKubernetesApiOperationError(
-            'Port-forward setup was cancelled.',
-            createNamedError('AbortError', 'request cancelled during teardown'),
-        );
+        const abortError = createNamedError('AbortError', 'request cancelled during teardown');
+        const operationError = createKubernetesApiOperationError('Port-forward setup was cancelled.', abortError);
 
         expect(isKubernetesApiTimeoutError(operationError)).toBe(false);
+        expect(operationError.cause).toBe(abortError);
+    });
+
+    it('preserves non-Error values as causes when normalizing them', () => {
+        const rawError = 'Forbidden';
+
+        const normalized = normalizeKubernetesApiError(rawError);
+
+        expect(normalized.message).toBe(rawError);
+        expect(normalized.cause).toBe(rawError);
     });
 });
