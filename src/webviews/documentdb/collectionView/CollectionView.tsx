@@ -611,6 +611,7 @@ export const CollectionView = (): JSX.Element => {
                 />
 
                 <TabList
+                    aria-label={l10n.t('Collection views')}
                     className="collectionTabList"
                     selectedValue={selectedTab}
                     onTabSelect={(_event, data) => {
@@ -646,9 +647,9 @@ export const CollectionView = (): JSX.Element => {
                                 size="small"
                                 shape="rounded"
                                 color="brand"
-                                aria-label={l10n.t('Query Insights feature is in preview')}
+                                aria-label={l10n.t('PREVIEW feature')}
                             >
-                                PREVIEW
+                                <span aria-hidden={true}>{l10n.t('PREVIEW')}</span>
                             </Badge>
                         </span>
                     </Tab>

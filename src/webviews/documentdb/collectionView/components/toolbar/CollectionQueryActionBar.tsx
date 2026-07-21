@@ -175,7 +175,7 @@ const QueryExecutionToolbar = ({ variant }: CollectionQueryActionBarProps): JSX.
             onCheckedValueChange={handleCheckedValueChange}
         >
             <ToolbarButton
-                aria-label={l10n.t('Execute the find query')}
+                aria-label={l10n.t('Find Query: execute the current editor values')}
                 disabled={currentContext.isLoading}
                 icon={<PlayRegular />}
                 onClick={handleExecuteQuery}
@@ -525,7 +525,7 @@ const CollectionMoreActionsMenu = ({
                         icon={<MoreHorizontalRegular />}
                         aria-label={l10n.t('{0} more actions', overflowCount)}
                     >
-                        +{overflowCount}
+                        <span aria-hidden={true}>+{overflowCount}</span>
                     </ToolbarButton>
                 </Tooltip>
             </MenuTrigger>
