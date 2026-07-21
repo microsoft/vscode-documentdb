@@ -548,7 +548,7 @@
   "Enter a collection name.": "Enter a collection name.",
   "Enter a database name.": "Enter a database name.",
   "Enter a new label for this kubeconfig source.": "Enter a new label for this kubeconfig source.",
-  "Enter a positive number of seconds.": "Enter a positive number of seconds.",
+  "Enter a positive whole number using digits only.": "Enter a positive whole number using digits only.",
   "Enter a valid port number (1-65535)": "Enter a valid port number (1-65535)",
   "Enter folder name": "Enter folder name",
   "Enter new folder name": "Enter new folder name",

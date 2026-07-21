@@ -334,7 +334,9 @@ export const CreateIndexDrawer = ({
     // Sparse and a partial filter are mutually exclusive on the server.
     const sparseDisabled = hasPartialFilter;
     const ttlActive = ttlEnabled && isSingleBTree;
-    const ttlNumberValid = !ttlActive || (ttlSeconds.trim() !== '' && Number.parseInt(ttlSeconds, 10) > 0);
+    const trimmedTtlSeconds = ttlSeconds.trim();
+    const parsedTtlSeconds = Number.parseInt(trimmedTtlSeconds, 10);
+    const ttlNumberValid = !ttlActive || (parsedTtlSeconds > 0 && String(parsedTtlSeconds) === trimmedTtlSeconds);
 
     const advancedHasContent = hasPartialFilter || hasCollation;
 
@@ -365,7 +367,7 @@ export const CreateIndexDrawer = ({
             payload.sparse = true;
         }
         if (ttlActive && ttlNumberValid) {
-            payload.expireAfterSeconds = Number.parseInt(ttlSeconds, 10);
+            payload.expireAfterSeconds = parsedTtlSeconds;
         }
         if (hasPartialFilter) {
             payload.partialFilterExpression = partialText.trim();
@@ -580,7 +582,7 @@ export const CreateIndexDrawer = ({
                                             validationMessage={
                                                 ttlNumberValid
                                                     ? undefined
-                                                    : l10n.t('Enter a positive number of seconds.')
+                                                    : l10n.t('Enter a positive whole number using digits only.')
                                             }
                                         >
                                             <Input

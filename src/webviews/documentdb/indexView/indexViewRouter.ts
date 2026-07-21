@@ -84,7 +84,7 @@ const CreateIndexInputSchema = z.object({
     name: z.string().optional(),
     unique: z.boolean().optional(),
     sparse: z.boolean().optional(),
-    expireAfterSeconds: z.number().int().nonnegative().optional(),
+    expireAfterSeconds: z.number().int().positive().optional(),
     partialFilterExpression: z.string().optional(),
     collation: z.string().optional(),
 });
