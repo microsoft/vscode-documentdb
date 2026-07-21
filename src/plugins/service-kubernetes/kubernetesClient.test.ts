@@ -483,12 +483,16 @@ describe('kubernetesClient', () => {
                 externalAddress: 'mydb.example.com',
                 connectionParams: expect.stringContaining('tlsAllowInvalidCertificates=true'),
             });
+            expect(services[0].connectionParams).toContain('directConnection=true');
+            expect(services[0].connectionParams).not.toContain('replicaSet');
             expect(services[1]).toMatchObject({
                 sourceKind: 'generic',
                 name: 'manual-documentdb',
                 serviceName: 'manual-documentdb',
                 clusterIP: '10.0.0.2',
             });
+            expect(services[1].connectionParams).toContain('directConnection=true');
+            expect(services[1].connectionParams).not.toContain('replicaSet');
             expect(mockCustomObjectsApiConstructor).toHaveBeenCalledTimes(1);
             expect(mockCreateConfiguration).toHaveBeenCalledWith(
                 expect.objectContaining({ promiseMiddleware: expect.any(Array) }),
@@ -1059,6 +1063,7 @@ describe('kubernetesClient', () => {
             expect(result!.username).toBe('admin');
             expect(result!.password).toBe('s3cret!');
             expect(result!.connectionParams).toContain('directConnection=true');
+            expect(result!.connectionParams).not.toContain('replicaSet');
             expect(mockCoreApi.readNamespacedSecret).toHaveBeenCalledWith({
                 name: 'my-secret',
                 namespace: 'default',
