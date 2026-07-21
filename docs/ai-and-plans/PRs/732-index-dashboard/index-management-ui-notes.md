@@ -28,6 +28,10 @@ The index metadata (types, properties) is backed by the operator registry work
 documented separately in this folder (`documentdb-supported-indexes.md`,
 `operator-registry-scraper-updates.md`).
 
+The CollectionView chrome changes delivered with the dashboard are documented
+in [CollectionView Toolbar / Tab Redesign](./collectionview-toolbar-tab-redesign.md),
+including the per-work-item implementation progress and validation checkpoints.
+
 ---
 
 ## What shipped (final decisions)
@@ -96,7 +100,7 @@ documented separately in this folder (`documentdb-supported-indexes.md`,
   built `createIndex(...)` command off to a **playground** or the **interactive
   shell**.
 - **Fresh vs. preserved form (final rule):** opening the drawer for a create
-  starts from a **clean form**, *unless* the previous close asked to preserve it.
+  starts from a **clean form**, _unless_ the previous close asked to preserve it.
   Preserve is requested on an accidental **cancel** (don't lose work) and on a
   **failed submit** (so the user can retry). A **successful** create leaves the
   form clear, so the next open is empty. This lives in `IndexesTab` as a
@@ -121,7 +125,7 @@ documented separately in this folder (`documentdb-supported-indexes.md`,
   above the editor; a blank object (`{}` / whitespace) is treated as "not set".
 
 **Why JSON-only, not autocompletion:** a partial filter is genuinely a query
-filter and *could* later get find-style completions; collation is a fixed-schema
+filter and _could_ later get find-style completions; collation is a fixed-schema
 object that is not a query at all. Rather than ship half-smart completions that
 imply more intelligence than exists — or block relaxed input behind a strict
 `JSON.parse` — these are honest "just JSON" inputs for now. The `EditorType.Json`
@@ -209,7 +213,7 @@ type without touching this plain base.
   as "ascending"), so glyphs are not the only cue.
 - **Layout/scroll fix:** the tab used to fill `100vh` while nested in the
   CollectionView's own clipped `100vh` flex column, pushing the footer count out
-  of reach. It now fills the *remaining* height (`flex: 1 1 auto; min-height: 0`),
+  of reach. It now fills the _remaining_ height (`flex: 1 1 auto; min-height: 0`),
   the list body is the single scroll region, and the "Showing X of Y" count sits
   inside that scroll area.
 
@@ -311,7 +315,7 @@ the next frame and emits this non-fatal `ErrorEvent`. Nothing is dropped — the
 layout still converges a frame later. It is emitted by Fluent UI's popup
 positioning (`@fluentui/react-positioning` → Floating UI `autoUpdate`), which
 observes the trigger + popup and repositions on resize. A one-shot on popup-open
-is benign; only a *continuous, every-frame* stream is a real loop (jank / pegged
+is benign; only a _continuous, every-frame_ stream is a real loop (jank / pegged
 CPU). Blip vs. runaway differ only by **rate**, not message.
 
 **It was only ever a dev-server overlay**, not a VS Code notification: our
@@ -321,10 +325,10 @@ CPU). Blip vs. runaway differ only by **rate**, not message.
 **Attempts (in order):**
 
 1. **Global `window` 'error' swallow** (capture phase, `stopImmediatePropagation`
-   + `preventDefault` on `/^ResizeObserver loop/`). Worked, but it was an
-   app-wide, prod-shipping suppressor that also hid the message from the devtools
-   console — heavier and blunter than the problem.
-2. **`overlay.runtimeErrors` *function* filter** — the natural per-error hook.
+   - `preventDefault` on `/^ResizeObserver loop/`). Worked, but it was an
+     app-wide, prod-shipping suppressor that also hid the message from the devtools
+     console — heavier and blunter than the problem.
+2. **`overlay.runtimeErrors` _function_ filter** — the natural per-error hook.
    **This broke rendering entirely.** See the gotcha below.
 3. **Final: `overlay.runtimeErrors: false`** (a boolean) + a **dev-only rate
    detector**. The runtime-error overlay is off (so the benign blip never shows),
@@ -332,9 +336,9 @@ CPU). Blip vs. runaway differ only by **rate**, not message.
    console, and `installResizeObserverLoopDetector` (installed behind
    `process.env.NODE_ENV !== 'production'`, dead-code-eliminated from production)
    `console.warn`s once per burst if the rate crosses ~5/s — i.e. it stays silent
-   for interaction blips and shouts only for a *real* loop.
+   for interaction blips and shouts only for a _real_ loop.
 
-**The gotcha (the actual discovery): a *function* dev-server option is
+**The gotcha (the actual discovery): a _function_ dev-server option is
 incompatible with the webview CSP.** webpack-dev-server evaluates `overlay`
 on the **client**, but the config lives on the **server**, so it serializes the
 option into the client's connection URL. A function can't travel as data, so it

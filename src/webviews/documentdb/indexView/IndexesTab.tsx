@@ -3,13 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProgressBar, Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
-import { AddRegular, ArrowClockwiseRegular } from '@fluentui/react-icons';
+import { ProgressBar } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList } from './components/indexList';
+import { IndexManagementToolbar } from './components/IndexManagementToolbar';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
 import './indexView.scss';
 import { type CreateIndexInput, type FieldIndexType, type IndexRow } from './types';
@@ -80,28 +80,6 @@ function pendingCreateFromInput(input: CreateIndexInput): PendingCreate {
  * of sync.
  */
 type ModalState = { kind: 'none' } | { kind: 'create' };
-
-interface IndexManagementToolbarProps {
-    onCreateIndex: () => void;
-    onRefreshIndexes: () => void;
-}
-
-const IndexManagementToolbar = ({ onCreateIndex, onRefreshIndexes }: IndexManagementToolbarProps): JSX.Element => (
-    <Toolbar className="tabActionBar indexManagementToolbar" aria-label={l10n.t('Index actions')} size="small">
-        <ToolbarButton icon={<AddRegular />} appearance="primary" onClick={onCreateIndex}>
-            {l10n.t('Create Index')}
-        </ToolbarButton>
-        <Tooltip content={l10n.t('Refresh indexes')} relationship="description" withArrow>
-            <ToolbarButton
-                aria-label={l10n.t('Refresh indexes')}
-                icon={<ArrowClockwiseRegular />}
-                onClick={onRefreshIndexes}
-            >
-                {l10n.t('Refresh')}
-            </ToolbarButton>
-        </Tooltip>
-    </Toolbar>
-);
 
 /**
  * Index Management panel rendered inside the CollectionView's tab strip
