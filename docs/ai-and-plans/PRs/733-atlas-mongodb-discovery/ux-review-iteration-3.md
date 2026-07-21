@@ -209,9 +209,9 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft)                                                                              |
 | 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | ~15     | 🗣️ #5     | 🟡 Open (soft)                                                                              |
 | 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | ~5      | —         | ✅ Implemented ([368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)) |
-| 10  | **P2**   | Project node has no tooltip                                                    | ~5      | —         | 🟠 Open                                                                                     |
-| 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | ~5      | —         | 🟠 Open                                                                                     |
-| 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | ~5      | —         | 🟠 Open                                                                                     |
+| 10  | **P2**   | Project node has no tooltip                                                    | ~5      | —         | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
+| 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | ~5      | —         | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
+| 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | ~5      | —         | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
 | 13  | **P3**   | ~~Active-filter state not visible on the root~~ — superseded by #14            | —       | —         | 🚫 Closed                                                                                   |
 
 ---
@@ -263,9 +263,9 @@ surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth fl
 
 Both items live in `SelectAtlasSteps` / `getDiscoveryWizard`.
 
-| Order | Item                                                                                             | Touches                                       | \u2248 Files | Parallel within bundle?                                                  |
-| ----- | ------------------------------------------------------------------------------------------------ | --------------------------------------------- | ------------ | ------------------------------------------------------------------------ |
-| 1     | **Item 5** — raw throws → Azure-style "Manage MongoDB Atlas Credentials…" + `UserCancelledError` | `SelectAtlasSteps`, `getDiscoveryWizard`      | ~5           | ✅ Implemented — completed; unblocks item 9                              |
+| Order | Item                                                                                             | Touches                                       | \u2248 Files | Parallel within bundle?                                                                      |
+| ----- | ------------------------------------------------------------------------------------------------ | --------------------------------------------- | ------------ | -------------------------------------------------------------------------------------------- |
+| 1     | **Item 5** — raw throws → Azure-style "Manage MongoDB Atlas Credentials…" + `UserCancelledError` | `SelectAtlasSteps`, `getDiscoveryWizard`      | ~5           | ✅ Implemented — completed; unblocks item 9                                                  |
 | 2     | **Item 9** — reconcile the IDLE-only cluster filter to match the tree                            | `SelectAtlasSteps` (`SelectAtlasClusterStep`) | ~5           | ✅ Implemented in [368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff) |
 
 ### Bundle C — Filtering removal · **P1 · implemented**
@@ -284,11 +284,11 @@ Both items live in `SelectAtlasSteps` / `getDiscoveryWizard`.
 Small, independent touches to the tree items and root description. **All three touch different
 files — order does not matter and they can be done in parallel.**
 
-| Order | Item                                                            | Touches                                    | \u2248 Files | Parallel within bundle?               |
-| ----- | --------------------------------------------------------------- | ------------------------------------------ | ------------ | ------------------------------------- |
-| ‖     | **Item 10** — add a project-node tooltip                        | `AtlasProjectItem.getTreeItem`             | ~5           | **Fully parallel** — independent file |
-| ‖     | **Item 11** — reveal/expand the root after a successful sign-in | `AtlasDiscoveryProvider`                   | ~5           | **Fully parallel** — independent file |
-| ‖     | **Item 12** — show the signed-in identity in the root (P3)      | `AtlasServiceRootItem.getStateDescription` | ~5           | **Fully parallel** — independent file |
+| Order | Item                                                            | Touches                                    | \u2248 Files | Parallel within bundle?           |
+| ----- | --------------------------------------------------------------- | ------------------------------------------ | ------------ | --------------------------------- |
+| ‖     | **Item 10** — add a project-node tooltip                        | `AtlasProjectItem.getTreeItem`             | ~5           | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
+| ‖     | **Item 11** — reveal/expand the root after a successful sign-in | `AtlasDiscoveryProvider`                   | ~5           | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
+| ‖     | **Item 12** — show the signed-in identity in the root (P3)      | `AtlasServiceRootItem.getStateDescription` | ~5           | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
 
 ### Bundle E — Credential & view redesign · **P2 · sequenced follow-up PRs**
 
@@ -704,7 +704,7 @@ to align the wizard with the tree.
 
 ### 10. Project node has no tooltip ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open · **Complexity:** ~5 files
+**Priority:** P2 · **Status:** ✅ Implemented · **Complexity:** ~5 files
 
 **Finding:**
 
@@ -713,11 +713,15 @@ to align the wizard with the tree.
 💡 **Suggestion:** Add a grouped markdown tooltip (org name, project ID, cluster count) in
 the same `---`-separated style as the cluster tooltip for cross-provider consistency.
 
+> **Decision (Iteration 3):** Add a `MarkdownString` tooltip with project name as the heading, organization name (when available), project ID, and cluster count — matching the same style as the cluster tooltip.
+
+✅ **Implemented (Iteration 3):** [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6) — `AtlasProjectItem` now has a private `buildTooltip()` method that returns a `vscode.MarkdownString` with project name (bold heading), org name (if present), project ID, and cluster count. `getTreeItem()` wires it in via the `tooltip` property. **Verification:** `npm run l10n` (1652 keys), `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
+
 ---
 
 ### 11. No reveal/expand of the Atlas root after a successful sign-in ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open · **Complexity:** ~5 files
+**Priority:** P2 · **Status:** ✅ Implemented · **Complexity:** ~5 files
 
 **Finding:**
 
@@ -726,18 +730,26 @@ the same `---`-separated style as the cluster tooltip for cross-provider consist
 💡 **Suggestion:** After `transitionTo(Active)`, reveal + expand the Atlas root so projects
 appear without a manual expand.
 
+> **Decision (Iteration 3):** After a successful authentication in `authenticateAndFetchUserInfo()`, call a new private `revealAtlasRoot()` method that finds the root node and calls `ext.discoveryTreeView.reveal(atlasRoot, { select: false, focus: false, expand: true })`. Mirror the Kubernetes pattern from `refreshKubernetesRoot.ts`. Wrap in try/catch so a reveal failure never breaks the sign-in outcome.
+
+✅ **Implemented (Iteration 3):** [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6) — `AtlasDiscoveryProvider` has a new private `revealAtlasRoot()` method. After a successful `executeAtlasAuthFlow` call in `authenticateAndFetchUserInfo()`, `void this.revealAtlasRoot()` is called after the tree refresh. The method resolves the Atlas root from `ext.discoveryBranchDataProvider.getChildren()` and calls `ext.discoveryTreeView.reveal()` with `expand: true`. Non-critical failures log a warning to `ext.outputChannel` and do not surface to the user. **Verification:** `npm run build` passed.
+
 ---
 
 ## P3 — Nice-to-have / cosmetic / acknowledged
 
 ### 12. Root shows no "signed in as…" identity when Active ⚠️
 
-**Priority:** P3 · **Status:** 🟠 Open · **Complexity:** ~5 files
+**Priority:** P3 · **Status:** ✅ Implemented · **Complexity:** ~5 files
 
 **Finding:** [getStateDescription](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L221) only annotates `Expired` / `Authenticating`; when `Active` the description is blank even though `getUserDisplayName()` is available (iteration 1 §9.1). Gains extra value under multi-credential (item 7): the root could show _which_ credential is active.
 
 💡 **Suggestion:** Surface the signed-in display name / org in the root description or
 tooltip when Active.
+
+> **Decision (Iteration 3):** Add an `Active` case to `getStateDescription()` that returns `"Signed in as {displayName}"` when a display name is stored, or `"Signed in"` as a fallback (covers Service Accounts for which no user-profile endpoint exists).
+
+✅ **Implemented (Iteration 3):** [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6) — `AtlasServiceRootItem.getStateDescription()` now handles `AtlasSessionState.Active`: it returns `vscode.l10n.t('Signed in as {0}', displayName)` when `getUserDisplayName()` returns a value, or `vscode.l10n.t('Signed in')` as the fallback. Service Accounts that have no resolvable display name show the fallback gracefully. **Verification:** `npm run build` passed.
 
 ---
 
@@ -780,17 +792,20 @@ the next one; nothing is dropped without a terminal status.
 
 ### Iteration 3 (this pass)
 
-| #    | Item                                                                       | Decision (why)                                                                           | Outcome                                                                                                              |
-| ---- | -------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| 1    | Root auto-opens auth picker on expand (🗣️ #1)                              | Remove auto-prompt; show only the sign-in node ("no magic"; the node is enough)          | 🟠 Decided — **release blocker**                                                                                     |
-| 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes       | ✅ Implemented                                                                                                       |
-| 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | Distinguish visible organizations with no visible projects; move guidance to tooltip     | ✅ Implemented                                                                                                       |
-| 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**                                                                                     |
-| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | ✅ Implemented in [313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)                         |
-| 14   | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)     | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
-| 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                | 🟡 Open (soft) — likely follow-up PRs                                                                                |
-| 9    | Wizard/tree cluster mismatch                                               | Show all clusters in the wizard, annotate non-IDLE states, keep only `IDLE` connectable | ✅ Implemented in [368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)                         |
-| 10–13 | Polish items                                                              | #13 closed (filtering removed); 10–12 still pending                                      | 🟠 Open / 🚫 Closed                                                                                                  |
+| #   | Item                                                                       | Decision (why)                                                                                      | Outcome                                                                                                              |
+| --- | -------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------- |
+| 1   | Root auto-opens auth picker on expand (🗣️ #1)                              | Remove auto-prompt; show only the sign-in node ("no magic"; the node is enough)                     | 🟠 Decided — **release blocker**                                                                                     |
+| 2   | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes                  | ✅ Implemented                                                                                                       |
+| 3   | "No projects found" masks under-permissioned key (🗣️ #4)                   | Distinguish visible organizations with no visible projects; move guidance to tooltip                | ✅ Implemented                                                                                                       |
+| 4   | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`                 | 🟠 Decided — **release blocker**                                                                                     |
+| 5   | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError`            | ✅ Implemented in [313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)                         |
+| 14  | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)                | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
+| 6–8 | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                           | 🟡 Open (soft) — likely follow-up PRs                                                                                |
+| 9   | Wizard/tree cluster mismatch                                               | Show all clusters in the wizard, annotate non-IDLE states, keep only `IDLE` connectable             | ✅ Implemented in [368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)                         |
+| 10    | Project node tooltip                                                       | Add markdown tooltip (org name, project ID, cluster count) — `buildTooltip()` in `AtlasProjectItem` | ✅ Implemented in [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)                        |
+| 11    | Reveal/expand root after sign-in                                           | `revealAtlasRoot()` after successful auth; mirrors K8s `revealKubernetesSource` pattern | ✅ Implemented in [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)                        |
+| 12    | "Signed in as…" root identity                                              | `Active` case in `getStateDescription()` with display name or "Signed in" fallback      | ✅ Implemented in [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)                        |
+| 13  | Active filter state not visible on root                                    | #13 closed (filtering removed)                                                                      | 🚫 Closed                                                                                                            |
 
 > 🗣️ = raised by the reviewer in the live pass. "Decided" items have an agreed direction (see
 > the Decision block on each) but are not yet implemented. Items 6–8 are dependent (see

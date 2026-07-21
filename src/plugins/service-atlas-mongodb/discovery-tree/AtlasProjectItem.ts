@@ -100,9 +100,24 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
             contextValue: this.contextValue,
             label: this.project.name,
             description,
+            tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('project'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
+    }
+
+    private buildTooltip(): vscode.MarkdownString {
+        const md = new vscode.MarkdownString();
+        md.isTrusted = false;
+
+        md.appendMarkdown(`**${this.project.name}**\n\n`);
+        if (this.orgName) {
+            md.appendMarkdown(`- **${vscode.l10n.t('Organization')}:** ${this.orgName}\n`);
+        }
+        md.appendMarkdown(`- **${vscode.l10n.t('Project ID')}:** ${this.project.id}\n`);
+        md.appendMarkdown(`- **${vscode.l10n.t('Clusters')}:** ${String(this.project.clusterCount)}\n`);
+
+        return md;
     }
 
     private createRetryNode(): TreeElement & TreeElementWithContextValue {

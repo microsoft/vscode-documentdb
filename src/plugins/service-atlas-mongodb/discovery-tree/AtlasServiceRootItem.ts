@@ -172,6 +172,10 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
 
     private getStateDescription(): string {
         switch (this.sessionManager.state) {
+            case AtlasSessionState.Active: {
+                const displayName = this.sessionManager.getUserDisplayName();
+                return displayName ? vscode.l10n.t('Signed in as {0}', displayName) : vscode.l10n.t('Signed in');
+            }
             case AtlasSessionState.Expired:
                 return vscode.l10n.t('Session expired');
             case AtlasSessionState.Authenticating:
