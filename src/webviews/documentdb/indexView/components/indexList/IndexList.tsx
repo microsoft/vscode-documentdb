@@ -24,6 +24,8 @@ export interface IndexListState {
 
 export interface IndexListProps {
     indexes: ReadonlyArray<IndexRow>;
+    /** Time of the latest successful index-list refresh. */
+    lastUpdatedAt?: number;
     onDelete: (index: IndexRow) => void;
     onToggleHidden: (index: IndexRow) => void;
     /** When true, the table is replaced with a loading skeleton and the count is hidden. */
@@ -57,6 +59,7 @@ function maxKnownMetric(indexes: ReadonlyArray<IndexRow>, metric: 'sizeBytes' | 
  */
 export const IndexList = ({
     indexes,
+    lastUpdatedAt,
     onDelete,
     onToggleHidden,
     isLoading = false,
@@ -66,9 +69,35 @@ export const IndexList = ({
 }: IndexListProps): JSX.Element => {
     const [filterText, setFilterText] = useState('');
     const [quickFilters, setQuickFilters] = useState<QuickFilters>({ hidden: false, unused: false });
+    const [now, setNow] = useState(Date.now);
     // Keep visual metric scales stable while filters change which rows are visible.
     const maxSizeBytes = maxKnownMetric(indexes, 'sizeBytes');
     const maxUsageOps = maxKnownMetric(indexes, 'usageOps');
+
+    useEffect(() => {
+        if (lastUpdatedAt === undefined) {
+            return;
+        }
+        const timer = setInterval(() => setNow(Date.now()), 1000);
+        return () => clearInterval(timer);
+    }, [lastUpdatedAt]);
+
+    const updatedText = useMemo(() => {
+        if (lastUpdatedAt === undefined) {
+            return undefined;
+        }
+        const elapsedSeconds = Math.max(0, Math.floor((now - lastUpdatedAt) / 1000));
+        if (elapsedSeconds < 30) {
+            return l10n.t('Updated {0} seconds ago', elapsedSeconds);
+        }
+        if (elapsedSeconds < 60) {
+            return l10n.t('Updated less than a minute ago');
+        }
+        const elapsedMinutes = Math.floor(elapsedSeconds / 60);
+        return elapsedMinutes === 1
+            ? l10n.t('Updated 1 minute ago')
+            : l10n.t('Updated {0} minutes ago', elapsedMinutes);
+    }, [lastUpdatedAt, now]);
 
     const shown = useMemo(() => {
         const query = filterText.trim().toLowerCase();
@@ -133,8 +162,16 @@ export const IndexList = ({
                     />
                 )}
                 {!isLoading && (
-                    <div className="indexListCount" aria-live="polite">
-                        {l10n.t('Showing {0} of {1} indexes', shown.length, indexes.length)}
+                    <div className="indexListCount">
+                        <span aria-live="polite">
+                            {l10n.t('Showing {0} of {1} indexes', shown.length, indexes.length)}
+                        </span>
+                        {updatedText !== undefined && (
+                            <>
+                                <span aria-hidden="true"> · </span>
+                                <span>{updatedText}</span>
+                            </>
+                        )}
                     </div>
                 )}
             </div>

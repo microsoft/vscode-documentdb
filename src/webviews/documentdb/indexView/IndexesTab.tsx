@@ -99,6 +99,7 @@ export const IndexesTab = (): JSX.Element => {
     const [indexes, setIndexes] = useState<ReadonlyArray<IndexRow>>([]);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [lastUpdatedAt, setLastUpdatedAt] = useState<number>();
     const hasLoadedRef = useRef(false);
     const refreshGenerationRef = useRef(0);
     const [modal, setModal] = useState<ModalState>({ kind: 'none' });
@@ -177,6 +178,7 @@ export const IndexesTab = (): JSX.Element => {
                 return;
             }
             setIndexes(rows);
+            setLastUpdatedAt(Date.now());
             hasLoadedRef.current = true;
         } catch (error) {
             if (generation === refreshGenerationRef.current) {
@@ -457,7 +459,7 @@ export const IndexesTab = (): JSX.Element => {
 
             {/* First row: summary metric cards (mirrors the Query Insights layout). */}
             <div className="indexMetricsRowContainer">
-                <IndexMetricsRow indexes={displayIndexes} isLoading={isInitialLoading} />
+                <IndexMetricsRow indexes={isInitialLoading || isRefreshing ? undefined : displayIndexes} />
             </div>
 
             {/* Filter row + details table, wrapped as a self-contained component.
@@ -465,6 +467,7 @@ export const IndexesTab = (): JSX.Element => {
                 and mutations update the rows in place without flashing a skeleton. */}
             <IndexList
                 indexes={displayIndexes}
+                lastUpdatedAt={lastUpdatedAt}
                 isLoading={isInitialLoading}
                 busyNames={busyNames}
                 scrollToName={scrollToName}
