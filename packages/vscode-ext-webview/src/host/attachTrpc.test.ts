@@ -9,7 +9,7 @@ import { initWebviewTrpc } from '../shared/initWebviewTrpc';
 import { TypedEventSink } from '../shared/TypedEventSink';
 import { type VsCodeLinkRequestMessage } from '../shared/wireProtocol';
 import { attachTrpc } from './attachTrpc';
-import { type ProcedureLogEntry, type ProcedureLogger } from './middleware/logging';
+import { type ProcedureLogEntry, type ProcedureLogger, type ProcedureStartEntry } from './middleware/logging';
 
 type PostedMessage = { id: string; result?: unknown; error?: { message: string }; complete?: boolean };
 
@@ -281,7 +281,7 @@ describe('attachTrpc', () => {
 
     it('logs one entry per completed query when a logger is supplied', async () => {
         const entries: ProcedureLogEntry[] = [];
-        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+        const logger: ProcedureLogger = { onEnd: (entry) => entries.push(entry) };
 
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
         const appRouter = router({
@@ -300,7 +300,7 @@ describe('attachTrpc', () => {
 
     it('stamps each log entry with the concurrent in-flight count (R766-S04)', async () => {
         const entries: ProcedureLogEntry[] = [];
-        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+        const logger: ProcedureLogger = { onEnd: (entry) => entries.push(entry) };
 
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
         const appRouter = router({
@@ -320,7 +320,7 @@ describe('attachTrpc', () => {
 
     it('logs a failed entry (ok: false) when a procedure throws', async () => {
         const entries: ProcedureLogEntry[] = [];
-        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+        const logger: ProcedureLogger = { onEnd: (entry) => entries.push(entry) };
 
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
         const appRouter = router({
@@ -341,7 +341,7 @@ describe('attachTrpc', () => {
 
     it('logs one subscription entry on natural completion', async () => {
         const entries: ProcedureLogEntry[] = [];
-        const logger: ProcedureLogger = { log: (entry) => entries.push(entry) };
+        const logger: ProcedureLogger = { onEnd: (entry) => entries.push(entry) };
 
         const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
         const appRouter = router({
@@ -360,6 +360,97 @@ describe('attachTrpc', () => {
 
         expect(entries).toHaveLength(1);
         expect(entries[0]).toMatchObject({ type: 'subscription', path: 'counter', ok: true });
+    });
+
+    it('fires onStart before onEnd exactly once per query', async () => {
+        const events: string[] = [];
+        const logger: ProcedureLogger = {
+            onStart: (entry) => events.push(`start:${entry.type}:${entry.path}`),
+            onEnd: (entry) => events.push(`end:${entry.type}:${entry.path}:${entry.ok ? 'ok' : 'fail'}`),
+        };
+
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            greet: publicProcedure.query(() => 'hello'),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory, logger);
+
+        await stub.send(makeMessage('q1', 'query', 'greet'));
+
+        expect(events).toEqual(['start:query:greet', 'end:query:greet:ok']);
+    });
+
+    it('fires onStart for a subscription before its completion', async () => {
+        const events: string[] = [];
+        const logger: ProcedureLogger = {
+            onStart: (entry) => events.push(`start:${entry.type}:${entry.path}`),
+            onEnd: (entry) => events.push(`end:${entry.type}:${entry.path}`),
+        };
+
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            counter: publicProcedure.subscription(async function* () {
+                await Promise.resolve();
+                yield 1;
+            }),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory, logger);
+
+        await stub.send(makeMessage('s1', 'subscription', 'counter'));
+        await flush();
+        await flush();
+
+        expect(events).toEqual(['start:subscription:counter', 'end:subscription:counter']);
+    });
+
+    it('fires onStart and onEnd even when subscription setup fails on an unknown path', async () => {
+        const starts: ProcedureStartEntry[] = [];
+        const ends: ProcedureLogEntry[] = [];
+        const logger: ProcedureLogger = {
+            onStart: (entry) => starts.push(entry),
+            onEnd: (entry) => ends.push(entry),
+        };
+
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            greet: publicProcedure.query(() => 'hello'),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory, logger);
+
+        // 'missing' is not a procedure on the router, so setup throws. The start hook
+        // has already fired, and the outer catch still logs exactly one completion.
+        await stub.send(makeMessage('s1', 'subscription', 'missing'));
+        await flush();
+
+        expect(starts).toEqual([{ type: 'subscription', path: 'missing' }]);
+        expect(ends).toHaveLength(1);
+        expect(ends[0]).toMatchObject({ type: 'subscription', path: 'missing', ok: false });
+    });
+
+    it('supports an onStart-only logger (onEnd omitted)', async () => {
+        const starts: ProcedureStartEntry[] = [];
+        const logger: ProcedureLogger = { onStart: (entry) => starts.push(entry) };
+
+        const { router, publicProcedure, createCallerFactory } = initWebviewTrpc<BaseRouterContext>();
+        const appRouter = router({
+            greet: publicProcedure.query(() => 'hello'),
+        });
+
+        const stub = createStubPanel();
+        attachTrpc(stub.panel, {}, appRouter, createCallerFactory, logger);
+
+        await stub.send(makeMessage('q1', 'query', 'greet'));
+
+        // Before this fix an onStart-only logger received nothing at dispatch; now
+        // the start hook fires and the query still returns its result.
+        expect(starts).toEqual([{ type: 'query', path: 'greet' }]);
+        expect(stub.posted).toEqual([{ id: 'q1', result: 'hello' }]);
     });
 
     it('does not log anything when no logger is supplied', async () => {
