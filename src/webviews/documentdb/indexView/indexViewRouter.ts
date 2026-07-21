@@ -231,13 +231,24 @@ function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
  */
 function buildCreateIndexShellCommand(collectionName: string, input: CreateIndexInput): string {
     const spec = buildIndexSpec(input);
-    const { key, ...options } = spec;
+    const { key, partialFilterExpression, collation, ...serializableOptions } = spec;
     const collection = JSON.stringify(collectionName);
     const keyJson = JSON.stringify(key);
-    if (Object.keys(options).length === 0) {
+    const optionEntries = Object.entries(serializableOptions).map(
+        ([option, value]) => `${JSON.stringify(option)}:${JSON.stringify(value)}`,
+    );
+    const partialFilterText = input.partialFilterExpression?.trim();
+    if (partialFilterExpression && partialFilterText) {
+        optionEntries.push(`${JSON.stringify('partialFilterExpression')}:${partialFilterText}`);
+    }
+    const collationText = input.collation?.trim();
+    if (collation && collationText) {
+        optionEntries.push(`${JSON.stringify('collation')}:${collationText}`);
+    }
+    if (optionEntries.length === 0) {
         return `db.getCollection(${collection}).createIndex(${keyJson})`;
     }
-    return `db.getCollection(${collection}).createIndex(${keyJson}, ${JSON.stringify(options)})`;
+    return `db.getCollection(${collection}).createIndex(${keyJson}, {${optionEntries.join(',')}})`;
 }
 
 export const indexViewRouter = router({
