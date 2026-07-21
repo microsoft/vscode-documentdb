@@ -208,7 +208,7 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | ✅ Implemented                                                                              |
 | 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft)                                                                              |
 | 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | ~15     | 🗣️ #5     | 🟡 Open (soft)                                                                              |
-| 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | ~5      | —         | 🟠 Open                                                                                     |
+| 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | ~5      | —         | ✅ Implemented ([368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)) |
 | 10  | **P2**   | Project node has no tooltip                                                    | ~5      | —         | 🟠 Open                                                                                     |
 | 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | ~5      | —         | 🟠 Open                                                                                     |
 | 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | ~5      | —         | 🟠 Open                                                                                     |
@@ -266,7 +266,7 @@ Both items live in `SelectAtlasSteps` / `getDiscoveryWizard`.
 | Order | Item                                                                                             | Touches                                       | \u2248 Files | Parallel within bundle?                                                  |
 | ----- | ------------------------------------------------------------------------------------------------ | --------------------------------------------- | ------------ | ------------------------------------------------------------------------ |
 | 1     | **Item 5** — raw throws → Azure-style "Manage MongoDB Atlas Credentials…" + `UserCancelledError` | `SelectAtlasSteps`, `getDiscoveryWizard`      | ~5           | ✅ Implemented — completed; unblocks item 9                              |
-| 2     | **Item 9** — reconcile the IDLE-only cluster filter to match the tree                            | `SelectAtlasSteps` (`SelectAtlasClusterStep`) | ~5           | No hard dependency on 5, but **same file** — sequence to avoid conflicts |
+| 2     | **Item 9** — reconcile the IDLE-only cluster filter to match the tree                            | `SelectAtlasSteps` (`SelectAtlasClusterStep`) | ~5           | ✅ Implemented in [368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff) |
 
 ### Bundle C — Filtering removal · **P1 · implemented**
 
@@ -660,18 +660,45 @@ follow-up PR._
 
 ### 9. Wizard shows only IDLE clusters — the tree shows all ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open · **Complexity:** ~5 files
+**Priority:** P2 · **Status:** ✅ Implemented ([368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)) · **Complexity:** ~5 files
 
 **Observation:** A cluster visible in the discovery tree (e.g. tagged `Updating…`) is
 **absent** from the Add-Connection wizard's cluster list.
 
 **Finding:**
 
-- ⚠️ [SelectAtlasClusterStep](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts#L72) filters `clusters.filter((c) => c.stateName === 'IDLE')`, while [AtlasProjectItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts#L64) lists **all** clusters (annotating state in the description). The two surfaces disagree about which clusters exist. (Also feeds the raw-throw dead-end in item 5.)
+- ✅ The wizard now lists **all** clusters returned by Atlas, matching the discovery tree's existence model.
+- ✅ Non-IDLE clusters are kept visible but marked as unavailable in the wizard, with the current state surfaced directly in the item description.
+- ✅ Selecting a non-IDLE cluster no longer creates a disappearance/mismatch problem; instead the user gets an in-flow explanation and returns to the picker.
+- 🔍 This keeps the safer connectability rule from item 5 intact: the wizard still only proceeds with `IDLE` clusters, but it no longer hides clusters that the tree already shows.
 
 💡 **Suggestion:** Either show non-IDLE clusters in the wizard as **disabled/annotated**
 items (so the list matches the tree and the reason is legible), or document the filter as
 intentional and give the empty case a friendly in-flow message (ties into item 5).
+
+> **Decision (Iteration 3):** Keep the wizard's **IDLE-only connectability rule**, but stop
+> hiding non-IDLE clusters. Show all clusters in the picker so the wizard matches the tree,
+> annotate non-IDLE entries with their state, and if the user selects one, explain that it is
+> not connectable until it returns to `IDLE`. **Reason:** the problem was not that the wizard
+> rejected non-IDLE clusters; the problem was that the clusters disappeared entirely, making the
+> wizard contradict the tree. This keeps the lower-risk connection rule while fixing the UX
+> mismatch.
+
+✅ **Implemented (Iteration 3):** [368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)
+updated [SelectAtlasSteps.ts](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts)
+to align the wizard with the tree.
+
+- Removed the `IDLE`-only filter from the cluster list builder so all Atlas clusters now appear
+  in the picker.
+- Added wizard-local state labels and explanations for non-IDLE cluster states.
+- Annotated non-IDLE cluster items in-place instead of hiding them.
+- Kept only `IDLE` clusters selectable for connection; selecting any non-IDLE cluster shows a
+  modal explanation and returns the user to the picker.
+- Replaced the old "no connectable clusters" dead-end with a true "no clusters in this
+  project" empty state, since visible-but-unavailable clusters are now shown directly.
+
+**Verification:** `npm run l10n`, `npm run prettier-fix`, `npm run lint`,
+`npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
 
 ---
 
@@ -759,10 +786,11 @@ the next one; nothing is dropped without a terminal status.
 | 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes       | ✅ Implemented                                                                                                       |
 | 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | Distinguish visible organizations with no visible projects; move guidance to tooltip     | ✅ Implemented                                                                                                       |
 | 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**                                                                                     |
-| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | ✅ Implemented in [313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)                       |
+| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | ✅ Implemented in [313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)                         |
 | 14   | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)     | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
 | 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                | 🟡 Open (soft) — likely follow-up PRs                                                                                |
-| 9–13 | Polish items                                                               | #13 closed (filtering removed); rest pending                                             | 🟠 Open / 🚫 Closed                                                                                                  |
+| 9    | Wizard/tree cluster mismatch                                               | Show all clusters in the wizard, annotate non-IDLE states, keep only `IDLE` connectable | ✅ Implemented in [368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)                         |
+| 10–13 | Polish items                                                              | #13 closed (filtering removed); 10–12 still pending                                      | 🟠 Open / 🚫 Closed                                                                                                  |
 
 > 🗣️ = raised by the reviewer in the live pass. "Decided" items have an agreed direction (see
 > the Decision block on each) but are not yet implemented. Items 6–8 are dependent (see
