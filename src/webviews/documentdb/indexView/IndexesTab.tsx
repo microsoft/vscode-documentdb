@@ -100,6 +100,7 @@ export const IndexesTab = (): JSX.Element => {
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const hasLoadedRef = useRef(false);
+    const refreshGenerationRef = useRef(0);
     const [modal, setModal] = useState<ModalState>({ kind: 'none' });
 
     // Optimistic "Creating…" rows: shown the instant a create is submitted and
@@ -161,6 +162,7 @@ export const IndexesTab = (): JSX.Element => {
     /** Fetch the index list. The first load shows a skeleton; later refreshes
      * keep the current rows on screen and only surface a thin progress bar. */
     const refresh = useCallback(async (): Promise<void> => {
+        const generation = ++refreshGenerationRef.current;
         const initial = !hasLoadedRef.current;
         if (initial) {
             // Clear so the skeleton (rather than stale data) shows on first load.
@@ -171,15 +173,22 @@ export const IndexesTab = (): JSX.Element => {
         }
         try {
             const rows = await trpcClient.mongoClusters.indexView.listIndexes.query();
+            if (generation !== refreshGenerationRef.current) {
+                return;
+            }
             setIndexes(rows);
             hasLoadedRef.current = true;
         } catch (error) {
-            showError(l10n.t('Failed to load indexes.'), error);
+            if (generation === refreshGenerationRef.current) {
+                showError(l10n.t('Failed to load indexes.'), error);
+            }
         } finally {
-            if (initial) {
-                setIsInitialLoading(false);
-            } else {
-                setIsRefreshing(false);
+            if (generation === refreshGenerationRef.current) {
+                if (initial) {
+                    setIsInitialLoading(false);
+                } else {
+                    setIsRefreshing(false);
+                }
             }
         }
     }, [trpcClient, showError]);
