@@ -78,9 +78,16 @@ export const IndexList = ({
         if (lastUpdatedAt === undefined) {
             return;
         }
-        const timer = setInterval(() => setNow(Date.now()), 1000);
-        return () => clearInterval(timer);
-    }, [lastUpdatedAt]);
+        const elapsedMs = Math.max(0, Date.now() - lastUpdatedAt);
+        const nextUpdateMs =
+            elapsedMs < 30_000
+                ? 30_000 - elapsedMs
+                : elapsedMs < 60_000
+                  ? 60_000 - elapsedMs
+                  : 60_000 - (elapsedMs % 60_000);
+        const timer = setTimeout(() => setNow(Date.now()), Math.max(1, nextUpdateMs));
+        return () => clearTimeout(timer);
+    }, [lastUpdatedAt, now]);
 
     const updatedText = useMemo(() => {
         if (lastUpdatedAt === undefined) {
@@ -88,7 +95,7 @@ export const IndexList = ({
         }
         const elapsedSeconds = Math.max(0, Math.floor((now - lastUpdatedAt) / 1000));
         if (elapsedSeconds < 30) {
-            return l10n.t('Updated {0} seconds ago', elapsedSeconds);
+            return l10n.t('Updated a few seconds ago');
         }
         if (elapsedSeconds < 60) {
             return l10n.t('Updated less than a minute ago');
@@ -149,7 +156,7 @@ export const IndexList = ({
             />
             <div className="indexContentContainer">
                 {isLoading ? (
-                    <IndexTableSkeleton />
+                    <IndexTableSkeleton rowCount={lastUpdatedAt === undefined ? undefined : shown.length} />
                 ) : (
                     <IndexTable
                         indexes={shown}

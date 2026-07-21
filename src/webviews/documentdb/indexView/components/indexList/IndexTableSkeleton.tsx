@@ -12,14 +12,19 @@ import { type JSX } from 'react';
  * (a header row followed by a grid of shimmering rows) so the loading state
  * feels consistent across the collection views.
  */
-export const IndexTableSkeleton = (): JSX.Element => (
+export interface IndexTableSkeletonProps {
+    /** Preserve the previous table height during refresh. Defaults to six rows on initial load. */
+    rowCount?: number;
+}
+
+export const IndexTableSkeleton = ({ rowCount = 6 }: IndexTableSkeletonProps): JSX.Element => (
     <div className="indexTableSkeleton">
         <Skeleton appearance="translucent" aria-label={l10n.t('Loading indexes')}>
             <div className="indexSkeletonHeaderRow">
                 <SkeletonItem size={24} />
             </div>
             <div className="indexSkeletonGrid">
-                {Array.from({ length: 24 }).map((_, index) => (
+                {Array.from({ length: rowCount * 4 }).map((_, index) => (
                     <SkeletonItem key={index} size={24} />
                 ))}
             </div>

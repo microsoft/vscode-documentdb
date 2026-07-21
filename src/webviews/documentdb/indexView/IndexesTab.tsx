@@ -99,6 +99,7 @@ export const IndexesTab = (): JSX.Element => {
     const [indexes, setIndexes] = useState<ReadonlyArray<IndexRow>>([]);
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
+    const [isManualRefreshing, setIsManualRefreshing] = useState(false);
     const [lastUpdatedAt, setLastUpdatedAt] = useState<number>();
     const hasLoadedRef = useRef(false);
     const refreshGenerationRef = useRef(0);
@@ -160,40 +161,45 @@ export const IndexesTab = (): JSX.Element => {
         [trpcClient],
     );
 
-    /** Fetch the index list. The first load shows a skeleton; later refreshes
-     * keep the current rows on screen and only surface a thin progress bar. */
-    const refresh = useCallback(async (): Promise<void> => {
-        const generation = ++refreshGenerationRef.current;
-        const initial = !hasLoadedRef.current;
-        if (initial) {
-            // Clear so the skeleton (rather than stale data) shows on first load.
-            setIsInitialLoading(true);
-            setIndexes([]);
-        } else {
-            setIsRefreshing(true);
-        }
-        try {
-            const rows = await trpcClient.mongoClusters.indexView.listIndexes.query();
-            if (generation !== refreshGenerationRef.current) {
-                return;
+    /** Fetch the index list. Initial and manual loads show a table skeleton;
+     * background reconciliation keeps the current rows visible. */
+    const refresh = useCallback(
+        async (source: 'background' | 'manual' = 'background'): Promise<void> => {
+            const generation = ++refreshGenerationRef.current;
+            const initial = !hasLoadedRef.current;
+            if (initial) {
+                // Clear so the skeleton (rather than stale data) shows on first load.
+                setIsInitialLoading(true);
+                setIndexes([]);
+            } else {
+                setIsRefreshing(true);
+                setIsManualRefreshing(source === 'manual');
             }
-            setIndexes(rows);
-            setLastUpdatedAt(Date.now());
-            hasLoadedRef.current = true;
-        } catch (error) {
-            if (generation === refreshGenerationRef.current) {
-                showError(l10n.t('Failed to load indexes.'), error);
-            }
-        } finally {
-            if (generation === refreshGenerationRef.current) {
-                if (initial) {
-                    setIsInitialLoading(false);
-                } else {
-                    setIsRefreshing(false);
+            try {
+                const rows = await trpcClient.mongoClusters.indexView.listIndexes.query();
+                if (generation !== refreshGenerationRef.current) {
+                    return;
+                }
+                setIndexes(rows);
+                setLastUpdatedAt(Date.now());
+                hasLoadedRef.current = true;
+            } catch (error) {
+                if (generation === refreshGenerationRef.current) {
+                    showError(l10n.t('Failed to load indexes.'), error);
+                }
+            } finally {
+                if (generation === refreshGenerationRef.current) {
+                    if (initial) {
+                        setIsInitialLoading(false);
+                    } else {
+                        setIsRefreshing(false);
+                        setIsManualRefreshing(false);
+                    }
                 }
             }
-        }
-    }, [trpcClient, showError]);
+        },
+        [trpcClient, showError],
+    );
 
     // Initial load. `refresh` is stable across renders because its only
     // dependencies (trpcClient, showError) are themselves memoised.
@@ -244,7 +250,7 @@ export const IndexesTab = (): JSX.Element => {
     // toolbar refreshes this tab's index list when it is the active tab.
     useEffect(() => {
         const handler = (): void => {
-            void refresh();
+            void refresh('manual');
         };
         window.addEventListener(REFRESH_INDEXES_EVENT, handler);
         return () => window.removeEventListener(REFRESH_INDEXES_EVENT, handler);
@@ -463,12 +469,12 @@ export const IndexesTab = (): JSX.Element => {
             </div>
 
             {/* Filter row + details table, wrapped as a self-contained component.
-                The list skeleton is reserved for the first load; later refreshes
-                and mutations update the rows in place without flashing a skeleton. */}
+                Initial and toolbar refreshes show a skeleton; background mutation
+                reconciliation keeps the existing rows visible. */}
             <IndexList
                 indexes={displayIndexes}
                 lastUpdatedAt={lastUpdatedAt}
-                isLoading={isInitialLoading}
+                isLoading={isInitialLoading || isManualRefreshing}
                 busyNames={busyNames}
                 scrollToName={scrollToName}
                 onDelete={(idx) => void handleDelete(idx)}
