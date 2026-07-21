@@ -214,13 +214,13 @@ export const IndexTable = ({
                     </TableHeaderCell>
                     <TableHeaderCell {...headerSortProps('type')}>{l10n.t('Type')}</TableHeaderCell>
                     <TableHeaderCell {...headerSortProps('properties')}>{l10n.t('Properties')}</TableHeaderCell>
-                    <TableHeaderCell className="centeredHeaderCell" {...headerSortProps('size')}>
+                    <TableHeaderCell className="metricCell" {...headerSortProps('size')}>
                         {l10n.t('Size')}
                     </TableHeaderCell>
-                    <TableHeaderCell className="centeredHeaderCell" {...headerSortProps('usage')}>
+                    <TableHeaderCell className="metricCell" {...headerSortProps('usage')}>
                         {l10n.t('Usage')}
                     </TableHeaderCell>
-                    <TableHeaderCell className="centeredHeaderCell" sortable={false}>
+                    <TableHeaderCell className="actionsCell" sortable={false}>
                         {l10n.t('Actions')}
                     </TableHeaderCell>
                 </TableRow>
@@ -308,7 +308,7 @@ export const IndexTable = ({
                                         )}
                                     </div>
                                 </TableCell>
-                                <TableCell>
+                                <TableCell className="actionsCell">
                                     <div className="actionsCell">
                                         <Tooltip
                                             content={

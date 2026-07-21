@@ -213,17 +213,15 @@
             padding-right: 0;
         }
 
-        /* Fluent renders every header label inside a full-width button slot. */
-        .centeredHeaderCell {
-            text-align: center;
-
-            > .fui-TableHeaderCell__button {
-                justify-content: center;
-            }
-        }
-
-        .metricCell .indexMetricValue {
+        /*
+         * Center the metrics and actions (headers + cells). Fluent's
+         * TableCell/TableHeaderCell use `display: flex`, so both flex and
+         * text alignment are required for their labels and contents.
+         */
+        .metricCell,
+        .actionsCell {
             justify-content: center;
+            text-align: center;
         }
 
         // Compact relative-size visual beside a metric's formatted value.
@@ -362,7 +360,6 @@
         display: flex;
         flex-direction: row;
         justify-content: center;
-        width: 100%;
         gap: 4px;
     }
 }
