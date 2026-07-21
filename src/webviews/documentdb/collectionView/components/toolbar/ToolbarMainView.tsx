@@ -185,7 +185,6 @@ const ToolbarQueryOperations = ({ selectedTab }: ToolbarMainViewProps): JSX.Elem
                 // IndexesTab component listens for; this keeps the toolbar
                 // free of any direct coupling to the IndexesTab internals.
                 <ToolbarButton
-                    aria-label={l10n.t('Create a new index')}
                     icon={<AddRegular />}
                     appearance="primary"
                     onClick={() => {
