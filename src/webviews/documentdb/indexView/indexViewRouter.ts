@@ -82,7 +82,10 @@ const CreateIndexInputSchema = z
                 }),
             )
             .min(1),
-        name: z.string().optional(),
+        name: z
+            .string()
+            .refine((name) => name.trim() !== '*', { message: l10n.t('The index name "*" is reserved.') })
+            .optional(),
         unique: z.boolean().optional(),
         sparse: z.boolean().optional(),
         expireAfterSeconds: z.number().int().positive().optional(),
@@ -474,6 +477,9 @@ export const indexViewRouter = router({
             const myCtx = ctx as WithTelemetry<RouterContext>;
             if (input.indexName === '_id_') {
                 throw new Error(l10n.t('The "_id_" index cannot be deleted.'));
+            }
+            if (input.indexName === '*') {
+                throw new Error(l10n.t('The index name "*" is reserved.'));
             }
 
             // Confirm on the extension host using the same modal detail dialog
