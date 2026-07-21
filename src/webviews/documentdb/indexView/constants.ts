@@ -36,16 +36,3 @@ export const GEOSPATIAL_INDEX_DIRECTIONS: ReadonlySet<string> = new Set(['2dsphe
 /** Conventional sort directions for traditional (b-tree) indexes. */
 export const ASC_DIRECTION = 1 as const;
 export const DESC_DIRECTION = -1 as const;
-
-/**
- * Cross-component event used by the CollectionView toolbar to trigger the
- * Create Index dialog inside IndexesTab. Decouples the two components
- * without requiring a shared React context.
- */
-export const OPEN_CREATE_INDEX_EVENT = 'documentdb:openCreateIndex';
-
-/**
- * Cross-component event used by the CollectionView toolbar to refresh the
- * index list inside IndexesTab when the Indexes tab is active.
- */
-export const REFRESH_INDEXES_EVENT = 'documentdb:refreshIndexes';

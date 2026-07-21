@@ -3,14 +3,14 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { ProgressBar } from '@fluentui/react-components';
+import { ProgressBar, Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
+import { AddRegular, ArrowClockwiseRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList } from './components/indexList';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
-import { OPEN_CREATE_INDEX_EVENT, REFRESH_INDEXES_EVENT } from './constants';
 import './indexView.scss';
 import { type CreateIndexInput, type FieldIndexType, type IndexRow } from './types';
 import { formatBytes, formatOps } from './utils/format';
@@ -80,6 +80,28 @@ function pendingCreateFromInput(input: CreateIndexInput): PendingCreate {
  * of sync.
  */
 type ModalState = { kind: 'none' } | { kind: 'create' };
+
+interface IndexManagementToolbarProps {
+    onCreateIndex: () => void;
+    onRefreshIndexes: () => void;
+}
+
+const IndexManagementToolbar = ({ onCreateIndex, onRefreshIndexes }: IndexManagementToolbarProps): JSX.Element => (
+    <Toolbar className="indexManagementToolbar" aria-label={l10n.t('Index actions')} size="small">
+        <ToolbarButton icon={<AddRegular />} appearance="primary" onClick={onCreateIndex}>
+            {l10n.t('Create Index')}
+        </ToolbarButton>
+        <Tooltip content={l10n.t('Refresh indexes')} relationship="description" withArrow>
+            <ToolbarButton
+                aria-label={l10n.t('Refresh indexes')}
+                icon={<ArrowClockwiseRegular />}
+                onClick={onRefreshIndexes}
+            >
+                {l10n.t('Refresh')}
+            </ToolbarButton>
+        </Tooltip>
+    </Toolbar>
+);
 
 /**
  * Index Management panel rendered inside the CollectionView's tab strip
@@ -235,26 +257,6 @@ export const IndexesTab = (): JSX.Element => {
         }
         setModal({ kind: 'create' });
     }, [trpcClient]);
-
-    // Listen for the toolbar-driven "Create Index" event so the primary
-    // CollectionView toolbar can open this tab's create dialog.
-    useEffect(() => {
-        const handler = (): void => {
-            void openCreateDialog();
-        };
-        window.addEventListener(OPEN_CREATE_INDEX_EVENT, handler);
-        return () => window.removeEventListener(OPEN_CREATE_INDEX_EVENT, handler);
-    }, [openCreateDialog]);
-
-    // Listen for the toolbar-driven "Refresh" event so the primary CollectionView
-    // toolbar refreshes this tab's index list when it is the active tab.
-    useEffect(() => {
-        const handler = (): void => {
-            void refresh('manual');
-        };
-        window.addEventListener(REFRESH_INDEXES_EVENT, handler);
-        return () => window.removeEventListener(REFRESH_INDEXES_EVENT, handler);
-    }, [refresh]);
 
     // The list shown to the user = the real indexes plus any optimistic
     // "Creating…" rows whose index has not yet appeared in a fetch. IndexTable
@@ -462,6 +464,11 @@ export const IndexesTab = (): JSX.Element => {
             {(isInitialLoading || isRefreshing) && (
                 <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
             )}
+
+            <IndexManagementToolbar
+                onCreateIndex={() => void openCreateDialog()}
+                onRefreshIndexes={() => void refresh('manual')}
+            />
 
             {/* First row: summary metric cards (mirrors the Query Insights layout). */}
             <div className="indexMetricsRowContainer">
