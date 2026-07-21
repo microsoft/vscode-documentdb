@@ -13,6 +13,7 @@ import { createGenericElementWithContext } from '../../../tree/api/createGeneric
 import { containsRetryNode, createRetryNode } from '../../../tree/api/retryNode';
 import { getCountPrefix } from '../../../utils/countPrefix';
 import { DISCOVERY_PROVIDER_ID } from '../config';
+import { isKubernetesApiTimeoutError } from '../kubernetesApiTimeout';
 import {
     createCoreApi,
     listDocumentDBServices,
@@ -69,7 +70,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                         error instanceof Error ? error.name : 'UnknownError';
                     return createServiceErrorChildren(
                         this.id,
-                        errorMessage,
+                        error,
                         this,
                         `${this.contextInfo.name}/${this.namespace}`,
                     );
@@ -156,16 +157,22 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
  */
 function createServiceErrorChildren(
     parentId: string,
-    errorMessage: string,
+    error: unknown,
     retryTarget: TreeElement,
     namespaceLabel: string,
 ): TreeElement[] {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const lower = errorMessage.toLowerCase();
 
     let summary: string;
     let hint: string;
 
-    if (lower.includes('403') || lower.includes('forbidden')) {
+    if (isKubernetesApiTimeoutError(error)) {
+        summary = vscode.l10n.t('Connection timed out');
+        hint = vscode.l10n.t(
+            'The cluster did not respond in time. Check your network connection and firewall settings.',
+        );
+    } else if (lower.includes('403') || lower.includes('forbidden')) {
         summary = vscode.l10n.t('Access denied listing services (403 Forbidden)');
         hint = vscode.l10n.t('Your account lacks permission to list services in this namespace.');
     } else if (lower.includes('401') || lower.includes('unauthorized')) {
