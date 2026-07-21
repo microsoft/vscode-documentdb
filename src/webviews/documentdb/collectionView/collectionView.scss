@@ -29,9 +29,26 @@
         overflow-y: hidden;
     }
 
-    .toolbarMainView {
+    .collectionTabList {
+        flex-shrink: 0;
         padding-top: 10px;
+    }
 
+    .queryInsightsTabLabel {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+
+    .collectionTabPanel {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 0;
+        row-gap: 10px;
+    }
+
+    .toolbarMainView {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
         align-items: center;

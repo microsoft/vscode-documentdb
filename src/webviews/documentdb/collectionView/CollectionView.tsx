@@ -130,6 +130,16 @@ export const CollectionView = (): JSX.Element => {
     const [selectedTab, setSelectedTab] = useState<'tab_result' | 'tab_indexes' | 'tab_queryInsights'>(
         () => configuration.initialTab ?? 'tab_result',
     );
+    const selectedTabId = {
+        tab_result: 'tab.results',
+        tab_indexes: 'tab.indexes',
+        tab_queryInsights: 'tab.queryInsights',
+    }[selectedTab];
+    const selectedTabPanelId = {
+        tab_result: 'tabpanel.results',
+        tab_indexes: 'tabpanel.indexes',
+        tab_queryInsights: 'tabpanel.queryInsights',
+    }[selectedTab];
 
     // keep Refs updated with the current state
     const currentQueryResultsRef = useRef(currentQueryResults);
@@ -600,55 +610,8 @@ export const CollectionView = (): JSX.Element => {
                     }
                 />
 
-                <div className="toolbarMainView">
-                    <ToolbarMainView selectedTab={selectedTab} />
-                </div>
-
-                {selectedTab !== 'tab_indexes' && (
-                    <QueryEditor
-                        onExecuteRequest={() => {
-                            // Get all query values from the editor at once
-                            const query = currentContext.queryEditor?.getCurrentQuery() ?? {
-                                filter: '{  }',
-                                project: '{  }',
-                                sort: '{  }',
-                                skip: 0,
-                                limit: 0,
-                            };
-
-                            setCurrentContext((prev) => ({
-                                ...prev,
-                                activeQuery: {
-                                    ...prev.activeQuery,
-                                    queryText: query.filter, // deprecated: kept in sync with filter
-                                    filter: query.filter,
-                                    project: query.project,
-                                    sort: query.sort,
-                                    skip: query.skip,
-                                    limit: query.limit,
-                                    pageNumber: 1,
-                                    executionIntent: 'initial',
-                                },
-                            }));
-
-                            trpcClient.common.reportEvent
-                                .mutate({
-                                    eventName: 'executeQuery',
-                                    properties: {
-                                        ui: 'shortcut',
-                                    },
-                                    measurements: {
-                                        queryLenth: query.filter.length,
-                                    },
-                                })
-                                .catch((error) => {
-                                    console.debug('Failed to report an event:', error);
-                                });
-                        }}
-                    />
-                )}
-
                 <TabList
+                    className="collectionTabList"
                     selectedValue={selectedTab}
                     onTabSelect={(_event, data) => {
                         const newTab = data.value as 'tab_result' | 'tab_indexes' | 'tab_queryInsights';
@@ -668,17 +631,16 @@ export const CollectionView = (): JSX.Element => {
 
                         setSelectedTab(newTab);
                     }}
-                    style={{ marginTop: '-10px' }}
                 >
-                    <Tab id="tab.results" value="tab_result">
+                    <Tab id="tab.results" value="tab_result" aria-controls="tabpanel.results">
                         {l10n.t('Documents')}
                     </Tab>
-                    <Tab id="tab.indexes" value="tab_indexes">
+                    <Tab id="tab.indexes" value="tab_indexes" aria-controls="tabpanel.indexes">
                         {l10n.t('Indexes')}
                     </Tab>
-                    <Tab id="tab.queryInsights" value="tab_queryInsights">
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            Query Insights
+                    <Tab id="tab.queryInsights" value="tab_queryInsights" aria-controls="tabpanel.queryInsights">
+                        <span className="queryInsightsTabLabel">
+                            {l10n.t('Query Insights')}
                             <Badge
                                 appearance="tint"
                                 size="small"
@@ -688,51 +650,110 @@ export const CollectionView = (): JSX.Element => {
                             >
                                 PREVIEW
                             </Badge>
-                        </div>
+                        </span>
                     </Tab>
                 </TabList>
 
-                {selectedTab === 'tab_result' && (
-                    <>
-                        <div className="resultsActionBar">
-                            <ToolbarViewNavigation />
-                            <ToolbarDocumentManipulation
-                                onDeleteClick={handleDeleteDocumentRequest}
-                                onEditClick={handleEditDocumentRequest}
-                                onViewClick={handleViewDocumentRequest}
-                                onAddClick={handleAddDocumentRequest}
-                            />
-                            <ViewSwitcher onViewChanged={handleViewChanged} />
-                        </div>
+                <div
+                    id={selectedTabPanelId}
+                    className="collectionTabPanel"
+                    role="tabpanel"
+                    aria-labelledby={selectedTabId}
+                >
+                    <div className="toolbarMainView">
+                        <ToolbarMainView selectedTab={selectedTab} />
+                    </div>
 
-                        <div className="resultsDisplayArea" id="resultsDisplayAreaId">
-                            {
-                                {
-                                    'Table View': (
-                                        <DataViewPanelTable
-                                            liveHeaders={currentQueryResults?.tableHeaders ?? []}
-                                            liveData={currentQueryResults?.tableData ?? []}
-                                            handleStepIn={handleStepInRequest}
-                                        />
-                                    ),
-                                    'Tree View': <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />,
-                                    'JSON View': <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />,
-                                    default: <div>error &apos;{currentContext.currentView}&apos;</div>,
-                                }[currentContext.currentView] // switch-statement
-                            }
-                        </div>
+                    {selectedTab !== 'tab_indexes' && (
+                        <QueryEditor
+                            onExecuteRequest={() => {
+                                // Get all query values from the editor at once
+                                const query = currentContext.queryEditor?.getCurrentQuery() ?? {
+                                    filter: '{  }',
+                                    project: '{  }',
+                                    sort: '{  }',
+                                    skip: 0,
+                                    limit: 0,
+                                };
 
-                        {currentContext.currentView === Views.TABLE && (
-                            <div className="toolbarTableNavigation">
-                                <ToolbarTableNavigation />
+                                setCurrentContext((prev) => ({
+                                    ...prev,
+                                    activeQuery: {
+                                        ...prev.activeQuery,
+                                        queryText: query.filter, // deprecated: kept in sync with filter
+                                        filter: query.filter,
+                                        project: query.project,
+                                        sort: query.sort,
+                                        skip: query.skip,
+                                        limit: query.limit,
+                                        pageNumber: 1,
+                                        executionIntent: 'initial',
+                                    },
+                                }));
+
+                                trpcClient.common.reportEvent
+                                    .mutate({
+                                        eventName: 'executeQuery',
+                                        properties: {
+                                            ui: 'shortcut',
+                                        },
+                                        measurements: {
+                                            queryLenth: query.filter.length,
+                                        },
+                                    })
+                                    .catch((error) => {
+                                        console.debug('Failed to report an event:', error);
+                                    });
+                            }}
+                        />
+                    )}
+
+                    {selectedTab === 'tab_result' && (
+                        <>
+                            <div className="resultsActionBar">
+                                <ToolbarViewNavigation />
+                                <ToolbarDocumentManipulation
+                                    onDeleteClick={handleDeleteDocumentRequest}
+                                    onEditClick={handleEditDocumentRequest}
+                                    onViewClick={handleViewDocumentRequest}
+                                    onAddClick={handleAddDocumentRequest}
+                                />
+                                <ViewSwitcher onViewChanged={handleViewChanged} />
                             </div>
-                        )}
-                    </>
-                )}
 
-                {selectedTab === 'tab_indexes' && <IndexesTab />}
+                            <div className="resultsDisplayArea" id="resultsDisplayAreaId">
+                                {
+                                    {
+                                        'Table View': (
+                                            <DataViewPanelTable
+                                                liveHeaders={currentQueryResults?.tableHeaders ?? []}
+                                                liveData={currentQueryResults?.tableData ?? []}
+                                                handleStepIn={handleStepInRequest}
+                                            />
+                                        ),
+                                        'Tree View': (
+                                            <DataViewPanelTree liveData={currentQueryResults?.treeData ?? []} />
+                                        ),
+                                        'JSON View': (
+                                            <DataViewPanelJSON value={currentQueryResults?.jsonDocuments ?? []} />
+                                        ),
+                                        default: <div>error &apos;{currentContext.currentView}&apos;</div>,
+                                    }[currentContext.currentView] // switch-statement
+                                }
+                            </div>
 
-                {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
+                            {currentContext.currentView === Views.TABLE && (
+                                <div className="toolbarTableNavigation">
+                                    <ToolbarTableNavigation />
+                                </div>
+                            )}
+                        </>
+                    )}
+
+                    {selectedTab === 'tab_indexes' && <IndexesTab />}
+
+                    {selectedTab === 'tab_queryInsights' && <QueryInsightsMain />}
+                </div>
             </div>
         </CollectionViewContext.Provider>
     );
