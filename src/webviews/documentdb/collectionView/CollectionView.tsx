@@ -27,8 +27,8 @@ import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTa
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
 import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
+import { CollectionQueryActionBar } from './components/toolbar/CollectionQueryActionBar';
 import { ToolbarDocumentManipulation } from './components/toolbar/ToolbarDocumentManipulation';
-import { ToolbarMainView } from './components/toolbar/ToolbarMainView';
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
@@ -660,9 +660,13 @@ export const CollectionView = (): JSX.Element => {
                     role="tabpanel"
                     aria-labelledby={selectedTabId}
                 >
-                    <div className="toolbarMainView">
-                        <ToolbarMainView selectedTab={selectedTab} />
-                    </div>
+                    {selectedTab !== 'tab_indexes' && (
+                        <div className="toolbarMainView">
+                            <CollectionQueryActionBar
+                                variant={selectedTab === 'tab_result' ? 'documents' : 'queryInsights'}
+                            />
+                        </div>
+                    )}
 
                     {selectedTab !== 'tab_indexes' && (
                         <QueryEditor
