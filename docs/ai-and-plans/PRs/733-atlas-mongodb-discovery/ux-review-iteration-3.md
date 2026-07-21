@@ -209,9 +209,9 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft)                                                                              |
 | 8   | **P2**   | Tree/List view toggle + org level (Kubernetes-style)                           | ~15     | 🗣️ #5     | 🟡 Open (soft)                                                                              |
 | 9   | **P2**   | Wizard hides non-IDLE clusters the tree shows (tree/wizard mismatch)           | ~5      | —         | ✅ Implemented ([368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)) |
-| 10  | **P2**   | Project node has no tooltip                                                    | ~5      | —         | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
-| 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | ~5      | —         | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
-| 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | ~5      | —         | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
+| 10  | **P2**   | Project node has no tooltip                                                    | ~5      | —         | ✅ Implemented ([41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)) |
+| 11  | **P2**   | No reveal/expand of the Atlas root after a successful sign-in                  | ~5      | —         | ✅ Implemented ([41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)) |
+| 12  | **P3**   | Root shows no "signed in as…" identity when Active                             | ~5      | —         | ✅ Implemented ([41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)) |
 | 13  | **P3**   | ~~Active-filter state not visible on the root~~ — superseded by #14            | —       | —         | 🚫 Closed                                                                                   |
 
 ---
@@ -286,9 +286,9 @@ files — order does not matter and they can be done in parallel.**
 
 | Order | Item                                                            | Touches                                    | \u2248 Files | Parallel within bundle?           |
 | ----- | --------------------------------------------------------------- | ------------------------------------------ | ------------ | --------------------------------- |
-| ‖     | **Item 10** — add a project-node tooltip                        | `AtlasProjectItem.getTreeItem`             | ~5           | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
-| ‖     | **Item 11** — reveal/expand the root after a successful sign-in | `AtlasDiscoveryProvider`                   | ~5           | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
-| ‖     | **Item 12** — show the signed-in identity in the root (P3)      | `AtlasServiceRootItem.getStateDescription` | ~5           | ✅ Implemented ([07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)) |
+| ‖     | **Item 10** — add a project-node tooltip                        | `AtlasProjectItem.getTreeItem`             | ~5           | ✅ Implemented ([41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)) |
+| ‖     | **Item 11** — reveal/expand the root after a successful sign-in | `AtlasDiscoveryProvider`                   | ~5           | ✅ Implemented ([41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)) |
+| ‖     | **Item 12** — show the signed-in identity in the root (P3)      | `AtlasServiceRootItem.getStateDescription` | ~5           | ✅ Implemented ([41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)) |
 
 ### Bundle E — Credential & view redesign · **P2 · sequenced follow-up PRs**
 
@@ -715,7 +715,7 @@ the same `---`-separated style as the cluster tooltip for cross-provider consist
 
 > **Decision (Iteration 3):** Add a `MarkdownString` tooltip with project name as the heading, organization name (when available), project ID, and cluster count — matching the same style as the cluster tooltip.
 
-✅ **Implemented (Iteration 3):** [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6) — `AtlasProjectItem` now has a private `buildTooltip()` method that returns a `vscode.MarkdownString` with project name (bold heading), org name (if present), project ID, and cluster count. `getTreeItem()` wires it in via the `tooltip` property. **Verification:** `npm run l10n` (1652 keys), `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
+✅ **Implemented (Iteration 3):** [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2) — `AtlasProjectItem` now has a private `buildTooltip()` method that returns a `vscode.MarkdownString` with project name (bold heading), org name (if present), project ID, and cluster count. `getTreeItem()` wires it in via the `tooltip` property. **Verification:** `npm run l10n` (1652 keys), `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
 
 ---
 
@@ -732,7 +732,7 @@ appear without a manual expand.
 
 > **Decision (Iteration 3):** After a successful authentication in `authenticateAndFetchUserInfo()`, call a new private `revealAtlasRoot()` method that finds the root node and calls `ext.discoveryTreeView.reveal(atlasRoot, { select: false, focus: false, expand: true })`. Mirror the Kubernetes pattern from `refreshKubernetesRoot.ts`. Wrap in try/catch so a reveal failure never breaks the sign-in outcome.
 
-✅ **Implemented (Iteration 3):** [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6) — `AtlasDiscoveryProvider` has a new private `revealAtlasRoot()` method. After a successful `executeAtlasAuthFlow` call in `authenticateAndFetchUserInfo()`, `void this.revealAtlasRoot()` is called after the tree refresh. The method resolves the Atlas root from `ext.discoveryBranchDataProvider.getChildren()` and calls `ext.discoveryTreeView.reveal()` with `expand: true`. Non-critical failures log a warning to `ext.outputChannel` and do not surface to the user. **Verification:** `npm run build` passed.
+✅ **Implemented (Iteration 3):** [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2) — `AtlasDiscoveryProvider` has a new private `revealAtlasRoot()` method. After a successful `executeAtlasAuthFlow` call in `authenticateAndFetchUserInfo()`, `void this.revealAtlasRoot()` is called after the tree refresh. The method resolves the Atlas root from `ext.discoveryBranchDataProvider.getChildren()` and calls `ext.discoveryTreeView.reveal()` with `expand: true`. Non-critical failures log a warning to `ext.outputChannel` and do not surface to the user. **Verification:** `npm run build` passed.
 
 ---
 
@@ -749,7 +749,7 @@ tooltip when Active.
 
 > **Decision (Iteration 3):** Add an `Active` case to `getStateDescription()` that returns `"Signed in as {displayName}"` when a display name is stored, or `"Signed in"` as a fallback (covers Service Accounts for which no user-profile endpoint exists).
 
-✅ **Implemented (Iteration 3):** [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6) — `AtlasServiceRootItem.getStateDescription()` now handles `AtlasSessionState.Active`: it returns `vscode.l10n.t('Signed in as {0}', displayName)` when `getUserDisplayName()` returns a value, or `vscode.l10n.t('Signed in')` as the fallback. Service Accounts that have no resolvable display name show the fallback gracefully. **Verification:** `npm run build` passed.
+✅ **Implemented (Iteration 3):** [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2) — `AtlasServiceRootItem.getStateDescription()` now handles `AtlasSessionState.Active`: it returns `vscode.l10n.t('Signed in as {0}', displayName)` when `getUserDisplayName()` returns a value, or `vscode.l10n.t('Signed in')` as the fallback. Service Accounts that have no resolvable display name show the fallback gracefully. **Verification:** `npm run build` passed.
 
 ---
 
@@ -802,9 +802,9 @@ the next one; nothing is dropped without a terminal status.
 | 14  | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)                | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
 | 6–8 | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                           | 🟡 Open (soft) — likely follow-up PRs                                                                                |
 | 9   | Wizard/tree cluster mismatch                                               | Show all clusters in the wizard, annotate non-IDLE states, keep only `IDLE` connectable             | ✅ Implemented in [368a4cff](https://github.com/microsoft/vscode-documentdb/commit/368a4cff)                         |
-| 10    | Project node tooltip                                                       | Add markdown tooltip (org name, project ID, cluster count) — `buildTooltip()` in `AtlasProjectItem` | ✅ Implemented in [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)                        |
-| 11    | Reveal/expand root after sign-in                                           | `revealAtlasRoot()` after successful auth; mirrors K8s `revealKubernetesSource` pattern | ✅ Implemented in [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)                        |
-| 12    | "Signed in as…" root identity                                              | `Active` case in `getStateDescription()` with display name or "Signed in" fallback      | ✅ Implemented in [07c8f6a6](https://github.com/microsoft/vscode-documentdb/commit/07c8f6a6)                        |
+| 10    | Project node tooltip                                                       | Add markdown tooltip (org name, project ID, cluster count) — `buildTooltip()` in `AtlasProjectItem` | ✅ Implemented in [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)                        |
+| 11    | Reveal/expand root after sign-in                                           | `revealAtlasRoot()` after successful auth; mirrors K8s `revealKubernetesSource` pattern | ✅ Implemented in [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)                        |
+| 12    | "Signed in as…" root identity                                              | `Active` case in `getStateDescription()` with display name or "Signed in" fallback      | ✅ Implemented in [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2)                        |
 | 13  | Active filter state not visible on root                                    | #13 closed (filtering removed)                                                                      | 🚫 Closed                                                                                                            |
 
 > 🗣️ = raised by the reviewer in the live pass. "Decided" items have an agreed direction (see
