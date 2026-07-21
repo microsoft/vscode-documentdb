@@ -11,7 +11,7 @@ import { promptAtlasAuthMethod } from '../auth/AtlasAuthQuickPick';
 import { type AtlasSession } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { executeAtlasAuthFlow } from '../auth/executeAtlasAuthFlow';
-import { type AtlasCluster, type AtlasProject } from '../models/AtlasProjectModel';
+import { type AtlasCluster, type AtlasClusterState, type AtlasProject } from '../models/AtlasProjectModel';
 
 interface AtlasProjectQuickPickItem extends vscode.QuickPickItem {
     readonly itemType: 'manageCredentials' | 'project' | 'noProjects';
@@ -19,7 +19,7 @@ interface AtlasProjectQuickPickItem extends vscode.QuickPickItem {
 }
 
 interface AtlasClusterQuickPickItem extends vscode.QuickPickItem {
-    readonly itemType: 'manageCredentials' | 'cluster' | 'noConnectableClusters';
+    readonly itemType: 'manageCredentials' | 'cluster' | 'unavailableCluster' | 'noClusters';
     readonly cluster?: AtlasCluster;
 }
 
@@ -163,44 +163,52 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
 
         const items = await this.getClusterItems(session, project);
 
-        const selected = await context.ui.showQuickPick<AtlasClusterQuickPickItem>(items, {
-            placeHolder: vscode.l10n.t('Select a cluster'),
-            loadingPlaceHolder: vscode.l10n.t('Loading Atlas clusters...'),
-            suppressPersistence: true,
-            matchOnDescription: true,
-        });
+        while (true) {
+            const selected = await context.ui.showQuickPick<AtlasClusterQuickPickItem>(items, {
+                placeHolder: vscode.l10n.t('Select a cluster'),
+                loadingPlaceHolder: vscode.l10n.t('Loading Atlas clusters...'),
+                suppressPersistence: true,
+                matchOnDescription: true,
+            });
 
-        if (selected.itemType === 'manageCredentials') {
-            await this.manageCredentialsFromWizard(context);
-            throw new UserCancelledError(vscode.l10n.t('Credential management completed'));
+            if (selected.itemType === 'manageCredentials') {
+                await this.manageCredentialsFromWizard(context);
+                throw new UserCancelledError(vscode.l10n.t('Credential management completed'));
+            }
+
+            if (selected.itemType === 'noClusters') {
+                await vscode.window.showInformationMessage(
+                    vscode.l10n.t('No clusters available'),
+                    {
+                        modal: true,
+                        detail: vscode.l10n.t(
+                            'This MongoDB Atlas project does not currently contain any clusters to connect to.',
+                        ),
+                    },
+                    vscode.l10n.t('OK'),
+                );
+
+                throw new UserCancelledError(vscode.l10n.t('No Atlas clusters available'));
+            }
+
+            if (selected.itemType === 'unavailableCluster') {
+                await this.showClusterUnavailableMessage(selected.cluster);
+                continue;
+            }
+
+            if (!selected.cluster) {
+                throw new UserCancelledError(vscode.l10n.t('No Atlas cluster selected'));
+            }
+
+            const connectionString =
+                selected.cluster.connectionStrings.standardSrv ?? selected.cluster.connectionStrings.standard;
+            if (!connectionString) {
+                throw new UserCancelledError(vscode.l10n.t('No Atlas cluster connection string available.'));
+            }
+
+            context.properties['atlas.selectedClusterConnectionString'] = connectionString;
+            return;
         }
-
-        if (selected.itemType === 'noConnectableClusters') {
-            await vscode.window.showInformationMessage(
-                vscode.l10n.t('No connectable clusters available'),
-                {
-                    modal: true,
-                    detail: vscode.l10n.t(
-                        'Only IDLE clusters are currently connectable in this flow. Choose a different project or retry after cluster provisioning completes.',
-                    ),
-                },
-                vscode.l10n.t('OK'),
-            );
-
-            throw new UserCancelledError(vscode.l10n.t('No connectable Atlas clusters available'));
-        }
-
-        if (!selected.cluster) {
-            throw new UserCancelledError(vscode.l10n.t('No Atlas cluster selected'));
-        }
-
-        const connectionString =
-            selected.cluster.connectionStrings.standardSrv ?? selected.cluster.connectionStrings.standard;
-        if (!connectionString) {
-            throw new UserCancelledError(vscode.l10n.t('No Atlas cluster connection string available.'));
-        }
-
-        context.properties['atlas.selectedClusterConnectionString'] = connectionString;
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
@@ -229,7 +237,6 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
         const clusters = await client.listClusters(project.id);
 
         const clusterItems: AtlasClusterQuickPickItem[] = clusters
-            .filter((c) => c.stateName === 'IDLE') // Only show active clusters
             .map((c) => {
                 const provider =
                     c.providerSettings ??
@@ -242,23 +249,30 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
                               }
                             : undefined;
                     })();
-                const desc = provider ? `${provider.instanceSizeName}, ${provider.providerName}` : c.clusterType;
+                const providerDescription = provider
+                    ? `${provider.instanceSizeName}, ${provider.providerName}`
+                    : c.clusterType;
+                const stateLabel = getClusterStateLabel(c.stateName);
                 return {
-                    itemType: 'cluster' as const,
+                    itemType: c.stateName === 'IDLE' ? ('cluster' as const) : ('unavailableCluster' as const),
                     label: c.name,
-                    description: desc,
-                    detail: c.connectionStrings.standardSrv ?? c.connectionStrings.standard,
+                    description: stateLabel ? `${providerDescription} · ${stateLabel}` : providerDescription,
+                    detail:
+                        c.stateName === 'IDLE'
+                            ? (c.connectionStrings.standardSrv ?? c.connectionStrings.standard)
+                            : vscode.l10n.t(
+                                  'Visible in the tree, but not connectable until the cluster returns to IDLE.',
+                              ),
                     cluster: c,
                 };
-            });
+            })
+            .sort((a, b) => a.label.localeCompare(b.label, undefined, { numeric: true }));
 
         if (clusterItems.length === 0) {
             clusterItems.push({
-                itemType: 'noConnectableClusters',
-                label: vscode.l10n.t('No connectable clusters found in project "{0}"', project.name),
-                detail: vscode.l10n.t(
-                    'Select Manage MongoDB Atlas Credentials... or retry after cluster provisioning completes.',
-                ),
+                itemType: 'noClusters',
+                label: vscode.l10n.t('No clusters found in project "{0}"', project.name),
+                detail: vscode.l10n.t('This project does not currently contain any MongoDB Atlas clusters.'),
                 iconPath: new vscode.ThemeIcon('info'),
                 alwaysShow: true,
             });
@@ -266,9 +280,24 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
 
         return [
             manageItem,
-            { label: '', kind: vscode.QuickPickItemKind.Separator, itemType: 'noConnectableClusters' },
+            { label: '', kind: vscode.QuickPickItemKind.Separator, itemType: 'noClusters' },
             ...clusterItems,
         ];
+    }
+
+    private async showClusterUnavailableMessage(cluster: AtlasCluster | undefined): Promise<void> {
+        if (!cluster) {
+            throw new UserCancelledError(vscode.l10n.t('No Atlas cluster selected'));
+        }
+
+        await vscode.window.showInformationMessage(
+            vscode.l10n.t('Cluster not connectable yet'),
+            {
+                modal: true,
+                detail: getClusterStateExplanation(cluster.stateName),
+            },
+            vscode.l10n.t('OK'),
+        );
     }
 
     private async manageCredentialsFromWizard(context: NewConnectionWizardContext): Promise<void> {
@@ -299,5 +328,44 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             },
             vscode.l10n.t('OK'),
         );
+    }
+}
+
+function getClusterStateLabel(state: AtlasClusterState): string | undefined {
+    const labels: Record<AtlasClusterState, string | undefined> = {
+        IDLE: undefined,
+        CREATING: vscode.l10n.t('Creating...'),
+        UPDATING: vscode.l10n.t('Updating...'),
+        REPAIRING: vscode.l10n.t('Repairing...'),
+        DELETING: vscode.l10n.t('Deleting...'),
+        UNKNOWN: vscode.l10n.t('Unknown state'),
+    };
+
+    return labels[state];
+}
+
+function getClusterStateExplanation(state: AtlasClusterState): string {
+    switch (state) {
+        case 'CREATING':
+            return vscode.l10n.t(
+                'This cluster is being created. It will be connectable from the wizard once creation is complete and the cluster returns to IDLE.',
+            );
+        case 'UPDATING':
+            return vscode.l10n.t(
+                'This cluster is being updated. It is visible here to match the discovery tree, but it is not connectable until the update completes and the cluster returns to IDLE.',
+            );
+        case 'REPAIRING':
+            return vscode.l10n.t(
+                'This cluster is being repaired. It is visible here to match the discovery tree, but it is not connectable until repair completes and the cluster returns to IDLE.',
+            );
+        case 'DELETING':
+            return vscode.l10n.t('This cluster is being deleted and cannot be connected to from the wizard.');
+        case 'UNKNOWN':
+            return vscode.l10n.t(
+                'This cluster is in an unknown state. Try refreshing to update its status before connecting from the wizard.',
+            );
+        case 'IDLE':
+        default:
+            return vscode.l10n.t('This cluster is not connectable from the wizard right now.');
     }
 }
