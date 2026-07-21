@@ -17,6 +17,7 @@ import {
     DISCOVERY_VIEW_MODE_STATE_KEY,
     type KubernetesViewMode,
 } from '../config';
+import { isKubernetesApiTimeoutError } from '../kubernetesApiTimeout';
 import {
     createCoreApi,
     listDocumentDBServices,
@@ -106,12 +107,7 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                     context.telemetry.properties.namespaceFetchErrorType =
                         error instanceof Error ? error.name : 'UnknownError';
 
-                    return createConnectionErrorChildren(
-                        this.id,
-                        errorMessage,
-                        this,
-                        this.alias ?? this.contextInfo.name,
-                    );
+                    return createConnectionErrorChildren(this.id, error, this, this.alias ?? this.contextInfo.name);
                 }
 
                 context.telemetry.measurements.clusterConnectMs = Date.now() - clusterConnectStart;
@@ -341,9 +337,18 @@ async function mapWithBoundedConcurrency<T>(
  * Classifies a Kubernetes API error message into a user-friendly summary
  * and an actionable hint so tree error nodes are immediately useful.
  */
-function classifyConnectionError(errorMessage: string): { summary: string; hint: string } {
+function classifyConnectionError(error: unknown): { summary: string; hint: string } {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     const lower = errorMessage.toLowerCase();
 
+    if (isKubernetesApiTimeoutError(error)) {
+        return {
+            summary: vscode.l10n.t('Connection timed out'),
+            hint: vscode.l10n.t(
+                'The cluster did not respond in time. Check your network connection and firewall settings.',
+            ),
+        };
+    }
     if (lower.includes('401') || lower.includes('unauthorized')) {
         return {
             summary: vscode.l10n.t('Authentication failed (401 Unauthorized)'),
@@ -427,11 +432,12 @@ function classifyConnectionError(errorMessage: string): { summary: string; hint:
  */
 function createConnectionErrorChildren(
     parentId: string,
-    errorMessage: string,
+    error: unknown,
     retryTarget: TreeElement,
     connectionLabel: string,
 ): TreeElement[] {
-    const { summary, hint } = classifyConnectionError(errorMessage);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    const { summary, hint } = classifyConnectionError(error);
 
     void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect to "{0}"', connectionLabel), {
         modal: true,
