@@ -114,16 +114,21 @@ export const localQuickStartRouter = router({
         // (e.g. Missing when the container was removed in another window), which drives
         // whether the Advanced credential/image fields are shown (§12).
         await QuickStartService.refreshLiveState();
-        const tctx = ctx as WithTelemetry<BaseRouterContext>;
+        const tctx = ctx as WithTelemetry<RouterContext>;
         // Design §14 quickstart.docker_readiness — never includes names/ports/creds.
-        tctx.telemetry.properties.dockerReadiness = !readiness.cliInstalled
+        tctx.actionContext.telemetry.properties.dockerReadiness = !readiness.cliInstalled
             ? 'cliMissing'
             : !readiness.daemonReachable
               ? 'daemonStopped'
               : 'ok';
-        tctx.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
+        tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
         const willReuse = await QuickStartService.willReuseExistingInstance();
-        return { readiness, status: toWebviewStatus(QuickStartService.getStatus()), busy: QuickStartService.isBusy, willReuse };
+        return {
+            readiness,
+            status: toWebviewStatus(QuickStartService.getStatus()),
+            busy: QuickStartService.isBusy,
+            willReuse,
+        };
     }),
 
     /** Lightweight status poll (no docker call). */
