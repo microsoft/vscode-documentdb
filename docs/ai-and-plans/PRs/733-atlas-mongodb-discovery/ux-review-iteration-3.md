@@ -203,7 +203,7 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | ~5      | 🗣️ #3     | ✅ Implemented                                                                              |
 | 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | ✅ Implemented                                                                              |
 | 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | ✅ Implemented                                                                              |
-| 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | ✅ Implemented                                                                              |
+| 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | ✅ Implemented ([313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)) |
 | 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) |
 | 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | ✅ Implemented                                                                              |
 | 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft)                                                                              |
@@ -415,7 +415,7 @@ tooltip. The generic empty-account guidance also moved from `description` to a t
 
 ### 4. Project-level load/auth errors render as passive in-tree rows ⚠️
 
-**Priority:** P1 · **Status:** ✅ Implemented · **Complexity:** ~5 files
+**Priority:** P1 · **Status:** ✅ Implemented ([313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)) · **Complexity:** ~5 files
 
 **Observation:** Break discovery after projects are already listed (revoke the key / drop
 the network), then expand a **project** — you get a plain error row, not the modal +
@@ -485,7 +485,8 @@ connectable clusters in this project" step rather than throwing. See
 > inside the wizard; this is the established, well-worded pattern across all three Azure
 > siblings.
 
-✅ **Implemented (Iteration 3):** Item 5 landed in
+✅ **Implemented (Iteration 3):** [313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)
+landed Item 5 in
 [SelectAtlasSteps.ts](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts) and follows the Azure wizard contract end-to-end.
 
 - Added typed quick-pick item models for project and cluster steps, including explicit
@@ -758,7 +759,7 @@ the next one; nothing is dropped without a terminal status.
 | 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes       | ✅ Implemented                                                                                                       |
 | 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | Distinguish visible organizations with no visible projects; move guidance to tooltip     | ✅ Implemented                                                                                                       |
 | 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**                                                                                     |
-| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | ✅ Implemented                                                                                                       |
+| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | ✅ Implemented in [313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)                       |
 | 14   | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)     | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
 | 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                | 🟡 Open (soft) — likely follow-up PRs                                                                                |
 | 9–13 | Polish items                                                               | #13 closed (filtering removed); rest pending                                             | 🟠 Open / 🚫 Closed                                                                                                  |
