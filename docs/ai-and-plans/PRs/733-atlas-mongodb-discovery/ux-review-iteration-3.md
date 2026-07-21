@@ -203,7 +203,7 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | 2   | **P1**   | Auth failure / bad key has no retry or "update credentials" path               | ~5      | 🗣️ #3     | ✅ Implemented                                                                              |
 | 3   | **P1**   | Under-permissioned key mis-reported as "No projects found" (+ unreadable desc) | ~5      | 🗣️ #4     | ✅ Implemented                                                                              |
 | 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)              | ~5      | —         | ✅ Implemented                                                                              |
-| 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | 🟠 Open                                                                                     |
+| 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)           | ~5      | (🗣️ #3)   | ✅ Implemented                                                                              |
 | 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup         | ~10     | 🗣️ live   | ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) |
 | 6   | **P2**   | Rework credential entry as a guided webview (where to get keys)                | ~15     | 🗣️ #2     | ✅ Implemented                                                                              |
 | 7   | **P2**   | Multi-credential management like the Azure accounts flow (add/remove)          | ~20     | 🗣️ #6     | 🟡 Open (soft)                                                                              |
@@ -235,7 +235,7 @@ entry, and is internally sequential).
 | Bundle | Theme                         | Priority | Items (in order)                                                                   | \u2248 Files (sum) | Parallelizable with     |
 | ------ | ----------------------------- | -------- | ---------------------------------------------------------------------------------- | ------------------ | ----------------------- |
 | **A**  | Sign-in & error surfacing     | P1       | 1 ✅ → 4 ✅ → {2 ‖ 3}                                                              | ~20                | **B, C, D**             |
-| **B**  | Add-Connection wizard         | P1       | 5 → 9                                                                              | ~10                | **A, C, D**             |
+| **B**  | Add-Connection wizard         | P1       | 5 ✅ → 9                                                                           | ~10                | **A, C, D**             |
 | **C**  | Filtering removal             | P1       | 14 ✅ ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) | ~10                | **A, B, D** (completed) |
 | **D**  | Tree/root presentation polish | P2–P3    | 10 ‖ 11 ‖ 12                                                                       | ~15                | **A, B, C**             |
 | **E**  | Credential & view redesign    | P2       | 6 → 7 → 8                                                                          | ~50                | after **C** (& **A**)   |
@@ -265,7 +265,7 @@ Both items live in `SelectAtlasSteps` / `getDiscoveryWizard`.
 
 | Order | Item                                                                                             | Touches                                       | \u2248 Files | Parallel within bundle?                                                  |
 | ----- | ------------------------------------------------------------------------------------------------ | --------------------------------------------- | ------------ | ------------------------------------------------------------------------ |
-| 1     | **Item 5** — raw throws → Azure-style "Manage MongoDB Atlas Credentials…" + `UserCancelledError` | `SelectAtlasSteps`, `getDiscoveryWizard`      | ~5           | Do first                                                                 |
+| 1     | **Item 5** — raw throws → Azure-style "Manage MongoDB Atlas Credentials…" + `UserCancelledError` | `SelectAtlasSteps`, `getDiscoveryWizard`      | ~5           | ✅ Implemented — completed; unblocks item 9                              |
 | 2     | **Item 9** — reconcile the IDLE-only cluster filter to match the tree                            | `SelectAtlasSteps` (`SelectAtlasClusterStep`) | ~5           | No hard dependency on 5, but **same file** — sequence to avoid conflicts |
 
 ### Bundle C — Filtering removal · **P1 · implemented**
@@ -455,7 +455,7 @@ participates in the inherited retry-node cache. **Verification:** `npm run build
 
 ### 5. Add-Connection wizard steps throw raw errors that close the flow ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open · **Complexity:** ~5 files
+**Priority:** P1 · **Status:** ✅ Implemented · **Complexity:** ~5 files
 
 **Observation:** Start the Add-Connection wizard with a dropped session, or pick a project
 whose clusters are all mid-provision — the wizard **closes with a raw error** instead of
@@ -463,9 +463,10 @@ keeping you in flow. (Reviewer #3's "I had to restart the wizard" pain shows up 
 
 **Finding:**
 
-- ⚠️ [SelectAtlasProjectStep.prompt](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts#L23) throws `new Error('Atlas session not available')` when the session is missing.
-- ⚠️ [SelectAtlasClusterStep.prompt](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts#L59) throws the same, plus `'No active clusters found in project "{0}"'` when the IDLE filter yields nothing.
-- 🔍 `getDiscoveryWizard` now pre-authenticates via [promptSignInForWizard](../../../../src/plugins/service-atlas-mongodb/AtlasDiscoveryProvider.ts#L84), so the _session_ throw is unlikely on the happy path — but the **no-IDLE-clusters** throw is reachable whenever a project's clusters are all `CREATING`/`UPDATING`. A raw `throw` surfaces as a generic error and ends the wizard, unlike the Azure siblings' clean `UserCancelledError` + always-show header.
+- 🔍 The old raw-throw dead-ends in `SelectAtlasProjectStep` / `SelectAtlasClusterStep` have been removed from the expected recovery paths.
+- ✅ Both steps now inject an Azure-style top `alwaysShow` action — **Manage MongoDB Atlas Credentials...** — with key icon and separator, followed by the normal project/cluster options.
+- ✅ Selecting the manage-credentials action runs the Atlas credential flow, records telemetry, shows a modal retry instruction, and exits with `UserCancelledError` rather than a generic `Error`.
+- ✅ Empty-state dead-ends now terminate cleanly: missing project/cluster selection and no-connectable-clusters paths use `UserCancelledError` with clear guidance instead of raw thrown errors that surface as hard wizard failures.
 
 💡 **Suggestion:** Replace the raw throws with an in-flow affordance (Azure style: an
 always-show header row + clean `UserCancelledError`; or K8s style: inline "Sign in…" and
@@ -483,6 +484,23 @@ connectable clusters in this project" step rather than throwing. See
 > raw `throw`). **Reason:** the user should always have a way to fix/switch credentials from
 > inside the wizard; this is the established, well-worded pattern across all three Azure
 > siblings.
+
+✅ **Implemented (Iteration 3):** Item 5 landed in
+[SelectAtlasSteps.ts](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts) and follows the Azure wizard contract end-to-end.
+
+- Added typed quick-pick item models for project and cluster steps, including explicit
+  `manageCredentials` and empty-state item types.
+- Added the top **Manage MongoDB Atlas Credentials...** `alwaysShow` item (with separator)
+  to both project and cluster pickers.
+- Replaced raw throw paths in recovery scenarios with clean `UserCancelledError` exits.
+- Added wizard-scope credential management handlers that run auth, emit telemetry
+  (`credentialConfigActivated`, `initiatedFrom`, `authMethod`, `authSuccess`), and show a
+  modal "retry discovery" instruction before returning control.
+- Replaced the old no-IDLE dead-end with a guided no-connectable-clusters message and
+  graceful cancellation path.
+
+**Verification:** `npm run l10n`, `npm run prettier-fix`, `npm run lint`,
+`npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
 
 ---
 
@@ -740,7 +758,7 @@ the next one; nothing is dropped without a terminal status.
 | 2    | Auth failure has no retry / update-creds path (🗣️ #3)                      | Store submitted credentials, then show retry and update credentials recovery nodes       | ✅ Implemented                                                                                                       |
 | 3    | "No projects found" masks under-permissioned key (🗣️ #4)                   | Distinguish visible organizations with no visible projects; move guidance to tooltip     | ✅ Implemented                                                                                                       |
 | 4    | Project-level passive error rows                                           | Remove all passive rows → error modal + single retry; detail to `ext.outputChannel`      | 🟠 Decided — **release blocker**                                                                                     |
-| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | 🟠 Decided — **release blocker**                                                                                     |
+| 5    | Wizard raw-throw dead-ends                                                 | Azure-style always-show "Manage MongoDB Atlas Credentials…" + clean `UserCancelledError` | ✅ Implemented                                                                                                       |
 | 14   | Remove all filtering + storage (🗣️ live)                                   | Removed entirely; scoped keys make filtering pointless; no migration (never shipped)     | ✅ Implemented in [a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70); `npm run build` passed |
 | 6–8  | Design items: webview (🗣️ #2), multi-credential (🗣️ #6), tree/list (🗣️ #5) | _pending_                                                                                | 🟡 Open (soft) — likely follow-up PRs                                                                                |
 | 9–13 | Polish items                                                               | #13 closed (filtering removed); rest pending                                             | 🟠 Open / 🚫 Closed                                                                                                  |
@@ -767,7 +785,7 @@ are _not_ extra work items and they are _not_ all gating. Two categories:
 
 | Block  | Item(s) | Bundle | Priority | Answer needed before…                    | State                          |
 | ------ | ------- | ------ | -------- | ---------------------------------------- | ------------------------------ |
-| **O1** | 5       | B      | P1       | already answered                         | ✅ Decided — Option A          |
+| **O1** | 5       | B      | P1       | already answered                         | ✅ Implemented — Option A      |
 | **O2** | 2, 3, 4 | A      | P1       | already answered                         | ✅ Decided — Option A          |
 | **O3** | 6       | E      | P2       | starting **Bundle E · item 6**           | 🟡 Open — 💡 suggests Option C |
 | **O4** | 7       | E      | P2       | starting **Bundle E · item 7** (after 6) | 🟡 Open — 💡 suggests Option A |
@@ -776,7 +794,7 @@ are _not_ extra work items and they are _not_ all gating. Two categories:
 > So: nothing here blocks the release-blocker bundles (A–D). Only **O3/O4/O5** need a decision,
 > and only at the point Bundle E's sequenced work reaches each item.
 
-### O1. Wizard no-session / empty-cluster recovery (item 5) · ✅ Decided (Option A — see [item 5](#5-add-connection-wizard-steps-throw-raw-errors-that-close-the-flow-))
+### O1. Wizard no-session / empty-cluster recovery (item 5) · ✅ Implemented (Option A — see [item 5](#5-add-connection-wizard-steps-throw-raw-errors-that-close-the-flow-))
 
 | Option                                                               | Pros                                                                | Cons                                                      |
 | -------------------------------------------------------------------- | ------------------------------------------------------------------- | --------------------------------------------------------- |
