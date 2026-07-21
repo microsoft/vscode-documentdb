@@ -100,7 +100,7 @@ const groupAccumulators: readonly OperatorEntry[] = [
     {
         value: '$maxN',
         meta: META_ACCUMULATOR,
-        description: 'The $maxN opertor retrieves the top N values based on a specified filtering criteria',
+        description: 'The $maxN operator retrieves the top N values based on specified filtering criteria.',
         snippet: '{ $maxN: { input: "${1:\\$field}", n: ${2:number} } }',
         link: getDocLink('$maxN', META_ACCUMULATOR),
     },

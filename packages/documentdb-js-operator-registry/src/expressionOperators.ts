@@ -236,7 +236,7 @@ const arrayExpressionOperators: readonly OperatorEntry[] = [
     {
         value: '$maxN',
         meta: META_EXPR_ARRAY,
-        description: 'The $maxN opertor retrieves the top N values based on a specified filtering criteria',
+        description: 'The $maxN operator retrieves the top N values based on specified filtering criteria.',
         snippet: '{ $maxN: { input: "${1:\\$array}", n: ${2:number} } }',
         link: 'https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$maxn', // inferred from another category
     },
