@@ -8,7 +8,7 @@ import * as net from 'net';
 import { PassThrough } from 'stream';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
-import { getKubernetesApiErrorMessage } from './kubernetesApiTimeout';
+import { getKubernetesApiErrorMessage, normalizeKubernetesApiError } from './kubernetesApiTimeout';
 
 interface TunnelParams {
     /**
@@ -74,7 +74,12 @@ export async function resolveServiceBackend(
     servicePort: number,
     servicePortName?: string,
 ): Promise<{ podName: string; targetPort: number }> {
-    const endpoints = await coreApi.readNamespacedEndpoints({ name: serviceName, namespace });
+    let endpoints: Awaited<ReturnType<CoreV1Api['readNamespacedEndpoints']>>;
+    try {
+        endpoints = await coreApi.readNamespacedEndpoints({ name: serviceName, namespace });
+    } catch (error) {
+        throw normalizeKubernetesApiError(error);
+    }
     const subsets = endpoints.subsets ?? [];
 
     for (const subset of subsets) {

@@ -23,24 +23,11 @@ export const kubernetesApiTimeoutMiddleware: Middleware = {
     },
 };
 
-export function isKubernetesApiTimeoutError(error: unknown): boolean {
-    if (!(error instanceof Error)) {
-        return false;
-    }
-
-    // The generated client uses node-fetch v2, which reports an aborted
-    // AbortSignal as AbortError. TimeoutError covers runtimes that preserve
-    // AbortSignal.timeout()'s native reason instead.
-    return (
-        error.name === KUBERNETES_API_TIMEOUT_ERROR_NAME || error.name === 'AbortError' || error.name === 'TimeoutError'
-    );
+export function isKubernetesApiTimeoutError(error: unknown): error is Error {
+    return error instanceof Error && error.name === KUBERNETES_API_TIMEOUT_ERROR_NAME;
 }
 
 export function getKubernetesApiErrorMessage(error: unknown): string {
-    if (isKubernetesApiTimeoutError(error)) {
-        return vscode.l10n.t('Operation timed out after {0} seconds.', String(KUBERNETES_API_TIMEOUT_SECONDS));
-    }
-
     if (error instanceof Error) {
         return error.message;
     }
@@ -76,13 +63,31 @@ export function createKubernetesApiOperationError(message: string, cause: unknow
 }
 
 export function normalizeKubernetesApiError(error: unknown): Error {
-    if (!isKubernetesApiTimeoutError(error)) {
+    if (isKubernetesApiTimeoutError(error)) {
+        return error;
+    }
+
+    if (!isAbortSignalTimeoutError(error)) {
         return error instanceof Error ? error : new Error(String(error));
     }
 
-    const timeoutError = new Error(getKubernetesApiErrorMessage(error));
+    const timeoutError = new Error(
+        vscode.l10n.t('Operation timed out after {0} seconds.', String(KUBERNETES_API_TIMEOUT_SECONDS)),
+    );
     timeoutError.name = KUBERNETES_API_TIMEOUT_ERROR_NAME;
     return timeoutError;
+}
+
+function isAbortSignalTimeoutError(error: unknown): boolean {
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    // The generated client uses node-fetch v2, which reports our timed signal
+    // as AbortError. TimeoutError covers runtimes that preserve
+    // AbortSignal.timeout()'s native reason. Only normalize these names at
+    // known generated-client request boundaries.
+    return error.name === 'AbortError' || error.name === 'TimeoutError';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

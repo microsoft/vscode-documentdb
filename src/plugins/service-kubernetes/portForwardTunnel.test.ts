@@ -235,6 +235,19 @@ describe('resolveServiceBackend', () => {
         await expect(resolveServiceBackend(coreApi, 'ns', 'svc', 27017)).rejects.toThrow('Forbidden');
     });
 
+    it('should normalize an Endpoints API abort as a Kubernetes timeout', async () => {
+        const abortError = new Error('The user aborted a request.');
+        abortError.name = 'AbortError';
+        const coreApi = {
+            readNamespacedEndpoints: jest.fn().mockRejectedValue(abortError),
+        } as never;
+
+        await expect(resolveServiceBackend(coreApi, 'ns', 'svc', 27017)).rejects.toMatchObject({
+            name: 'KubernetesApiTimeoutError',
+            message: 'Operation timed out after 30 seconds.',
+        });
+    });
+
     it('should pass correct arguments to readNamespacedEndpoints', async () => {
         const mockRead = jest.fn().mockResolvedValue({
             subsets: [
@@ -1037,5 +1050,34 @@ describe('PortForwardTunnelManager', () => {
 
         expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('error-svc'));
         expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(expect.stringContaining('Forbidden'));
+    });
+
+    it('should not relabel a non-API AbortError from port-forward setup as a timeout', async () => {
+        const abortError = new Error('request cancelled during teardown');
+        abortError.name = 'AbortError';
+        mockPortForward.mockRejectedValue(abortError);
+
+        const freePort = await new Promise<number>((resolve) => {
+            const tmp = net.createServer();
+            tmp.listen(0, '127.0.0.1', () => {
+                const port = (tmp.address() as net.AddressInfo).port;
+                tmp.close(() => resolve(port));
+            });
+        });
+
+        await manager.startTunnel(createMockParams({ localPort: freePort }));
+
+        const client = new net.Socket();
+        const closed = new Promise<void>((resolve) => client.on('close', () => resolve()));
+        client.connect(freePort, '127.0.0.1');
+        await closed;
+        await new Promise((resolve) => setTimeout(resolve, 50));
+
+        expect(ext.outputChannel.appendLine).toHaveBeenCalledWith(
+            expect.stringContaining('request cancelled during teardown'),
+        );
+        expect(ext.outputChannel.appendLine).not.toHaveBeenCalledWith(
+            expect.stringContaining('Operation timed out after 30 seconds.'),
+        );
     });
 });

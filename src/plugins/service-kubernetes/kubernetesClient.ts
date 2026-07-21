@@ -642,13 +642,14 @@ export async function listNamespaces(coreApi: CoreV1Api): Promise<string[]> {
             .filter((name): name is string => !!name)
             .sort((a, b) => a.localeCompare(b, undefined, { numeric: true }));
     } catch (error) {
-        const errorMessage = getKubernetesApiErrorMessage(error);
+        const apiError = normalizeKubernetesApiError(error);
+        const errorMessage = getKubernetesApiErrorMessage(apiError);
         throw createKubernetesApiOperationError(
             vscode.l10n.t(
                 'Failed to list namespaces: {0}. Check that your credentials are valid and you have the required RBAC permissions.',
                 errorMessage,
             ),
-            error,
+            apiError,
         );
     }
 }
@@ -796,26 +797,28 @@ async function listDkoDocumentDbResources(
             return [];
         }
 
+        const apiError = normalizeKubernetesApiError(error);
+
         if (options.suppressUnexpectedErrors) {
             // Credential lookup is best-effort, but a timeout should still be
             // visible in diagnostics rather than looking like a missing Secret.
-            if (isKubernetesApiTimeoutError(error)) {
+            if (isKubernetesApiTimeoutError(apiError)) {
                 ext.outputChannel.warn(
-                    `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(error)} ` +
+                    `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(apiError)} ` +
                         `while listing DKO resources in namespace "${namespace}".`,
                 );
             }
             return [];
         }
 
-        const errorMessage = getKubernetesApiErrorMessage(error);
+        const errorMessage = getKubernetesApiErrorMessage(apiError);
         throw createKubernetesApiOperationError(
             vscode.l10n.t(
                 'Failed to list DKO resources in namespace "{0}": {1}. Check that the DocumentDB Kubernetes Operator CRD is installed and that your Kubernetes credentials can list documentdb.io dbs resources.',
                 namespace,
                 errorMessage,
             ),
-            error,
+            apiError,
         );
     }
 }
@@ -975,14 +978,15 @@ export async function listDocumentDBServices(
             return a.displayName.localeCompare(b.displayName, undefined, { numeric: true });
         });
     } catch (error) {
-        const errorMessage = getKubernetesApiErrorMessage(error);
+        const apiError = normalizeKubernetesApiError(error);
+        const errorMessage = getKubernetesApiErrorMessage(apiError);
         throw createKubernetesApiOperationError(
             vscode.l10n.t(
                 'Failed to list services in namespace "{0}": {1}. Check your RBAC permissions.',
                 namespace,
                 errorMessage,
             ),
-            error,
+            apiError,
         );
     }
 }
@@ -1213,8 +1217,9 @@ async function getFirstNodeAddress(coreApi: CoreV1Api): Promise<{ address: strin
             return { address: firstInternalAddress, isExternal: false };
         }
     } catch (error) {
-        if (isKubernetesApiTimeoutError(error)) {
-            throw normalizeKubernetesApiError(error);
+        const apiError = normalizeKubernetesApiError(error);
+        if (isKubernetesApiTimeoutError(apiError)) {
+            throw apiError;
         }
         // If we can't list nodes, we can't resolve NodePort addresses.
     }
@@ -1259,9 +1264,10 @@ export async function resolveDocumentDBCredentials(
             };
         }
     } catch (error) {
-        if (isKubernetesApiTimeoutError(error)) {
+        const apiError = normalizeKubernetesApiError(error);
+        if (isKubernetesApiTimeoutError(apiError)) {
             ext.outputChannel.warn(
-                `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(error)} ` +
+                `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(apiError)} ` +
                     `while reading credential Secret "${matchingResource.secretName}" in namespace "${namespace}".`,
             );
         }
@@ -1306,9 +1312,10 @@ export async function resolveGenericServiceCredentials(
             return { username, password };
         }
     } catch (error) {
-        if (isKubernetesApiTimeoutError(error)) {
+        const apiError = normalizeKubernetesApiError(error);
+        if (isKubernetesApiTimeoutError(apiError)) {
             ext.outputChannel.warn(
-                `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(error)} ` +
+                `[KubernetesDiscovery] ${getKubernetesApiErrorMessage(apiError)} ` +
                     `while reading credential Secret "${secretName}" in namespace "${namespace}".`,
             );
         }

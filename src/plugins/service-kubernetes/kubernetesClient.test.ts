@@ -585,7 +585,9 @@ describe('kubernetesClient', () => {
 
             await expect(listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig)).rejects.toMatchObject({
                 name: 'KubernetesApiTimeoutError',
-                message: expect.stringContaining('Operation timed out after 30 seconds.'),
+                message: expect.stringMatching(
+                    /Failed to list services.*Failed to list DKO resources.*Operation timed out after 30 seconds\./,
+                ),
             });
         });
 
@@ -851,7 +853,7 @@ describe('kubernetesClient', () => {
 
             await expect(listNamespaces(mockCoreApi)).rejects.toMatchObject({
                 name: 'KubernetesApiTimeoutError',
-                message: expect.stringContaining('Operation timed out after 30 seconds.'),
+                message: expect.stringMatching(/Failed to list namespaces: Operation timed out after 30 seconds\./),
             });
         });
     });

@@ -470,7 +470,7 @@ describe('KubernetesContextItem', () => {
 
         it('should identify a namespace-list timeout and retain the retry action', async () => {
             (vscode.window.showErrorMessage as jest.Mock).mockClear();
-            const timeoutError = new Error('Operation timed out after 30 seconds.');
+            const timeoutError = new Error('localized deadline message');
             timeoutError.name = 'KubernetesApiTimeoutError';
             mockListNamespaces.mockRejectedValue(timeoutError);
 
@@ -487,9 +487,7 @@ describe('KubernetesContextItem', () => {
                     detail: expect.stringContaining('Connection timed out'),
                 }),
             );
-            expect(mockOutputChannelError).toHaveBeenCalledWith(
-                expect.stringContaining('Operation timed out after 30 seconds.'),
-            );
+            expect(mockOutputChannelError).toHaveBeenCalledWith(expect.stringContaining('localized deadline message'));
             expect(telemetryContextMock.telemetry.properties).toHaveProperty(
                 'namespaceFetchErrorType',
                 'KubernetesApiTimeoutError',
