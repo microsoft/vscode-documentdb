@@ -569,6 +569,9 @@ export const indexViewRouter = router({
         )
         .mutation(async ({ input, ctx }) => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
+            if (input.indexName === '_id_') {
+                throw new Error(l10n.t('The "_id_" index visibility cannot be changed.'));
+            }
             const confirmed = await confirmIndexAction('unhide', {
                 indexName: input.indexName,
                 collectionName: myCtx.collectionName,

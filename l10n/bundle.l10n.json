@@ -1392,6 +1392,7 @@
   "Thank you for your feedback!": "Thank you for your feedback!",
   "The \"_id_\" index cannot be deleted.": "The \"_id_\" index cannot be deleted.",
   "The \"_id_\" index cannot be hidden.": "The \"_id_\" index cannot be hidden.",
+  "The \"_id_\" index visibility cannot be changed.": "The \"_id_\" index visibility cannot be changed.",
   "The \"{databaseId}\" database has been deleted.": "The \"{databaseId}\" database has been deleted.",
   "The \"{indexName}\" index cannot be dropped.": "The \"{indexName}\" index cannot be dropped.",
   "The \"{indexName}\" index cannot be modified.": "The \"{indexName}\" index cannot be modified.",
