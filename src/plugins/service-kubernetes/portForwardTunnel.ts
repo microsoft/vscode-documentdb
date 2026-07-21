@@ -8,6 +8,7 @@ import * as net from 'net';
 import { PassThrough } from 'stream';
 import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
+import { getKubernetesApiErrorMessage } from './kubernetesApiTimeout';
 
 interface TunnelParams {
     /**
@@ -621,7 +622,7 @@ export class PortForwardTunnelManager implements vscode.Disposable {
                 });
             }
         } catch (err) {
-            const errMsg = err instanceof Error ? err.message : String(err);
+            const errMsg = getKubernetesApiErrorMessage(err);
             ext.outputChannel.appendLine(
                 vscode.l10n.t(
                     'Port-forward backend resolution failed for {0}/{1}: {2}',

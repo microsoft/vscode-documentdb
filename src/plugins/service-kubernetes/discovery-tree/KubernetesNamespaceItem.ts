@@ -171,6 +171,11 @@ function createServiceErrorChildren(
     } else if (lower.includes('401') || lower.includes('unauthorized')) {
         summary = vscode.l10n.t('Authentication failed listing services (401)');
         hint = vscode.l10n.t('Credentials may have expired. Re-authenticate with your cluster.');
+    } else if (lower.includes('timeout') || lower.includes('timed out')) {
+        summary = vscode.l10n.t('Connection timed out');
+        hint = vscode.l10n.t(
+            'The cluster did not respond in time. Check your network connection and firewall settings.',
+        );
     } else {
         summary = vscode.l10n.t('Failed to list services');
         hint = vscode.l10n.t('Check the output channel for details.');
