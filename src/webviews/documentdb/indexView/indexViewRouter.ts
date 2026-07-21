@@ -72,22 +72,37 @@ export type RouterContext = BaseRouterContext & {
  */
 const FieldIndexTypeSchema = z.enum(['asc', 'desc', 'text', '2dsphere', 'hashed']);
 
-const CreateIndexInputSchema = z.object({
-    fields: z
-        .array(
-            z.object({
-                field: z.string().min(1),
-                type: FieldIndexTypeSchema,
-            }),
-        )
-        .min(1),
-    name: z.string().optional(),
-    unique: z.boolean().optional(),
-    sparse: z.boolean().optional(),
-    expireAfterSeconds: z.number().int().positive().optional(),
-    partialFilterExpression: z.string().optional(),
-    collation: z.string().optional(),
-});
+const CreateIndexInputSchema = z
+    .object({
+        fields: z
+            .array(
+                z.object({
+                    field: z.string().min(1),
+                    type: FieldIndexTypeSchema,
+                }),
+            )
+            .min(1),
+        name: z.string().optional(),
+        unique: z.boolean().optional(),
+        sparse: z.boolean().optional(),
+        expireAfterSeconds: z.number().int().positive().optional(),
+        partialFilterExpression: z.string().optional(),
+        collation: z.string().optional(),
+    })
+    .superRefine((input, ctx) => {
+        const fieldNames = new Set<string>();
+        input.fields.forEach((entry, index) => {
+            const fieldName = entry.field.trim();
+            if (fieldNames.has(fieldName)) {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ['fields', index, 'field'],
+                    message: l10n.t('Duplicate index field.'),
+                });
+            }
+            fieldNames.add(fieldName);
+        });
+    });
 
 /** Convert a raw IndexItemModel to the IndexRow shape used by the webview. */
 function toIndexRow(

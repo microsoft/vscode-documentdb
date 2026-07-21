@@ -530,6 +530,7 @@
   "Drafting…": "Drafting…",
   "Drop Index…": "Drop Index…",
   "Dropping index \"{indexName}\" from collection: {collection}": "Dropping index \"{indexName}\" from collection: {collection}",
+  "Duplicate index field.": "Duplicate index field.",
   "Duplicate key error for document with _id: {0}. {1}": "Duplicate key error for document with _id: {0}. {1}",
   "Duplicate key error: {0}": "Duplicate key error: {0}",
   "Duplicate key error. {0}": "Duplicate key error. {0}",
