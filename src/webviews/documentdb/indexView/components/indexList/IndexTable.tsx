@@ -320,7 +320,7 @@ export const IndexTable = ({
                                                 size="small"
                                                 icon={<DeleteRegular />}
                                                 aria-label={l10n.t('Delete index {0}', idx.name)}
-                                                disabled={isProtected || isPending}
+                                                disabledFocusable={isProtected || isPending}
                                                 onClick={() => onDelete(idx)}
                                             />
                                         </Tooltip>
@@ -344,7 +344,7 @@ export const IndexTable = ({
                                                         ? l10n.t('Unhide index {0}', idx.name)
                                                         : l10n.t('Hide index {0}', idx.name)
                                                 }
-                                                disabled={isProtected || isPending}
+                                                disabledFocusable={isProtected || isPending}
                                                 onClick={() => onToggleHidden(idx)}
                                             />
                                         </Tooltip>

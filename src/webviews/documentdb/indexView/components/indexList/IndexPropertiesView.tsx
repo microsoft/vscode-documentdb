@@ -6,6 +6,7 @@
 import { Badge, Tooltip } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
+import '../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
 import { formatShellJson } from '../../utils/format';
 
@@ -58,8 +59,16 @@ export const IndexPropertiesView = ({ index }: IndexPropertiesViewProps): JSX.El
         <div className="indexPropertiesCell">
             {badges.map(({ label, tooltip }) => {
                 const badge = (
-                    <Badge appearance="outline" color="informative" shape="rounded" size="medium">
-                        {label}
+                    <Badge
+                        appearance="outline"
+                        color="informative"
+                        shape="rounded"
+                        size="medium"
+                        tabIndex={tooltip ? 0 : undefined}
+                        className={tooltip ? 'focusableBadge' : undefined}
+                        aria-label={tooltip ? l10n.t('{0}. {1}', label, tooltip) : undefined}
+                    >
+                        <span aria-hidden={tooltip ? true : undefined}>{label}</span>
                     </Badge>
                 );
                 if (!tooltip) {
