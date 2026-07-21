@@ -452,7 +452,7 @@ export const IndexesTab = (): JSX.Element => {
     return (
         <div className="indexView">
             {(isInitialLoading || isRefreshing) && (
-                <ProgressBar thickness="large" shape="square" className="progressBar" />
+                <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
             )}
 
             {/* First row: summary metric cards (mirrors the Query Insights layout). */}
