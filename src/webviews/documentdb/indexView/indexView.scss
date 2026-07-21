@@ -214,14 +214,14 @@
         }
 
         /*
-         * Center the metrics and actions (headers + cells). Fluent's
-         * TableCell/TableHeaderCell use `display: flex`, so both flex and
-         * text alignment are required for their labels and contents.
+         * Left-align the Usage column (header + cells). Fluent's
+         * TableCell/TableHeaderCell use `display: flex`, so we set both
+         * `justify-content` (flex main-axis) and `text-align` to keep the
+         * count snug against the left edge of the column.
          */
-        .metricCell,
-        .actionsCell {
-            justify-content: center;
-            text-align: center;
+        .usageCell {
+            justify-content: flex-start;
+            text-align: left;
         }
 
         // Compact relative-size visual beside a metric's formatted value.
@@ -359,7 +359,6 @@
     .actionsCell {
         display: flex;
         flex-direction: row;
-        justify-content: center;
         gap: 4px;
     }
 }

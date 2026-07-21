@@ -214,15 +214,11 @@ export const IndexTable = ({
                     </TableHeaderCell>
                     <TableHeaderCell {...headerSortProps('type')}>{l10n.t('Type')}</TableHeaderCell>
                     <TableHeaderCell {...headerSortProps('properties')}>{l10n.t('Properties')}</TableHeaderCell>
-                    <TableHeaderCell className="metricCell" {...headerSortProps('size')}>
-                        {l10n.t('Size')}
-                    </TableHeaderCell>
-                    <TableHeaderCell className="metricCell" {...headerSortProps('usage')}>
+                    <TableHeaderCell {...headerSortProps('size')}>{l10n.t('Size')}</TableHeaderCell>
+                    <TableHeaderCell className="usageCell" {...headerSortProps('usage')}>
                         {l10n.t('Usage')}
                     </TableHeaderCell>
-                    <TableHeaderCell className="actionsCell" sortable={false}>
-                        {l10n.t('Actions')}
-                    </TableHeaderCell>
+                    <TableHeaderCell sortable={false}>{l10n.t('Actions')}</TableHeaderCell>
                 </TableRow>
             </TableHeader>
             <TableBody>
@@ -288,7 +284,7 @@ export const IndexTable = ({
                                 <TableCell>
                                     <IndexPropertiesView index={idx} />
                                 </TableCell>
-                                <TableCell className="metricCell">
+                                <TableCell>
                                     <div className="indexMetricValue">
                                         <span className="indexMetricText">{formatBytes(idx.sizeBytes)}</span>
                                         {sizeBarWidth !== undefined && (
@@ -298,7 +294,7 @@ export const IndexTable = ({
                                         )}
                                     </div>
                                 </TableCell>
-                                <TableCell className="metricCell">
+                                <TableCell className="usageCell">
                                     <div className="indexMetricValue">
                                         <span className="indexMetricText">{formatOps(idx.usageOps)}</span>
                                         {usageBarWidth !== undefined && (
@@ -308,7 +304,7 @@ export const IndexTable = ({
                                         )}
                                     </div>
                                 </TableCell>
-                                <TableCell className="actionsCell">
+                                <TableCell>
                                     <div className="actionsCell">
                                         <Tooltip
                                             content={
