@@ -13,7 +13,6 @@ import { createGenericElementWithContext } from '../../../tree/api/createGeneric
 import { containsRetryNode, createRetryNode } from '../../../tree/api/retryNode';
 import { getCountPrefix } from '../../../utils/countPrefix';
 import { DISCOVERY_PROVIDER_ID } from '../config';
-import { isKubernetesApiTimeoutError } from '../kubernetesApiTimeout';
 import {
     createCoreApi,
     listDocumentDBServices,
@@ -22,6 +21,7 @@ import {
     type KubeServiceInfo,
 } from '../kubernetesClient';
 import { KubernetesResourceItem } from './documentdb/KubernetesResourceItem';
+import { classifyKubernetesConnectionError } from './kubernetesConnectionError';
 
 export class KubernetesNamespaceItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
@@ -162,31 +162,21 @@ function createServiceErrorChildren(
     namespaceLabel: string,
 ): TreeElement[] {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    const lower = errorMessage.toLowerCase();
 
-    let summary: string;
-    let hint: string;
-
-    if (isKubernetesApiTimeoutError(error)) {
-        summary = vscode.l10n.t('Connection timed out');
-        hint = vscode.l10n.t(
-            'The cluster did not respond in time. Check your network connection and firewall settings.',
-        );
-    } else if (lower.includes('403') || lower.includes('forbidden')) {
-        summary = vscode.l10n.t('Access denied listing services (403 Forbidden)');
-        hint = vscode.l10n.t('Your account lacks permission to list services in this namespace.');
-    } else if (lower.includes('401') || lower.includes('unauthorized')) {
-        summary = vscode.l10n.t('Authentication failed listing services (401)');
-        hint = vscode.l10n.t('Credentials may have expired. Re-authenticate with your cluster.');
-    } else if (lower.includes('timeout') || lower.includes('timed out')) {
-        summary = vscode.l10n.t('Connection timed out');
-        hint = vscode.l10n.t(
-            'The cluster did not respond in time. Check your network connection and firewall settings.',
-        );
-    } else {
-        summary = vscode.l10n.t('Failed to list services');
-        hint = vscode.l10n.t('Check the output channel for details.');
-    }
+    const { summary, hint } = classifyKubernetesConnectionError(error, {
+        unauthorized: {
+            summary: vscode.l10n.t('Authentication failed listing services (401)'),
+            hint: vscode.l10n.t('Credentials may have expired. Re-authenticate with your cluster.'),
+        },
+        forbidden: {
+            summary: vscode.l10n.t('Access denied listing services (403 Forbidden)'),
+            hint: vscode.l10n.t('Your account lacks permission to list services in this namespace.'),
+        },
+        unknown: {
+            summary: vscode.l10n.t('Failed to list services'),
+            hint: vscode.l10n.t('Check the output channel for details.'),
+        },
+    });
 
     void vscode.window.showErrorMessage(vscode.l10n.t('Failed to list services in "{0}"', namespaceLabel), {
         modal: true,

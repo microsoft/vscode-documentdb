@@ -68,7 +68,10 @@ export function normalizeKubernetesApiError(error: unknown): Error {
     }
 
     if (!isAbortSignalTimeoutError(error)) {
-        return error instanceof Error ? error : new Error(String(error), { cause: error });
+        // Wrap non-Error values (e.g. the generated client's record-shaped API
+        // exceptions) without discarding the message getKubernetesApiErrorMessage
+        // can extract from them — String(error) would collapse to "[object Object]".
+        return error instanceof Error ? error : new Error(getKubernetesApiErrorMessage(error), { cause: error });
     }
 
     const timeoutError = new Error(

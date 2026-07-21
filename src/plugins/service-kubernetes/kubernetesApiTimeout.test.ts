@@ -81,4 +81,16 @@ describe('kubernetesApiTimeout', () => {
         expect(normalized.message).toBe(rawError);
         expect(normalized.cause).toBe(rawError);
     });
+
+    it('preserves an extractable message when normalizing a record-shaped API error', () => {
+        // The generated client can reject with a plain object rather than an Error;
+        // normalizing it must not collapse the message to "[object Object]".
+        const apiException = { body: { message: 'services is forbidden' } };
+
+        const normalized = normalizeKubernetesApiError(apiException);
+
+        expect(normalized.message).toBe('services is forbidden');
+        expect(normalized.cause).toBe(apiException);
+        expect(getKubernetesApiErrorMessage(normalized)).toBe('services is forbidden');
+    });
 });
