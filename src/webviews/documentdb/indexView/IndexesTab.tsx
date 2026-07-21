@@ -87,7 +87,7 @@ interface IndexManagementToolbarProps {
 }
 
 const IndexManagementToolbar = ({ onCreateIndex, onRefreshIndexes }: IndexManagementToolbarProps): JSX.Element => (
-    <Toolbar className="indexManagementToolbar" aria-label={l10n.t('Index actions')} size="small">
+    <Toolbar className="tabActionBar indexManagementToolbar" aria-label={l10n.t('Index actions')} size="small">
         <ToolbarButton icon={<AddRegular />} appearance="primary" onClick={onCreateIndex}>
             {l10n.t('Create Index')}
         </ToolbarButton>

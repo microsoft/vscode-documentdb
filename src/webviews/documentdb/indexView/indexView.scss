@@ -17,7 +17,10 @@
     flex: 1 1 auto;
     min-height: 0;
     row-gap: 10px;
-    padding-top: 10px;
+
+    .indexManagementToolbar {
+        flex-wrap: nowrap;
+    }
 
     .indexHeader {
         display: flex;

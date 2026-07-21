@@ -31,6 +31,9 @@
 
     .collectionTabList {
         flex-shrink: 0;
+        min-width: 0;
+        overflow-x: auto;
+        overflow-y: hidden;
         padding-top: 10px;
     }
 
@@ -48,13 +51,22 @@
         row-gap: 10px;
     }
 
-    .toolbarMainView {
+    .tabActionBar {
+        box-sizing: border-box;
+        flex-shrink: 0;
+        min-height: 32px;
+        text-wrap: nowrap;
+    }
+
+    .collectionQueryActionBar {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
         align-items: center;
         gap: 10px;
 
-        text-wrap: nowrap;
+        > .fui-Toolbar:first-child {
+            flex-wrap: nowrap;
+        }
 
         // The overflow toolbar (second column) needs these styles so the
         // FluentUI Overflow manager can measure and clip items correctly.
@@ -82,7 +94,7 @@
         }
     }
 
-    .resultsActionBar {
+    .documentResultsActionBar {
         display: flex;
         flex-direction: row;
         justify-content: space-between;
