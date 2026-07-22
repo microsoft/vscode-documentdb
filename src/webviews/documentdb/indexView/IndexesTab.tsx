@@ -208,12 +208,22 @@ export const IndexesTab = (): JSX.Element => {
     }, [refresh]);
 
     /**
-     * Pre-fetch the data the Create dialog needs (field suggestions +
-     * approximate document count for the large-collection warning),
-     * then open the dialog. Failures are swallowed so the dialog still
-     * opens with whatever data was retrievable.
+     * Open the Create dialog immediately, then settle its two optional
+     * enhancements independently.
+     *
+     * Index creation NEVER depends on these prerequisites, so we must not block
+     * the drawer on them:
+     *  - field suggestions (autocomplete) come from the in-process SchemaStore
+     *    and legitimately return an EMPTY list when sampling hasn't populated it
+     *    yet — that is expected, not an error, and simply means no autocomplete.
+     *  - the document count only decides whether to show the large-collection
+     *    warning; it already resolves to 0 on failure.
+     *
+     * Settling them separately (rather than one `Promise.all` gate) means a slow
+     * or failed request for one never blocks the drawer or discards the other's
+     * result.
      */
-    const openCreateDialog = useCallback(async (): Promise<void> => {
+    const openCreateDialog = useCallback((): void => {
         // Start each create session from a clean form unless the previous close
         // asked to preserve it (an accidental cancel, or a failed submit the
         // user can retry). A successful create leaves the flag clear, so the
@@ -222,18 +232,15 @@ export const IndexesTab = (): JSX.Element => {
             setCreateResetSignal((n) => n + 1);
         }
         preserveFormRef.current = false;
-        try {
-            const [suggestions, count] = await Promise.all([
-                trpcClient.mongoClusters.indexView.getFieldSuggestions.query(),
-                trpcClient.mongoClusters.indexView.getCollectionDocumentCount.query(),
-            ]);
-            setFieldSuggestions(suggestions);
-            setDocumentCount(count);
-        } catch {
-            setFieldSuggestions([]);
-            setDocumentCount(0);
-        }
         setModal({ kind: 'create' });
+        void trpcClient.mongoClusters.indexView.getFieldSuggestions
+            .query()
+            .then(setFieldSuggestions)
+            .catch(() => setFieldSuggestions([]));
+        void trpcClient.mongoClusters.indexView.getCollectionDocumentCount
+            .query()
+            .then(setDocumentCount)
+            .catch(() => setDocumentCount(0));
     }, [trpcClient]);
 
     // The list shown to the user = the real indexes plus any optimistic

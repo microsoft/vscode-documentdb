@@ -211,7 +211,7 @@ impact — genuine nice-to-haves that should not hold up the merge.
 | 1   | **P1**   | Webview row progress starts after the host operation finishes              | ✅       | 🟠 Open |
 | 2   | **P1**   | Failed direct creation hides its recovery path behind reopening the drawer | ✅       | 🟠 Open |
 | 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | 🟠 Open |
-| 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | 🟠 Open |
+| 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | ✅ Implemented |
 | 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | 🟠 Open |
 | 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | 🟠 Open |
 | 7   | **P3**   | Manual (toolbar) refresh silently resets sort + expanded rows _(new)_      | ✅       | ✅ Implemented |
@@ -403,7 +403,25 @@ success-announcement half of this decision.
 
 ### 4. Create prerequisites fail silently and discard partial success ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open · **✅ Verified in code**
+**Priority:** P2 · **Status:** ✅ Implemented · **✅ Verified in code**
+
+> **Decision (Iteration 1):** open the drawer immediately and settle each enhancement
+> independently. **Reason (operator):** _"one should be able to proceed even when no schema
+> info comes back. This is not likely as we always run a basic query and have schema info
+> ready. I think an empty schema comes back when we ask for it and it's not there yet."_
+>
+> **Verified that concern:** confirmed in code — `getFieldSuggestions` reads the in-process
+> `SchemaStore` synchronously and returns an **empty array** (never throws) when sampling
+> hasn't populated it yet; `getCollectionDocumentCount` already returns `0` on failure. So an
+> "empty schema" is an expected, non-error state — the drawer just opens without autocomplete.
+
+> ✅ **Implemented (Iteration 1):** `openCreateDialog` now opens the drawer first, then fires
+> `getFieldSuggestions` and `getCollectionDocumentCount` as **two independent** requests
+> (`.then/.catch` each) instead of a single blocking `Promise.all`. A slow or failed request
+> for one no longer blocks the drawer or discards the other's result, and the empty-schema
+> case is documented inline as expected. Files:
+> [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L226).
+> Commit: see `fix(indexView): open create drawer without blocking on schema prerequisites`.
 
 **Observation:** Open Create Index when schema analysis or the document-count query is slow
 or unavailable. There is a blank pause with no toolbar feedback, then the drawer opens — but
