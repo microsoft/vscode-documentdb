@@ -213,9 +213,9 @@ impact — genuine nice-to-haves that should not hold up the merge.
 | 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | ✅ Implemented |
 | 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | ✅ Implemented |
 | 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | ✅ Implemented |
-| 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | 🟠 Open |
+| 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | 🟡 Deferred (clarify) |
 | 7   | **P3**   | Manual (toolbar) refresh silently resets sort + expanded rows _(new)_      | ✅       | ✅ Implemented |
-| 8   | **P3**   | Create / Refresh toolbar buttons are not guarded against re-entry _(new)_  | ✅       | 🟡 Open (soft) · revisited |
+| 8   | **P3**   | Create / Refresh toolbar buttons are not guarded against re-entry _(new)_  | ✅       | � Closed (won't fix) |
 
 > The index column above is the finding number (stable identifier used throughout); rows are
 > ordered by priority, so 5 sits with the other P3 items.
@@ -565,12 +565,26 @@ announce(l10n.t('Could not load indexes.'), 'assertive'); // on failure
 
 ### 5. No-matches / could-not-load states render as a bare table ⚠️
 
-**Priority:** P3 _(↓ from P2)_ · **Status:** 🟠 Open · **✅ Verified in code**
+**Priority:** P3 _(↓ from P2)_ · **Status:** � Open (soft) — ⏭️ **deferred: needs clarification** · **✅ Verified in code**
 
 > **Why downgraded:** the primary recovery — a **Clear filters** button — already exists in
 > the filter bar and is enabled whenever a filter is active
 > ([IndexListFilterBar.tsx#L79-L90](../../../../src/webviews/documentdb/indexView/components/indexList/IndexListFilterBar.tsx#L79)).
 > What's missing is only the in-table _message_, so this is polish, not a stuck user.
+
+> **⏭️ Deferred (Iteration 1) — not implemented, pending clarification.** The operator gave
+> two signals that pull in opposite directions:
+> 1. On no-matches: _"filter and 0 matches, I'm fine with showing 0 of xx indexes"_ (i.e. **no**
+>    in-table message needed for the filtered-empty case).
+> 2. On this item: _"well, why not, just make these buttons centered, maybe it doesn't have to
+>    be a table at all."_
+>
+> Reconciling them: (1) says leave the filtered-empty case alone, while (2) hints at a
+> **centered, non-table empty panel** — but the empty state has **no buttons today**, so it's
+> unclear which buttons "these buttons" refers to and whether (2) applies to the
+> **could-not-load** case only, the filtered-empty case, or a broader redesign of the whole
+> table when empty. Rather than guess at a visible redesign, this item is **skipped this
+> iteration** and rolled to Iteration 2. See the open question in the executive summary.
 
 **Observation:** Apply filters that match no indexes, and separately trigger a first-load
 failure. Both leave a header-only table whose only clue is the footer's `Showing 0 of N`.
@@ -673,7 +687,11 @@ behaves.
 
 ### 8. Create and Refresh toolbar buttons are not guarded against re-entry ⚠️ _(new)_
 
-**Priority:** P3 · **Status:** � Open (soft) · **✅ Verified in code** · **🔁 revisited**
+**Priority:** P3 · **Status:** 🚫 Closed (won't fix) · **✅ Verified in code** · **🔁 revisited**
+
+> **Decision (Iteration 1) — Closed / won't fix.** **Reason (operator):** _"leave as is."_
+> There is no correctness impact — the refresh generation guard already prevents stale data
+> and the create/refresh opens are idempotent — so the missing busy affordance is acceptable.
 
 > **Revisited (2026-07-22):** softened from 🟠 to 🟡 (soft). This has **no correctness impact**
 > — the refresh generation guard already prevents stale data, and the create/refresh opens are
