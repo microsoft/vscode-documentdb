@@ -212,7 +212,7 @@ impact — genuine nice-to-haves that should not hold up the merge.
 | 2   | **P1**   | Failed direct creation hides its recovery path behind reopening the drawer | ✅       | ✅ Implemented |
 | 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | ✅ Implemented |
 | 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | ✅ Implemented |
-| 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | 🟠 Open |
+| 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | ✅ Implemented |
 | 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | 🟠 Open |
 | 7   | **P3**   | Manual (toolbar) refresh silently resets sort + expanded rows _(new)_      | ✅       | ✅ Implemented |
 | 8   | **P3**   | Create / Refresh toolbar buttons are not guarded against re-entry _(new)_  | ✅       | 🟡 Open (soft) · revisited |
@@ -522,7 +522,11 @@ void trpc.indexView.getCollectionDocumentCount
 
 ### 6. Loading and row-state transitions are not consistently announced ⚠️
 
-**Priority:** P2 · **Status:** 🟠 Open · **✅ Verified in code**
+**Priority:** P2 · **Status:** ✅ Implemented · **✅ Verified in code**
+
+> **Decision (Iteration 1):** implement it. **Reason (operator):** _"accessibility is important
+> for us."_ Announce the user-initiated list lifecycle while keeping the decorative progress
+> bar hidden.
 
 **Observation:** _Best felt with a screen reader._ Refresh the list, create an index, and
 hide/unhide one while focus stays on the triggering control. Start, failure, and same-count

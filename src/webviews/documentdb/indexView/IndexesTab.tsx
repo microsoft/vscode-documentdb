@@ -6,6 +6,7 @@
 import { ProgressBar } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX } from 'react';
+import { Announcer } from '../../components/accessibility';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { CreateIndexDrawer } from './components/CreateIndexDrawer';
 import { IndexList } from './components/indexList';
@@ -161,12 +162,29 @@ export const IndexesTab = (): JSX.Element => {
         [trpcClient],
     );
 
+    // Screen-reader announcements for user-initiated list lifecycle (refresh
+    // start / success / failure). The top progress bar is aria-hidden and the
+    // skeleton is silent, so without this an assistive-tech user gets no signal
+    // that a refresh happened — especially a refresh that returns the same count.
+    // The bumped `n` re-mounts the Announcer so identical or sequential messages
+    // are re-announced (the component only fires on a false→true transition).
+    const [live, setLive] = useState<{ text: string; politeness: 'polite' | 'assertive'; n: number }>({
+        text: '',
+        politeness: 'polite',
+        n: 0,
+    });
+    const announce = useCallback((text: string, politeness: 'polite' | 'assertive' = 'polite'): void => {
+        setLive((prev) => ({ text, politeness, n: prev.n + 1 }));
+    }, []);
+
     /** Fetch the index list. Initial and manual loads show a table skeleton;
      * background reconciliation keeps the current rows visible. */
     const refresh = useCallback(
         async (source: 'background' | 'manual' = 'background'): Promise<void> => {
             const generation = ++refreshGenerationRef.current;
             const initial = !hasLoadedRef.current;
+            // Only user-initiated loads announce; the 5s build poll must stay silent.
+            const shouldAnnounce = initial || source === 'manual';
             if (initial) {
                 // Clear so the skeleton (rather than stale data) shows on first load.
                 setIsInitialLoading(true);
@@ -174,6 +192,9 @@ export const IndexesTab = (): JSX.Element => {
             } else {
                 setIsRefreshing(true);
                 setIsManualRefreshing(source === 'manual');
+            }
+            if (shouldAnnounce) {
+                announce(l10n.t('Loading indexes…'));
             }
             try {
                 const rows = await trpcClient.mongoClusters.indexView.listIndexes.query();
@@ -183,9 +204,15 @@ export const IndexesTab = (): JSX.Element => {
                 setIndexes(rows);
                 setLastUpdatedAt(Date.now());
                 hasLoadedRef.current = true;
+                if (shouldAnnounce) {
+                    announce(l10n.t('Indexes updated.'));
+                }
             } catch (error) {
                 if (generation === refreshGenerationRef.current) {
                     showError(l10n.t('Failed to load indexes.'), error);
+                    if (shouldAnnounce) {
+                        announce(l10n.t('Could not load indexes.'), 'assertive');
+                    }
                 }
             } finally {
                 if (generation === refreshGenerationRef.current) {
@@ -198,7 +225,7 @@ export const IndexesTab = (): JSX.Element => {
                 }
             }
         },
-        [trpcClient, showError],
+        [trpcClient, showError, announce],
     );
 
     // Initial load. `refresh` is stable across renders because its only
@@ -485,6 +512,9 @@ export const IndexesTab = (): JSX.Element => {
             {(isInitialLoading || isRefreshing) && (
                 <ProgressBar thickness="large" shape="square" className="progressBar" aria-hidden={true} />
             )}
+
+            {/* Screen-reader-only live region for list lifecycle (see `announce`). */}
+            <Announcer key={live.n} when={live.text.length > 0} message={live.text} politeness={live.politeness} />
 
             <IndexManagementToolbar
                 onCreateIndex={() => void openCreateDialog()}
