@@ -94,6 +94,13 @@ finding below.
 > rectangles are intermediate steps; diamonds are user/branch decisions. A red terminal is
 > an inconsistency to fix, not necessarily a bug that crashes.
 
+> ⚠️ **These diagrams capture the _pre-fix baseline_ (what the review found), not current
+> behavior.** As of Iteration 1–2 every red node is resolved: F1 spinner now covers the real
+> op, F2 has an Edit & retry modal, F3 failures are modal / hide-unhide success now toasts,
+> F4 opens the drawer immediately, and F5's load-failure now shows a "Could not load indexes."
+> message. They are kept as-is for provenance; see each finding's **Implemented** block for the
+> shipped flow.
+
 ### Overview — one tab, three journeys
 
 ```mermaid
@@ -215,7 +222,7 @@ impact — genuine nice-to-haves that should not hold up the merge.
 | 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | ✅ Implemented |
 | 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | ✅ Implemented |
 | 7   | **P3**   | Manual (toolbar) refresh silently resets sort + expanded rows _(new)_      | ✅       | ✅ Implemented |
-| 8   | **P3**   | Create / Refresh toolbar buttons are not guarded against re-entry _(new)_  | ✅       | � Closed (won't fix) |
+| 8   | **P3**   | Create / Refresh toolbar buttons are not guarded against re-entry _(new)_  | ✅       | 🚫 Closed (won't fix) |
 
 > The index column above is the finding number (stable identifier used throughout); rows are
 > ordered by priority, so 5 sits with the other P3 items.
@@ -232,6 +239,23 @@ impact — genuine nice-to-haves that should not hold up the merge.
 >   **8** has **no correctness impact at all** (the generation guard already protects the data),
 >   so it is a candidate to simply **acknowledge/close** if the fix is not cheap. Both remain
 >   worth doing only if inexpensive; neither should hold up the PR.
+
+### Still-open audit (2026-07-22)
+
+Every finding now has a **terminal status** (7 Implemented, 1 Closed) — so nothing is
+functionally _unresolved_. What remains open is **verification and documentation hygiene**,
+not code decisions:
+
+| # | Still-open item | Kind | Notes |
+| --- | --- | --- | --- |
+| A | **No hands-on run yet.** All fixes are code-level and pass build/lint/tests, but none has been _exercised in a running extension_. | ⚠️ Verification | The original point of a UX review — walk each journey live (slow cluster for finding 1, a rejected create for finding 2, a screen reader for finding 6, a forced load failure for finding 5). |
+| B | **Diagrams + "story in one paragraph" describe the _pre-fix_ baseline.** | 📄 Doc staleness | Kept for context (they show _what was found_), but the red nodes are now resolved — see the caveat under the interaction map. Do not read them as current bugs. |
+| C | **Finding 5 retry button is being reconsidered.** | 🔄 Possible reopen | The shipped could-not-load state has **no button** (operator's earlier call). A non-committed simulation of a **Retry** variant was requested to evaluate adding one; if adopted, finding 5 reopens. |
+| D | **Accepted residuals (no action unless felt live).** | 🟢 Acknowledged | (1) finding 1 — the row spinner is also visible behind the confirmation modal (operator OK); (2) finding 6 — a changed-count refresh may be announced twice (Announcer + the count live region); (3) finding 3 — success toasts vanish when `ShowOperationSummaries` is off (intended). |
+
+> **Bottom line:** the PR-blocking review work is done. The only true follow-ups are a live
+> pass (A) and deciding the Retry-button question (C); (B) is a doc-refresh chore and (D) is
+> already acknowledged.
 
 ---
 
@@ -801,29 +825,34 @@ resolved here rolls into Iteration 2.
 | 6 · accessibility | ✅ Implemented (`feat(indexView): announce list refresh lifecycle to screen readers`) |
 | 7 · sort/expansion reset | ✅ Implemented (`fix(indexView): retain sort and expanded rows across manual refresh`) |
 | 8 · toolbar re-entry | 🚫 Closed (won't fix) — operator: "leave as is" |
-| 5 · empty-state | 🟡 **Deferred to Iteration 2** — needs clarification (below) |
+| 5 · empty-state | 🟡 **Deferred to Iteration 2** — needs clarification (resolved below) |
 
-**Open questions for Iteration 2 / operator review**
+**Open questions — all resolved in Iteration 2 (2026-07-22)**
 
-1. **Finding 5 (empty-state) is the only unresolved item.** The two pieces of feedback
-   conflict: _"I'm fine with showing 0 of xx indexes"_ (leave filtered-empty alone) vs. _"make
-   these buttons centered, maybe it doesn't have to be a table at all."_ There are no buttons
-   in the empty state today. **Which case does the redesign apply to** — the **could-not-load**
-   state, the **filtered-empty** state, or both — and should it become a **centered non-table
-   panel**, or is a small centered message enough? Left untouched pending an answer.
-2. **Finding 1 side effect:** because the operator chose "one request," the row spinner is now
-   also visible **behind the confirmation modal** (cleared on cancel). If that reads oddly,
-   the only alternative is splitting confirm/operate into two requests (previously declined).
-3. **Finding 3 scope call to confirm:** **background/poll and initial list-load failures were
-   kept non-modal** (toast) on purpose — making them modal would pop repeatedly during the 5s
-   build poll. Only discrete user actions (create/delete/hide/unhide/prepare/raw-open) are
-   modal. Please confirm this scoping matches "errors as an effect of user interaction."
-4. **Finding 3 tree behavior:** tree failures are now modal by suppressing azext's default
-   (non-modal) error and showing our own modal, then rethrowing for telemetry. This drops the
-   azext "Report Issue" affordance on those specific errors — acceptable?
-5. **Gated success toasts:** create/delete success toasts are now gated by
-   `ShowOperationSummaries` (to match the tree). If a user disables that setting they lose
-   create/delete/hide/unhide success toasts (the row change remains). Confirm that's intended.
+The five questions raised at the end of Iteration 1 have since been answered by the operator:
+
+1. **Finding 5 (empty-state):** ✅ Resolved — _"no buttons, just the could not load state"_ and
+   _"fine with showing 0 of xx"_. Implemented as a centered **"Could not load indexes."**
+   message for the load-failure case only. _(New: operator is now evaluating a **Retry**
+   variant via a non-committed simulation — may reopen; see the still-open audit item C.)_
+2. **Finding 1 (spinner behind modal):** ✅ Confirmed acceptable — _"fine with spinners behind
+   the modal and cleared on cancel."_
+3. **Finding 3 (modal scope):** ✅ Confirmed — _"modal only for the immediate user actions, so
+   pool, background, first load are non modal."_ Matches what shipped.
+4. **Finding 3 (tree behavior):** ✅ Confirmed — _"this is ok."_
+5. **Gated success toasts:** ✅ Confirmed, and a helper was requested & added
+   (`showOperationSummary`).
+
+### Iteration 2 (2026-07-22) — clarifications applied
+
+- **Finding 5** implemented (centered could-not-load message, no buttons). Commit
+  `feat(indexView): show a could-not-load message instead of a bare table`.
+- **`showOperationSummary` helper** added and the three success call sites refactored onto it.
+  Commit `refactor(indexView): add showOperationSummary helper for gated toasts`.
+
+**Still open after Iteration 2:** only the two items in the [Still-open audit](#still-open-audit-2026-07-22)
+that are not code decisions — a **hands-on live pass** (item A) and the **Retry-button
+question** (item C, pending the requested simulation).
 
 ---
 
