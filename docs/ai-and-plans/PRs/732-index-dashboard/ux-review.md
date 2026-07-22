@@ -240,6 +240,23 @@ impact — genuine nice-to-haves that should not hold up the merge.
 No P0 candidate was found during pre-assessment. Confirm this by testing first load,
 create failure/retry, and every cancel path.
 
+### J1. Raw index definition open-failure should be modal ⚠️ · ✅ Implemented
+
+**Priority:** P1 · **Status:** ✅ Implemented · **✅ Verified in code**
+
+**Observation (operator):** _"expand row, view raw index — the error should be a modal, not
+a toast."_
+
+> **Decision (Iteration 1):** surface the open-failure modally. **Reason:** it is the direct
+> result of a user action that failed, and the house rule is "failed user action → modal;
+> completion → non-modal toast." A passive toast is too easy to miss for something the user
+> just asked for.
+
+> ✅ **Implemented (Iteration 1):** flipped the raw-definition failure from `modal: false` to
+> `modal: true` (with the underlying cause shown in the modal's detail). Files:
+> [IndexRowDetails.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexRowDetails.tsx#L56).
+> Commit: see `fix(indexView): surface raw-definition open failure as a modal`.
+
 ## P1 — Broken / misleading, or consistency & safety
 
 ### 1. Webview row progress starts after the host operation finishes ⚠️

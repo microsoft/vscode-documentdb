@@ -58,9 +58,12 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
             .mutate({ indexName: index.name })
             .catch((error: unknown) => {
                 const message = error instanceof Error ? error.message : String(error);
+                // A failed *user action* is surfaced modally (house rule): the user
+                // explicitly asked to open this definition, so the failure must not be
+                // missable the way a passive toast can be.
                 void trpcClient.common.displayErrorMessage.mutate({
                     message: l10n.t('Failed to open the index definition.'),
-                    modal: false,
+                    modal: true,
                     cause: message,
                 });
             });
