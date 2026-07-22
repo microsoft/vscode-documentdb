@@ -870,3 +870,76 @@ and have no matching token, and px scale with zoom anyway.
 - Webview webpack (`watch:views`) — compiled successfully (SCSS validated).
 - `npm run l10n` not required: no user-facing strings were added, changed, or
   removed in this pass (SCSS + class-name only).
+
+## 12. Theme-adaptive neutral surfaces & loading skeletons (2026-07-22)
+
+Picking `--colorNeutralBackground2` for the tab band (§11.2) surfaced a broader
+gap: Fluent's neutral ramp does not track the VS Code theme. This section covers
+the fix, which lives in `src/webviews/theme/themeGenerator.ts` and therefore
+benefits every webview, not just the collection view. Tracked as issue
+[#811](https://github.com/microsoft/vscode-documentdb/issues/811).
+
+### 12.1 Problem
+
+The adaptive themes are built from `createLightTheme` / `createDarkTheme`, whose
+**neutral ramp is a fixed gray**. `themeGenerator.ts` previously only remapped
+`colorNeutralBackground1` and the `colorNeutralForeground1/2` families onto VS
+Code variables. Everything else on the ramp kept the stock gray, so on themes
+whose editor background is tinted (Solarized, Nord, a red theme, high-contrast,
+…) these surfaces drifted out of tune:
+
+- the **tab band** and the **index list's odd rows** (`colorNeutralBackground2`),
+- every **opaque loading skeleton** (`colorNeutralStencil1` / `Stencil2`).
+
+### 12.2 Neutral surface overrides
+
+A shared `adaptiveNeutralSurfaces` map is spread into both the light and dark
+adaptive themes (the VS Code variables are already theme-appropriate, so the same
+expressions serve both). Each value falls back through progressively more common
+surface tokens for themes that leave the ideal one undefined:
+
+- `colorNeutralBackground2` (+ `Hover` / `Pressed` / `Selected`) →
+  `--vscode-tree-tableOddRowsBackground` → `--vscode-sideBar-background` →
+  `--vscode-editorWidget-background` (interaction states additionally consider
+  the list hover / selection colors).
+- `colorNeutralStroke2` → `--vscode-panel-border` → `--vscode-widget-border` →
+  `--vscode-editorWidget-border`.
+
+### 12.3 Loading skeletons
+
+Fluent's `SkeletonItem` chooses its stencil tokens by `appearance`:
+
+| appearance             | tokens                                         | behavior                                                              |
+| ---------------------- | ---------------------------------------------- | -------------------------------------------------------------------- |
+| `opaque` (default)     | solid `colorNeutralStencil1` + `Stencil2`      | Paints an opaque fill over the card → fixed gray, ignores the theme.  |
+| `translucent`          | `colorNeutralStencil1Alpha` (over transparent) | Composites a black/white overlay over the themed card → already adapts. |
+
+The **results grid** ([`LoadingAnimationTable.tsx`](../../../../src/webviews/documentdb/collectionView/components/resultsTab/LoadingAnimationTable.tsx))
+and the **index list** ([`IndexTableSkeleton.tsx`](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTableSkeleton.tsx))
+already pass `appearance="translucent"` and looked correct. The **metrics** and
+**query-insights** skeletons used the default `opaque` and rendered gray.
+
+For the `opaque` path we could **not** reuse solid VS Code tokens: structural
+surfaces (`editorWidget` / `sideBar` background) can be far darker than the card,
+and hover / selection overlays can resolve to a saturated accent — both overshoot
+the gentle look. Instead we mimic what `translucent` does and paint **faint alpha
+overlays** that composite over the card, split by theme kind so the direction is
+right (darken on light, lighten on dark), matching Fluent's own translucent
+`*Alpha` scale. Held in `lightSkeletonStencils` / `darkSkeletonStencils`:
+
+- light: `Stencil1 = rgba(0, 0, 0, 0.07)`, `Stencil2 = rgba(0, 0, 0, 0.1)`
+- dark: `Stencil1 = rgba(255, 255, 255, 0.07)`, `Stencil2 = rgba(255, 255, 255, 0.1)`
+
+`Stencil1` is the resting base; `Stencil2` is the slightly stronger sweep band.
+The values are kept low because the `opaque` appearance layers a base fill under
+the animated sweep, so the two compose. The translucent `*Alpha` variants are
+left at Fluent's defaults (that path already composites correctly).
+
+### 12.4 Validation
+
+- `npm run prettier-fix` / `npm run lint` — passed (only the pre-existing ESLint
+  v10 `eslint-env` warning).
+- `npm run build` — passed (TypeScript).
+- `npx jest --no-coverage` — passed.
+- Visually confirmed on a tinted (red) theme: the tab band, alternating rows and
+  all skeletons pick up the theme instead of stock gray.
