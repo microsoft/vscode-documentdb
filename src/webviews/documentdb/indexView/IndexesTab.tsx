@@ -373,9 +373,7 @@ export const IndexesTab = (): JSX.Element => {
                         );
                     }
                     showOperationSummary(
-                        result.indexName
-                            ? l10n.t('Index "{0}" created.', result.indexName)
-                            : l10n.t('Index created.'),
+                        result.indexName ? l10n.t('Index "{0}" created.', result.indexName) : l10n.t('Index created.'),
                     );
                     // Scroll the new index into view (if off-screen) so the user
                     // can spot it under the active sort. We do NOT refresh here
