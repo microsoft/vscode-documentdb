@@ -360,6 +360,13 @@ export const IndexesTab = (): JSX.Element => {
     const handleDelete = useCallback(
         async (index: IndexRow): Promise<void> => {
             const indexName = index.name;
+            // Set the row's processing visual up front (before the mutation) so it
+            // covers the *actual* server operation, not just a post-hoc hold. The
+            // confirmation modal runs inside this one mutation; if the user cancels,
+            // the `finally` clears the spinner. On success we keep the spinner for a
+            // short tail (operation time + MIN_ACTION_VISIBLE_MS) so a fast delete is
+            // still perceptible before the row disappears. One request, no split.
+            addBusy(indexName);
             try {
                 const result = await trpcClient.mongoClusters.indexView.dropIndex.mutate({
                     indexName,
@@ -369,18 +376,15 @@ export const IndexesTab = (): JSX.Element => {
                 if (result.cancelled) {
                     return;
                 }
-                // Deleting is quick; show a spinner on the doomed row and hold it
-                // for a minimum window so the user registers which one is going.
-                addBusy(indexName);
                 await delay(MIN_ACTION_VISIBLE_MS);
                 void trpcClient.common.displayInformationMessage.mutate({
                     message: l10n.t('Index "{0}" deleted.', indexName),
                 });
                 await refresh();
-                removeBusy(indexName);
             } catch (error) {
-                removeBusy(indexName);
                 showError(l10n.t('Failed to delete index "{0}".', indexName), error);
+            } finally {
+                removeBusy(indexName);
             }
         },
         [trpcClient, refresh, showError, addBusy, removeBusy],
@@ -390,6 +394,10 @@ export const IndexesTab = (): JSX.Element => {
     const handleToggleHidden = useCallback(
         async (index: IndexRow): Promise<void> => {
             const details = { sizeText: formatBytes(index.sizeBytes), usageText: formatOps(index.usageOps) };
+            // Processing visual first (covers the real operation); keep it for a
+            // short tail on success so a quick toggle is still perceptible. See
+            // handleDelete for the one-request rationale.
+            addBusy(index.name);
             try {
                 const result = index.hidden
                     ? await trpcClient.mongoClusters.indexView.unhideIndex.mutate({
@@ -403,20 +411,17 @@ export const IndexesTab = (): JSX.Element => {
                 if (result.cancelled) {
                     return;
                 }
-                // Show a spinner on the affected row and hold it for a minimum
-                // window so the toggle is perceptible before the list refreshes.
-                addBusy(index.name);
                 await delay(MIN_ACTION_VISIBLE_MS);
                 await refresh();
-                removeBusy(index.name);
             } catch (error) {
-                removeBusy(index.name);
                 showError(
                     index.hidden
                         ? l10n.t('Failed to unhide index "{0}".', index.name)
                         : l10n.t('Failed to hide index "{0}".', index.name),
                     error,
                 );
+            } finally {
+                removeBusy(index.name);
             }
         },
         [trpcClient, refresh, showError, addBusy, removeBusy],

@@ -208,7 +208,7 @@ impact — genuine nice-to-haves that should not hold up the merge.
 
 | #   | Priority | Item                                                                       | Verified | Status  |
 | --- | -------- | -------------------------------------------------------------------------- | -------- | ------- |
-| 1   | **P1**   | Webview row progress starts after the host operation finishes              | ✅       | 🟠 Open |
+| 1   | **P1**   | Webview row progress starts after the host operation finishes              | ✅       | ✅ Implemented |
 | 2   | **P1**   | Failed direct creation hides its recovery path behind reopening the drawer | ✅       | 🟠 Open |
 | 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | 🟠 Open |
 | 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | ✅ Implemented |
@@ -261,7 +261,14 @@ a toast."_
 
 ### 1. Webview row progress starts after the host operation finishes ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open · **✅ Verified in code**
+**Priority:** P1 · **Status:** ✅ Implemented · **✅ Verified in code**
+
+> **Decision (Iteration 1):** keep it **one request** — set the row's processing visual first,
+> then call the backend, and on success hold ~2s more before finalizing. **Reason (operator):**
+> _"I need that extra time of 2-few seconds for scenarios when the operation returns quickly;
+> otherwise it's just too fast and the user is surprised by quick changes."_ So the busy state
+> now spans the real operation **plus** a short tail, rather than being a purely cosmetic
+> post-operation hold, and we avoid splitting the confirm/operate round trip.
 
 **Observation:** _Best felt on a slow cluster._ After you confirm Delete/Hide/Unhide, the
 modal disappears and the row sits **unchanged and unlabelled** while the server works; the
@@ -305,6 +312,13 @@ finally { removeBusy(indexName); await refresh(); }
 | **Do nothing**                                        | Zero risk                                                           | Misleading feedback persists on slow clusters               |
 
 Full trade-off in [O1](#o1-where-should-confirmation-and-operation-progress-be-owned-item-1).
+
+> ✅ **Implemented (Iteration 1):** `handleDelete` and `handleToggleHidden` now call
+> `addBusy(name)` **before** the mutation (so the spinner covers the actual server operation),
+> keep it for `MIN_ACTION_VISIBLE_MS` after success, and clear it in a `finally` (covers the
+> cancel path too). No second procedure — still one request. Files:
+> [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L359).
+> Commit: see `fix(indexView): show row progress during the actual index operation`.
 
 ### 2. Failed direct creation hides its recovery path behind reopening the drawer ⚠️
 
@@ -717,6 +731,12 @@ react to, not decisions.
 
 > 💡 **Suggested:** Option A. Confirmation remains host-native, while the visible row state
 > can accurately begin only after the user has confirmed and before the server call starts.
+
+> **Decision (Iteration 1):** _None of A/B/C._ The operator chose to **keep one request** and
+> accept the trade-off: set the row's processing visual before the (confirm + operate)
+> mutation and hold it a short tail after success. The only cost is that the spinner is also
+> visible behind the confirmation modal (cleared on cancel), which was deemed acceptable
+> versus a second round trip. Implemented on finding 1.
 
 ### O2. What should successful visibility changes announce? (item 3)
 
