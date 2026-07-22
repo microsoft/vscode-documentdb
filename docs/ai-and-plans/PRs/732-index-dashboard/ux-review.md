@@ -210,7 +210,7 @@ impact — genuine nice-to-haves that should not hold up the merge.
 | --- | -------- | -------------------------------------------------------------------------- | -------- | ------- |
 | 1   | **P1**   | Webview row progress starts after the host operation finishes              | ✅       | ✅ Implemented |
 | 2   | **P1**   | Failed direct creation hides its recovery path behind reopening the drawer | ✅       | 🟠 Open |
-| 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | 🟠 Open |
+| 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | ✅ Implemented |
 | 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | ✅ Implemented |
 | 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | 🟠 Open |
 | 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | 🟠 Open |
@@ -368,7 +368,41 @@ const handleCreateSubmit = async (input) => {
 
 ### 3. Sibling index actions terminate on inconsistent feedback surfaces ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open · **✅ Verified in code**
+**Priority:** P1 · **Status:** ✅ Implemented · **✅ Verified in code**
+
+> **Decision (Iteration 1):** adopt one matrix — **a failed user action is modal; a completion
+> is a non-modal toast** (gated by the operation-summaries setting) — and make the tree match
+> the (more-tweaked) webview. **Reason (operator):** _"errors that happen as an effect of a
+> user interaction where the action fails should be modal; a notification that something
+> completed can be non-modal. Create/hide/unhide fails → modal; index created fine → a toast is
+> enough."_
+>
+> Applied matrix:
+>
+> | Action | Success | Failure |
+> | --- | --- | --- |
+> | Create | toast (gated) | **modal** (already) |
+> | Delete | toast (gated) | **modal** (was toast) |
+> | Hide / Unhide | **toast (gated, new)** | **modal** (was toast) |
+> | Prepare in playground/shell | target opens | **modal** (was toast) |
+> | Raw definition open | editor opens | **modal** (finding J1) |
+> | List load / background refresh | — | non-modal toast (passive, unchanged — avoids modal spam on the 5s poll) |
+> | Tree delete/hide/unhide | toast (gated, unchanged) | **modal** (was azext non-modal) |
+
+> ✅ **Implemented (Iteration 1):**
+> - Extended `common.displayInformationMessage` with an `asOperationSummary` flag that routes
+>   through `showConfirmationAsInSettings`, so webview completion toasts honour the same
+>   `ShowOperationSummaries` setting as the tree. Files:
+>   [appRouter.ts](../../../../src/webviews/_integration/appRouter.ts#L159).
+> - Webview: create/delete success toasts gated; **added** hide/unhide success toasts; delete,
+>   hide, unhide, and prepare-in-target failures now modal. Files:
+>   [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L326).
+> - Tree: delete/hide/unhide failures now show a modal error (azext default display suppressed,
+>   error rethrown for telemetry); success already used `showConfirmationAsInSettings`. Files:
+>   [dropIndex.ts](../../../../src/commands/index.dropIndex/dropIndex.ts#L64),
+>   [hideIndex.ts](../../../../src/commands/index.hideIndex/hideIndex.ts#L72),
+>   [unhideIndex.ts](../../../../src/commands/index.unhideIndex/unhideIndex.ts#L66).
+> Commit: see `fix(indexView): unify index-action feedback (modal failures, gated success toasts)`.
 
 **Observation:** Do create, delete, hide, and unhide in the webview, then repeat
 delete/hide/unhide from Explorer. Success and failure land on **four different surfaces**
@@ -748,6 +782,13 @@ react to, not decisions.
 
 > 💡 **Suggested:** Option B for the webview, paired with an explicit rationale for why
 > Explorer retains configured notification behavior.
+
+> **Decision (Iteration 1):** **B mixed with a gated toast.** **Reason (operator):** _"we can
+> have toast notifications, assistive technology will be happy, and we still have table
+> changes. We can also leverage `documentDB.userInterface.ShowOperationSummaries` — mix it in
+> with option B."_ So hide/unhide success now shows a completion toast **gated by that
+> setting** (screen readers hear the toast; the row still changes visually); the deeper
+> in-webview live-region announcements land in finding 6. Implemented on finding 3.
 
 ---
 

@@ -330,6 +330,7 @@ export const IndexesTab = (): JSX.Element => {
                         message: result.indexName
                             ? l10n.t('Index "{0}" created.', result.indexName)
                             : l10n.t('Index created.'),
+                        asOperationSummary: true,
                     });
                     // Scroll the new index into view (if off-screen) so the user
                     // can spot it under the active sort. We do NOT refresh here
@@ -379,10 +380,11 @@ export const IndexesTab = (): JSX.Element => {
                 await delay(MIN_ACTION_VISIBLE_MS);
                 void trpcClient.common.displayInformationMessage.mutate({
                     message: l10n.t('Index "{0}" deleted.', indexName),
+                    asOperationSummary: true,
                 });
                 await refresh();
             } catch (error) {
-                showError(l10n.t('Failed to delete index "{0}".', indexName), error);
+                showError(l10n.t('Failed to delete index "{0}".', indexName), error, { modal: true });
             } finally {
                 removeBusy(indexName);
             }
@@ -412,6 +414,15 @@ export const IndexesTab = (): JSX.Element => {
                     return;
                 }
                 await delay(MIN_ACTION_VISIBLE_MS);
+                // Completion toast (gated by the operation-summaries setting, like
+                // the tree commands). Previously hide/unhide gave no feedback at all,
+                // unlike create/delete and the Explorer handlers.
+                void trpcClient.common.displayInformationMessage.mutate({
+                    message: index.hidden
+                        ? l10n.t('Index "{0}" unhidden.', index.name)
+                        : l10n.t('Index "{0}" hidden.', index.name),
+                    asOperationSummary: true,
+                });
                 await refresh();
             } catch (error) {
                 showError(
@@ -419,6 +430,7 @@ export const IndexesTab = (): JSX.Element => {
                         ? l10n.t('Failed to unhide index "{0}".', index.name)
                         : l10n.t('Failed to hide index "{0}".', index.name),
                     error,
+                    { modal: true },
                 );
             } finally {
                 removeBusy(index.name);
@@ -442,7 +454,7 @@ export const IndexesTab = (): JSX.Element => {
                 }
                 setModal({ kind: 'none' });
             } catch (error) {
-                showError(l10n.t('Failed to prepare the index command.'), error);
+                showError(l10n.t('Failed to prepare the index command.'), error, { modal: true });
                 throw error;
             }
         },

@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
@@ -63,6 +64,18 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
         if (success) {
             showConfirmationAsInSettings(l10n.t('Index "{indexName}" has been deleted.', { indexName }));
         }
+    } catch (error) {
+        // A failed user action is surfaced modally, matching the webview matrix
+        // (failure of a user-triggered action -> modal; completion -> non-modal
+        // toast). We show it ourselves and suppress azext's default non-modal
+        // error, then rethrow so telemetry still records the failure.
+        const detail = error instanceof Error ? error.message : String(error);
+        context.errorHandling.suppressDisplay = true;
+        void vscode.window.showErrorMessage(l10n.t('Failed to delete index "{indexName}".', { indexName }), {
+            modal: true,
+            detail,
+        });
+        throw error;
     } finally {
         // Refresh parent (collection's indexes folder)
         const lastSlashIndex = node.id.lastIndexOf('/');

@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
@@ -64,6 +65,16 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
         if (success) {
             showConfirmationAsInSettings(l10n.t('Index "{indexName}" has been unhidden.', { indexName }));
         }
+    } catch (error) {
+        // Failed user action -> modal (matches the webview matrix); suppress
+        // azext's default non-modal error and rethrow for telemetry.
+        const detail = error instanceof Error ? error.message : String(error);
+        context.errorHandling.suppressDisplay = true;
+        void vscode.window.showErrorMessage(l10n.t('Failed to unhide index "{indexName}".', { indexName }), {
+            modal: true,
+            detail,
+        });
+        throw error;
     } finally {
         // Refresh parent (collection's indexes folder)
         const lastSlashIndex = node.id.lastIndexOf('/');

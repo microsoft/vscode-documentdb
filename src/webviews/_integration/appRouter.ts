@@ -30,6 +30,7 @@ import { type API } from '../../DocumentDBExperiences';
 import { openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
+import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { indexViewRouter } from '../documentdb/indexView/indexViewRouter';
@@ -160,10 +161,21 @@ const commonRouter = router({
         .input(
             z.object({
                 message: z.string(),
+                /**
+                 * When true, the toast is gated by the
+                 * `documentDB.userInterface.ShowOperationSummaries` setting (via
+                 * `showConfirmationAsInSettings`), so webview completion toasts
+                 * honour the same user preference as the tree-view commands.
+                 */
+                asOperationSummary: z.boolean().optional(),
             }),
         )
         .mutation(({ input }) => {
-            void vscode.window.showInformationMessage(input.message);
+            if (input.asOperationSummary) {
+                showConfirmationAsInSettings(input.message);
+            } else {
+                void vscode.window.showInformationMessage(input.message);
+            }
         }),
     surveyPing: publicProcedure
         .input(
