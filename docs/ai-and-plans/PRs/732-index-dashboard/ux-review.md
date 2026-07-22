@@ -209,7 +209,7 @@ impact — genuine nice-to-haves that should not hold up the merge.
 | #   | Priority | Item                                                                       | Verified | Status  |
 | --- | -------- | -------------------------------------------------------------------------- | -------- | ------- |
 | 1   | **P1**   | Webview row progress starts after the host operation finishes              | ✅       | ✅ Implemented |
-| 2   | **P1**   | Failed direct creation hides its recovery path behind reopening the drawer | ✅       | 🟠 Open |
+| 2   | **P1**   | Failed direct creation hides its recovery path behind reopening the drawer | ✅       | ✅ Implemented |
 | 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | ✅ Implemented |
 | 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | ✅ Implemented |
 | 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | 🟠 Open |
@@ -322,7 +322,13 @@ Full trade-off in [O1](#o1-where-should-confirmation-and-operation-progress-be-o
 
 ### 2. Failed direct creation hides its recovery path behind reopening the drawer ⚠️
 
-**Priority:** P1 · **Status:** 🟠 Open · **✅ Verified in code**
+**Priority:** P1 · **Status:** ✅ Implemented · **✅ Verified in code**
+
+> **Decision (Iteration 1):** keep hiding the drawer on submit (the 80% happy path is that it
+> just works), but add an **Edit and retry** button to the failure modal that re-opens the
+> preserved form. **Reason (operator):** _"the happy 80% path is when things just work — this
+> is the design decision, keep hiding the drawer, but add an edit & retry button in the modal
+> error and then reopen the drawer."_
 
 **Observation:** Submit an index the server rejects (e.g. a duplicate-key unique index). The
 drawer is already gone, the optimistic row vanishes, and a modal says it failed — with no
@@ -365,7 +371,12 @@ const handleCreateSubmit = async (input) => {
 | **Keep drawer open + inline error (above)**               | Recovery is right where the data is; matches shell/playground handoff | Loses the "instant close feels fast" behavior; drawer blocks the row |
 | **Close, but reopen the drawer automatically on failure** | Preserves the fast-close optimism; still lands the user on the form   | A modal + auto-reopen can feel like a flicker                        |
 | **Keep modal, add an explicit "Edit &amp; retry" button** | Smallest change to current flow                                       | Still a detour; user acts, _then_ sees the form                      |
-
+> ✅ **Implemented (Iteration 1):** extended `common.displayErrorMessage` to accept `actions`
+> and return the picked one; the create-failure modal now offers **Edit and retry**, which
+> calls `openCreateDialog()` with the preserved form (the fast drawer-close is kept). Files:
+> [appRouter.ts](../../../../src/webviews/_integration/appRouter.ts#L140),
+> [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L343).
+> Commit: see `feat(indexView): add Edit and retry to the create-index failure modal`.
 ### 3. Sibling index actions terminate on inconsistent feedback surfaces ⚠️
 
 **Priority:** P1 · **Status:** ✅ Implemented · **✅ Verified in code**

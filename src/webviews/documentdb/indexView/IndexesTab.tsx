@@ -343,18 +343,37 @@ export const IndexesTab = (): JSX.Element => {
                 },
                 (error) => {
                     // Drop the optimistic row and surface the failure in a modal.
-                    // The drawer keeps its form data, so the next open is pre-filled.
+                    // The drawer keeps its form data, so re-opening it pre-fills the
+                    // form. We add an explicit "Edit and retry" button to the modal
+                    // that re-opens the drawer immediately — the recovery path is
+                    // otherwise invisible (the user would have to guess that clicking
+                    // "Create Index" again restores their work).
                     preserveFormRef.current = true;
                     setPendingCreates((prev) => prev.filter((p) => p.name !== pending.name));
                     void refresh();
-                    showError(l10n.t('Failed to create index.'), error, { modal: true });
+                    const cause = error instanceof Error ? error.message : String(error);
+                    const editAndRetry = l10n.t('Edit and retry');
+                    void trpcClient.common.displayErrorMessage
+                        .mutate({
+                            message: l10n.t('Failed to create index.'),
+                            modal: true,
+                            cause,
+                            actions: [editAndRetry],
+                        })
+                        .then((result) => {
+                            if (result?.action === editAndRetry) {
+                                // preserveFormRef is true, so the drawer re-opens
+                                // with the preserved form rather than a clean slate.
+                                openCreateDialog();
+                            }
+                        });
                 },
             );
 
             // Close the drawer immediately; the create continues in the background.
             setModal({ kind: 'none' });
         },
-        [trpcClient, refresh, showError],
+        [trpcClient, refresh, openCreateDialog],
     );
 
     /** Delete an index. Confirmation happens on the extension host (modal). */

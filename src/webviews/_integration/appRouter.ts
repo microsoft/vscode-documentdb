@@ -144,18 +144,30 @@ const commonRouter = router({
                 message: z.string(),
                 modal: z.boolean(),
                 cause: z.string(),
+                /**
+                 * Optional action button labels shown on the message. The label
+                 * the user picks is returned as `{ action }` (or `undefined` if
+                 * the message was dismissed) so the caller can react — e.g. an
+                 * "Edit and retry" button that re-opens a form.
+                 */
+                actions: z.array(z.string()).optional(),
             }),
         )
-        .mutation(({ input }) => {
+        .mutation(async ({ input }) => {
             let message = input.message;
             if (input.cause && !input.modal) {
                 message += ` (${input.cause})`;
             }
 
-            void vscode.window.showErrorMessage(message, {
-                modal: input.modal,
-                detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
-            });
+            const action = await vscode.window.showErrorMessage(
+                message,
+                {
+                    modal: input.modal,
+                    detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
+                },
+                ...(input.actions ?? []),
+            );
+            return { action };
         }),
     displayInformationMessage: publicProcedure
         .input(
