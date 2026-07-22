@@ -27,10 +27,10 @@ import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
+import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
-import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { indexViewRouter } from '../documentdb/indexView/indexViewRouter';
