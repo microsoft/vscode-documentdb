@@ -95,7 +95,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 
             {/* Show skeleton if Stage 1 is loading or no data yet */}
             {(stage1Loading || (!stage1Data && !stage2Data)) && !hasError && (
-                <Skeleton>
+                <Skeleton appearance="translucent">
                     <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                     <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                     <SkeletonItem size={16} style={{ width: '60%' }} />
@@ -128,7 +128,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                         <Text size={200} style={{ color: tokens.colorNeutralForeground3 }}>
                                             {l10n.t('SHARD_MERGE · {0} shards', stage1Data.shards.length)}
                                         </Text>
-                                        <Skeleton>
+                                        <Skeleton appearance="translucent">
                                             <SkeletonItem size={12} style={{ width: '120px' }} />
                                         </Skeleton>
                                     </div>
@@ -210,7 +210,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
 
                                             {/* Metrics - show skeleton until Stage 2 data is available */}
                                             {(!shard2Data || stage2Loading) && (
-                                                <Skeleton>
+                                                <Skeleton appearance="translucent">
                                                     <SkeletonItem size={12} style={{ width: '80%' }} />
                                                 </Skeleton>
                                             )}
@@ -348,7 +348,7 @@ export const QueryPlanSummary: React.FC<QueryPlanSummaryProps> = ({
                                 </div>
                                 {/* Metrics - show skeleton until Stage 2 data is available */}
                                 {(!stage2Data || stage2Loading) && (
-                                    <Skeleton>
+                                    <Skeleton appearance="translucent">
                                         <SkeletonItem size={12} style={{ width: '80%' }} />
                                     </Skeleton>
                                 )}

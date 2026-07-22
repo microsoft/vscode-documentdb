@@ -66,7 +66,7 @@ export const MetricBase: React.FC<MetricBaseProps> = ({
         // Undefined means data is still loading
         if (value === undefined) {
             if (loadingPlaceholder === 'skeleton') {
-                return <SkeletonItem size={28} />;
+                return <SkeletonItem size={28} appearance="translucent" />;
             }
             return null; // empty
         }

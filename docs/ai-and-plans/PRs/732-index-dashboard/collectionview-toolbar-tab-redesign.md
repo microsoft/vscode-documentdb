@@ -935,7 +935,28 @@ The values are kept low because the `opaque` appearance layers a base fill under
 the animated sweep, so the two compose. The translucent `*Alpha` variants are
 left at Fluent's defaults (that path already composites correctly).
 
-### 12.4 Validation
+### 12.4 Skeleton unification (`appearance="translucent"`)
+
+With the stencils theme-aware, the remaining inconsistency was that the metrics /
+query-insights skeletons still rendered as a solid `opaque` fill while the results
+and index skeletons use `translucent`. To unify the look, the following were
+switched to `appearance="translucent"` (Fluent's `SkeletonItem` accepts the prop
+directly, so the two un-wrapped items take it inline; the rest set it on their
+`<Skeleton>` wrapper):
+
+- `metricsRow/MetricBase.tsx` — the single render point for every metric
+  (`Count`/`Generic`/`Ratio`/`Time` all delegate to it), so this also covers the
+  index dashboard's Total Indexes / Size / Usage / Unused cards.
+- `summaryCard/CellBase.tsx` — summary-cell value placeholder.
+- `summaryCard/custom/PerformanceRatingCell.tsx` — rating skeleton.
+- `queryPlanSummary/QueryPlanSummary.tsx` — the four stage/shard skeletons.
+- `QueryInsightsTab.tsx` — the Stage 1 loading card skeleton.
+
+Every skeleton in the webviews now shares the same gentle, background-tinted
+shimmer. The §12.3 stencil overrides remain as the theme-tracking baseline for any
+`opaque` skeleton that is not (or cannot be) made translucent.
+
+### 12.5 Validation
 
 - `npm run prettier-fix` / `npm run lint` — passed (only the pre-existing ESLint
   v10 `eslint-env` warning).

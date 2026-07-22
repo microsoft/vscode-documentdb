@@ -67,7 +67,7 @@ export const CellBase: React.FC<CellBaseProps> = ({
         // Undefined means data is still loading
         if (value === undefined) {
             if (loadingPlaceholder === 'skeleton') {
-                return <SkeletonItem size={16} />;
+                return <SkeletonItem size={16} appearance="translucent" />;
             }
             return null; // empty
         }
