@@ -16,6 +16,7 @@ import {
     Tooltip,
     useTableFeatures,
     useTableSort,
+    type SortDirection,
     type TableColumnDefinition,
     type TableColumnId,
 } from '@fluentui/react-components';
@@ -27,7 +28,7 @@ import {
     EyeRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { Fragment, useEffect, useRef, useState, type JSX } from 'react';
+import { Fragment, useEffect, useRef, type JSX } from 'react';
 import { type IndexRow } from '../../types';
 import { formatBytes, formatOps } from '../../utils/format';
 import { classifyIndex } from '../../utils/indexType';
@@ -35,6 +36,16 @@ import { IndexPropertiesView } from './IndexPropertiesView';
 import { IndexRowDetails } from './IndexRowDetails';
 import { IndexStatusIndicator } from './IndexStatusIndicator';
 import { IndexTypeBadgeView } from './IndexTypeBadgeView';
+
+/**
+ * Controlled sort state ({@link SortDirection} + which column). Mirrors Fluent's
+ * internal `SortState` shape but is owned by the parent so it survives the
+ * table being unmounted (e.g. a manual refresh swaps in the skeleton).
+ */
+export interface IndexSortState {
+    sortColumn: TableColumnId | undefined;
+    sortDirection: SortDirection;
+}
 
 export interface IndexTableProps {
     indexes: ReadonlyArray<IndexRow>;
@@ -48,6 +59,21 @@ export interface IndexTableProps {
     busyNames?: ReadonlySet<string>;
     /** Name of a row to scroll into view once (only if it is off-screen). */
     scrollToName?: string;
+    /**
+     * Sort state, owned by the parent. Controlled (rather than internal to the
+     * table) so a manual refresh — which swaps this table for a skeleton and
+     * therefore unmounts it — does not silently reset the user's chosen sort.
+     */
+    sortState: IndexSortState;
+    /** Notified when the user toggles a column's sort. */
+    onSortChange: (next: IndexSortState) => void;
+    /**
+     * Names of currently-expanded rows, owned by the parent for the same
+     * survive-a-refresh reason as {@link sortState}.
+     */
+    expanded: ReadonlySet<string>;
+    /** Toggle a row's expanded state (parent owns the set). */
+    onToggleExpanded: (name: string) => void;
 }
 
 const MIN_POSITIVE_BAR_PERCENT = 20;
@@ -118,16 +144,22 @@ export const IndexTable = ({
     onToggleHidden,
     busyNames,
     scrollToName,
+    sortState,
+    onSortChange,
+    expanded,
+    onToggleExpanded,
 }: IndexTableProps): JSX.Element => {
-    // Set of currently-expanded index names. Kept in component state so
-    // expansion survives table re-renders driven by data refresh.
-    const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
-
+    // Sort and expansion state are controlled by the parent (see the prop docs):
+    // a manual refresh unmounts this table for a skeleton, so keeping either here
+    // would silently discard the user's sort/expanded rows on every refresh.
     const {
         getRows,
         sort: { getSortDirection, toggleColumnSort, sort },
     } = useTableFeatures({ columns, items: [...indexes] }, [
-        useTableSort({ defaultSortState: { sortColumn: 'name', sortDirection: 'ascending' } }),
+        useTableSort({
+            sortState,
+            onSortChange: (_event, next) => onSortChange(next),
+        }),
     ]);
     const rows = sort(getRows());
 
@@ -180,18 +212,6 @@ export const IndexTable = ({
             }
         };
     }, [scrollToName, indexes]);
-
-    const toggleExpanded = (name: string): void => {
-        setExpanded((prev) => {
-            const next = new Set(prev);
-            if (next.has(name)) {
-                next.delete(name);
-            } else {
-                next.add(name);
-            }
-            return next;
-        });
-    };
 
     return (
         <Table aria-label={l10n.t('Indexes')} size="small" className="indexTable" sortable>
@@ -267,7 +287,7 @@ export const IndexTable = ({
                                         }
                                         aria-expanded={isExpanded}
                                         icon={isExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
-                                        onClick={() => toggleExpanded(idx.name)}
+                                        onClick={() => onToggleExpanded(idx.name)}
                                     />
                                 </TableCell>
                                 <TableCell className="nameCell">

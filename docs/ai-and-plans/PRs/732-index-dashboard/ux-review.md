@@ -214,7 +214,7 @@ impact — genuine nice-to-haves that should not hold up the merge.
 | 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | 🟠 Open |
 | 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | 🟠 Open |
 | 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | 🟠 Open |
-| 7   | **P3**   | Manual (toolbar) refresh silently resets sort + expanded rows _(new)_      | ✅       | � Open (soft) · revisited |
+| 7   | **P3**   | Manual (toolbar) refresh silently resets sort + expanded rows _(new)_      | ✅       | ✅ Implemented |
 | 8   | **P3**   | Create / Refresh toolbar buttons are not guarded against re-entry _(new)_  | ✅       | 🟡 Open (soft) · revisited |
 
 > The index column above is the finding number (stable identifier used throughout); rows are
@@ -542,12 +542,26 @@ names the cause and points at the existing recovery:
 
 ### 7. Manual (toolbar) refresh silently resets sort and expanded rows ⚠️ _(new)_
 
-**Priority:** P3 · **Status:** � Open (soft) · **✅ Verified in code** · **🔁 revisited**
+**Priority:** P3 · **Status:** ✅ Implemented · **✅ Verified in code** · **🔁 revisited**
 
 > **Revisited (2026-07-22):** softened from 🟠 to 🟡 (soft). This is a genuine nice-to-have —
 > the refresh is _user-initiated_ and re-sorting/re-expanding is a single click, so the impact
 > is a minor annoyance, not a broken flow. Worth doing only if the fix is cheap (e.g. the
 > "keep rows, no skeleton" option below); otherwise acceptable as-is.
+
+> **Decision (Iteration 1):** fix it by **lifting and retaining** the sort + expanded state,
+> with code comments explaining why. **Reason (operator):** _"I don't think it's the case. oh,
+> indeed it is the case, this is unexpected."_ The reset is surprising and contradicts the
+> documented intent, so state should persist across a manual refresh.
+
+> ✅ **Implemented (Iteration 1):** moved the sort state and the expanded-row set out of
+> `IndexTable` and into `IndexList` (which stays mounted across the skeleton swap), passing
+> them down as controlled props (`sortState`/`onSortChange`, `expanded`/`onToggleExpanded`).
+> Fluent's `useTableSort` is now driven in controlled mode. Comments on the new props and the
+> `IndexList` state explain the survive-a-refresh rationale. Files:
+> [IndexTable.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx#L47),
+> [IndexList.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexList.tsx#L74).
+> Commit: see `fix(indexView): retain sort and expanded rows across manual refresh`.
 
 **Observation:** Sort by Size, expand a couple of rows, then press the toolbar **Refresh**.
 The list snaps back to the default name-ascending sort and every row collapses — whereas the
@@ -628,9 +642,11 @@ context, not open findings:
   [IndexTable.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx#L300).
 - ✅ TTL input has inline error state and a specific positive-whole-number message. See
   [CreateIndexDrawer.tsx](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx#L493).
-- ✅ Table sorting and expansion state survive ordinary data refreshes because `IndexTable`
-  remains mounted and owns those states. See
-  [IndexTable.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx#L118).
+- ✅ Table sorting and expansion state survive **all** data refreshes — including a manual
+  toolbar refresh — because `IndexList` (which stays mounted across the skeleton swap) owns
+  that state and passes it to `IndexTable` as controlled props. See
+  [IndexList.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexList.tsx#L74)
+  (fixed in Iteration 1, finding 7).
 
 ---
 

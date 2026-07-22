@@ -7,7 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { type IndexRow } from '../../types';
 import { IndexListFilterBar, type QuickFilters } from './IndexListFilterBar';
-import { IndexTable } from './IndexTable';
+import { IndexTable, type IndexSortState } from './IndexTable';
 import { IndexTableSkeleton } from './IndexTableSkeleton';
 
 /** Snapshot of the list's filter inputs and resulting counts, surfaced to the parent. */
@@ -70,6 +70,26 @@ export const IndexList = ({
     const [filterText, setFilterText] = useState('');
     const [quickFilters, setQuickFilters] = useState<QuickFilters>({ hidden: false, unused: false });
     const [now, setNow] = useState(Date.now);
+    // Sort + expanded-row state live here (not inside IndexTable) so they survive
+    // a manual refresh: that swaps IndexTable for the skeleton, unmounting the
+    // table. Owning the state one level up — in this component, which stays
+    // mounted across the swap — keeps the user's chosen sort and expanded rows.
+    const [sortState, setSortState] = useState<IndexSortState>({
+        sortColumn: 'name',
+        sortDirection: 'ascending',
+    });
+    const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+    const toggleExpanded = (name: string): void => {
+        setExpanded((prev) => {
+            const next = new Set(prev);
+            if (next.has(name)) {
+                next.delete(name);
+            } else {
+                next.add(name);
+            }
+            return next;
+        });
+    };
     // Keep visual metric scales stable while filters change which rows are visible.
     const maxSizeBytes = maxKnownMetric(indexes, 'sizeBytes');
     const maxUsageOps = maxKnownMetric(indexes, 'usageOps');
@@ -166,6 +186,10 @@ export const IndexList = ({
                         onToggleHidden={onToggleHidden}
                         busyNames={busyNames}
                         scrollToName={scrollToName}
+                        sortState={sortState}
+                        onSortChange={setSortState}
+                        expanded={expanded}
+                        onToggleExpanded={toggleExpanded}
                     />
                 )}
                 {!isLoading && (
