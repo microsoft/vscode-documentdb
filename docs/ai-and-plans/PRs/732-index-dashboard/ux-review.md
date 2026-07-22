@@ -415,6 +415,13 @@ const handleCreateSubmit = async (input) => {
 >   [unhideIndex.ts](../../../../src/commands/index.unhideIndex/unhideIndex.ts#L66).
 > Commit: see `fix(indexView): unify index-action feedback (modal failures, gated success toasts)`.
 
+> ✅ **Follow-up (Iteration 2):** the gated-toast pattern now has a named helper. Added
+> `showOperationSummary(message)` in `IndexesTab` (the webview counterpart to the tree's
+> `showConfirmationAsInSettings`); the three success call sites (create/delete/hide-unhide)
+> route through it instead of repeating the `asOperationSummary: true` payload. Files:
+> [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L166).
+> Commit: see `refactor(indexView): add showOperationSummary helper for gated toasts`.
+
 **Observation:** Do create, delete, hide, and unhide in the webview, then repeat
 delete/hide/unhide from Explorer. Success and failure land on **four different surfaces**
 depending on which action and which entry point.

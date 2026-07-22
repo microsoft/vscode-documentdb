@@ -165,6 +165,20 @@ export const IndexesTab = (): JSX.Element => {
         [trpcClient],
     );
 
+    /**
+     * Show a completion toast for a successful action, gated by the
+     * `documentDB.userInterface.ShowOperationSummaries` setting. This is the
+     * webview counterpart to the tree-view `showConfirmationAsInSettings`
+     * helper, so both surfaces honour the same user preference. Use it for
+     * "X succeeded" notifications (never for errors — those use `showError`).
+     */
+    const showOperationSummary = useCallback(
+        (message: string): void => {
+            void trpcClient.common.displayInformationMessage.mutate({ message, asOperationSummary: true });
+        },
+        [trpcClient],
+    );
+
     // Screen-reader announcements for user-initiated list lifecycle (refresh
     // start / success / failure). The top progress bar is aria-hidden and the
     // skeleton is silent, so without this an assistive-tech user gets no signal
@@ -358,12 +372,11 @@ export const IndexesTab = (): JSX.Element => {
                             prev.map((p) => (p.name === pending.name ? { ...p, name: result.indexName as string } : p)),
                         );
                     }
-                    void trpcClient.common.displayInformationMessage.mutate({
-                        message: result.indexName
+                    showOperationSummary(
+                        result.indexName
                             ? l10n.t('Index "{0}" created.', result.indexName)
                             : l10n.t('Index created.'),
-                        asOperationSummary: true,
-                    });
+                    );
                     // Scroll the new index into view (if off-screen) so the user
                     // can spot it under the active sort. We do NOT refresh here
                     // — the build poll refreshes after ~5s, so the "Creating…"
@@ -405,7 +418,7 @@ export const IndexesTab = (): JSX.Element => {
             // Close the drawer immediately; the create continues in the background.
             setModal({ kind: 'none' });
         },
-        [trpcClient, refresh, openCreateDialog],
+        [trpcClient, refresh, openCreateDialog, showOperationSummary],
     );
 
     /** Delete an index. Confirmation happens on the extension host (modal). */
@@ -429,10 +442,7 @@ export const IndexesTab = (): JSX.Element => {
                     return;
                 }
                 await delay(MIN_ACTION_VISIBLE_MS);
-                void trpcClient.common.displayInformationMessage.mutate({
-                    message: l10n.t('Index "{0}" deleted.', indexName),
-                    asOperationSummary: true,
-                });
+                showOperationSummary(l10n.t('Index "{0}" deleted.', indexName));
                 await refresh();
             } catch (error) {
                 showError(l10n.t('Failed to delete index "{0}".', indexName), error, { modal: true });
@@ -440,7 +450,7 @@ export const IndexesTab = (): JSX.Element => {
                 removeBusy(indexName);
             }
         },
-        [trpcClient, refresh, showError, addBusy, removeBusy],
+        [trpcClient, refresh, showError, showOperationSummary, addBusy, removeBusy],
     );
 
     /** Hide / unhide toggle. Confirmation happens on the extension host (modal). */
@@ -468,12 +478,11 @@ export const IndexesTab = (): JSX.Element => {
                 // Completion toast (gated by the operation-summaries setting, like
                 // the tree commands). Previously hide/unhide gave no feedback at all,
                 // unlike create/delete and the Explorer handlers.
-                void trpcClient.common.displayInformationMessage.mutate({
-                    message: index.hidden
+                showOperationSummary(
+                    index.hidden
                         ? l10n.t('Index "{0}" unhidden.', index.name)
                         : l10n.t('Index "{0}" hidden.', index.name),
-                    asOperationSummary: true,
-                });
+                );
                 await refresh();
             } catch (error) {
                 showError(
@@ -487,7 +496,7 @@ export const IndexesTab = (): JSX.Element => {
                 removeBusy(index.name);
             }
         },
-        [trpcClient, refresh, showError, addBusy, removeBusy],
+        [trpcClient, refresh, showError, showOperationSummary, addBusy, removeBusy],
     );
 
     /**
