@@ -101,6 +101,9 @@ export const IndexesTab = (): JSX.Element => {
     const [isInitialLoading, setIsInitialLoading] = useState(true);
     const [isRefreshing, setIsRefreshing] = useState(false);
     const [isManualRefreshing, setIsManualRefreshing] = useState(false);
+    // True when the last load attempt failed. Drives the "could not load" empty
+    // state (only when there are also no rows to fall back to).
+    const [loadFailed, setLoadFailed] = useState(false);
     const [lastUpdatedAt, setLastUpdatedAt] = useState<number>();
     const hasLoadedRef = useRef(false);
     const refreshGenerationRef = useRef(0);
@@ -204,11 +207,13 @@ export const IndexesTab = (): JSX.Element => {
                 setIndexes(rows);
                 setLastUpdatedAt(Date.now());
                 hasLoadedRef.current = true;
+                setLoadFailed(false);
                 if (shouldAnnounce) {
                     announce(l10n.t('Indexes updated.'));
                 }
             } catch (error) {
                 if (generation === refreshGenerationRef.current) {
+                    setLoadFailed(true);
                     showError(l10n.t('Failed to load indexes.'), error);
                     if (shouldAnnounce) {
                         announce(l10n.t('Could not load indexes.'), 'assertive');
@@ -533,6 +538,7 @@ export const IndexesTab = (): JSX.Element => {
                 indexes={displayIndexes}
                 lastUpdatedAt={lastUpdatedAt}
                 isLoading={isInitialLoading || isManualRefreshing}
+                loadFailed={loadFailed}
                 busyNames={busyNames}
                 scrollToName={scrollToName}
                 onDelete={(idx) => void handleDelete(idx)}

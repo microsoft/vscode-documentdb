@@ -87,6 +87,20 @@
         font-size: var(--fontSizeBase300);
     }
 
+    // Centered "could not load" message shown in place of the table when the
+    // most recent load failed and there are no rows to fall back to. A filtered
+    // -to-empty list is intentionally NOT shown here (it keeps the count footer).
+    .indexEmptyState {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 120px;
+        padding: 24px 10px;
+        text-align: center;
+        color: var(--colorNeutralForeground2);
+        font-size: var(--fontSizeBase300);
+    }
+
     // Loading placeholder for the table area. Mirrors the Results tab skeleton:
     // a header row followed by a grid of shimmering rows.
     .indexTableSkeleton {

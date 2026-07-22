@@ -30,6 +30,13 @@ export interface IndexListProps {
     onToggleHidden: (index: IndexRow) => void;
     /** When true, the table is replaced with a loading skeleton and the count is hidden. */
     isLoading?: boolean;
+    /**
+     * True when the most recent list load failed and there are no rows to fall
+     * back to. Drives a compact "could not load" message in place of an empty
+     * table. Only the load-failure case gets a message — a filtered-to-empty
+     * list is intentionally left to the "Showing 0 of N" footer.
+     */
+    loadFailed?: boolean;
     /** Names of rows with an action in flight (delete / hide / unhide) — shown with a spinner. */
     busyNames?: ReadonlySet<string>;
     /** Name of a row to scroll into view once (if it is off-screen). */
@@ -63,6 +70,7 @@ export const IndexList = ({
     onDelete,
     onToggleHidden,
     isLoading = false,
+    loadFailed = false,
     busyNames,
     scrollToName,
     onStateChange,
@@ -177,6 +185,12 @@ export const IndexList = ({
             <div className="indexContentContainer">
                 {isLoading ? (
                     <IndexTableSkeleton rowCount={lastUpdatedAt === undefined ? undefined : shown.length} />
+                ) : loadFailed && shown.length === 0 ? (
+                    // Load-failure only: a filtered-to-empty list keeps the plain
+                    // "Showing 0 of N" footer per the design decision on finding 5.
+                    <div className="indexEmptyState" role="status">
+                        {l10n.t('Could not load indexes.')}
+                    </div>
                 ) : (
                     <IndexTable
                         indexes={shown}
@@ -192,7 +206,7 @@ export const IndexList = ({
                         onToggleExpanded={toggleExpanded}
                     />
                 )}
-                {!isLoading && (
+                {!isLoading && !(loadFailed && shown.length === 0) && (
                     <div className="indexListCount">
                         <span aria-live="polite">
                             {l10n.t('Showing {0} of {1} indexes', shown.length, indexes.length)}
