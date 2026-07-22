@@ -715,3 +715,158 @@ reviewable.
 - `npm run lint` — passed.
 - `npx jest --no-coverage` — passed: 162 suites, 2,683 tests, 4 snapshots.
 - `npm run build` — passed for all workspaces and the extension.
+
+---
+
+## 11. UX finalization, full-bleed chrome & SCSS refactor (2026-07-22)
+
+Follow-up pass after the tab redesign landed. Focus areas: pixel alignment across
+the three tabs, a proper full-width header band, keeping keyboard **focus
+indicators visible**, and a readability refactor of
+[collectionView.scss](../../../../src/webviews/documentdb/collectionView/collectionView.scss)
+(naming + Fluent design tokens). No behavior changed — this is layout, theming,
+and structure only.
+
+### 11.1 Edge alignment across all three tabs
+
+The primary buttons didn't share a left edge: **Find Query** (Documents / Query
+Insights) sat ~4px inboard of **Create Index** (Indexes). Cause: the query
+toolbars are Fluent `Toolbar`s nested inside a 10px-gutter wrapper, and Fluent
+adds its own intrinsic horizontal padding _on top_; the Index toolbar carries the
+gutter directly, so it had no extra offset.
+
+Fix — zero the intrinsic padding of the toolbars _inside_ the action bars so their
+first/last controls land exactly on the shared 10px gutter:
+
+```scss
+.collectionQueryActionBar .fui-Toolbar,
+.resultsActionBar .fui-Toolbar {
+    padding-inline: 0;
+}
+```
+
+Find Query, the Documents results-navigation row, and Create Index now begin on
+one vertical line, and their right edges line up with the data gutter.
+
+### 11.2 Full-width header band (full-bleed)
+
+VS Code injects `body { padding: 0 20px }` into every webview, which inset the
+whole view — so the new tab-strip background stopped ~20px short of the window
+edges. The view is now full-bleed, robust to the exact body-padding value:
+
+```scss
+.collectionView {
+    margin-inline: calc(50% - 50vw);
+}
+```
+
+The header band (`.collectionTabList`) fills that width using **Fluent neutral
+aliases** so it tracks the theme:
+
+- `--colorNeutralBackground2` — the band shade
+- `--colorNeutralStroke2` + `--strokeWidthThin` (1px) — the bottom separator
+- `--colorNeutralBackground1` — the view surface, which also paints the reclaimed
+  edge strips so they match the theme instead of the raw editor background
+
+### 11.3 Accessibility — keeping focus indicators visible
+
+This was the subtle part. Twice the **tab focus outline got cropped** — first on
+the left, then on the top — once the view was pulled to the window edges:
+
+- The view **clips** its overflow (to suppress a 1px cumulative-rounding
+  scrollbar), so a focus ring drawn at `x=0` / `y=0` is cut.
+- Nothing renders **above** the webview's own top edge, so no amount of
+  clip-margin can rescue a ring sitting at `y=0` — the tabs genuinely have to sit
+  a few px down.
+
+Rather than hardcode "4px", the allowance is **derived from the Fluent focus
+stroke width**, so it scales if the theme thickens the outline:
+
+```scss
+// ~4px today (2 × 2px); grows if --strokeWidthThick grows
+$tab-focus-inset: calc(2 * var(--strokeWidthThick));
+```
+
+It is reserved on **all four sides** of the content, and the band **re-escapes**
+it with a matching negative margin so its background still spans edge-to-edge:
+
+```scss
+.collectionTabList {
+    margin-inline: calc(-1 * #{$tab-focus-inset}); // escape → background reaches the edges
+    padding-inline: $tab-focus-inset; // re-inset → tabs align with the content
+    padding-top: $tab-focus-inset; // clear the webview's top edge
+}
+```
+
+Overflow was also switched from `hidden` to `clip` + `overflow-clip-margin`, which
+still kills the rounding scrollbar but lets focus rings **bleed a few px past the
+view's edges** instead of being clipped. Net effect: the WCAG _focus-visible_
+affordance on the tabs is never truncated, at any theme or zoom.
+
+### 11.4 Toolbar top spacing
+
+A 4px gap between the tab strip and the primary toolbar was added as **`margin-top`
+on `.primaryActionBar`** (not padding): the toolbar vertically centers its buttons,
+so padding would be half-absorbed by the centering, whereas margin shows the full
+gap. It is documented inline as a single tweakable knob.
+
+### 11.5 SCSS refactor — naming & Fluent tokens
+
+Successive agents had accreted layout rules with mixed hardcoded values and opaque
+names. The file was reorganized (section banners, regions ordered top→bottom,
+global helpers grouped, dead `.row-separator` removed) and the layout regions
+renamed for clarity:
+
+| Before                      | After               | Why                                        |
+| --------------------------- | ------------------- | ------------------------------------------ |
+| `.tabActionBar`             | `.primaryActionBar` | The tab's main toolbar row.                |
+| `.tabActionToolbar`         | `.actionBarToolbar` | A Fluent `Toolbar` _inside_ an action bar. |
+| `.documentResultsActionBar` | `.resultsActionBar` | Shorter; it's the results-navigation row.  |
+
+They now read as a family: `primaryActionBar` (shared row chrome) →
+`actionBarToolbar` (toolbars within it) → `collectionQueryActionBar` /
+`resultsActionBar` (the two layout variants). Renames were applied to every call
+site (`CollectionView.tsx`, `CollectionQueryActionBar.tsx`,
+`IndexManagementToolbar.tsx`); the tests assert on aria-labels / behavior, not
+class names, so none broke.
+
+**Fluent spacing tokens.** The hardcoded px were replaced with **Fluent UI v9
+design tokens** — `--spacingHorizontal*` / `--spacingVertical*`, `--strokeWidth*`,
+`--colorNeutral*` — which `FluentProvider` injects as CSS variables. They keep
+spacing consistent and follow the theme:
+
+- `10px` → `--spacingHorizontalMNudge` / `--spacingVerticalMNudge`
+- `6px` → `--spacingHorizontalSNudge`, `4px` → `--spacingHorizontalXS`,
+  `2px` → `--spacingVerticalXXS`, `8px` → `--spacingVerticalS`
+- `1px` border → `--strokeWidthThin`
+
+`calc()` was kept deliberately sparse — only four remain, each with a concrete
+reason (the full-bleed `50% - 50vw`, the focus-derived inset, and two _negative_
+offsets that mirror a positive token they cancel: the band escape and the pager's
+row-gap pullback). Values that are plain spacing constants are tokens with no
+calc. Control heights (e.g. `min-height: 32px`) stay as px — they are not spacing
+and have no matching token, and px scale with zoom anyway.
+
+### 11.6 Visual checks
+
+- **Left edges** of Find Query / Create Index / the results-nav row / the Monaco
+  filter box and the tab labels all land on the shared gutter; **right edges**
+  align with the data gutter.
+- **Header band** spans the full window width and reaches the top; shade and
+  separator render correctly in light, dark, and high-contrast themes (Fluent
+  neutral aliases).
+- **Keyboard focus** was tabbed through the tab strip and toolbars — the tab
+  focus outline is fully visible on every side (no left/top crop), including at
+  200% zoom.
+- **Monaco filter box** border lines up with the Find Query button above it.
+- **Query Insights** cards align to the same gutter as the action bar.
+
+### Completion validation (2026-07-22)
+
+- `npm run prettier-fix` — passed.
+- `npm run lint` — passed (only the pre-existing ESLint v10 `eslint-env` warning).
+- `npm run build` — passed (TypeScript).
+- `npx jest --no-coverage` — passed: 162 suites, 2,683 tests, 4 snapshots.
+- Webview webpack (`watch:views`) — compiled successfully (SCSS validated).
+- `npm run l10n` not required: no user-facing strings were added, changed, or
+  removed in this pass (SCSS + class-name only).

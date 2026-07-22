@@ -38,6 +38,7 @@
         flex-direction: column;
         flex: 1 1 auto;
         min-height: 0;
+        margin-inline: var(--spacingHorizontalMNudge);
         row-gap: 10px;
     }
 
@@ -46,8 +47,8 @@
     .indexToolbar {
         width: 100%;
         box-sizing: border-box;
-        padding: 0 10px;
         gap: 8px;
+        padding-inline: 0;
         flex-shrink: 0;
 
         // Fluent buttons default to a semibold weight; keep the filter-row
@@ -75,11 +76,6 @@
         flex: 1 1 auto;
         min-height: 0;
         overflow: auto;
-        // Reserve space for the vertical scrollbar at all times so expanding a
-        // row (which makes the list taller and reveals the scrollbar) does not
-        // shrink the content width and reflow the table.
-        scrollbar-gutter: stable;
-        padding: 0 10px;
     }
 
     // Centered "showing X of Y" count, sized so it's clearly visible. Rendered

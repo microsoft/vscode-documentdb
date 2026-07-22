@@ -41,7 +41,6 @@ import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import { CollectionViewContext } from '../../collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
 import { useHideScrollbarsDuringResize } from '../../hooks/useHideScrollbarsDuringResize';
-import { ToolbarDividerTransparent } from './ToolbarDividerTransparent';
 
 export interface CollectionQueryActionBarProps {
     variant: 'documents' | 'queryInsights';
@@ -170,6 +169,7 @@ const QueryExecutionToolbar = ({ variant }: CollectionQueryActionBarProps): JSX.
     return (
         <Toolbar
             aria-label={toolbarLabel}
+            className="actionBarToolbar"
             size="small"
             checkedValues={checkedValues}
             onCheckedValueChange={handleCheckedValueChange}
@@ -184,21 +184,16 @@ const QueryExecutionToolbar = ({ variant }: CollectionQueryActionBarProps): JSX.
                 {l10n.t('Find Query')}
             </ToolbarButton>
 
-            <ToolbarDividerTransparent />
-
             {configuration.enableAIQueryGeneration && (
-                <>
-                    <ToolbarToggleButton
-                        appearance="subtle"
-                        aria-label={l10n.t('Generate query with AI')}
-                        icon={currentContext.isAiRowVisible ? <SparkleFilled /> : <SparkleRegular />}
-                        name="aiToggle"
-                        value="copilot"
-                    >
-                        {l10n.t('Generate')}
-                    </ToolbarToggleButton>
-                    <ToolbarDividerTransparent />
-                </>
+                <ToolbarToggleButton
+                    appearance="subtle"
+                    aria-label={l10n.t('Generate query with AI')}
+                    icon={currentContext.isAiRowVisible ? <SparkleFilled /> : <SparkleRegular />}
+                    name="aiToggle"
+                    value="copilot"
+                >
+                    {l10n.t('Generate')}
+                </ToolbarToggleButton>
             )}
 
             <Tooltip content={refreshDescription} relationship="description" withArrow>
@@ -330,6 +325,7 @@ const QuerySecondaryActions = ({ variant }: CollectionQueryActionBarProps): JSX.
                 aria-label={
                     variant === 'documents' ? l10n.t('Document query utilities') : l10n.t('Query Insights utilities')
                 }
+                className="actionBarToolbar"
                 size="small"
             >
                 {variant === 'documents' && (

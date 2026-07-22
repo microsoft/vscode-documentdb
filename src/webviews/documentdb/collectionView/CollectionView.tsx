@@ -662,7 +662,7 @@ export const CollectionView = (): JSX.Element => {
                     aria-labelledby={selectedTabId}
                 >
                     {selectedTab !== 'tab_indexes' && (
-                        <div className="tabActionBar collectionQueryActionBar">
+                        <div className="primaryActionBar collectionQueryActionBar">
                             <CollectionQueryActionBar
                                 variant={selectedTab === 'tab_result' ? 'documents' : 'queryInsights'}
                             />
@@ -715,7 +715,7 @@ export const CollectionView = (): JSX.Element => {
 
                     {selectedTab === 'tab_result' && (
                         <>
-                            <div className="documentResultsActionBar">
+                            <div className="resultsActionBar">
                                 <ToolbarViewNavigation />
                                 <ToolbarDocumentManipulation
                                     onDeleteClick={handleDeleteDocumentRequest}
