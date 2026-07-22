@@ -781,6 +781,42 @@ implements them. **Each work item below is a dedicated commit** (with a matching
 Per-item Decision/Implemented blocks are recorded on each finding above. Anything not
 resolved here rolls into Iteration 2.
 
+#### Iteration 1 outcome
+
+| Finding | Result |
+| --- | --- |
+| J1 · raw-definition error | ✅ Implemented (`fix(indexView): surface raw-definition open failure as a modal`) |
+| 1 · row progress timing | ✅ Implemented (`fix(indexView): show row progress during the actual index operation`) |
+| 2 · create-fail recovery | ✅ Implemented (`feat(indexView): add Edit and retry to the create-index failure modal`) |
+| 3 · feedback matrix | ✅ Implemented (`fix(indexView): unify index-action feedback…`) |
+| 4 · schema prerequisites | ✅ Implemented (`fix(indexView): open create drawer without blocking on schema prerequisites`) |
+| 6 · accessibility | ✅ Implemented (`feat(indexView): announce list refresh lifecycle to screen readers`) |
+| 7 · sort/expansion reset | ✅ Implemented (`fix(indexView): retain sort and expanded rows across manual refresh`) |
+| 8 · toolbar re-entry | 🚫 Closed (won't fix) — operator: "leave as is" |
+| 5 · empty-state | 🟡 **Deferred to Iteration 2** — needs clarification (below) |
+
+**Open questions for Iteration 2 / operator review**
+
+1. **Finding 5 (empty-state) is the only unresolved item.** The two pieces of feedback
+   conflict: _"I'm fine with showing 0 of xx indexes"_ (leave filtered-empty alone) vs. _"make
+   these buttons centered, maybe it doesn't have to be a table at all."_ There are no buttons
+   in the empty state today. **Which case does the redesign apply to** — the **could-not-load**
+   state, the **filtered-empty** state, or both — and should it become a **centered non-table
+   panel**, or is a small centered message enough? Left untouched pending an answer.
+2. **Finding 1 side effect:** because the operator chose "one request," the row spinner is now
+   also visible **behind the confirmation modal** (cleared on cancel). If that reads oddly,
+   the only alternative is splitting confirm/operate into two requests (previously declined).
+3. **Finding 3 scope call to confirm:** **background/poll and initial list-load failures were
+   kept non-modal** (toast) on purpose — making them modal would pop repeatedly during the 5s
+   build poll. Only discrete user actions (create/delete/hide/unhide/prepare/raw-open) are
+   modal. Please confirm this scoping matches "errors as an effect of user interaction."
+4. **Finding 3 tree behavior:** tree failures are now modal by suppressing azext's default
+   (non-modal) error and showing our own modal, then rethrowing for telemetry. This drops the
+   azext "Report Issue" affordance on those specific errors — acceptable?
+5. **Gated success toasts:** create/delete success toasts are now gated by
+   `ShowOperationSummaries` (to match the tree). If a user disables that setting they lose
+   create/delete/hide/unhide success toasts (the row change remains). Confirm that's intended.
+
 ---
 
 ## Open ideas — options, pros & cons
