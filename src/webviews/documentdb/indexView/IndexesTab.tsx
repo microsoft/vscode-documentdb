@@ -39,6 +39,7 @@ interface PendingCreate {
     expireAfterSeconds?: number;
     hasPartialFilter: boolean;
     hasCollation: boolean;
+    hasWildcardProjection: boolean;
 }
 
 /** Map a per-field index type onto its wire-level key value (mirrors the router). */
@@ -71,6 +72,7 @@ function pendingCreateFromInput(input: CreateIndexInput): PendingCreate {
         expireAfterSeconds: input.expireAfterSeconds,
         hasPartialFilter: input.partialFilterExpression !== undefined,
         hasCollation: input.collation !== undefined,
+        hasWildcardProjection: input.wildcardProjection !== undefined,
     };
 }
 
@@ -305,6 +307,7 @@ export const IndexesTab = (): JSX.Element => {
                 expireAfterSeconds: p.expireAfterSeconds,
                 partialFilterExpression: p.hasPartialFilter ? {} : undefined,
                 collation: p.hasCollation ? {} : undefined,
+                wildcardProjection: p.hasWildcardProjection ? {} : undefined,
                 usageOps: 0,
                 isDefault: false,
                 statsAvailable: false,

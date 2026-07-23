@@ -74,6 +74,17 @@ export interface CreateIndexField {
     type: FieldIndexType;
 }
 
+/** Exact destructive and retained effects shown before enabling wildcard mode. */
+export interface EnableWildcardIndexConfirmationDetails {
+    fields: CreateIndexField[];
+    clearUnique: boolean;
+    clearSparse: boolean;
+    clearTtl: boolean;
+    retainName: boolean;
+    retainPartialFilter: boolean;
+    retainCollation: boolean;
+}
+
 /**
  * Payload sent from the webview when the user submits the Create Index drawer.
  * Field types live on each key; TTL, unique, sparse, partial filter and
@@ -90,4 +101,6 @@ export interface CreateIndexInput {
     partialFilterExpression?: string;
     /** Raw collation JSON text, parsed (loosely) on the extension side. */
     collation?: string;
+    /** Raw wildcard-projection JSON text, parsed (loosely) on the extension side. */
+    wildcardProjection?: string;
 }

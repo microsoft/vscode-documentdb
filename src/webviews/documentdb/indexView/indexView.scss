@@ -476,6 +476,10 @@
         min-width: 0;
     }
 
+    .generatedWildcardKey input {
+        font-family: var(--fontFamilyMonospace);
+    }
+
     // The per-field type dropdown is wide enough to hold the longest option
     // label ("Geospatial (2dsphere)") on a single line without wrapping.
     .fieldType {
@@ -528,6 +532,18 @@
         font-size: var(--fontSizeBase200);
     }
 
+    .wildcardSettings,
+    .wildcardProjectionField {
+        display: flex;
+        flex-direction: column;
+        row-gap: 8px;
+    }
+
+    .wildcardProjectionLabel {
+        font-weight: var(--fontWeightSemibold);
+        font-size: var(--fontSizeBase300);
+    }
+
     // "Advanced settings ›" navigation entry that pushes the advanced sub-page.
     .advancedEntry {
         display: flex;
@@ -550,6 +566,12 @@
         &:focus-visible {
             outline: 2px solid var(--colorStrokeFocus2);
             outline-offset: 2px;
+        }
+
+        &:disabled {
+            cursor: default;
+            color: var(--colorNeutralForegroundDisabled);
+            background-color: var(--colorNeutralBackgroundDisabled);
         }
     }
 

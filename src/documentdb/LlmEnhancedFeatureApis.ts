@@ -47,6 +47,8 @@ export interface IndexSpecification {
     expireAfterSeconds?: number;
     // Partial index filter expression
     partialFilterExpression?: Document;
+    // Wildcard index field inclusion/exclusion document
+    wildcardProjection?: Document;
     // Additional index options
     [key: string]: unknown;
 }

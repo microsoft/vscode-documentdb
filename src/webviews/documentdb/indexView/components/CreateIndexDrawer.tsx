@@ -18,6 +18,8 @@ import {
     MessageBarTitle,
     Option,
     OverlayDrawer,
+    Radio,
+    RadioGroup,
     Switch,
     Tooltip,
 } from '@fluentui/react-components';
@@ -36,30 +38,25 @@ import {
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
+import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { LARGE_COLLECTION_THRESHOLD_DOCS } from '../constants';
 import { type CreateIndexInput, type FieldIndexType } from '../types';
+import {
+    applyConfirmedWildcardTransition,
+    createInitialIndexFormState,
+    disableWildcardMode,
+    getEnableWildcardImpact,
+    getWildcardActivationDecision,
+    isBlankIndexOption,
+    isWildcardParentPathValid,
+    normalizeWildcardParentPath,
+    setWildcardPath,
+    setWildcardScope,
+} from '../wildcardIndexForm';
 import { JsonInputEditor } from './JsonInputEditor';
 
 /** Which pane of the drawer is visible. Advanced is a pushed sub-page. */
 type DrawerPage = 'main' | 'advanced';
-
-/**
- * Local row state for the editable fields list. Each row gets a stable id so
- * React can key it across reorders without relying on the field name (which
- * can be empty mid-edit). `type` defaults to ascending so a freshly added row
- * is immediately usable.
- */
-interface FieldDraft {
-    id: string;
-    field: string;
-    type: FieldIndexType;
-}
-
-function makeFieldId(): string {
-    return `field-${Math.random().toString(36).slice(2, 10)}`;
-}
-
-const INITIAL_FIELD = (): FieldDraft => ({ id: makeFieldId(), field: '', type: 'asc' });
 
 /**
  * Build the localised per-field type options lazily inside the component so
@@ -106,16 +103,6 @@ function DrawerSection({
             <div className="drawerSectionBody">{children}</div>
         </section>
     );
-}
-
-/**
- * True when the text is either empty or an empty JSON object (`{}` with any
- * inner/outer whitespace). Such values are treated as "not set" so they never
- * mark the Advanced section as configured or get sent to the server.
- */
-function isBlankJsonObject(text: string): boolean {
-    const trimmed = text.trim();
-    return trimmed === '' || /^\{\s*\}$/.test(trimmed);
 }
 
 /**
@@ -176,10 +163,12 @@ function OptionRow({
 function FieldNameCombobox({
     value,
     suggestions,
+    disabled,
     onChange,
 }: {
     value: string;
     suggestions: ReadonlyArray<string>;
+    disabled: boolean;
     onChange: (value: string) => void;
 }): JSX.Element {
     const needle = value.trim().toLowerCase();
@@ -193,6 +182,7 @@ function FieldNameCombobox({
         <Combobox
             className="fieldGrow"
             freeform
+            disabled={disabled}
             placeholder={l10n.t('Select or type a field name')}
             value={value}
             onChange={(event) => onChange(event.target.value)}
@@ -250,33 +240,39 @@ export const CreateIndexDrawer = ({
     onPrepareInTarget,
     resetSignal,
 }: CreateIndexDrawerProps): JSX.Element => {
+    const trpcClient = useTrpcClient();
     const [page, setPage] = useState<DrawerPage>('main');
-    const [fields, setFields] = useState<FieldDraft[]>([INITIAL_FIELD()]);
-    const [name, setName] = useState('');
-    const [nameEnabled, setNameEnabled] = useState(false);
-    const [unique, setUnique] = useState(false);
-    const [sparse, setSparse] = useState(false);
-    const [ttlEnabled, setTtlEnabled] = useState(false);
-    // Seeded with a sensible default so the TTL input never opens in an error state.
-    const [ttlSeconds, setTtlSeconds] = useState<string>('3600');
-    const [partialText, setPartialText] = useState('{  }');
-    const [collationText, setCollationText] = useState('{  }');
+    const [form, setForm] = useState(createInitialIndexFormState);
     const [submitting, setSubmitting] = useState(false);
+    const [wildcardConfirmationPending, setWildcardConfirmationPending] = useState(false);
+    const wildcardConfirmationPendingRef = useRef(false);
+    const wildcardConfirmationGenerationRef = useRef(0);
+
+    const {
+        fields,
+        name,
+        nameEnabled,
+        unique,
+        sparse,
+        ttlEnabled,
+        ttlSeconds,
+        partialText,
+        collationText,
+        wildcardEnabled,
+        wildcardScope,
+        wildcardPath,
+        wildcardProjectionText,
+    } = form;
 
     const typeLabels = useMemo(() => buildTypeLabels(), []);
 
     const reset = useCallback((): void => {
         setPage('main');
-        setFields([INITIAL_FIELD()]);
-        setName('');
-        setNameEnabled(false);
-        setUnique(false);
-        setSparse(false);
-        setTtlEnabled(false);
-        setTtlSeconds('3600');
-        setPartialText('{  }');
-        setCollationText('{  }');
+        setForm(createInitialIndexFormState());
         setSubmitting(false);
+        wildcardConfirmationGenerationRef.current += 1;
+        wildcardConfirmationPendingRef.current = false;
+        setWildcardConfirmationPending(false);
     }, []);
 
     // The parent clears the form after a successful create by bumping
@@ -293,29 +289,82 @@ export const CreateIndexDrawer = ({
     // Closing preserves the form; only an explicit reset (or a successful
     // create) clears it.
     const handleCancel = (): void => {
-        if (submitting) {
+        if (submitting || wildcardConfirmationPending) {
             return;
         }
         onCancel();
     };
 
     const addField = (): void => {
-        setFields((prev) => [...prev, INITIAL_FIELD()]);
+        setForm((prev) => ({
+            ...prev,
+            fields: [...prev.fields, createInitialIndexFormState().fields[0]],
+        }));
     };
 
     const removeField = (id: string): void => {
-        setFields((prev) => (prev.length > 1 ? prev.filter((f) => f.id !== id) : prev));
+        setForm((prev) => ({
+            ...prev,
+            fields: prev.fields.length > 1 ? prev.fields.filter((field) => field.id !== id) : prev.fields,
+        }));
     };
 
     // Reset a single row back to its empty state. Used for the lone first field,
     // where there is nothing to delete but the user still needs a way to clear
     // what they typed.
     const clearField = (id: string): void => {
-        setFields((prev) => prev.map((f) => (f.id === id ? { ...f, field: '', type: 'asc' } : f)));
+        setForm((prev) => ({
+            ...prev,
+            fields: prev.fields.map((field) => (field.id === id ? { ...field, field: '', type: 'asc' } : field)),
+        }));
     };
 
-    const updateField = (id: string, patch: Partial<Omit<FieldDraft, 'id'>>): void => {
-        setFields((prev) => prev.map((f) => (f.id === id ? { ...f, ...patch } : f)));
+    const updateField = (id: string, patch: { field?: string; type?: FieldIndexType }): void => {
+        setForm((prev) => ({
+            ...prev,
+            fields: prev.fields.map((field) => (field.id === id ? { ...field, ...patch } : field)),
+        }));
+    };
+
+    const handleWildcardToggle = async (checked: boolean): Promise<void> => {
+        if (!checked) {
+            if (!wildcardConfirmationPendingRef.current) {
+                setForm((prev) => disableWildcardMode(prev));
+            }
+            return;
+        }
+
+        const decision = getWildcardActivationDecision(form, wildcardConfirmationPendingRef.current);
+        if (decision === 'blocked') {
+            return;
+        }
+        if (decision === 'enable') {
+            setForm((prev) => applyConfirmedWildcardTransition(prev));
+            return;
+        }
+
+        const impact = getEnableWildcardImpact(form);
+        const generation = ++wildcardConfirmationGenerationRef.current;
+        wildcardConfirmationPendingRef.current = true;
+        setWildcardConfirmationPending(true);
+        try {
+            const result = await trpcClient.mongoClusters.indexView.confirmEnableWildcardIndex.mutate(impact);
+            if (generation === wildcardConfirmationGenerationRef.current && result.confirmed) {
+                setForm((prev) => applyConfirmedWildcardTransition(prev));
+            }
+        } catch (error) {
+            const cause = error instanceof Error ? error.message : String(error);
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to confirm wildcard index changes.'),
+                modal: false,
+                cause,
+            });
+        } finally {
+            if (generation === wildcardConfirmationGenerationRef.current) {
+                wildcardConfirmationPendingRef.current = false;
+                setWildcardConfirmationPending(false);
+            }
+        }
     };
 
     // Only rows with a field name contribute to the index; the type always has
@@ -328,28 +377,47 @@ export const CreateIndexDrawer = ({
     // Single source of truth for "is this advanced option meaningfully set?" —
     // a blank object ({} / whitespace) counts as not set. Used everywhere so the
     // Advanced entry badge, its summary, and the payload never disagree.
-    const hasPartialFilter = !isBlankJsonObject(partialText);
-    const hasCollation = !isBlankJsonObject(collationText);
+    const hasPartialFilter = !isBlankIndexOption(partialText);
+    const hasCollation = !isBlankIndexOption(collationText);
+    const hasWildcardProjection = wildcardEnabled && !isBlankIndexOption(wildcardProjectionText);
 
     // Sparse and a partial filter are mutually exclusive on the server.
-    const sparseDisabled = hasPartialFilter;
+    const sparseDisabled = wildcardEnabled || hasPartialFilter;
     const ttlActive = ttlEnabled && isSingleBTree;
     const trimmedTtlSeconds = ttlSeconds.trim();
     const parsedTtlSeconds = Number.parseInt(trimmedTtlSeconds, 10);
     const ttlNumberValid = !ttlActive || (parsedTtlSeconds > 0 && String(parsedTtlSeconds) === trimmedTtlSeconds);
+    const wildcardPathValid = !wildcardEnabled || wildcardScope === 'all' || isWildcardParentPathValid(wildcardPath);
+    const interactionDisabled = submitting || wildcardConfirmationPending;
 
-    const advancedHasContent = hasPartialFilter || hasCollation;
+    const advancedHasContent = hasPartialFilter || hasCollation || wildcardEnabled;
+
+    let wildcardSummary: string | undefined;
+    if (wildcardEnabled) {
+        if (wildcardScope === 'all') {
+            wildcardSummary = l10n.t('Wildcard: all fields');
+        } else {
+            const normalizedPath = normalizeWildcardParentPath(wildcardPath);
+            wildcardSummary =
+                normalizedPath === ''
+                    ? l10n.t('Wildcard: fields below a path')
+                    : l10n.t('Wildcard: {0}', normalizedPath);
+        }
+    }
 
     // Which advanced settings are populated — surfaced on the entry so the user
     // can tell at a glance that something is configured behind it.
     const advancedSummary = [
+        wildcardSummary,
+        hasWildcardProjection ? l10n.t('Wildcard projection configured') : undefined,
         hasPartialFilter ? l10n.t('Partial filter') : undefined,
         hasCollation ? l10n.t('Collation') : undefined,
     ]
         .filter((part): part is string => part !== undefined)
         .join(' · ');
 
-    const canSubmit = completedRows.length > 0 && ttlNumberValid && !submitting;
+    const canSubmit =
+        completedRows.length > 0 && ttlNumberValid && wildcardPathValid && !submitting && !wildcardConfirmationPending;
 
     // Assemble the payload once; shared by the direct create and the
     // playground/shell hand-offs so all three produce an identical index.
@@ -374,6 +442,9 @@ export const CreateIndexDrawer = ({
         }
         if (hasCollation) {
             payload.collation = collationText.trim();
+        }
+        if (hasWildcardProjection) {
+            payload.wildcardProjection = wildcardProjectionText.trim();
         }
         return payload;
     };
@@ -420,7 +491,7 @@ export const CreateIndexDrawer = ({
                         appearance="subtle"
                         aria-label={l10n.t('Back')}
                         icon={<ArrowLeftRegular />}
-                        disabled={submitting}
+                        disabled={interactionDisabled}
                         onClick={() => setPage('main')}
                     />
                 </Tooltip>
@@ -430,7 +501,7 @@ export const CreateIndexDrawer = ({
                     appearance="subtle"
                     aria-label={l10n.t('Hide')}
                     icon={<PanelRightContractRegular />}
-                    disabled={submitting}
+                    disabled={interactionDisabled}
                     onClick={handleCancel}
                 />
             </Tooltip>
@@ -470,22 +541,38 @@ export const CreateIndexDrawer = ({
 
                         <DrawerSection
                             title={l10n.t('Index fields')}
-                            hint={l10n.t(
-                                'Select the field(s) to index and a type for each. Add more fields to build a compound index.',
-                            )}
+                            hint={
+                                wildcardEnabled
+                                    ? l10n.t('The wildcard key is generated from the scope in Advanced settings.')
+                                    : l10n.t(
+                                          'Select the field(s) to index and a type for each. Add more fields to build a compound index.',
+                                      )
+                            }
                         >
                             <div className="indexFieldsList">
                                 {fields.map((draft) => (
                                     <div key={draft.id} className="fieldRow">
-                                        <FieldNameCombobox
-                                            value={draft.field}
-                                            suggestions={fieldSuggestions}
-                                            onChange={(v) => updateField(draft.id, { field: v })}
-                                        />
+                                        {wildcardEnabled ? (
+                                            <Input
+                                                className="fieldGrow generatedWildcardKey"
+                                                value={draft.field}
+                                                readOnly
+                                                disabled={interactionDisabled}
+                                                aria-label={l10n.t('Generated wildcard index key')}
+                                            />
+                                        ) : (
+                                            <FieldNameCombobox
+                                                value={draft.field}
+                                                suggestions={fieldSuggestions}
+                                                disabled={interactionDisabled}
+                                                onChange={(v) => updateField(draft.id, { field: v })}
+                                            />
+                                        )}
                                         <Dropdown
                                             className="fieldType"
                                             selectedOptions={[draft.type]}
                                             value={typeLabels.find((t) => t.value === draft.type)?.label ?? ''}
+                                            disabled={wildcardEnabled || interactionDisabled}
                                             onOptionSelect={(_, data) => {
                                                 if (data.optionValue) {
                                                     updateField(draft.id, {
@@ -511,7 +598,11 @@ export const CreateIndexDrawer = ({
                                          */}
                                         {fields.length <= 1 ? (
                                             <Tooltip
-                                                content={l10n.t('Clear field')}
+                                                content={
+                                                    wildcardEnabled
+                                                        ? l10n.t('The wildcard key is generated from its scope.')
+                                                        : l10n.t('Clear field')
+                                                }
                                                 relationship="description"
                                                 withArrow
                                             >
@@ -520,6 +611,7 @@ export const CreateIndexDrawer = ({
                                                     size="small"
                                                     icon={<ArrowResetRegular />}
                                                     aria-label={l10n.t('Clear field')}
+                                                    disabled={wildcardEnabled || interactionDisabled}
                                                     onClick={() => clearField(draft.id)}
                                                 />
                                             </Tooltip>
@@ -534,6 +626,7 @@ export const CreateIndexDrawer = ({
                                                     size="small"
                                                     icon={<DeleteRegular />}
                                                     aria-label={l10n.t('Remove field')}
+                                                    disabled={wildcardEnabled || interactionDisabled}
                                                     onClick={() => removeField(draft.id)}
                                                 />
                                             </Tooltip>
@@ -542,7 +635,13 @@ export const CreateIndexDrawer = ({
                                 ))}
                             </div>
                             <div>
-                                <Button appearance="subtle" size="small" icon={<AddRegular />} onClick={addField}>
+                                <Button
+                                    appearance="subtle"
+                                    size="small"
+                                    icon={<AddRegular />}
+                                    disabled={wildcardEnabled || interactionDisabled}
+                                    onClick={addField}
+                                >
                                     {l10n.t('Add field (compound)')}
                                 </Button>
                             </div>
@@ -555,24 +654,38 @@ export const CreateIndexDrawer = ({
                             <div className="typeOptions">
                                 <OptionRow
                                     label={l10n.t('Unique - rejects duplicate values')}
-                                    checked={unique}
-                                    onToggle={setUnique}
+                                    checked={unique && !wildcardEnabled}
+                                    disabled={wildcardEnabled || interactionDisabled}
+                                    disabledReason={
+                                        wildcardEnabled
+                                            ? l10n.t('Unique is not available for wildcard indexes.')
+                                            : undefined
+                                    }
+                                    onToggle={(checked) => setForm((prev) => ({ ...prev, unique: checked }))}
                                 />
                                 <OptionRow
                                     label={l10n.t('Sparse - only indexes documents that contain the field')}
                                     checked={sparse && !sparseDisabled}
-                                    disabled={sparseDisabled}
-                                    disabledReason={l10n.t(
-                                        'Sparse is not available together with a partial filter expression.',
-                                    )}
-                                    onToggle={setSparse}
+                                    disabled={sparseDisabled || interactionDisabled}
+                                    disabledReason={
+                                        wildcardEnabled
+                                            ? l10n.t('Sparse is not available for wildcard indexes.')
+                                            : l10n.t(
+                                                  'Sparse is not available together with a partial filter expression.',
+                                              )
+                                    }
+                                    onToggle={(checked) => setForm((prev) => ({ ...prev, sparse: checked }))}
                                 />
                                 <OptionRow
                                     label={l10n.t('TTL - auto-deletes documents after a set age')}
                                     checked={ttlActive}
-                                    disabled={!isSingleBTree}
-                                    disabledReason={l10n.t('TTL Requires a single ascending or descending field.')}
-                                    onToggle={setTtlEnabled}
+                                    disabled={wildcardEnabled || !isSingleBTree || interactionDisabled}
+                                    disabledReason={
+                                        wildcardEnabled
+                                            ? l10n.t('TTL is not available for wildcard indexes.')
+                                            : l10n.t('TTL requires a single ascending or descending field.')
+                                    }
+                                    onToggle={(checked) => setForm((prev) => ({ ...prev, ttlEnabled: checked }))}
                                 >
                                     {ttlActive && (
                                         <Field
@@ -589,7 +702,14 @@ export const CreateIndexDrawer = ({
                                                 type="number"
                                                 min={1}
                                                 value={ttlSeconds}
-                                                onChange={(e) => setTtlSeconds(e.target.value)}
+                                                disabled={interactionDisabled}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        ttlSeconds: e.target.value,
+                                                        ttlConfigured: true,
+                                                    }))
+                                                }
                                             />
                                         </Field>
                                     )}
@@ -597,14 +717,16 @@ export const CreateIndexDrawer = ({
                                 <OptionRow
                                     label={l10n.t('Name - use a custom index name')}
                                     checked={nameEnabled}
-                                    onToggle={setNameEnabled}
+                                    disabled={interactionDisabled}
+                                    onToggle={(checked) => setForm((prev) => ({ ...prev, nameEnabled: checked }))}
                                 >
                                     {nameEnabled && (
                                         <Field>
                                             <Input
                                                 value={name}
                                                 placeholder={l10n.t('Index name')}
-                                                onChange={(e) => setName(e.target.value)}
+                                                disabled={interactionDisabled}
+                                                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
                                             />
                                         </Field>
                                     )}
@@ -612,14 +734,19 @@ export const CreateIndexDrawer = ({
                             </div>
                         </DrawerSection>
 
-                        <button type="button" className="advancedEntry" onClick={() => setPage('advanced')}>
+                        <button
+                            type="button"
+                            className="advancedEntry"
+                            disabled={interactionDisabled}
+                            onClick={() => setPage('advanced')}
+                        >
                             <SettingsRegular className="advancedEntryIcon" />
                             <span className="advancedEntryText">
                                 <span className="advancedEntryTitle">{l10n.t('Advanced settings')}</span>
                                 <span className="advancedEntrySub">
                                     {advancedSummary !== ''
                                         ? advancedSummary
-                                        : l10n.t('Partial filter expression, custom collation')}
+                                        : l10n.t('Wildcard index, partial filter expression, custom collation')}
                                 </span>
                             </span>
                             {advancedHasContent ? (
@@ -634,13 +761,118 @@ export const CreateIndexDrawer = ({
                 ) : (
                     <div className="createIndexForm">
                         <DrawerSection
+                            title={l10n.t('Wildcard index')}
+                            hint={l10n.t(
+                                'Create one ascending wildcard key for all fields or for fields below a parent path.',
+                            )}
+                            example={'$**  ·  metadata.$**'}
+                        >
+                            <div className="typeOptions wildcardOptions">
+                                <OptionRow
+                                    label={l10n.t('Wildcard index')}
+                                    checked={wildcardEnabled}
+                                    disabled={interactionDisabled}
+                                    disabledReason={
+                                        wildcardConfirmationPending
+                                            ? l10n.t('Waiting for confirmation in VS Code.')
+                                            : undefined
+                                    }
+                                    onToggle={(checked) => void handleWildcardToggle(checked)}
+                                >
+                                    {wildcardEnabled && (
+                                        <div className="wildcardSettings">
+                                            <Field label={l10n.t('Scope')}>
+                                                <RadioGroup
+                                                    value={wildcardScope}
+                                                    disabled={interactionDisabled}
+                                                    aria-label={l10n.t('Wildcard index scope')}
+                                                    onChange={(_, data) => {
+                                                        const scope = data.value;
+                                                        if (scope === 'all' || scope === 'path') {
+                                                            setForm((prev) => setWildcardScope(prev, scope));
+                                                        }
+                                                    }}
+                                                >
+                                                    <Radio value="all" label={l10n.t('All fields')} />
+                                                    <Radio value="path" label={l10n.t('Fields below a path')} />
+                                                </RadioGroup>
+                                            </Field>
+
+                                            {wildcardScope === 'path' && (
+                                                <Field
+                                                    label={l10n.t('Parent path')}
+                                                    required
+                                                    validationState={wildcardPathValid ? 'none' : 'error'}
+                                                    validationMessage={
+                                                        wildcardPath.includes('$**')
+                                                            ? l10n.t(
+                                                                  'Enter a parent path without $**. It is added automatically.',
+                                                              )
+                                                            : l10n.t('Enter a non-empty parent path.')
+                                                    }
+                                                    hint={l10n.t('For example, metadata creates metadata.$**.')}
+                                                >
+                                                    <Input
+                                                        value={wildcardPath}
+                                                        disabled={interactionDisabled}
+                                                        placeholder={l10n.t('metadata')}
+                                                        aria-label={l10n.t('Wildcard parent path')}
+                                                        onChange={(event) =>
+                                                            setForm((prev) => setWildcardPath(prev, event.target.value))
+                                                        }
+                                                        onBlur={() => {
+                                                            if (!wildcardPath.includes('$**')) {
+                                                                setForm((prev) =>
+                                                                    setWildcardPath(
+                                                                        prev,
+                                                                        normalizeWildcardParentPath(prev.wildcardPath),
+                                                                    ),
+                                                                );
+                                                            }
+                                                        }}
+                                                    />
+                                                </Field>
+                                            )}
+
+                                            <div className="wildcardProjectionField">
+                                                <div className="wildcardProjectionLabel">
+                                                    {l10n.t('Wildcard projection (optional)')}
+                                                </div>
+                                                <div className="optionDescription">
+                                                    {l10n.t(
+                                                        'Limit which fields the wildcard index includes. Enter a JSON object.',
+                                                    )}
+                                                </div>
+                                                <code className="drawerSectionExample">
+                                                    {"{ name: 1, 'metadata.category': 1 }"}
+                                                </code>
+                                                <JsonInputEditor
+                                                    value={wildcardProjectionText}
+                                                    readOnly={interactionDisabled}
+                                                    onChange={(value) =>
+                                                        setForm((prev) => ({
+                                                            ...prev,
+                                                            wildcardProjectionText: value,
+                                                        }))
+                                                    }
+                                                    ariaLabel={l10n.t('Wildcard projection: enter a JSON object')}
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                </OptionRow>
+                            </div>
+                        </DrawerSection>
+
+                        <DrawerSection
                             title={l10n.t('Partial filter expression')}
                             hint={l10n.t('Only index documents that match this filter. Enter a JSON object.')}
                             example={"{ status: { $eq: 'active' } }"}
                         >
                             <JsonInputEditor
                                 value={partialText}
-                                onChange={setPartialText}
+                                readOnly={interactionDisabled}
+                                onChange={(value) => setForm((prev) => ({ ...prev, partialText: value }))}
                                 ariaLabel={l10n.t('Partial filter expression: enter a JSON object')}
                             />
                         </DrawerSection>
@@ -652,7 +884,8 @@ export const CreateIndexDrawer = ({
                         >
                             <JsonInputEditor
                                 value={collationText}
-                                onChange={setCollationText}
+                                readOnly={interactionDisabled}
+                                onChange={(value) => setForm((prev) => ({ ...prev, collationText: value }))}
                                 ariaLabel={l10n.t('Collation: enter a JSON object')}
                             />
                         </DrawerSection>
@@ -662,7 +895,12 @@ export const CreateIndexDrawer = ({
 
             <div className="createIndexDrawerFooter">
                 {page === 'advanced' ? (
-                    <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => setPage('main')}>
+                    <Button
+                        appearance="secondary"
+                        icon={<ArrowLeftRegular />}
+                        disabled={interactionDisabled}
+                        onClick={() => setPage('main')}
+                    >
                         {l10n.t('Back to Create Index')}
                     </Button>
                 ) : (
@@ -697,7 +935,7 @@ export const CreateIndexDrawer = ({
                         <Button
                             appearance="secondary"
                             icon={<ArrowResetRegular />}
-                            disabled={submitting}
+                            disabled={interactionDisabled}
                             onClick={reset}
                         >
                             {l10n.t('Reset form')}

@@ -39,20 +39,20 @@
  * =============================================================================
  */
 
-import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
 import { ClustersClient, type IndexItemModel } from '../../../documentdb/ClustersClient';
-import { type IndexSpecification } from '../../../documentdb/LlmEnhancedFeatureApis';
 import { PlaygroundCommandIds } from '../../../documentdb/playground/constants';
 import { SchemaStore } from '../../../documentdb/SchemaStore';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
+import { confirmEnableWildcardIndex } from '../../../utils/dialogs/confirmEnableWildcardIndex';
 import { confirmIndexAction } from '../../../utils/dialogs/confirmIndexAction';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
-import { type CreateIndexInput, type FieldIndexType, type IndexRow } from './types';
+import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema } from './indexCreation';
+import { type IndexRow } from './types';
 
 export type RouterContext = BaseRouterContext & {
     /** Stable cluster identifier for cache/client lookups. */
@@ -65,47 +65,24 @@ export type RouterContext = BaseRouterContext & {
     collectionName: string;
 };
 
-/**
- * Zod schemas for tRPC input validation. Defining them once at module scope
- * keeps the procedure declarations terse and re-uses the same instance for
- * every call.
- */
-const FieldIndexTypeSchema = z.enum(['asc', 'desc', 'text', '2dsphere', 'hashed']);
-
-const CreateIndexInputSchema = z
+const EnableWildcardIndexConfirmationDetailsSchema = z
     .object({
-        fields: z
-            .array(
-                z.object({
+        fields: z.array(
+            z
+                .object({
                     field: z.string().min(1),
-                    type: FieldIndexTypeSchema,
-                }),
-            )
-            .min(1),
-        name: z
-            .string()
-            .refine((name) => name.trim() !== '*', { message: l10n.t('The index name "*" is reserved.') })
-            .optional(),
-        unique: z.boolean().optional(),
-        sparse: z.boolean().optional(),
-        expireAfterSeconds: z.number().int().positive().optional(),
-        partialFilterExpression: z.string().optional(),
-        collation: z.string().optional(),
+                    type: z.enum(['asc', 'desc', 'text', '2dsphere', 'hashed']),
+                })
+                .strict(),
+        ),
+        clearUnique: z.boolean(),
+        clearSparse: z.boolean(),
+        clearTtl: z.boolean(),
+        retainName: z.boolean(),
+        retainPartialFilter: z.boolean(),
+        retainCollation: z.boolean(),
     })
-    .superRefine((input, ctx) => {
-        const fieldNames = new Set<string>();
-        input.fields.forEach((entry, index) => {
-            const fieldName = entry.field.trim();
-            if (fieldNames.has(fieldName)) {
-                ctx.addIssue({
-                    code: z.ZodIssueCode.custom,
-                    path: ['fields', index, 'field'],
-                    message: l10n.t('Duplicate index field.'),
-                });
-            }
-            fieldNames.add(fieldName);
-        });
-    });
+    .strict();
 
 /** Convert a raw IndexItemModel to the IndexRow shape used by the webview. */
 function toIndexRow(
@@ -142,116 +119,6 @@ function asRecord(value: unknown): Record<string, unknown> | undefined {
     return typeof value === 'object' && value !== null && !Array.isArray(value)
         ? (value as Record<string, unknown>)
         : undefined;
-}
-
-/**
- * Map a per-field index type onto its wire-level key value. Ordinary keys use
- * ±1; the special types use their sentinel strings.
- */
-function fieldTypeToKeyValue(type: FieldIndexType): number | string {
-    switch (type) {
-        case 'asc':
-            return 1;
-        case 'desc':
-            return -1;
-        case 'text':
-            return 'text';
-        case '2dsphere':
-            return '2dsphere';
-        case 'hashed':
-            return 'hashed';
-    }
-}
-
-/**
- * Parse a raw JSON option string from the drawer into a plain object using the
- * loose shell-BSON parser (unquoted keys, single quotes, BSON constructors are
- * all accepted). Empty input yields `undefined`; anything that doesn't parse to
- * a plain object throws a localized error surfaced by the create mutation.
- */
-function parseOptionObject(text: string | undefined, label: string): Record<string, unknown> | undefined {
-    const trimmed = text?.trim();
-    if (!trimmed) {
-        return undefined;
-    }
-    let parsed: unknown;
-    try {
-        parsed = parseShellBSON(trimmed, { mode: ParseMode.Loose });
-    } catch (error) {
-        const message = error instanceof Error ? error.message : String(error);
-        throw new Error(l10n.t('Invalid {0}: {1}', label, message));
-    }
-    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-        throw new Error(l10n.t('Invalid {0}: expected a JSON object.', label));
-    }
-    return parsed as Record<string, unknown>;
-}
-
-/**
- * Build an `IndexSpecification` from the drawer input. Each field carries its
- * own type (direction or sentinel); TTL, unique, sparse, partial filter and
- * collation are index-level options applied to the whole index.
- */
-function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
-    const key: Record<string, number | string> = {};
-
-    for (const entry of input.fields) {
-        key[entry.field] = fieldTypeToKeyValue(entry.type);
-    }
-
-    const spec: IndexSpecification = { key };
-    if (input.name && input.name.trim().length > 0) {
-        spec.name = input.name.trim();
-    }
-    if (input.unique) {
-        spec.unique = true;
-    }
-    if (input.sparse) {
-        spec.sparse = true;
-    }
-    if (typeof input.expireAfterSeconds === 'number') {
-        spec.expireAfterSeconds = input.expireAfterSeconds;
-    }
-    const partialFilterExpression = parseOptionObject(
-        input.partialFilterExpression,
-        l10n.t('partial filter expression'),
-    );
-    if (partialFilterExpression) {
-        spec.partialFilterExpression = partialFilterExpression;
-    }
-    const collation = parseOptionObject(input.collation, l10n.t('collation'));
-    if (collation) {
-        spec.collation = collation;
-    }
-    return spec;
-}
-
-/**
- * Render a `createIndex` invocation as a shell/playground command string built
- * from the same spec used for the direct create, so the prepared command is
- * identical to what the drawer would submit. The options argument is omitted
- * when the index has no index-level options.
- */
-function buildCreateIndexShellCommand(collectionName: string, input: CreateIndexInput): string {
-    const spec = buildIndexSpec(input);
-    const { key, partialFilterExpression, collation, ...serializableOptions } = spec;
-    const collection = JSON.stringify(collectionName);
-    const keyJson = JSON.stringify(key);
-    const optionEntries = Object.entries(serializableOptions).map(
-        ([option, value]) => `${JSON.stringify(option)}:${JSON.stringify(value)}`,
-    );
-    const partialFilterText = input.partialFilterExpression?.trim();
-    if (partialFilterExpression && partialFilterText) {
-        optionEntries.push(`${JSON.stringify('partialFilterExpression')}:${partialFilterText}`);
-    }
-    const collationText = input.collation?.trim();
-    if (collation && collationText) {
-        optionEntries.push(`${JSON.stringify('collation')}:${collationText}`);
-    }
-    if (optionEntries.length === 0) {
-        return `db.getCollection(${collection}).createIndex(${keyJson})`;
-    }
-    return `db.getCollection(${collection}).createIndex(${keyJson}, {${optionEntries.join(',')}})`;
 }
 
 export const indexViewRouter = router({
@@ -377,6 +244,21 @@ export const indexViewRouter = router({
         }
         return Array.from(unique).sort();
     }),
+
+    confirmEnableWildcardIndex: publicProcedureWithTelemetry
+        .input(EnableWildcardIndexConfirmationDetailsSchema)
+        .mutation(async ({ input, ctx }) => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+            const confirmed = await confirmEnableWildcardIndex(input);
+
+            myCtx.actionContext.telemetry.measurements.fieldCount = input.fields.length;
+            myCtx.actionContext.telemetry.properties.clearsUnique = String(input.clearUnique);
+            myCtx.actionContext.telemetry.properties.clearsSparse = String(input.clearSparse);
+            myCtx.actionContext.telemetry.properties.clearsTtl = String(input.clearTtl);
+            myCtx.actionContext.telemetry.properties.confirmed = String(confirmed);
+
+            return { confirmed };
+        }),
 
     /**
      * BACKEND INTEGRATION POINT — createIndex
