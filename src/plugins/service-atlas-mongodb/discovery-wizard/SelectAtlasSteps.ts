@@ -334,10 +334,10 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
 function getClusterStateLabel(state: AtlasClusterState): string | undefined {
     const labels: Record<AtlasClusterState, string | undefined> = {
         IDLE: undefined,
-        CREATING: vscode.l10n.t('Creating...'),
-        UPDATING: vscode.l10n.t('Updating...'),
-        REPAIRING: vscode.l10n.t('Repairing...'),
-        DELETING: vscode.l10n.t('Deleting...'),
+        CREATING: vscode.l10n.t('Creating…'),
+        UPDATING: vscode.l10n.t('Updating…'),
+        REPAIRING: vscode.l10n.t('Repairing…'),
+        DELETING: vscode.l10n.t('Deleting…'),
         UNKNOWN: vscode.l10n.t('Unknown state'),
     };
 
