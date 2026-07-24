@@ -25,7 +25,7 @@ finding reframes the whole feature:
 > each expose a _different subset_ of projects, and the org's full project set is their
 > **union**. The data model must therefore key orgs/projects by Atlas ID and merge across
 > credentials — see [§3.1](#31-credential-scoping--the-load-bearing-fact) and
-> [§7 Q5](#7-answers-to-the-seven-poc-questions-ledger-step-0).
+> [§8 Q5](#8-answers-to-the-seven-poc-questions-ledger-step-0).
 
 Recommended shape:
 
@@ -41,9 +41,9 @@ Recommended shape:
 4. **Parallel fan-out** across credentials (bounded by a concurrency limiter, cap ~4–5) is
    safe and ~8× faster than sequential — proven by [Experiment 3](#experiment-3--parallel-vs-sequential-fan-out).
 
-**Effort:** medium. See [§10 effort & decision gates](#10-effort-estimate-decision-gates--scrap-criteria).
+**Effort:** medium. See [§11 effort & decision gates](#11-effort-estimate-decision-gates--scrap-criteria).
 **Confidence in feasibility:** high (>90%). The two remaining unknowns both require a live
-Atlas account to close and are called out as [live experiments](#92-experiments-requiring-a-live-atlas-account-deferred).
+Atlas account to close and are called out as [live experiments](#102-experiments-requiring-a-live-atlas-account-deferred).
 
 ---
 
@@ -359,13 +359,17 @@ how MongoDB's own tools behave:
   must **handle secret expiry gracefully** (detect it, surface a clean "re-enter credentials"
   recovery — the existing per-credential error nodes in §6 already cover this). Otherwise the
   recommended method becomes the more annoying one for a long-lived desktop tool.
-- **Strategic note (out of scope for this POC, worth a follow-up):** the genuinely _best_ single
-  path for a **human-facing** UI tool is the interactive **`UserAccount` browser-OAuth device
-  flow** (what the Atlas UI and `atlas auth login` use): no stored secret, auto-refreshing
-  session, and it spans **all** of the user's orgs/projects automatically — which would largely
-  dissolve the multi-credential problem this document addresses. It is a larger build (device
-  auth + refresh) and is **not** what the extension implements today, but it is the direction
-  that would let a future version reduce three auth methods to one great one.
+- **Strategic note — the "ideal" third path is currently _blocked_, not just deferred:** the
+  genuinely best single path for a **human-facing** UI tool would be the interactive
+  **`UserAccount` browser-OAuth device flow** (what the Atlas UI and `atlas auth login` use):
+  no stored secret, auto-refreshing session, and it spans **all** of the user's orgs/projects
+  automatically — which would largely dissolve the multi-credential problem this document
+  addresses. **However, there is no official way for a third-party application (this extension)
+  to register as an OAuth app with Atlas**, so this flow **cannot be implemented today** — it is
+  blocked on MongoDB providing public app registration, not merely on our effort. Until that
+  exists, the two programmatic methods above are the only viable options, which is _why_ the
+  multi-credential model and its UX ([§7](#7-credential-management--tree-ux-proposals)) are
+  necessary rather than optional.
 
 ---
 
@@ -416,7 +420,220 @@ demonstrates the concrete difference.
 
 ---
 
-## 7. Answers to the seven POC questions (ledger §Step 0)
+## 7. Credential management & tree UX (proposals)
+
+> **Scope:** the **happy path is 1–4 credential sets**, not 100+. Every proposal below optimises
+> for a handful of credentials; large-fleet concerns (search, grouping, lazy loading,
+> virtualization) are explicitly out of scope and flagged where they would eventually bite.
+
+Two surfaces are involved and should stay **separate**:
+
+1. **Management** — _"what credentials do I have; add / remove / fix them."_ Lives **outside the
+   tree**, in an Azure-style QuickPick that launches the item-#6 webview to add/edit.
+2. **Discovery** — _"show me my orgs / projects / clusters."_ Lives **in the tree**. The open UX
+   question is _where per-credential errors surface_ without imposing a permanent credential
+   level on the common single-credential user.
+
+### 7.1 Management surface — Azure-style QuickPick + webview (recommended)
+
+Mirrors [`configureAzureCredentials`](../../../../src/plugins/api-shared/azure/credentialsManagement/configureAzureCredentials.ts).
+Entry points: the root inline **gear** (existing `manageCredentials` command), the root context
+menu, and the on-error tree nodes (§7.3). The QuickPick lists saved credentials with a method
+icon and live status:
+
+```text
+Manage MongoDB Atlas Credentials
+──────────────────────────────────────────────────────────
+$(key)    Acme Corp — API Key             Signed in
+$(cloud)  Beta Ltd — Service Account      ⚠ Secret expired
+$(cloud)  Gamma Inc — Service Account     Signed in
+──────────────────────────────────────────────────────────
+$(add)      Add a credential…
+$(sign-out) Sign out of all
+$(close)    Exit
+```
+
+Selecting a credential opens a per-item action menu (Azure's `TenantActionStep` shape):
+
+```text
+Beta Ltd — Service Account
+──────────────────────────────────────────────────────────
+$(refresh)    Retry
+$(key)        Update credentials…     ▸ opens webview (edit)
+$(trash)      Remove                  ▸ deletes only this credential's secrets
+$(arrow-left) Back
+```
+
+**Add** launches the item-#6 webview, which gains a **method-choice first step** (the reviewer's
+request) — the natural home for the "which should I use?" guidance from §5.7:
+
+```text
+┌ Add a MongoDB Atlas credential ─────────────────────────────┐
+│  How do you want to connect?                                │
+│                                                             │
+│   ◉  Service Account   (recommended)                        │
+│      OAuth2 client ID + secret. More secure; the secret     │
+│      expires (8h–365d) and must be rotated periodically.    │
+│                                                             │
+│   ○  API Key   (legacy · simplest)                          │
+│      Public + private key. Never expires — good for a       │
+│      personal, set-and-forget setup.                        │
+│                                                             │
+│                               [ Cancel ]     [ Continue ▸ ] │
+└─────────────────────────────────────────────────────────────┘
+        │ Continue
+        ▼
+   Step 2: the method-specific form (existing AtlasCredentialsView),
+           with inline "where to find this in Atlas" help + validation.
+```
+
+Keeping the chooser **inside** the webview (not a separate QuickPick) makes the whole add-flow one
+guided surface, and lets the toggle live-swap the form fields + help text.
+
+### 7.2 The core tension
+
+- A **permanent credential level** at the top of the tree makes error isolation trivial (each
+  credential is a node; its failure stays local) **but** adds a level the common 1-credential
+  user never needed, and duplicates the management QuickPick. _Not preferred._
+- Keeping credentials **out of the tree** yields a clean org → project → cluster view **but**
+  needs a deliberate answer to "where does a broken credential show?"
+
+Recommended resolution: **Proposal A as the default + Proposal B as an opt-in toggle; Proposal C
+rejected as a default.**
+
+```mermaid
+flowchart TD
+    A["Root getChildren()"] --> B{"View mode"}
+    B -->|"Grouped by org (default)"| C["Merge snapshot by orgId"]
+    B -->|"By credential (opt-in toggle)"| D["One node per credential"]
+    C --> E{"Any credential errored?"}
+    E -->|"no"| F["org -> project -> cluster only<br/>(credentials invisible)"]
+    E -->|"yes"| G["healthy orgs<br/>+ one attention node per broken credential"]
+    D --> H["each credential node holds<br/>its orgs, or its error children"]
+```
+
+### 7.3 Proposal A — merged org tree; credentials surface **only on error** (recommended default)
+
+Credentials are invisible on the happy path. The **org level is the natural top level** (each
+credential resolves to one org; §3.1), and projects merge across credentials by `orgId`
+(§3.1, §8 Q5). A credential becomes visible **only when it fails**, as a single actionable
+"attention" node at the root.
+
+**Happy path (3 healthy credentials → 3 orgs):**
+
+```text
+🌩 MongoDB Atlas                         Signed in · 3 credentials
+├─ 🏢 Acme Corp                          via API Key
+│  └─ 📁 Payments
+│     └─ 🍃 payments-prod   IDLE
+├─ 🏢 Beta Ltd                           via Service Account
+│  ├─ 📁 Web
+│  │  └─ 🍃 web-cluster     IDLE
+│  └─ 📁 Analytics
+│     └─ 🍃 analytics-rs    IDLE
+└─ 🏢 Gamma Inc                          via Service Account
+   └─ 📁 Research
+      └─ 🍃 research-flex   IDLE
+```
+
+`via <method>` is a muted description (or tooltip) — cheap identity signal at this scale; drop it
+if it reads as noise.
+
+**Partial failure (Beta's SA secret expired → 401; Gamma IP-denied → 403; Acme healthy):**
+
+```text
+🌩 MongoDB Atlas                         2 of 3 credentials need attention
+├─ 🏢 Acme Corp                          via API Key
+│  └─ 📁 Payments
+│     └─ 🍃 payments-prod   IDLE
+├─ ⚠ Beta Ltd — session expired          Service Account
+│  ├─ ↻  Click here to retry
+│  └─ 🔑 Click here to update credentials
+└─ ⚠ Gamma Inc — access denied           Service Account
+   └─ ↻  Click here to retry             (check IP access list / roles)
+```
+
+- A broken credential **collapses** to a labelled attention node (using its **cached** org
+  name/label; if it never succeeded, its user label or key/clientId prefix — §5.5) carrying the
+  actionable children from §6.2. Healthy orgs render normally beside it.
+- **Authoritative-empty is _not_ an error** (`200 []`, §3.4): the org still renders, with a muted
+  info child, never a retry node:
+
+```text
+├─ 🏢 Delta Co                           via API Key
+│  └─ ℹ No projects visible to this credential
+```
+
+- The root **description summarises degradation** ("2 of 3 credentials need attention") so the
+  user notices without a modal per credential (§6.2). Modals stay reserved for the single-
+  credential empty case (item #3).
+
+**Why it fits 1–4 credentials:** at most a handful of top-level nodes; attention nodes are rare
+and self-explanatory; no grouping or search needed. (At 100+ credentials the root would grow
+long — out of scope; that scale would want Proposal B/C's credential grouping by default.)
+
+### 7.4 Proposal B — optional "Group by credential" view mode (opt-in power view)
+
+Reuse the Kubernetes tree/list **view-mode toggle** (item #8): default = Proposal A (grouped by
+org); toggled = credential-rooted (Proposal C's shape, but **opt-in**). Power users who want
+strict per-credential isolation get it; everyone else keeps the clean default.
+
+```text
+🌩 MongoDB Atlas          [ ⇄ Group by: Credential ▾ ]
+├─ 🔑 Acme key · API Key                 Signed in
+│  └─ 🏢 Acme Corp › 📁 Payments › 🍃 payments-prod
+├─ 🌩 Beta SA · Service Account          ⚠ session expired
+│  ├─ ↻  Click here to retry
+│  └─ 🔑 Click here to update credentials
+└─ 🌩 Gamma SA · Service Account         Signed in
+   └─ 🏢 Gamma Inc › 📁 Research › 🍃 research-flex
+```
+
+Same state key + inline toggle command as
+[switchKubernetesViewMode](../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts).
+
+### 7.5 Proposal C — permanent credential level (connection-manager; **rejected as default**)
+
+```text
+🌩 MongoDB Atlas
+├─ 🔑 Acme key
+│  └─ 🏢 Acme Corp › 📁 Payments › 🍃 payments-prod
+├─ 🌩 Beta SA
+│  └─ ⚠ session expired · ↻ retry · 🔑 update credentials
+└─ 🌩 Gamma SA
+   └─ 🏢 Gamma Inc › 📁 Research › 🍃 research-flex
+```
+
+- ✅ Trivial error isolation; no org-merge logic; simplest to build.
+- ❌ Adds a level the **common 1-credential** user never needed — the single case becomes
+  `MongoDB Atlas › my-key › org › project › cluster` (one extra hop to every cluster).
+- ❌ Duplicates the management QuickPick's job inside the tree and sinks the real resources a
+  level deeper.
+- → It is exactly **Proposal B's toggle made mandatory.** Ship it _as_ B's opt-in mode, never as
+  the default.
+
+### 7.6 Recommendation & partial-error mapping
+
+**Default to Proposal A; offer Proposal B's toggle; do not make Proposal C the default.** This
+honours the stated preference (credentials managed via the QuickPick, not a permanent tree level)
+while giving every failure a concrete, actionable home. Error → node mapping at happy-path scale,
+building on §6.2:
+
+| Per-credential outcome | Proposal A (default, grouped) | Proposal B/C (by credential) |
+| --- | --- | --- |
+| healthy | org → projects → clusters | credential → org → … |
+| `ok-empty` (`200 []`) | org node + muted "No projects visible" | credential node + same muted child |
+| `401` expired / rejected | ⚠ attention node + **retry** + **update credentials** | error children under the credential node |
+| `403` forbidden (IP / roles) | ⚠ attention node + **retry** (+ IP/roles hint) | same, under the credential node |
+| `429` rate-limited | transient ⚠ + auto-retry (honour `Retry-After`) | same |
+| whole fleet failed | root shows only attention nodes + summary | root shows only credential error nodes |
+
+Root-level actions (context menu / inline): **Manage credentials** (opens the §7.1 QuickPick),
+**Add credential**, **Refresh**. Removal deletes only that credential's secrets and its nodes.
+
+---
+
+## 8. Answers to the seven POC questions (ledger §Step 0)
 
 1. **Stable non-secret ID + secrets in SecretStorage via StorageService?** ✅ Yes — `randomUUID`
    record ID, secrets in `secrets[]`, exactly the K8s `sourceStore` shape (§5.1).
@@ -435,7 +652,7 @@ demonstrates the concrete difference.
    remembers the **set of credentials** that can reach it and picks the first healthy one as the
    action owner. In **list mode / wizard**, dedup clusters by `clusterId` (or SRV string) the
    same way. Alternative (simpler for POC): no merge, group strictly per credential — accept that
-   the same org/project may appear under two credentials. (See [alternatives](#11-alternatives).)
+   the same org/project may appear under two credentials. (See [alternatives](#12-alternatives).)
 6. **Which credential owns a node / subsequent request, retained through refresh/retry/connect?**
    ✅ Every snapshot row carries `credentialId`; tree items store it; the wizard threads it into
    connection creation. Stable because the ID is secret-independent (§5.1).
@@ -445,7 +662,7 @@ demonstrates the concrete difference.
 
 ---
 
-## 8. Reference architecture (diagram)
+## 9. Reference architecture (diagram)
 
 ```mermaid
 flowchart TD
@@ -463,9 +680,9 @@ flowchart TD
 
 ---
 
-## 9. Experiments
+## 10. Experiments
 
-### 9.1 Experiments performed in isolation (no live account, no secrets)
+### 10.1 Experiments performed in isolation (no live account, no secrets)
 
 Run with `node experiment.mjs` (throwaway script kept out of the repo). Full script text is in
 [Appendix A](#appendix-a--experiment-script). Verbatim results:
@@ -514,7 +731,7 @@ per-credential. Validates §5.4.
 **Finding:** rate limiting is a non-issue for discovery; the limiter and 429 handling are
 defensive only. Validates §3.4.
 
-### 9.2 Experiments requiring a live Atlas account (deferred)
+### 10.2 Experiments requiring a live Atlas account (deferred)
 
 These cannot be run autonomously (no credentials, and the security policy forbids routing
 secrets). They are the only feasibility gaps left; each is cheap once an account exists.
@@ -525,7 +742,7 @@ secrets). They are the only feasibility gaps left; each is cheap once an account
 | L2 | A valid credential with a non-allow-listed IP returns **403**, not 401 | Create key, omit caller IP from access list, call `/groups` | §3.4 error taxonomy |
 | L3 | `>100` projects paginate as documented via `links.next` | Point at an org with >100 projects (or mock via `itemsPerPage=1`) | §3.3 pagination fix |
 | L4 | SA token mint under concurrent refresh has no surprising throttle on `oauth/token` | Fire N parallel client_credentials mints | §5.6 |
-| L5 | Two least-privilege credentials in the **same** org expose overlapping/disjoint project subsets (merge/union path) | Add 2 scoped keys to 1 org with different project roles; run `listAll()`; confirm the union merges by `projectId` | §7 Q5 |
+| L5 | Two least-privilege credentials in the **same** org expose overlapping/disjoint project subsets (merge/union path) | Add 2 scoped keys to 1 org with different project roles; run `listAll()`; confirm the union merges by `projectId` | §8 Q5 |
 
 > **Recommendation:** run L1 and L2 first — they gate the org/project attribution model. L1 is
 > expected to confirm the one-org boundary **and** the role-driven project subset; L5 then
@@ -533,9 +750,9 @@ secrets). They are the only feasibility gaps left; each is cheap once an account
 
 ---
 
-## 10. Effort estimate, decision gates & scrap criteria
+## 11. Effort estimate, decision gates & scrap criteria
 
-### 10.1 Effort (relative)
+### 11.1 Effort (relative)
 
 | Slice | What | Size |
 | --- | --- | --- |
@@ -551,13 +768,13 @@ No slice is "L". The refactor (B) touches the most files but is mechanical (sing
 keyed-by-ID). The aggregation (C) is the intellectually load-bearing piece and is already
 prototyped here.
 
-### 10.2 Decision gates (build only if all hold)
+### 11.2 Decision gates (build only if all hold)
 
 1. **L1 passes** (each credential maps to one org with a stable, enumerable project subset). — _blocking_
 2. **L2 confirms 403-vs-401 distinguishability** so "empty vs broken vs forbidden" UX is real. — _blocking_
 3. Product still wants multiple orgs visible simultaneously (the whole point). — _product_
 
-### 10.3 Scrap / de-scope criteria
+### 11.3 Scrap / de-scope criteria
 
 - If L1 shows credentials cannot be stably attributed to an org **and** the same-org merge
   proves messy, **de-scope item #8's org tree** and ship item #7 as a flat, per-credential
@@ -571,7 +788,7 @@ prototyped here.
 
 ---
 
-## 11. Alternatives considered
+## 12. Alternatives considered
 
 1. **Keep one global session, add a "switch credential" command.** Cheapest, but defeats the
    reviewer's goal (see many orgs _at once_) and keeps the single-slot storage. Rejected as the
@@ -579,7 +796,7 @@ prototyped here.
 2. **No merge, always per-credential grouping.** Simplest aggregation (skip the union in Q5):
    render each credential's org/project/cluster subtree independently, so the same org/project
    may appear more than once when credentials share an org. Good **POC-stage** choice to defer
-   the merge; promote to the ID-keyed union (§7 Q5) once L5 confirms same-org overlap in practice.
+   the merge; promote to the ID-keyed union (§8 Q5) once L5 confirms same-org overlap in practice.
 3. **Bespoke secret store instead of `StorageService`.** Rejected — reinvents the K8s solution,
    more migration risk, no upside.
 4. **Background token-refresh timer.** Rejected — lazy refresh at expand time is sufficient and
@@ -589,7 +806,7 @@ prototyped here.
 
 ---
 
-## 12. Next actions
+## 13. Next actions
 
 1. Provision a scratch Atlas org (or two) and run **L1 + L2** — the only blocking unknowns.
 2. If they pass, land **slices A–C** as an internal refactor (no UX change): credential store,
@@ -604,7 +821,7 @@ prototyped here.
 
 ## Appendix A — experiment script
 
-The isolated experiment (no secrets, no network) used for §9.1. Kept out of the repo; reproduced
+The isolated experiment (no secrets, no network) used for §10.1. Kept out of the repo; reproduced
 here for auditability. Run with `node experiment.mjs` on Node ≥ 18.
 
 ```js
