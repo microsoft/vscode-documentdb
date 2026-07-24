@@ -61,13 +61,13 @@ account.
 
 ## 2. Current architecture (single-session baseline)
 
-| Concern | Today | File |
-| --- | --- | --- |
-| Session | Exactly **one** `AtlasSession` (API key _or_ SA) | [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts) |
-| Secret storage | **Fixed single-slot keys** (`atlas-mongodb.apikey.publicKey`, …) | [AtlasSessionManager.ts#L15-L20](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts#L15-L20) |
-| API client | One `AtlasApiClient` bound to one session; silent SA token refresh on 401/403 | [AtlasApiClient](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts) |
-| Tree root | Fetches `listProjects()` + `listOrganizations()` for the single session | [AtlasServiceRootItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts) |
-| Recovery UX | Per-session `sign-in` / `retry` / `update-credentials` error nodes | [AtlasServiceRootItem.ts#L136-L170](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L136-L170) |
+| Concern        | Today                                                                         | File                                                                                                                                |
+| -------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- |
+| Session        | Exactly **one** `AtlasSession` (API key _or_ SA)                              | [AtlasSessionManager](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts)                                    |
+| Secret storage | **Fixed single-slot keys** (`atlas-mongodb.apikey.publicKey`, …)              | [AtlasSessionManager.ts#L15-L20](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts#L15-L20)                 |
+| API client     | One `AtlasApiClient` bound to one session; silent SA token refresh on 401/403 | [AtlasApiClient](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts)                                               |
+| Tree root      | Fetches `listProjects()` + `listOrganizations()` for the single session       | [AtlasServiceRootItem](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts)                        |
+| Recovery UX    | Per-session `sign-in` / `retry` / `update-credentials` error nodes            | [AtlasServiceRootItem.ts#L136-L170](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts#L136-L170) |
 
 The single-slot secret keys are the structural blocker: they physically allow only one API key
 and one Service Account. Everything else (client, tree, error nodes) is already
@@ -100,12 +100,12 @@ identical for both:
 **Which projects a credential can see is decided by its _roles_, not by whether it is a key or a
 service account** ([user-roles](https://www.mongodb.com/docs/atlas/reference/user-roles/)):
 
-| Role on the credential | Projects visible via `GET /groups` |
-| --- | --- |
-| `ORG_OWNER` | _"Project Owner access to **all projects** in the organization"_ → **every** project |
-| `ORG_READ_ONLY` | _"read-only access to the settings, users, and **projects in the organization**"_ → **every** project (read-only) |
-| `ORG_MEMBER` (+ project roles) | _"can only access projects they have been **explicitly added to**"_ → **subset** |
-| project roles only (`GROUP_*`) | only the explicitly granted projects → **subset** |
+| Role on the credential         | Projects visible via `GET /groups`                                                                                |
+| ------------------------------ | ----------------------------------------------------------------------------------------------------------------- |
+| `ORG_OWNER`                    | _"Project Owner access to **all projects** in the organization"_ → **every** project                              |
+| `ORG_READ_ONLY`                | _"read-only access to the settings, users, and **projects in the organization**"_ → **every** project (read-only) |
+| `ORG_MEMBER` (+ project roles) | _"can only access projects they have been **explicitly added to**"_ → **subset**                                  |
+| project roles only (`GROUP_*`) | only the explicitly granted projects → **subset**                                                                 |
 
 **Design implications (this corrects an earlier oversimplification):**
 
@@ -123,15 +123,15 @@ service account** ([user-roles](https://www.mongodb.com/docs/atlas/reference/use
 
 ### 3.2 Authentication mechanics (already implemented, must go per-credential)
 
-| Method | Mechanism | Expiry | Refresh |
-| --- | --- | --- | --- |
-| API Key | HTTP **Digest** (public key = user, private key = password) | Never expires | N/A — keys are long-lived |
-| Service Account | OAuth2 **client_credentials** → Bearer token | **Access token: 3600 s (1 h)** | **Not refreshable.** Mint a _new_ token from `client_id`/`client_secret` at `POST https://cloud.mongodb.com/api/oauth/token` |
+| Method          | Mechanism                                                   | Expiry                         | Refresh                                                                                                                      |
+| --------------- | ----------------------------------------------------------- | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| API Key         | HTTP **Digest** (public key = user, private key = password) | Never expires                  | N/A — keys are long-lived                                                                                                    |
+| Service Account | OAuth2 **client_credentials** → Bearer token                | **Access token: 3600 s (1 h)** | **Not refreshable.** Mint a _new_ token from `client_id`/`client_secret` at `POST https://cloud.mongodb.com/api/oauth/token` |
 
 Confirmed from docs: _"The access token is valid for 1 hour (3600 seconds). You can't refresh
 an access token. When this access token expires, repeat this step to generate a new one."_ The
 current code already does exactly this in
-  [`tryRefreshServiceAccount`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts#L291-L317)
+[`tryRefreshServiceAccount`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts#L291-L317)
 and [`AtlasServiceAccountClient`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient.ts).
 The client secret itself has a separate, user-chosen expiry (months) — when it lapses, token
 minting fails with a 401 and the credential needs re-entry.
@@ -149,11 +149,11 @@ follow `links.next` (or loop `pageNum`) — a latent bug worth fixing while we a
 Atlas rate-limits per **endpoint set** and **scope** (`USER`, `GROUP`, `ORGANIZATION`, `IP`),
 each with its own bucket. The endpoints discovery uses:
 
-| Endpoint | Scope | Capacity | Refill |
-| --- | --- | --- | --- |
-| `GET /orgs` (list orgs) | **USER** | 300 | 100 / 60 s |
-| `GET /groups` (list projects) | **USER** | 1200 | 500 / 60 s |
-| `GET /groups/{id}/clusters` | **GROUP** | 10000 | 5000 / 60 s |
+| Endpoint                      | Scope     | Capacity | Refill      |
+| ----------------------------- | --------- | -------- | ----------- |
+| `GET /orgs` (list orgs)       | **USER**  | 300      | 100 / 60 s  |
+| `GET /groups` (list projects) | **USER**  | 1200     | 500 / 60 s  |
+| `GET /groups/{id}/clusters`   | **GROUP** | 10000    | 5000 / 60 s |
 
 Because `/orgs` and `/groups` are **USER-scoped**, and a credential is its own programmatic
 "user", **each credential has an independent bucket**. Fanning discovery out across _N_
@@ -187,14 +187,14 @@ states, never for `ok-empty`.
 
 (From a full read of `src/plugins/api-shared/azure/`; captured in repo memory.)
 
-| Aspect | Azure implementation | Verdict for Atlas |
-| --- | --- | --- |
-| Aggregation entry point | Single `getSubscriptions(true)` flattens all tenants → one list | ✅ Copy the "one aggregation surface" idea |
-| Fan-out | `Promise.all` over tenants for `isSignedIn` checks | ❌ **All-or-nothing** — one failing tenant discards _every_ account ([SelectAccountStep.ts#L135-L182](../../../../src/plugins/api-shared/azure/credentialsManagement/SelectAccountStep.ts#L135-L182)) |
-| Concurrency | Shared limiter, cap 5, across wizard steps | ✅ Reuse [`createConcurrencyLimiter`](../../../../src/utils/concurrencyLimiter.ts) |
-| Ordering gotcha | `getTenants` + `getSubscriptions` **must be sequential** — running them in parallel returned incorrect data (documented in-code) | ⚠️ Heed within a credential; across credentials it doesn't apply |
-| Token refresh | Delegated to `@microsoft/vscode-azext-azureauth` (opaque) | ➖ Atlas has no such library; we own SA token minting (already do) |
-| Per-account error node | **None** — a global "configure credentials" retry node only | ❌ Weaker than Atlas's existing per-session nodes; **do better** |
+| Aspect                  | Azure implementation                                                                                                             | Verdict for Atlas                                                                                                                                                                                     |
+| ----------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Aggregation entry point | Single `getSubscriptions(true)` flattens all tenants → one list                                                                  | ✅ Copy the "one aggregation surface" idea                                                                                                                                                            |
+| Fan-out                 | `Promise.all` over tenants for `isSignedIn` checks                                                                               | ❌ **All-or-nothing** — one failing tenant discards _every_ account ([SelectAccountStep.ts#L135-L182](../../../../src/plugins/api-shared/azure/credentialsManagement/SelectAccountStep.ts#L135-L182)) |
+| Concurrency             | Shared limiter, cap 5, across wizard steps                                                                                       | ✅ Reuse [`createConcurrencyLimiter`](../../../../src/utils/concurrencyLimiter.ts)                                                                                                                    |
+| Ordering gotcha         | `getTenants` + `getSubscriptions` **must be sequential** — running them in parallel returned incorrect data (documented in-code) | ⚠️ Heed within a credential; across credentials it doesn't apply                                                                                                                                      |
+| Token refresh           | Delegated to `@microsoft/vscode-azext-azureauth` (opaque)                                                                        | ➖ Atlas has no such library; we own SA token minting (already do)                                                                                                                                    |
+| Per-account error node  | **None** — a global "configure credentials" retry node only                                                                      | ❌ Weaker than Atlas's existing per-session nodes; **do better**                                                                                                                                      |
 
 **Net:** Azure gives us the "single aggregation surface + concurrency limiter" pattern to copy,
 and a concrete anti-pattern to avoid (`Promise.all` all-or-nothing, no per-account error
@@ -212,12 +212,12 @@ in a `credentials` workspace, mirroring [sourceStore.ts](../../../../src/plugins
 
 ```ts
 interface AtlasCredentialRecordProps extends Record<string, unknown> {
-    readonly authMethod: 'apikey' | 'serviceaccount';
-    readonly label?: string;        // user-supplied friendly name (optional)
-    readonly orgId?: string;        // cached from first successful listOrgs()
-    readonly orgName?: string;      // cached; primary display label (see §5.5)
-    readonly order: number;         // stable display order
-    readonly version: '1';          // schema version for future migrations
+  readonly authMethod: 'apikey' | 'serviceaccount';
+  readonly label?: string; // user-supplied friendly name (optional)
+  readonly orgId?: string; // cached from first successful listOrgs()
+  readonly orgName?: string; // cached; primary display label (see §5.5)
+  readonly order: number; // stable display order
+  readonly version: '1'; // schema version for future migrations
 }
 // secrets[] (SecretStorage-backed):
 //   apikey        → { publicKey, privateKey }
@@ -250,25 +250,25 @@ way:
 
 ```ts
 interface CredentialError {
-    readonly credentialId: string;
-    readonly label: string;
-    readonly kind: 'auth' | 'forbidden' | 'rateLimited' | 'network' | 'other';
-    readonly status?: number;
-    readonly message: string;
-    readonly retryable: boolean;   // false only for unrecoverable/removed
+  readonly credentialId: string;
+  readonly label: string;
+  readonly kind: 'auth' | 'forbidden' | 'rateLimited' | 'network' | 'other';
+  readonly status?: number;
+  readonly message: string;
+  readonly retryable: boolean; // false only for unrecoverable/removed
 }
 
 interface AtlasDiscoverySnapshot {
-    readonly organizations: Array<AtlasOrganization & { credentialId: string }>;
-    readonly projects:      Array<AtlasProject      & { credentialId: string }>;
-    readonly clusters:      Array<AtlasCluster      & { credentialId: string }>;
-    readonly credentialErrors: CredentialError[];   // partial-failure descriptors
-    readonly credentialsQueried: number;
+  readonly organizations: Array<AtlasOrganization & { credentialId: string }>;
+  readonly projects: Array<AtlasProject & { credentialId: string }>;
+  readonly clusters: Array<AtlasCluster & { credentialId: string }>;
+  readonly credentialErrors: CredentialError[]; // partial-failure descriptors
+  readonly credentialsQueried: number;
 }
 
 class AtlasDiscoveryService {
-    // Never throws. One call powers both tree modes and the wizard.
-    async listAll(signal?: AbortSignal): Promise<AtlasDiscoverySnapshot>;
+  // Never throws. One call powers both tree modes and the wizard.
+  async listAll(signal?: AbortSignal): Promise<AtlasDiscoverySnapshot>;
 }
 ```
 
@@ -317,7 +317,7 @@ single-slot concept that cannot survive multi-credential.
 ### 5.6 Token-refresh maintenance across the fleet
 
 - **On demand (lazy):** `getSession(credentialId)` checks SA expiry (existing
-    [`isExpired`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts#L319-L323),
+  [`isExpired`](../../../../src/plugins/service-atlas-mongodb/auth/AtlasSessionManager.ts#L319-L323),
   60 s skew) and mints a fresh token if needed. API keys need nothing.
 - **On 401/403 during a request:** existing refresh-once-retry-once in `AtlasApiClient`.
 - **No background timer needed:** tokens are only needed at discovery/expand time; minting is
@@ -342,12 +342,12 @@ how MongoDB's own tools behave:
   as a "legacy" method** (not deprecated — still fully supported).
 - The two methods have **different lifecycles**, which is the whole reason to keep both:
 
-  | | Service Account | API Key |
-  | --- | --- | --- |
-  | Auth | OAuth2 client_credentials → 1 h token | HTTP Digest, no token |
-  | Secret expiry | **8 h – 365 d** (rotation required; Atlas alerts before expiry) | **Never expires** |
-  | Posture | Recommended, short-lived tokens, rotatable | Legacy, long-lived password-equivalent |
-  | Best fit | security-conscious / enterprise / org mandates SAs | set-and-forget personal desktop use |
+  |               | Service Account                                                 | API Key                                |
+  | ------------- | --------------------------------------------------------------- | -------------------------------------- |
+  | Auth          | OAuth2 client_credentials → 1 h token                           | HTTP Digest, no token                  |
+  | Secret expiry | **8 h – 365 d** (rotation required; Atlas alerts before expiry) | **Never expires**                      |
+  | Posture       | Recommended, short-lived tokens, rotatable                      | Legacy, long-lived password-equivalent |
+  | Best fit      | security-conscious / enterprise / org mandates SAs              | set-and-forget personal desktop use    |
 
 - **Why both, not one:** (1) SAs are new (GA ~2024) — a large installed base still uses API
   keys; dropping them strands users. (2) Org policy varies — some orgs disable API-key
@@ -394,14 +394,14 @@ retry ([AtlasServiceRootItem.ts#L96-L114](../../../../src/plugins/service-atlas-
 With many credentials this must become **per-credential**, and it must distinguish _authoritative
 emptiness_ from _failure_ (enabled by §3.4's `200 []` vs `403`/`401`):
 
-| Per-credential outcome | Tree presentation | Suggest refresh? |
-| --- | --- | --- |
-| `ok-with-data` | org → projects → clusters | no |
-| `ok-empty` (`200`, `[]`) | org node + muted "No projects visible to this credential" | **no** (it's a true answer) |
-| `forbidden (403)` | org node (if known) or credential row + "Access denied — check IP access list / roles" + **retry** | yes |
-| `auth (401)` | credential row + "Credentials rejected — update credentials" + **update** | yes (via update) |
-| `rateLimited (429)` | credential row + "Rate limited — retry shortly" (honour `Retry-After`) | auto-retry after delay |
-| `network/other` | credential row + generic + **retry** | yes |
+| Per-credential outcome   | Tree presentation                                                                                  | Suggest refresh?            |
+| ------------------------ | -------------------------------------------------------------------------------------------------- | --------------------------- |
+| `ok-with-data`           | org → projects → clusters                                                                          | no                          |
+| `ok-empty` (`200`, `[]`) | org node + muted "No projects visible to this credential"                                          | **no** (it's a true answer) |
+| `forbidden (403)`        | org node (if known) or credential row + "Access denied — check IP access list / roles" + **retry** | yes                         |
+| `auth (401)`             | credential row + "Credentials rejected — update credentials" + **update**                          | yes (via update)            |
+| `rateLimited (429)`      | credential row + "Rate limited — retry shortly" (honour `Retry-After`)                             | auto-retry after delay      |
+| `network/other`          | credential row + generic + **retry**                                                               | yes                         |
 
 A **fleet-level summary** is only shown when it adds signal, e.g. a status-bar / root
 description like _"2 of 4 credentials failed to load"_, so the user notices partial degradation
@@ -422,7 +422,7 @@ demonstrates the concrete difference.
 
 ## 7. Credential management & tree UX (proposals)
 
-> **Scope:** the **happy path is 1–4 credential sets**, not 100+. Every proposal below optimises
+> **Scope:** the **happy path is 1–4 credential sets**, not 100+. Every design choice below optimises
 > for a handful of credentials; large-fleet concerns (search, grouping, lazy loading,
 > virtualization) are explicitly out of scope and flagged where they would eventually bite.
 
@@ -490,29 +490,35 @@ request) — the natural home for the "which should I use?" guidance from §5.7:
 Keeping the chooser **inside** the webview (not a separate QuickPick) makes the whole add-flow one
 guided surface, and lets the toggle live-swap the form fields + help text.
 
-### 7.2 The core tension
+### 7.2 The core tension — and the toggle we already have
 
-- A **permanent credential level** at the top of the tree makes error isolation trivial (each
-  credential is a node; its failure stays local) **but** adds a level the common 1-credential
-  user never needed, and duplicates the management QuickPick. _Not preferred._
-- Keeping credentials **out of the tree** yields a clean org → project → cluster view **but**
-  needs a deliberate answer to "where does a broken credential show?"
+Two constraints shape the design:
 
-Recommended resolution: **Proposal A as the default + Proposal B as an opt-in toggle; Proposal C
-rejected as a default.**
+- **Credentials stay out of the tree.** A permanent credential level (a connection-manager
+  root) would make error isolation trivial, but it adds a level the common 1-credential user
+  never needed and duplicates the management QuickPick (§7.1). Rejected.
+- **A Tree/List toggle already exists (item #8).** The discovery view already plans the
+  Kubernetes-style [view-mode toggle](../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts):
+  **Tree** = org → project → cluster nested; **List** = _flat clusters with `org · project` in
+  the description_. We design **around that toggle**, not add a second one — so there is **no**
+  separate "group by credential" mode.
+
+That leaves one open question: **where does a broken credential surface**, given that List mode
+has no org/credential node to hang an error on? The answer (below): credentials are invisible
+until they fail; on failure the view **forces Tree mode and disables List** until the problem
+clears.
 
 ```mermaid
 flowchart TD
-    A["Root getChildren()"] --> B{"View mode"}
-    B -->|"Grouped by org (default)"| C["Merge snapshot by orgId"]
-    B -->|"By credential (opt-in toggle)"| D["One node per credential"]
-    C --> E{"Any credential errored?"}
-    E -->|"no"| F["org -> project -> cluster only<br/>(credentials invisible)"]
-    E -->|"yes"| G["healthy orgs<br/>+ one attention node per broken credential"]
-    D --> H["each credential node holds<br/>its orgs, or its error children"]
+    A["Root getChildren()"] --> B{"Any credential errored?"}
+    B -->|"yes"| T["Force TREE mode<br/>(List toggle disabled)"]
+    B -->|"no"| M{"View mode — item #8 toggle"}
+    M -->|"Tree"| TT["org -> project -> cluster<br/>(credentials invisible)"]
+    M -->|"List"| LL["flat clusters<br/>org · project in the description"]
+    T --> G["healthy orgs (full or partial)<br/>+ attention node where a credential failed"]
 ```
 
-### 7.3 Proposal A — merged org tree; credentials surface **only on error** (recommended default)
+### 7.3 The tree model — merged org tree; credentials surface **only on error**
 
 Credentials are invisible on the happy path. The **org level is the natural top level** (each
 credential resolves to one org; §3.1), and projects merge across credentials by `orgId`
@@ -570,66 +576,106 @@ if it reads as noise.
 
 **Why it fits 1–4 credentials:** at most a handful of top-level nodes; attention nodes are rare
 and self-explanatory; no grouping or search needed. (At 100+ credentials the root would grow
-long — out of scope; that scale would want Proposal B/C's credential grouping by default.)
+long — out of scope; that scale would want credential grouping or search, which we deliberately
+do not build here.)
 
-### 7.4 Proposal B — optional "Group by credential" view mode (opt-in power view)
+### 7.4 List mode (item #8) and errors — auto-switch to Tree, block List
 
-Reuse the Kubernetes tree/list **view-mode toggle** (item #8): default = Proposal A (grouped by
-org); toggled = credential-rooted (Proposal C's shape, but **opt-in**). Power users who want
-strict per-credential isolation get it; everyone else keeps the clean default.
-
-```text
-🌩 MongoDB Atlas          [ ⇄ Group by: Credential ▾ ]
-├─ 🔑 Acme key · API Key                 Signed in
-│  └─ 🏢 Acme Corp › 📁 Payments › 🍃 payments-prod
-├─ 🌩 Beta SA · Service Account          ⚠ session expired
-│  ├─ ↻  Click here to retry
-│  └─ 🔑 Click here to update credentials
-└─ 🌩 Gamma SA · Service Account         Signed in
-   └─ 🏢 Gamma Inc › 📁 Research › 🍃 research-flex
-```
-
-Same state key + inline toggle command as
-[switchKubernetesViewMode](../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts).
-
-### 7.5 Proposal C — permanent credential level (connection-manager; **rejected as default**)
+In **List mode**, the item-#8 toggle flattens the whole view to clusters, with `org · project`
+in the description — no org or credential nodes:
 
 ```text
-🌩 MongoDB Atlas
-├─ 🔑 Acme key
-│  └─ 🏢 Acme Corp › 📁 Payments › 🍃 payments-prod
-├─ 🌩 Beta SA
-│  └─ ⚠ session expired · ↻ retry · 🔑 update credentials
-└─ 🌩 Gamma SA
-   └─ 🏢 Gamma Inc › 📁 Research › 🍃 research-flex
+🌩 MongoDB Atlas   ☰ List                 Signed in · 3 credentials
+├─ 🍃 payments-prod   IDLE    Acme Corp · Payments
+├─ 🍃 web-cluster     IDLE    Beta Ltd · Web
+├─ 🍃 analytics-rs    IDLE    Beta Ltd · Analytics
+└─ 🍃 research-flex   IDLE    Gamma Inc · Research
 ```
 
-- ✅ Trivial error isolation; no org-merge logic; simplest to build.
-- ❌ Adds a level the **common 1-credential** user never needed — the single case becomes
-  `MongoDB Atlas › my-key › org › project › cluster` (one extra hop to every cluster).
-- ❌ Duplicates the management QuickPick's job inside the tree and sinks the real resources a
-  level deeper.
-- → It is exactly **Proposal B's toggle made mandatory.** Ship it _as_ B's opt-in mode, never as
-  the default.
+A flat cluster list has **nowhere to attach a credential error** — there is no org or credential
+row to carry a retry action. Rather than invent a hybrid, the rule is explicit:
+
+> **While any credential is in an error state (`credentialErrors.length > 0`), the view forces
+> Tree mode and disables the List toggle.** It re-enables List once every credential is healthy.
+
+```text
+🌩 MongoDB Atlas   ☰ List (unavailable)   2 of 3 credentials need attention
+   ⓘ Switched to Tree view — resolve the flagged credentials to re-enable List view.
+        (Tree renders the healthy clusters + the attention nodes from §7.3)
+```
+
+- The switch is **automatic and announced** (the root description line), never silent, so the
+  user understands why the layout changed.
+- The toggle is **visibly disabled** (greyed inline icon + tooltip), not hidden, so its temporary
+  unavailability is discoverable.
+- Reuse the item-#8 scaffold verbatim — the `'list' | 'tree'` state key and the `…ViewModeTree` /
+  `…List` contextValue marker — and add one guard: `effectiveMode = hasErrors ? 'tree' :
+savedMode`, remembering `savedMode` so the user's List preference is restored after recovery.
+- **Softer alternative (noted, not chosen):** keep List mode but pin a single non-collapsible
+  "⚠ N credentials need attention — switch to Tree to fix" row at the top. Rejected for now
+  because the actionable retry/update nodes still cannot live in a flat list; the auto-switch is
+  clearer.
+
+### 7.5 The hard case — two credentials for one org, only one fails
+
+This is the scenario the merge model must get right. Org **Acme** is reachable through two
+credentials:
+
+- **Acme key** (API Key, healthy) — surfaces projects _Payments_, _Web_.
+- **Acme SA** (Service Account, secret expired → 401) — would surface _Analytics_, _Reports_.
+
+Because projects merge by `orgId` (§3.1, §8 Q5), Acme is **one** org node. One contributing
+credential is healthy and one failed, so the org is **partially** visible. Attribute the failure
+to the org it affects (using the failed credential's **cached** `orgId`/`orgName`, §5.1):
+
+```text
+🌩 MongoDB Atlas                         1 of 2 credentials need attention
+└─ 🏢 Acme Corp                          2 credentials · 1 needs attention
+   ├─ 📁 Payments
+   │  └─ 🍃 payments-prod   IDLE
+   ├─ 📁 Web
+   │  └─ 🍃 web-cluster     IDLE
+   └─ ⚠ Some projects may be hidden — “Acme SA” session expired
+      ├─ ↻  Click here to retry
+      └─ 🔑 Click here to update credentials
+```
+
+Rules:
+
+- **Org has ≥ 1 healthy contributing credential** → render the org with its (partial) merged
+  projects, plus an **inline attention child** flagging that a contributing credential failed and
+  some projects may be missing. The org stays usable; only the missing slice is called out.
+- **Org has 0 healthy contributing credentials** (all its credentials failed) → the org cannot
+  render data, so it **collapses to a root-level attention node** (the base model, §7.3).
+- **Failed credential with no cached org** (it never succeeded once) → cannot be attributed to an
+  org, so it appears as a **root-level** attention node labelled by its user label / key prefix.
+- **Dedup:** a project both credentials can see is keyed by `projectId` and appears **once**
+  (§8 Q5); the inline attention child only claims projects _may_ be hidden, since we cannot
+  enumerate what the failed credential would have added.
 
 ### 7.6 Recommendation & partial-error mapping
 
-**Default to Proposal A; offer Proposal B's toggle; do not make Proposal C the default.** This
-honours the stated preference (credentials managed via the QuickPick, not a permanent tree level)
-while giving every failure a concrete, actionable home. Error → node mapping at happy-path scale,
-building on §6.2:
+**One design: the merged org tree (§7.3), rendered in Tree mode; the item-#8 List mode is a
+presentation of the same healthy data and is auto-disabled while any credential needs attention
+(§7.4).** No separate credential view mode; no permanent credential level. This honours the
+stated preference (credentials managed via the QuickPick) while giving every failure a concrete,
+actionable home. Error → node mapping at happy-path scale, building on §6.2:
 
-| Per-credential outcome | Proposal A (default, grouped) | Proposal B/C (by credential) |
-| --- | --- | --- |
-| healthy | org → projects → clusters | credential → org → … |
-| `ok-empty` (`200 []`) | org node + muted "No projects visible" | credential node + same muted child |
-| `401` expired / rejected | ⚠ attention node + **retry** + **update credentials** | error children under the credential node |
-| `403` forbidden (IP / roles) | ⚠ attention node + **retry** (+ IP/roles hint) | same, under the credential node |
-| `429` rate-limited | transient ⚠ + auto-retry (honour `Retry-After`) | same |
-| whole fleet failed | root shows only attention nodes + summary | root shows only credential error nodes |
+| Per-credential outcome                             | Where it lands (Tree mode)                                                                 |
+| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
+| healthy                                            | org → projects → clusters (or a flat cluster row in List mode)                             |
+| `ok-empty` (`200 []`)                              | org node + muted "No projects visible" (not an error)                                      |
+| `401` expired / rejected                           | ⚠ attention node + **retry** + **update credentials**                                      |
+| `403` forbidden (IP / roles)                       | ⚠ attention node + **retry** (+ IP/roles hint)                                             |
+| `429` rate-limited                                 | transient ⚠ + auto-retry (honour `Retry-After`)                                            |
+| org still reachable via another healthy credential | org renders (partial) + inline "⚠ some projects may be hidden — &lt;cred&gt;" child (§7.5) |
+| org reachable via **no** healthy credential        | root-level ⚠ attention node for that org / credential                                      |
+| whole fleet failed                                 | root shows only attention nodes + a summary                                                |
 
-Root-level actions (context menu / inline): **Manage credentials** (opens the §7.1 QuickPick),
-**Add credential**, **Refresh**. Removal deletes only that credential's secrets and its nodes.
+Whenever `credentialErrors.length > 0`, **List mode is disabled and the view forces Tree mode**
+(§7.4); it re-enables once every credential is healthy again. Root-level actions (context menu /
+inline): **Manage credentials** (opens the §7.1 QuickPick), **Add credential**, **Refresh**.
+Removal deletes only that credential's secrets and its nodes.
 
 ---
 
@@ -736,13 +782,13 @@ defensive only. Validates §3.4.
 These cannot be run autonomously (no credentials, and the security policy forbids routing
 secrets). They are the only feasibility gaps left; each is cheap once an account exists.
 
-| # | Hypothesis to confirm | Method | Closes |
-| --- | --- | --- | --- |
-| L1 | A credential belongs to exactly one org; `/groups` returns only the project subset its roles allow (all for `ORG_OWNER`/`ORG_READ_ONLY`, else explicit projects) | Create keys in 2 orgs + a scoped `ORG_MEMBER` key; call `/orgs` and `/groups` with each; confirm 1 org each and the expected project subset | §3.1 core model |
-| L2 | A valid credential with a non-allow-listed IP returns **403**, not 401 | Create key, omit caller IP from access list, call `/groups` | §3.4 error taxonomy |
-| L3 | `>100` projects paginate as documented via `links.next` | Point at an org with >100 projects (or mock via `itemsPerPage=1`) | §3.3 pagination fix |
-| L4 | SA token mint under concurrent refresh has no surprising throttle on `oauth/token` | Fire N parallel client_credentials mints | §5.6 |
-| L5 | Two least-privilege credentials in the **same** org expose overlapping/disjoint project subsets (merge/union path) | Add 2 scoped keys to 1 org with different project roles; run `listAll()`; confirm the union merges by `projectId` | §8 Q5 |
+| #   | Hypothesis to confirm                                                                                                                                            | Method                                                                                                                                      | Closes              |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
+| L1  | A credential belongs to exactly one org; `/groups` returns only the project subset its roles allow (all for `ORG_OWNER`/`ORG_READ_ONLY`, else explicit projects) | Create keys in 2 orgs + a scoped `ORG_MEMBER` key; call `/orgs` and `/groups` with each; confirm 1 org each and the expected project subset | §3.1 core model     |
+| L2  | A valid credential with a non-allow-listed IP returns **403**, not 401                                                                                           | Create key, omit caller IP from access list, call `/groups`                                                                                 | §3.4 error taxonomy |
+| L3  | `>100` projects paginate as documented via `links.next`                                                                                                          | Point at an org with >100 projects (or mock via `itemsPerPage=1`)                                                                           | §3.3 pagination fix |
+| L4  | SA token mint under concurrent refresh has no surprising throttle on `oauth/token`                                                                               | Fire N parallel client_credentials mints                                                                                                    | §5.6                |
+| L5  | Two least-privilege credentials in the **same** org expose overlapping/disjoint project subsets (merge/union path)                                               | Add 2 scoped keys to 1 org with different project roles; run `listAll()`; confirm the union merges by `projectId`                           | §8 Q5               |
 
 > **Recommendation:** run L1 and L2 first — they gate the org/project attribution model. L1 is
 > expected to confirm the one-org boundary **and** the role-driven project subset; L5 then
@@ -754,15 +800,15 @@ secrets). They are the only feasibility gaps left; each is cheap once an account
 
 ### 11.1 Effort (relative)
 
-| Slice | What | Size |
-| --- | --- | --- |
-| A | `AtlasCredentialStore` on StorageService (copy `sourceStore`) | S–M |
-| B | Per-credential session/token refactor of `AtlasSessionManager` | M |
-| C | `AtlasDiscoveryService.listAll` aggregation + pagination fix | M |
-| D | Tree: `orgId`-keyed org nodes merging projects across credentials + per-credential error/retry nodes (list mode later, item #8) | M |
-| E | Manage-credentials QuickPick (Azure-style) + wire to add/edit webview (item #6) | M |
-| F | Wizard: dedup + credential attribution through connect | S–M |
-| G | Tests (unit for store/aggregation/error taxonomy) + l10n | M |
+| Slice | What                                                                                                                            | Size |
+| ----- | ------------------------------------------------------------------------------------------------------------------------------- | ---- |
+| A     | `AtlasCredentialStore` on StorageService (copy `sourceStore`)                                                                   | S–M  |
+| B     | Per-credential session/token refactor of `AtlasSessionManager`                                                                  | M    |
+| C     | `AtlasDiscoveryService.listAll` aggregation + pagination fix                                                                    | M    |
+| D     | Tree: `orgId`-keyed org nodes merging projects across credentials + per-credential error/retry nodes (list mode later, item #8) | M    |
+| E     | Manage-credentials QuickPick (Azure-style) + wire to add/edit webview (item #6)                                                 | M    |
+| F     | Wizard: dedup + credential attribution through connect                                                                          | S–M  |
+| G     | Tests (unit for store/aggregation/error taxonomy) + l10n                                                                        | M    |
 
 No slice is "L". The refactor (B) touches the most files but is mechanical (single-slot →
 keyed-by-ID). The aggregation (C) is the intellectually load-bearing piece and is already
@@ -829,115 +875,199 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 // A tiny copy of src/utils/concurrencyLimiter.ts
 function createConcurrencyLimiter({ concurrency }) {
-    const cap = Number.isFinite(concurrency) ? Math.max(1, Math.floor(concurrency)) : 1;
-    let active = 0;
-    const waiters = [];
-    const release = () => { active--; const resume = waiters.shift(); if (resume) resume(); };
-    return async (fn) => {
-        if (active >= cap) await new Promise((res) => waiters.push(res));
-        active++;
-        try { return await fn(); } finally { release(); }
-    };
+  const cap = Number.isFinite(concurrency) ? Math.max(1, Math.floor(concurrency)) : 1;
+  let active = 0;
+  const waiters = [];
+  const release = () => {
+    active--;
+    const resume = waiters.shift();
+    if (resume) resume();
+  };
+  return async (fn) => {
+    if (active >= cap) await new Promise((res) => waiters.push(res));
+    active++;
+    try {
+      return await fn();
+    } finally {
+      release();
+    }
+  };
 }
 
 class ApiError extends Error {
-    constructor(message, statusCode) { super(message); this.statusCode = statusCode; }
+  constructor(message, statusCode) {
+    super(message);
+    this.statusCode = statusCode;
+  }
 }
 
 function makeCredential({ id, kind, orgName, latencyMs = 60, fail }) {
-    return {
-        id, kind, label: orgName ? `${orgName} (${kind})` : id,
-        async listOrgs() { await sleep(latencyMs); if (fail) throw fail(); return [{ id: `${id}-org`, name: orgName ?? `${id}-org` }]; },
-        async listProjects() {
-            await sleep(latencyMs); if (fail) throw fail();
-            return [
-                { id: `${id}-p1`, name: `${orgName}-proj-A`, orgId: `${id}-org` },
-                { id: `${id}-p2`, name: `${orgName}-proj-B`, orgId: `${id}-org` },
-            ];
-        },
-        async listClusters(projectId) { await sleep(latencyMs); if (fail) throw fail(); return [{ id: `${projectId}-c1`, name: `${projectId}-cluster` }]; },
-    };
+  return {
+    id,
+    kind,
+    label: orgName ? `${orgName} (${kind})` : id,
+    async listOrgs() {
+      await sleep(latencyMs);
+      if (fail) throw fail();
+      return [{ id: `${id}-org`, name: orgName ?? `${id}-org` }];
+    },
+    async listProjects() {
+      await sleep(latencyMs);
+      if (fail) throw fail();
+      return [
+        { id: `${id}-p1`, name: `${orgName}-proj-A`, orgId: `${id}-org` },
+        { id: `${id}-p2`, name: `${orgName}-proj-B`, orgId: `${id}-org` },
+      ];
+    },
+    async listClusters(projectId) {
+      await sleep(latencyMs);
+      if (fail) throw fail();
+      return [{ id: `${projectId}-c1`, name: `${projectId}-cluster` }];
+    },
+  };
 }
 
 // Fleet: 2 API keys + 2 Service Accounts, one of each broken (403 / 401).
 function makeFleet() {
-    return [
-        makeCredential({ id: 'k1', kind: 'apikey', orgName: 'Acme', latencyMs: 50 }),
-        makeCredential({ id: 'k2', kind: 'apikey', orgName: 'Beta', latencyMs: 40, fail: () => new ApiError('Access denied (IP access list)', 403) }),
-        makeCredential({ id: 's1', kind: 'serviceaccount', orgName: 'Gamma', latencyMs: 70 }),
-        makeCredential({ id: 's2', kind: 'serviceaccount', orgName: 'Delta', latencyMs: 30, fail: () => new ApiError('Token expired / client secret rotated', 401) }),
-    ];
+  return [
+    makeCredential({ id: 'k1', kind: 'apikey', orgName: 'Acme', latencyMs: 50 }),
+    makeCredential({
+      id: 'k2',
+      kind: 'apikey',
+      orgName: 'Beta',
+      latencyMs: 40,
+      fail: () => new ApiError('Access denied (IP access list)', 403),
+    }),
+    makeCredential({ id: 's1', kind: 'serviceaccount', orgName: 'Gamma', latencyMs: 70 }),
+    makeCredential({
+      id: 's2',
+      kind: 'serviceaccount',
+      orgName: 'Delta',
+      latencyMs: 30,
+      fail: () => new ApiError('Token expired / client secret rotated', 401),
+    }),
+  ];
 }
 
 // EXPERIMENT 1 — Promise.all (all-or-nothing) vs Promise.allSettled (partial success)
 async function experiment1() {
-    const fleet = makeFleet();
-    let a;
-    try { const orgs = await Promise.all(fleet.map((c) => c.listOrgs())); a = { ok: true, orgs: orgs.flat().length }; }
-    catch (err) { a = { ok: false, reason: `${err.statusCode ?? ''} ${err.message}`.trim() }; }
-    console.log('Promise.all        →', JSON.stringify(a));
+  const fleet = makeFleet();
+  let a;
+  try {
+    const orgs = await Promise.all(fleet.map((c) => c.listOrgs()));
+    a = { ok: true, orgs: orgs.flat().length };
+  } catch (err) {
+    a = { ok: false, reason: `${err.statusCode ?? ''} ${err.message}`.trim() };
+  }
+  console.log('Promise.all        →', JSON.stringify(a));
 
-    const settled = await Promise.allSettled(fleet.map((c) => c.listOrgs()));
-    const orgs = [], failures = [];
-    settled.forEach((res, i) => {
-        const cred = fleet[i];
-        if (res.status === 'fulfilled') orgs.push(...res.value.map((o) => ({ ...o, credentialId: cred.id })));
-        else failures.push({ credentialId: cred.id, label: cred.label, error: res.reason.message, status: res.reason.statusCode });
-    });
-    console.log('Promise.allSettled →', JSON.stringify({ orgs: orgs.length, healthy: orgs.map((o) => o.name), failures }));
+  const settled = await Promise.allSettled(fleet.map((c) => c.listOrgs()));
+  const orgs = [],
+    failures = [];
+  settled.forEach((res, i) => {
+    const cred = fleet[i];
+    if (res.status === 'fulfilled') orgs.push(...res.value.map((o) => ({ ...o, credentialId: cred.id })));
+    else
+      failures.push({
+        credentialId: cred.id,
+        label: cred.label,
+        error: res.reason.message,
+        status: res.reason.statusCode,
+      });
+  });
+  console.log(
+    'Promise.allSettled →',
+    JSON.stringify({ orgs: orgs.length, healthy: orgs.map((o) => o.name), failures }),
+  );
 }
 
 // EXPERIMENT 2 — single "list all" API: never throws, returns data + per-credential errors
 async function aggregateAll(fleet, { credentialConcurrency = 4, perCredConcurrency = 4 } = {}) {
-    const credLimit = createConcurrencyLimiter({ concurrency: credentialConcurrency });
-    const result = { orgs: [], projects: [], clusters: [], errors: [] };
-    await Promise.all(fleet.map((cred) => credLimit(async () => {
+  const credLimit = createConcurrencyLimiter({ concurrency: credentialConcurrency });
+  const result = { orgs: [], projects: [], clusters: [], errors: [] };
+  await Promise.all(
+    fleet.map((cred) =>
+      credLimit(async () => {
         try {
-            const [orgs, projects] = await Promise.all([cred.listOrgs(), cred.listProjects()]);
-            orgs.forEach((o) => result.orgs.push({ ...o, credentialId: cred.id }));
-            const clusterLimit = createConcurrencyLimiter({ concurrency: perCredConcurrency });
-            await Promise.all(projects.map((p) => clusterLimit(async () => {
+          const [orgs, projects] = await Promise.all([cred.listOrgs(), cred.listProjects()]);
+          orgs.forEach((o) => result.orgs.push({ ...o, credentialId: cred.id }));
+          const clusterLimit = createConcurrencyLimiter({ concurrency: perCredConcurrency });
+          await Promise.all(
+            projects.map((p) =>
+              clusterLimit(async () => {
                 result.projects.push({ ...p, credentialId: cred.id });
                 try {
-                    const clusters = await cred.listClusters(p.id);
-                    clusters.forEach((c) => result.clusters.push({ ...c, projectId: p.id, credentialId: cred.id }));
+                  const clusters = await cred.listClusters(p.id);
+                  clusters.forEach((c) => result.clusters.push({ ...c, projectId: p.id, credentialId: cred.id }));
                 } catch (err) {
-                    result.errors.push({ scope: 'project', credentialId: cred.id, projectId: p.id, error: err.message, status: err.statusCode });
+                  result.errors.push({
+                    scope: 'project',
+                    credentialId: cred.id,
+                    projectId: p.id,
+                    error: err.message,
+                    status: err.statusCode,
+                  });
                 }
-            })));
+              }),
+            ),
+          );
         } catch (err) {
-            result.errors.push({ scope: 'credential', credentialId: cred.id, label: cred.label, error: err.message, status: err.statusCode });
+          result.errors.push({
+            scope: 'credential',
+            credentialId: cred.id,
+            label: cred.label,
+            error: err.message,
+            status: err.statusCode,
+          });
         }
-    })));
-    return result;
+      }),
+    ),
+  );
+  return result;
 }
 async function experiment2() {
-    const fleet = makeFleet();
-    const t0 = Date.now();
-    const agg = await aggregateAll(fleet);
-    console.log(`Aggregated in ${Date.now() - t0}ms →`, JSON.stringify({
-        orgs: agg.orgs.map((o) => o.name), projects: agg.projects.length, clusters: agg.clusters.length,
-        errors: agg.errors.map((e) => `${e.scope}:${e.credentialId} (${e.status})`),
-    }));
+  const fleet = makeFleet();
+  const t0 = Date.now();
+  const agg = await aggregateAll(fleet);
+  console.log(
+    `Aggregated in ${Date.now() - t0}ms →`,
+    JSON.stringify({
+      orgs: agg.orgs.map((o) => o.name),
+      projects: agg.projects.length,
+      clusters: agg.clusters.length,
+      errors: agg.errors.map((e) => `${e.scope}:${e.credentialId} (${e.status})`),
+    }),
+  );
 }
 
 // EXPERIMENT 3 — parallel vs sequential wall-clock (healthy fleet of 8)
 async function experiment3() {
-    const healthy = Array.from({ length: 8 }, (_, i) => makeCredential({ id: `c${i}`, kind: i % 2 ? 'apikey' : 'serviceaccount', orgName: `Org${i}`, latencyMs: 100 }));
-    const tSeq = Date.now();
-    for (const c of healthy) { await c.listOrgs(); await c.listProjects(); }
-    const seqMs = Date.now() - tSeq;
-    const tPar = Date.now();
-    await aggregateAll(healthy, { credentialConcurrency: 8 });
-    const parMs = Date.now() - tPar;
-    console.log(`Sequential: ${seqMs}ms   Parallel(cap8): ${parMs}ms   speedup: ${(seqMs / parMs).toFixed(1)}x`);
+  const healthy = Array.from({ length: 8 }, (_, i) =>
+    makeCredential({ id: `c${i}`, kind: i % 2 ? 'apikey' : 'serviceaccount', orgName: `Org${i}`, latencyMs: 100 }),
+  );
+  const tSeq = Date.now();
+  for (const c of healthy) {
+    await c.listOrgs();
+    await c.listProjects();
+  }
+  const seqMs = Date.now() - tSeq;
+  const tPar = Date.now();
+  await aggregateAll(healthy, { credentialConcurrency: 8 });
+  const parMs = Date.now() - tPar;
+  console.log(`Sequential: ${seqMs}ms   Parallel(cap8): ${parMs}ms   speedup: ${(seqMs / parMs).toFixed(1)}x`);
 }
 
 // EXPERIMENT 4 — token-bucket headroom (USER scope is per-credential)
 function experiment4() {
-    const ORGS_CAPACITY = 300, GROUPS_CAPACITY = 1200, credentials = 4;
-    console.log(`With ${credentials} credentials, one refresh spends 1 /orgs + 1 /groups token per credential (separate USER buckets).`);
-    console.log(`50 back-to-back refreshes = 50/${ORGS_CAPACITY} /orgs and 50/${GROUPS_CAPACITY} /groups per credential — far below capacity.`);
+  const ORGS_CAPACITY = 300,
+    GROUPS_CAPACITY = 1200,
+    credentials = 4;
+  console.log(
+    `With ${credentials} credentials, one refresh spends 1 /orgs + 1 /groups token per credential (separate USER buckets).`,
+  );
+  console.log(
+    `50 back-to-back refreshes = 50/${ORGS_CAPACITY} /orgs and 50/${GROUPS_CAPACITY} /groups per credential — far below capacity.`,
+  );
 }
 
 await experiment1();
