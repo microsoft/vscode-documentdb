@@ -324,6 +324,49 @@ single-slot concept that cannot survive multi-credential.
   cheap (one POST) and the `oauth/token` endpoint is separate from the discovery buckets.
   Refreshing all credentials at once is safe (Experiment 4).
 
+### 5.7 Auth-method strategy — offer both, default to Service Account, eye interactive OAuth
+
+Sources: [API Authentication Methods](https://www.mongodb.com/docs/atlas/api/api-authentication/),
+[Connect from the Atlas CLI](https://www.mongodb.com/docs/atlas/cli/current/connect-atlas-cli/),
+[Rotate Service Account Secrets](https://www.mongodb.com/docs/atlas/tutorial/rotate-service-account-secrets/),
+[Terraform provider](https://registry.terraform.io/providers/mongodb/mongodbatlas/latest/docs).
+
+**Decision: keep both programmatic methods; make Service Account the recommended default and
+API Key the simple fallback. Do _not_ collapse to a single method.** Rationale, grounded in
+how MongoDB's own tools behave:
+
+- MongoDB's own interactive tool (Atlas CLI) offers **three** methods with explicit use cases:
+  `UserAccount` (browser device login) — _"best for non-programmatic use"_; `ServiceAccount` —
+  programmatic/CI; `APIKeys` — programmatic, _"doesn't require manual login"_. Both the
+  Terraform provider and the API docs mark **Service Accounts as recommended** and **API keys
+  as a "legacy" method** (not deprecated — still fully supported).
+- The two methods have **different lifecycles**, which is the whole reason to keep both:
+
+  | | Service Account | API Key |
+  | --- | --- | --- |
+  | Auth | OAuth2 client_credentials → 1 h token | HTTP Digest, no token |
+  | Secret expiry | **8 h – 365 d** (rotation required; Atlas alerts before expiry) | **Never expires** |
+  | Posture | Recommended, short-lived tokens, rotatable | Legacy, long-lived password-equivalent |
+  | Best fit | security-conscious / enterprise / org mandates SAs | set-and-forget personal desktop use |
+
+- **Why both, not one:** (1) SAs are new (GA ~2024) — a large installed base still uses API
+  keys; dropping them strands users. (2) Org policy varies — some orgs disable API-key
+  creation, others standardize on them; supporting both means the tool works regardless.
+  (3) The two paths **converge into one `AtlasApiClient`** right after auth (Bearer vs Digest
+  header — already abstracted), so the second path is near-free. (4) Ecosystem parity — Atlas
+  CLI and Terraform both support both.
+- **UX obligation this creates:** because the SA client secret expires, the "recommended" path
+  must **handle secret expiry gracefully** (detect it, surface a clean "re-enter credentials"
+  recovery — the existing per-credential error nodes in §6 already cover this). Otherwise the
+  recommended method becomes the more annoying one for a long-lived desktop tool.
+- **Strategic note (out of scope for this POC, worth a follow-up):** the genuinely _best_ single
+  path for a **human-facing** UI tool is the interactive **`UserAccount` browser-OAuth device
+  flow** (what the Atlas UI and `atlas auth login` use): no stored secret, auto-refreshing
+  session, and it spans **all** of the user's orgs/projects automatically — which would largely
+  dissolve the multi-credential problem this document addresses. It is a larger build (device
+  auth + refresh) and is **not** what the extension implements today, but it is the direction
+  that would let a future version reduce three auth methods to one great one.
+
 ---
 
 ## 6. Error reporting model — partial results with per-credential attribution
