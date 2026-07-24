@@ -17,11 +17,15 @@
 storage/tree infrastructure support everything the POC needs. The single most important
 finding reframes the whole feature:
 
-> **Each Atlas API Key and each Service Account is scoped to exactly one organization.**
-> To see _N_ organizations you _must_ hold _N_ credentials. Therefore "multi-credential
-> support" and "multi-org support" (item #8's tree level) are the **same feature** — a
-> credential is, for practical purposes, an org handle. This collapses items #7 and #8 into
-> one data model and removes most of the ambiguity in the ledger.
+> **Each Atlas API Key and each Service Account belongs to exactly one organization, and can
+> be granted access to _any subset_ of that org's projects (0…all, decided by its roles).**
+> To see _N_ organizations you _must_ hold _N_ credentials — so multi-credential support is a
+> prerequisite for multi-org support (item #8). But it is **not** a strict 1:1 "credential =
+> org": within a single org you can legitimately hold several least-privilege credentials that
+> each expose a _different subset_ of projects, and the org's full project set is their
+> **union**. The data model must therefore key orgs/projects by Atlas ID and merge across
+> credentials — see [§3.1](#31-credential-scoping--the-load-bearing-fact) and
+> [§7 Q5](#7-answers-to-the-seven-poc-questions-ledger-step-0).
 
 Recommended shape:
 
@@ -75,19 +79,47 @@ credential-agnostic enough to generalise.
 
 Sources: [Get Started with the Atlas Administration API](https://www.mongodb.com/docs/atlas/configure-api-access/),
 [API Reference](https://www.mongodb.com/docs/atlas/api/atlas-admin-api-ref/),
-[API Rate Limits](https://www.mongodb.com/docs/atlas/api/api-rate-limit/).
+[API Rate Limits](https://www.mongodb.com/docs/atlas/api/api-rate-limit/),
+[API Authentication Methods](https://www.mongodb.com/docs/atlas/api/api-authentication/),
+[Atlas User Roles](https://www.mongodb.com/docs/atlas/reference/user-roles/).
 
 ### 3.1 Credential scoping — the load-bearing fact
 
-- API Keys and Service Accounts are **created inside a single organization** ("To create a
-  service account or API keys for an organization, you must have `Organization Owner` access to
-  **that** organization"). A credential authenticates as an **org-scoped programmatic identity**,
-  not as a human user who may span many orgs.
-- Consequently `GET /api/atlas/v2/orgs` for a given credential returns effectively **its one
-  org**; `GET /api/atlas/v2/groups` returns the projects that credential can see within that org.
-- **Design implication:** the credential list _is_ the org list. Item #8's "org → project →
-  cluster" tree is naturally `credential(=org) → project → cluster`. No separate org-discovery
-  mechanism is needed.
+**API Keys and Service Accounts share one scoping model — the difference between them is only
+the authentication _mechanism_ (Digest vs OAuth2), not scope.** The official wording is nearly
+identical for both:
+
+- Service accounts: _"Each service account belongs to **exactly one organization**, and you can
+  grant it access to **any number of projects within that organization**."_
+- API keys: _"Each pair of API keys belongs to **only one organization**, and can grant access
+  to **any number of projects in that organization**."_
+- The org boundary is hard: the credential _"must be a member of the organization that hosts the
+  project. Otherwise, Atlas responds with a **401** error."_ ⇒ **to span _N_ orgs you need _N_
+  credentials.**
+
+**Which projects a credential can see is decided by its _roles_, not by whether it is a key or a
+service account** ([user-roles](https://www.mongodb.com/docs/atlas/reference/user-roles/)):
+
+| Role on the credential | Projects visible via `GET /groups` |
+| --- | --- |
+| `ORG_OWNER` | _"Project Owner access to **all projects** in the organization"_ → **every** project |
+| `ORG_READ_ONLY` | _"read-only access to the settings, users, and **projects in the organization**"_ → **every** project (read-only) |
+| `ORG_MEMBER` (+ project roles) | _"can only access projects they have been **explicitly added to**"_ → **subset** |
+| project roles only (`GROUP_*`) | only the explicitly granted projects → **subset** |
+
+**Design implications (this corrects an earlier oversimplification):**
+
+- A credential maps to **exactly one org** (hard) but to a **subset of that org's projects**
+  (0…all, role-dependent). It is _not_ safe to treat "one credential" as "one whole org".
+- Therefore **multiple credentials can share the same org** and each surface a _different_
+  subset of projects; the org's full project list is their **union**. This is a legitimate,
+  common least-privilege pattern (a scoped key per team/project instead of one org-owner key).
+- Consequently the tree's org level must be keyed by **`orgId`** and **merge/dedup projects
+  across all credentials** that resolve to that org, remembering which credential(s) can reach
+  each project (drives ownership for subsequent API calls — POC Q5/Q6). It is _not_ a simple
+  `credential → org node`.
+- `GET /api/atlas/v2/orgs` for a credential returns the org(s) it belongs to (normally its one
+  org); `GET /api/atlas/v2/groups` returns exactly the project subset above.
 
 ### 3.2 Authentication mechanics (already implemented, must go per-credential)
 
@@ -271,8 +303,10 @@ Atlas exposes **no user profile for Service Accounts** and only a programmatic i
 keys. Label resolution order:
 
 1. **User-supplied label** captured in the add/edit webview (item #6) — always wins if present.
-2. **Org name** from the first successful `listOrgs()` (cached in `orgName`). Reliable because
-   a credential ≈ one org, and it is meaningful to the user.
+2. **Org name** from the first successful `listOrgs()` (cached in `orgName`). Meaningful and
+   usually unique per credential — but note two credentials can share one org (§3.1), so the
+   org name alone is **not guaranteed unique**; disambiguate with the role/key hint below when
+   two labels collide.
 3. **Fallbacks:** API key → `publicKey` prefix (e.g. `abcd1234…`); SA → `clientId` prefix.
    Never render the secret.
 
@@ -350,12 +384,15 @@ demonstrates the concrete difference.
 4. **Stable user-facing label without a user profile (esp. SA)?** ✅ Org name (cached) with
    user-label override and key/clientId-prefix fallback (§5.5).
 5. **Duplicate org/project/cluster across credentials — merge, once+attribution, or per
-   credential?** → Because a credential ≈ one org, duplicates are rare. **Recommended:** key by
-   Atlas resource ID; in **tree mode** show per-credential org nodes (no dedup needed — natural);
-   in **list mode / wizard** dedup clusters by cluster ID (or SRV connection string) and remember
-   the set of credentials that can reach each, picking the first healthy credential as the action
-   owner. Alternative (simpler for POC): no dedup, always per-credential — accept rare visual
-   dupes. (See [alternatives](#11-alternatives).)
+   credential?** → **This is now a first-class case, not a rare one:** two least-privilege
+   credentials can belong to the **same org** and expose overlapping or disjoint project subsets
+   (§3.1). **Recommended:** key every resource by its Atlas ID (`orgId` / `projectId` /
+   `clusterId`); the org node is keyed by `orgId` and its project children are the **union**
+   across all credentials resolving to that org, deduped by `projectId`; each merged node
+   remembers the **set of credentials** that can reach it and picks the first healthy one as the
+   action owner. In **list mode / wizard**, dedup clusters by `clusterId` (or SRV string) the
+   same way. Alternative (simpler for POC): no merge, group strictly per credential — accept that
+   the same org/project may appear under two credentials. (See [alternatives](#11-alternatives).)
 6. **Which credential owns a node / subsequent request, retained through refresh/retry/connect?**
    ✅ Every snapshot row carries `credentialId`; tree items store it; the wizard threads it into
    connection creation. Stable because the ID is secret-independent (§5.1).
@@ -376,8 +413,9 @@ flowchart TD
     C1 -->|"orgs + projects + clusters, or error"| Agg["Snapshot<br/>organizations / projects / clusters<br/>+ credentialErrors"]
     C2 --> Agg
     Cn --> Agg
-    Agg --> Tree["Tree: org = cred -> project -> cluster<br/>+ per-credential retry/update nodes"]
-    Agg --> Wizard["Add-connection wizard<br/>dedup clusters by id"]
+    Agg --> Merge["Merge by Atlas ID<br/>orgId / projectId / clusterId<br/>(union across credentials)"]
+    Merge --> Tree["Tree: org -> project -> cluster<br/>each node remembers owning credential(s)<br/>+ per-credential retry/update nodes"]
+    Merge --> Wizard["Add-connection wizard<br/>dedup clusters by id"]
 ```
 
 ---
@@ -440,15 +478,15 @@ secrets). They are the only feasibility gaps left; each is cheap once an account
 
 | # | Hypothesis to confirm | Method | Closes |
 | --- | --- | --- | --- |
-| L1 | An org-scoped credential's `/orgs` returns exactly its one org (credential ≈ org) | Create 2 API keys in 2 orgs; call `/orgs` with each; confirm 1 org each | §3.1 core assumption |
+| L1 | A credential belongs to exactly one org; `/groups` returns only the project subset its roles allow (all for `ORG_OWNER`/`ORG_READ_ONLY`, else explicit projects) | Create keys in 2 orgs + a scoped `ORG_MEMBER` key; call `/orgs` and `/groups` with each; confirm 1 org each and the expected project subset | §3.1 core model |
 | L2 | A valid credential with a non-allow-listed IP returns **403**, not 401 | Create key, omit caller IP from access list, call `/groups` | §3.4 error taxonomy |
 | L3 | `>100` projects paginate as documented via `links.next` | Point at an org with >100 projects (or mock via `itemsPerPage=1`) | §3.3 pagination fix |
 | L4 | SA token mint under concurrent refresh has no surprising throttle on `oauth/token` | Fire N parallel client_credentials mints | §5.6 |
-| L5 | Two credentials in the **same** org produce duplicate org/project IDs (dedup path) | Add 2 keys to 1 org; run `listAll()`; inspect dupes | §7 Q5 |
+| L5 | Two least-privilege credentials in the **same** org expose overlapping/disjoint project subsets (merge/union path) | Add 2 scoped keys to 1 org with different project roles; run `listAll()`; confirm the union merges by `projectId` | §7 Q5 |
 
-> **Recommendation:** run L1 and L2 first — they gate the whole "credential = org" model. If L1
-> is false (a credential can span orgs), the tree in §8 still works but the dedup policy (Q5)
-> becomes more important. Everything else survives.
+> **Recommendation:** run L1 and L2 first — they gate the org/project attribution model. L1 is
+> expected to confirm the one-org boundary **and** the role-driven project subset; L5 then
+> exercises the same-org merge path. Everything else survives regardless of outcome.
 
 ---
 
@@ -461,7 +499,7 @@ secrets). They are the only feasibility gaps left; each is cheap once an account
 | A | `AtlasCredentialStore` on StorageService (copy `sourceStore`) | S–M |
 | B | Per-credential session/token refactor of `AtlasSessionManager` | M |
 | C | `AtlasDiscoveryService.listAll` aggregation + pagination fix | M |
-| D | Tree: per-credential org nodes + per-credential error/retry nodes (list mode later, item #8) | M |
+| D | Tree: `orgId`-keyed org nodes merging projects across credentials + per-credential error/retry nodes (list mode later, item #8) | M |
 | E | Manage-credentials QuickPick (Azure-style) + wire to add/edit webview (item #6) | M |
 | F | Wizard: dedup + credential attribution through connect | S–M |
 | G | Tests (unit for store/aggregation/error taxonomy) + l10n | M |
@@ -472,14 +510,15 @@ prototyped here.
 
 ### 10.2 Decision gates (build only if all hold)
 
-1. **L1 passes** (credential ≈ org, or at least a stable enumerable org set). — _blocking_
+1. **L1 passes** (each credential maps to one org with a stable, enumerable project subset). — _blocking_
 2. **L2 confirms 403-vs-401 distinguishability** so "empty vs broken vs forbidden" UX is real. — _blocking_
 3. Product still wants multiple orgs visible simultaneously (the whole point). — _product_
 
 ### 10.3 Scrap / de-scope criteria
 
-- If L1 shows credentials cannot be stably attributed to an org **and** dedup proves messy,
-  **de-scope item #8's org tree** and ship item #7 as a flat, per-credential cluster list only.
+- If L1 shows credentials cannot be stably attributed to an org **and** the same-org merge
+  proves messy, **de-scope item #8's org tree** and ship item #7 as a flat, per-credential
+  cluster list only.
 - If the manage-credentials UX (E) balloons, ship the **store + aggregation (A–C)** behind the
   existing single-session UX first (invisible internal refactor), then add multi-credential UI
   as a fast follow. A–C alone fixes the pagination bug and the all-or-nothing risk with zero
@@ -494,9 +533,10 @@ prototyped here.
 1. **Keep one global session, add a "switch credential" command.** Cheapest, but defeats the
    reviewer's goal (see many orgs _at once_) and keeps the single-slot storage. Rejected as the
    primary path; acceptable **fallback** if item #8 is de-scoped.
-2. **No dedup, always per-credential grouping.** Simplest aggregation (skip Q5 entirely). Since
-   a credential ≈ one org, dupes only appear when two credentials share an org — rare. Good
-   **POC-stage** choice; revisit dedup only if L5 shows it matters.
+2. **No merge, always per-credential grouping.** Simplest aggregation (skip the union in Q5):
+   render each credential's org/project/cluster subtree independently, so the same org/project
+   may appear more than once when credentials share an org. Good **POC-stage** choice to defer
+   the merge; promote to the ID-keyed union (§7 Q5) once L5 confirms same-org overlap in practice.
 3. **Bespoke secret store instead of `StorageService`.** Rejected — reinvents the K8s solution,
    more migration risk, no upside.
 4. **Background token-refresh timer.** Rejected — lazy refresh at expand time is sufficient and
