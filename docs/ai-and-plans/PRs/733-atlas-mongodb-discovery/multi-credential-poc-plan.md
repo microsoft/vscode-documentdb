@@ -563,7 +563,7 @@ if it reads as noise.
   name/label; if it never succeeded, its user label or key/clientId prefix — §5.5) carrying the
   actionable children from §6.2. Healthy orgs render normally beside it.
 - **Authoritative-empty is _not_ an error** (`200 []`, §3.4): the org still renders, with a muted
-  info child, never a retry node:
+  info child, never a retry node (§7.8 proposes retiring even this bare info row):
 
 ```text
 ├─ 🏢 Delta Co                           via API Key
@@ -664,7 +664,7 @@ actionable home. Error → node mapping at happy-path scale, building on §6.2:
 | Per-credential outcome                             | Where it lands (Tree mode)                                                                 |
 | -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
 | healthy                                            | org → projects → clusters (or a flat cluster row in List mode)                             |
-| `ok-empty` (`200 []`)                              | org node + muted "No projects visible" (not an error)                                      |
+| `ok-empty` (`200 []`)                              | org node; retire the bare info row — prefer an action or the QuickPick (§7.8)              |
 | `401` expired / rejected                           | ⚠ attention node + **retry** + **update credentials**                                      |
 | `403` forbidden (IP / roles)                       | ⚠ attention node + **retry** (+ IP/roles hint)                                             |
 | `429` rate-limited                                 | transient ⚠ + auto-retry (honour `Retry-After`)                                            |
@@ -676,6 +676,105 @@ Whenever `credentialErrors.length > 0`, **List mode is disabled and the view for
 (§7.4); it re-enables once every credential is healthy again. Root-level actions (context menu /
 inline): **Manage credentials** (opens the §7.1 QuickPick), **Add credential**, **Refresh**.
 Removal deletes only that credential's secrets and its nodes.
+
+### 7.7 Simplified variant — "quiet tree, loud QuickPick" (noise reduction)
+
+A layer on top of §7.3 that **keeps errors out of node descriptions**. Descriptions (the greyed
+secondary text) are where noise accumulates: a warning on every affected node, plus a root
+counter, plus `via <method>` on healthy nodes. This variant strips that to the minimum with three
+moves.
+
+**1 — Drop baseline descriptions.** Remove `via API Key` / `via Service Account` from healthy org
+nodes (credential identity → tooltip + QuickPick, not the tree). Show cluster **state only when it
+is _not_ `IDLE`** (e.g. `Updating…`, `Paused`); the common case shows nothing. The happy path
+becomes pure structure:
+
+```text
+🌩 MongoDB Atlas
+├─ 🏢 Acme Corp
+│  └─ 📁 Payments
+│     └─ 🍃 payments-prod
+├─ 🏢 Beta Ltd
+│  ├─ 📁 Web
+│  │  └─ 🍃 web-cluster
+│  └─ 📁 Analytics
+│     └─ 🍃 analytics-rs
+└─ 🏢 Gamma Inc
+   └─ 📁 Research
+      └─ 🍃 research-flex
+```
+
+**2 — Collapse all error UI into one actionable row.** Instead of a per-credential attention node
+(each with its own description + child retry/update rows) plus a root-description counter, render
+a **single** actionable row that opens the §7.1 Manage-Credentials QuickPick — which already lists
+each credential with status and per-item Retry / Update / Remove:
+
+```text
+🌩 MongoDB Atlas
+├─ ⚠ 2 credentials need attention — click to manage
+├─ 🏢 Acme Corp
+│  └─ 📁 Payments
+│     └─ 🍃 payments-prod
+└─ 🏢 Gamma Inc
+   └─ 📁 Research
+      └─ 🍃 research-flex
+```
+
+All recovery detail (which credential, why, retry vs. update) lives in the QuickPick, not the
+tree. The tree gains **one** row, carries **no** warning descriptions, and the healthy orgs stay
+pristine.
+
+**3 — Mark a partially-affected org with an icon, never text.** For the §7.5 "two creds, one org,
+one fails" case, put a **warning icon only** on the affected org (no description); the tooltip
+explains and the single attention row handles recovery:
+
+```text
+├─ 🏢 Acme Corp  ⚠         ← icon only; tooltip: "Some projects may be hidden —
+│  ├─ 📁 Payments             click 'credentials need attention' to manage"
+│  └─ 📁 Web
+```
+
+**Trade-off:** the tree no longer shows _which_ credential failed inline — that detail moves to
+the QuickPick. For the 1–4 credential happy path this is a good trade (the QuickPick is one click
+away and is the right place to fix a credential). Pick this variant when descriptions get busy;
+pick §7.3's inline attention nodes when you want recovery actions **in situ**. The two can even be
+**progressive**: render the quiet single row by default, and expand it into the §7.3 inline nodes
+on click — quiet until the user asks for detail.
+
+### 7.8 Retiring the non-actionable info node ("No projects visible")
+
+The bare `ℹ No projects visible to this credential` row is a dead end — it states a fact and
+offers nothing to do. Replace it; every tree row should be either a **real resource** or an
+**action**. Options, best-first:
+
+- **A — Make it actionable (preferred).** A credential that authenticates but sees no projects is
+  almost always a **permissions** gap (roles / project assignment). Offer the next step instead of
+  a fact:
+
+  ```text
+  🏢 Acme Corp
+  └─ 🔗 Grant this credential access to a project…   ▸ opens the Atlas access page
+  ```
+
+  Deep-link to the org-scoped Atlas console page when we can build the URL; otherwise open a short
+  explainer with the link. A dead row becomes a fix.
+
+- **B — Fold into the parent, no child row.** Render the org as a **leaf** (no expand chevron)
+  with the explanation in its **tooltip** and a context-menu action ("Manage project access in
+  Atlas"). Nothing non-actionable is shown; the empty state is silent.
+
+- **C — Surface in the QuickPick, not the tree.** Don't render a zero-project org as a branch at
+  all; the Manage-Credentials QuickPick shows `Acme key — connected · 0 projects visible` with a
+  **Fix access** action. The tree stays strictly real resources; a single subtle root affordance
+  ("1 credential has no visible projects — manage") avoids a silent disappearance.
+
+- **D — Fold into the attention row (§7.7).** Treat "connected but 0 projects" as a soft attention
+  state inside the same consolidated row ("1 credential sees no projects — click to manage"). Most
+  consistent with the quiet-tree variant.
+
+**Recommendation:** **A** when a useful Atlas URL exists (turn the dead-end into a fix); otherwise
+**C/D** (surface in the QuickPick / attention row). Never ship a bare info row. This same
+principle retires _any_ purely-informational node, including the `ok-empty` row in §7.6's table.
 
 ---
 
