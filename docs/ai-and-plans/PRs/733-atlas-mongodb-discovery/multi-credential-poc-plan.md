@@ -368,7 +368,7 @@ how MongoDB's own tools behave:
   to register as an OAuth app with Atlas**, so this flow **cannot be implemented today** — it is
   blocked on MongoDB providing public app registration, not merely on our effort. Until that
   exists, the two programmatic methods above are the only viable options, which is _why_ the
-  multi-credential model and its UX ([§7](#7-credential-management--tree-ux-proposals)) are
+  multi-credential model and its UX ([§7](#7-credential-management--tree-ux-selected-design)) are
   necessary rather than optional.
 
 ---
@@ -420,26 +420,39 @@ demonstrates the concrete difference.
 
 ---
 
-## 7. Credential management & tree UX (proposals)
+## 7. Credential management & tree UX (selected design)
 
-> **Scope:** the **happy path is 1–4 credential sets**, not 100+. Every design choice below optimises
-> for a handful of credentials; large-fleet concerns (search, grouping, lazy loading,
-> virtualization) are explicitly out of scope and flagged where they would eventually bite.
+> **Scope:** happy path **1–4 credential sets**, not 100+; large-fleet concerns (search, grouping,
+> virtualization) are out of scope. Earlier tree-view approaches that were considered and
+> **dropped** are preserved in §7.7 with the reason for each.
 
-Two surfaces are involved and should stay **separate**:
+The selected design in one line: **credentials are managed in a QuickPick wizard (kept out of the
+tree); the tree and list stay quiet on the happy path; a single `Click here to revisit
+credentials` node appears whenever anything is wrong; and refresh simply retries everything.**
 
-1. **Management** — _"what credentials do I have; add / remove / fix them."_ Lives **outside the
-   tree**, in an Azure-style QuickPick that launches the item-#6 webview to add/edit.
-2. **Discovery** — _"show me my orgs / projects / clusters."_ Lives **in the tree**. The open UX
-   question is _where per-credential errors surface_ without imposing a permanent credential
-   level on the common single-credential user.
+### 7.1 Principles (what was chosen)
 
-### 7.1 Management surface — Azure-style QuickPick + webview (recommended)
+- **Management lives outside the tree** — an Azure-style QuickPick wizard that launches the
+  item-#6 webview to add / edit credentials (§7.2).
+- **Quiet tree** — healthy nodes carry **no** `via <method>` descriptions; a cluster shows its
+  **state only when it is not `IDLE`** (`Updating…`, `Paused`).
+- **One consolidated error node** — on any credential failure the view shows a single actionable
+  **`⚠ Click here to revisit credentials`** row. The label is short; the **tooltip** carries the
+  detail (which credentials, and why). Clicking opens the management wizard (§7.2).
+- **Identical in Tree and List modes** — the same error node appears in both; there is **no**
+  view-mode switching or blocking (§7.4).
+- **Empty state = the standard `empty` placeholder** already used in the Connections view
+  (`$(indent)` icon, label `empty`, detail in the tooltip) — not a sentence (§7.3).
+- **Refresh retries everything** — one refresh re-attempts every credential; no modals (§7.5).
+- **Every row is a real resource or an action** — no bare informational nodes.
 
-Mirrors [`configureAzureCredentials`](../../../../src/plugins/api-shared/azure/credentialsManagement/configureAzureCredentials.ts).
-Entry points: the root inline **gear** (existing `manageCredentials` command), the root context
-menu, and the on-error tree nodes (§7.3). The QuickPick lists saved credentials with a method
-icon and live status:
+### 7.2 Credential management wizard (QuickPick + webview) — paths & flows
+
+Management mirrors [`configureAzureCredentials`](../../../../src/plugins/api-shared/azure/credentialsManagement/configureAzureCredentials.ts).
+Entry points: the discovery root's inline **gear** (the existing `manageCredentials` command),
+the root context menu, and the **`Click here to revisit credentials`** error node (§7.3).
+
+**The list (what you have):**
 
 ```text
 Manage MongoDB Atlas Credentials
@@ -453,7 +466,7 @@ $(sign-out) Sign out of all
 $(close)    Exit
 ```
 
-Selecting a credential opens a per-item action menu (Azure's `TenantActionStep` shape):
+**Per-credential actions** (select a row → submenu, Azure's `TenantActionStep` shape):
 
 ```text
 Beta Ltd — Service Account
@@ -490,62 +503,181 @@ request) — the natural home for the "which should I use?" guidance from §5.7:
 Keeping the chooser **inside** the webview (not a separate QuickPick) makes the whole add-flow one
 guided surface, and lets the toggle live-swap the form fields + help text.
 
-### 7.2 The core tension — and the toggle we already have
-
-Two constraints shape the design:
-
-- **Credentials stay out of the tree.** A permanent credential level (a connection-manager
-  root) would make error isolation trivial, but it adds a level the common 1-credential user
-  never needed and duplicates the management QuickPick (§7.1). Rejected.
-- **A Tree/List toggle already exists (item #8).** The discovery view already plans the
-  Kubernetes-style [view-mode toggle](../../../../src/plugins/service-kubernetes/commands/switchKubernetesViewMode.ts):
-  **Tree** = org → project → cluster nested; **List** = _flat clusters with `org · project` in
-  the description_. We design **around that toggle**, not add a second one — so there is **no**
-  separate "group by credential" mode.
-
-That leaves one open question: **where does a broken credential surface**, given that List mode
-has no org/credential node to hang an error on? The answer (below): credentials are invisible
-until they fail; on failure the view **forces Tree mode and disables List** until the problem
-clears.
+**Add flow (happy path + failure):**
 
 ```mermaid
 flowchart TD
-    A["Root getChildren()"] --> B{"Any credential errored?"}
-    B -->|"yes"| T["Force TREE mode<br/>(List toggle disabled)"]
-    B -->|"no"| M{"View mode — item #8 toggle"}
-    M -->|"Tree"| TT["org -> project -> cluster<br/>(credentials invisible)"]
-    M -->|"List"| LL["flat clusters<br/>org · project in the description"]
-    T --> G["healthy orgs (full or partial)<br/>+ attention node where a credential failed"]
+    Q["Manage Credentials QuickPick"] -->|"Add a credential…"| W1["Webview · choose method"]
+    W1 -->|"Continue"| W2["Webview · enter secret, submit"]
+    W2 --> V{"Validate host-side<br/>(listProjects)"}
+    V -->|"200 OK"| OK["Store credential · toast · tree refreshes"]
+    V -->|"401 / 403 / network"| ERR["Inline MessageBar in webview<br/>secret retained · webview stays open"]
+    ERR -->|"correct & resubmit"| W2
+    ERR -->|"close webview"| CX["Cancelled · nothing stored"]
 ```
 
-### 7.3 The tree model — merged org tree; credentials surface **only on error**
+- **Validation is host-side before storing** (§5.3): a Service Account that can mint a token but
+  cannot `listProjects` is still rejected with an inline hint, so we never store a credential that
+  cannot discover anything.
+- **Failure keeps the webview open** with the entered secret retained, so the user fixes the
+  Atlas-side issue (roles / IP access list) and resubmits — no restart.
+- **Cancel / close stores nothing** and leaves any previously-working credential untouched.
 
-Credentials are invisible on the happy path. The **org level is the natural top level** (each
-credential resolves to one org; §3.1), and projects merge across credentials by `orgId`
-(§3.1, §8 Q5). A credential becomes visible **only when it fails**, as a single actionable
-"attention" node at the root.
+**Recover an existing credential (from the error node):**
 
-**Happy path (3 healthy credentials → 3 orgs):**
+```mermaid
+flowchart LR
+    N["Tree/List: ⚠ Click here to revisit credentials"] --> Q["Manage Credentials QuickPick<br/>(failed credentials flagged)"]
+    Q -->|"pick failed credential"| A["Retry · Update · Remove"]
+    A -->|"Retry"| RT["re-run listAll for it · clears on success"]
+    A -->|"Update credentials…"| WV["webview (edit) → validate → replace secret"]
+    A -->|"Remove"| RM["drop credential · its nodes disappear"]
+```
+
+- **Update** replaces the stored secret only **after** the new one validates, so a failed update
+  never destroys the previous working credential (§5.2, item #12).
+- **Remove** deletes only that credential's secrets and its tree nodes; other credentials are
+  untouched.
+- **Sign out of all** clears every credential after a single confirm.
+
+### 7.3 Tree mode — the quiet tree
+
+The org level is the natural top level (each credential resolves to one org; §3.1); projects merge
+across credentials by `orgId` (§3.1, §8 Q5). On the happy path the tree is **pure structure** — no
+descriptions, cluster state shown only when it is not `IDLE`:
 
 ```text
-🌩 MongoDB Atlas                         Signed in · 3 credentials
-├─ 🏢 Acme Corp                          via API Key
+🌩 MongoDB Atlas
+├─ 🏢 Acme Corp
 │  └─ 📁 Payments
-│     └─ 🍃 payments-prod   IDLE
-├─ 🏢 Beta Ltd                           via Service Account
+│     └─ 🍃 payments-prod
+├─ 🏢 Beta Ltd
 │  ├─ 📁 Web
-│  │  └─ 🍃 web-cluster     IDLE
+│  │  └─ 🍃 web-cluster
 │  └─ 📁 Analytics
-│     └─ 🍃 analytics-rs    IDLE
-└─ 🏢 Gamma Inc                          via Service Account
+│     └─ 🍃 analytics-rs        Updating…    ← state shown only when not IDLE
+└─ 🏢 Gamma Inc
    └─ 📁 Research
-      └─ 🍃 research-flex   IDLE
+      └─ 🍃 research-flex
 ```
 
-`via <method>` is a muted description (or tooltip) — cheap identity signal at this scale; drop it
-if it reads as noise.
+**On any credential failure — one node, not many.** All failing credentials collapse into a single
+top row; the detail lives in its tooltip and in the wizard it opens:
 
-**Partial failure (Beta's SA secret expired → 401; Gamma IP-denied → 403; Acme healthy):**
+```text
+🌩 MongoDB Atlas
+├─ ⚠ Click here to revisit credentials     ← tooltip: "2 credentials need attention:
+├─ 🏢 Acme Corp                                Beta (session expired), Gamma (access denied)"
+│  └─ 📁 Payments
+│     └─ 🍃 payments-prod
+└─ 🏢 Gamma Inc
+   └─ 📁 Research
+      └─ 🍃 research-flex
+```
+
+**Partially-affected org** (two credentials for one org, one fails). The org keeps rendering its
+healthy projects; a **warning icon only** (no description) marks it, and the single error node
+handles recovery:
+
+```text
+├─ 🏢 Acme Corp  ⚠          ← tooltip: "Some projects may be hidden — a credential for
+│  ├─ 📁 Payments              this org needs attention. Click 'revisit credentials'."
+│  └─ 📁 Web
+```
+
+- **≥ 1 healthy credential for the org** → it renders its (partial) merged projects + the warning
+  icon; the error node handles recovery.
+- **No healthy credential for the org** → its data is absent; only the error node represents it.
+- **Attribution** uses the failed credential's **cached** `orgId`/`orgName` (§5.1); a project both
+  credentials can see is deduped by `projectId` (§8 Q5).
+
+**Empty** (a credential authenticates but sees no projects, `200 []`). Reuse the **`empty`
+placeholder** from an empty folder in the Connections view — `$(indent)` icon, label `empty`,
+explanation in the tooltip — nothing more:
+
+```text
+├─ 🏢 Delta Co
+│  └─ $(indent) empty       ← tooltip: "This credential can't see any projects yet.
+│                              Check its project access / roles in Atlas."
+```
+
+### 7.4 List mode — same error node, no switch
+
+List mode (item #8) flattens to clusters with `org · project` in the description — that context
+**stays** (it is useful). The quiet-tree rules apply equally: no per-cluster noise, and the **same**
+`Click here to revisit credentials` node sits at the top when anything fails. No view switching, no
+blocking.
+
+**Happy path:**
+
+```text
+🌩 MongoDB Atlas   ☰ List
+├─ 🍃 payments-prod    Acme Corp · Payments
+├─ 🍃 web-cluster      Beta Ltd · Web
+├─ 🍃 analytics-rs     Beta Ltd · Analytics     Updating…
+└─ 🍃 research-flex    Gamma Inc · Research
+```
+
+**With a failure — identical error node, in place:**
+
+```text
+🌩 MongoDB Atlas   ☰ List
+├─ ⚠ Click here to revisit credentials     ← same node as Tree mode; same tooltip + action
+├─ 🍃 payments-prod    Acme Corp · Payments
+└─ 🍃 research-flex    Gamma Inc · Research
+```
+
+Because the error node is just another row, List mode needs no special-casing — the earlier
+"force Tree / disable List" workaround is dropped (§7.7). The empty state uses the same `empty`
+placeholder as Tree mode.
+
+### 7.5 Refresh & retry behavior
+
+**Refresh retries everything.** A tree refresh re-runs `listAll()` across **all** credentials —
+healthy and failed alike — and re-renders. No modals, no per-credential prompts: one click, whole
+fleet re-attempted.
+
+**Accepted trade-off.** Elsewhere the design deliberately gates retries behind the explicit error
+node, so a persistently-failing credential is not hammered on every tree expansion. A manual
+**refresh** intentionally bypasses that gate and retries all — including credentials the user has
+not touched. For the 1–4 credential happy path this is fine: a refresh is a deliberate action, and
+the cost is a handful of requests against independent per-credential rate buckets (§3.4). We accept
+it as a **niche** trade-off rather than tracking per-credential retry-eligibility through a manual
+refresh.
+
+- **On expand / passive load** — a failed credential stays collapsed behind its error node and is
+  **not** silently re-attempted (prevents retry storms).
+- **On explicit refresh** — everything is re-attempted (the user asked for it).
+- **On the error node → Retry** — only that one credential is re-attempted (§7.2).
+
+### 7.6 Scenario catalog — what renders
+
+At happy-path scale every state maps to a small set of renderings (building on §6.2). The
+"two credentials, one org, one fails" case (§7.3) is the only one that keeps an org **partially**
+visible; all other failures collapse to the single error node.
+
+| Scenario                                | Tree mode                                                                | List mode                                       |
+| --------------------------------------- | ------------------------------------------------------------------------ | ----------------------------------------------- |
+| all healthy                             | org → project → cluster (quiet)                                          | flat clusters, `org · project`                  |
+| a cluster not `IDLE`                    | state shown on that cluster only                                         | state in the row                                |
+| a credential `200 []` (no projects)     | org → `empty` placeholder                                                | (org absent from a flat list)                   |
+| any credential `401` / `403` / network  | one `⚠ Click here to revisit credentials` node                           | the same node, at the top                       |
+| one org, 2 creds, one fails             | org renders its healthy projects + **warning icon**; plus the error node | clusters from the healthy cred + the error node |
+| org reachable via no healthy credential | its data is absent; plus the error node                                  | absent; plus the error node                     |
+| whole fleet failed                      | only the error node under the root                                       | only the error node                             |
+
+The error node's **tooltip** always enumerates the affected credentials and reasons; the **label**
+never changes (`Click here to revisit credentials`), so the view stays quiet no matter how many
+credentials failed.
+
+### 7.7 Archive — tree-view approaches considered and dropped
+
+Kept for the record. Each was viable; the operator chose the quieter model above.
+
+**A1 — Verbose merged tree (descriptions + per-credential inline attention nodes).** The original
+form of §7.3: healthy nodes carried `via API Key` / `via Service Account`, the root description
+counted failures, and each failed credential expanded into its own attention node with child
+**retry** + **update credentials** rows:
 
 ```text
 🌩 MongoDB Atlas                         2 of 3 credentials need attention
@@ -559,222 +691,40 @@ if it reads as noise.
    └─ ↻  Click here to retry             (check IP access list / roles)
 ```
 
-- A broken credential **collapses** to a labelled attention node (using its **cached** org
-  name/label; if it never succeeded, its user label or key/clientId prefix — §5.5) carrying the
-  actionable children from §6.2. Healthy orgs render normally beside it.
-- **Authoritative-empty is _not_ an error** (`200 []`, §3.4): the org still renders, with a muted
-  info child, never a retry node (§7.8 proposes retiring even this bare info row):
+**Why dropped:** description noise — warnings accumulated across the root description **and** every
+affected node **and** child action rows. Superseded by the single `Click here to revisit
+credentials` node + tooltip (§7.3), with recovery handled in the wizard. _(In-situ recovery nodes
+remain a possible progressive-disclosure enhancement — expand the single node into these on click
+— but are not the default.)_
 
-```text
-├─ 🏢 Delta Co                           via API Key
-│  └─ ℹ No projects visible to this credential
-```
-
-- The root **description summarises degradation** ("2 of 3 credentials need attention") so the
-  user notices without a modal per credential (§6.2). Modals stay reserved for the single-
-  credential empty case (item #3).
-
-**Why it fits 1–4 credentials:** at most a handful of top-level nodes; attention nodes are rare
-and self-explanatory; no grouping or search needed. (At 100+ credentials the root would grow
-long — out of scope; that scale would want credential grouping or search, which we deliberately
-do not build here.)
-
-### 7.4 List mode (item #8) and errors — auto-switch to Tree, block List
-
-In **List mode**, the item-#8 toggle flattens the whole view to clusters, with `org · project`
-in the description — no org or credential nodes:
-
-```text
-🌩 MongoDB Atlas   ☰ List                 Signed in · 3 credentials
-├─ 🍃 payments-prod   IDLE    Acme Corp · Payments
-├─ 🍃 web-cluster     IDLE    Beta Ltd · Web
-├─ 🍃 analytics-rs    IDLE    Beta Ltd · Analytics
-└─ 🍃 research-flex   IDLE    Gamma Inc · Research
-```
-
-A flat cluster list has **nowhere to attach a credential error** — there is no org or credential
-row to carry a retry action. Rather than invent a hybrid, the rule is explicit:
-
-> **While any credential is in an error state (`credentialErrors.length > 0`), the view forces
-> Tree mode and disables the List toggle.** It re-enables List once every credential is healthy.
+**A2 — List mode: auto-switch to Tree + disable List on error.** An earlier version of List mode
+treated a flat
+list as unable to host an error, so any failure forced Tree mode and greyed out the List toggle:
 
 ```text
 🌩 MongoDB Atlas   ☰ List (unavailable)   2 of 3 credentials need attention
    ⓘ Switched to Tree view — resolve the flagged credentials to re-enable List view.
-        (Tree renders the healthy clusters + the attention nodes from §7.3)
 ```
 
-- The switch is **automatic and announced** (the root description line), never silent, so the
-  user understands why the layout changed.
-- The toggle is **visibly disabled** (greyed inline icon + tooltip), not hidden, so its temporary
-  unavailability is discoverable.
-- Reuse the item-#8 scaffold verbatim — the `'list' | 'tree'` state key and the `…ViewModeTree` /
-  `…List` contextValue marker — and add one guard: `effectiveMode = hasErrors ? 'tree' :
-savedMode`, remembering `savedMode` so the user's List preference is restored after recovery.
-- **Softer alternative (noted, not chosen):** keep List mode but pin a single non-collapsible
-  "⚠ N credentials need attention — switch to Tree to fix" row at the top. Rejected for now
-  because the actionable retry/update nodes still cannot live in a flat list; the auto-switch is
-  clearer.
+**Why dropped:** it was a "magic switch" — the layout changed under the user. Because the
+consolidated error node is just another row, it drops into a flat list unchanged (§7.4), so List
+mode needs no special-casing at all.
 
-### 7.5 The hard case — two credentials for one org, only one fails
+**A3 — Separate "group by credential" view mode, and a permanent credential level.** Considered
+early and dropped before this iteration: a second toggle duplicated the existing item-#8 Tree/List
+toggle, and a permanent credential root (a connection-manager level) added a hop the common
+1-credential user never needed and duplicated the wizard. The org-keyed merged tree (§7.3) plus the
+wizard (§7.2) cover both goals without either.
 
-This is the scenario the merge model must get right. Org **Acme** is reachable through two
-credentials:
+**A4 — Actionable deep-link empty node.** An earlier iteration proposed replacing the bare
+"No projects visible" row with an actionable `🔗 Grant this credential access to a project…`
+deep-link into the Atlas console (plus variants: fold into the parent tooltip, surface in the
+wizard, or merge into the error node).
 
-- **Acme key** (API Key, healthy) — surfaces projects _Payments_, _Web_.
-- **Acme SA** (Service Account, secret expired → 401) — would surface _Analytics_, _Reports_.
-
-Because projects merge by `orgId` (§3.1, §8 Q5), Acme is **one** org node. One contributing
-credential is healthy and one failed, so the org is **partially** visible. Attribute the failure
-to the org it affects (using the failed credential's **cached** `orgId`/`orgName`, §5.1):
-
-```text
-🌩 MongoDB Atlas                         1 of 2 credentials need attention
-└─ 🏢 Acme Corp                          2 credentials · 1 needs attention
-   ├─ 📁 Payments
-   │  └─ 🍃 payments-prod   IDLE
-   ├─ 📁 Web
-   │  └─ 🍃 web-cluster     IDLE
-   └─ ⚠ Some projects may be hidden — “Acme SA” session expired
-      ├─ ↻  Click here to retry
-      └─ 🔑 Click here to update credentials
-```
-
-Rules:
-
-- **Org has ≥ 1 healthy contributing credential** → render the org with its (partial) merged
-  projects, plus an **inline attention child** flagging that a contributing credential failed and
-  some projects may be missing. The org stays usable; only the missing slice is called out.
-- **Org has 0 healthy contributing credentials** (all its credentials failed) → the org cannot
-  render data, so it **collapses to a root-level attention node** (the base model, §7.3).
-- **Failed credential with no cached org** (it never succeeded once) → cannot be attributed to an
-  org, so it appears as a **root-level** attention node labelled by its user label / key prefix.
-- **Dedup:** a project both credentials can see is keyed by `projectId` and appears **once**
-  (§8 Q5); the inline attention child only claims projects _may_ be hidden, since we cannot
-  enumerate what the failed credential would have added.
-
-### 7.6 Recommendation & partial-error mapping
-
-**One design: the merged org tree (§7.3), rendered in Tree mode; the item-#8 List mode is a
-presentation of the same healthy data and is auto-disabled while any credential needs attention
-(§7.4).** No separate credential view mode; no permanent credential level. This honours the
-stated preference (credentials managed via the QuickPick) while giving every failure a concrete,
-actionable home. Error → node mapping at happy-path scale, building on §6.2:
-
-| Per-credential outcome                             | Where it lands (Tree mode)                                                                 |
-| -------------------------------------------------- | ------------------------------------------------------------------------------------------ |
-| healthy                                            | org → projects → clusters (or a flat cluster row in List mode)                             |
-| `ok-empty` (`200 []`)                              | org node; retire the bare info row — prefer an action or the QuickPick (§7.8)              |
-| `401` expired / rejected                           | ⚠ attention node + **retry** + **update credentials**                                      |
-| `403` forbidden (IP / roles)                       | ⚠ attention node + **retry** (+ IP/roles hint)                                             |
-| `429` rate-limited                                 | transient ⚠ + auto-retry (honour `Retry-After`)                                            |
-| org still reachable via another healthy credential | org renders (partial) + inline "⚠ some projects may be hidden — &lt;cred&gt;" child (§7.5) |
-| org reachable via **no** healthy credential        | root-level ⚠ attention node for that org / credential                                      |
-| whole fleet failed                                 | root shows only attention nodes + a summary                                                |
-
-Whenever `credentialErrors.length > 0`, **List mode is disabled and the view forces Tree mode**
-(§7.4); it re-enables once every credential is healthy again. Root-level actions (context menu /
-inline): **Manage credentials** (opens the §7.1 QuickPick), **Add credential**, **Refresh**.
-Removal deletes only that credential's secrets and its nodes.
-
-### 7.7 Simplified variant — "quiet tree, loud QuickPick" (noise reduction)
-
-A layer on top of §7.3 that **keeps errors out of node descriptions**. Descriptions (the greyed
-secondary text) are where noise accumulates: a warning on every affected node, plus a root
-counter, plus `via <method>` on healthy nodes. This variant strips that to the minimum with three
-moves.
-
-**1 — Drop baseline descriptions.** Remove `via API Key` / `via Service Account` from healthy org
-nodes (credential identity → tooltip + QuickPick, not the tree). Show cluster **state only when it
-is _not_ `IDLE`** (e.g. `Updating…`, `Paused`); the common case shows nothing. The happy path
-becomes pure structure:
-
-```text
-🌩 MongoDB Atlas
-├─ 🏢 Acme Corp
-│  └─ 📁 Payments
-│     └─ 🍃 payments-prod
-├─ 🏢 Beta Ltd
-│  ├─ 📁 Web
-│  │  └─ 🍃 web-cluster
-│  └─ 📁 Analytics
-│     └─ 🍃 analytics-rs
-└─ 🏢 Gamma Inc
-   └─ 📁 Research
-      └─ 🍃 research-flex
-```
-
-**2 — Collapse all error UI into one actionable row.** Instead of a per-credential attention node
-(each with its own description + child retry/update rows) plus a root-description counter, render
-a **single** actionable row that opens the §7.1 Manage-Credentials QuickPick — which already lists
-each credential with status and per-item Retry / Update / Remove:
-
-```text
-🌩 MongoDB Atlas
-├─ ⚠ 2 credentials need attention — click to manage
-├─ 🏢 Acme Corp
-│  └─ 📁 Payments
-│     └─ 🍃 payments-prod
-└─ 🏢 Gamma Inc
-   └─ 📁 Research
-      └─ 🍃 research-flex
-```
-
-All recovery detail (which credential, why, retry vs. update) lives in the QuickPick, not the
-tree. The tree gains **one** row, carries **no** warning descriptions, and the healthy orgs stay
-pristine.
-
-**3 — Mark a partially-affected org with an icon, never text.** For the §7.5 "two creds, one org,
-one fails" case, put a **warning icon only** on the affected org (no description); the tooltip
-explains and the single attention row handles recovery:
-
-```text
-├─ 🏢 Acme Corp  ⚠         ← icon only; tooltip: "Some projects may be hidden —
-│  ├─ 📁 Payments             click 'credentials need attention' to manage"
-│  └─ 📁 Web
-```
-
-**Trade-off:** the tree no longer shows _which_ credential failed inline — that detail moves to
-the QuickPick. For the 1–4 credential happy path this is a good trade (the QuickPick is one click
-away and is the right place to fix a credential). Pick this variant when descriptions get busy;
-pick §7.3's inline attention nodes when you want recovery actions **in situ**. The two can even be
-**progressive**: render the quiet single row by default, and expand it into the §7.3 inline nodes
-on click — quiet until the user asks for detail.
-
-### 7.8 Retiring the non-actionable info node ("No projects visible")
-
-The bare `ℹ No projects visible to this credential` row is a dead end — it states a fact and
-offers nothing to do. Replace it; every tree row should be either a **real resource** or an
-**action**. Options, best-first:
-
-- **A — Make it actionable (preferred).** A credential that authenticates but sees no projects is
-  almost always a **permissions** gap (roles / project assignment). Offer the next step instead of
-  a fact:
-
-  ```text
-  🏢 Acme Corp
-  └─ 🔗 Grant this credential access to a project…   ▸ opens the Atlas access page
-  ```
-
-  Deep-link to the org-scoped Atlas console page when we can build the URL; otherwise open a short
-  explainer with the link. A dead row becomes a fix.
-
-- **B — Fold into the parent, no child row.** Render the org as a **leaf** (no expand chevron)
-  with the explanation in its **tooltip** and a context-menu action ("Manage project access in
-  Atlas"). Nothing non-actionable is shown; the empty state is silent.
-
-- **C — Surface in the QuickPick, not the tree.** Don't render a zero-project org as a branch at
-  all; the Manage-Credentials QuickPick shows `Acme key — connected · 0 projects visible` with a
-  **Fix access** action. The tree stays strictly real resources; a single subtle root affordance
-  ("1 credential has no visible projects — manage") avoids a silent disappearance.
-
-- **D — Fold into the attention row (§7.7).** Treat "connected but 0 projects" as a soft attention
-  state inside the same consolidated row ("1 credential sees no projects — click to manage"). Most
-  consistent with the quiet-tree variant.
-
-**Recommendation:** **A** when a useful Atlas URL exists (turn the dead-end into a fix); otherwise
-**C/D** (surface in the QuickPick / attention row). Never ship a bare info row. This same
-principle retires _any_ purely-informational node, including the `ok-empty` row in §7.6's table.
+**Why dropped:** the operator chose the **existing `empty` placeholder** convention instead
+(Connections view: `$(indent)` icon, label `empty`, detail in the tooltip; §7.3) — a deep-link URL
+cannot always be constructed reliably, whereas `empty` is a known, quiet pattern already used in
+the extension. The permissions hint lives in the tooltip.
 
 ---
 
