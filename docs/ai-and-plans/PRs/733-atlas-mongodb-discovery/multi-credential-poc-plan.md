@@ -42,8 +42,8 @@ Recommended shape:
    safe and ~8× faster than sequential — proven by [Experiment 3](#experiment-3--parallel-vs-sequential-fan-out).
 
 **Effort:** medium. See [§11 effort & decision gates](#11-effort-estimate-decision-gates--scrap-criteria).
-**Confidence in feasibility:** high (>90%). The two remaining unknowns both require a live
-Atlas account to close and are called out as [live experiments](#102-experiments-requiring-a-live-atlas-account-deferred).
+**Confidence in feasibility:** high (>90%). The blocking scope, aggregation, and error-taxonomy
+assumptions passed the [live experiments](#102-experiments-requiring-a-live-atlas-account).
 
 ---
 
@@ -172,9 +172,13 @@ Error body fields: `detail`, `error` (int status), `errorCode` (stable constant)
 - **An empty list is `200` with `results: []`, _not_ `404`.** So "no projects" is an
   authoritative, healthy answer — not an error. 404 is only returned when the _context_ does
   not exist (e.g. projects of a non-existent org).
-- **IP Access List rejections are `403`.** A credential can be perfectly valid yet return 403
-  because the caller's IP isn't allow-listed. This is per-credential and recoverable by editing
-  the Atlas access list — it must be reported as a credential error, not a global sign-out.
+- **An enforced IP Access List rejection is `403`.** Atlas only enforces an empty API Access
+  List when the organization's **Require IP Access List for the Atlas Administration API**
+  setting is enabled. If that setting is disabled, an empty list permits requests from any
+  internet address; adding an entry makes the list restrictive. A credential can therefore be
+  valid yet return `403` when the requirement is enabled or a non-matching entry exists. This is
+  per-credential and recoverable by editing the Atlas API Access List — it must be reported as a
+  credential error, not a global sign-out.
 
 This lets the aggregation layer tag each credential result as one of:
 `ok-with-data` · `ok-empty` · `auth-error(401)` · `forbidden(403)` · `rate-limited(429)` ·
@@ -826,22 +830,71 @@ per-credential. Validates §5.4.
 **Finding:** rate limiting is a non-issue for discovery; the limiter and 429 handling are
 defensive only. Validates §3.4.
 
-### 10.2 Experiments requiring a live Atlas account (deferred)
+### 10.2 Experiments requiring a live Atlas account
 
-These cannot be run autonomously (no credentials, and the security policy forbids routing
-secrets). They are the only feasibility gaps left; each is cheap once an account exists.
+These cannot be run autonomously because the security policy forbids routing secrets. The
+operator completed the blocking API-key and Service Account scope checks on 2026-07-25.
 
-| #   | Hypothesis to confirm                                                                                                                                            | Method                                                                                                                                      | Closes              |
-| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- | ------------------- |
-| L1  | A credential belongs to exactly one org; `/groups` returns only the project subset its roles allow (all for `ORG_OWNER`/`ORG_READ_ONLY`, else explicit projects) | Create keys in 2 orgs + a scoped `ORG_MEMBER` key; call `/orgs` and `/groups` with each; confirm 1 org each and the expected project subset | §3.1 core model     |
-| L2  | A valid credential with a non-allow-listed IP returns **403**, not 401                                                                                           | Create key, omit caller IP from access list, call `/groups`                                                                                 | §3.4 error taxonomy |
-| L3  | `>100` projects paginate as documented via `links.next`                                                                                                          | Point at an org with >100 projects (or mock via `itemsPerPage=1`)                                                                           | §3.3 pagination fix |
-| L4  | SA token mint under concurrent refresh has no surprising throttle on `oauth/token`                                                                               | Fire N parallel client_credentials mints                                                                                                    | §5.6                |
-| L5  | Two least-privilege credentials in the **same** org expose overlapping/disjoint project subsets (merge/union path)                                               | Add 2 scoped keys to 1 org with different project roles; run `listAll()`; confirm the union merges by `projectId`                           | §8 Q5               |
+| #   | Hypothesis to confirm                                                                                                                                            | Method                                                                                                                                                                            | Status                                                                                         |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------- |
+| L1  | A credential belongs to exactly one org; `/groups` returns only the project subset its roles allow (all for `ORG_OWNER`/`ORG_READ_ONLY`, else explicit projects) | Create keys in 2 orgs + a scoped `ORG_MEMBER` key; call `/orgs` and `/groups` with each; confirm 1 org each and the expected project subset                                       | **Passed:** different-org, same-org subset, healthy-empty, and Service Account parity observed |
+| L2  | A valid credential rejected by an **enforced** API Access List returns **403**, not 401                                                                          | Enable the organization's API-access-list requirement or add a non-matching entry, omit the caller IP, and probe list plus detail calls for organizations, projects, and clusters | **Passed:** controlled non-match `403`, matching-IP `200`, and invalid-secret `401` observed   |
+| L3  | `>100` projects paginate as documented via `links.next`                                                                                                          | **Not planned:** a representative live account is not feasible; implement pagination from the API contract and cover it with mocked multi-page tests instead                      | Mocked contract coverage required                                                              |
+| L4  | SA token mint under concurrent refresh has no surprising throttle on `oauth/token`                                                                               | **Telemetry-deferred:** do not manufacture live load; instrument production token-mint throttling/failures and review observed frequency                                          | Production telemetry required                                                                  |
+| L5  | Two least-privilege credentials in the **same** org expose overlapping/disjoint project subsets (merge/union path)                                               | Add 2 scoped keys to 1 org with different project roles; run `listAll()`; confirm the union merges by `projectId`                                                                 | **Passed:** overlapping and disjoint project sets produced the expected deduplicated union     |
 
-> **Recommendation:** run L1 and L2 first — they gate the org/project attribution model. L1 is
-> expected to confirm the one-org boundary **and** the role-driven project subset; L5 then
-> exercises the same-org merge path. Everything else survives regardless of outcome.
+> **Conclusion:** L1, L2, and L5 close the live feasibility gates. Proceed with production
+> implementation and automated acceptance coverage. L3 will not be run live; use mocked
+> pagination contract tests. L4 will be observed through privacy-reviewed production telemetry
+> around token-mint throttling/failure classification instead of a synthetic live stress test.
+
+#### Live evidence recorded 2026-07-25
+
+The submitted reports cover these exact combinations. Resource identifiers below refer to the
+stable fingerprints in the sanitized reports; no raw Atlas identifiers or secrets are recorded.
+
+| Evidence | Organization/project setup                                                          | API Access List setup                                                 | Endpoint result                                                                                                                                     | Verdict                                                                                                               |
+| -------- | ----------------------------------------------------------------------------------- | --------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| L1-01    | Org-wide API keys in two organizations; two projects in organization A and one in B | Not under test                                                        | Each key returned one different organization; all organization/project details succeeded; cluster list/detail succeeded where a cluster existed     | **Passed:** different-organization attribution and detail retrieval                                                   |
+| L1-02    | Org-wide key, one-project key, and no-project key in organization A                 | Not under test                                                        | All shared one org fingerprint; visible project counts were 2, 1, and 0; union contained two projects and overlap contained only the scoped project | **Passed:** role subset, overlap, deduplication, and healthy `200 []` emptiness                                       |
+| L1-03    | Two scoped API keys in organization A, each assigned a different project            | Not under test                                                        | Each returned one distinct project under the same organization; union contained both and overlap was empty                                          | **Passed:** disjoint same-org union                                                                                   |
+| L1-04    | API key and Service Account assigned the same project                               | Not under test                                                        | Both returned the same organization and project fingerprints; organization/project details and zero-result cluster lists succeeded                  | **Passed:** Service Account scope parity; cluster detail parity remains optional because this project had no cluster  |
+| L2-01    | Org-wide API key with two projects                                                  | Empty API Access List while the organization requirement was disabled | Organization/project list and detail calls returned `200`; cluster list/detail returned `200` where data existed                                    | **Passed baseline:** empty non-required list is unrestricted; no detail-only restriction exists in the accepted state |
+| L2-02    | Same valid key and roles as baseline                                                | Organization requirement enabled; only a non-matching IP allowed      | Both `/orgs` and `/groups` returned `403`; dependent detail and cluster probes could not run because no IDs were returned                           | **Passed rejection:** enforced non-match is forbidden, not authentication failure                                     |
+| L2-03    | Same valid key and roles                                                            | Actual caller IP allowed                                              | All organization/project list and detail probes returned `200`; cluster list/detail returned `200` where data existed                               | **Passed recovery control:** changing only the allowlist restored access                                              |
+| L2-04    | Same public key with intentionally invalid private key; caller IP allowed           | Matching IP                                                           | `/orgs` and `/groups` returned `401`                                                                                                                | **Passed auth control:** invalid credentials are distinguishable from enforced-list `403`                             |
+
+#### L1/L2 assumption verdicts
+
+- **Verified:** an API key in each tested organization returned exactly one organization.
+- **Verified:** credentials from different organizations returned different organization
+  fingerprints and independently attributed projects.
+- **Verified:** project visibility is role-filtered; org-wide, one-project, disjoint-project, and
+  no-project (`200 []`) scopes returned the expected subsets and deduplicated union.
+- **Verified:** API-key and Service Account credentials with equivalent roles returned the same
+  organization and project scope.
+- **Disproved:** "caller IP absent from an empty API Access List" is sufficient to test rejection.
+  It is unrestricted while the organization requirement is disabled.
+- **Disproved:** no project membership should surface as `401` or `403`; the observed response is
+  healthy `200 []`.
+- **Verified for the controlled L2 run:** changing only the enforced allowlist produced `403`,
+  and allowing the caller restored `200`. Production must still retain the generic
+  `forbidden(403)` classification because unrelated role/authorization failures can also be
+  forbidden.
+- **Disproved in the accepted state:** list calls and their follow-up detail calls all succeeded;
+  no detail-only restriction was observed. Under enforced rejection the list calls failed before
+  resource IDs were available, so dependent detail calls were intentionally not attempted.
+
+#### Residual live matrix
+
+| Priority                | Combination                              | Minimum setup and expected evidence                                                                                                                                    | Purpose                                                                             |
+| ----------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
+| **Optional parity**     | Service Account enforced non-match/match | Repeat L2-02 and L2-03 with the tested Service Account. Token mint may succeed while Admin API calls return `403`; allowing the caller should restore `200`.           | Confirms Service Account behavior through the Administration API refresh/retry path |
+| **Optional parity**     | Service Account cluster detail           | Give the tested Service Account access to a project containing a cluster and rerun L1.                                                                                 | Exercises the only successful detail surface not reached in L1-04                   |
+| **Optional diagnostic** | Authorization-forbidden detail call      | With a known resource ID outside a valid credential's role scope, call a detail endpoint and record `403`/`404`. Do not interpret either as IP-specific in production. | Documents provider behavior but does not block the generic forbidden UX             |
+
+No remaining live check blocks implementation. The first two rows are recommended production
+acceptance coverage; the final row is informational only.
 
 ---
 
@@ -865,9 +918,16 @@ prototyped here.
 
 ### 11.2 Decision gates (build only if all hold)
 
-1. **L1 passes** (each credential maps to one org with a stable, enumerable project subset). — _blocking_
-2. **L2 confirms 403-vs-401 distinguishability** so "empty vs broken vs forbidden" UX is real. — _blocking_
-3. Product still wants multiple orgs visible simultaneously (the whole point). — _product_
+1. **L1 passed:** each tested credential mapped to one org with stable role-authorized project
+   subsets; same-org overlap/disjoint union and Service Account parity were observed.
+2. **L2 passed:** enforced non-match `403`, matching-IP `200`, invalid-secret `401`, and healthy
+   `200 []` emptiness are empirically distinguishable.
+3. **Product direction confirmed:** keep multiple organizations visible simultaneously through
+   the selected multi-credential design.
+
+**Blocking open questions: none.** L3 mocked pagination coverage, L4 production telemetry, and
+the residual Service Account parity checks are implementation or acceptance work; they do not
+block starting slices A–C.
 
 ### 11.3 Scrap / de-scope criteria
 
@@ -903,14 +963,13 @@ prototyped here.
 
 ## 13. Next actions
 
-1. Provision a scratch Atlas org (or two) and run **L1 + L2** — the only blocking unknowns.
-2. If they pass, land **slices A–C** as an internal refactor (no UX change): credential store,
+1. Land **slices A–C** as an internal refactor (no UX change): credential store,
    per-credential sessions, `listAll()` with pagination + `allSettled`. This is low-regret and
    independently valuable.
-3. Then build the manage-credentials QuickPick (E) + wire the item-#6 webview, followed by the
+2. Then build the manage-credentials QuickPick (E) + wire the item-#6 webview, followed by the
    tree work (D) and item #8 modes.
-4. Update the [Iteration 3 ledger](./ux-review-iteration-3.md#open-work-summary-and-proposed-order-2026-07-24)
-   Step 0 row with the L1/L2 outcomes and this document's decisions.
+3. Add the mocked L3 pagination contracts and L4 production telemetry while implementing the
+   corresponding slices; treat residual Service Account L2/detail checks as acceptance coverage.
 
 ---
 
@@ -1126,5 +1185,7 @@ experiment4();
 ```
 
 _Prepared as the Step-0 feasibility POC for MongoDB Atlas multi-credential discovery
-(review items #7/#8/#12). Isolated experiments executed 2026-07-24; live-account experiments
-(L1–L5) deferred pending a scratch Atlas org._
+(review items #7/#8/#12). Isolated experiments executed 2026-07-24. Live API-key evidence on
+2026-07-25 partially verified L1 and established healthy-empty/unrestricted-list behavior, while
+same-org aggregation, enforced-list L2 controls, detail probes, and Service Account parity remain
+open. L3 is not planned as a live test; L4 is telemetry-deferred._
