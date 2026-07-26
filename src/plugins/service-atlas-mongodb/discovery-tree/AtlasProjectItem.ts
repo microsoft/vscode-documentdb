@@ -13,6 +13,7 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { createAtlasClusterModel } from '../models/AtlasClusterModel';
@@ -110,11 +111,11 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
         const md = new vscode.MarkdownString();
         md.isTrusted = false;
 
-        md.appendMarkdown(`**${this.project.name}**\n\n`);
+        md.appendMarkdown(`**${escapeMarkdown(this.project.name)}**\n\n`);
         if (this.orgName) {
-            md.appendMarkdown(`- **${vscode.l10n.t('Organization')}:** ${this.orgName}\n`);
+            md.appendMarkdown(`- **${vscode.l10n.t('Organization')}:** ${escapeMarkdown(this.orgName)}\n`);
         }
-        md.appendMarkdown(`- **${vscode.l10n.t('Project ID')}:** ${this.project.id}\n`);
+        md.appendMarkdown(`- **${vscode.l10n.t('Project ID')}:** ${escapeMarkdown(this.project.id)}\n`);
         md.appendMarkdown(`- **${vscode.l10n.t('Clusters')}:** ${String(this.project.clusterCount)}\n`);
 
         return md;

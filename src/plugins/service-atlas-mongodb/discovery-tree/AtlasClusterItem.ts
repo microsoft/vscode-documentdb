@@ -26,20 +26,13 @@ import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { getResourcesPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
+import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { type AtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasClusterState } from '../models/AtlasProjectModel';
 
 /** Resource type identifier for telemetry */
 const RESOURCE_TYPE = 'atlas-mongodb-cluster';
-
-/**
- * Escapes markdown special characters so Atlas-provided text is always rendered
- * as plain text rather than being interpreted as markdown formatting or links.
- */
-function escapeMarkdown(text: string): string {
-    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
-}
 
 /**
  * Tree item representing a MongoDB Atlas cluster within a project.
