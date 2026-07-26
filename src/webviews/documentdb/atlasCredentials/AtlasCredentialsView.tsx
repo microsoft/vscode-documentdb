@@ -12,6 +12,8 @@ import {
     makeStyles,
     MessageBar,
     MessageBarBody,
+    Radio,
+    RadioGroup,
     Spinner,
     Title3,
     tokens,
@@ -19,6 +21,7 @@ import {
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useMemo, useState } from 'react';
+import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { type AtlasCredentialsWebviewConfig } from './atlasCredentialsController';
 
@@ -79,6 +82,16 @@ const useStyles = makeStyles({
         flexDirection: 'column',
         gap: '4px',
     },
+    methodOption: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px',
+    },
+    methodHint: {
+        color: tokens.colorNeutralForeground2,
+        paddingLeft: '28px',
+        paddingBottom: '8px',
+    },
 });
 
 interface FieldSpec {
@@ -93,7 +106,14 @@ export const AtlasCredentialsView = (): JSX.Element => {
     const trpcClient = useTrpcClient();
     const styles = useStyles();
 
-    const isApiKey = configuration.authMethod === 'apikey';
+    // The method chooser is the first step of the add flow. Keeping it inside the webview - rather
+    // than in a separate QuickPick - makes the whole add flow one guided surface and lets the
+    // toggle live-swap the form fields and the help text.
+    const [chosenMethod, setChosenMethod] = useState<AtlasAuthMethod | undefined>(configuration.authMethod);
+    const [pendingMethod, setPendingMethod] = useState<AtlasAuthMethod>(configuration.authMethod ?? 'serviceaccount');
+
+    const isApiKey = chosenMethod === 'apikey';
+    const isEdit = configuration.mode === 'edit';
 
     const [values, setValues] = useState<Record<string, string>>({});
     const [isSubmitting, setIsSubmitting] = useState(false);
@@ -172,116 +192,176 @@ export const AtlasCredentialsView = (): JSX.Element => {
 
     return (
         <div className={styles.root}>
-            <Title3 as="h1">
-                {isApiKey
-                    ? l10n.t('Connect with a MongoDB Atlas API Key')
-                    : l10n.t('Connect with a MongoDB Atlas Service Account')}
-            </Title3>
+            {chosenMethod === undefined ? (
+                <>
+                    <Title3 as="h1">
+                        {isEdit ? l10n.t('Update MongoDB Atlas credentials') : l10n.t('Add a MongoDB Atlas credential')}
+                    </Title3>
+                    <Body1 className={styles.intro}>{l10n.t('How do you want to connect?')}</Body1>
 
-            <Body1 className={styles.intro}>
-                {isApiKey
-                    ? l10n.t(
-                          'Create an API key in the MongoDB Atlas console under IDENTITY & ACCESS → Applications → API Keys, then paste the Public Key and Private Key below.',
-                      )
-                    : l10n.t(
-                          'Create a Service Account in the MongoDB Atlas console under IDENTITY & ACCESS → Applications → Service Accounts, then paste the Client ID and Client Secret below.',
-                      )}
-            </Body1>
-            <details className={styles.guide}>
-                <summary className={styles.guideSummary}>
-                    <Body1 as="span" className={styles.guideHeading}>
-                        {l10n.t('How to create credentials in MongoDB Atlas')}
-                        {' — '}
-                        <Link
-                            onClick={(e) => {
-                                e.stopPropagation();
-                                openLink(isApiKey ? ATLAS_API_KEY_DOCS_URL : ATLAS_SERVICE_ACCOUNT_DOCS_URL);
-                            }}
-                        >
-                            {l10n.t('View documentation')}
-                        </Link>
-                    </Body1>
-                </summary>
-                <ol className={styles.stepList}>
-                    <li>
-                        <Body1 as="span">
-                            <Link onClick={() => openLink(ATLAS_CONSOLE_URL)}>
-                                {l10n.t('Sign in to MongoDB Atlas')}
-                            </Link>
-                            {l10n.t(", or sign up if you don't have an account yet.")}
+                    <RadioGroup
+                        value={pendingMethod}
+                        onChange={(_event, data) => setPendingMethod(data.value as AtlasAuthMethod)}
+                    >
+                        <Radio
+                            value="serviceaccount"
+                            label={
+                                <span className={styles.methodOption}>
+                                    <Body1 as="span">{l10n.t('Service Account (recommended)')}</Body1>
+                                </span>
+                            }
+                        />
+                        <Body1 as="p" className={styles.methodHint}>
+                            {l10n.t(
+                                'OAuth2 client ID and secret. More secure, and the secret expires (8 hours to 365 days) so it has to be rotated periodically.',
+                            )}
                         </Body1>
-                    </li>
-                    <li>
-                        <Body1 as="span">{l10n.t('Select your Organization at the top-left.')}</Body1>
-                        <ul className={styles.subStepList}>
+                        <Radio
+                            value="apikey"
+                            label={
+                                <span className={styles.methodOption}>
+                                    <Body1 as="span">{l10n.t('API Key (legacy, simplest)')}</Body1>
+                                </span>
+                            }
+                        />
+                        <Body1 as="p" className={styles.methodHint}>
+                            {l10n.t(
+                                'Public and private key pair. Never expires, which suits a personal, set-and-forget setup.',
+                            )}
+                        </Body1>
+                    </RadioGroup>
+
+                    <div className={styles.actions}>
+                        <Button appearance="primary" onClick={() => setChosenMethod(pendingMethod)}>
+                            {l10n.t('Continue')}
+                        </Button>
+                    </div>
+                </>
+            ) : (
+                <>
+                    <Title3 as="h1">
+                        {isEdit
+                            ? isApiKey
+                                ? l10n.t('Update your MongoDB Atlas API Key')
+                                : l10n.t('Update your MongoDB Atlas Service Account')
+                            : isApiKey
+                              ? l10n.t('Connect with a MongoDB Atlas API Key')
+                              : l10n.t('Connect with a MongoDB Atlas Service Account')}
+                    </Title3>
+
+                    <Body1 className={styles.intro}>
+                        {isApiKey
+                            ? l10n.t(
+                                  'Create an API key in the MongoDB Atlas console under IDENTITY & ACCESS → Applications → API Keys, then paste the Public Key and Private Key below.',
+                              )
+                            : l10n.t(
+                                  'Create a Service Account in the MongoDB Atlas console under IDENTITY & ACCESS → Applications → Service Accounts, then paste the Client ID and Client Secret below.',
+                              )}
+                    </Body1>
+                    <details className={styles.guide}>
+                        <summary className={styles.guideSummary}>
+                            <Body1 as="span" className={styles.guideHeading}>
+                                {l10n.t('How to create credentials in MongoDB Atlas')}
+                                {' — '}
+                                <Link
+                                    onClick={(e) => {
+                                        e.stopPropagation();
+                                        openLink(isApiKey ? ATLAS_API_KEY_DOCS_URL : ATLAS_SERVICE_ACCOUNT_DOCS_URL);
+                                    }}
+                                >
+                                    {l10n.t('View documentation')}
+                                </Link>
+                            </Body1>
+                        </summary>
+                        <ol className={styles.stepList}>
                             <li>
                                 <Body1 as="span">
-                                    {l10n.t(
-                                        "If you don't have one: click the Organization name \u2192 View All Organizations \u2192 Create New Organization, enter a name, then click Next \u2192 Create Organization.",
-                                    )}
+                                    <Link onClick={() => openLink(ATLAS_CONSOLE_URL)}>
+                                        {l10n.t('Sign in to MongoDB Atlas')}
+                                    </Link>
+                                    {l10n.t(", or sign up if you don't have an account yet.")}
                                 </Body1>
                             </li>
-                        </ul>
-                    </li>
-                    <li>
-                        <Body1 as="span">
-                            {l10n.t('In the left sidebar, under IDENTITY & ACCESS, click Applications.')}
-                        </Body1>
-                    </li>
-                    <li>
-                        <Body1 as="span">
-                            {isApiKey
-                                ? l10n.t(
-                                      'Click the API Keys tab → Add new → set permissions → copy the Public Key and Private Key, then paste them in the fields below.',
-                                  )
-                                : l10n.t(
-                                      'Click the Service Accounts tab → Add new → set permissions → copy the Client ID and Client Secret, then paste them in the fields below.',
-                                  )}
-                        </Body1>
-                    </li>
-                </ol>
-            </details>
+                            <li>
+                                <Body1 as="span">{l10n.t('Select your Organization at the top-left.')}</Body1>
+                                <ul className={styles.subStepList}>
+                                    <li>
+                                        <Body1 as="span">
+                                            {l10n.t(
+                                                "If you don't have one: click the Organization name \u2192 View All Organizations \u2192 Create New Organization, enter a name, then click Next \u2192 Create Organization.",
+                                            )}
+                                        </Body1>
+                                    </li>
+                                </ul>
+                            </li>
+                            <li>
+                                <Body1 as="span">
+                                    {l10n.t('In the left sidebar, under IDENTITY & ACCESS, click Applications.')}
+                                </Body1>
+                            </li>
+                            <li>
+                                <Body1 as="span">
+                                    {isApiKey
+                                        ? l10n.t(
+                                              'Click the API Keys tab → Add new → set permissions → copy the Public Key and Private Key, then paste them in the fields below.',
+                                          )
+                                        : l10n.t(
+                                              'Click the Service Accounts tab → Add new → set permissions → copy the Client ID and Client Secret, then paste them in the fields below.',
+                                          )}
+                                </Body1>
+                            </li>
+                        </ol>
+                    </details>
 
-            {errorMessage && (
-                <MessageBar intent="error">
-                    <MessageBarBody style={{ whiteSpace: 'pre-wrap' }}>{errorMessage}</MessageBarBody>
-                </MessageBar>
+                    {errorMessage && (
+                        <MessageBar intent="error">
+                            <MessageBarBody style={{ whiteSpace: 'pre-wrap' }}>{errorMessage}</MessageBarBody>
+                        </MessageBar>
+                    )}
+
+                    <form
+                        className={styles.fields}
+                        onSubmit={(event) => {
+                            event.preventDefault();
+                            void handleSubmit();
+                        }}
+                    >
+                        {fieldSpecs.map((spec) => (
+                            <Field key={spec.key} label={spec.label} required>
+                                <Input
+                                    type={spec.secret ? 'password' : 'text'}
+                                    value={values[spec.key] ?? ''}
+                                    placeholder={spec.placeholder}
+                                    disabled={isSubmitting}
+                                    onChange={(_event, data) =>
+                                        setValues((prev) => ({ ...prev, [spec.key]: data.value }))
+                                    }
+                                />
+                            </Field>
+                        ))}
+
+                        <div className={styles.actions}>
+                            <Button type="submit" appearance="primary" disabled={!canSubmit}>
+                                {isEdit ? l10n.t('Update') : l10n.t('Connect')}
+                            </Button>
+                            {configuration.authMethod === undefined && !isSubmitting && (
+                                <Button appearance="secondary" onClick={() => setChosenMethod(undefined)}>
+                                    {l10n.t('Back')}
+                                </Button>
+                            )}
+                            {isSubmitting && <Spinner size="tiny" label={l10n.t('Validating credentials…')} />}
+                        </div>
+                    </form>
+
+                    <Body1 className={styles.intro}>
+                        {isApiKey
+                            ? l10n.t(
+                                  "Make sure your current IP address is on the API key's Access List and that the key has the required project permissions.",
+                              )
+                            : l10n.t('Make sure the Service Account has the required project permissions.')}
+                    </Body1>
+                </>
             )}
-
-            <form
-                className={styles.fields}
-                onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleSubmit();
-                }}
-            >
-                {fieldSpecs.map((spec) => (
-                    <Field key={spec.key} label={spec.label} required>
-                        <Input
-                            type={spec.secret ? 'password' : 'text'}
-                            value={values[spec.key] ?? ''}
-                            placeholder={spec.placeholder}
-                            disabled={isSubmitting}
-                            onChange={(_event, data) => setValues((prev) => ({ ...prev, [spec.key]: data.value }))}
-                        />
-                    </Field>
-                ))}
-
-                <div className={styles.actions}>
-                    <Button type="submit" appearance="primary" disabled={!canSubmit}>
-                        {l10n.t('Connect')}
-                    </Button>
-                    {isSubmitting && <Spinner size="tiny" label={l10n.t('Validating credentials…')} />}
-                </div>
-            </form>
-
-            <Body1 className={styles.intro}>
-                {isApiKey
-                    ? l10n.t(
-                          "Make sure your current IP address is on the API key's Access List and that the key has the required project permissions.",
-                      )
-                    : l10n.t('Make sure the Service Account has the required project permissions.')}
-            </Body1>
         </div>
     );
 };

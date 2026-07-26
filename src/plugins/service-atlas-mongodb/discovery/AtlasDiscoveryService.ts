@@ -22,6 +22,7 @@ import { createConcurrencyLimiter } from '../../../utils/concurrencyLimiter';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
 import { AtlasCredentialSessionRegistry } from '../auth/AtlasCredentialSessionRegistry';
 import {
+    getAtlasCredential,
     readAtlasCredentials,
     updateAtlasCredentialMetadata,
     type AtlasCredentialRecord,
@@ -166,6 +167,7 @@ export interface CredentialResult {
  */
 export class AtlasDiscoveryService {
     private snapshot: AtlasDiscoverySnapshot | undefined;
+    private lastResults: CredentialResult[] | undefined;
     private inflight: Promise<AtlasDiscoverySnapshot> | undefined;
 
     constructor(private readonly sessions: AtlasCredentialSessionRegistry = new AtlasCredentialSessionRegistry()) {}
@@ -205,17 +207,42 @@ export class AtlasDiscoveryService {
      */
     public invalidate(): void {
         this.snapshot = undefined;
+        this.lastResults = undefined;
         this.inflight = undefined;
     }
 
     /**
-     * Re-attempts a single credential: drops its session and the cached snapshot so the next read
-     * picks it up. Retrying one credential must never hammer its healthy peers, which is why the
-     * credential-management "Retry" action calls this instead of a full refresh.
+     * Re-attempts a single credential and folds the result back into the cached snapshot.
+     *
+     * Retrying one credential must not hammer its healthy peers, which is why the
+     * credential-management "Retry" action calls this instead of a full refresh: only the selected
+     * credential issues requests, and every other credential's last known result is reused.
+     *
+     * Falls back to a full refresh when there is no cached snapshot to fold into.
      */
-    public retryCredential(credentialId: string): void {
+    public async retryCredential(credentialId: string, signal?: AbortSignal): Promise<AtlasDiscoverySnapshot> {
         this.sessions.invalidate(credentialId);
-        this.invalidate();
+
+        const previous = this.lastResults;
+        const snapshot = this.snapshot;
+        if (!previous || !snapshot) {
+            this.invalidate();
+            return this.listAll({ forceRefresh: true, signal });
+        }
+
+        const record = await getAtlasCredential(credentialId);
+        if (!record) {
+            // The credential is gone; simply drop its contribution.
+            const remaining = previous.filter((result) => result.record.id !== credentialId);
+            return this.commit(remaining, snapshot.clustersIncluded);
+        }
+
+        const refreshed = await this.queryCredential(record, snapshot.clustersIncluded, signal);
+        const merged = previous.some((result) => result.record.id === credentialId)
+            ? previous.map((result) => (result.record.id === credentialId ? refreshed : result))
+            : [...previous, refreshed];
+
+        return this.commit(merged, snapshot.clustersIncluded);
     }
 
     /** Forgets every cached session and snapshot. Used after "sign out of all". */
@@ -264,6 +291,15 @@ export class AtlasDiscoveryService {
 
         const snapshot = mergeResults(results, includeClusters);
         this.snapshot = snapshot;
+        this.lastResults = results;
+        return snapshot;
+    }
+
+    /** Stores a set of per-credential results as the new cached snapshot. */
+    private commit(results: CredentialResult[], clustersIncluded: boolean): AtlasDiscoverySnapshot {
+        const snapshot = mergeResults(results, clustersIncluded);
+        this.snapshot = snapshot;
+        this.lastResults = results;
         return snapshot;
     }
 

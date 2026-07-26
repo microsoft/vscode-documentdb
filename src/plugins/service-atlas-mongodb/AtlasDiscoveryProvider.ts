@@ -4,21 +4,22 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext, type IWizardOptions, UserCancelledError } from '@microsoft/vscode-azext-utils';
-import { Disposable, l10n, window } from 'vscode';
+import { Disposable } from 'vscode';
 import { type NewConnectionWizardContext } from '../../commands/newConnection/NewConnectionWizardContext';
 import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
-import { AtlasApiClient } from './api/AtlasApiClient';
 import { promptAtlasAuthMethod } from './auth/AtlasAuthQuickPick';
 import { type AtlasSession, AtlasSessionState } from './auth/AtlasSession';
 import { AtlasSessionManager } from './auth/AtlasSessionManager';
 import { executeAtlasAuthFlow } from './auth/executeAtlasAuthFlow';
 import { DESCRIPTION, DISCOVERY_PROVIDER_ID, ICON_PATH, LABEL, WIZARD_TITLE } from './config';
+import { configureAtlasCredentials } from './credentialsManagement/configureAtlasCredentials';
 import { AtlasServiceRootItem } from './discovery-tree/AtlasServiceRootItem';
 import { AtlasExecuteStep } from './discovery-wizard/AtlasExecuteStep';
 import { SelectAtlasClusterStep, SelectAtlasProjectStep } from './discovery-wizard/SelectAtlasSteps';
+import { AtlasDiscoveryService } from './discovery/AtlasDiscoveryService';
 
 /**
  * Discovery provider for MongoDB Atlas.
@@ -32,6 +33,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
     iconPath = ICON_PATH;
 
     private readonly sessionManager: AtlasSessionManager;
+    private readonly discoveryService = new AtlasDiscoveryService();
 
     constructor() {
         const sessionManager = new AtlasSessionManager(ext.secretStorage, ext.context.globalState);
@@ -108,87 +110,10 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         context.telemetry.properties.credentialConfigActivated = 'true';
         context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
 
-        // If already authenticated, show user identity with credential actions.
-        if (this.sessionManager.state === AtlasSessionState.Active) {
-            const displayName = this.sessionManager.getUserDisplayName() ?? l10n.t('Atlas Account');
-            const updateCredentials = l10n.t('Update credentials');
-            const signOut = l10n.t('Sign Out');
-            const exit = l10n.t('Exit');
+        const changed = await configureAtlasCredentials(context, this.discoveryService, this.sessionManager, node);
 
-            const choice = await window.showQuickPick(
-                [
-                    {
-                        label: `$(key) ${updateCredentials}`,
-                    },
-                    {
-                        label: `$(sign-out) ${signOut}`,
-                    },
-                    {
-                        label: `$(close) ${exit}`,
-                    },
-                ],
-                {
-                    placeHolder: l10n.t('Signed in to Atlas as {0}', displayName),
-                },
-            );
-
-            if (!choice || choice.label.includes(exit)) {
-                return; // User cancelled or chose Exit
-            }
-
-            if (choice.label.includes(updateCredentials)) {
-                await this.authenticateAndFetchUserInfo(context, node);
-                return;
-            }
-
-            if (choice.label.includes(signOut)) {
-                await this.sessionManager.signOut();
-                context.telemetry.properties.action = 'signOut';
-                if (node) {
-                    ext.discoveryBranchDataProvider.refresh(node);
-                } else {
-                    ext.discoveryBranchDataProvider.refresh();
-                }
-                return;
-            }
-        }
-
-        // Not authenticated — prompt for auth method
-        await this.authenticateAndFetchUserInfo(context, node);
-    }
-
-    /**
-     * Runs the authentication flow and fetches user info on success.
-     */
-    private async authenticateAndFetchUserInfo(context: IActionContext, node?: TreeElement): Promise<void> {
-        const authMethod = await promptAtlasAuthMethod();
-        if (!authMethod) {
-            return; // User cancelled
-        }
-
-        const success = await executeAtlasAuthFlow(authMethod, this.sessionManager);
-
-        if (success) {
-            context.telemetry.properties.authMethod = authMethod;
-            context.telemetry.properties.authSuccess = 'true';
-
-            // Fetch and store user display name
-            await this.fetchAndStoreUserInfo();
-
-            // Clear the cached error state so the tree re-fetches children
-            if (node?.id) {
-                ext.discoveryBranchDataProvider.resetNodeErrorState(node.id);
-            }
-        }
-
-        if (node) {
-            ext.discoveryBranchDataProvider.refresh(node);
-        } else {
-            ext.discoveryBranchDataProvider.refresh();
-        }
-
-        if (success) {
-            // Reveal and expand the root so projects appear without a manual expand
+        if (changed) {
+            // Reveal and expand the root so projects appear without a manual expand.
             void this.revealAtlasRoot();
         }
     }
@@ -210,25 +135,6 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         } catch (error) {
             const message = error instanceof Error ? error.message : String(error);
             ext.outputChannel.warn(`[AtlasDiscovery] Could not reveal Atlas root: ${message}`);
-        }
-    }
-
-    /**
-     * Fetches the current user's info from Atlas and stores the display name.
-     */
-    private async fetchAndStoreUserInfo(): Promise<void> {
-        try {
-            const session = await this.sessionManager.getSession();
-            if (!session) {
-                return;
-            }
-
-            const client = new AtlasApiClient(session, this.sessionManager);
-            const user = await client.getCurrentUser();
-            const displayName = user.emailAddress || user.username || `${user.firstName} ${user.lastName}`.trim();
-            await this.sessionManager.setUserDisplayName(displayName);
-        } catch {
-            // Non-critical — UI will fall back to "Atlas Account"
         }
     }
 }

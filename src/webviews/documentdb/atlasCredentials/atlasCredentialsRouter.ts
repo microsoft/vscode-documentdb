@@ -7,21 +7,27 @@
  * tRPC router for the guided MongoDB Atlas credential-entry webview (Item 6).
  *
  * This router runs in the extension host, so it can safely import plugin code
- * (`AtlasApiClient`, `AtlasSessionManager`) and validate + persist credentials
+ * (`AtlasApiClient`, the credential store) and validate + persist credentials
  * without the secret ever leaving the host: the webview posts the entered
  * values up exactly once via a mutation, the host validates them against the
- * MongoDB Atlas Admin API, stores them in SecretStorage, and reports success/failure
+ * MongoDB Atlas Admin API, stores them, and reports success/failure
  * back for inline display.
  *
- * The live {@link AtlasSessionManager} and the `onCredentialsStored` completion
- * callback are supplied through the router context (a shallow-cloned, host-side
- * object), which is why non-serialisable references are allowed here.
+ * Validation happens **before** anything is written. A rejected credential is therefore never
+ * stored, and an "update credentials" attempt that fails leaves the previous working secret
+ * untouched. The webview stays open with the entered values retained so the user can correct an
+ * Atlas-side access problem and resubmit.
  */
 
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
 import { AtlasApiClient, AtlasApiError } from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
 import { type AtlasSessionManager } from '../../../plugins/service-atlas-mongodb/auth/AtlasSessionManager';
+import {
+    replaceAtlasCredentialSecrets,
+    upsertAtlasCredential,
+    type AtlasCredentialSecrets,
+} from '../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
@@ -33,6 +39,14 @@ import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../
 export type RouterContext = BaseRouterContext & {
     /** The single session manager instance owned by the discovery provider. */
     sessionManager: AtlasSessionManager;
+    /**
+     * When set, the submitted secret replaces this credential's secret in place instead of
+     * creating a new credential record. Keeps the record ID - and therefore tree paths and saved
+     * connections - stable across a rotation.
+     */
+    credentialId?: string;
+    /** Optional user-supplied friendly name persisted alongside the credential. */
+    credentialLabel?: string;
     /**
      * Invoked exactly once when credentials have been validated and stored.
      * The opener uses this to resolve its `Promise<boolean>` and dispose the panel.
@@ -69,11 +83,31 @@ function describeAtlasError(error: unknown): string {
     return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * Persists a validated credential: replacing an existing record's secret when the webview was
+ * opened in edit mode, otherwise adding (or refreshing) a record for that Atlas identity.
+ */
+async function persistCredential(ctx: WithTelemetry<RouterContext>, secrets: AtlasCredentialSecrets): Promise<void> {
+    const metadata = ctx.credentialLabel ? { label: ctx.credentialLabel } : {};
+
+    if (ctx.credentialId) {
+        const updated = await replaceAtlasCredentialSecrets(ctx.credentialId, secrets, metadata);
+        if (updated) {
+            ctx.telemetry.properties.credentialUpdated = 'true';
+            return;
+        }
+        // The record disappeared while the webview was open; fall through and add it back.
+    }
+
+    const { created } = await upsertAtlasCredential(secrets, metadata);
+    ctx.telemetry.properties.credentialCreated = created ? 'true' : 'false';
+}
+
 export const atlasCredentialsRouter = router({
     /**
      * Validates and stores a MongoDB Atlas API Key (public + private key pair).
-     * Mirrors the previous input-box flow: the credentials are stored for retry
-     * first, validated against the MongoDB Atlas API, and only marked active on success.
+     * The key is validated with a real discovery call first, so a credential that authenticates
+     * but cannot list projects is rejected inline instead of being stored as "working".
      */
     submitApiKey: publicProcedureWithTelemetry
         .input(
@@ -89,9 +123,6 @@ export const atlasCredentialsRouter = router({
             const publicKey = input.publicKey.trim();
             const privateKey = input.privateKey.trim();
 
-            // Store first so the root's retry node keeps working if the user closes the form.
-            await myCtx.sessionManager.storeApiKeyCredentialsForRetry(publicKey, privateKey);
-
             try {
                 const client = new AtlasApiClient({ type: 'apikey', publicKey, privateKey });
                 await client.listProjects();
@@ -100,6 +131,7 @@ export const atlasCredentialsRouter = router({
                 return { success: false, errorMessage: describeAtlasError(error) };
             }
 
+            await persistCredential(myCtx, { authMethod: 'apikey', publicKey, privateKey });
             await myCtx.sessionManager.storeApiKeyCredentials(publicKey, privateKey);
             myCtx.telemetry.properties.authSuccess = 'true';
             myCtx.onCredentialsStored();
@@ -108,7 +140,7 @@ export const atlasCredentialsRouter = router({
 
     /**
      * Validates and stores a MongoDB Atlas Service Account (client id + secret) by
-     * acquiring a token via the client_credentials grant.
+     * acquiring a token via the client_credentials grant and confirming it can discover projects.
      */
     submitServiceAccount: publicProcedureWithTelemetry
         .input(
@@ -124,22 +156,31 @@ export const atlasCredentialsRouter = router({
             const clientId = input.clientId.trim();
             const clientSecret = input.clientSecret.trim();
 
-            await myCtx.sessionManager.storeServiceAccountCredentialsForRetry(clientId, clientSecret);
+            let accessToken: string;
+            let expiresIn: number;
 
             try {
                 const { fetchServiceAccountToken } =
                     await import('../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient');
                 const tokenResponse = await fetchServiceAccountToken(clientId, clientSecret);
-                await myCtx.sessionManager.storeServiceAccountCredentials(
-                    clientId,
-                    clientSecret,
-                    tokenResponse.access_token,
-                    tokenResponse.expires_in,
-                );
+                accessToken = tokenResponse.access_token;
+                expiresIn = tokenResponse.expires_in;
+
+                const client = new AtlasApiClient({ type: 'serviceaccount', accessToken });
+                await client.listProjects();
             } catch (error) {
                 myCtx.telemetry.properties.authSuccess = 'false';
                 return { success: false, errorMessage: describeAtlasError(error) };
             }
+
+            await persistCredential(myCtx, {
+                authMethod: 'serviceaccount',
+                clientId,
+                clientSecret,
+                accessToken,
+                expiresAt: String(Date.now() + expiresIn * 1000),
+            });
+            await myCtx.sessionManager.storeServiceAccountCredentials(clientId, clientSecret, accessToken, expiresIn);
 
             myCtx.telemetry.properties.authSuccess = 'true';
             myCtx.onCredentialsStored();
