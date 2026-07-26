@@ -30,11 +30,11 @@ jest.mock('./AtlasClusterItem', () => ({
     AtlasClusterItem: class AtlasClusterItem {},
 }));
 
-import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
+import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasProjectItem } from './AtlasProjectItem';
 
-const sessionManagerStub = {} as AtlasSessionManager;
+const discoveryServiceStub = {} as AtlasDiscoveryService;
 
 function buildProject(overrides: Partial<AtlasProject> = {}): AtlasProject {
     return {
@@ -48,7 +48,7 @@ function buildProject(overrides: Partial<AtlasProject> = {}): AtlasProject {
 }
 
 function tooltipValue(project: AtlasProject, orgName?: string): string {
-    const item = new AtlasProjectItem('parent', project, sessionManagerStub, orgName);
+    const item = new AtlasProjectItem('parent', project, discoveryServiceStub, 'credential-1', orgName);
     const tooltip = item.getTreeItem().tooltip as unknown as MarkdownStringMock;
     return tooltip.value;
 }
@@ -83,7 +83,7 @@ describe('AtlasProjectItem tooltip', () => {
     });
 
     it('keeps the tooltip untrusted', () => {
-        const item = new AtlasProjectItem('parent', buildProject(), sessionManagerStub);
+        const item = new AtlasProjectItem('parent', buildProject(), discoveryServiceStub, 'credential-1');
         const tooltip = item.getTreeItem().tooltip as unknown as MarkdownStringMock;
 
         expect(tooltip.isTrusted).toBe(false);

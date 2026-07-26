@@ -57,7 +57,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
     }
 
     getDiscoveryTreeRootItem(parentId: string): TreeElement {
-        return new AtlasServiceRootItem(this.sessionManager, parentId);
+        return new AtlasServiceRootItem(this.discoveryService, parentId);
     }
 
     async getDiscoveryWizard(context: NewConnectionWizardContext): Promise<IWizardOptions<NewConnectionWizardContext>> {

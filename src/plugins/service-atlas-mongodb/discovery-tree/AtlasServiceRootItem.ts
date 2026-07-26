@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import {
@@ -11,16 +13,19 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
-import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
-import { AtlasSessionState } from '../auth/AtlasSession';
-import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { DISCOVERY_PROVIDER_ID } from '../config';
-import { AtlasProjectItem } from './AtlasProjectItem';
-import { showAtlasLoadFailure } from './showAtlasLoadFailure';
+import { readAtlasCredentials } from '../credentials/atlasCredentialStore';
+import { snapshotHasFailures, type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
+import { AtlasOrganizationItem } from './AtlasOrganizationItem';
+import { createEmptyPlaceholderNode, createRevisitCredentialsNode } from './atlasTreeNodes';
 
 /**
  * Root tree item for the MongoDB Atlas discovery provider.
- * Handles authentication gating before fetching and displaying projects.
+ *
+ * Renders the quiet merged tree: organization to project to cluster, with duplicate resources
+ * merged by Atlas ID and no per-node credential attribution. Whatever goes wrong across the
+ * credential fleet collapses into a single "Click here to revisit credentials" row, so one broken
+ * credential never blanks the healthy data and never produces a storm of nodes or modals.
  */
 export class AtlasServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
@@ -28,96 +33,68 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         'enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem';
 
     constructor(
-        private readonly sessionManager: AtlasSessionManager,
+        private readonly discoveryService: AtlasDiscoveryService,
         public readonly parentId: string,
     ) {
         this.id = `${parentId}/${DISCOVERY_PROVIDER_ID}`;
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        const session = await this.sessionManager.getSession();
-
-        if (!session) {
-            if (await this.sessionManager.hasStoredCredentials()) {
-                return [this.createRetryNode(), this.createUpdateCredentialsNode()];
-            }
+        const credentials = await readAtlasCredentials();
+        if (credentials.length === 0) {
             return [this.createSignInNode()];
         }
 
-        // Fetch projects from Atlas
-        try {
-            const client = new AtlasApiClient(session, this.sessionManager);
+        const snapshot = await this.discoveryService.listAll();
 
-            // Lazily fetch user display name if not already stored
-            // (Service Accounts don't have user profiles, so skip for them)
-            if (!this.sessionManager.getUserDisplayName() && session.type !== 'serviceaccount') {
-                void client.getCurrentUser().then(
-                    (user) => {
-                        const displayName =
-                            user.emailAddress || user.username || `${user.firstName} ${user.lastName}`.trim();
-                        void this.sessionManager.setUserDisplayName(displayName);
-                    },
-                    () => {
-                        // Non-critical — ignore errors
-                    },
-                );
-            }
-
-            return await this.fetchProjectItems(client);
-        } catch (error) {
-            if (error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403)) {
-                // The client already attempted a silent token refresh + retry before throwing.
-                // Only when the refresh token is completely rejected does the session manager
-                // sign out (state === None) — in that case prompt the user to sign in again.
-                if (this.sessionManager.state === AtlasSessionState.None) {
-                    return [this.createSignInNode()];
-                }
-
-                // Transient failure or insufficient permissions — keep the session intact and
-                // offer a retry instead of forcing the user to re-authenticate.
-                await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), error.message);
-                return [this.createRetryNode(), this.createUpdateCredentialsNode()];
-            }
-
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas projects.'), errorMessage);
-            return [this.createRetryNode(), this.createUpdateCredentialsNode()];
+        const children: ExtTreeElementBase[] = [];
+        if (snapshotHasFailures(snapshot)) {
+            children.push(createRevisitCredentialsNode(this, snapshot));
         }
-    }
 
-    /**
-     * Fetches projects and organizations from Atlas, returning tree items.
-     */
-    private async fetchProjectItems(client: AtlasApiClient): Promise<ExtTreeElementBase[]> {
-        const [projects, orgs] = await Promise.all([client.listProjects(), client.listOrganizations()]);
+        // Organizations whose only credentials failed keep no data of their own; a credential's
+        // cached organization id is what lets a partially-degraded organization still be flagged.
+        const degradedOrgIds = new Set(
+            snapshot.credentialErrors
+                .map((error) => credentials.find((record) => record.id === error.credentialId)?.orgId)
+                .filter((orgId): orgId is string => typeof orgId === 'string'),
+        );
 
-        if (projects.length === 0) {
-            const hasVisibleOrganizations = orgs.length > 0;
+        for (const entry of snapshot.organizations) {
+            children.push(
+                new AtlasOrganizationItem(
+                    this.id,
+                    entry.organization,
+                    this.discoveryService,
+                    degradedOrgIds.has(entry.organization.id),
+                ),
+            );
+        }
+
+        if (children.length === 0) {
             return [
-                createGenericElementWithContext({
-                    contextValue: 'info',
-                    id: `${this.id}/${hasVisibleOrganizations ? 'no-visible-projects' : 'no-projects'}`,
-                    label: hasVisibleOrganizations
-                        ? vscode.l10n.t('No projects visible to this API key')
-                        : vscode.l10n.t('No projects found'),
-                    tooltip: hasVisibleOrganizations
-                        ? vscode.l10n.t(
-                              'This API key can access organizations, but it cannot view any projects. Check the project access and roles for this key.',
-                          )
-                        : vscode.l10n.t('Create a project in the Atlas console'),
-                    iconPath: new vscode.ThemeIcon('info'),
-                }),
+                createEmptyPlaceholderNode(
+                    this,
+                    vscode.l10n.t(
+                        'These credentials cannot see any organizations yet. Check their project access and roles in MongoDB Atlas.',
+                    ),
+                ),
             ];
         }
 
-        // Build org name lookup for project descriptions
-        const orgNameMap = new Map(orgs.map((org) => [org.id, org.name]));
+        return children;
+    }
 
-        return projects
-            .sort((a, b) => a.name.localeCompare(b.name, undefined, { numeric: true }))
-            .map(
-                (project) => new AtlasProjectItem(this.id, project, this.sessionManager, orgNameMap.get(project.orgId)),
-            );
+    /**
+     * Explicit refresh re-attempts every credential, healthy and failed alike. Passive expansion
+     * reuses the cached snapshot, so a persistently failing credential is not hammered every time
+     * a node is expanded.
+     */
+    public async refresh(_context: IActionContext): Promise<void> {
+        this.discoveryService.invalidate();
+        await this.discoveryService.listAll({ forceRefresh: true });
+        ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
+        ext.discoveryBranchDataProvider.refresh(this);
     }
 
     public hasRetryNode(children: TreeElement[] | null | undefined): boolean {
@@ -131,7 +108,6 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             id: this.id,
             contextValue: this.contextValue,
             label: vscode.l10n.t('MongoDB Atlas'),
-            description: this.getStateDescription(),
             iconPath: new vscode.ThemeIcon('cloud'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
@@ -146,42 +122,5 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
             commandArgs: [this],
         });
-    }
-
-    private createRetryNode(): TreeElement & TreeElementWithContextValue {
-        return createGenericElementWithContext({
-            contextValue: 'error',
-            id: `${this.id}/retry`,
-            label: vscode.l10n.t('Click here to retry'),
-            iconPath: new vscode.ThemeIcon('refresh'),
-            commandId: 'vscode-documentdb.command.internal.retry',
-            commandArgs: [this],
-        });
-    }
-
-    private createUpdateCredentialsNode(): TreeElement & TreeElementWithContextValue {
-        return createGenericElementWithContext({
-            contextValue: 'error',
-            id: `${this.id}/update-credentials`,
-            label: vscode.l10n.t('Update credentials'),
-            iconPath: new vscode.ThemeIcon('key'),
-            commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
-            commandArgs: [this],
-        });
-    }
-
-    private getStateDescription(): string {
-        switch (this.sessionManager.state) {
-            case AtlasSessionState.Active: {
-                const displayName = this.sessionManager.getUserDisplayName();
-                return displayName ? vscode.l10n.t('Signed in as {0}', displayName) : vscode.l10n.t('Signed in');
-            }
-            case AtlasSessionState.Expired:
-                return vscode.l10n.t('Session expired');
-            case AtlasSessionState.Authenticating:
-                return vscode.l10n.t('Authenticating…');
-            default:
-                return '';
-        }
     }
 }
