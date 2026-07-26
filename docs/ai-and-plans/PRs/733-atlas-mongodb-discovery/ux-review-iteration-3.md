@@ -359,7 +359,7 @@ sign-in node immediately when no session exists. The automatic auth QuickPick pa
 
 ### 2. Auth failure / bad key has no retry or "update credentials" path ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open (reopened 2026-07-23) · **Complexity:** ~5 files · **Reviewer #3/live**
+**Priority:** P1 · **Status:** ✅ Implemented (Iteration 4) · **Complexity:** ~5 files · **Reviewer #3/live**
 
 > 🤖 **Automatic audit note (2026-07-23): Further implementation and hands-on testing
 > required — do not accept as closed yet.** The recovery actions exist, but the second tree
@@ -417,11 +417,31 @@ wording in this tree context.
 **Status:** 🟠 **Open.** Update the tree label and verify both actions from the failed-auth
 state before accepting this item as closed.
 
+> **Decision (Iteration 4, Step 4):** The interim label fix is **superseded**. The two recovery
+> rows are replaced by the selected design's single consolidated row, **Click here to revisit
+> credentials**, which is itself a sentence-style call to action and therefore satisfies the
+> wording concern. Both recovery actions the reviewer asked for still exist - they moved from the
+> tree into the credential-management QuickPick the row opens, where **Retry** re-attempts the
+> selected credential only and **Update credentials…** reopens the guided entry surface.
+>
+> Reason for the deviation: with several credentials, per-credential recovery rows multiply in the
+> tree (two rows per failed credential). The consolidated row keeps the label constant no matter
+> how many credentials failed and moves the detail into a tooltip, which is exactly the "reduce
+> description noise" goal recorded in the POC's archived alternative A1.
+
+✅ **Implemented (Iteration 4, Step 4):** [9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f)
+— `createRevisitCredentialsNode` renders one warning row whose tooltip enumerates every affected
+credential and reason; clicking it opens the credential manager
+([c0c49ce6](https://github.com/microsoft/vscode-documentdb/commit/c0c49ce6)) with per-credential
+Retry, Update credentials, and Remove. A scoped project-level cluster failure still uses the
+canonical **Click here to retry** row, because a retry is the accurate action for a failure that
+is not necessarily credential-related.
+
 ---
 
 ### 3. Under-permissioned key mis-reported as "No projects found" (+ unreadable description) ⚠️ 🗣️
 
-**Priority:** P1 · **Status:** 🟠 Open (reopened 2026-07-23) · **Complexity:** ~5 files · **Reviewer #4/live**
+**Priority:** P1 · **Status:** ✅ Implemented (Iteration 4) · **Complexity:** ~5 files · **Reviewer #4/live**
 
 > 🤖 **Automatic audit note (2026-07-23): Further implementation and hands-on testing
 > required — do not accept as closed yet.** Iteration 3 implemented its original plan, but
@@ -478,6 +498,25 @@ When the Atlas request returns no visible projects:
 **Status:** 🟠 **Open.** This follow-up changes the presentation agreed in Iteration 3; it
 requires implementation plus hands-on verification for both an under-permissioned key and a
 genuinely empty account.
+
+> **Decision (Iteration 4, Steps 2 and 4):** The Iteration 4.1 proposal to show a modal plus
+> **Click here to retry** for every no-projects result is **superseded**, exactly as this
+> document's own roadmap section already anticipated. The live L2 checks confirmed that Atlas
+> distinguishes the two cases at the protocol level: a healthy but unprivileged credential returns
+> `200 []`, while an enforced access list returns `403` and a bad secret returns `401`.
+>
+> Because `200 []` is an authoritative answer rather than a failure, retrying it can never change
+> the result, so offering a retry would train the user to click something that does nothing.
+> Emptiness therefore uses the standard `empty` placeholder (`$(indent)` icon, label `empty`,
+> permissions explanation in the tooltip), and only `401`, `403`, rate-limit, and network failures
+> raise the consolidated recovery action.
+
+✅ **Implemented (Iteration 4):** [ee2bf417](https://github.com/microsoft/vscode-documentdb/commit/ee2bf417)
+classifies each outcome (`auth`, `forbidden`, `rateLimited`, `network`, `other`) and keeps a healthy
+empty list out of the error path;
+[9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f) renders the `empty`
+placeholder under an organization with the permissions hint in its tooltip and no retry suggestion.
+The non-actionable sentence row is gone.
 
 ---
 
@@ -685,11 +724,32 @@ _Modified files:_
 
 **Verification:** `npm run l10n` (1619 keys), `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
 
+> **Decision (Iteration 4, Step 3):** The Iteration 3 note above deliberately kept the auth-method
+> chooser as a separate QuickPick. That is now **reversed**: the chooser became the webview's first
+> step. **Reason:** with multiple credentials, the choice is no longer a one-time setup detail but
+> a recurring decision that needs the "which should I use?" guidance from the POC's auth-method
+> strategy (Service Account recommended and rotatable, API Key legacy and never expiring). A
+> QuickPick cannot carry that guidance, and keeping the chooser inside the panel makes the whole
+> add flow one guided surface whose toggle live-swaps the fields and the help text.
+>
+> The "store first, then validate" order is also **reversed**: the credential is now validated with
+> a real discovery call **before** anything is written. **Reason:** storing first was only there to
+> keep a single-session retry node alive. With per-credential records, storing an unvalidated
+> secret would either create a junk credential or, worse, overwrite a working one during an update.
+
+✅ **Implemented (Iteration 4, Step 3):** [c0c49ce6](https://github.com/microsoft/vscode-documentdb/commit/c0c49ce6)
+— the webview opens on the method choice (Service Account preselected and marked recommended, API
+Key labelled legacy and simplest), supports an edit mode that replaces an existing credential's
+secret in place, validates before storing, keeps the panel open with the entered values on failure,
+and stores nothing when cancelled.
+[caa1a823](https://github.com/microsoft/vscode-documentdb/commit/caa1a823) removed the now-unused
+auth-method QuickPick and the flow wrappers.
+
 ---
 
 ### 7. Multi-credential management, modeled on the Azure accounts flow 🗣️
 
-**Priority:** P2 · **Status:** 🟡 Open (soft) · **Complexity:** ~20 files · **Reviewer #6**
+**Priority:** P2 · **Status:** ✅ Implemented (Iteration 4) · **Complexity:** ~20 files · **Reviewer #6**
 
 > 🤖 **Automatic audit note (2026-07-23): Keep open; implementation is still required.**
 > Code inspection confirms that Atlas still uses fixed single-credential storage and a flat
@@ -729,11 +789,36 @@ See [O4](#o4-multi-credential-model--api-redesign-item-7). **This supersedes the
 "staged Back/status wording" polish item** — that lands for free with the Azure-style flow.
 _Follow-up PR; sequence after item 6._
 
+> **Decision (Iteration 4, Steps 2 and 3):** Implemented as suggested, on both reference stacks:
+> the Kubernetes `sourceStore` shape for persistence and the Azure `credentialsManagement/` wizard
+> shape for the UI (`AzureWizard` prompt steps, `GoBackError` for Back, a sentinel
+> `UserCancelledError` message for a graceful exit). Reusing both patterns verbatim is what keeps
+> the two providers' credential flows maintainable side by side.
+>
+> Two deliberate deviations, both recorded here:
+>
+> 1. **Aggregation does not copy Azure's fan-out.** Azure's wizard uses `Promise.all`, so one
+>    failing account collapses the whole list. Atlas uses `Promise.allSettled` behind a bounded
+>    limiter and returns healthy data together with typed per-credential errors, because a dead
+>    credential must never blank the fleet.
+> 2. **Re-entering the same Atlas identity updates the existing record instead of adding a
+>    duplicate.** The record ID stays stable across a secret rotation, which is what keeps tree
+>    paths and saved connections valid.
+
+✅ **Implemented (Iteration 4):** [ee2bf417](https://github.com/microsoft/vscode-documentdb/commit/ee2bf417)
+(store, per-credential sessions, `listAll()` aggregation, pagination),
+[c0c49ce6](https://github.com/microsoft/vscode-documentdb/commit/c0c49ce6) (Manage MongoDB Atlas
+Credentials QuickPick with Add, Retry, Update, Remove, Sign out of all, Back, Exit), and
+[caa1a823](https://github.com/microsoft/vscode-documentdb/commit/caa1a823) (retirement of the
+single-session manager). Tests cover independent restore, token-refresh isolation, credential
+removal, partial failure, pagination, duplicate/overlapping project access, stable ordering,
+cancellation, and every management action.
+
 ---
 
 ### 8. Tree/List view toggle with an org level (Kubernetes-style) 🗣️
 
-**Priority:** P2 · **Status:** 🟡 Open (soft) · **Complexity:** ~15 files · **Reviewer #5**
+**Priority:** P2 · **Status:** ✅ Implemented (Iteration 4) · **Complexity:** ~15 files · **Reviewer #5**
 
 > 🤖 **Automatic audit note (2026-07-23): Keep open; implementation is still required.**
 > No organization tree node, flat-list mode, view-mode state, or toggle commands were added.
@@ -755,6 +840,20 @@ contextValue marker + inline toggle). **Tree mode:** new `AtlasOrgItem` → `Atl
 description. Sequence **after** the org-aware credential model (item 7) so the org grouping
 has a stable data source. See [O5](#o5-treelist-toggle--org-level-item-8). _Feature work;
 follow-up PR._
+
+> **Decision (Iteration 4, Steps 4 and 5):** Ported as suggested, sequenced after the credential
+> model exactly as recommended. Tree mode is the default because the organization level is what
+> makes several credentials legible; List mode stays one click away.
+>
+> Deviation worth noting: the earlier idea of forcing Tree mode and disabling the List toggle on
+> error was **dropped**. Because the recovery row is just another row, it drops into a flat list
+> unchanged, so List mode needs no special casing and the layout never changes under the user.
+
+✅ **Implemented (Iteration 4):** [9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f)
+adds the organization level and the merged tree;
+[3674133d](https://github.com/microsoft/vscode-documentdb/commit/3674133d) adds the persisted
+Tree/List toggle, the flat deduplicated cluster list with `organization · project` context, and the
+same recovery row in both modes.
 
 ---
 
@@ -871,7 +970,7 @@ appear without a manual expand.
 
 ### 12. Root shows no "signed in as…" identity when Active ⚠️
 
-**Priority:** P3 · **Status:** ✅ Implemented · **Complexity:** ~5 files
+**Priority:** P3 · **Status:** 🚫 Closed (superseded, Iteration 4) · **Complexity:** ~5 files
 
 > 🤖 **Automatic audit note (2026-07-23): Further investigation and targeted testing
 > required — do not accept as closed yet.** The Active-state text was added, but credential
@@ -887,6 +986,18 @@ tooltip when Active.
 > **Decision (Iteration 3):** Add an `Active` case to `getStateDescription()` that returns `"Signed in as {displayName}"` when a display name is stored, or `"Signed in"` as a fallback (covers Service Accounts for which no user-profile endpoint exists).
 
 ✅ **Implemented (Iteration 3):** [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2) — `AtlasServiceRootItem.getStateDescription()` now handles `AtlasSessionState.Active`: it returns `vscode.l10n.t('Signed in as {0}', displayName)` when `getUserDisplayName()` returns a value, or `vscode.l10n.t('Signed in')` as the fallback. Service Accounts that have no resolvable display name show the fallback gracefully. **Verification:** `npm run build` passed.
+
+> **Decision (Iteration 4):** 🚫 **Closed as superseded.** The audit note above is exactly right
+> that the display-name lifecycle was broken, and the multi-credential model resolves it by
+> deleting the concept: a single global "signed in as" slot cannot describe a fleet of
+> credentials, and the root description is the one place the quiet-tree design specifically wants
+> to stay empty. Identity moved to where it is actionable - the Manage MongoDB Atlas Credentials
+> QuickPick lists every credential with its resolved label (user label, then cached organization
+> name, then a non-secret identity hint) and its live status.
+>
+> 🚫 **Reason:** a per-credential identity list replaces a single stale root description.
+> Implemented by [caa1a823](https://github.com/microsoft/vscode-documentdb/commit/caa1a823), which
+> removed the `userDisplayName` state slot together with the single-session manager.
 
 ---
 
@@ -1159,15 +1270,15 @@ tree rendering, wizard attribution, or live Atlas behavior works in the extensio
 
 ### Open work at a glance
 
-| Order | Item(s)            | Open work                                                                                                                                  | Why it sits here                                                                                         |
-| ----- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
-| 1     | **#7, #8, #12**    | ✅ Live feasibility gates complete; preserve results as production contract tests                                                          | L1/L2/L5 now confirm org/project attribution, union semantics, auth parity, and the `401`/`403` taxonomy |
-| 2     | **#7, #12**        | Build credential storage, per-credential sessions, and the `listAll()` aggregation foundation                                              | Every UI surface depends on stable credential/resource attribution and partial-result behavior           |
-| 3     | **#6, #7, #12**    | Implement the credential-management QuickPick and guided add/edit webview                                                                  | Builds the production lifecycle on the new store without coupling management to the tree                 |
-| 4     | **#2, #3, #7, #8** | Build the merged organization tree, empty state, and consolidated recovery action                                                          | Requires the aggregated model and management entry point                                                 |
-| 5     | **#5, #8**         | Add List mode and thread credential ownership through the add-connection wizard                                                            | Reuses the merged snapshot and proves either view can connect through a valid owning credential          |
-| 6     | **#10**            | ✅ Done — Atlas-provided Markdown escaped in project tooltips ([f53c0ca3](https://github.com/microsoft/vscode-documentdb/commit/f53c0ca3)) | Independent and safe to land in parallel with steps 1–5                                                  |
-| 7     | **All open items** | Run focused automated tests and the hands-on UX matrix; reconcile this ledger                                                              | Verifies both auth methods, partial failures, empty results, duplicate resources, reload, and both modes |
+| Order | Item(s)            | Open work                                                                                                                                                   | Why it sits here                                                                                         |
+| ----- | ------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| 1     | **#7, #8, #12**    | ✅ Live feasibility gates complete; preserved as production contract tests                                                                                  | L1/L2/L5 now confirm org/project attribution, union semantics, auth parity, and the `401`/`403` taxonomy |
+| 2     | **#7, #12**        | ✅ Done — credential storage, per-credential sessions, `listAll()` aggregation ([ee2bf417](https://github.com/microsoft/vscode-documentdb/commit/ee2bf417)) | Every UI surface depends on stable credential/resource attribution and partial-result behavior           |
+| 3     | **#6, #7, #12**    | ✅ Done — credential-management QuickPick and guided add/edit webview ([c0c49ce6](https://github.com/microsoft/vscode-documentdb/commit/c0c49ce6))          | Builds the production lifecycle on the new store without coupling management to the tree                 |
+| 4     | **#2, #3, #7, #8** | ✅ Done — merged organization tree, empty state, consolidated recovery action ([9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f))  | Requires the aggregated model and management entry point                                                 |
+| 5     | **#5, #8**         | ✅ Done — List mode and credential ownership through the wizard ([3674133d](https://github.com/microsoft/vscode-documentdb/commit/3674133d))                | Reuses the merged snapshot and proves either view can connect through a valid owning credential          |
+| 6     | **#10**            | ✅ Done — Atlas-provided Markdown escaped in project tooltips ([f53c0ca3](https://github.com/microsoft/vscode-documentdb/commit/f53c0ca3))                  | Independent and safe to land in parallel with steps 1–5                                                  |
+| 7     | **All open items** | ✅ Automated tests and the full checklist run; ledger reconciled. **Outstanding: the hands-on UX matrix**                                                   | Verifies both auth methods, partial failures, empty results, duplicate resources, reload, and both modes |
 
 #### Iteration 4 implementation progress
 
@@ -1175,15 +1286,21 @@ Tracked inline as the steps land. Order deviation: **Step 6 was landed first** b
 itself marks it as parallel-safe and it carries no dependency on the multi-credential foundation;
 landing it early removes a security-relevant gap regardless of how far the larger steps get.
 
-| Step | State          | Commit                                                                     |
-| ---- | -------------- | -------------------------------------------------------------------------- |
-| 1    | ✅ Complete    | Documentation only (live gates)                                            |
-| 2    | ⏳ In progress | —                                                                          |
-| 3    | ⏳ Pending     | —                                                                          |
-| 4    | ⏳ Pending     | —                                                                          |
-| 5    | ⏳ Pending     | —                                                                          |
-| 6    | ✅ Complete    | [f53c0ca3](https://github.com/microsoft/vscode-documentdb/commit/f53c0ca3) |
-| 7    | ⏳ Pending     | —                                                                          |
+| Step | State                                                              | Commit                                                                                                                                                          |
+| ---- | ------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1    | ✅ Complete                                                        | Documentation only (live gates)                                                                                                                                 |
+| 2    | ✅ Complete                                                        | [ee2bf417](https://github.com/microsoft/vscode-documentdb/commit/ee2bf417)                                                                                      |
+| 3    | ✅ Complete                                                        | [c0c49ce6](https://github.com/microsoft/vscode-documentdb/commit/c0c49ce6)                                                                                      |
+| 4    | ✅ Complete                                                        | [9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f)                                                                                      |
+| 5    | ✅ Complete                                                        | [3674133d](https://github.com/microsoft/vscode-documentdb/commit/3674133d) + [caa1a823](https://github.com/microsoft/vscode-documentdb/commit/caa1a823) cleanup |
+| 6    | ✅ Complete                                                        | [f53c0ca3](https://github.com/microsoft/vscode-documentdb/commit/f53c0ca3)                                                                                      |
+| 7    | ✅ Automated checks complete; hands-on UX matrix still outstanding | `npm run l10n` (1672 keys), `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage` (2743 tests / 166 suites), `npm run build`                         |
+
+**Remaining for a human:** the hands-on UX matrix in Step 7 (both auth methods, multiple
+credentials in different organizations, overlapping credentials in one organization, mixed
+valid/invalid credentials, retries, healthy empty results, the `401` vs `403` distinction,
+extension reload, and both view modes). Everything above is covered by automated tests, which are
+no substitute for a live pass.
 
 ### Step 1 — Live API gates closed
 
