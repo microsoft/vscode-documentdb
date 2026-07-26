@@ -39,6 +39,16 @@ import { createEmptyPlaceholderNode, createRevisitCredentialsNode } from './atla
 export class AtlasServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
 
+    /**
+     * Must stay a writable property: the discovery branch data provider appends its own markers
+     * (for example `rootItem`) onto root elements, so a getter-only accessor breaks activation.
+     * The view-mode marker is therefore folded in at {@link getTreeItem} time instead of being
+     * baked into this field, which keeps it current after a toggle without accumulating stale
+     * markers.
+     */
+    public contextValue: string =
+        'enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem';
+
     constructor(
         private readonly discoveryService: AtlasDiscoveryService,
         public readonly parentId: string,
@@ -47,12 +57,11 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     /**
-     * The current view mode is part of the context value so the toggle command can be gated on it:
-     * the icon reflects the current mode and the action switches to the other one.
+     * The current view mode is part of the rendered context value so the toggle command can be
+     * gated on it: the icon reflects the current mode and the action switches to the other one.
      */
-    public get contextValue(): string {
-        const modeMarker = getAtlasViewMode() === 'list' ? 'discoveryAtlasViewModeList' : 'discoveryAtlasViewModeTree';
-        return `enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem;${modeMarker}`;
+    private get viewModeContextValue(): string {
+        return getAtlasViewMode() === 'list' ? 'discoveryAtlasViewModeList' : 'discoveryAtlasViewModeTree';
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
@@ -156,7 +165,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
     public getTreeItem(): vscode.TreeItem {
         return {
             id: this.id,
-            contextValue: this.contextValue,
+            contextValue: `${this.contextValue};${this.viewModeContextValue}`,
             label: vscode.l10n.t('MongoDB Atlas'),
             iconPath: new vscode.ThemeIcon('cloud'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,

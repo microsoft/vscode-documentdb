@@ -263,10 +263,19 @@ describe('AtlasServiceRootItem', () => {
 
     it('marks the current view mode in the context value so the toggle can be gated', () => {
         const root = new AtlasServiceRootItem(serviceStub(snapshotOf()), 'discoveryView');
-        expect(root.contextValue).toContain('discoveryAtlasViewModeTree');
+        expect(root.getTreeItem().contextValue).toContain('discoveryAtlasViewModeTree');
 
         globalStateBacking.set(VIEW_MODE_KEY, 'list');
-        expect(root.contextValue).toContain('discoveryAtlasViewModeList');
+        expect(root.getTreeItem().contextValue).toContain('discoveryAtlasViewModeList');
+    });
+
+    it('keeps contextValue writable so the tree data provider can append its own markers', () => {
+        const root = new AtlasServiceRootItem(serviceStub(snapshotOf()), 'discoveryView');
+
+        expect(() => {
+            root.contextValue = `${root.contextValue};rootItem`;
+        }).not.toThrow();
+        expect(root.getTreeItem().contextValue).toContain('rootItem');
     });
 });
 
