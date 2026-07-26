@@ -7,43 +7,103 @@ import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-aze
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { AtlasApiClient } from '../api/AtlasApiClient';
-import { promptAtlasAuthMethod } from '../auth/AtlasAuthQuickPick';
-import { type AtlasSession } from '../auth/AtlasSession';
 import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
-import { executeAtlasAuthFlow } from '../auth/executeAtlasAuthFlow';
+import { configureAtlasCredentials } from '../credentialsManagement/configureAtlasCredentials';
+import { snapshotHasFailures, type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasCluster, type AtlasClusterState, type AtlasProject } from '../models/AtlasProjectModel';
 
 interface AtlasProjectQuickPickItem extends vscode.QuickPickItem {
-    readonly itemType: 'manageCredentials' | 'project' | 'noProjects';
+    readonly itemType: 'manageCredentials' | 'project' | 'noProjects' | 'separator';
     readonly project?: AtlasProject;
+    /** The healthy credential that owns this project in the merged snapshot. */
+    readonly credentialId?: string;
 }
 
 interface AtlasClusterQuickPickItem extends vscode.QuickPickItem {
-    readonly itemType: 'manageCredentials' | 'cluster' | 'unavailableCluster' | 'noClusters';
+    readonly itemType: 'manageCredentials' | 'cluster' | 'unavailableCluster' | 'noClusters' | 'separator';
     readonly cluster?: AtlasCluster;
 }
 
 /**
+ * Builds the shared "manage credentials" row. It doubles as the recovery affordance: when the
+ * snapshot carries failures, the same row explains that some credentials need attention, so a
+ * partial failure never dead-ends the wizard.
+ */
+function createManageCredentialsItem(hasFailures: boolean): {
+    label: string;
+    detail: string;
+    iconPath: vscode.ThemeIcon;
+    alwaysShow: true;
+} {
+    return {
+        label: hasFailures
+            ? vscode.l10n.t('Click here to revisit credentials')
+            : vscode.l10n.t('Manage MongoDB Atlas Credentials…'),
+        detail: hasFailures
+            ? vscode.l10n.t('Some credentials need attention, so parts of your fleet may be missing from this list.')
+            : vscode.l10n.t('Add or update credentials to see more projects and clusters.'),
+        iconPath: new vscode.ThemeIcon(hasFailures ? 'warning' : 'key'),
+        alwaysShow: true,
+    };
+}
+
+/**
+ * Runs the credential-management flow from inside the wizard.
+ *
+ * Returns `true` only when credential storage actually changed. Cancelling must never be
+ * reported as "credential management completed".
+ */
+async function manageCredentialsFromWizard(
+    context: NewConnectionWizardContext,
+    discoveryService: AtlasDiscoveryService,
+    sessionManager: AtlasSessionManager,
+): Promise<boolean> {
+    context.telemetry.properties.credentialConfigActivated = 'true';
+    context.telemetry.properties.initiatedFrom = 'newConnectionWizard';
+
+    const changed = await configureAtlasCredentials(context, discoveryService, sessionManager);
+    context.telemetry.properties.credentialsChanged = changed ? 'true' : 'false';
+    return changed;
+}
+
+/**
  * Wizard step that prompts the user to select an Atlas project.
+ *
+ * Consumes the same merged snapshot as the tree, so a project visible through two credentials
+ * appears once and carries the healthy credential that owns it.
  */
 export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
-    constructor(private readonly sessionManager?: AtlasSessionManager) {
+    constructor(
+        private readonly discoveryService: AtlasDiscoveryService,
+        private readonly sessionManager: AtlasSessionManager,
+    ) {
         super();
     }
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const session = context.properties['atlas.session'] as AtlasSession | undefined;
-        const items = await this.getProjectItems(session);
-
-        const selected = await context.ui.showQuickPick<AtlasProjectQuickPickItem>(items, {
+        const selected = await context.ui.showQuickPick<AtlasProjectQuickPickItem>(this.getProjectItems(), {
             placeHolder: vscode.l10n.t('Select an Atlas project'),
-            loadingPlaceHolder: vscode.l10n.t('Loading Atlas projects...'),
+            loadingPlaceHolder: vscode.l10n.t('Loading Atlas projects…'),
             suppressPersistence: true,
             matchOnDescription: true,
         });
 
         if (selected.itemType === 'manageCredentials') {
-            await this.manageCredentialsFromWizard(context);
+            const changed = await manageCredentialsFromWizard(context, this.discoveryService, this.sessionManager);
+            if (!changed) {
+                throw new UserCancelledError();
+            }
+
+            await vscode.window.showInformationMessage(
+                vscode.l10n.t('Credential management completed'),
+                {
+                    modal: true,
+                    detail: vscode.l10n.t(
+                        'Please retry discovery to refresh the available MongoDB Atlas projects and clusters.',
+                    ),
+                },
+                vscode.l10n.t('OK'),
+            );
             throw new UserCancelledError(vscode.l10n.t('Credential management completed'));
         }
 
@@ -53,7 +113,7 @@ export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionW
                 {
                     modal: true,
                     detail: vscode.l10n.t(
-                        'No MongoDB Atlas projects are currently available for this session. Manage credentials to try a different API key or Service Account.',
+                        'No MongoDB Atlas projects are currently visible to your stored credentials. Manage credentials to add or update a credential.',
                     ),
                 },
                 vscode.l10n.t('OK'),
@@ -62,47 +122,46 @@ export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionW
             throw new UserCancelledError(vscode.l10n.t('No Atlas projects available'));
         }
 
-        if (!selected.project) {
+        if (!selected.project || !selected.credentialId) {
             throw new UserCancelledError(vscode.l10n.t('No Atlas project selected'));
         }
 
         context.properties['atlas.selectedProject'] = selected.project;
+        context.properties['atlas.selectedProjectCredentialId'] = selected.credentialId;
     }
 
     public shouldPrompt(context: NewConnectionWizardContext): boolean {
         return !context.properties['atlas.selectedProject'];
     }
 
-    private async getProjectItems(session: AtlasSession | undefined): Promise<AtlasProjectQuickPickItem[]> {
+    private async getProjectItems(): Promise<AtlasProjectQuickPickItem[]> {
+        const snapshot = await this.discoveryService.listAll();
+        const orgNames = new Map(
+            snapshot.organizations.map((entry) => [entry.organization.id, entry.organization.name]),
+        );
+
         const manageItem: AtlasProjectQuickPickItem = {
             itemType: 'manageCredentials',
-            label: vscode.l10n.t('Manage MongoDB Atlas Credentials...'),
-            detail: vscode.l10n.t(
-                'Sign in with a different API key or Service Account to see more projects and clusters.',
-            ),
-            iconPath: new vscode.ThemeIcon('key'),
-            alwaysShow: true,
+            ...createManageCredentialsItem(snapshotHasFailures(snapshot)),
         };
 
-        if (!session) {
-            return [manageItem];
-        }
-
-        const client = new AtlasApiClient(session, this.sessionManager);
-        const projects = await client.listProjects();
-
-        const projectItems: AtlasProjectQuickPickItem[] = projects.map((p) => ({
-            itemType: 'project',
-            label: p.name,
-            description: vscode.l10n.t('{0} clusters', String(p.clusterCount)),
-            project: p,
-        }));
+        const projectItems: AtlasProjectQuickPickItem[] = snapshot.projects.map((entry) => {
+            const orgName = orgNames.get(entry.project.orgId);
+            return {
+                itemType: 'project',
+                label: entry.project.name,
+                description: orgName ?? '',
+                detail: vscode.l10n.t('{0} clusters', String(entry.project.clusterCount)),
+                project: entry.project,
+                credentialId: entry.ownerCredentialId,
+            };
+        });
 
         if (projectItems.length === 0) {
             projectItems.push({
                 itemType: 'noProjects',
                 label: vscode.l10n.t('No projects available for these credentials'),
-                detail: vscode.l10n.t('Select Manage MongoDB Atlas Credentials... to try different credentials.'),
+                detail: vscode.l10n.t('Manage credentials to add or update a credential.'),
                 iconPath: new vscode.ThemeIcon('info'),
                 alwaysShow: true,
             });
@@ -110,39 +169,9 @@ export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionW
 
         return [
             manageItem,
-            { label: '', kind: vscode.QuickPickItemKind.Separator, itemType: 'noProjects' },
+            { label: '', kind: vscode.QuickPickItemKind.Separator, itemType: 'separator' },
             ...projectItems,
         ];
-    }
-
-    private async manageCredentialsFromWizard(context: NewConnectionWizardContext): Promise<void> {
-        context.telemetry.properties.credentialConfigActivated = 'true';
-        context.telemetry.properties.nodeProvided = 'false';
-        context.telemetry.properties.initiatedFrom = 'newConnectionWizard';
-
-        if (!this.sessionManager) {
-            throw new UserCancelledError(vscode.l10n.t('Credential management is not available'));
-        }
-
-        const authMethod = await promptAtlasAuthMethod();
-        if (!authMethod) {
-            throw new UserCancelledError();
-        }
-
-        const success = await executeAtlasAuthFlow(authMethod, this.sessionManager);
-        context.telemetry.properties.authMethod = authMethod;
-        context.telemetry.properties.authSuccess = success ? 'true' : 'false';
-
-        await vscode.window.showInformationMessage(
-            vscode.l10n.t('Credential management completed'),
-            {
-                modal: true,
-                detail: vscode.l10n.t(
-                    'Please retry discovery to refresh the available MongoDB Atlas projects and clusters.',
-                ),
-            },
-            vscode.l10n.t('OK'),
-        );
     }
 }
 
@@ -150,29 +179,35 @@ export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionW
  * Wizard step that prompts the user to select an Atlas cluster within the selected project.
  */
 export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
-    constructor(private readonly sessionManager?: AtlasSessionManager) {
+    constructor(
+        private readonly discoveryService: AtlasDiscoveryService,
+        private readonly sessionManager: AtlasSessionManager,
+    ) {
         super();
     }
 
     public async prompt(context: NewConnectionWizardContext): Promise<void> {
-        const session = context.properties['atlas.session'] as AtlasSession | undefined;
         const project = context.properties['atlas.selectedProject'] as AtlasProject | undefined;
-        if (!project) {
+        const credentialId = context.properties['atlas.selectedProjectCredentialId'] as string | undefined;
+        if (!project || !credentialId) {
             throw new UserCancelledError(vscode.l10n.t('Atlas project not selected'));
         }
 
-        const items = await this.getClusterItems(session, project);
+        const items = await this.getClusterItems(project, credentialId);
 
         while (true) {
             const selected = await context.ui.showQuickPick<AtlasClusterQuickPickItem>(items, {
                 placeHolder: vscode.l10n.t('Select a cluster'),
-                loadingPlaceHolder: vscode.l10n.t('Loading Atlas clusters...'),
+                loadingPlaceHolder: vscode.l10n.t('Loading Atlas clusters…'),
                 suppressPersistence: true,
                 matchOnDescription: true,
             });
 
             if (selected.itemType === 'manageCredentials') {
-                await this.manageCredentialsFromWizard(context);
+                const changed = await manageCredentialsFromWizard(context, this.discoveryService, this.sessionManager);
+                if (!changed) {
+                    throw new UserCancelledError();
+                }
                 throw new UserCancelledError(vscode.l10n.t('Credential management completed'));
             }
 
@@ -215,28 +250,30 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
         return !context.properties['atlas.selectedClusterConnectionString'];
     }
 
-    private async getClusterItems(
-        session: AtlasSession | undefined,
-        project: AtlasProject,
-    ): Promise<AtlasClusterQuickPickItem[]> {
+    private async getClusterItems(project: AtlasProject, credentialId: string): Promise<AtlasClusterQuickPickItem[]> {
+        const registry = this.discoveryService.sessionRegistry;
+        const session = await registry.getSession(credentialId);
+
         const manageItem: AtlasClusterQuickPickItem = {
             itemType: 'manageCredentials',
-            label: vscode.l10n.t('Manage MongoDB Atlas Credentials...'),
-            detail: vscode.l10n.t(
-                'Sign in with a different API key or Service Account to see more projects and clusters.',
-            ),
-            iconPath: new vscode.ThemeIcon('key'),
-            alwaysShow: true,
+            ...createManageCredentialsItem(session === undefined),
         };
 
         if (!session) {
             return [manageItem];
         }
 
-        const client = new AtlasApiClient(session, this.sessionManager);
-        const clusters = await client.listClusters(project.id);
+        const client = new AtlasApiClient(session, registry.refresherFor(credentialId));
+        // Deduplicate by cluster name: the same cluster can be reachable through more than one
+        // credential, and Atlas cluster names are unique within a project.
+        const byName = new Map<string, AtlasCluster>();
+        for (const cluster of await client.listClusters(project.id)) {
+            if (!byName.has(cluster.name)) {
+                byName.set(cluster.name, cluster);
+            }
+        }
 
-        const clusterItems: AtlasClusterQuickPickItem[] = clusters
+        const clusterItems: AtlasClusterQuickPickItem[] = [...byName.values()]
             .map((c) => {
                 const provider =
                     c.providerSettings ??
@@ -280,7 +317,7 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
 
         return [
             manageItem,
-            { label: '', kind: vscode.QuickPickItemKind.Separator, itemType: 'noClusters' },
+            { label: '', kind: vscode.QuickPickItemKind.Separator, itemType: 'separator' },
             ...clusterItems,
         ];
     }
@@ -295,36 +332,6 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             {
                 modal: true,
                 detail: getClusterStateExplanation(cluster.stateName),
-            },
-            vscode.l10n.t('OK'),
-        );
-    }
-
-    private async manageCredentialsFromWizard(context: NewConnectionWizardContext): Promise<void> {
-        context.telemetry.properties.credentialConfigActivated = 'true';
-        context.telemetry.properties.nodeProvided = 'false';
-        context.telemetry.properties.initiatedFrom = 'newConnectionWizard';
-
-        if (!this.sessionManager) {
-            throw new UserCancelledError(vscode.l10n.t('Credential management is not available'));
-        }
-
-        const authMethod = await promptAtlasAuthMethod();
-        if (!authMethod) {
-            throw new UserCancelledError();
-        }
-
-        const success = await executeAtlasAuthFlow(authMethod, this.sessionManager);
-        context.telemetry.properties.authMethod = authMethod;
-        context.telemetry.properties.authSuccess = success ? 'true' : 'false';
-
-        await vscode.window.showInformationMessage(
-            vscode.l10n.t('Credential management completed'),
-            {
-                modal: true,
-                detail: vscode.l10n.t(
-                    'Please retry discovery to refresh the available MongoDB Atlas projects and clusters.',
-                ),
             },
             vscode.l10n.t('OK'),
         );

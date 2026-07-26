@@ -742,6 +742,24 @@ export class ClustersExtension implements vscode.Disposable {
                     }),
                 );
 
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.atlas.switchToTreeView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToAtlasTreeView } =
+                            await import('../plugins/service-atlas-mongodb/commands/switchAtlasViewMode');
+                        await switchToAtlasTreeView(context);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.atlas.switchToFlatListView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToAtlasFlatListView } =
+                            await import('../plugins/service-atlas-mongodb/commands/switchAtlasViewMode');
+                        await switchToAtlasFlatListView(context);
+                    }),
+                );
+
                 registerCommandWithTreeNodeUnwrappingAndModalErrors(
                     'vscode-documentdb.command.discoveryView.addConnectionToConnectionsView',
                     withTreeNodeCommandCorrelation(addConnectionFromRegistry),

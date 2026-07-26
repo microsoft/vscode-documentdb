@@ -5,6 +5,8 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { Views } from '../../../documentdb/Views';
+import { AtlasExperience } from '../../../DocumentDBExperiences';
 import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
@@ -13,9 +15,16 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { getAtlasViewMode } from '../commands/switchAtlasViewMode';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { readAtlasCredentials } from '../credentials/atlasCredentialStore';
-import { snapshotHasFailures, type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
+import {
+    snapshotHasFailures,
+    type AtlasDiscoveryService,
+    type AtlasDiscoverySnapshot,
+} from '../discovery/AtlasDiscoveryService';
+import { createAtlasClusterModel } from '../models/AtlasClusterModel';
+import { AtlasClusterItem } from './AtlasClusterItem';
 import { AtlasOrganizationItem } from './AtlasOrganizationItem';
 import { createEmptyPlaceholderNode, createRevisitCredentialsNode } from './atlasTreeNodes';
 
@@ -29,8 +38,6 @@ import { createEmptyPlaceholderNode, createRevisitCredentialsNode } from './atla
  */
 export class AtlasServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
-    public contextValue: string =
-        'enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem';
 
     constructor(
         private readonly discoveryService: AtlasDiscoveryService,
@@ -39,37 +46,34 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         this.id = `${parentId}/${DISCOVERY_PROVIDER_ID}`;
     }
 
+    /**
+     * The current view mode is part of the context value so the toggle command can be gated on it:
+     * the icon reflects the current mode and the action switches to the other one.
+     */
+    public get contextValue(): string {
+        const modeMarker = getAtlasViewMode() === 'list' ? 'discoveryAtlasViewModeList' : 'discoveryAtlasViewModeTree';
+        return `enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem;${modeMarker}`;
+    }
+
     async getChildren(): Promise<ExtTreeElementBase[]> {
         const credentials = await readAtlasCredentials();
         if (credentials.length === 0) {
             return [this.createSignInNode()];
         }
 
-        const snapshot = await this.discoveryService.listAll();
+        const listMode = getAtlasViewMode() === 'list';
+        const snapshot = await this.discoveryService.listAll({ includeClusters: listMode });
 
         const children: ExtTreeElementBase[] = [];
         if (snapshotHasFailures(snapshot)) {
+            // The recovery row is just another row, so it drops into a flat list unchanged and
+            // List mode needs no special casing: a failure never forces a view-mode switch.
             children.push(createRevisitCredentialsNode(this, snapshot));
         }
 
-        // Organizations whose only credentials failed keep no data of their own; a credential's
-        // cached organization id is what lets a partially-degraded organization still be flagged.
-        const degradedOrgIds = new Set(
-            snapshot.credentialErrors
-                .map((error) => credentials.find((record) => record.id === error.credentialId)?.orgId)
-                .filter((orgId): orgId is string => typeof orgId === 'string'),
+        children.push(
+            ...(listMode ? this.buildClusterRows(snapshot) : this.buildOrganizationRows(snapshot, credentials)),
         );
-
-        for (const entry of snapshot.organizations) {
-            children.push(
-                new AtlasOrganizationItem(
-                    this.id,
-                    entry.organization,
-                    this.discoveryService,
-                    degradedOrgIds.has(entry.organization.id),
-                ),
-            );
-        }
 
         if (children.length === 0) {
             return [
@@ -85,6 +89,49 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         return children;
     }
 
+    /** Tree mode: one node per merged organization. */
+    private buildOrganizationRows(
+        snapshot: AtlasDiscoverySnapshot,
+        credentials: Awaited<ReturnType<typeof readAtlasCredentials>>,
+    ): ExtTreeElementBase[] {
+        // Organizations whose only credentials failed keep no data of their own; a credential's
+        // cached organization id is what lets a partially-degraded organization still be flagged.
+        const degradedOrgIds = new Set(
+            snapshot.credentialErrors
+                .map((error) => credentials.find((record) => record.id === error.credentialId)?.orgId)
+                .filter((orgId): orgId is string => typeof orgId === 'string'),
+        );
+
+        return snapshot.organizations.map(
+            (entry) =>
+                new AtlasOrganizationItem(
+                    this.id,
+                    entry.organization,
+                    this.discoveryService,
+                    degradedOrgIds.has(entry.organization.id),
+                ),
+        );
+    }
+
+    /** List mode: a flat, deduplicated cluster list carrying `organization · project` context. */
+    private buildClusterRows(snapshot: AtlasDiscoverySnapshot): ExtTreeElementBase[] {
+        const orgNames = new Map(
+            snapshot.organizations.map((entry) => [entry.organization.id, entry.organization.name]),
+        );
+
+        return snapshot.clusters.map((entry) => {
+            const model = createAtlasClusterModel(entry.projectId, entry.projectName, entry.cluster, AtlasExperience);
+            const treeCluster = {
+                ...model,
+                treeId: `${this.id}/${entry.projectId}/${entry.cluster.name.replaceAll('/', '_')}`,
+                viewId: Views.DiscoveryView,
+            };
+            const orgName = orgNames.get(entry.orgId);
+            const context = orgName ? `${orgName} · ${entry.projectName}` : entry.projectName;
+            return new AtlasClusterItem('', treeCluster, context);
+        });
+    }
+
     /**
      * Explicit refresh re-attempts every credential, healthy and failed alike. Passive expansion
      * reuses the cached snapshot, so a persistently failing credential is not hammered every time
@@ -92,7 +139,10 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
      */
     public async refresh(_context: IActionContext): Promise<void> {
         this.discoveryService.invalidate();
-        await this.discoveryService.listAll({ forceRefresh: true });
+        await this.discoveryService.listAll({
+            forceRefresh: true,
+            includeClusters: getAtlasViewMode() === 'list',
+        });
         ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
         ext.discoveryBranchDataProvider.refresh(this);
     }

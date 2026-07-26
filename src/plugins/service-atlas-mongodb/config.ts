@@ -36,3 +36,25 @@ export const SECRET_KEY_PREFIX = 'atlas-mongodb';
 /** Global state keys */
 export const STATE_AUTH_METHOD = `${SECRET_KEY_PREFIX}.authMethod`;
 export const STATE_USER_DISPLAY_NAME = `${SECRET_KEY_PREFIX}.userDisplayName`;
+
+/**
+ * How the MongoDB Atlas discovery tree renders below its root:
+ *
+ * - `tree` (default): organization to project to cluster.
+ * - `list`: a flat, deduplicated cluster list with `organization · project` in the description.
+ *
+ * Both modes render the same consolidated recovery row when a credential fails, so a failure
+ * never forces a view-mode switch.
+ */
+export type AtlasViewMode = 'tree' | 'list';
+
+/** Default view mode when the user has not toggled it yet. */
+export const DEFAULT_ATLAS_VIEW_MODE: AtlasViewMode = 'tree';
+
+/**
+ * GlobalState key persisting the discovery tree {@link AtlasViewMode}.
+ *
+ * Stored directly via `ext.context.globalState`, matching the Kubernetes view-mode key, so the
+ * last choice always persists without exposing a user-facing setting.
+ */
+export const DISCOVERY_VIEW_MODE_STATE_KEY = `${DISCOVERY_PROVIDER_ID}.viewMode`;

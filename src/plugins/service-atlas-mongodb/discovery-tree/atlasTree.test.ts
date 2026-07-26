@@ -66,7 +66,13 @@ jest.mock('../../../extensionVariables', () => ({
 }));
 
 jest.mock('./AtlasClusterItem', () => ({
-    AtlasClusterItem: class AtlasClusterItem {},
+    AtlasClusterItem: class AtlasClusterItem {
+        constructor(
+            public readonly journeyCorrelationId: string,
+            public readonly cluster: { name: string },
+            public readonly contextDescription?: string,
+        ) {}
+    },
 }));
 
 jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
@@ -81,9 +87,24 @@ import {
     upsertAtlasCredential,
 } from '../credentials/atlasCredentialStore';
 import { type AtlasDiscoveryService, type AtlasDiscoverySnapshot } from '../discovery/AtlasDiscoveryService';
-import { type AtlasOrganization, type AtlasProject } from '../models/AtlasProjectModel';
+import { type AtlasCluster, type AtlasOrganization, type AtlasProject } from '../models/AtlasProjectModel';
+import { AtlasClusterItem } from './AtlasClusterItem';
 import { AtlasOrganizationItem } from './AtlasOrganizationItem';
 import { AtlasServiceRootItem } from './AtlasServiceRootItem';
+
+const VIEW_MODE_KEY = 'atlas-mongodb-discovery.viewMode';
+
+function cluster(name: string, groupId: string): AtlasCluster {
+    return {
+        id: `cluster-${name}`,
+        name,
+        groupId,
+        mongoDBVersion: '7.0',
+        connectionStrings: { standardSrv: `mongodb+srv://${name}.example.invalid` },
+        stateName: 'IDLE',
+        clusterType: 'REPLICASET',
+    };
+}
 
 function org(id: string, name: string): AtlasOrganization {
     return { id, name };
@@ -237,7 +258,85 @@ describe('AtlasServiceRootItem', () => {
         await root.refresh({} as IActionContext);
 
         expect(service.invalidate).toHaveBeenCalled();
-        expect(service.listAll).toHaveBeenCalledWith({ forceRefresh: true });
+        expect(service.listAll).toHaveBeenCalledWith({ forceRefresh: true, includeClusters: false });
+    });
+
+    it('marks the current view mode in the context value so the toggle can be gated', () => {
+        const root = new AtlasServiceRootItem(serviceStub(snapshotOf()), 'discoveryView');
+        expect(root.contextValue).toContain('discoveryAtlasViewModeTree');
+
+        globalStateBacking.set(VIEW_MODE_KEY, 'list');
+        expect(root.contextValue).toContain('discoveryAtlasViewModeList');
+    });
+});
+
+describe('AtlasServiceRootItem in List mode', () => {
+    beforeEach(() => {
+        globalStateBacking.set(VIEW_MODE_KEY, 'list');
+    });
+
+    it('renders a flat deduplicated cluster list with organization and project context', async () => {
+        await upsertAtlasCredential({ authMethod: 'apikey', publicKey: 'pub-1', privateKey: 'priv-1' });
+        const service = serviceStub(
+            snapshotOf({
+                clustersIncluded: true,
+                organizations: [
+                    { organization: org('org-1', 'Acme Corp'), credentialIds: ['c1'], ownerCredentialId: 'c1' },
+                ],
+                clusters: [
+                    {
+                        cluster: cluster('payments-prod', 'p1'),
+                        projectId: 'p1',
+                        projectName: 'Payments',
+                        orgId: 'org-1',
+                        credentialIds: ['c1', 'c2'],
+                        ownerCredentialId: 'c1',
+                    },
+                ],
+            }),
+        );
+
+        const root = new AtlasServiceRootItem(service, 'discoveryView');
+        const children = await root.getChildren();
+
+        expect(service.listAll).toHaveBeenCalledWith({ includeClusters: true });
+        expect(children).toHaveLength(1);
+        const row = children[0] as unknown as { contextDescription?: string };
+        expect(children[0]).toBeInstanceOf(AtlasClusterItem);
+        expect(row.contextDescription).toBe('Acme Corp · Payments');
+    });
+
+    it('keeps the same recovery row in List mode without switching views', async () => {
+        await upsertAtlasCredential({ authMethod: 'apikey', publicKey: 'pub-1', privateKey: 'priv-1' });
+        const service = serviceStub(
+            snapshotOf({
+                clustersIncluded: true,
+                organizations: [
+                    { organization: org('org-1', 'Acme Corp'), credentialIds: ['c1'], ownerCredentialId: 'c1' },
+                ],
+                clusters: [
+                    {
+                        cluster: cluster('payments-prod', 'p1'),
+                        projectId: 'p1',
+                        projectName: 'Payments',
+                        orgId: 'org-1',
+                        credentialIds: ['c1'],
+                        ownerCredentialId: 'c1',
+                    },
+                ],
+                credentialErrors: [
+                    { credentialId: 'c2', label: 'Beta', kind: 'auth', message: 'session expired', retryable: true },
+                ],
+            }),
+        );
+
+        const root = new AtlasServiceRootItem(service, 'discoveryView');
+        const children = (await root.getChildren()) as Array<{ id?: string; label?: string }>;
+
+        expect(children[0].id).toContain('/revisit-credentials');
+        expect(children).toHaveLength(2);
+        // The healthy cluster is still listed next to the recovery row.
+        expect(children[1]).toBeInstanceOf(AtlasClusterItem);
     });
 });
 

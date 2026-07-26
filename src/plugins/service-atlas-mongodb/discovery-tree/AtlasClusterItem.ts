@@ -47,6 +47,11 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
          */
         journeyCorrelationId: string,
         cluster: TreeCluster<AtlasClusterModel>,
+        /**
+         * Context shown instead of the tier/region description, used by List mode to render
+         * `organization · project` next to a flat cluster row.
+         */
+        private readonly contextDescription?: string,
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;
@@ -269,8 +274,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
     private buildDescription(): string {
         const parts: string[] = [];
 
-        // The tier (e.g. "M10") should show. When the tier is unavailable (e.g. serverless clusters), fall back to the provider/region pair.
-        if (this.cluster.instanceSizeName) {
+        if (this.contextDescription) {
+            // List mode already carries the organization and project, so repeating the tier here
+            // would only add noise. State is still worth showing when it is not IDLE.
+            parts.push(this.contextDescription);
+        } else if (this.cluster.instanceSizeName) {
+            // The tier (e.g. "M10") should show. When the tier is unavailable (e.g. serverless clusters), fall back to the provider/region pair.
             parts.push(this.cluster.instanceSizeName);
         } else {
             if (this.cluster.providerName) {

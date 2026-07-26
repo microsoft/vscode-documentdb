@@ -10,11 +10,10 @@ import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
-import { promptAtlasAuthMethod } from './auth/AtlasAuthQuickPick';
-import { type AtlasSession, AtlasSessionState } from './auth/AtlasSession';
+import { AtlasSessionState } from './auth/AtlasSession';
 import { AtlasSessionManager } from './auth/AtlasSessionManager';
-import { executeAtlasAuthFlow } from './auth/executeAtlasAuthFlow';
 import { DESCRIPTION, DISCOVERY_PROVIDER_ID, ICON_PATH, LABEL, WIZARD_TITLE } from './config';
+import { readAtlasCredentials } from './credentials/atlasCredentialStore';
 import { configureAtlasCredentials } from './credentialsManagement/configureAtlasCredentials';
 import { AtlasServiceRootItem } from './discovery-tree/AtlasServiceRootItem';
 import { AtlasExecuteStep } from './discovery-wizard/AtlasExecuteStep';
@@ -61,45 +60,26 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
     }
 
     async getDiscoveryWizard(context: NewConnectionWizardContext): Promise<IWizardOptions<NewConnectionWizardContext>> {
-        let session = await this.sessionManager.getSession();
-        if (!session) {
-            session = await this.promptSignInForWizard(context);
+        const credentials = await readAtlasCredentials();
+        if (credentials.length === 0) {
+            // Nothing stored yet: run the credential-management flow first so the wizard has
+            // something to enumerate. A cancelled sign-in must cancel the wizard rather than
+            // dropping the user into an empty project list.
+            const changed = await configureAtlasCredentials(context, this.discoveryService, this.sessionManager);
+            if (!changed) {
+                throw new UserCancelledError();
+            }
         }
-
-        context.properties['atlas.session'] = session;
 
         return {
             title: WIZARD_TITLE,
             promptSteps: [
-                new SelectAtlasProjectStep(this.sessionManager),
-                new SelectAtlasClusterStep(this.sessionManager),
+                new SelectAtlasProjectStep(this.discoveryService, this.sessionManager),
+                new SelectAtlasClusterStep(this.discoveryService, this.sessionManager),
             ],
             executeSteps: [new AtlasExecuteStep()],
             showLoadingPrompt: true,
         };
-    }
-
-    /**
-     * Prompts the user to authenticate to Atlas during the new-connection wizard and returns the
-     * resulting session. Throws {@link UserCancelledError} if the user dismisses the auth-method
-     * prompt, and returns undefined if authentication was attempted but did not succeed.
-     */
-    private async promptSignInForWizard(context: NewConnectionWizardContext): Promise<AtlasSession | undefined> {
-        const authMethod = await promptAtlasAuthMethod();
-        if (!authMethod) {
-            throw new UserCancelledError();
-        }
-
-        const success = await executeAtlasAuthFlow(authMethod, this.sessionManager);
-
-        if (!success) {
-            return undefined;
-        }
-
-        context.telemetry.properties.authMethod = authMethod;
-        context.telemetry.properties.authSuccess = 'true';
-
-        return this.sessionManager.getSession();
     }
 
     getLearnMoreUrl(): string | undefined {
