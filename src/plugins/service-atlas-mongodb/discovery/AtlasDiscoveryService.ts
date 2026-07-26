@@ -1,0 +1,487 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/**
+ * Single aggregation surface for MongoDB Atlas discovery.
+ *
+ * `listAll()` fans out across every stored credential and returns healthy data **and** typed
+ * per-credential errors together. It never throws for an individual credential: one dead
+ * credential degrades that credential's branch only, instead of blanking the whole view. This is
+ * the concrete difference from the Azure prior art in this repository, which uses `Promise.all`
+ * and collapses to an empty list when any account fails.
+ *
+ * Resources are merged by their Atlas IDs (`orgId` / `projectId` / cluster id) so two credentials
+ * that can see the same organization or project produce one node, and each merged node remembers
+ * every credential that can reach it plus a healthy owner for follow-up requests.
+ */
+
+import * as l10n from '@vscode/l10n';
+import { createConcurrencyLimiter } from '../../../utils/concurrencyLimiter';
+import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
+import { AtlasCredentialSessionRegistry } from '../auth/AtlasCredentialSessionRegistry';
+import {
+    readAtlasCredentials,
+    updateAtlasCredentialMetadata,
+    type AtlasCredentialRecord,
+} from '../credentials/atlasCredentialStore';
+import { type AtlasCluster, type AtlasOrganization, type AtlasProject } from '../models/AtlasProjectModel';
+
+/**
+ * Why a credential (or one project below it) could not be read. Drives the wording and the
+ * recovery affordance the tree offers.
+ */
+export type AtlasErrorKind = 'auth' | 'forbidden' | 'rateLimited' | 'network' | 'other';
+
+/** A whole credential failed. Its healthy peers are unaffected. */
+export interface AtlasCredentialError {
+    readonly credentialId: string;
+    readonly label: string;
+    readonly kind: AtlasErrorKind;
+    readonly status?: number;
+    readonly message: string;
+    /** `false` only when retrying cannot possibly help (for example the credential was removed). */
+    readonly retryable: boolean;
+}
+
+/** A single project's cluster list failed while the owning credential stayed healthy. */
+export interface AtlasProjectError extends AtlasCredentialError {
+    readonly projectId: string;
+    readonly projectName: string;
+}
+
+/** Common shape for every merged resource: who can see it, and who acts on it. */
+interface MergedResource {
+    /** Every credential that can currently reach this resource. */
+    readonly credentialIds: string[];
+    /** The credential used for follow-up requests. Always one of {@link credentialIds}. */
+    readonly ownerCredentialId: string;
+}
+
+export interface AtlasOrganizationEntry extends MergedResource {
+    readonly organization: AtlasOrganization;
+}
+
+export interface AtlasProjectEntry extends MergedResource {
+    readonly project: AtlasProject;
+}
+
+export interface AtlasClusterEntry extends MergedResource {
+    readonly cluster: AtlasCluster;
+    readonly projectId: string;
+    readonly projectName: string;
+    readonly orgId: string;
+}
+
+/**
+ * Everything the tree, the list view, and the add-connection wizard need, in one value.
+ */
+export interface AtlasDiscoverySnapshot {
+    readonly organizations: AtlasOrganizationEntry[];
+    readonly projects: AtlasProjectEntry[];
+    readonly clusters: AtlasClusterEntry[];
+    readonly credentialErrors: AtlasCredentialError[];
+    readonly projectErrors: AtlasProjectError[];
+    /** How many credentials were queried for this snapshot. */
+    readonly credentialsQueried: number;
+    /** Whether cluster data was requested; `false` snapshots carry an empty `clusters` array. */
+    readonly clustersIncluded: boolean;
+}
+
+export interface ListAllOptions {
+    /**
+     * Fetch clusters for every visible project. Off by default: Tree mode only needs
+     * organizations and projects up front and loads clusters when a project is expanded, so the
+     * default keeps the first paint to two requests per credential.
+     */
+    readonly includeClusters?: boolean;
+    /** Ignore the cached snapshot and re-query every credential. */
+    readonly forceRefresh?: boolean;
+    readonly signal?: AbortSignal;
+}
+
+/** Bounded fan-out across credentials. Independent credentials use independent rate buckets. */
+const CREDENTIAL_CONCURRENCY = 4;
+
+/** Bounded fan-out across a single credential's projects when cluster data is requested. */
+const PROJECT_CONCURRENCY = 5;
+
+/**
+ * Resolves the user-facing label for a credential: an explicit user label wins, then the cached
+ * organization name, then a non-secret identity hint, then the record ID.
+ */
+export function resolveCredentialLabel(record: AtlasCredentialRecord): string {
+    if (record.label && record.label.trim().length > 0) {
+        return record.label.trim();
+    }
+    if (record.orgName && record.orgName.trim().length > 0) {
+        return record.orgName.trim();
+    }
+    if (record.identityHint && record.identityHint.length > 0) {
+        return `${record.identityHint}…`;
+    }
+    return record.id;
+}
+
+/**
+ * Classifies a thrown error into the taxonomy the UX reacts to.
+ */
+export function classifyAtlasError(error: unknown): { kind: AtlasErrorKind; status?: number; message: string } {
+    if (error instanceof AtlasApiError) {
+        switch (error.statusCode) {
+            case 401:
+                return { kind: 'auth', status: 401, message: error.message };
+            case 403:
+                return { kind: 'forbidden', status: 403, message: error.message };
+            case 429:
+                return { kind: 'rateLimited', status: 429, message: error.message };
+            default:
+                return { kind: 'other', status: error.statusCode, message: error.message };
+        }
+    }
+
+    const message = error instanceof Error ? error.message : String(error);
+    // `fetch` surfaces connectivity problems as a TypeError with a generic message; treat any
+    // non-API failure that mentions the network as a connectivity problem so the UX can say so.
+    if (error instanceof TypeError || /network|fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(message)) {
+        return { kind: 'network', message };
+    }
+
+    return { kind: 'other', message };
+}
+
+/** Result of querying one credential, before merging. */
+export interface CredentialResult {
+    readonly record: AtlasCredentialRecord;
+    readonly organizations: AtlasOrganization[];
+    readonly projects: AtlasProject[];
+    readonly clusters: Array<{ project: AtlasProject; cluster: AtlasCluster }>;
+    readonly credentialError?: AtlasCredentialError;
+    readonly projectErrors: AtlasProjectError[];
+}
+
+/**
+ * Aggregates discovery data across the whole credential fleet.
+ */
+export class AtlasDiscoveryService {
+    private snapshot: AtlasDiscoverySnapshot | undefined;
+    private inflight: Promise<AtlasDiscoverySnapshot> | undefined;
+
+    constructor(private readonly sessions: AtlasCredentialSessionRegistry = new AtlasCredentialSessionRegistry()) {}
+
+    /** The session registry backing this service, so callers can build their own scoped clients. */
+    public get sessionRegistry(): AtlasCredentialSessionRegistry {
+        return this.sessions;
+    }
+
+    /**
+     * Returns everything visible across every stored credential. Never rejects because of a
+     * single credential; per-credential failures come back in `credentialErrors`.
+     *
+     * The cached snapshot is reused on passive tree expansion so a persistently failing credential
+     * is not re-attempted on every expand. An explicit refresh passes `forceRefresh`.
+     */
+    public async listAll(options: ListAllOptions = {}): Promise<AtlasDiscoverySnapshot> {
+        const needsClusters = options.includeClusters === true;
+
+        if (!options.forceRefresh && this.snapshot && (!needsClusters || this.snapshot.clustersIncluded)) {
+            return this.snapshot;
+        }
+
+        if (this.inflight && !options.forceRefresh) {
+            return this.inflight;
+        }
+
+        const work = this.buildSnapshot(needsClusters, options.signal).finally(() => {
+            this.inflight = undefined;
+        });
+        this.inflight = work;
+        return work;
+    }
+
+    /**
+     * Drops the cached snapshot so the next {@link listAll} re-queries every credential.
+     */
+    public invalidate(): void {
+        this.snapshot = undefined;
+        this.inflight = undefined;
+    }
+
+    /**
+     * Re-attempts a single credential: drops its session and the cached snapshot so the next read
+     * picks it up. Retrying one credential must never hammer its healthy peers, which is why the
+     * credential-management "Retry" action calls this instead of a full refresh.
+     */
+    public retryCredential(credentialId: string): void {
+        this.sessions.invalidate(credentialId);
+        this.invalidate();
+    }
+
+    /** Forgets every cached session and snapshot. Used after "sign out of all". */
+    public reset(): void {
+        this.sessions.invalidateAll();
+        this.invalidate();
+    }
+
+    private async buildSnapshot(includeClusters: boolean, signal?: AbortSignal): Promise<AtlasDiscoverySnapshot> {
+        const credentials = await readAtlasCredentials();
+        const limit = createConcurrencyLimiter({ concurrency: CREDENTIAL_CONCURRENCY });
+
+        // `allSettled`, not `all`: a rejected credential must not discard its healthy peers.
+        const settled = await Promise.allSettled(
+            credentials.map((record) => limit(() => this.queryCredential(record, includeClusters, signal))),
+        );
+
+        const results: CredentialResult[] = [];
+        for (let index = 0; index < settled.length; index++) {
+            const outcome = settled[index];
+            if (outcome.status === 'fulfilled') {
+                results.push(outcome.value);
+                continue;
+            }
+
+            // Defensive: queryCredential already converts failures into descriptors. A rejection
+            // here means an unexpected bug, and it still must not take the fleet down.
+            const record = credentials[index];
+            const classified = classifyAtlasError(outcome.reason);
+            results.push({
+                record,
+                organizations: [],
+                projects: [],
+                clusters: [],
+                projectErrors: [],
+                credentialError: {
+                    credentialId: record.id,
+                    label: resolveCredentialLabel(record),
+                    kind: classified.kind,
+                    status: classified.status,
+                    message: classified.message,
+                    retryable: true,
+                },
+            });
+        }
+
+        const snapshot = mergeResults(results, includeClusters);
+        this.snapshot = snapshot;
+        return snapshot;
+    }
+
+    private async queryCredential(
+        record: AtlasCredentialRecord,
+        includeClusters: boolean,
+        signal?: AbortSignal,
+    ): Promise<CredentialResult> {
+        const label = resolveCredentialLabel(record);
+        const session = await this.sessions.getSession(record.id);
+
+        if (!session) {
+            return {
+                record,
+                organizations: [],
+                projects: [],
+                clusters: [],
+                projectErrors: [],
+                credentialError: {
+                    credentialId: record.id,
+                    label,
+                    kind: 'auth',
+                    message: l10n.t('Stored credentials were rejected. Update them to continue.'),
+                    retryable: true,
+                },
+            };
+        }
+
+        const client = new AtlasApiClient(session, this.sessions.refresherFor(record.id));
+
+        let organizations: AtlasOrganization[] = [];
+        let projects: AtlasProject[] = [];
+
+        try {
+            // Different endpoints with independent scopes, so they are safe to run together. The
+            // Azure "sequential or you get wrong data" caveat applies to tenants vs subscriptions
+            // inside one provider, not to these two Atlas calls.
+            [organizations, projects] = await Promise.all([
+                client.listOrganizations(signal),
+                client.listProjects(signal),
+            ]);
+        } catch (error) {
+            const classified = classifyAtlasError(error);
+            return {
+                record,
+                organizations: [],
+                projects: [],
+                clusters: [],
+                projectErrors: [],
+                credentialError: {
+                    credentialId: record.id,
+                    label,
+                    kind: classified.kind,
+                    status: classified.status,
+                    message: classified.message,
+                    retryable: true,
+                },
+            };
+        }
+
+        await this.cacheOrganizationMetadata(record, organizations);
+
+        if (!includeClusters || projects.length === 0) {
+            return { record, organizations, projects, clusters: [], projectErrors: [] };
+        }
+
+        const projectLimit = createConcurrencyLimiter({ concurrency: PROJECT_CONCURRENCY });
+        const clusters: Array<{ project: AtlasProject; cluster: AtlasCluster }> = [];
+        const projectErrors: AtlasProjectError[] = [];
+
+        const clusterOutcomes = await Promise.allSettled(
+            projects.map((project) =>
+                projectLimit(async () => ({ project, clusters: await client.listClusters(project.id, signal) })),
+            ),
+        );
+
+        for (let index = 0; index < clusterOutcomes.length; index++) {
+            const outcome = clusterOutcomes[index];
+            const project = projects[index];
+            if (outcome.status === 'fulfilled') {
+                for (const cluster of outcome.value.clusters) {
+                    clusters.push({ project, cluster });
+                }
+                continue;
+            }
+
+            const classified = classifyAtlasError(outcome.reason);
+            projectErrors.push({
+                credentialId: record.id,
+                label,
+                projectId: project.id,
+                projectName: project.name,
+                kind: classified.kind,
+                status: classified.status,
+                message: classified.message,
+                retryable: true,
+            });
+        }
+
+        return { record, organizations, projects, clusters, projectErrors };
+    }
+
+    /**
+     * Caches the organization name for a credential that resolves to exactly one organization, so
+     * a failed credential can still be attributed to a readable organization name later.
+     */
+    private async cacheOrganizationMetadata(
+        record: AtlasCredentialRecord,
+        organizations: AtlasOrganization[],
+    ): Promise<void> {
+        if (organizations.length !== 1) {
+            return;
+        }
+        const [organization] = organizations;
+        if (record.orgId === organization.id && record.orgName === organization.name) {
+            return;
+        }
+        try {
+            await updateAtlasCredentialMetadata(record.id, { orgId: organization.id, orgName: organization.name });
+        } catch {
+            // Caching the display name is best-effort; discovery must not fail because of it.
+        }
+    }
+}
+
+/**
+ * Merges per-credential results into one deduplicated snapshot.
+ *
+ * Exported for focused testing of the merge contract without needing the network.
+ */
+export function mergeResults(results: readonly CredentialResult[], clustersIncluded: boolean): AtlasDiscoverySnapshot {
+    const organizations = new Map<string, { organization: AtlasOrganization; credentialIds: string[] }>();
+    const projects = new Map<string, { project: AtlasProject; credentialIds: string[] }>();
+    const clusters = new Map<
+        string,
+        { cluster: AtlasCluster; project: AtlasProject; credentialIds: string[]; orgId: string }
+    >();
+    const credentialErrors: AtlasCredentialError[] = [];
+    const projectErrors: AtlasProjectError[] = [];
+
+    for (const result of results) {
+        if (result.credentialError) {
+            credentialErrors.push(result.credentialError);
+        }
+        projectErrors.push(...result.projectErrors);
+
+        for (const organization of result.organizations) {
+            const entry = organizations.get(organization.id);
+            if (entry) {
+                if (!entry.credentialIds.includes(result.record.id)) {
+                    entry.credentialIds.push(result.record.id);
+                }
+            } else {
+                organizations.set(organization.id, { organization, credentialIds: [result.record.id] });
+            }
+        }
+
+        for (const project of result.projects) {
+            const entry = projects.get(project.id);
+            if (entry) {
+                if (!entry.credentialIds.includes(result.record.id)) {
+                    entry.credentialIds.push(result.record.id);
+                }
+            } else {
+                projects.set(project.id, { project, credentialIds: [result.record.id] });
+            }
+        }
+
+        for (const { project, cluster } of result.clusters) {
+            const key = clusterKey(project.id, cluster);
+            const entry = clusters.get(key);
+            if (entry) {
+                if (!entry.credentialIds.includes(result.record.id)) {
+                    entry.credentialIds.push(result.record.id);
+                }
+            } else {
+                clusters.set(key, { cluster, project, credentialIds: [result.record.id], orgId: project.orgId });
+            }
+        }
+    }
+
+    return {
+        organizations: [...organizations.values()]
+            .map(({ organization, credentialIds }) => ({
+                organization,
+                credentialIds,
+                ownerCredentialId: credentialIds[0],
+            }))
+            .sort((a, b) => a.organization.name.localeCompare(b.organization.name, undefined, { numeric: true })),
+        projects: [...projects.values()]
+            .map(({ project, credentialIds }) => ({ project, credentialIds, ownerCredentialId: credentialIds[0] }))
+            .sort((a, b) => a.project.name.localeCompare(b.project.name, undefined, { numeric: true })),
+        clusters: [...clusters.values()]
+            .map(({ cluster, project, credentialIds, orgId }) => ({
+                cluster,
+                projectId: project.id,
+                projectName: project.name,
+                orgId,
+                credentialIds,
+                ownerCredentialId: credentialIds[0],
+            }))
+            .sort((a, b) => a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true })),
+        credentialErrors,
+        projectErrors,
+        credentialsQueried: results.length,
+        clustersIncluded,
+    };
+}
+
+/**
+ * Clusters are keyed by project id + cluster name. Atlas cluster names are unique inside a
+ * project, and the `id` field is absent on some cluster shapes, so the name is the reliable key.
+ */
+function clusterKey(projectId: string, cluster: AtlasCluster): string {
+    return `${projectId}/${cluster.name}`;
+}
+
+/** Convenience predicate for the UX: does this snapshot need a recovery action? */
+export function snapshotHasFailures(snapshot: AtlasDiscoverySnapshot): boolean {
+    return snapshot.credentialErrors.length > 0 || snapshot.projectErrors.length > 0;
+}

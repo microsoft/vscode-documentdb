@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { type AtlasSessionRefresher } from '../auth/AtlasCredentialSessionRegistry';
 import { type AtlasSession } from '../auth/AtlasSession';
-import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { ATLAS_API_BASE_URL } from '../config';
 import {
     type AtlasCluster,
@@ -23,6 +23,19 @@ interface AtlasPaginatedResponse<T> {
 }
 
 /**
+ * Page size requested from the Atlas Admin API. Atlas caps `itemsPerPage` at 500; asking for the
+ * maximum keeps the common single-page case to exactly one request.
+ */
+const ATLAS_PAGE_SIZE = 500;
+
+/**
+ * Defensive ceiling on the number of pages fetched for one list call. At 500 items per page this
+ * covers 50,000 resources, far beyond any realistic Atlas organization, and guarantees that a
+ * malformed `totalCount` can never spin an unbounded request loop.
+ */
+const ATLAS_MAX_PAGES = 100;
+
+/**
  * Client for the MongoDB Atlas Admin API v2.
  * Supports Service Account (Bearer token) and API Key (HTTP Digest) authentication.
  */
@@ -32,14 +45,14 @@ export class AtlasApiClient {
 
     /**
      * @param session The active Atlas session used to authenticate requests.
-     * @param sessionManager Optional session manager. When provided, token-based sessions
+     * @param sessionManager Optional session refresher. When provided, token-based sessions
      * (Service Account) are transparently refreshed and the request retried once if
-     * the access token is rejected (401/403). The user is only signed out — and therefore
-     * prompted to sign in again — when the credentials themselves are completely rejected.
+     * the access token is rejected (401/403). The user is only signed out - and therefore
+     * prompted to sign in again - when the credentials themselves are completely rejected.
      */
     constructor(
         session: AtlasSession,
-        private readonly sessionManager?: AtlasSessionManager,
+        private readonly sessionManager?: AtlasSessionRefresher,
     ) {
         this.session = session;
     }
@@ -48,19 +61,14 @@ export class AtlasApiClient {
      * Lists all projects (groups) accessible by the authenticated user.
      */
     async listProjects(signal?: AbortSignal): Promise<AtlasProject[]> {
-        const response = await this.request<AtlasPaginatedResponse<AtlasProject>>('/groups', signal);
-        return response.results;
+        return this.requestAllPages<AtlasProject>('/groups', signal);
     }
 
     /**
      * Lists all clusters in a given project.
      */
     async listClusters(projectId: string, signal?: AbortSignal): Promise<AtlasCluster[]> {
-        const response = await this.request<AtlasPaginatedResponse<AtlasCluster>>(
-            `/groups/${encodeURIComponent(projectId)}/clusters`,
-            signal,
-        );
-        return response.results;
+        return this.requestAllPages<AtlasCluster>(`/groups/${encodeURIComponent(projectId)}/clusters`, signal);
     }
 
     /**
@@ -77,8 +85,7 @@ export class AtlasApiClient {
      * Lists all organizations accessible by the authenticated user.
      */
     async listOrganizations(signal?: AbortSignal): Promise<AtlasOrganization[]> {
-        const response = await this.request<AtlasPaginatedResponse<AtlasOrganization>>('/orgs', signal);
-        return response.results;
+        return this.requestAllPages<AtlasOrganization>('/orgs', signal);
     }
 
     /**
@@ -86,6 +93,36 @@ export class AtlasApiClient {
      */
     async getCurrentUser(signal?: AbortSignal): Promise<AtlasUserInfo> {
         return this.request<AtlasUserInfo>('/users/me', signal);
+    }
+
+    /**
+     * Walks every page of a paginated Atlas list endpoint and returns the concatenated results.
+     *
+     * Atlas paginates with `pageNum` (1-based) + `itemsPerPage` and reports `totalCount`. The loop
+     * stops as soon as a short page arrives, the reported total is reached, or the defensive page
+     * ceiling is hit, so a missing or wrong `totalCount` cannot cause an unbounded fetch.
+     */
+    private async requestAllPages<T>(path: string, signal?: AbortSignal): Promise<T[]> {
+        const separator = path.includes('?') ? '&' : '?';
+        const collected: T[] = [];
+
+        for (let pageNum = 1; pageNum <= ATLAS_MAX_PAGES; pageNum++) {
+            const pagePath = `${path}${separator}itemsPerPage=${String(ATLAS_PAGE_SIZE)}&pageNum=${String(pageNum)}`;
+            const response = await this.request<AtlasPaginatedResponse<T>>(pagePath, signal);
+            const results = Array.isArray(response.results) ? response.results : [];
+            collected.push(...results);
+
+            if (results.length < ATLAS_PAGE_SIZE) {
+                break;
+            }
+
+            const totalCount = response.totalCount;
+            if (typeof totalCount === 'number' && Number.isFinite(totalCount) && collected.length >= totalCount) {
+                break;
+            }
+        }
+
+        return collected;
     }
 
     /**

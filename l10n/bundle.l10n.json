@@ -1328,6 +1328,7 @@
   "Stopped {0} port-forward tunnel(s) for kubeconfig source \"{1}\".": "Stopped {0} port-forward tunnel(s) for kubeconfig source \"{1}\".",
   "Stopping {0}": "Stopping {0}",
   "Stopping task...": "Stopping task...",
+  "Stored credentials were rejected. Update them to continue.": "Stored credentials were rejected. Update them to continue.",
   "Submit": "Submit",
   "Submit Feedback": "Submit Feedback",
   "Submitting...": "Submitting...",
