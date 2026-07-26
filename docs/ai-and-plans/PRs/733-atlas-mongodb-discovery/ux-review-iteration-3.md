@@ -815,6 +815,8 @@ to align the wizard with the tree.
 > not accept as closed yet.** The requested tooltip exists, but Atlas-provided project and
 > organization values are interpolated into Markdown without escaping. Align with the existing
 > cluster-tooltip escaping and test names containing Markdown syntax before closure.
+>
+> ✅ **Audit note resolved (Iteration 4, Step 6):** see the escaping entry at the end of this item.
 
 **Finding:**
 
@@ -826,6 +828,20 @@ the same `---`-separated style as the cluster tooltip for cross-provider consist
 > **Decision (Iteration 3):** Add a `MarkdownString` tooltip with project name as the heading, organization name (when available), project ID, and cluster count — matching the same style as the cluster tooltip.
 
 ✅ **Implemented (Iteration 3):** [41ec69f2](https://github.com/microsoft/vscode-documentdb/commit/41ec69f2) — `AtlasProjectItem` now has a private `buildTooltip()` method that returns a `vscode.MarkdownString` with project name (bold heading), org name (if present), project ID, and cluster count. `getTreeItem()` wires it in via the `tooltip` property. **Verification:** `npm run l10n` (1652 keys), `npm run prettier-fix`, `npm run lint`, `npx jest --no-coverage` (2668 tests / 159 suites), and `npm run build` all passed.
+
+> **Decision (Iteration 4, Step 6):** The escaping gap is closed by reusing the repository-wide
+> [`escapeMarkdown`](../../../../src/webviews/utils/escapeMarkdown.ts) helper rather than the
+> private copy that lived inside `AtlasClusterItem`. **Deviation from the literal instruction**
+> ("use the same helper as the cluster tooltip"): the cluster tooltip's private copy was deleted
+> and both tooltips now call the shared helper. Reason — the shared helper escapes a strict
+> superset of characters (adds `<`, `>`, `&`), keeping two tooltips on one contract removes a
+> silent drift risk, and the shared helper already has its own test suite. Confidence: high.
+
+✅ **Implemented (Iteration 4, Step 6):** [f53c0ca3](https://github.com/microsoft/vscode-documentdb/commit/f53c0ca3)
+— `AtlasProjectItem.buildTooltip()` escapes project name, organization name, and project ID;
+`AtlasClusterItem` drops its duplicated local helper and imports the shared one. New
+`AtlasProjectItem.test.ts` covers emphasis (`**not bold**`), link-like organization names,
+underscore-bearing project IDs, and asserts the tooltip stays `isTrusted = false`.
 
 ---
 
@@ -1143,15 +1159,31 @@ tree rendering, wizard attribution, or live Atlas behavior works in the extensio
 
 ### Open work at a glance
 
-| Order | Item(s)            | Open work                                                                                     | Why it sits here                                                                                         |
-| ----- | ------------------ | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
-| 1     | **#7, #8, #12**    | ✅ Live feasibility gates complete; preserve results as production contract tests             | L1/L2/L5 now confirm org/project attribution, union semantics, auth parity, and the `401`/`403` taxonomy |
-| 2     | **#7, #12**        | Build credential storage, per-credential sessions, and the `listAll()` aggregation foundation | Every UI surface depends on stable credential/resource attribution and partial-result behavior           |
-| 3     | **#6, #7, #12**    | Implement the credential-management QuickPick and guided add/edit webview                     | Builds the production lifecycle on the new store without coupling management to the tree                 |
-| 4     | **#2, #3, #7, #8** | Build the merged organization tree, empty state, and consolidated recovery action             | Requires the aggregated model and management entry point                                                 |
-| 5     | **#5, #8**         | Add List mode and thread credential ownership through the add-connection wizard               | Reuses the merged snapshot and proves either view can connect through a valid owning credential          |
-| 6     | **#10**            | Escape Atlas-provided Markdown in project tooltips                                            | Independent and safe to land in parallel with steps 1–5                                                  |
-| 7     | **All open items** | Run focused automated tests and the hands-on UX matrix; reconcile this ledger                 | Verifies both auth methods, partial failures, empty results, duplicate resources, reload, and both modes |
+| Order | Item(s)            | Open work                                                                                                                                  | Why it sits here                                                                                         |
+| ----- | ------------------ | ------------------------------------------------------------------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------- |
+| 1     | **#7, #8, #12**    | ✅ Live feasibility gates complete; preserve results as production contract tests                                                          | L1/L2/L5 now confirm org/project attribution, union semantics, auth parity, and the `401`/`403` taxonomy |
+| 2     | **#7, #12**        | Build credential storage, per-credential sessions, and the `listAll()` aggregation foundation                                              | Every UI surface depends on stable credential/resource attribution and partial-result behavior           |
+| 3     | **#6, #7, #12**    | Implement the credential-management QuickPick and guided add/edit webview                                                                  | Builds the production lifecycle on the new store without coupling management to the tree                 |
+| 4     | **#2, #3, #7, #8** | Build the merged organization tree, empty state, and consolidated recovery action                                                          | Requires the aggregated model and management entry point                                                 |
+| 5     | **#5, #8**         | Add List mode and thread credential ownership through the add-connection wizard                                                            | Reuses the merged snapshot and proves either view can connect through a valid owning credential          |
+| 6     | **#10**            | ✅ Done — Atlas-provided Markdown escaped in project tooltips ([f53c0ca3](https://github.com/microsoft/vscode-documentdb/commit/f53c0ca3)) | Independent and safe to land in parallel with steps 1–5                                                  |
+| 7     | **All open items** | Run focused automated tests and the hands-on UX matrix; reconcile this ledger                                                              | Verifies both auth methods, partial failures, empty results, duplicate resources, reload, and both modes |
+
+#### Iteration 4 implementation progress
+
+Tracked inline as the steps land. Order deviation: **Step 6 was landed first** because the plan
+itself marks it as parallel-safe and it carries no dependency on the multi-credential foundation;
+landing it early removes a security-relevant gap regardless of how far the larger steps get.
+
+| Step | State          | Commit                                                                     |
+| ---- | -------------- | -------------------------------------------------------------------------- |
+| 1    | ✅ Complete    | Documentation only (live gates)                                            |
+| 2    | ⏳ In progress | —                                                                          |
+| 3    | ⏳ Pending     | —                                                                          |
+| 4    | ⏳ Pending     | —                                                                          |
+| 5    | ⏳ Pending     | —                                                                          |
+| 6    | ✅ Complete    | [f53c0ca3](https://github.com/microsoft/vscode-documentdb/commit/f53c0ca3) |
+| 7    | ⏳ Pending     | —                                                                          |
 
 ### Step 1 — Live API gates closed
 
