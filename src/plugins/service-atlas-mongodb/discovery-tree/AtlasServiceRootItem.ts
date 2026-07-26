@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type IActionContext } from '@microsoft/vscode-azext-utils';
+import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { AtlasExperience } from '../../../DocumentDBExperiences';
@@ -165,7 +165,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
     public getTreeItem(): vscode.TreeItem {
         return {
             id: this.id,
-            contextValue: `${this.contextValue};${this.viewModeContextValue}`,
+            contextValue: createContextValue([this.contextValue, this.viewModeContextValue]),
             label: vscode.l10n.t('MongoDB Atlas'),
             iconPath: new vscode.ThemeIcon('cloud'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,

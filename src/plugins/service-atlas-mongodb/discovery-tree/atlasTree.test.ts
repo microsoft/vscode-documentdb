@@ -79,6 +79,12 @@ jest.mock('../../../tree/api/createGenericElementWithContext', () => ({
     createGenericElementWithContext: jest.fn((options: Record<string, unknown>) => ({ ...options })),
 }));
 
+// The azext-utils entry point evaluates VS Code APIs at module load time, so the whole package is
+// stubbed here (matching the other tree-item test suites) instead of widening the `vscode` mock.
+jest.mock('@microsoft/vscode-azext-utils', () => ({
+    createContextValue: (values: string[]) => Array.from(new Set(values)).sort().join(';'),
+}));
+
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import { StorageService } from '../../../services/storageService';
 import {
