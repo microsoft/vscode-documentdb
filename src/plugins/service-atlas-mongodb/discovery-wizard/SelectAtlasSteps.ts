@@ -7,7 +7,6 @@ import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-aze
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { AtlasApiClient } from '../api/AtlasApiClient';
-import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { configureAtlasCredentials } from '../credentialsManagement/configureAtlasCredentials';
 import { snapshotHasFailures, type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasCluster, type AtlasClusterState, type AtlasProject } from '../models/AtlasProjectModel';
@@ -56,12 +55,11 @@ function createManageCredentialsItem(hasFailures: boolean): {
 async function manageCredentialsFromWizard(
     context: NewConnectionWizardContext,
     discoveryService: AtlasDiscoveryService,
-    sessionManager: AtlasSessionManager,
 ): Promise<boolean> {
     context.telemetry.properties.credentialConfigActivated = 'true';
     context.telemetry.properties.initiatedFrom = 'newConnectionWizard';
 
-    const changed = await configureAtlasCredentials(context, discoveryService, sessionManager);
+    const changed = await configureAtlasCredentials(context, discoveryService);
     context.telemetry.properties.credentialsChanged = changed ? 'true' : 'false';
     return changed;
 }
@@ -73,10 +71,7 @@ async function manageCredentialsFromWizard(
  * appears once and carries the healthy credential that owns it.
  */
 export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
-    constructor(
-        private readonly discoveryService: AtlasDiscoveryService,
-        private readonly sessionManager: AtlasSessionManager,
-    ) {
+    constructor(private readonly discoveryService: AtlasDiscoveryService) {
         super();
     }
 
@@ -89,7 +84,7 @@ export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionW
         });
 
         if (selected.itemType === 'manageCredentials') {
-            const changed = await manageCredentialsFromWizard(context, this.discoveryService, this.sessionManager);
+            const changed = await manageCredentialsFromWizard(context, this.discoveryService);
             if (!changed) {
                 throw new UserCancelledError();
             }
@@ -179,10 +174,7 @@ export class SelectAtlasProjectStep extends AzureWizardPromptStep<NewConnectionW
  * Wizard step that prompts the user to select an Atlas cluster within the selected project.
  */
 export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionWizardContext> {
-    constructor(
-        private readonly discoveryService: AtlasDiscoveryService,
-        private readonly sessionManager: AtlasSessionManager,
-    ) {
+    constructor(private readonly discoveryService: AtlasDiscoveryService) {
         super();
     }
 
@@ -204,7 +196,7 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             });
 
             if (selected.itemType === 'manageCredentials') {
-                const changed = await manageCredentialsFromWizard(context, this.discoveryService, this.sessionManager);
+                const changed = await manageCredentialsFromWizard(context, this.discoveryService);
                 if (!changed) {
                     throw new UserCancelledError();
                 }

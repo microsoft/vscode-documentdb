@@ -10,8 +10,6 @@ import { Views } from '../../documentdb/Views';
 import { ext } from '../../extensionVariables';
 import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
-import { AtlasSessionState } from './auth/AtlasSession';
-import { AtlasSessionManager } from './auth/AtlasSessionManager';
 import { DESCRIPTION, DISCOVERY_PROVIDER_ID, ICON_PATH, LABEL, WIZARD_TITLE } from './config';
 import { readAtlasCredentials } from './credentials/atlasCredentialStore';
 import { configureAtlasCredentials } from './credentialsManagement/configureAtlasCredentials';
@@ -31,27 +29,12 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
     description = DESCRIPTION;
     iconPath = ICON_PATH;
 
-    private readonly sessionManager: AtlasSessionManager;
     private readonly discoveryService = new AtlasDiscoveryService();
 
     constructor() {
-        const sessionManager = new AtlasSessionManager(ext.secretStorage, ext.context.globalState);
-
         super(() => {
-            // Cleanup on dispose
-            // this.sessionManager.signOut();
-        });
-
-        this.sessionManager = sessionManager;
-
-        // Listen for session changes to refresh the tree
-        this.sessionManager.onDidChangeSession((state) => {
-            // Clear cached error nodes so the tree re-fetches children
-            const rootId = `${Views.DiscoveryView}/${DISCOVERY_PROVIDER_ID}`;
-            if (state === AtlasSessionState.Active || state === AtlasSessionState.None) {
-                ext.discoveryBranchDataProvider.resetNodeErrorState(rootId);
-            }
-            ext.discoveryBranchDataProvider.refresh();
+            // Nothing to tear down: credential secrets live in storage and sessions are recreated
+            // on demand, so disposing the provider must not sign the user out.
         });
     }
 
@@ -65,7 +48,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
             // Nothing stored yet: run the credential-management flow first so the wizard has
             // something to enumerate. A cancelled sign-in must cancel the wizard rather than
             // dropping the user into an empty project list.
-            const changed = await configureAtlasCredentials(context, this.discoveryService, this.sessionManager);
+            const changed = await configureAtlasCredentials(context, this.discoveryService);
             if (!changed) {
                 throw new UserCancelledError();
             }
@@ -74,8 +57,8 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         return {
             title: WIZARD_TITLE,
             promptSteps: [
-                new SelectAtlasProjectStep(this.discoveryService, this.sessionManager),
-                new SelectAtlasClusterStep(this.discoveryService, this.sessionManager),
+                new SelectAtlasProjectStep(this.discoveryService),
+                new SelectAtlasClusterStep(this.discoveryService),
             ],
             executeSteps: [new AtlasExecuteStep()],
             showLoadingPrompt: true,
@@ -90,7 +73,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
         context.telemetry.properties.credentialConfigActivated = 'true';
         context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
 
-        const changed = await configureAtlasCredentials(context, this.discoveryService, this.sessionManager, node);
+        const changed = await configureAtlasCredentials(context, this.discoveryService, node);
 
         if (changed) {
             // Reveal and expand the root so projects appear without a manual expand.

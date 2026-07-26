@@ -6,7 +6,6 @@
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
-import { type AtlasSessionManager } from '../../../plugins/service-atlas-mongodb/auth/AtlasSessionManager';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './atlasCredentialsRouter';
 
@@ -42,20 +41,10 @@ export interface OpenAtlasCredentialsOptions {
  * Opens the guided credential-entry webview and resolves once the user either successfully stores
  * credentials or closes the panel.
  *
- * Returning a `Promise<boolean>` keeps the existing auth-flow contract
- * (`executeAtlasAuthFlow`) intact, so every caller - the discovery tree, the credential-management
- * wizard, and the new-connection wizard - continues to work without change.
- *
  * @returns `true` when credentials were validated and stored; `false` when the
  *          user closed the panel without completing.
  */
-export function openAtlasCredentialsWebview(
-    authMethodOrOptions: AtlasAuthMethod | OpenAtlasCredentialsOptions | undefined,
-    sessionManager: AtlasSessionManager,
-): Promise<boolean> {
-    const options: OpenAtlasCredentialsOptions =
-        typeof authMethodOrOptions === 'string' ? { authMethod: authMethodOrOptions } : (authMethodOrOptions ?? {});
-
+export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions = {}): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
         let settled = false;
         // Held in an object so the `onCredentialsStored` closure can reference the
@@ -83,7 +72,6 @@ export function openAtlasCredentialsWebview(
         const context: RouterContext = {
             dbExperience: API.DocumentDB,
             webviewName: 'atlasCredentials',
-            sessionManager,
             credentialId: options.credentialId,
             credentialLabel: options.credentialLabel,
             onCredentialsStored,

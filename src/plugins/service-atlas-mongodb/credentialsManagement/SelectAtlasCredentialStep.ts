@@ -88,7 +88,7 @@ export class SelectAtlasCredentialStep extends AzureWizardPromptStep<AtlasCreden
 
         if (selected.isAddOption) {
             context.telemetry.properties.atlasCredentialAction = 'add';
-            const stored = await openAtlasCredentialsWebview({}, context.sessionManager);
+            const stored = await openAtlasCredentialsWebview();
             if (!stored) {
                 // Cancelling the webview stores nothing. Return to the list rather than closing
                 // the whole flow, so the user can pick another action.
@@ -113,7 +113,6 @@ export class SelectAtlasCredentialStep extends AzureWizardPromptStep<AtlasCreden
             const removed = await removeAllAtlasCredentials();
             context.telemetry.measurements.atlasCredentialsRemoved = removed;
             context.discoveryService.reset();
-            await context.sessionManager.signOut();
             context.changed = true;
             throw new UserCancelledError(ATLAS_CREDENTIAL_MANAGEMENT_EXIT);
         }

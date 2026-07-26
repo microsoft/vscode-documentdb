@@ -22,7 +22,6 @@
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
 import { AtlasApiClient, AtlasApiError } from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
-import { type AtlasSessionManager } from '../../../plugins/service-atlas-mongodb/auth/AtlasSessionManager';
 import {
     replaceAtlasCredentialSecrets,
     upsertAtlasCredential,
@@ -32,13 +31,11 @@ import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 
 /**
- * Context for the MongoDB Atlas credential webview. Carries the live session manager
- * and a one-shot completion callback invoked when credentials are validated
- * and stored, so the opener (an auth flow awaiting a boolean) can resume.
+ * Context for the MongoDB Atlas credential webview. Carries the target credential (when updating)
+ * and a one-shot completion callback invoked when credentials are validated and stored, so the
+ * opener can resume.
  */
 export type RouterContext = BaseRouterContext & {
-    /** The single session manager instance owned by the discovery provider. */
-    sessionManager: AtlasSessionManager;
     /**
      * When set, the submitted secret replaces this credential's secret in place instead of
      * creating a new credential record. Keeps the record ID - and therefore tree paths and saved
@@ -132,7 +129,6 @@ export const atlasCredentialsRouter = router({
             }
 
             await persistCredential(myCtx, { authMethod: 'apikey', publicKey, privateKey });
-            await myCtx.sessionManager.storeApiKeyCredentials(publicKey, privateKey);
             myCtx.telemetry.properties.authSuccess = 'true';
             myCtx.onCredentialsStored();
             return { success: true };
@@ -180,7 +176,6 @@ export const atlasCredentialsRouter = router({
                 accessToken,
                 expiresAt: String(Date.now() + expiresIn * 1000),
             });
-            await myCtx.sessionManager.storeServiceAccountCredentials(clientId, clientSecret, accessToken, expiresIn);
 
             myCtx.telemetry.properties.authSuccess = 'true';
             myCtx.onCredentialsStored();

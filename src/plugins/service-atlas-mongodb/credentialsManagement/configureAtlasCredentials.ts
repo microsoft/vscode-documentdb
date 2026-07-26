@@ -12,7 +12,6 @@ import {
 import * as l10n from '@vscode/l10n';
 import { ext } from '../../../extensionVariables';
 import { type TreeElement } from '../../../tree/TreeElement';
-import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { AtlasCredentialActionStep } from './AtlasCredentialActionStep';
@@ -36,7 +35,6 @@ import {
 export async function configureAtlasCredentials(
     context: IActionContext,
     discoveryService: AtlasDiscoveryService,
-    sessionManager: AtlasSessionManager,
     node?: TreeElement,
 ): Promise<boolean> {
     const result = await callWithTelemetryAndErrorHandling(
@@ -48,7 +46,6 @@ export async function configureAtlasCredentials(
             const wizardContext: AtlasCredentialsManagementWizardContext = {
                 ...telemetryContext,
                 discoveryService,
-                sessionManager,
                 // Initialised with [] so AzureWizard captures it in propertiesBeforePrompt and it
                 // survives back navigation (null/undefined values are filtered out).
                 credentials: [],

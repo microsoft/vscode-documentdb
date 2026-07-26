@@ -30,13 +30,6 @@ export const ATLAS_API_BASE_URL = 'https://cloud.mongodb.com/api/atlas/v2';
 /** Atlas Service Account token endpoint (client_credentials grant) */
 export const ATLAS_SERVICE_ACCOUNT_TOKEN_URL = 'https://cloud.mongodb.com/api/oauth/token';
 
-/** Secret storage key prefixes */
-export const SECRET_KEY_PREFIX = 'atlas-mongodb';
-
-/** Global state keys */
-export const STATE_AUTH_METHOD = `${SECRET_KEY_PREFIX}.authMethod`;
-export const STATE_USER_DISPLAY_NAME = `${SECRET_KEY_PREFIX}.userDisplayName`;
-
 /**
  * How the MongoDB Atlas discovery tree renders below its root:
  *

@@ -125,10 +125,7 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
     ): Promise<never> {
         context.telemetry.properties.atlasCredentialAction = 'update';
 
-        const stored = await openAtlasCredentialsWebview(
-            { credentialId, credentialLabel: label },
-            context.sessionManager,
-        );
+        const stored = await openAtlasCredentialsWebview({ credentialId, credentialLabel: label });
 
         context.telemetry.properties.atlasCredentialUpdateResult = stored ? 'succeeded' : 'cancelled';
 

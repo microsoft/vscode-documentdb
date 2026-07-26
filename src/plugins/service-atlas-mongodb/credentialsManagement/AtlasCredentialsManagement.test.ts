@@ -80,7 +80,6 @@ jest.mock('../../../webviews/documentdb/atlasCredentials/atlasCredentialsControl
 
 import * as vscode from 'vscode';
 import { StorageService } from '../../../services/storageService';
-import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import {
     readAtlasCredentials,
     resetAtlasCredentialStoreCache,
@@ -133,7 +132,6 @@ function buildContext(
             showWarningMessage: jest.fn().mockResolvedValue({ title: 'ok' }),
         },
         discoveryService,
-        sessionManager: { signOut: jest.fn() } as unknown as AtlasSessionManager,
         credentials: [],
         selectedCredentialId: undefined,
         changed: false,
@@ -291,7 +289,6 @@ describe('AtlasCredentialActionStep', () => {
         await expect(new AtlasCredentialActionStep().prompt(context)).rejects.toBeInstanceOf(GoBackErrorMock);
         expect(mockOpenWebview).toHaveBeenCalledWith(
             expect.objectContaining({ credentialId, credentialLabel: 'Work key' }),
-            expect.anything(),
         );
         expect(context.changed).toBe(true);
     });

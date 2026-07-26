@@ -4,7 +4,6 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
-import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
 import { type AtlasCredentialRecord } from '../credentials/atlasCredentialStore';
 import { type AtlasCredentialError, type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 
@@ -28,8 +27,6 @@ export interface AtlasCredentialStatus {
 export interface AtlasCredentialsManagementWizardContext extends IActionContext {
     /** Aggregation service used for credential status and single-credential retries. */
     readonly discoveryService: AtlasDiscoveryService;
-    /** Legacy single-session manager, still required by the credential webview. */
-    readonly sessionManager: AtlasSessionManager;
 
     /**
      * All credentials with their current status. Initialised with `[]` so it is captured in
