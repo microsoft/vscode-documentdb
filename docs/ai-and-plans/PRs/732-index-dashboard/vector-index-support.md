@@ -1001,19 +1001,21 @@ has three tabs:
 ```
 
 Standard and Wildcard have focused forms and preserve their draft state. Vector
-currently renders only an informational placeholder.
+is now a working create form as well (see the implementation-progress entries
+below); the notes in this section describe the *original placeholder* state for
+historical context.
 
-Current Vector limitations:
+Original Vector limitations (now resolved):
 
-- `CreateIndexFormState` has no vector draft fields.
-- `canSubmit` returns `false` for the Vector kind.
-- `buildPayload()` has no Vector branch.
-- JSON preview is not available from the Vector placeholder.
-- Create, Create in Playground, and Create in Shell remain disabled.
-- Advanced settings are not exposed for Vector.
+- `CreateIndexFormState` had no vector draft fields.
+- `canSubmit` returned `false` for the Vector kind.
+- `buildPayload()` had no Vector branch.
+- JSON preview was not available from the Vector placeholder.
+- Create, Create in Playground, and Create in Shell were disabled.
+- Advanced settings were not exposed for Vector.
 
 The tab structure is still the right foundation. Vector is sufficiently
-different from Standard and Wildcard that it should remain its own focused form.
+different from Standard and Wildcard that it remains its own focused form.
 
 ### Typed create contract
 
@@ -1497,6 +1499,40 @@ variants, the shell command, and the invalid-combination matrix. The repository
 l10n, Prettier, ESLint, Jest (2746 tests), and `tsc` build checks all pass.
 End-to-end creation against a live Azure DocumentDB vCore deployment is the
 remaining manual verification step (Phase 6).
+
+---
+
+### 2026-07-27: Vector create UX refinements
+
+Follow-up polish on the create experience, applied across all three tabs where
+relevant:
+
+- **Algorithm as radio cards:** the algorithm dropdown became three parallel
+  selectable cards (HNSW / IVF / DiskANN), each carrying its own one-line
+  description *inside* the card. The previous dropdown could only show the
+  chosen algorithm's description above it. Implemented as an ARIA `radiogroup`
+  of buttons with roving `tabindex` and arrow-key navigation.
+- **Flatter drawer:** the tinted background boxes behind option groups were
+  removed. Shading is now reserved for the Advanced/JSON entries and the
+  selected algorithm card, which reads noticeably cleaner. The Advanced settings
+  and Preview as JSON entries were grouped under a titled **More options**
+  section so they no longer float loose at the foot of the form.
+- **Disabled-reason hint:** a live, muted requirement line now sits above the
+  footer whenever the primary action is disabled, naming exactly what is still
+  needed (e.g. *Add at least one index field*, *Enter the vector dimensions*).
+  It updates as the form is filled, clears when valid, and is announced via
+  `role="status"`.
+- **Required markers:** the shared `DrawerSection` gained a `required` marker
+  (a Fluent-style asterisk) applied to the Standard *Index fields* and Vector
+  *Vector field* sections; Dimensions already carried a `Field required` marker.
+  The asterisks are decorative (`aria-hidden`) — the requirement is conveyed
+  functionally by the disabled action and the hint.
+- **No premature name error:** an empty custom vector index name no longer shows
+  an inline error. It is treated as "no name" (the server generates
+  `<field>_cosmosSearch`), and the reserved `*` name is caught by validation on
+  create, matching the other Create Index options.
+- **Wildcard preview alignment:** the wildcard index-key preview is indented to
+  line up with the left edge of the radio buttons above it.
 
 ---
 
