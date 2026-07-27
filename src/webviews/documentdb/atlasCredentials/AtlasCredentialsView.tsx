@@ -554,7 +554,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 </Text>
                 <div className={styles.actions}>
                     {!isEdit && (
-                        <Button appearance="secondary" onClick={handleBack}>
+                        <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={handleBack}>
                             {l10n.t('Back')}
                         </Button>
                     )}
@@ -568,11 +568,14 @@ export const AtlasCredentialsView = (): JSX.Element => {
 
     const checkFailed = phase === 'checking' && submitError !== undefined;
     const stageStatusAt = (index: number): StageStatus => {
-        if (failedStage !== undefined) {
-            if (index < failedStage) {
+        if (checkFailed) {
+            // No spinner once it has failed: mark the step that failed (defaulting to the first)
+            // and leave the rest pending.
+            const failedAt = failedStage ?? 0;
+            if (index < failedAt) {
                 return 'done';
             }
-            return index === failedStage ? 'error' : 'pending';
+            return index === failedAt ? 'error' : 'pending';
         }
         // Verifying: the host does not stream per-step progress, so only the first step is shown
         // active and later steps stay pending rather than pretending to have finished.
@@ -600,8 +603,8 @@ export const AtlasCredentialsView = (): JSX.Element => {
             {checkFailed && errorMessage}
             {checkFailed && (
                 <div className={styles.actions}>
-                    <Button appearance="primary" icon={<ArrowLeftRegular />} onClick={() => setPhase('form')}>
-                        {l10n.t('Go back')}
+                    <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => setPhase('form')}>
+                        {l10n.t('Back')}
                     </Button>
                 </div>
             )}
