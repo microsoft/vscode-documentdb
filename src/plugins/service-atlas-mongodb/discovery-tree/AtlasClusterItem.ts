@@ -29,6 +29,7 @@ import { nonNullValue } from '../../../utils/nonNull';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
 import { buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
+import { monotonicNow } from '../atlasTrace';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { type AtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasClusterState } from '../models/AtlasProjectModel';
@@ -110,7 +111,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            const connectionStartTime = Date.now();
+            const connectionStartTime = monotonicNow();
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.connectionInitiatedFrom = 'discoveryView';
@@ -175,19 +176,19 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
                     }),
                 );
 
-                context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                context.telemetry.measurements.connectionEstablishmentTimeMs = monotonicNow() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'success';
                 context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
                 return clustersClient;
             } catch (error) {
                 if (error instanceof UserCancelledError) {
-                    context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                    context.telemetry.measurements.connectionEstablishmentTimeMs = monotonicNow() - connectionStartTime;
                     context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
                 }
 
-                context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                context.telemetry.measurements.connectionEstablishmentTimeMs = monotonicNow() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'failed';
                 context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
 

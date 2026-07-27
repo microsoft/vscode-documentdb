@@ -15,7 +15,7 @@
  * - a credential whose secret was rejected can be marked failed without disturbing its peers.
  */
 
-import { atlasTrace, atlasWarn, shortId } from '../atlasTrace';
+import { atlasTrace, atlasWarn, formatMs, monotonicNow, shortId } from '../atlasTrace';
 import {
     cacheServiceAccountToken,
     readAtlasCredentialSecrets,
@@ -199,16 +199,17 @@ export class AtlasCredentialSessionRegistry {
         credentialId: string,
         secrets: AtlasCredentialSecrets & { authMethod: 'serviceaccount' },
     ): Promise<AtlasSession | undefined> {
-        const startedAt = Date.now();
+        const startedAt = monotonicNow();
         try {
             const tokenResponse = await fetchServiceAccountToken(secrets.clientId, secrets.clientSecret);
             await cacheServiceAccountToken(
                 credentialId,
                 tokenResponse.access_token,
+                // Wall clock on purpose: this expiry is persisted and compared in a later session.
                 Date.now() + tokenResponse.expires_in * 1000,
             );
             atlasTrace(
-                `credential ${shortId(credentialId)}: minted a service account token in ${String(Date.now() - startedAt)}ms, valid for ${String(tokenResponse.expires_in)}s`,
+                `credential ${shortId(credentialId)}: minted a service account token in ${formatMs(startedAt)}, valid for ${String(tokenResponse.expires_in)}s`,
             );
             return this.storeSession(credentialId, {
                 type: 'serviceaccount',

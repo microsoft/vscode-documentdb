@@ -291,12 +291,14 @@ describe('AtlasDiscoveryService.listAll', () => {
         await service.listAll();
         expect(mockListProjects).toHaveBeenCalledTimes(1);
 
-        const realNow = Date.now;
+        // The TTL runs on the monotonic clock, not the wall clock, so that an NTP correction or a
+        // resume from sleep cannot make a stale snapshot look fresh.
+        const realNow = performance.now.bind(performance);
+        const advanced = jest.spyOn(performance, 'now').mockImplementation(() => realNow() + 60_000);
         try {
-            Date.now = () => realNow() + 60_000;
             await service.listAll();
         } finally {
-            Date.now = realNow;
+            advanced.mockRestore();
         }
 
         expect(mockListProjects).toHaveBeenCalledTimes(2);

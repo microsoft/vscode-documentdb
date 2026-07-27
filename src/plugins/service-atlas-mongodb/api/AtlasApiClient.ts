@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
-import { atlasTrace, atlasWarn, formatMs } from '../atlasTrace';
+import { atlasTrace, atlasWarn, formatMs, monotonicNow } from '../atlasTrace';
 import { type AtlasSessionRefresher } from '../auth/AtlasCredentialSessionRegistry';
 import { type AtlasSession } from '../auth/AtlasSession';
 import { ATLAS_API_BASE_URL } from '../config';
@@ -109,7 +109,7 @@ export class AtlasApiClient {
     private async requestAllPages<T>(path: string, signal?: AbortSignal): Promise<T[]> {
         const separator = path.includes('?') ? '&' : '?';
         const collected: T[] = [];
-        const startedAt = Date.now();
+        const startedAt = monotonicNow();
         let pagesFetched = 0;
 
         for (let pageNum = 1; pageNum <= ATLAS_MAX_PAGES; pageNum++) {
@@ -190,7 +190,7 @@ export class AtlasApiClient {
      */
     private async requestOnce<T>(path: string, signal?: AbortSignal): Promise<T> {
         const url = `${ATLAS_API_BASE_URL}${path}`;
-        const startedAt = Date.now();
+        const startedAt = monotonicNow();
         const headers: Record<string, string> = {
             Accept: 'application/vnd.atlas.2023-02-01+json',
         };

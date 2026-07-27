@@ -20,7 +20,7 @@
 import * as l10n from '@vscode/l10n';
 import { createConcurrencyLimiter } from '../../../utils/concurrencyLimiter';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
-import { atlasTrace, describeCredential, formatMs } from '../atlasTrace';
+import { atlasTrace, describeCredential, formatMs, monotonicNow } from '../atlasTrace';
 import { AtlasCredentialSessionRegistry } from '../auth/AtlasCredentialSessionRegistry';
 import {
     getAtlasCredential,
@@ -202,6 +202,7 @@ export interface CredentialResult {
  */
 export class AtlasDiscoveryService {
     private snapshot: AtlasDiscoverySnapshot | undefined;
+    /** Monotonic reading, so a wall-clock step cannot make a stale snapshot look fresh forever. */
     private snapshotTakenAt = 0;
     private lastResults: CredentialResult[] | undefined;
     private inflight: Promise<AtlasDiscoverySnapshot> | undefined;
@@ -225,7 +226,7 @@ export class AtlasDiscoveryService {
         const needsClusters = options.includeClusters === true;
 
         if (!options.forceRefresh && this.snapshot && (!needsClusters || this.snapshot.clustersIncluded)) {
-            const age = Date.now() - this.snapshotTakenAt;
+            const age = monotonicNow() - this.snapshotTakenAt;
             if (age < SNAPSHOT_TTL_MS) {
                 atlasTrace(
                     `listAll: serving the cached snapshot, ${String(age)}ms old (${String(this.snapshot.organizations.length)} org(s), ${String(this.snapshot.projects.length)} project(s), ${String(this.snapshot.credentialErrors.length)} credential error(s))`,
@@ -334,7 +335,7 @@ export class AtlasDiscoveryService {
     ): Promise<AtlasDiscoverySnapshot> {
         const credentials = await readAtlasCredentials();
         const limit = createConcurrencyLimiter({ concurrency: CREDENTIAL_CONCURRENCY });
-        const startedAt = Date.now();
+        const startedAt = monotonicNow();
 
         atlasTrace(
             `listAll: querying ${String(credentials.length)} credential(s), clusters ${includeClusters ? 'included' : 'deferred to project expand'}${forceFreshSessions ? ', forcing fresh sessions' : ''}`,
@@ -378,7 +379,7 @@ export class AtlasDiscoveryService {
 
         const snapshot = mergeResults(results, includeClusters);
         this.snapshot = snapshot;
-        this.snapshotTakenAt = Date.now();
+        this.snapshotTakenAt = monotonicNow();
         this.lastResults = results;
 
         atlasTrace(
@@ -392,7 +393,7 @@ export class AtlasDiscoveryService {
     private commit(results: CredentialResult[], clustersIncluded: boolean): AtlasDiscoverySnapshot {
         const snapshot = mergeResults(results, clustersIncluded);
         this.snapshot = snapshot;
-        this.snapshotTakenAt = Date.now();
+        this.snapshotTakenAt = monotonicNow();
         this.lastResults = results;
         return snapshot;
     }

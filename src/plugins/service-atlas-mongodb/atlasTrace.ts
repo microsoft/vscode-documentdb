@@ -48,7 +48,22 @@ export function describeCredential(label: string, credentialId: string): string 
     return `${label} (${shortId(credentialId)})`;
 }
 
-/** Formats a duration for logs. */
+/**
+ * Reads the monotonic clock, for measuring how long something took.
+ *
+ * Deliberately not `Date.now()`. The wall clock can step backwards, and it does: an NTP
+ * correction, a resume from sleep, or a VM restore all move it. When that lands mid-request the
+ * log fills with negative durations, which is worse than useless because it silently discredits
+ * every other number on the line. `performance.now()` only ever moves forward.
+ *
+ * Wall-clock time is still the right choice for anything persisted or compared across processes,
+ * such as a Service Account token's `expiresAt`.
+ */
+export function monotonicNow(): number {
+    return performance.now();
+}
+
+/** Formats a duration for logs. Pair with {@link monotonicNow}, never with `Date.now()`. */
 export function formatMs(startedAt: number): string {
-    return `${String(Date.now() - startedAt)}ms`;
+    return `${String(Math.round(monotonicNow() - startedAt))}ms`;
 }
