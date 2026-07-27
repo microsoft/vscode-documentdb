@@ -4,9 +4,10 @@
 > and add the PR link here, matching the other entries in `docs/ai-and-plans/PRs/`.
 >
 > **Branch:** `feature/cluster-dashboard-poc` → `main`
-> **Base:** `c745a327`
+> **Base:** `c745a327` · **Diff:** 21 files, +2871 / −0 · 9 commits
 > **Date:** 2026-07-27
 > **Status:** POC — demo-ready, not production-ready (see [Not production-ready](#not-production-ready))
+> **Review:** one full round applied — see [Review round 1](#review-round-1-applied)
 >
 > Source plan: `docs/ai-and-plans/cluster-dashboard-poc-plan.md` (untracked local doc).
 > Target end-state design: `docs/ai-and-plans/cluster-dashboard-design.md` (untracked, pending PM review).
@@ -67,7 +68,7 @@ without changing the collector's contract.
 The webview reads this directly: `undefined` renders a loading skeleton, `null` renders
 "Not available on this server", a number renders the value.
 
-### Confirmation lives on the host
+### Confirmation lives on the host, and the result is reported honestly
 
 `killOperation` raises `getConfirmationAsInSettings` in the router, not a dialog in the
 webview.
@@ -75,6 +76,18 @@ webview.
 **Why:** it inherits the user's configured confirmation style (word / challenge / click)
 for free, consistent with `collectionViewRouter.deleteDocumentsById`. A webview-side dialog
 would be a second, divergent confirmation UX for a destructive action.
+
+Two consequences shaped the final shape of the procedure:
+
+- **`killOp` acknowledges the request, not a match.** The server replies `{ok: 1}` whether
+  or not an operation was found, so the UI cannot claim an operation "has been killed". The
+  procedure returns a four-way `outcome` (`requested` / `cancelled` / `gone` / `failed`) and
+  the toast says "Kill request sent".
+- **The prompt blocks indefinitely** (`ignoreFocusOut: true`) while the table keeps
+  refreshing underneath it, so an opid captured at click time can be recycled onto a
+  different operation before the user confirms. The operation is re-checked immediately
+  before the kill. The word-confirmation style also *throws* `UserCancelledError` on Escape
+  rather than returning `false`, which is caught and mapped to `cancelled`.
 
 ### Custom SVG sparkline instead of a charting dependency
 
@@ -109,7 +122,7 @@ panel for the same cluster after a drag-and-drop.
 | Registration (`src/documentdb/ClustersExtension.ts`) | `vscode-documentdb.command.clusterDashboard.open` via `registerCommandWithTreeNodeUnwrapping` + `withTreeNodeCommandCorrelation`, next to the Interactive Shell. | Journey correlation telemetry, consistent with sibling tree commands. |
 | Manifest (`package.json`) | Command (`$(pulse)`, "Show Cluster Dashboard (Preview)"), `view/item/context` at `5@2` on cluster nodes in all four tree views, `commandPalette` `when: never`. | Sits directly under Open Interactive Shell; hidden from the palette because it needs a tree node. |
 | Webview UI (`…/clusterDashboard/*`) | Root + SCSS + `HeaderCard`, `StatusStrip`, `Sparkline`, `OverviewTab`, `OperationsTab`, `StorageTab`, `formatUtils`. | Plain `useState` in the root with prop drilling — no context at this size. |
-| l10n | Regenerated bundle, +57 keys. | All user-facing strings go through `l10n.t(...)`. |
+| l10n | Regenerated bundle, +68 keys. | All user-facing strings go through `l10n.t(...)`. |
 
 ### Notable UI details
 
@@ -144,6 +157,74 @@ killable.
 `mapCurrentOp` also falls back to the connection description (`desc`, e.g. `conn4`) for
 the client column when `client`/`appName` are absent.
 
+## Review round 1 (applied)
+
+A full review of the 14 new files produced 21 findings. All were re-verified against
+source before acting; 19 were fixed in `3396eaa6`, 2 were deferred as architectural, and
+2 review claims were themselves corrected. Test count went 2684 → 2692.
+
+### The finding that mattered
+
+`$currentOp` reports **the very aggregation issuing it**. `isUserOperation` accepted it, so
+the dashboard was watching itself: Active Operations floored at 1 on an idle cluster, the
+sparkline was a flat line at 1, and the Operations tab carried a permanent phantom row
+whose Kill button would have terminated the dashboard's own poll.
+
+This had been *visible in the original live-test output* — the smoke run printed
+`first op: {"namespace":"admin.$cmd.aggregate", ...}` next to `activeOperations: 1` — and
+was misread as a background thread. The earlier claim in this document that an idle cluster
+showed "3 background threads" was wrong: it was 2 threads **+ the self-op**. Corrected in
+[Bug found by live testing](#bug-found-by-live-testing) above.
+
+### Fixed
+
+| # | Finding | Fix |
+|---|---------|-----|
+| 1 | Dashboard counts and lists its own poll | `isSelfInspectionQuery` drops it on both the aggregation and legacy paths |
+| 2 | `Number(opid)` corrupts int64 ids and breaks vCore string opids (`'0x1A'`→26, `'1e3'`→1000, `'9007199254740993'`→…992 — a *different* operation) | Carry `opidIsNumeric` from the server's reported type instead of re-deriving |
+| 3 | Every kill reported success; cancelling showed "Failed to kill" | Four-way `outcome`; `UserCancelledError` caught |
+| 4 | `$limit` ran before the user-op filter, so background threads could starve real ops out of the budget on a busy server | Filter moved into a `$match` **before** `$limit` |
+| 5 | Opid goes stale across the blocking prompt; `key={opid}` collides when opid is `''` | Re-check before killing; composite React key |
+| 6 | No `CredentialCache` precondition — a never-expanded connection error-looped every 5 s | Guard copied from `openInteractiveShell` |
+| 9 | Neither poller had an in-flight guard; a 30 s `serverSelectionTimeoutMS` against a 5 s interval stacked requests | `inFlightRef` on both loops |
+| 10 | "vCore does not support serverStatus" rendered during the first ~5 s on *every* server | Distinguish "Collecting…" from unsupported |
+| 11 | Total used `listDatabases.totalSize` (counts `admin`/`local`/`config` and capped-out DBs) but was rendered as the total of the user-DB table | Sum the rendered rows; report `omittedDatabaseCount` |
+| 12 | "Topology" read `hello.msg`, a mongos-only marker → every standalone/emulator/replica-set primary rendered the literal word "unknown" | Derive from `topology_numberOfServers` |
+| 13 | `StorageTab` never read `storageStats.errors` — a permission failure rendered as "No user databases" | Surface errors and the omission notice |
+| 14 | A hard RPC failure left the spinner forever with Refresh unreachable inside the non-null branch | Toolbar hoisted out; failure surfaced in a `MessageBar` |
+| 15 | Sparkline filtered `null` instead of drawing gaps, so an outage rendered as a healthy line and earlier points shifted each poll; a flat series drew at the *bottom* edge | Segment into contiguous runs; centre flat series |
+| 16 | Storage tiles were frozen for the panel's lifetime while sitting in the "live" strip | Storage refreshes on a slow cadence (12× the health tick) |
+| P3 | Bare `catch {}` discarded every error object, so with telemetry suppressed the PR's own #1 risk (vCore) was undiagnosable | `describeCommandFailure` records `name: reason` |
+| P3 | `sizeOnDisk ?? …` never fell back when the server reported `0` | `??=` with a comment on why `\|\|` would be wrong |
+| P3 | `'{count} operations are running.'` unpluralized | Repo's `{countOne}` / `{countMany}` convention |
+
+### Corrections to the review
+
+- **"`if (!confirmed)` is dead code" is overstated.** It is unreachable only for the *word*
+  confirmation style; the number-quiz and click styles return `false` normally. The UX bug
+  was real and is fixed, but the branch was kept.
+- The "3 entries on an idle cluster" miscount originated in this document, not in the
+  reviewer's reading of it.
+
+### Deferred (architectural — see [Not production-ready](#not-production-ready))
+
+- **Bypassing `beforeCachedClientConnect()`** (`ClusterItemBase.ts:221`): the router calls
+  `ClustersClient.getClient` directly, so Kubernetes port-forward setup never runs for a
+  dashboard. Confirmed real. Fixing it needs the router to reach tree nodes.
+- **No connection-lifecycle invalidation**: `removeConnection` clears credentials but never
+  calls `deleteClient`, so a deleted connection keeps polling; `updateCredentials` *does*
+  call it, so the next poll silently re-runs the full handshake. Confirmed real. Fixing it
+  needs a lifecycle event the POC has no plumbing for.
+
+Both are deliberately documented rather than fixed badly.
+
+### Tests that asserted the buggy behaviour
+
+Three were inverted rather than preserved (self-op kept, opid coercion, `totalSize` 303 vs
+the 300 the rows sum to). New coverage was added for what had none: a failing ping (the
+value the whole connection-state machine keys on), `$match`-before-`$limit` ordering, opid
+type preservation, and the zero-size fallback.
+
 ## Corrections to the source plan
 
 The plan's code skeletons were verified against source before use; two were wrong:
@@ -156,24 +237,37 @@ The plan's code skeletons were verified against source before use; two were wron
 ## Verification
 
 All PR-checklist steps pass: `npm run l10n` (idempotent), `npm run prettier`,
-`npm run lint`, `npm run jesttest` (2684 tests / 160 suites), `npm run build`, plus both
+`npm run lint`, `npm run jesttest` (**2692 tests / 160 suites**), `npm run build`, plus both
 webpack bundles.
 
 The interactive F5 walkthrough could not be run in the authoring environment, so the risky
-half was verified against a live `mongo:7` container instead:
+half was verified against a live `mongo:7` container instead — once when the POC landed,
+and again after the review fixes:
 
-- Collectors returned latency, uptime, connections, opcounters, and storage with zero errors.
-- **Kill Operation proven end to end:** a long-running `$where` scan appeared in the
-  operations list, `killOperation` terminated it (`Interrupted`), and it was gone on the
-  next poll.
+```
+IDLE activeOperations = 0        (was 1: the dashboard's own poll)
+BUSY ops = … 1106/query/smokedb.items
+kill acknowledged = true | opidIsNumeric = true
+slow query outcome = killed: Interrupted
+STORAGE total = 8192 | rowSum = 8192 | reconciles = true
+```
+
+- **The self-op fix is confirmed empirically**, not just by unit test: an idle cluster now
+  reports zero active operations.
+- **Kill Operation proven end to end:** a long-running `$where` scan appears in the list,
+  is terminated (`Interrupted`), and is gone on the next poll — with the opid type
+  correctly detected as numeric.
+- **The storage total reconciles** with the sum of the rendered rows.
 - **No host code in the webview bundle** — the type-only imports of `ClusterHealthSample`
   et al. from `src/documentdb/` are fully elided by the bundler, so the plan's stated risk
   about cross-boundary imports did not materialize and no shared `types.ts` was needed.
 
-Unit tests (`getClusterHealth.test.ts`, 10 cases) cover the resilience contract
-specifically: a rejecting `serverStatus` still yields a latency reading with
-`'serverStatus'` in `errors`; both `currentOp` forms failing yields an empty list plus both
-command names; a failing per-database `dbStats` does not lose the other databases.
+Unit tests (`getClusterHealth.test.ts`, 18 cases) cover the resilience contract
+specifically: a rejecting `serverStatus` still yields a latency reading with the *reason*
+preserved; a failing ping yields the `null` latency the connection-state machine keys on;
+both `currentOp` forms failing yields an empty list plus both command names; the `$match`
+provably precedes the `$limit`; a numeric-looking string opid is not coerced; a failing
+per-database `dbStats` does not lose the other databases.
 
 ## Not production-ready
 

@@ -5,7 +5,9 @@
 > what order, and what to be suspicious of.
 
 **Branch:** `feature/cluster-dashboard-poc` (local only — not pushed)
-**Base:** `main` @ `c745a327` · **Diff:** 19 files, +2056 / −0 · 7 commits
+**Base:** `main` @ `c745a327` · **Diff:** 21 files, +2871 / −0 · 9 commits
+**Review status:** one round applied (19 findings fixed, 2 deferred) — details in
+[`summary.md`](./summary.md#review-round-1-applied)
 
 ---
 
@@ -38,15 +40,23 @@ Then in the Extension Development Host: **Connections view → New Connection �
 1. Right-click a cluster → **Show Cluster Dashboard (Preview)**.
 2. Header card: name, connection badge, server version, platform, topology, host, uptime.
    Four tiles below refresh every 5 s.
+   - **Expected on an idle cluster: Active Operations = 0.** If it reads 1 with a phantom
+     `admin.$cmd.aggregate` row in the Operations tab, the self-op filter has regressed.
 3. **Overview** tab — latency and active-ops charts, plus an ops/sec breakdown when the
-   server supports `serverStatus`.
+   server supports `serverStatus`. Before the second sample arrives this reads
+   "Collecting…", *not* the vCore message.
 4. **Operations** tab — start a long-running query (below), watch it appear, click
    **Kill** → confirmation prompt appears in the VS Code UI (host-side, honoring the
    configured confirmation style) → the row disappears on the next poll.
+   - Press **Escape** at the prompt: this must be a silent no-op, not "Failed to kill".
+   - Let the prompt sit for ~30 s before confirming: the operation is re-checked, so a
+     finished op reports "no longer running" instead of killing whatever now holds the id.
 5. **Storage** tab — per-database sizes with relative bars, plus a total row and a manual
-   Refresh.
+   Refresh. The Total must equal the sum of the visible rows.
 6. Re-invoke the context-menu item → the existing panel is **revealed**, not duplicated.
    Close the panel → polling stops (no extension-host console errors).
+7. Right-click a connection you have **never expanded** → expect a single "Not signed in"
+   error, not a panel that error-loops every 5 s.
 
 To generate a long-running operation for step 4, run this in the Interactive Shell or a
 playground:
@@ -68,6 +78,11 @@ Each commit compiles on its own, so they can be reviewed in sequence.
 | 5 | `90fecb02` | Webview UI |
 | 6 | `9e5a32c0` | l10n bundle (generated — skim only) |
 | 7 | `9015de8d` | `currentOp` background-thread fix |
+| 8 | `ede37fc0` | This PR record (docs only) |
+| 9 | `3396eaa6` | **Review-round fixes** — the largest behavioural commit; read it against `summary.md`'s findings table |
+
+If you are re-reviewing rather than reading cold, start at `3396eaa6` — it is where the
+kill path, the pollers, and every "the UI says something untrue" defect were fixed.
 
 ## 4. What to scrutinize
 
@@ -77,22 +92,34 @@ Ordered by how likely it is to matter.
    expected to fail there (tiles fall back to `—`), and the
    `$currentOp` → `currentOp` → permissions-empty-state chain is implemented and
    unit-tested but never run against real vCore. **Try this before demoing to anyone on
-   Azure.** If `$currentOp` misbehaves, the fallback in `listCurrentOperations` is the
-   place to look.
-2. **Visual layout has never been seen rendered.** Types and SCSS compile; appearance,
+   Azure.** Two vCore-specific behaviours now hinge on this: the `opidIsNumeric` flag
+   (vCore reports *string* opids, and killing with the wrong type silently no-ops), and
+   the `$match`-inside-`$currentOp` stage. Failures now carry their reason in
+   `sample.errors`, so a vCore run is diagnosable from the Operations/Storage messages.
+2. **Two known-broken paths were deferred, not fixed** (details in `summary.md`):
+   - **Kubernetes clusters will not connect.** The router calls `ClustersClient.getClient`
+     directly, bypassing `ClusterItemBase.beforeCachedClientConnect()`, so port-forward
+     setup never runs — while the tree connects fine. The menu item *is* shown for k8s
+     nodes.
+   - **Deleting a connection does not stop its dashboard.** `removeConnection` clears
+     credentials but never calls `deleteClient`, so the cached client survives and the
+     panel keeps polling — and can still kill operations on — a removed connection.
+     Renaming leaves a stale tab title.
+3. **Visual layout has never been seen rendered.** Types and SCSS compile; appearance,
    spacing, two-panels-side-by-side, and light↔dark re-theming are unobserved. Expect to
-   want CSS tweaks on the first run.
-3. **The background-thread and self-op filters** (`isUserOperation` /
+   want CSS tweaks on the first run. The `Sparkline` gap/segment rendering is new in the
+   review round and has *only* been reasoned about, never looked at.
+4. **The background-thread and self-op filters** (`isUserOperation` /
    `isSelfInspectionQuery`) — are they too aggressive for other server types? Without
    them the Active Operations tile read non-zero on an idle cluster and the Kill button
    could terminate the dashboard's own poll.
-4. **Polling cost.** Each 5 s health sample runs `ping` + `serverStatus` + `$currentOp`,
+5. **Polling cost.** Each 5 s health sample runs `ping` + `serverStatus` + `$currentOp`,
    and the Operations tab polls `$currentOp` again independently while mounted. Both
    loops now have in-flight guards so they cannot stack, but they are still two separate
    pollers — the obvious consolidation target before shipping. Telemetry is suppressed on
    both polled procedures. Neither loop pauses when the panel is hidden
    (`retainContextWhenHidden`), which is a known remaining gap.
-5. **Two plan corrections worth confirming** — `isDisposed` is a getter not a method
+6. **Two plan corrections worth confirming** — `isDisposed` is a getter not a method
    (`WebviewController.ts:384`), and telemetry suppression goes through
    `ctx.actionContext.telemetry` (matching `collectionViewRouter.ts:684`). Details in
    `summary.md`.
