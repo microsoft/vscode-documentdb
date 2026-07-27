@@ -16,7 +16,7 @@
  * degrades to the least specific destination it can still be sure about.
  */
 
-import { type AtlasCredentialRecord } from '../credentials/atlasCredentialStore';
+import { type AtlasCredentialRecord } from './credentials/atlasCredentialStore';
 
 /** Root of the MongoDB Atlas web console. */
 const ATLAS_CLOUD_ROOT = 'https://cloud.mongodb.com';
@@ -47,4 +47,16 @@ export function buildAtlasAccessUrl(record: AtlasCredentialRecord, clientId?: st
     }
 
     return clientId ? `${access}/serviceAccounts/${encodeURIComponent(clientId)}` : `${access}/serviceAccounts`;
+}
+
+/**
+ * Builds the Atlas **Network Access** URL for a project, which is where the IP access list lives.
+ *
+ * This is the page a user needs when a cluster connection is rejected during the TLS handshake:
+ * Atlas fronts clusters with a proxy that refuses a client whose IP is not on the project's access
+ * list, and the refusal happens before authentication, so the driver reports a TLS alert rather
+ * than anything about credentials.
+ */
+export function buildAtlasNetworkAccessUrl(projectId: string): string {
+    return `${ATLAS_CLOUD_ROOT}/v2/${encodeURIComponent(projectId)}#/security/network/accessList`;
 }

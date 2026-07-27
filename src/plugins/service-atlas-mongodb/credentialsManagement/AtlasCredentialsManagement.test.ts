@@ -82,6 +82,7 @@ jest.mock('../../../webviews/documentdb/atlasCredentials/atlasCredentialsControl
 
 import * as vscode from 'vscode';
 import { StorageService } from '../../../services/storageService';
+import { buildAtlasAccessUrl } from '../atlasDeepLinks';
 import {
     readAtlasCredentials,
     resetAtlasCredentialStoreCache,
@@ -91,7 +92,6 @@ import {
 import { type AtlasDiscoveryService, type AtlasDiscoverySnapshot } from '../discovery/AtlasDiscoveryService';
 import { AtlasCredentialActionStep } from './AtlasCredentialActionStep';
 import { type AtlasCredentialsManagementWizardContext } from './AtlasCredentialsManagementWizardContext';
-import { buildAtlasAccessUrl } from './atlasDeepLinks';
 import { SelectAtlasCredentialStep } from './SelectAtlasCredentialStep';
 
 interface QuickPickLike {

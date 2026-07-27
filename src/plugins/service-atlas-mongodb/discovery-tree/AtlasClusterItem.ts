@@ -27,6 +27,8 @@ import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { getResourcesPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
+import { isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
+import { buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { type AtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasClusterState } from '../models/AtlasProjectModel';
@@ -193,16 +195,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                void vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
-                );
+                await this.showConnectionFailure(context, error);
 
                 // Clean up failed connection
                 await ClustersClient.deleteClient(this.cluster.clusterId);
@@ -213,6 +206,56 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
         });
 
         return result ?? null;
+    }
+
+    /**
+     * Reports a failed connection attempt.
+     *
+     * The TLS handshake rejection gets its own wording and an escape hatch. Atlas refuses the
+     * handshake for a client that is not on the project's IP access list, which happens before
+     * authentication, so the raw OpenSSL text ("tlsv1 alert internal error ... SSL alert number
+     * 80") is both unreadable and actively misleading: it appears right after the user typed a
+     * username and password that were never sent anywhere.
+     */
+    private async showConnectionFailure(context: IActionContext, error: unknown): Promise<void> {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        if (!isAtlasTlsHandshakeRejection(error)) {
+            context.telemetry.properties.atlasConnectionFailureKind = 'other';
+            void vscode.window.showErrorMessage(
+                l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+                {
+                    modal: true,
+                    detail:
+                        l10n.t('Revisit connection details and try again.') +
+                        '\n\n' +
+                        l10n.t('Error: {error}', { error: errorMessage }),
+                },
+            );
+            return;
+        }
+
+        context.telemetry.properties.atlasConnectionFailureKind = 'tlsHandshakeRejected';
+
+        const openNetworkAccess = l10n.t('Open Network Access in Atlas');
+        const selected = await vscode.window.showErrorMessage(
+            l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+            {
+                modal: true,
+                detail:
+                    l10n.t(
+                        'MongoDB Atlas closed the connection before authentication, which usually means this machine\u2019s IP address is not on the project\u2019s IP access list. Your username and password were never sent, so they are not the problem here.',
+                    ) +
+                    '\n\n' +
+                    l10n.t('Error: {error}', { error: errorMessage }),
+            },
+            openNetworkAccess,
+        );
+
+        if (selected === openNetworkAccess) {
+            context.telemetry.properties.atlasNetworkAccessOpened = 'true';
+            await vscode.env.openExternal(vscode.Uri.parse(buildAtlasNetworkAccessUrl(this.cluster.projectId)));
+        }
     }
 
     /**

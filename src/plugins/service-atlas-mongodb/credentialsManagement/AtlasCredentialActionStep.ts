@@ -7,9 +7,9 @@ import { AzureWizardPromptStep, GoBackError, UserCancelledError } from '@microso
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openAtlasCredentialsWebview } from '../../../webviews/documentdb/atlasCredentials/atlasCredentialsController';
+import { buildAtlasAccessUrl } from '../atlasDeepLinks';
 import { readAtlasCredentialSecrets, removeAtlasCredential } from '../credentials/atlasCredentialStore';
 import { type AtlasCredentialsManagementWizardContext } from './AtlasCredentialsManagementWizardContext';
-import { buildAtlasAccessUrl } from './atlasDeepLinks';
 import { ATLAS_CREDENTIAL_MANAGEMENT_EXIT } from './SelectAtlasCredentialStep';
 
 interface CredentialActionQuickPickItem extends vscode.QuickPickItem {
