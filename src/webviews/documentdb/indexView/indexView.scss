@@ -498,13 +498,13 @@
         white-space: nowrap;
     }
 
+    // Experiment: option groups (Options, Name, etc.) render flat — no tinted
+    // box — so only the Advanced entry, JSON preview button, and the selected
+    // algorithm card carry a shade. Keeps the vertical rhythm via row-gap.
     .typeOptions {
         display: flex;
         flex-direction: column;
         row-gap: 12px;
-        padding: 12px;
-        background-color: var(--colorNeutralBackground2);
-        border-radius: var(--borderRadiusMedium);
     }
 
     // A single option: the switch plus its indented detail container.
@@ -542,16 +542,12 @@
         font-size: var(--fontSizeBase200);
     }
 
-    // The wildcard scope settings (radio group, parent path, preview) sit in the
-    // same padded, tinted box as the `.typeOptions` groups (e.g. the Name option)
-    // so both blocks on the tab read as matching cards.
+    // Experiment: the wildcard scope settings render flat (no tinted box) to
+    // match the unshaded option groups above.
     .wildcardSettings {
         display: flex;
         flex-direction: column;
         row-gap: 12px;
-        padding: 12px;
-        background-color: var(--colorNeutralBackground2);
-        border-radius: var(--borderRadiusMedium);
     }
 
     // Two side-by-side vector inputs (e.g. Dimensions + Similarity) that wrap to
@@ -640,11 +636,14 @@
     }
 
     // Live "Index key preview" chip: a short label plus the generated key in
-    // monospace, sitting on one baseline so it reads as a single hint.
+    // monospace, sitting on one baseline so it reads as a single hint. Indented
+    // by one horizontal-S so the label lines up with the left edge of the radio
+    // buttons above it (the indicator's own left margin).
     .wildcardKeyPreview {
         display: flex;
         align-items: baseline;
         gap: 8px;
+        padding-inline-start: var(--spacingHorizontalS);
 
         .wildcardKeyPreviewLabel {
             color: var(--colorNeutralForeground3);

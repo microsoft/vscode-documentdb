@@ -891,6 +891,19 @@ export const CreateIndexDrawer = ({
         </button>
     );
 
+    // Groups the two pushed-page entries (Advanced settings, Preview as JSON)
+    // under a titled section. With the option groups now unshaded, this heading
+    // keeps the two entry cards from floating loose at the foot of the form.
+    const advancedAndPreviewSection = (
+        <DrawerSection
+            title={l10n.t('More options')}
+            hint={l10n.t('Optional settings and a preview of the generated index specification.')}
+        >
+            {advancedEntry}
+            {previewEntry}
+        </DrawerSection>
+    );
+
     // Header quick actions: Back is present only on the advanced sub-page; Hide
     // (collapse) is always available since the drawer preserves its state.
     const headerActions = (
@@ -1121,8 +1134,7 @@ export const CreateIndexDrawer = ({
                                     </div>
                                 </DrawerSection>
 
-                                {advancedEntry}
-                                {previewEntry}
+                                {advancedAndPreviewSection}
                             </>
                         )}
 
@@ -1361,8 +1373,7 @@ export const CreateIndexDrawer = ({
                                     <div className="typeOptions">{nameOption}</div>
                                 </DrawerSection>
 
-                                {advancedEntry}
-                                {previewEntry}
+                                {advancedAndPreviewSection}
                             </>
                         )}
 
@@ -1510,8 +1521,7 @@ export const CreateIndexDrawer = ({
                                     <div className="typeOptions">{vectorNameOption}</div>
                                 </DrawerSection>
 
-                                {advancedEntry}
-                                {previewEntry}
+                                {advancedAndPreviewSection}
                             </>
                         )}
                     </div>
