@@ -13,7 +13,7 @@ import { type AtlasCredentialsManagementWizardContext } from './AtlasCredentials
 import { ATLAS_CREDENTIAL_MANAGEMENT_EXIT } from './SelectAtlasCredentialStep';
 
 interface CredentialActionQuickPickItem extends vscode.QuickPickItem {
-    action?: 'retry' | 'openInAtlas' | 'update' | 'remove' | 'back' | 'exit';
+    action?: 'retry' | 'openInAtlas' | 'update' | 'signOut' | 'back' | 'exit';
 }
 
 /**
@@ -55,10 +55,13 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
                 action: 'update',
             },
             {
-                label: l10n.t('Remove'),
-                detail: l10n.t('Delete only this credential and its secrets.'),
-                iconPath: new vscode.ThemeIcon('trash'),
-                action: 'remove',
+                // Deliberately "Sign out" rather than "Remove", to read as the single-credential
+                // form of the fleet-level "Sign out of all". Both delete the stored secret; using
+                // two different verbs for the same operation made them look like different things.
+                label: l10n.t('Sign out'),
+                detail: l10n.t('Sign out of this credential only. The others stay signed in.'),
+                iconPath: new vscode.ThemeIcon('sign-out'),
+                action: 'signOut',
             },
             { label: '', kind: vscode.QuickPickItemKind.Separator },
             {
@@ -91,8 +94,8 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
             case 'update':
                 await this.update(context, credentialId, label);
                 return;
-            case 'remove':
-                await this.remove(context, credentialId, label);
+            case 'signOut':
+                await this.signOut(context, credentialId, label);
                 return;
             case 'back':
                 context.telemetry.properties.atlasCredentialAction = 'back';
@@ -194,20 +197,20 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
         throw new GoBackError();
     }
 
-    private async remove(
+    private async signOut(
         context: AtlasCredentialsManagementWizardContext,
         credentialId: string,
         label: string,
     ): Promise<never> {
-        context.telemetry.properties.atlasCredentialAction = 'remove';
+        context.telemetry.properties.atlasCredentialAction = 'signOut';
 
         await context.ui.showWarningMessage(
-            l10n.t('Remove the MongoDB Atlas credential "{0}"?', label),
+            l10n.t('Sign out of the MongoDB Atlas credential "{0}"?', label),
             {
                 modal: true,
-                detail: l10n.t('Only this credential and its secrets are deleted. Other credentials stay signed in.'),
+                detail: l10n.t('Only this credential and its secrets are removed. Other credentials stay signed in.'),
             },
-            { title: l10n.t('Remove') },
+            { title: l10n.t('Sign out') },
         );
 
         await removeAtlasCredential(credentialId);
@@ -215,7 +218,7 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
         context.discoveryService.invalidate();
         context.changed = true;
 
-        void vscode.window.showInformationMessage(l10n.t('Removed the MongoDB Atlas credential "{0}".', label));
+        void vscode.window.showInformationMessage(l10n.t('Signed out of the MongoDB Atlas credential "{0}".', label));
 
         context.credentials = [];
         context.selectedCredentialId = undefined;

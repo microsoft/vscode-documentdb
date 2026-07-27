@@ -373,14 +373,14 @@ describe('AtlasCredentialActionStep', () => {
         expect((await readAtlasCredentials())[0].id).toBe(credentialId);
     });
 
-    it('removes only the selected credential after confirmation', async () => {
+    it('signs out of only the selected credential after confirmation', async () => {
         const peer = await upsertAtlasCredential({
             authMethod: 'apikey',
             publicKey: 'peer-key',
             privateKey: 'peer-secret',
         });
         const [context, credentialId] = await contextWithSelection(
-            (items) => items.find((item) => item.action === 'remove')!,
+            (items) => items.find((item) => item.action === 'signOut')!,
         );
 
         await expect(new AtlasCredentialActionStep().prompt(context)).rejects.toBeInstanceOf(GoBackErrorMock);
@@ -389,6 +389,8 @@ describe('AtlasCredentialActionStep', () => {
         expect(remaining.map((r) => r.id)).toEqual([peer.record.id]);
         expect(remaining.map((r) => r.id)).not.toContain(credentialId);
         expect(context.changed).toBe(true);
+        // Reads as the single-credential form of the fleet-level "Sign out of all".
+        expect(context.telemetry.properties.atlasCredentialAction).toBe('signOut');
     });
 
     it('exits the flow when the user picks Exit', async () => {
