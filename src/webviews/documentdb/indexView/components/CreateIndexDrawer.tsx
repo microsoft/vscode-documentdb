@@ -141,17 +141,27 @@ function DrawerSection({
     title,
     hint,
     example,
+    required,
     children,
 }: {
     title: string;
     hint?: string;
     /** A small, always-visible example rendered in monospace above the inputs. */
     example?: string;
+    /** Marks the section's input as required with a trailing asterisk. */
+    required?: boolean;
     children: ReactNode;
 }): JSX.Element {
     return (
         <section className="drawerSection">
-            <div className="drawerSectionTitle">{title}</div>
+            <div className="drawerSectionTitle">
+                {title}
+                {required && (
+                    <span className="drawerSectionRequired" aria-hidden="true">
+                        *
+                    </span>
+                )}
+            </div>
             {hint && <div className="drawerSectionHint">{hint}</div>}
             {example && <code className="drawerSectionExample">{example}</code>}
             <div className="drawerSectionBody">{children}</div>
@@ -1007,6 +1017,7 @@ export const CreateIndexDrawer = ({
                             <>
                                 <DrawerSection
                                     title={l10n.t('Index fields')}
+                                    required
                                     hint={l10n.t(
                                         'Select the field(s) to index and a type for each. Add more fields to build a compound index.',
                                     )}
@@ -1402,6 +1413,7 @@ export const CreateIndexDrawer = ({
                             <>
                                 <DrawerSection
                                     title={l10n.t('Vector field')}
+                                    required
                                     hint={l10n.t(
                                         'The document field that stores the embedding array. Only one vector is indexed per path.',
                                     )}

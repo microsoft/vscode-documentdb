@@ -474,6 +474,13 @@
         font-size: var(--fontSizeBase300);
     }
 
+    // Required-field asterisk on a section title, matching Fluent's Field marker.
+    .drawerSectionRequired {
+        margin-inline-start: 4px;
+        color: var(--colorPaletteRedForeground3);
+        font-weight: var(--fontWeightRegular);
+    }
+
     .drawerSectionHint {
         color: var(--colorNeutralForeground3);
         font-size: var(--fontSizeBase200);
