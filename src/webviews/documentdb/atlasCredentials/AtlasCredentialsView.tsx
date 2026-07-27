@@ -19,6 +19,7 @@ import {
     mergeClasses,
     MessageBar,
     MessageBarBody,
+    Radio,
     Spinner,
     Text,
     tokens,
@@ -63,7 +64,6 @@ const useStyles = makeStyles({
         flexDirection: 'column',
         gap: '20px',
         maxWidth: '760px',
-        margin: '0 auto',
         padding: '24px',
     },
     hero: { display: 'flex', alignItems: 'center', gap: '16px' },
@@ -80,20 +80,9 @@ const useStyles = makeStyles({
     methodCardSelected: {
         outline: `2px solid ${tokens.colorBrandStroke1}`,
         outlineOffset: '-1px',
-        backgroundColor: tokens.colorBrandBackground2,
     },
     methodIcon: { color: tokens.colorBrandForeground1, fontSize: '24px' },
-    methodQualifier: { color: tokens.colorNeutralForeground3 },
-    methodBody: { display: 'flex', flexDirection: 'column', gap: '12px' },
-    methodGraphic: {
-        display: 'grid',
-        gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
-        alignItems: 'center',
-        gap: '8px',
-        padding: '10px 0',
-        color: tokens.colorNeutralForeground2,
-        textAlign: 'center',
-    },
+    methodSummary: { color: tokens.colorNeutralForeground2 },
     actions: {
         display: 'flex',
         gap: '8px',
@@ -322,8 +311,9 @@ export const AtlasCredentialsView = (): JSX.Element => {
             if (result.success) {
                 setPhase('success');
             } else {
+                // Stay on the verification screen and surface the error there; the user chooses when
+                // to go back rather than being bounced to the form automatically.
                 setSubmitError(result.error);
-                setPhase('form');
             }
         } catch (error) {
             setSubmitError({
@@ -331,7 +321,6 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 title: l10n.t("We couldn't check this credential"),
                 message: error instanceof Error ? error.message : String(error),
             });
-            setPhase('form');
         }
     }, [canSubmit, chosenMethod, phase, trpcClient, values]);
 
@@ -400,40 +389,26 @@ export const AtlasCredentialsView = (): JSX.Element => {
         icon: JSX.Element,
         title: string,
         qualifier: string,
-        from: string,
-        to: string,
         summary: string,
     ): JSX.Element => (
         <Card
             className={mergeClasses(styles.methodCard, pendingMethod === method && styles.methodCardSelected)}
-            appearance="outline"
             selected={pendingMethod === method}
             onSelectionChange={(_event, data) => data.selected && setPendingMethod(method)}
-            checkbox={{ 'aria-label': title }}
+            floatingAction={
+                <Radio checked={pendingMethod === method} onChange={() => setPendingMethod(method)} aria-label={title} />
+            }
         >
             <CardHeader
                 image={icon}
-                header={
-                    <Text weight="semibold">
-                        {title}{' '}
-                        <Text as="span" size={200} className={styles.methodQualifier}>
-                            {qualifier}
-                        </Text>
+                header={<Text weight="semibold">{title}</Text>}
+                description={
+                    <Text size={200} className={styles.methodSummary}>
+                        {qualifier}
                     </Text>
                 }
             />
-            <div className={styles.methodBody}>
-                <div className={styles.methodGraphic} aria-label={l10n.t('{0} to {1} to MongoDB Atlas', from, to)}>
-                    <Text aria-hidden size={200}>
-                        {from}
-                    </Text>
-                    <Text aria-hidden>{'→'}</Text>
-                    <Text aria-hidden size={200}>
-                        {to}
-                    </Text>
-                </div>
-                <Body1 className={styles.muted}>{summary}</Body1>
-            </div>
+            <Body1 className={styles.methodSummary}>{summary}</Body1>
         </Card>
     );
 
@@ -447,9 +422,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     'serviceaccount',
                     <PersonAccountsRegular aria-hidden className={styles.methodIcon} />,
                     l10n.t('Service Account'),
-                    l10n.t('(recommended)'),
-                    l10n.t('Client ID + secret'),
-                    l10n.t('Access token'),
+                    l10n.t('Recommended'),
                     l10n.t(
                         'OAuth2 client ID and secret. More secure, and the secret expires (8 hours to 365 days) so it has to be rotated periodically.',
                     ),
@@ -458,9 +431,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     'apikey',
                     <KeyRegular aria-hidden className={styles.methodIcon} />,
                     l10n.t('API Key'),
-                    l10n.t('(legacy, simplest)'),
-                    l10n.t('Public + private key'),
-                    l10n.t('Signed request'),
+                    l10n.t('Legacy, simplest'),
                     l10n.t('Public and private key pair. Never expires, which suits a personal, set-and-forget setup.'),
                 )}
             </div>
@@ -599,28 +570,51 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     {l10n.t('We check these with MongoDB Atlas before saving them.')}
                 </Text>
                 <div className={styles.actions}>
+                    {!isEdit && (
+                        <Button appearance="secondary" onClick={handleBack}>
+                            {l10n.t('Back')}
+                        </Button>
+                    )}
                     <Button type="submit" appearance="primary" disabled={!canSubmit}>
-                        {submitError ? l10n.t('Try again') : l10n.t('Check and save')}
+                        {l10n.t('Verify & Save')}
                     </Button>
                 </div>
             </form>
         </section>
     );
 
+    const checkFailed = phase === 'checking' && submitError !== undefined;
+    const stageStatusAt = (index: number): StageStatus => {
+        if (index < activeStage) {
+            return 'done';
+        }
+        if (index === activeStage) {
+            return checkFailed ? 'error' : 'active';
+        }
+        return 'pending';
+    };
     const checking = (
         <section className={styles.section} aria-labelledby="atlas-checking-heading">
             <Text id="atlas-checking-heading" as="h2" size={500} weight="semibold">
-                {isApiKey ? l10n.t('Checking your API Key…') : l10n.t('Checking your Service Account…')}
+                {checkFailed
+                    ? l10n.t('Verification failed')
+                    : isApiKey
+                      ? l10n.t('Checking your API Key…')
+                      : l10n.t('Checking your Service Account…')}
             </Text>
             <div className={styles.stageList} role="list" aria-label={l10n.t('Credential check progress')}>
                 {checkStages.map((label, index) => (
-                    <StageRow
-                        key={label}
-                        label={label}
-                        status={index < activeStage ? 'done' : index === activeStage ? 'active' : 'pending'}
-                    />
+                    <StageRow key={label} label={label} status={stageStatusAt(index)} />
                 ))}
             </div>
+            {checkFailed && errorMessage}
+            {checkFailed && (
+                <div className={styles.actions}>
+                    <Button appearance="primary" icon={<ArrowLeftRegular />} onClick={() => setPhase('form')}>
+                        {l10n.t('Go back')}
+                    </Button>
+                </div>
+            )}
         </section>
     );
 
