@@ -46,6 +46,16 @@ All eight documented index types are marked **supported**.
   spec alone.
 - **Hashed** and **Wildcard** are detectable from the key spec and were the two
   types previously mislabeled by the UI (now fixed).
+- **Wildcard projection** — a wildcard index on the all-fields `$**` key accepts
+  an optional `wildcardProjection` that limits which paths the index covers. Each
+  listed path maps to `1` (**include**) or `0` (**exclude**), so the projection
+  is either an _include_ list (`{ "name": 1, "metadata.category": 1 }`) or an
+  _exclude_ list (`{ "secret": 0 }`). Include and exclude statements cannot be
+  mixed in the same projection — the only exception is adding/removing `_id`. A
+  projection is valid **only** on the all-fields `$**` key; a scoped `path.$**`
+  key already narrows the index and rejects `wildcardProjection`. The Create
+  Index dialog surfaces this as an Include/Exclude choice plus a field list,
+  shown only for the "All fields" scope.
 
 ---
 
@@ -75,11 +85,17 @@ modifiers that can be combined with the index types above.
   `import { INDEX_TYPES, INDEX_PROPERTIES } from '@documentdb-js/operator-registry';`
 - **Existing-index classification (Type column):** Default, ObjectId,
   Single Field, Compound, Text, Geospatial, **Hashed**, **Wildcard**.
-- **Creatable index types (Create Index dialog):** currently
-  `asc / desc / ttl / geospatial / text` only. Wildcard, Hashed, and Vector are
-  documented and supported by the service but are **not yet offered in the
-  create UI** — that requires backend create-index key-spec support and a UX
-  decision.
+- **Creatable index types (Create Index dialog):** the drawer offers three
+  mutually-exclusive kinds via a tab selector:
+  - **Standard** — one or more fields, each `asc / desc / text / 2dsphere /
+    hashed`, plus `unique / sparse / TTL`, partial filter, and collation.
+  - **Wildcard** — a single ascending wildcard key: **All fields** (`$**`) or
+    **Fields below a path** (`metadata.$**`, empty path falls back to `$**`),
+    with an optional include/exclude **projection** on the all-fields key, plus
+    partial filter and collation.
+  - **Vector** — placeholder tab; creation is not yet implemented.
+- Hashed keys are available as a Standard per-field type; Vector creation still
+  requires a UX and backend decision and is intentionally left as a stub.
 
 ---
 

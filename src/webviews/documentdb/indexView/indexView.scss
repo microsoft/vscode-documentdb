@@ -395,7 +395,10 @@
     }
 
     // The body scrolls vertically when the form grows taller than the drawer.
+    // A column flex context lets the Preview page's editor fill the free space.
     .createIndexDrawerBody {
+        display: flex;
+        flex-direction: column;
         overflow-y: auto;
     }
 
@@ -420,6 +423,27 @@
     display: flex;
     flex-direction: column;
     row-gap: 20px;
+
+    // Preview page: the specification editor fills the free vertical space
+    // (with a little breathing room) instead of auto-sizing to its content.
+    &.previewForm {
+        flex: 1 1 auto;
+        min-height: 0;
+        padding-bottom: 8px;
+
+        .drawerSection {
+            flex: 1 1 auto;
+            min-height: 0;
+        }
+
+        .drawerSectionBody {
+            flex: 1 1 auto;
+            min-height: 0;
+            border: 1px solid var(--colorNeutralStroke2);
+            border-radius: var(--borderRadiusMedium);
+            overflow: hidden;
+        }
+    }
 
     // A titled input section: bold title, muted one-line explanation, then inputs.
     .drawerSection {
@@ -476,8 +500,9 @@
         min-width: 0;
     }
 
-    .generatedWildcardKey input {
-        font-family: var(--fontFamilyMonospace);
+    // Three-way index-kind selector pinned to the top of the drawer content.
+    .indexKindTabs {
+        margin-bottom: 4px;
     }
 
     // The per-field type dropdown is wide enough to hold the longest option
@@ -532,16 +557,63 @@
         font-size: var(--fontSizeBase200);
     }
 
-    .wildcardSettings,
-    .wildcardProjectionField {
+    // The wildcard scope settings (radio group, parent path, preview) sit in the
+    // same padded, tinted box as the `.typeOptions` groups (e.g. the Name option)
+    // so both blocks on the tab read as matching cards.
+    .wildcardSettings {
+        display: flex;
+        flex-direction: column;
+        row-gap: 12px;
+        padding: 12px;
+        background-color: var(--colorNeutralBackground2);
+        border-radius: var(--borderRadiusMedium);
+    }
+
+    // The scoped "Parent path" is a sub-setting of the "Fields below a path"
+    // radio, so indent it to start where the radio *labels* start: past the
+    // 16px indicator, its two horizontal-S margins, and the label's own
+    // horizontal-XS left padding.
+    .wildcardScopedPath {
+        padding-inline-start: calc(16px + 2 * var(--spacingHorizontalS) + var(--spacingHorizontalXS));
+    }
+
+    // Live "Index key preview" chip: a short label plus the generated key in
+    // monospace, sitting on one baseline so it reads as a single hint.
+    .wildcardKeyPreview {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+
+        .wildcardKeyPreviewLabel {
+            color: var(--colorNeutralForeground3);
+            font-size: var(--fontSizeBase200);
+        }
+
+        code {
+            font-family: var(--fontFamilyMonospace);
+            font-size: var(--fontSizeBase300);
+        }
+    }
+
+    // Structured wildcard projection: mode radios plus a stacked list of
+    // field-name rows, each [combobox] [remove], mirroring the index field list.
+    .wildcardProjectionBody {
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+    }
+
+    .projectionFieldsList {
         display: flex;
         flex-direction: column;
         row-gap: 8px;
     }
 
-    .wildcardProjectionLabel {
-        font-weight: var(--fontWeightSemibold);
-        font-size: var(--fontSizeBase300);
+    .projectionFieldRow {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 10px;
     }
 
     // "Advanced settings ›" navigation entry that pushes the advanced sub-page.

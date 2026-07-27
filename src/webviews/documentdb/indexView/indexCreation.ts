@@ -16,6 +16,30 @@ export function isWildcardKey(field: string): boolean {
     return field.includes('$**');
 }
 
+/**
+ * True only for the all-fields wildcard key `$**`. A scoped `path.$**` key is a
+ * wildcard but is not the all-fields form, and the server only accepts a
+ * `wildcardProjection` on the all-fields key.
+ */
+export function isAllFieldsWildcardKey(field: string): boolean {
+    return field.trim() === '$**';
+}
+
+/**
+ * True when an optional JSON-object option carries no meaningful content —
+ * either absent, blank, or an empty object (`{}` with any inner whitespace).
+ * Such values are treated as "not set" exactly like an omitted option, so an
+ * empty option never triggers validation errors (mirrors the drawer's
+ * `isBlankIndexOption`).
+ */
+function isBlankOptionText(text: string | undefined): boolean {
+    if (text === undefined) {
+        return true;
+    }
+    const trimmed = text.trim();
+    return trimmed === '' || /^\{\s*\}$/.test(trimmed);
+}
+
 /** Strict create-index input validation shared by direct creation and command handoffs. */
 export const CreateIndexInputSchema = z
     .object({
@@ -41,6 +65,9 @@ export const CreateIndexInputSchema = z
     .superRefine((input, ctx) => {
         const fieldNames = new Set<string>();
         const wildcardFields = input.fields.filter((entry) => isWildcardKey(entry.field.trim()));
+        // The all-fields wildcard is the exact `$**` key; a scoped `path.$**`
+        // key is still a wildcard but does not accept a wildcard projection.
+        const hasAllFieldsWildcard = input.fields.some((entry) => isAllFieldsWildcardKey(entry.field.trim()));
 
         input.fields.forEach((entry, index) => {
             const fieldName = entry.field.trim();
@@ -90,14 +117,23 @@ export const CreateIndexInputSchema = z
                 message: l10n.t('Wildcard indexes cannot use TTL.'),
             });
         }
-        if (wildcardFields.length === 0 && input.wildcardProjection !== undefined) {
+        if (wildcardFields.length === 0 && !isBlankOptionText(input.wildcardProjection)) {
             ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 path: ['wildcardProjection'],
                 message: l10n.t('Wildcard projection requires a wildcard index key.'),
             });
         }
-        if (wildcardFields.length > 0 && input.wildcardProjection !== undefined) {
+        // A wildcard projection is only accepted on the all-fields `$**` key.
+        // A scoped `path.$**` key rejects it server-side, so block it here too.
+        if (wildcardFields.length > 0 && !hasAllFieldsWildcard && !isBlankOptionText(input.wildcardProjection)) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['wildcardProjection'],
+                message: l10n.t('Wildcard projection is only allowed on an all-fields wildcard index (the $** key).'),
+            });
+        }
+        if (hasAllFieldsWildcard && !isBlankOptionText(input.wildcardProjection)) {
             try {
                 parseOptionObject(input.wildcardProjection, l10n.t('wildcard projection'));
             } catch (error) {

@@ -21,12 +21,15 @@ import {
     Radio,
     RadioGroup,
     Switch,
+    Tab,
+    TabList,
     Tooltip,
 } from '@fluentui/react-components';
 import {
     AddRegular,
     ArrowLeftRegular,
     ArrowResetRegular,
+    BracesRegular,
     CheckmarkCircleRegular,
     ChevronRightRegular,
     DeleteRegular,
@@ -38,25 +41,23 @@ import {
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
-import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { LARGE_COLLECTION_THRESHOLD_DOCS } from '../constants';
 import { type CreateIndexInput, type FieldIndexType } from '../types';
 import {
-    applyConfirmedWildcardTransition,
+    buildWildcardKey,
+    buildWildcardProjectionObject,
     createInitialIndexFormState,
-    disableWildcardMode,
-    getEnableWildcardImpact,
-    getWildcardActivationDecision,
     isBlankIndexOption,
     isWildcardParentPathValid,
-    normalizeWildcardParentPath,
-    setWildcardPath,
-    setWildcardScope,
+    makeProjectionFieldId,
+    type IndexKind,
+    type WildcardProjectionMode,
+    type WildcardScope,
 } from '../wildcardIndexForm';
 import { JsonInputEditor } from './JsonInputEditor';
 
-/** Which pane of the drawer is visible. Advanced is a pushed sub-page. */
-type DrawerPage = 'main' | 'advanced';
+/** Which pane of the drawer is visible. Advanced and Preview are pushed sub-pages. */
+type DrawerPage = 'main' | 'advanced' | 'preview';
 
 /**
  * Build the localised per-field type options lazily inside the component so
@@ -78,10 +79,18 @@ function isBTreeType(type: FieldIndexType): boolean {
     return type === 'asc' || type === 'desc';
 }
 
-/**
- * Parse a JSON-object text field (partial filter / collation). Empty input is
- * valid (the option is simply omitted); non-empty input must be a JSON object.
- */
+/** Render a field's key value as a JS literal: `1` / `-1` or a quoted sentinel. */
+function keyValueLiteral(type: FieldIndexType): string {
+    switch (type) {
+        case 'asc':
+            return '1';
+        case 'desc':
+            return '-1';
+        default:
+            return `'${type}'`;
+    }
+}
+
 /** A titled form section with a short explanation above its inputs. */
 function DrawerSection({
     title,
@@ -223,13 +232,15 @@ export interface CreateIndexDrawerProps {
 
 /**
  * Create Index experience, rendered as a Fluent overlay drawer pinned to the
- * end (right) of the panel. The primary pane covers the common case (fields +
- * index-level options); rarely-needed settings live on a pushed "Advanced"
- * sub-page reached via the header back button.
+ * end (right) of the panel. A three-way tab selector at the top picks the index
+ * kind — Standard, Wildcard, or Vector — and each kind renders a focused form
+ * for its own shape rather than folding every option into one conditional form.
+ * Rarely-needed settings (partial filter, collation) live on a pushed "Advanced"
+ * sub-page reached from the main pane.
  *
- * Form state is intentionally preserved when the drawer is hidden — users who
- * set up a complex compound index do not lose their work on an accidental
- * close — and is only cleared via "Reset form" or after a successful creation.
+ * Form state is intentionally preserved when the drawer is hidden — and each
+ * kind keeps its own draft, so switching tabs never destroys the other kinds'
+ * work. State is only cleared via "Reset form" or after a successful creation.
  */
 export const CreateIndexDrawer = ({
     open,
@@ -240,15 +251,12 @@ export const CreateIndexDrawer = ({
     onPrepareInTarget,
     resetSignal,
 }: CreateIndexDrawerProps): JSX.Element => {
-    const trpcClient = useTrpcClient();
     const [page, setPage] = useState<DrawerPage>('main');
     const [form, setForm] = useState(createInitialIndexFormState);
     const [submitting, setSubmitting] = useState(false);
-    const [wildcardConfirmationPending, setWildcardConfirmationPending] = useState(false);
-    const wildcardConfirmationPendingRef = useRef(false);
-    const wildcardConfirmationGenerationRef = useRef(0);
 
     const {
+        indexKind,
         fields,
         name,
         nameEnabled,
@@ -258,10 +266,11 @@ export const CreateIndexDrawer = ({
         ttlSeconds,
         partialText,
         collationText,
-        wildcardEnabled,
         wildcardScope,
         wildcardPath,
-        wildcardProjectionText,
+        wildcardProjectionEnabled,
+        wildcardProjectionMode,
+        wildcardProjectionFields,
     } = form;
 
     const typeLabels = useMemo(() => buildTypeLabels(), []);
@@ -270,9 +279,6 @@ export const CreateIndexDrawer = ({
         setPage('main');
         setForm(createInitialIndexFormState());
         setSubmitting(false);
-        wildcardConfirmationGenerationRef.current += 1;
-        wildcardConfirmationPendingRef.current = false;
-        setWildcardConfirmationPending(false);
     }, []);
 
     // The parent clears the form after a successful create by bumping
@@ -289,11 +295,20 @@ export const CreateIndexDrawer = ({
     // Closing preserves the form; only an explicit reset (or a successful
     // create) clears it.
     const handleCancel = (): void => {
-        if (submitting || wildcardConfirmationPending) {
+        if (submitting) {
             return;
         }
         onCancel();
     };
+
+    const setIndexKind = (kind: IndexKind): void => {
+        // Switching kinds keeps the main pane; Advanced only holds partial
+        // filter and collation, so there is nothing kind-specific to leave.
+        setPage('main');
+        setForm((prev) => ({ ...prev, indexKind: kind }));
+    };
+
+    // --- Standard field list ------------------------------------------------
 
     const addField = (): void => {
         setForm((prev) => ({
@@ -326,45 +341,46 @@ export const CreateIndexDrawer = ({
         }));
     };
 
-    const handleWildcardToggle = async (checked: boolean): Promise<void> => {
-        if (!checked) {
-            if (!wildcardConfirmationPendingRef.current) {
-                setForm((prev) => disableWildcardMode(prev));
-            }
-            return;
-        }
+    // --- Wildcard projection field list -------------------------------------
 
-        const decision = getWildcardActivationDecision(form, wildcardConfirmationPendingRef.current);
-        if (decision === 'blocked') {
-            return;
-        }
-        if (decision === 'enable') {
-            setForm((prev) => applyConfirmedWildcardTransition(prev));
-            return;
-        }
+    const addProjectionField = (): void => {
+        setForm((prev) => ({
+            ...prev,
+            wildcardProjectionFields: [...prev.wildcardProjectionFields, { id: makeProjectionFieldId(), field: '' }],
+        }));
+    };
 
-        const impact = getEnableWildcardImpact(form);
-        const generation = ++wildcardConfirmationGenerationRef.current;
-        wildcardConfirmationPendingRef.current = true;
-        setWildcardConfirmationPending(true);
-        try {
-            const result = await trpcClient.mongoClusters.indexView.confirmEnableWildcardIndex.mutate(impact);
-            if (generation === wildcardConfirmationGenerationRef.current && result.confirmed) {
-                setForm((prev) => applyConfirmedWildcardTransition(prev));
-            }
-        } catch (error) {
-            const cause = error instanceof Error ? error.message : String(error);
-            void trpcClient.common.displayErrorMessage.mutate({
-                message: l10n.t('Failed to confirm wildcard index changes.'),
-                modal: false,
-                cause,
-            });
-        } finally {
-            if (generation === wildcardConfirmationGenerationRef.current) {
-                wildcardConfirmationPendingRef.current = false;
-                setWildcardConfirmationPending(false);
-            }
-        }
+    // Never delete the last row — the list always keeps at least one field so
+    // the projection is either configured or explicitly turned off via the switch.
+    const removeProjectionField = (id: string): void => {
+        setForm((prev) => ({
+            ...prev,
+            wildcardProjectionFields:
+                prev.wildcardProjectionFields.length > 1
+                    ? prev.wildcardProjectionFields.filter((field) => field.id !== id)
+                    : prev.wildcardProjectionFields,
+        }));
+    };
+
+    // Reset the lone projection row back to empty — mirrors the standard field
+    // list, where the single first row offers a "clear" affordance instead of a
+    // delete button.
+    const clearProjectionField = (id: string): void => {
+        setForm((prev) => ({
+            ...prev,
+            wildcardProjectionFields: prev.wildcardProjectionFields.map((field) =>
+                field.id === id ? { ...field, field: '' } : field,
+            ),
+        }));
+    };
+
+    const updateProjectionField = (id: string, value: string): void => {
+        setForm((prev) => ({
+            ...prev,
+            wildcardProjectionFields: prev.wildcardProjectionFields.map((field) =>
+                field.id === id ? { ...field, field: value } : field,
+            ),
+        }));
     };
 
     // Only rows with a field name contribute to the index; the type always has
@@ -379,37 +395,45 @@ export const CreateIndexDrawer = ({
     // Advanced entry badge, its summary, and the payload never disagree.
     const hasPartialFilter = !isBlankIndexOption(partialText);
     const hasCollation = !isBlankIndexOption(collationText);
-    const hasWildcardProjection = wildcardEnabled && !isBlankIndexOption(wildcardProjectionText);
+
+    // The structured projection editor collapses to a plain object; `undefined`
+    // means "nothing meaningful configured" so it is treated like an omitted
+    // option everywhere. A projection is only valid on the all-fields `$**` key,
+    // so it is ignored for the scoped-path scope.
+    const wildcardProjectionObject = useMemo(
+        () =>
+            indexKind === 'wildcard' && wildcardScope === 'all' && wildcardProjectionEnabled
+                ? buildWildcardProjectionObject(wildcardProjectionMode, wildcardProjectionFields)
+                : undefined,
+        [indexKind, wildcardScope, wildcardProjectionEnabled, wildcardProjectionMode, wildcardProjectionFields],
+    );
+    const hasWildcardProjection = wildcardProjectionObject !== undefined;
+
+    // Live preview of the generated wildcard key, e.g. `$**` or `metadata.$**`.
+    // An empty parent path collapses to `$**` (all fields), so the preview is
+    // shown for empty input too; it is only suppressed when the path is invalid
+    // (contains the `$**` token itself).
+    const wildcardKeyPreview =
+        indexKind === 'wildcard' && isWildcardParentPathValid(wildcardPath)
+            ? buildWildcardKey(wildcardScope, wildcardPath)
+            : '';
 
     // Sparse and a partial filter are mutually exclusive on the server.
-    const sparseDisabled = wildcardEnabled || hasPartialFilter;
+    const sparseDisabled = hasPartialFilter;
     const ttlActive = ttlEnabled && isSingleBTree;
     const trimmedTtlSeconds = ttlSeconds.trim();
     const parsedTtlSeconds = Number.parseInt(trimmedTtlSeconds, 10);
     const ttlNumberValid = !ttlActive || (parsedTtlSeconds > 0 && String(parsedTtlSeconds) === trimmedTtlSeconds);
-    const wildcardPathValid = !wildcardEnabled || wildcardScope === 'all' || isWildcardParentPathValid(wildcardPath);
-    const interactionDisabled = submitting || wildcardConfirmationPending;
+    // Empty path is fine (treated as all fields); only a path carrying the
+    // wildcard token itself is rejected. Errors are otherwise deferred to submit.
+    const wildcardPathValid = indexKind !== 'wildcard' || isWildcardParentPathValid(wildcardPath);
+    const interactionDisabled = submitting;
 
-    const advancedHasContent = hasPartialFilter || hasCollation || wildcardEnabled;
-
-    let wildcardSummary: string | undefined;
-    if (wildcardEnabled) {
-        if (wildcardScope === 'all') {
-            wildcardSummary = l10n.t('Wildcard: all fields');
-        } else {
-            const normalizedPath = normalizeWildcardParentPath(wildcardPath);
-            wildcardSummary =
-                normalizedPath === ''
-                    ? l10n.t('Wildcard: fields below a path')
-                    : l10n.t('Wildcard: {0}', normalizedPath);
-        }
-    }
+    const advancedHasContent = hasPartialFilter || hasCollation;
 
     // Which advanced settings are populated — surfaced on the entry so the user
     // can tell at a glance that something is configured behind it.
     const advancedSummary = [
-        wildcardSummary,
-        hasWildcardProjection ? l10n.t('Wildcard projection configured') : undefined,
         hasPartialFilter ? l10n.t('Partial filter') : undefined,
         hasCollation ? l10n.t('Collation') : undefined,
     ]
@@ -417,11 +441,35 @@ export const CreateIndexDrawer = ({
         .join(' · ');
 
     const canSubmit =
-        completedRows.length > 0 && ttlNumberValid && wildcardPathValid && !submitting && !wildcardConfirmationPending;
+        !submitting &&
+        (indexKind === 'standard'
+            ? completedRows.length > 0 && ttlNumberValid
+            : indexKind === 'wildcard'
+              ? wildcardPathValid
+              : false);
 
     // Assemble the payload once; shared by the direct create and the
     // playground/shell hand-offs so all three produce an identical index.
     const buildPayload = (): CreateIndexInput => {
+        if (indexKind === 'wildcard') {
+            const payload: CreateIndexInput = {
+                fields: [{ field: buildWildcardKey(wildcardScope, wildcardPath), type: 'asc' }],
+            };
+            if (nameEnabled && name.trim() !== '') {
+                payload.name = name.trim();
+            }
+            if (hasPartialFilter) {
+                payload.partialFilterExpression = partialText.trim();
+            }
+            if (hasCollation) {
+                payload.collation = collationText.trim();
+            }
+            if (hasWildcardProjection) {
+                payload.wildcardProjection = JSON.stringify(wildcardProjectionObject);
+            }
+            return payload;
+        }
+
         const payload: CreateIndexInput = {
             fields: completedRows.map((r) => ({ field: r.field.trim(), type: r.type })),
         };
@@ -443,10 +491,48 @@ export const CreateIndexDrawer = ({
         if (hasCollation) {
             payload.collation = collationText.trim();
         }
-        if (hasWildcardProjection) {
-            payload.wildcardProjection = wildcardProjectionText.trim();
-        }
         return payload;
+    };
+
+    // Build a read-only, JS-style preview of the specification passed to
+    // createIndex(). Partial filter / collation are relaxed JSON parsed on the
+    // host, so here they are embedded verbatim (continuation lines re-indented to
+    // sit under their property). The wildcard projection is already a plain
+    // object, so it is expanded directly.
+    const buildPreviewText = (): string => {
+        const payload = buildPayload();
+        const reindent = (text: string): string => text.replace(/\n/g, '\n    ');
+        const entries: string[] = [];
+
+        const keyBody = payload.fields.map((f) => `${JSON.stringify(f.field)}: ${keyValueLiteral(f.type)}`).join(', ');
+        entries.push(payload.fields.length > 0 ? `key: { ${keyBody} }` : 'key: {}');
+
+        if (payload.name !== undefined) {
+            entries.push(`name: ${JSON.stringify(payload.name)}`);
+        }
+        if (payload.unique) {
+            entries.push('unique: true');
+        }
+        if (payload.sparse) {
+            entries.push('sparse: true');
+        }
+        if (payload.expireAfterSeconds !== undefined) {
+            entries.push(`expireAfterSeconds: ${payload.expireAfterSeconds}`);
+        }
+        if (payload.partialFilterExpression !== undefined) {
+            entries.push(`partialFilterExpression: ${reindent(payload.partialFilterExpression)}`);
+        }
+        if (payload.collation !== undefined) {
+            entries.push(`collation: ${reindent(payload.collation)}`);
+        }
+        if (wildcardProjectionObject) {
+            const projBody = Object.entries(wildcardProjectionObject)
+                .map(([field, value]) => `${JSON.stringify(field)}: ${value}`)
+                .join(', ');
+            entries.push(`wildcardProjection: { ${projBody} }`);
+        }
+
+        return `{\n${entries.map((entry) => `    ${entry}`).join(',\n')}\n}`;
     };
 
     const handleSubmit = async (): Promise<void> => {
@@ -481,11 +567,76 @@ export const CreateIndexDrawer = ({
 
     const showLargeCollectionWarning = documentCount > LARGE_COLLECTION_THRESHOLD_DOCS;
 
+    // Shared "custom index name" option, used by Standard and Wildcard forms.
+    // The input is revealed only while the option is on.
+    const nameOption = (
+        <OptionRow
+            label={l10n.t('Name - use a custom index name')}
+            checked={nameEnabled}
+            disabled={interactionDisabled}
+            onToggle={(checked) => setForm((prev) => ({ ...prev, nameEnabled: checked }))}
+        >
+            {nameEnabled && (
+                <Field>
+                    <Input
+                        value={name}
+                        disabled={interactionDisabled}
+                        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                    />
+                </Field>
+            )}
+        </OptionRow>
+    );
+
+    // Shared entry to the pushed Advanced sub-page (partial filter + collation).
+    const advancedEntry = (
+        <button
+            type="button"
+            className="advancedEntry"
+            disabled={interactionDisabled}
+            onClick={() => setPage('advanced')}
+        >
+            <SettingsRegular className="advancedEntryIcon" />
+            <span className="advancedEntryText">
+                <span className="advancedEntryTitle">{l10n.t('Advanced settings')}</span>
+                <span className="advancedEntrySub">
+                    {advancedSummary !== '' ? advancedSummary : l10n.t('Partial filter expression, custom collation')}
+                </span>
+            </span>
+            {advancedHasContent ? (
+                <span className="advancedEntryBadge advancedEntryBadgeSet">
+                    <CheckmarkCircleRegular />
+                    {l10n.t('Configured')}
+                </span>
+            ) : null}
+            <ChevronRightRegular className="advancedEntryChevron" />
+        </button>
+    );
+
+    // Shared entry to the pushed JSON preview sub-page.
+    const previewEntry = (
+        <button
+            type="button"
+            className="advancedEntry"
+            disabled={interactionDisabled}
+            onClick={() => setPage('preview')}
+        >
+            <BracesRegular className="advancedEntryIcon" />
+            <span className="advancedEntryText">
+                <span className="advancedEntryTitle">{l10n.t('Preview as JSON')}</span>
+                <span className="advancedEntrySub">
+                    {l10n.t('Review the generated index specification before creating it.')}
+                </span>
+            </span>
+            <ChevronRightRegular className="advancedEntryChevron" />
+        </button>
+    );
+
     // Header quick actions: Back is present only on the advanced sub-page; Hide
     // (collapse) is always available since the drawer preserves its state.
     const headerActions = (
         <div className="drawerHeaderActions">
-            {page === 'advanced' && (
+            {page !== 'main' && (
                 <Tooltip content={l10n.t('Back')} relationship="label" withArrow>
                     <Button
                         appearance="subtle"
@@ -523,7 +674,11 @@ export const CreateIndexDrawer = ({
         >
             <DrawerHeader>
                 <DrawerHeaderTitle action={headerActions}>
-                    {page === 'advanced' ? l10n.t('Advanced settings') : l10n.t('Create Index')}
+                    {page === 'advanced'
+                        ? l10n.t('Advanced settings')
+                        : page === 'preview'
+                          ? l10n.t('JSON preview')
+                          : l10n.t('Create Index')}
                 </DrawerHeaderTitle>
             </DrawerHeader>
 
@@ -539,331 +694,424 @@ export const CreateIndexDrawer = ({
                             </MessageBar>
                         )}
 
-                        <DrawerSection
-                            title={l10n.t('Index fields')}
-                            hint={
-                                wildcardEnabled
-                                    ? l10n.t('The wildcard key is generated from the scope in Advanced settings.')
-                                    : l10n.t(
-                                          'Select the field(s) to index and a type for each. Add more fields to build a compound index.',
-                                      )
-                            }
+                        <TabList
+                            aria-label={l10n.t('Index kind')}
+                            className="indexKindTabs"
+                            selectedValue={indexKind}
+                            onTabSelect={(_event, data) => {
+                                const kind = data.value;
+                                if (kind === 'standard' || kind === 'wildcard' || kind === 'vector') {
+                                    setIndexKind(kind);
+                                }
+                            }}
                         >
-                            <div className="indexFieldsList">
-                                {fields.map((draft) => (
-                                    <div key={draft.id} className="fieldRow">
-                                        {wildcardEnabled ? (
-                                            <Input
-                                                className="fieldGrow generatedWildcardKey"
-                                                value={draft.field}
-                                                readOnly
-                                                disabled={interactionDisabled}
-                                                aria-label={l10n.t('Generated wildcard index key')}
-                                            />
-                                        ) : (
-                                            <FieldNameCombobox
-                                                value={draft.field}
-                                                suggestions={fieldSuggestions}
-                                                disabled={interactionDisabled}
-                                                onChange={(v) => updateField(draft.id, { field: v })}
-                                            />
-                                        )}
-                                        <Dropdown
-                                            className="fieldType"
-                                            selectedOptions={[draft.type]}
-                                            value={typeLabels.find((t) => t.value === draft.type)?.label ?? ''}
-                                            disabled={wildcardEnabled || interactionDisabled}
-                                            onOptionSelect={(_, data) => {
-                                                if (data.optionValue) {
-                                                    updateField(draft.id, {
-                                                        type: data.optionValue as FieldIndexType,
-                                                    });
-                                                }
-                                            }}
-                                            aria-label={l10n.t('Field type')}
-                                        >
-                                            {typeLabels.map((t) => (
-                                                <Option key={t.value} value={t.value}>
-                                                    {t.label}
-                                                </Option>
-                                            ))}
-                                        </Dropdown>
-                                        {/*
-                                         * With a single field there is nothing to
-                                         * delete, so offer a "clear" affordance to
-                                         * reset that lone row instead of a disabled
-                                         * delete button. Once a second field exists,
-                                         * every row (including the first) can be
-                                         * deleted, so show the delete button.
-                                         */}
-                                        {fields.length <= 1 ? (
-                                            <Tooltip
-                                                content={
-                                                    wildcardEnabled
-                                                        ? l10n.t('The wildcard key is generated from its scope.')
-                                                        : l10n.t('Clear field')
-                                                }
-                                                relationship="description"
-                                                withArrow
-                                            >
-                                                <Button
-                                                    appearance="subtle"
-                                                    size="small"
-                                                    icon={<ArrowResetRegular />}
-                                                    aria-label={l10n.t('Clear field')}
-                                                    disabled={wildcardEnabled || interactionDisabled}
-                                                    onClick={() => clearField(draft.id)}
-                                                />
-                                            </Tooltip>
-                                        ) : (
-                                            <Tooltip
-                                                content={l10n.t('Remove field')}
-                                                relationship="description"
-                                                withArrow
-                                            >
-                                                <Button
-                                                    appearance="subtle"
-                                                    size="small"
-                                                    icon={<DeleteRegular />}
-                                                    aria-label={l10n.t('Remove field')}
-                                                    disabled={wildcardEnabled || interactionDisabled}
-                                                    onClick={() => removeField(draft.id)}
-                                                />
-                                            </Tooltip>
-                                        )}
-                                    </div>
-                                ))}
-                            </div>
-                            <div>
-                                <Button
-                                    appearance="subtle"
-                                    size="small"
-                                    icon={<AddRegular />}
-                                    disabled={wildcardEnabled || interactionDisabled}
-                                    onClick={addField}
-                                >
-                                    {l10n.t('Add field (compound)')}
-                                </Button>
-                            </div>
-                        </DrawerSection>
+                            <Tab value="standard">{l10n.t('Standard')}</Tab>
+                            <Tab value="wildcard">{l10n.t('Wildcard')}</Tab>
+                            <Tab value="vector">{l10n.t('Vector')}</Tab>
+                        </TabList>
 
-                        <DrawerSection
-                            title={l10n.t('Options')}
-                            hint={l10n.t('Index-level properties applied to the whole index.')}
-                        >
-                            <div className="typeOptions">
-                                <OptionRow
-                                    label={l10n.t('Unique - rejects duplicate values')}
-                                    checked={unique && !wildcardEnabled}
-                                    disabled={wildcardEnabled || interactionDisabled}
-                                    disabledReason={
-                                        wildcardEnabled
-                                            ? l10n.t('Unique is not available for wildcard indexes.')
-                                            : undefined
-                                    }
-                                    onToggle={(checked) => setForm((prev) => ({ ...prev, unique: checked }))}
-                                />
-                                <OptionRow
-                                    label={l10n.t('Sparse - only indexes documents that contain the field')}
-                                    checked={sparse && !sparseDisabled}
-                                    disabled={sparseDisabled || interactionDisabled}
-                                    disabledReason={
-                                        wildcardEnabled
-                                            ? l10n.t('Sparse is not available for wildcard indexes.')
-                                            : l10n.t(
-                                                  'Sparse is not available together with a partial filter expression.',
-                                              )
-                                    }
-                                    onToggle={(checked) => setForm((prev) => ({ ...prev, sparse: checked }))}
-                                />
-                                <OptionRow
-                                    label={l10n.t('TTL - auto-deletes documents after a set age')}
-                                    checked={ttlActive}
-                                    disabled={wildcardEnabled || !isSingleBTree || interactionDisabled}
-                                    disabledReason={
-                                        wildcardEnabled
-                                            ? l10n.t('TTL is not available for wildcard indexes.')
-                                            : l10n.t('TTL requires a single ascending or descending field.')
-                                    }
-                                    onToggle={(checked) => setForm((prev) => ({ ...prev, ttlEnabled: checked }))}
-                                >
-                                    {ttlActive && (
-                                        <Field
-                                            label={l10n.t('Expire after (seconds)')}
-                                            required
-                                            validationState={ttlNumberValid ? 'none' : 'error'}
-                                            validationMessage={
-                                                ttlNumberValid
-                                                    ? undefined
-                                                    : l10n.t('Enter a positive whole number using digits only.')
-                                            }
-                                        >
-                                            <Input
-                                                type="number"
-                                                min={1}
-                                                value={ttlSeconds}
-                                                disabled={interactionDisabled}
-                                                onChange={(e) =>
-                                                    setForm((prev) => ({
-                                                        ...prev,
-                                                        ttlSeconds: e.target.value,
-                                                        ttlConfigured: true,
-                                                    }))
-                                                }
-                                            />
-                                        </Field>
+                        {indexKind === 'standard' && (
+                            <>
+                                <DrawerSection
+                                    title={l10n.t('Index fields')}
+                                    hint={l10n.t(
+                                        'Select the field(s) to index and a type for each. Add more fields to build a compound index.',
                                     )}
-                                </OptionRow>
-                                <OptionRow
-                                    label={l10n.t('Name - use a custom index name')}
-                                    checked={nameEnabled}
-                                    disabled={interactionDisabled}
-                                    onToggle={(checked) => setForm((prev) => ({ ...prev, nameEnabled: checked }))}
                                 >
-                                    {nameEnabled && (
-                                        <Field>
-                                            <Input
-                                                value={name}
-                                                placeholder={l10n.t('Index name')}
-                                                disabled={interactionDisabled}
-                                                onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
-                                            />
-                                        </Field>
-                                    )}
-                                </OptionRow>
-                            </div>
-                        </DrawerSection>
-
-                        <button
-                            type="button"
-                            className="advancedEntry"
-                            disabled={interactionDisabled}
-                            onClick={() => setPage('advanced')}
-                        >
-                            <SettingsRegular className="advancedEntryIcon" />
-                            <span className="advancedEntryText">
-                                <span className="advancedEntryTitle">{l10n.t('Advanced settings')}</span>
-                                <span className="advancedEntrySub">
-                                    {advancedSummary !== ''
-                                        ? advancedSummary
-                                        : l10n.t('Wildcard index, partial filter expression, custom collation')}
-                                </span>
-                            </span>
-                            {advancedHasContent ? (
-                                <span className="advancedEntryBadge advancedEntryBadgeSet">
-                                    <CheckmarkCircleRegular />
-                                    {l10n.t('Configured')}
-                                </span>
-                            ) : null}
-                            <ChevronRightRegular className="advancedEntryChevron" />
-                        </button>
-                    </div>
-                ) : (
-                    <div className="createIndexForm">
-                        <DrawerSection
-                            title={l10n.t('Wildcard index')}
-                            hint={l10n.t(
-                                'Create one ascending wildcard key for all fields or for fields below a parent path.',
-                            )}
-                            example={'$**  ·  metadata.$**'}
-                        >
-                            <div className="typeOptions wildcardOptions">
-                                <OptionRow
-                                    label={l10n.t('Wildcard index')}
-                                    checked={wildcardEnabled}
-                                    disabled={interactionDisabled}
-                                    disabledReason={
-                                        wildcardConfirmationPending
-                                            ? l10n.t('Waiting for confirmation in VS Code.')
-                                            : undefined
-                                    }
-                                    onToggle={(checked) => void handleWildcardToggle(checked)}
-                                >
-                                    {wildcardEnabled && (
-                                        <div className="wildcardSettings">
-                                            <Field label={l10n.t('Scope')}>
-                                                <RadioGroup
-                                                    value={wildcardScope}
+                                    <div className="indexFieldsList">
+                                        {fields.map((draft) => (
+                                            <div key={draft.id} className="fieldRow">
+                                                <FieldNameCombobox
+                                                    value={draft.field}
+                                                    suggestions={fieldSuggestions}
                                                     disabled={interactionDisabled}
-                                                    aria-label={l10n.t('Wildcard index scope')}
-                                                    onChange={(_, data) => {
-                                                        const scope = data.value;
-                                                        if (scope === 'all' || scope === 'path') {
-                                                            setForm((prev) => setWildcardScope(prev, scope));
+                                                    onChange={(v) => updateField(draft.id, { field: v })}
+                                                />
+                                                <Dropdown
+                                                    className="fieldType"
+                                                    selectedOptions={[draft.type]}
+                                                    value={typeLabels.find((t) => t.value === draft.type)?.label ?? ''}
+                                                    disabled={interactionDisabled}
+                                                    onOptionSelect={(_, data) => {
+                                                        if (data.optionValue) {
+                                                            updateField(draft.id, {
+                                                                type: data.optionValue as FieldIndexType,
+                                                            });
                                                         }
                                                     }}
+                                                    aria-label={l10n.t('Field type')}
                                                 >
-                                                    <Radio value="all" label={l10n.t('All fields')} />
-                                                    <Radio value="path" label={l10n.t('Fields below a path')} />
-                                                </RadioGroup>
-                                            </Field>
+                                                    {typeLabels.map((t) => (
+                                                        <Option key={t.value} value={t.value}>
+                                                            {t.label}
+                                                        </Option>
+                                                    ))}
+                                                </Dropdown>
+                                                {/*
+                                                 * With a single field there is nothing to delete, so
+                                                 * offer a "clear" affordance to reset that lone row
+                                                 * instead of a disabled delete button. Once a second
+                                                 * field exists, every row can be deleted.
+                                                 */}
+                                                {fields.length <= 1 ? (
+                                                    <Tooltip
+                                                        content={l10n.t('Clear field')}
+                                                        relationship="description"
+                                                        withArrow
+                                                    >
+                                                        <Button
+                                                            appearance="subtle"
+                                                            size="small"
+                                                            icon={<ArrowResetRegular />}
+                                                            aria-label={l10n.t('Clear field')}
+                                                            disabled={interactionDisabled}
+                                                            onClick={() => clearField(draft.id)}
+                                                        />
+                                                    </Tooltip>
+                                                ) : (
+                                                    <Tooltip
+                                                        content={l10n.t('Remove field')}
+                                                        relationship="description"
+                                                        withArrow
+                                                    >
+                                                        <Button
+                                                            appearance="subtle"
+                                                            size="small"
+                                                            icon={<DeleteRegular />}
+                                                            aria-label={l10n.t('Remove field')}
+                                                            disabled={interactionDisabled}
+                                                            onClick={() => removeField(draft.id)}
+                                                        />
+                                                    </Tooltip>
+                                                )}
+                                            </div>
+                                        ))}
+                                    </div>
+                                    <div>
+                                        <Button
+                                            appearance="subtle"
+                                            size="small"
+                                            icon={<AddRegular />}
+                                            disabled={interactionDisabled}
+                                            onClick={addField}
+                                        >
+                                            {l10n.t('Add field (compound)')}
+                                        </Button>
+                                    </div>
+                                </DrawerSection>
 
-                                            {wildcardScope === 'path' && (
+                                <DrawerSection
+                                    title={l10n.t('Options')}
+                                    hint={l10n.t('Index-level properties applied to the whole index.')}
+                                >
+                                    <div className="typeOptions">
+                                        <OptionRow
+                                            label={l10n.t('Unique - rejects duplicate values')}
+                                            checked={unique}
+                                            disabled={interactionDisabled}
+                                            onToggle={(checked) => setForm((prev) => ({ ...prev, unique: checked }))}
+                                        />
+                                        <OptionRow
+                                            label={l10n.t('Sparse - only indexes documents that contain the field')}
+                                            checked={sparse && !sparseDisabled}
+                                            disabled={sparseDisabled || interactionDisabled}
+                                            disabledReason={l10n.t(
+                                                'Sparse is not available together with a partial filter expression.',
+                                            )}
+                                            onToggle={(checked) => setForm((prev) => ({ ...prev, sparse: checked }))}
+                                        />
+                                        <OptionRow
+                                            label={l10n.t('TTL - auto-deletes documents after a set age')}
+                                            checked={ttlActive}
+                                            disabled={!isSingleBTree || interactionDisabled}
+                                            disabledReason={l10n.t(
+                                                'TTL requires a single ascending or descending field.',
+                                            )}
+                                            onToggle={(checked) =>
+                                                setForm((prev) => ({ ...prev, ttlEnabled: checked }))
+                                            }
+                                        >
+                                            {ttlActive && (
                                                 <Field
-                                                    label={l10n.t('Parent path')}
+                                                    label={l10n.t('Expire after (seconds)')}
                                                     required
-                                                    validationState={wildcardPathValid ? 'none' : 'error'}
+                                                    validationState={ttlNumberValid ? 'none' : 'error'}
                                                     validationMessage={
-                                                        wildcardPath.includes('$**')
-                                                            ? l10n.t(
-                                                                  'Enter a parent path without $**. It is added automatically.',
-                                                              )
-                                                            : l10n.t('Enter a non-empty parent path.')
+                                                        ttlNumberValid
+                                                            ? undefined
+                                                            : l10n.t('Enter a positive whole number using digits only.')
                                                     }
-                                                    hint={l10n.t('For example, metadata creates metadata.$**.')}
                                                 >
                                                     <Input
-                                                        value={wildcardPath}
+                                                        type="number"
+                                                        min={1}
+                                                        value={ttlSeconds}
                                                         disabled={interactionDisabled}
-                                                        placeholder={l10n.t('metadata')}
-                                                        aria-label={l10n.t('Wildcard parent path')}
-                                                        onChange={(event) =>
-                                                            setForm((prev) => setWildcardPath(prev, event.target.value))
+                                                        onChange={(e) =>
+                                                            setForm((prev) => ({
+                                                                ...prev,
+                                                                ttlSeconds: e.target.value,
+                                                                ttlConfigured: true,
+                                                            }))
                                                         }
-                                                        onBlur={() => {
-                                                            if (!wildcardPath.includes('$**')) {
-                                                                setForm((prev) =>
-                                                                    setWildcardPath(
-                                                                        prev,
-                                                                        normalizeWildcardParentPath(prev.wildcardPath),
-                                                                    ),
-                                                                );
-                                                            }
-                                                        }}
                                                     />
                                                 </Field>
                                             )}
+                                        </OptionRow>
+                                        {nameOption}
+                                    </div>
+                                </DrawerSection>
 
-                                            <div className="wildcardProjectionField">
-                                                <div className="wildcardProjectionLabel">
-                                                    {l10n.t('Wildcard projection (optional)')}
-                                                </div>
-                                                <div className="optionDescription">
-                                                    {l10n.t(
-                                                        'Limit which fields the wildcard index includes. Enter a JSON object.',
-                                                    )}
-                                                </div>
-                                                <code className="drawerSectionExample">
-                                                    {"{ name: 1, 'metadata.category': 1 }"}
-                                                </code>
-                                                <JsonInputEditor
-                                                    value={wildcardProjectionText}
-                                                    readOnly={interactionDisabled}
-                                                    onChange={(value) =>
-                                                        setForm((prev) => ({
-                                                            ...prev,
-                                                            wildcardProjectionText: value,
-                                                        }))
-                                                    }
-                                                    ariaLabel={l10n.t('Wildcard projection: enter a JSON object')}
-                                                />
-                                            </div>
-                                        </div>
+                                {advancedEntry}
+                                {previewEntry}
+                            </>
+                        )}
+
+                        {indexKind === 'wildcard' && (
+                            <>
+                                <DrawerSection
+                                    title={l10n.t('Scope')}
+                                    hint={l10n.t(
+                                        'Create one ascending wildcard key for all fields or for fields below a parent path.',
                                     )}
-                                </OptionRow>
-                            </div>
-                        </DrawerSection>
+                                >
+                                    <div className="wildcardSettings">
+                                        <RadioGroup
+                                            value={wildcardScope}
+                                            disabled={interactionDisabled}
+                                            aria-label={l10n.t('Wildcard index scope')}
+                                            onChange={(_, data) => {
+                                                const scope = data.value;
+                                                if (scope === 'all' || scope === 'path') {
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        wildcardScope: scope as WildcardScope,
+                                                    }));
+                                                }
+                                            }}
+                                        >
+                                            <Radio value="all" label={l10n.t('All fields')} />
+                                            <Radio value="path" label={l10n.t('Fields below a path')} />
+                                        </RadioGroup>
 
+                                        {/*
+                                         * The parent path stays mounted for both scopes — it is only
+                                         * disabled for "All fields" — so switching scope never shifts
+                                         * the layout. Validation applies only while the path scope is
+                                         * active.
+                                         */}
+                                        <Field
+                                            className="wildcardScopedPath"
+                                            label={l10n.t('Parent path')}
+                                            validationState={
+                                                wildcardScope === 'path' && wildcardPath.includes('$**')
+                                                    ? 'error'
+                                                    : 'none'
+                                            }
+                                            validationMessage={
+                                                wildcardScope === 'path' && wildcardPath.includes('$**')
+                                                    ? l10n.t(
+                                                          'Enter a parent path without $**. It is added automatically.',
+                                                      )
+                                                    : undefined
+                                            }
+                                            hint={l10n.t(
+                                                'For example, metadata creates metadata.$**. Leave empty to index all fields.',
+                                            )}
+                                        >
+                                            <div className="fieldRow">
+                                                <FieldNameCombobox
+                                                    value={wildcardPath}
+                                                    suggestions={fieldSuggestions}
+                                                    disabled={wildcardScope !== 'path' || interactionDisabled}
+                                                    onChange={(value) =>
+                                                        setForm((prev) => ({ ...prev, wildcardPath: value }))
+                                                    }
+                                                />
+                                                <Tooltip
+                                                    content={l10n.t('Clear parent path')}
+                                                    relationship="description"
+                                                    withArrow
+                                                >
+                                                    <Button
+                                                        appearance="subtle"
+                                                        size="small"
+                                                        icon={<ArrowResetRegular />}
+                                                        aria-label={l10n.t('Clear parent path')}
+                                                        disabled={wildcardScope !== 'path' || interactionDisabled}
+                                                        onClick={() =>
+                                                            setForm((prev) => ({ ...prev, wildcardPath: '' }))
+                                                        }
+                                                    />
+                                                </Tooltip>
+                                            </div>
+                                        </Field>
+
+                                        {wildcardKeyPreview !== '' && (
+                                            <div className="wildcardKeyPreview">
+                                                <span className="wildcardKeyPreviewLabel">
+                                                    {l10n.t('Index key preview')}
+                                                </span>
+                                                <code className="drawerSectionExample">{wildcardKeyPreview}</code>
+                                            </div>
+                                        )}
+                                    </div>
+                                </DrawerSection>
+
+                                {/*
+                                 * A wildcard projection is only accepted on the all-fields `$**`
+                                 * key. A scoped `path.$**` key already narrows the index, so the
+                                 * projection controls are only offered for the "All fields" scope.
+                                 */}
+                                {wildcardScope === 'all' && (
+                                    <DrawerSection
+                                        title={l10n.t('Projection')}
+                                        hint={l10n.t(
+                                            'Optionally limit which fields the wildcard index covers by including or excluding specific field paths.',
+                                        )}
+                                    >
+                                        <div className="typeOptions">
+                                            <OptionRow
+                                                label={l10n.t('Include or exclude specific fields')}
+                                                checked={wildcardProjectionEnabled}
+                                                disabled={interactionDisabled}
+                                                onToggle={(checked) =>
+                                                    setForm((prev) => ({ ...prev, wildcardProjectionEnabled: checked }))
+                                                }
+                                            >
+                                                {wildcardProjectionEnabled && (
+                                                    <div className="wildcardProjectionBody">
+                                                        <Field label={l10n.t('Projection mode')}>
+                                                            <RadioGroup
+                                                                value={wildcardProjectionMode}
+                                                                disabled={interactionDisabled}
+                                                                aria-label={l10n.t('Wildcard projection mode')}
+                                                                onChange={(_, data) => {
+                                                                    const mode = data.value;
+                                                                    if (mode === 'include' || mode === 'exclude') {
+                                                                        setForm((prev) => ({
+                                                                            ...prev,
+                                                                            wildcardProjectionMode:
+                                                                                mode as WildcardProjectionMode,
+                                                                        }));
+                                                                    }
+                                                                }}
+                                                            >
+                                                                <Radio
+                                                                    value="include"
+                                                                    label={l10n.t('Include selected fields')}
+                                                                />
+                                                                <Radio
+                                                                    value="exclude"
+                                                                    label={l10n.t('Exclude selected fields')}
+                                                                />
+                                                            </RadioGroup>
+                                                        </Field>
+
+                                                        <Field label={l10n.t('Fields')}>
+                                                            <div className="projectionFieldsList">
+                                                                {wildcardProjectionFields.map((draft) => (
+                                                                    <div key={draft.id} className="projectionFieldRow">
+                                                                        <FieldNameCombobox
+                                                                            value={draft.field}
+                                                                            suggestions={fieldSuggestions}
+                                                                            disabled={interactionDisabled}
+                                                                            onChange={(value) =>
+                                                                                updateProjectionField(draft.id, value)
+                                                                            }
+                                                                        />
+                                                                        {/*
+                                                                         * With a single projection field there is
+                                                                         * nothing to delete, so offer a "clear"
+                                                                         * affordance to reset that lone row instead
+                                                                         * of a disabled delete button — matching the
+                                                                         * standard index field list.
+                                                                         */}
+                                                                        {wildcardProjectionFields.length <= 1 ? (
+                                                                            <Tooltip
+                                                                                content={l10n.t('Clear field')}
+                                                                                relationship="description"
+                                                                                withArrow
+                                                                            >
+                                                                                <Button
+                                                                                    appearance="subtle"
+                                                                                    size="small"
+                                                                                    icon={<ArrowResetRegular />}
+                                                                                    aria-label={l10n.t('Clear field')}
+                                                                                    disabled={interactionDisabled}
+                                                                                    onClick={() =>
+                                                                                        clearProjectionField(draft.id)
+                                                                                    }
+                                                                                />
+                                                                            </Tooltip>
+                                                                        ) : (
+                                                                            <Tooltip
+                                                                                content={l10n.t('Remove field')}
+                                                                                relationship="description"
+                                                                                withArrow
+                                                                            >
+                                                                                <Button
+                                                                                    appearance="subtle"
+                                                                                    size="small"
+                                                                                    icon={<DeleteRegular />}
+                                                                                    aria-label={l10n.t('Remove field')}
+                                                                                    disabled={interactionDisabled}
+                                                                                    onClick={() =>
+                                                                                        removeProjectionField(draft.id)
+                                                                                    }
+                                                                                />
+                                                                            </Tooltip>
+                                                                        )}
+                                                                    </div>
+                                                                ))}
+                                                            </div>
+                                                        </Field>
+                                                        <div>
+                                                            <Button
+                                                                appearance="subtle"
+                                                                size="small"
+                                                                icon={<AddRegular />}
+                                                                disabled={interactionDisabled}
+                                                                onClick={addProjectionField}
+                                                            >
+                                                                {l10n.t('Add field')}
+                                                            </Button>
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </OptionRow>
+                                        </div>
+                                    </DrawerSection>
+                                )}
+
+                                <DrawerSection
+                                    title={l10n.t('Options')}
+                                    hint={l10n.t('Index-level properties applied to the whole index.')}
+                                >
+                                    <div className="typeOptions">{nameOption}</div>
+                                </DrawerSection>
+
+                                {advancedEntry}
+                                {previewEntry}
+                            </>
+                        )}
+
+                        {indexKind === 'vector' && (
+                            <DrawerSection
+                                title={l10n.t('Vector index')}
+                                hint={l10n.t('Similarity search over vector embeddings.')}
+                            >
+                                <MessageBar intent="info">
+                                    <MessageBarBody>
+                                        <MessageBarTitle>{l10n.t('Not yet available')}</MessageBarTitle>
+                                        {l10n.t('Vector index creation will be added in a future update.')}
+                                    </MessageBarBody>
+                                </MessageBar>
+                            </DrawerSection>
+                        )}
+                    </div>
+                ) : page === 'advanced' ? (
+                    <div className="createIndexForm">
                         <DrawerSection
                             title={l10n.t('Partial filter expression')}
                             hint={l10n.t('Only index documents that match this filter. Enter a JSON object.')}
@@ -890,11 +1138,26 @@ export const CreateIndexDrawer = ({
                             />
                         </DrawerSection>
                     </div>
+                ) : (
+                    <div className="createIndexForm previewForm">
+                        <DrawerSection
+                            title={l10n.t('Index specification')}
+                            hint={l10n.t('This is the specification that will be passed to createIndex().')}
+                        >
+                            <JsonInputEditor
+                                value={buildPreviewText()}
+                                readOnly
+                                fill
+                                onChange={() => undefined}
+                                ariaLabel={l10n.t('Index specification preview')}
+                            />
+                        </DrawerSection>
+                    </div>
                 )}
             </DrawerBody>
 
             <div className="createIndexDrawerFooter">
-                {page === 'advanced' ? (
+                {page !== 'main' ? (
                     <Button
                         appearance="secondary"
                         icon={<ArrowLeftRegular />}

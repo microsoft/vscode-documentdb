@@ -4,135 +4,100 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
-    applyConfirmedWildcardTransition,
-    applyWildcardConfirmationResult,
+    buildWildcardKey,
+    buildWildcardProjectionObject,
     createInitialIndexFormState,
-    disableWildcardMode,
-    getEnableWildcardImpact,
-    getWildcardActivationDecision,
-    setWildcardPath,
-    setWildcardScope,
+    isBlankIndexOption,
+    isWildcardParentPathValid,
+    normalizeWildcardParentPath,
 } from './wildcardIndexForm';
 
 const createFieldId = (): string => 'test-field';
 
-describe('wildcard index form transitions', () => {
-    it('enables a pristine form without confirmation', () => {
-        expect(getWildcardActivationDecision(createInitialIndexFormState(createFieldId), false)).toBe('enable');
-    });
-
-    it('requires confirmation for selected ordinary fields', () => {
+describe('create index form state', () => {
+    it('starts in the standard kind with pristine per-mode drafts', () => {
         const state = createInitialIndexFormState(createFieldId);
-        state.fields = [{ id: 'name', field: 'name', type: 'desc' }];
-        expect(getWildcardActivationDecision(state, false)).toBe('confirm');
-    });
-
-    it.each(['unique', 'sparse', 'ttlEnabled', 'ttlConfigured'] as const)(
-        'requires confirmation when %s is set',
-        (option) => {
-            const state = { ...createInitialIndexFormState(createFieldId), [option]: true };
-            expect(getWildcardActivationDecision(state, false)).toBe('confirm');
-        },
-    );
-
-    it('computes the exact destructive and retained impact', () => {
-        const state = {
-            ...createInitialIndexFormState(createFieldId),
-            fields: [
-                { id: 'name', field: 'name', type: 'asc' as const },
-                { id: 'category', field: 'metadata.category', type: 'text' as const },
-            ],
-            unique: true,
-            sparse: true,
-            ttlConfigured: true,
-            name: 'custom_name',
-            nameEnabled: true,
-            partialText: '{ active: true }',
-            collationText: "{ locale: 'en' }",
-        };
-
-        expect(getEnableWildcardImpact(state)).toEqual({
-            fields: [
-                { field: 'name', type: 'asc' },
-                { field: 'metadata.category', type: 'text' },
-            ],
-            clearUnique: true,
-            clearSparse: true,
-            clearTtl: true,
-            retainName: true,
-            retainPartialFilter: true,
-            retainCollation: true,
-        });
-    });
-
-    it('preserves the complete original state on cancellation', () => {
-        const state = {
-            ...createInitialIndexFormState(createFieldId),
-            fields: [{ id: 'name', field: 'name', type: 'desc' as const }],
-            unique: true,
-            name: 'custom_name',
-        };
-        expect(applyWildcardConfirmationResult(state, false, createFieldId)).toBe(state);
-    });
-
-    it('replaces fields and clears only incompatible settings on confirmation', () => {
-        const state = {
-            ...createInitialIndexFormState(createFieldId),
-            fields: [{ id: 'name', field: 'name', type: 'desc' as const }],
-            unique: true,
-            sparse: true,
-            ttlEnabled: true,
-            ttlSeconds: '60',
-            ttlConfigured: true,
-            name: 'custom_name',
-            nameEnabled: true,
-            partialText: '{ active: true }',
-            collationText: "{ locale: 'en' }",
-        };
-
-        const result = applyConfirmedWildcardTransition(state, createFieldId);
-
-        expect(result.fields).toEqual([{ id: 'test-field', field: '$**', type: 'asc' }]);
-        expect(result).toMatchObject({
+        expect(state).toMatchObject({
+            indexKind: 'standard',
             unique: false,
             sparse: false,
             ttlEnabled: false,
             ttlSeconds: '3600',
-            ttlConfigured: false,
-            wildcardEnabled: true,
-            name: 'custom_name',
-            nameEnabled: true,
-            partialText: '{ active: true }',
-            collationText: "{ locale: 'en' }",
-        });
-    });
-
-    it('normalizes a scoped parent path into one generated key', () => {
-        let state = createInitialIndexFormState(createFieldId);
-        state = applyConfirmedWildcardTransition(state, createFieldId);
-        state = setWildcardScope(state, 'path');
-        state = setWildcardPath(state, ' metadata.. ');
-        expect(state.fields[0].field).toBe('metadata.$**');
-    });
-
-    it('returns to one blank ascending field when wildcard mode is disabled', () => {
-        const enabled = applyConfirmedWildcardTransition(createInitialIndexFormState(createFieldId), createFieldId);
-        expect(disableWildcardMode(enabled, createFieldId).fields).toEqual([
-            { id: 'test-field', field: '', type: 'asc' },
-        ]);
-    });
-
-    it('resets all wildcard state', () => {
-        const reset = createInitialIndexFormState(createFieldId);
-        expect(reset).toMatchObject({
-            wildcardEnabled: false,
+            nameEnabled: false,
+            partialText: '{  }',
+            collationText: '{  }',
             wildcardScope: 'all',
             wildcardPath: '',
-            wildcardProjectionText: '{  }',
+            wildcardProjectionEnabled: false,
+            wildcardProjectionMode: 'include',
         });
+        expect(state.fields).toEqual([{ id: 'test-field', field: '', type: 'asc' }]);
+        expect(state.wildcardProjectionFields).toEqual([{ id: 'test-field', field: '' }]);
+    });
+});
+
+describe('blank option detection', () => {
+    it.each(['', '   ', '{}', '{  }', '{\n}'])('treats "%s" as blank', (text) => {
+        expect(isBlankIndexOption(text)).toBe(true);
     });
 
-    it('blocks repeated activation while confirmation is pending', () => {
-        expect(getWildcardActivationDecision(createInitialIndexFormState(createFieldId), true)).toBe('blocked');
+    it.each(['{ a: 1 }', '{"a":1}'])('treats "%s" as configured', (text) => {
+        expect(isBlankIndexOption(text)).toBe(false);
+    });
+});
+
+describe('wildcard parent path', () => {
+    it('normalizes stray dots and whitespace', () => {
+        expect(normalizeWildcardParentPath(' metadata.. ')).toBe('metadata');
+        expect(normalizeWildcardParentPath('a. b .c')).toBe('a.b.c');
+    });
+
+    it('accepts an empty path (treated as all fields)', () => {
+        expect(isWildcardParentPathValid('')).toBe(true);
+        expect(isWildcardParentPathValid('   ')).toBe(true);
+    });
+
+    it('accepts an ordinary path', () => {
+        expect(isWildcardParentPathValid('metadata')).toBe(true);
+    });
+
+    it('rejects a path that already contains the wildcard token', () => {
+        expect(isWildcardParentPathValid('metadata.$**')).toBe(false);
+    });
+});
+
+describe('wildcard key generation', () => {
+    it('uses $** for the all-fields scope', () => {
+        expect(buildWildcardKey('all', 'ignored')).toBe('$**');
+    });
+
+    it('appends $** to a normalized scoped path', () => {
+        expect(buildWildcardKey('path', ' metadata.. ')).toBe('metadata.$**');
+    });
+
+    it('collapses an empty scoped path to the all-fields key', () => {
+        expect(buildWildcardKey('path', '')).toBe('$**');
+        expect(buildWildcardKey('path', '   ')).toBe('$**');
+    });
+});
+
+describe('wildcard projection serialization', () => {
+    it('maps included fields to 1 and skips blank rows', () => {
+        expect(
+            buildWildcardProjectionObject('include', [
+                { id: 'a', field: 'name' },
+                { id: 'b', field: '  ' },
+                { id: 'c', field: 'metadata.category' },
+            ]),
+        ).toEqual({ name: 1, 'metadata.category': 1 });
+    });
+
+    it('maps excluded fields to 0', () => {
+        expect(buildWildcardProjectionObject('exclude', [{ id: 'a', field: 'secret' }])).toEqual({ secret: 0 });
+    });
+
+    it('returns undefined when no field carries a value', () => {
+        expect(buildWildcardProjectionObject('include', [{ id: 'a', field: '   ' }])).toBeUndefined();
+        expect(buildWildcardProjectionObject('include', [])).toBeUndefined();
     });
 });

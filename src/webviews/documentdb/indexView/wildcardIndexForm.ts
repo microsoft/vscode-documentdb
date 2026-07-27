@@ -3,10 +3,20 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type EnableWildcardIndexConfirmationDetails, type FieldIndexType } from './types';
+import { type FieldIndexType } from './types';
+
+/**
+ * The three mutually-exclusive index creation modes surfaced as tabs at the top
+ * of the Create Index drawer. Each mode keeps its own draft in
+ * {@link CreateIndexFormState} so switching between them never destroys the work
+ * configured for another mode.
+ */
+export type IndexKind = 'standard' | 'wildcard' | 'vector';
 
 export type WildcardScope = 'all' | 'path';
-export type WildcardActivationDecision = 'enable' | 'confirm' | 'blocked';
+
+/** Whether the wildcard projection lists fields to include or to exclude. */
+export type WildcardProjectionMode = 'include' | 'exclude';
 
 export interface IndexFieldDraft {
     id: string;
@@ -14,21 +24,39 @@ export interface IndexFieldDraft {
     type: FieldIndexType;
 }
 
+/** One editable row in the wildcard-projection field list. */
+export interface ProjectionFieldDraft {
+    id: string;
+    field: string;
+}
+
 export interface CreateIndexFormState {
+    /** Active creation mode; the per-mode drafts below are all preserved. */
+    indexKind: IndexKind;
+
+    // --- Standard mode draft ------------------------------------------------
     fields: IndexFieldDraft[];
-    name: string;
-    nameEnabled: boolean;
     unique: boolean;
     sparse: boolean;
     ttlEnabled: boolean;
     ttlSeconds: string;
     ttlConfigured: boolean;
+
+    // --- Shared by Standard and Wildcard ------------------------------------
+    name: string;
+    nameEnabled: boolean;
     partialText: string;
     collationText: string;
-    wildcardEnabled: boolean;
+
+    // --- Wildcard mode draft ------------------------------------------------
     wildcardScope: WildcardScope;
     wildcardPath: string;
-    wildcardProjectionText: string;
+    /** Whether the wildcard projection is configured (fields list below applies). */
+    wildcardProjectionEnabled: boolean;
+    /** Include-vs-exclude semantics for the listed projection fields. */
+    wildcardProjectionMode: WildcardProjectionMode;
+    /** Field paths the projection includes or excludes. */
+    wildcardProjectionFields: ProjectionFieldDraft[];
 }
 
 export type FieldIdFactory = () => string;
@@ -37,26 +65,38 @@ export function makeIndexFieldId(): string {
     return `field-${Math.random().toString(36).slice(2, 10)}`;
 }
 
+/** Stable id factory for a wildcard-projection field row. */
+export function makeProjectionFieldId(): string {
+    return `projection-${Math.random().toString(36).slice(2, 10)}`;
+}
+
 function blankField(createFieldId: FieldIdFactory): IndexFieldDraft {
     return { id: createFieldId(), field: '', type: 'asc' };
 }
 
+/** A single blank projection row so the list is never empty when first shown. */
+function blankProjectionField(createFieldId: FieldIdFactory): ProjectionFieldDraft {
+    return { id: createFieldId(), field: '' };
+}
+
 export function createInitialIndexFormState(createFieldId: FieldIdFactory = makeIndexFieldId): CreateIndexFormState {
     return {
+        indexKind: 'standard',
         fields: [blankField(createFieldId)],
-        name: '',
-        nameEnabled: false,
         unique: false,
         sparse: false,
         ttlEnabled: false,
         ttlSeconds: '3600',
         ttlConfigured: false,
+        name: '',
+        nameEnabled: false,
         partialText: '{  }',
         collationText: '{  }',
-        wildcardEnabled: false,
         wildcardScope: 'all',
         wildcardPath: '',
-        wildcardProjectionText: '{  }',
+        wildcardProjectionEnabled: false,
+        wildcardProjectionMode: 'include',
+        wildcardProjectionFields: [blankProjectionField(createFieldId)],
     };
 }
 
@@ -76,98 +116,46 @@ export function normalizeWildcardParentPath(path: string): string {
         .join('.');
 }
 
+/**
+ * A parent path is acceptable as long as it does not itself contain the wildcard
+ * token (`$**` is appended automatically). An empty path is allowed: it is
+ * treated as the all-fields wildcard, so the field never shows an error for
+ * empty input — validation of the final key happens at submit time.
+ */
 export function isWildcardParentPathValid(path: string): boolean {
-    return normalizeWildcardParentPath(path).length > 0 && !path.includes('$**');
+    return !path.includes('$**');
 }
 
-/** Produce the generated ascending wildcard key owned by the UI. */
+/**
+ * Produce the generated ascending wildcard key. An empty (or whitespace-only)
+ * parent path collapses to the all-fields `$**` key, so a blank path behaves
+ * exactly like selecting "All fields".
+ */
 export function buildWildcardKey(scope: WildcardScope, path: string): string {
-    if (scope === 'all' || !isWildcardParentPathValid(path)) {
+    if (scope === 'all') {
         return '$**';
     }
-    return `${normalizeWildcardParentPath(path)}.$**`;
+    const normalized = normalizeWildcardParentPath(path);
+    return normalized === '' ? '$**' : `${normalized}.$**`;
 }
 
-export function getEnableWildcardImpact(state: CreateIndexFormState): EnableWildcardIndexConfirmationDetails {
-    return {
-        fields: state.fields
-            .filter((entry) => entry.field.trim().length > 0)
-            .map((entry) => ({ field: entry.field.trim(), type: entry.type })),
-        clearUnique: state.unique,
-        clearSparse: state.sparse,
-        clearTtl: state.ttlEnabled || state.ttlConfigured,
-        retainName: state.nameEnabled && state.name.trim().length > 0,
-        retainPartialFilter: !isBlankIndexOption(state.partialText),
-        retainCollation: !isBlankIndexOption(state.collationText),
-    };
-}
-
-export function requiresEnableWildcardConfirmation(details: EnableWildcardIndexConfirmationDetails): boolean {
-    return details.fields.length > 0 || details.clearUnique || details.clearSparse || details.clearTtl;
-}
-
-export function getWildcardActivationDecision(
-    state: CreateIndexFormState,
-    confirmationPending: boolean,
-): WildcardActivationDecision {
-    if (confirmationPending) {
-        return 'blocked';
+/**
+ * Serialize the structured wildcard-projection editor into the plain object the
+ * driver expects: each listed field maps to `1` (include) or `0` (exclude).
+ * Blank rows are skipped; the result is `undefined` when nothing meaningful is
+ * configured so callers can treat it exactly like an omitted option.
+ */
+export function buildWildcardProjectionObject(
+    mode: WildcardProjectionMode,
+    fields: ReadonlyArray<ProjectionFieldDraft>,
+): Record<string, 0 | 1> | undefined {
+    const value: 0 | 1 = mode === 'include' ? 1 : 0;
+    const projection: Record<string, 0 | 1> = {};
+    for (const entry of fields) {
+        const name = entry.field.trim();
+        if (name.length > 0) {
+            projection[name] = value;
+        }
     }
-    return requiresEnableWildcardConfirmation(getEnableWildcardImpact(state)) ? 'confirm' : 'enable';
-}
-
-/** Atomically replace ordinary fields and clear only wildcard-incompatible options. */
-export function applyConfirmedWildcardTransition(
-    state: CreateIndexFormState,
-    createFieldId: FieldIdFactory = makeIndexFieldId,
-): CreateIndexFormState {
-    return {
-        ...state,
-        fields: [
-            {
-                id: createFieldId(),
-                field: buildWildcardKey(state.wildcardScope, state.wildcardPath),
-                type: 'asc',
-            },
-        ],
-        unique: false,
-        sparse: false,
-        ttlEnabled: false,
-        ttlSeconds: '3600',
-        ttlConfigured: false,
-        wildcardEnabled: true,
-    };
-}
-
-export function applyWildcardConfirmationResult(
-    state: CreateIndexFormState,
-    confirmed: boolean,
-    createFieldId: FieldIdFactory = makeIndexFieldId,
-): CreateIndexFormState {
-    return confirmed ? applyConfirmedWildcardTransition(state, createFieldId) : state;
-}
-
-export function disableWildcardMode(
-    state: CreateIndexFormState,
-    createFieldId: FieldIdFactory = makeIndexFieldId,
-): CreateIndexFormState {
-    return { ...state, fields: [blankField(createFieldId)], wildcardEnabled: false };
-}
-
-export function setWildcardScope(state: CreateIndexFormState, scope: WildcardScope): CreateIndexFormState {
-    const fields: IndexFieldDraft[] = state.wildcardEnabled
-        ? state.fields.map((field, index) =>
-              index === 0 ? { ...field, field: buildWildcardKey(scope, state.wildcardPath), type: 'asc' } : field,
-          )
-        : state.fields;
-    return { ...state, wildcardScope: scope, fields };
-}
-
-export function setWildcardPath(state: CreateIndexFormState, path: string): CreateIndexFormState {
-    const fields: IndexFieldDraft[] = state.wildcardEnabled
-        ? state.fields.map((field, index) =>
-              index === 0 ? { ...field, field: buildWildcardKey(state.wildcardScope, path), type: 'asc' } : field,
-          )
-        : state.fields;
-    return { ...state, wildcardPath: path, fields };
+    return Object.keys(projection).length > 0 ? projection : undefined;
 }

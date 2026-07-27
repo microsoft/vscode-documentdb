@@ -46,7 +46,6 @@ import { PlaygroundCommandIds } from '../../../documentdb/playground/constants';
 import { SchemaStore } from '../../../documentdb/SchemaStore';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import { meterSilentCatch } from '../../../utils/accumulatingTelemetry';
-import { confirmEnableWildcardIndex } from '../../../utils/dialogs/confirmEnableWildcardIndex';
 import { confirmIndexAction } from '../../../utils/dialogs/confirmIndexAction';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
@@ -64,25 +63,6 @@ export type RouterContext = BaseRouterContext & {
     databaseName: string;
     collectionName: string;
 };
-
-const EnableWildcardIndexConfirmationDetailsSchema = z
-    .object({
-        fields: z.array(
-            z
-                .object({
-                    field: z.string().min(1),
-                    type: z.enum(['asc', 'desc', 'text', '2dsphere', 'hashed']),
-                })
-                .strict(),
-        ),
-        clearUnique: z.boolean(),
-        clearSparse: z.boolean(),
-        clearTtl: z.boolean(),
-        retainName: z.boolean(),
-        retainPartialFilter: z.boolean(),
-        retainCollation: z.boolean(),
-    })
-    .strict();
 
 /** Convert a raw IndexItemModel to the IndexRow shape used by the webview. */
 function toIndexRow(
@@ -244,21 +224,6 @@ export const indexViewRouter = router({
         }
         return Array.from(unique).sort();
     }),
-
-    confirmEnableWildcardIndex: publicProcedureWithTelemetry
-        .input(EnableWildcardIndexConfirmationDetailsSchema)
-        .mutation(async ({ input, ctx }) => {
-            const myCtx = ctx as WithTelemetry<RouterContext>;
-            const confirmed = await confirmEnableWildcardIndex(input);
-
-            myCtx.actionContext.telemetry.measurements.fieldCount = input.fields.length;
-            myCtx.actionContext.telemetry.properties.clearsUnique = String(input.clearUnique);
-            myCtx.actionContext.telemetry.properties.clearsSparse = String(input.clearSparse);
-            myCtx.actionContext.telemetry.properties.clearsTtl = String(input.clearTtl);
-            myCtx.actionContext.telemetry.properties.confirmed = String(confirmed);
-
-            return { confirmed };
-        }),
 
     /**
      * BACKEND INTEGRATION POINT — createIndex

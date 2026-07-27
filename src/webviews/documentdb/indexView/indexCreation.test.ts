@@ -66,6 +66,50 @@ describe('wildcard index creation', () => {
         );
     });
 
+    it('rejects a projection on a scoped path wildcard key', () => {
+        expect(
+            CreateIndexInputSchema.safeParse({
+                fields: [{ field: 'metadata.$**', type: 'asc' }],
+                wildcardProjection: '{ name: 1 }',
+            }).success,
+        ).toBe(false);
+    });
+
+    it('allows a scoped path wildcard key without a projection', () => {
+        expect(CreateIndexInputSchema.safeParse({ fields: [{ field: 'metadata.$**', type: 'asc' }] }).success).toBe(
+            true,
+        );
+    });
+
+    it.each(['', '   ', '{}', '{  }'])(
+        'treats a blank projection as unset on a scoped path wildcard key: %s',
+        (wildcardProjection) => {
+            expect(
+                CreateIndexInputSchema.safeParse({
+                    fields: [{ field: 'metadata.$**', type: 'asc' }],
+                    wildcardProjection,
+                }).success,
+            ).toBe(true);
+        },
+    );
+
+    it.each(['', '   ', '{}', '{  }'])(
+        'treats a blank wildcard projection as unset on an ordinary index: %s',
+        (wildcardProjection) => {
+            expect(CreateIndexInputSchema.safeParse({ ...ordinaryInput, wildcardProjection }).success).toBe(true);
+        },
+    );
+
+    it.each(['', '   ', '{}', '{  }'])(
+        'treats a blank wildcard projection as unset on a wildcard index: %s',
+        (wildcardProjection) => {
+            expect(
+                CreateIndexInputSchema.safeParse({ fields: [{ field: '$**', type: 'asc' }], wildcardProjection })
+                    .success,
+            ).toBe(true);
+        },
+    );
+
     it.each(['not valid {', '[]', '42'])('rejects invalid wildcard projection text: %s', (wildcardProjection) => {
         const input: CreateIndexInput = {
             fields: [{ field: '$**', type: 'asc' }],
