@@ -27,15 +27,16 @@ import {
 import { createAtlasClusterModel } from '../models/AtlasClusterModel';
 import { AtlasClusterItem } from './AtlasClusterItem';
 import { AtlasOrganizationItem } from './AtlasOrganizationItem';
-import { createEmptyPlaceholderNode, createRevisitCredentialsNode } from './atlasTreeNodes';
+import { createEmptyPlaceholderNode, createRecoveryNode } from './atlasTreeNodes';
 
 /**
  * Root tree item for the MongoDB Atlas discovery provider.
  *
  * Renders the quiet merged tree: organization to project to cluster, with duplicate resources
  * merged by Atlas ID and no per-node credential attribution. Whatever goes wrong across the
- * credential fleet collapses into a single "Click here to revisit credentials" row, so one broken
- * credential never blanks the healthy data and never produces a storm of nodes or modals.
+ * credential fleet collapses into a single recovery row, so one broken credential never blanks the
+ * healthy data and never produces a storm of nodes or modals. That row asks for a retry or for a
+ * credential review depending on what actually failed.
  */
 export class AtlasServiceRootItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
@@ -82,7 +83,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         if (snapshotHasFailures(snapshot)) {
             // The recovery row is just another row, so it drops into a flat list unchanged and
             // List mode needs no special casing: a failure never forces a view-mode switch.
-            children.push(createRevisitCredentialsNode(this, snapshot));
+            children.push(createRecoveryNode(this, snapshot));
         }
 
         children.push(
