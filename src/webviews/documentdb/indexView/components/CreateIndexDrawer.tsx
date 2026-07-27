@@ -33,6 +33,7 @@ import {
     CheckmarkCircleRegular,
     ChevronRightRegular,
     DeleteRegular,
+    InfoRegular,
     KeyboardRegular,
     PanelRightContractRegular,
     SendRegular,
@@ -596,6 +597,26 @@ export const CreateIndexDrawer = ({
             : indexKind === 'wildcard'
               ? wildcardPathValid
               : vectorValid);
+
+    // A live, plain-language explanation of what still blocks creation, shown
+    // above the footer only while the primary action is disabled. Empty when the
+    // form is ready to submit (or already submitting).
+    const submitRequirement =
+        indexKind === 'standard'
+            ? completedRows.length === 0
+                ? l10n.t('Add at least one index field to create the index.')
+                : !ttlNumberValid
+                  ? l10n.t('Enter a valid TTL value to continue.')
+                  : ''
+            : indexKind === 'wildcard'
+              ? !wildcardPathValid
+                  ? l10n.t('Remove $** from the parent path — it is added automatically.')
+                  : ''
+              : vectorFieldValue === ''
+                ? l10n.t('Enter a vector field to create the index.')
+                : parsedDimensions === undefined
+                  ? l10n.t('Enter the vector dimensions to create the index.')
+                  : l10n.t('Fix the highlighted values in Advanced settings to continue.');
 
     // Assemble the field-keyed (Standard/Wildcard) payload.
     const buildFieldPayload = (): FieldCreateIndexInput => {
@@ -1797,42 +1818,50 @@ export const CreateIndexDrawer = ({
                         {l10n.t('Back to Create Index')}
                     </Button>
                 ) : (
-                    <>
-                        <Button
-                            appearance="primary"
-                            icon={<SendRegular />}
-                            onClick={() => void handleSubmit()}
-                            disabled={!canSubmit}
-                        >
-                            {submitting ? l10n.t('Creating…') : l10n.t('Create Index')}
-                        </Button>
-                        <Tooltip content={l10n.t('Create in the playground')} relationship="label" withArrow>
+                    <div className="createIndexFooterMain">
+                        {!canSubmit && !submitting && submitRequirement !== '' && (
+                            <div className="submitRequirement" role="status">
+                                <InfoRegular className="submitRequirementIcon" />
+                                <span>{submitRequirement}</span>
+                            </div>
+                        )}
+                        <div className="createIndexFooterActions">
+                            <Button
+                                appearance="primary"
+                                icon={<SendRegular />}
+                                onClick={() => void handleSubmit()}
+                                disabled={!canSubmit}
+                            >
+                                {submitting ? l10n.t('Creating…') : l10n.t('Create Index')}
+                            </Button>
+                            <Tooltip content={l10n.t('Create in the playground')} relationship="label" withArrow>
+                                <Button
+                                    appearance="secondary"
+                                    icon={<KeyboardRegular />}
+                                    aria-label={l10n.t('Create in the playground')}
+                                    disabled={!canSubmit}
+                                    onClick={() => void handleCreateIn('playground')}
+                                />
+                            </Tooltip>
+                            <Tooltip content={l10n.t('Create in the shell')} relationship="label" withArrow>
+                                <Button
+                                    appearance="secondary"
+                                    icon={<WindowConsoleRegular />}
+                                    aria-label={l10n.t('Create in the shell')}
+                                    disabled={!canSubmit}
+                                    onClick={() => void handleCreateIn('shell')}
+                                />
+                            </Tooltip>
                             <Button
                                 appearance="secondary"
-                                icon={<KeyboardRegular />}
-                                aria-label={l10n.t('Create in the playground')}
-                                disabled={!canSubmit}
-                                onClick={() => void handleCreateIn('playground')}
-                            />
-                        </Tooltip>
-                        <Tooltip content={l10n.t('Create in the shell')} relationship="label" withArrow>
-                            <Button
-                                appearance="secondary"
-                                icon={<WindowConsoleRegular />}
-                                aria-label={l10n.t('Create in the shell')}
-                                disabled={!canSubmit}
-                                onClick={() => void handleCreateIn('shell')}
-                            />
-                        </Tooltip>
-                        <Button
-                            appearance="secondary"
-                            icon={<ArrowResetRegular />}
-                            disabled={interactionDisabled}
-                            onClick={reset}
-                        >
-                            {l10n.t('Reset form')}
-                        </Button>
-                    </>
+                                icon={<ArrowResetRegular />}
+                                disabled={interactionDisabled}
+                                onClick={reset}
+                            >
+                                {l10n.t('Reset form')}
+                            </Button>
+                        </div>
+                    </div>
                 )}
             </DrawerFooter>
         </OverlayDrawer>

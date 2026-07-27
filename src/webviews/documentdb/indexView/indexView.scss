@@ -403,6 +403,38 @@
         flex-direction: column;
         overflow-y: auto;
     }
+
+    // Main-page footer: an optional "what's still required" line stacked above
+    // the action buttons, so the reason a disabled Create button can't be used
+    // is always visible next to it.
+    .createIndexFooterMain {
+        display: flex;
+        flex-direction: column;
+        row-gap: 10px;
+        width: 100%;
+    }
+
+    .createIndexFooterActions {
+        display: flex;
+        flex-direction: row;
+        align-items: center;
+        gap: 8px;
+    }
+
+    // A muted, non-alarming requirement hint (info icon + short sentence).
+    .submitRequirement {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+
+        .submitRequirementIcon {
+            flex: 0 0 auto;
+            font-size: 16px;
+            color: var(--colorNeutralForeground3);
+        }
+    }
 }
 
 .createIndexForm {
