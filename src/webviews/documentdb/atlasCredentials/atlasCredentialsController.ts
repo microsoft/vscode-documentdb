@@ -74,6 +74,7 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             webviewName: 'atlasCredentials',
             credentialId: options.credentialId,
             credentialLabel: options.credentialLabel,
+            credentialsStored: false,
             onCredentialsStored,
         };
 
@@ -84,7 +85,7 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             context,
         });
 
-        state.controller.onDisposed(() => finish(false));
+        state.controller.onDisposed(() => finish(context.credentialsStored));
     });
 }
 

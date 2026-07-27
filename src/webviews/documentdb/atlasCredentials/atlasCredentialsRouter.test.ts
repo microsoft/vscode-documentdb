@@ -1,0 +1,152 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+const mockListProjects = jest.fn();
+const mockGetAtlasCredential = jest.fn();
+const mockUpsertAtlasCredential = jest.fn();
+const mockReplaceAtlasCredentialSecrets = jest.fn();
+
+jest.mock('vscode', () => ({
+    l10n: {
+        t: jest.fn((message: string, ...args: string[]) =>
+            args.reduce<string>((result, value, index) => result.replace(`{${String(index)}}`, value), message),
+        ),
+    },
+}));
+
+jest.mock('@vscode/l10n', () => ({
+    t: jest.fn((message: string, ...args: string[]) =>
+        args.reduce<string>((result, value, index) => result.replace(`{${String(index)}}`, value), message),
+    ),
+}));
+
+jest.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
+    class AtlasApiErrorMock extends Error {
+        constructor(
+            message: string,
+            public readonly statusCode: number,
+            public readonly detail?: string,
+            public readonly errorCode?: string,
+        ) {
+            super(message);
+            this.name = 'AtlasApiError';
+        }
+    }
+
+    return {
+        AtlasApiError: AtlasApiErrorMock,
+        AtlasApiClient: class AtlasApiClientMock {
+            public listProjects(): Promise<unknown> {
+                return mockListProjects() as Promise<unknown>;
+            }
+        },
+    };
+});
+
+jest.mock('../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore', () => ({
+    getAtlasCredential: (...args: unknown[]) => mockGetAtlasCredential(...args) as unknown,
+    replaceAtlasCredentialSecrets: (...args: unknown[]) => mockReplaceAtlasCredentialSecrets(...args) as unknown,
+    upsertAtlasCredential: (...args: unknown[]) => mockUpsertAtlasCredential(...args) as unknown,
+}));
+
+jest.mock('../../_integration/trpc', () => {
+    const { initWebviewTrpc } = jest.requireActual('@microsoft/vscode-ext-webview') as {
+        initWebviewTrpc: () => {
+            publicProcedure: unknown;
+            router: unknown;
+            createCallerFactory: unknown;
+        };
+    };
+    const trpc = initWebviewTrpc();
+    return {
+        createCallerFactory: trpc.createCallerFactory,
+        publicProcedureWithTelemetry: trpc.publicProcedure,
+        router: trpc.router,
+    };
+});
+
+import { API } from '../../../DocumentDBExperiences';
+import { AtlasApiError } from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
+import { createCallerFactory } from '../../_integration/trpc';
+import { atlasCredentialsRouter, type RouterContext } from './atlasCredentialsRouter';
+
+function createContext(credentialId?: string): RouterContext & {
+    telemetry: { properties: Record<string, string>; measurements: Record<string, number> };
+} {
+    return {
+        dbExperience: API.DocumentDB,
+        webviewName: 'atlasCredentials',
+        credentialId,
+        credentialsStored: false,
+        onCredentialsStored: jest.fn(),
+        telemetry: { properties: {}, measurements: {} },
+    };
+}
+
+beforeEach(() => {
+    mockListProjects.mockReset();
+    mockGetAtlasCredential.mockReset();
+    mockUpsertAtlasCredential.mockReset();
+    mockReplaceAtlasCredentialSecrets.mockReset();
+});
+
+describe('atlasCredentialsRouter', () => {
+    it('returns an actionable IP access error with the existing credential deep link', async () => {
+        mockListProjects.mockRejectedValue(
+            new AtlasApiError(
+                'Access denied',
+                403,
+                'IP address 203.0.113.9 is not allowed.',
+                'IP_ADDRESS_NOT_ON_ACCESS_LIST',
+            ),
+        );
+        mockGetAtlasCredential.mockResolvedValue({
+            id: 'credential-1',
+            authMethod: 'apikey',
+            orgId: 'org-1',
+            order: 0,
+        });
+        const context = createContext('credential-1');
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        const result = await caller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' });
+
+        expect(result).toEqual({
+            success: false,
+            error: {
+                kind: 'ipAccess',
+                title: 'This IP address is not allowed',
+                message:
+                    "MongoDB Atlas blocked requests from this IP address. Add it to this credential's API access list, then try again.",
+                action: {
+                    label: 'Open access settings in MongoDB Atlas',
+                    url: 'https://cloud.mongodb.com/v2#/org/org-1/access/apiKeys',
+                },
+            },
+        });
+        expect(context.credentialsStored).toBe(false);
+    });
+
+    it('keeps the panel open after saving until the success screen is completed', async () => {
+        mockListProjects.mockResolvedValue([]);
+        mockUpsertAtlasCredential.mockResolvedValue({
+            created: true,
+            record: { id: 'credential-1', authMethod: 'apikey', order: 0 },
+        });
+        const context = createContext();
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        await expect(caller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' })).resolves.toEqual({
+            success: true,
+        });
+
+        expect(context.credentialsStored).toBe(true);
+        expect(context.onCredentialsStored).not.toHaveBeenCalled();
+
+        await caller.complete();
+
+        expect(context.onCredentialsStored).toHaveBeenCalledTimes(1);
+    });
+});

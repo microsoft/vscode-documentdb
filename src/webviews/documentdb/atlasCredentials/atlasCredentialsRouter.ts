@@ -22,7 +22,9 @@
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
 import { AtlasApiClient, AtlasApiError } from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
+import { buildAtlasAccessUrl } from '../../../plugins/service-atlas-mongodb/atlasDeepLinks';
 import {
+    getAtlasCredential,
     replaceAtlasCredentialSecrets,
     upsertAtlasCredential,
     type AtlasCredentialSecrets,
@@ -45,39 +47,131 @@ export type RouterContext = BaseRouterContext & {
     /** Optional user-supplied friendly name persisted alongside the credential. */
     credentialLabel?: string;
     /**
-     * Invoked exactly once when credentials have been validated and stored.
-     * The opener uses this to resolve its `Promise<boolean>` and dispose the panel.
+     * Tracks whether this panel stored a credential, including when the user closes the success
+     * screen instead of selecting Done.
      */
+    credentialsStored: boolean;
+    /** Invoked from the success screen's Done action to resolve the opener and dispose the panel. */
     onCredentialsStored: () => void;
 };
 
+export type CredentialErrorKind = 'authentication' | 'ipAccess' | 'permissions' | 'rateLimit' | 'network' | 'unknown';
+
+export interface CredentialErrorAction {
+    readonly label: string;
+    readonly url: string;
+}
+
+export interface CredentialSubmitError {
+    readonly kind: CredentialErrorKind;
+    readonly title: string;
+    readonly message: string;
+    readonly action?: CredentialErrorAction;
+}
+
 /**
  * Result returned to the webview after a submit attempt. On failure the
- * `errorMessage` is rendered inline so the user can correct and retry without
+ * structured error is rendered inline so the user can correct and retry without
  * leaving the form.
  */
-export interface SubmitResult {
-    readonly success: boolean;
-    readonly errorMessage?: string;
-}
+export type SubmitResult =
+    | { readonly success: true }
+    | { readonly success: false; readonly error: CredentialSubmitError };
 
 /**
  * Builds a user-facing message for a MongoDB Atlas API rejection, adding the
  * Access-List / permissions hint for authentication failures (401/403).
  */
-function describeAtlasError(error: unknown): string {
-    if (error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403)) {
-        const reason =
-            error.detail && error.detail.trim().length > 0
-                ? error.detail
-                : l10n.t('Please verify the credentials you entered.');
-        return l10n.t(
-            '{0}\n\nIf the credentials are correct, make sure your current IP address is on the Access List and that the key has the required project permissions.',
-            reason,
-        );
+async function describeAtlasError(
+    ctx: WithTelemetry<RouterContext>,
+    error: unknown,
+    authMethod: 'apikey' | 'serviceaccount',
+    clientId?: string,
+): Promise<CredentialSubmitError> {
+    const isNetworkError =
+        error instanceof TypeError ||
+        (error instanceof Error && /network|fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(error.message));
+    if (isNetworkError) {
+        return {
+            kind: 'network',
+            title: l10n.t("We couldn't reach MongoDB Atlas"),
+            message: l10n.t('Check your internet connection or proxy settings, then try again.'),
+        };
     }
 
-    return error instanceof Error ? error.message : String(error);
+    if (!(error instanceof AtlasApiError)) {
+        return {
+            kind: 'unknown',
+            title: l10n.t("We couldn't check this credential"),
+            message: error instanceof Error ? error.message : String(error),
+        };
+    }
+
+    if (error.statusCode === 401) {
+        return {
+            kind: 'authentication',
+            title: l10n.t("We couldn't sign in"),
+            message:
+                authMethod === 'apikey'
+                    ? l10n.t(
+                          'MongoDB Atlas did not accept the public and private key. Check both values and try again.',
+                      )
+                    : l10n.t('MongoDB Atlas did not accept the Client ID and secret. Check both values and try again.'),
+        };
+    }
+
+    if (error.statusCode === 429) {
+        return {
+            kind: 'rateLimit',
+            title: l10n.t('MongoDB Atlas asked us to slow down'),
+            message: l10n.t('Too many requests were made. Wait briefly, then try again.'),
+        };
+    }
+
+    if (error.statusCode === 403) {
+        const action = await buildAtlasErrorAction(ctx, authMethod, clientId);
+        if (error.errorCode === 'IP_ADDRESS_NOT_ON_ACCESS_LIST') {
+            return {
+                kind: 'ipAccess',
+                title: l10n.t('This IP address is not allowed'),
+                message: l10n.t(
+                    "MongoDB Atlas blocked requests from this IP address. Add it to this credential's API access list, then try again.",
+                ),
+                action,
+            };
+        }
+
+        return {
+            kind: 'permissions',
+            title: l10n.t('More access is required'),
+            message: l10n.t(
+                'The credential was accepted, but it cannot list projects. Add an appropriate organization or project role, then try again.',
+            ),
+            action,
+        };
+    }
+
+    return {
+        kind: 'unknown',
+        title: l10n.t("We couldn't check this credential"),
+        message: error.message,
+    };
+}
+
+async function buildAtlasErrorAction(
+    ctx: WithTelemetry<RouterContext>,
+    authMethod: 'apikey' | 'serviceaccount',
+    clientId?: string,
+): Promise<CredentialErrorAction> {
+    const record = ctx.credentialId ? await getAtlasCredential(ctx.credentialId) : undefined;
+    const url = record
+        ? buildAtlasAccessUrl(record, authMethod === 'serviceaccount' ? clientId : undefined)
+        : 'https://cloud.mongodb.com';
+
+    return {
+        label: l10n.t('Open access settings in MongoDB Atlas'),
+        url,
+    };
 }
 
 /**
@@ -125,12 +219,12 @@ export const atlasCredentialsRouter = router({
                 await client.listProjects();
             } catch (error) {
                 myCtx.telemetry.properties.authSuccess = 'false';
-                return { success: false, errorMessage: describeAtlasError(error) };
+                return { success: false, error: await describeAtlasError(myCtx, error, 'apikey') };
             }
 
             await persistCredential(myCtx, { authMethod: 'apikey', publicKey, privateKey });
+            myCtx.credentialsStored = true;
             myCtx.telemetry.properties.authSuccess = 'true';
-            myCtx.onCredentialsStored();
             return { success: true };
         }),
 
@@ -161,12 +255,33 @@ export const atlasCredentialsRouter = router({
                 const tokenResponse = await fetchServiceAccountToken(clientId, clientSecret);
                 accessToken = tokenResponse.access_token;
                 expiresIn = tokenResponse.expires_in;
+            } catch (error) {
+                myCtx.telemetry.properties.authSuccess = 'false';
+                const networkError = await describeAtlasError(myCtx, error, 'serviceaccount', clientId);
+                return {
+                    success: false,
+                    error:
+                        networkError.kind === 'network'
+                            ? networkError
+                            : {
+                                  kind: 'authentication',
+                                  title: l10n.t("We couldn't sign in"),
+                                  message: l10n.t(
+                                      'MongoDB Atlas did not accept the Client ID and secret. Check both values and try again.',
+                                  ),
+                              },
+                };
+            }
 
+            try {
                 const client = new AtlasApiClient({ type: 'serviceaccount', accessToken });
                 await client.listProjects();
             } catch (error) {
                 myCtx.telemetry.properties.authSuccess = 'false';
-                return { success: false, errorMessage: describeAtlasError(error) };
+                return {
+                    success: false,
+                    error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId),
+                };
             }
 
             await persistCredential(myCtx, {
@@ -177,8 +292,15 @@ export const atlasCredentialsRouter = router({
                 expiresAt: String(Date.now() + expiresIn * 1000),
             });
 
+            myCtx.credentialsStored = true;
             myCtx.telemetry.properties.authSuccess = 'true';
-            myCtx.onCredentialsStored();
             return { success: true };
         }),
+
+    complete: publicProcedureWithTelemetry.mutation(({ ctx }): void => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+        if (myCtx.credentialsStored) {
+            myCtx.onCredentialsStored();
+        }
+    }),
 });
