@@ -3,6 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
+
 const mockListProjects = jest.fn();
 const mockGetAtlasCredential = jest.fn();
 const mockUpsertAtlasCredential = jest.fn();
@@ -52,13 +54,9 @@ jest.mock('../../../plugins/service-atlas-mongodb/credentials/atlasCredentialSto
 }));
 
 jest.mock('../../_integration/trpc', () => {
-    const { initWebviewTrpc } = jest.requireActual('@microsoft/vscode-ext-webview') as {
-        initWebviewTrpc: () => {
-            publicProcedure: unknown;
-            router: unknown;
-            createCallerFactory: unknown;
-        };
-    };
+    const { initWebviewTrpc } = jest.requireActual<{ initWebviewTrpc: typeof InitWebviewTrpc }>(
+        '@microsoft/vscode-ext-webview',
+    );
     const trpc = initWebviewTrpc();
     return {
         createCallerFactory: trpc.createCallerFactory,
