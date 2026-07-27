@@ -11,7 +11,6 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
@@ -24,7 +23,6 @@ import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/Pr
 import { ext } from '../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
-import { getResourcesPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
@@ -268,10 +266,16 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
     /**
      * Returns the tree item representation with Atlas-specific display.
-     * Uses a stable provider-identity icon (the DocumentDB cluster brand mark, matching
-     * sibling discovery plugins); transient cluster state is surfaced through the
-     * description and tooltip rather than the icon so the tree stays visually stable
-     * across refreshes.
+     *
+     * Deliberately does NOT use `vscode-documentdb-cluster-{light,dark}-themes.svg`. Those
+     * files are byte-identical copies of the DocumentDB product logo, so stamping them on an
+     * Atlas cluster would brand somebody else's managed service as DocumentDB. The Kubernetes
+     * plugin does use them, and correctly so: it discovers actual DocumentDB deployments.
+     *
+     * `server-environment` is the same neutral codicon the Connections view already draws for a
+     * non-emulator cluster, so a discovered Atlas cluster and a saved one read the same.
+     * The icon stays fixed across refreshes; transient cluster state is carried by the
+     * description and tooltip instead.
      */
     getTreeItem(): vscode.TreeItem {
         return {
@@ -280,14 +284,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
             label: this.cluster.name,
             description: this.buildDescription(),
             tooltip: this.buildTooltip(),
-            iconPath: {
-                light: vscode.Uri.file(
-                    path.join(getResourcesPath(), 'icons', 'vscode-documentdb-cluster-light-themes.svg'),
-                ),
-                dark: vscode.Uri.file(
-                    path.join(getResourcesPath(), 'icons', 'vscode-documentdb-cluster-dark-themes.svg'),
-                ),
-            },
+            iconPath: new vscode.ThemeIcon('server-environment'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
