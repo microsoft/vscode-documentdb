@@ -52,10 +52,9 @@ export function buildAtlasAccessUrl(record: AtlasCredentialRecord, clientId?: st
 /**
  * Builds the Atlas **Network Access** URL for a project, which is where the IP access list lives.
  *
- * This is the page a user needs when a cluster connection is rejected during the TLS handshake:
- * Atlas fronts clusters with a proxy that refuses a client whose IP is not on the project's access
- * list, and the refusal happens before authentication, so the driver reports a TLS alert rather
- * than anything about credentials.
+ * MongoDB documents that Atlas allows client connections to a cluster only from addresses on this
+ * list, so it is the first thing to check when a connection fails for no obvious reason. Note it
+ * is a different list from the API access list attached to each credential.
  */
 export function buildAtlasNetworkAccessUrl(projectId: string): string {
     return `${ATLAS_CLOUD_ROOT}/v2/${encodeURIComponent(projectId)}#/security/network/accessList`;

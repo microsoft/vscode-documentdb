@@ -7,9 +7,9 @@ import { isAtlasTlsHandshakeRejection } from './atlasConnectionErrors';
 import { buildAtlasNetworkAccessUrl } from './atlasDeepLinks';
 
 describe('isAtlasTlsHandshakeRejection', () => {
-    it('recognises the OpenSSL text Atlas produces for a non-allowlisted client IP', () => {
-        // Verbatim from a live run: the user had just typed a username and password, but Atlas
-        // tore the handshake down before either was sent.
+    it('recognises the OpenSSL text seen when an Atlas connection dies at the TLS layer', () => {
+        // Verbatim from a live run. All this signature establishes is that the failure was
+        // transport-level; it is not the shape of an authentication rejection.
         const error = new Error(
             '00B92AFAC07A0000:error:0A000438:SSL routines:ssl3_read_bytes:tlsv1 alert internal error:' +
                 '../deps/openssl/openssl/ssl/record/rec_layer_s3.c:918:SSL alert number 80',

@@ -211,11 +211,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
     /**
      * Reports a failed connection attempt.
      *
-     * The TLS handshake rejection gets its own wording and an escape hatch. Atlas refuses the
-     * handshake for a client that is not on the project's IP access list, which happens before
-     * authentication, so the raw OpenSSL text ("tlsv1 alert internal error ... SSL alert number
-     * 80") is both unreadable and actively misleading: it appears right after the user typed a
-     * username and password that were never sent anywhere.
+     * A TLS-level failure gets its own wording. What can be stated with confidence is only what
+     * the error itself proves: the connection died at the transport layer, and that is not the
+     * shape of an authentication rejection, which arrives as `bad auth : Authentication failed`.
+     * Naming a single cause would be a guess. MongoDB documents that the project IP access list
+     * gates client connections, but it does not document that a blocked address surfaces as this
+     * particular alert, so the modal lists what to check rather than claiming a diagnosis.
      */
     private async showConnectionFailure(context: IActionContext, error: unknown): Promise<void> {
         const errorMessage = error instanceof Error ? error.message : String(error);
@@ -235,7 +236,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
             return;
         }
 
-        context.telemetry.properties.atlasConnectionFailureKind = 'tlsHandshakeRejected';
+        context.telemetry.properties.atlasConnectionFailureKind = 'tlsFailure';
 
         const openNetworkAccess = l10n.t('Open Network Access in Atlas');
         const selected = await vscode.window.showErrorMessage(
@@ -244,8 +245,14 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
                 modal: true,
                 detail:
                     l10n.t(
-                        'MongoDB Atlas closed the connection before authentication, which usually means this machine\u2019s IP address is not on the project\u2019s IP access list. Your username and password were never sent, so they are not the problem here.',
+                        'MongoDB Atlas closed the TLS connection with an internal error. This is a transport-level failure rather than an authentication response, so it is not what an incorrect username or password looks like: those report "bad auth : Authentication failed".',
                     ) +
+                    '\n\n' +
+                    l10n.t('Worth checking in MongoDB Atlas:') +
+                    '\n' +
+                    l10n.t('- Is this machine\u2019s IP address on the project\u2019s IP access list?') +
+                    '\n' +
+                    l10n.t('- Is the cluster paused, or still being provisioned?') +
                     '\n\n' +
                     l10n.t('Error: {error}', { error: errorMessage }),
             },
