@@ -12,9 +12,9 @@
   `src/commands/index.*Index/`
 - **PR / branch:** [microsoft/vscode-documentdb#732](https://github.com/microsoft/vscode-documentdb/pull/732) ·
   `dev/khelanmodi/index-management-ui`
-- **Related design docs:** [Index Management UI notes](index-management-ui-notes.md) ·
-  [Collection view toolbar/tab redesign](collectionview-toolbar-tab-redesign.md) ·
-  [Technical review](review-2026-07-20.md)
+- **Related design docs:** [Index Management UI notes](feature-01-index-management-overview.md) ·
+  [Collection view toolbar/tab redesign](feature-02-collectionview-toolbar-redesign.md) ·
+  [Technical review](code-review-2026-07-20.md)
 - **Scope:** the UX-facing surface (tree entry, tab structure, wording, index table,
   create flow, lifecycle actions, feedback, accessibility, and error recovery). Backend
   internals appear only where they explain a user-visible symptom.
@@ -36,7 +36,7 @@ already exists in the filter bar — see [IndexListFilterBar.tsx](../../../../sr
 degradation is confirmed to also swallow the large-collection warning, so it stays P2 with a
 sharper solution.
 
-The existing design decisions in [Index Management UI notes](index-management-ui-notes.md)
+The existing design decisions in [Index Management UI notes](feature-01-index-management-overview.md)
 are treated as constraints rather than reopened findings. In particular: fixed column
 widths, optimistic sorted insertion, the driver-shaped create form, and one shared detailed
 confirmation modal for delete/hide/unhide are already deliberate choices.
@@ -213,15 +213,15 @@ impact — genuine nice-to-haves that should not hold up the merge.
 
 ## Priority index
 
-| #   | Priority | Item                                                                       | Verified | Status  |
-| --- | -------- | -------------------------------------------------------------------------- | -------- | ------- |
-| 1   | **P1**   | Webview row progress starts after the host operation finishes              | ✅       | ✅ Implemented |
-| 2   | **P1**   | Failed direct creation hides its recovery path behind reopening the drawer | ✅       | ✅ Implemented |
-| 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | ✅ Implemented |
-| 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | ✅ Implemented |
-| 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | ✅ Implemented |
-| 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | ✅ Implemented |
-| 7   | **P3**   | Manual (toolbar) refresh silently resets sort + expanded rows _(new)_      | ✅       | ✅ Implemented |
+| #   | Priority | Item                                                                       | Verified | Status                |
+| --- | -------- | -------------------------------------------------------------------------- | -------- | --------------------- |
+| 1   | **P1**   | Webview row progress starts after the host operation finishes              | ✅       | ✅ Implemented        |
+| 2   | **P1**   | Failed direct creation hides its recovery path behind reopening the drawer | ✅       | ✅ Implemented        |
+| 3   | **P1**   | Sibling index actions terminate on inconsistent feedback surfaces          | ✅       | ✅ Implemented        |
+| 4   | **P2**   | Create prerequisites fail silently and discard partial success             | ✅       | ✅ Implemented        |
+| 6   | **P2**   | Loading and row-state transitions are not consistently announced           | ✅       | ✅ Implemented        |
+| 5   | **P3**   | No-matches / could-not-load states render as a bare table (↓ from P2)      | ✅       | ✅ Implemented        |
+| 7   | **P3**   | Manual (toolbar) refresh silently resets sort + expanded rows _(new)_      | ✅       | ✅ Implemented        |
 | 8   | **P3**   | Create / Refresh toolbar buttons are not guarded against re-entry _(new)_  | ✅       | 🚫 Closed (won't fix) |
 
 > The index column above is the finding number (stable identifier used throughout); rows are
@@ -246,12 +246,12 @@ Every finding now has a **terminal status** (7 Implemented, 1 Closed) — so not
 functionally _unresolved_. What remains open is **verification and documentation hygiene**,
 not code decisions:
 
-| # | Still-open item | Kind | Notes |
-| --- | --- | --- | --- |
-| A | **No hands-on run yet.** All fixes are code-level and pass build/lint/tests, but none has been _exercised in a running extension_. | ⚠️ Verification | The original point of a UX review — walk each journey live (slow cluster for finding 1, a rejected create for finding 2, a screen reader for finding 6, a forced load failure for finding 5). |
-| B | **Diagrams + "story in one paragraph" describe the _pre-fix_ baseline.** | 📄 Doc staleness | Kept for context (they show _what was found_), but the red nodes are now resolved — see the caveat under the interaction map. Do not read them as current bugs. |
-| C | **Finding 5 retry button is being reconsidered.** | 🔄 Possible reopen | The shipped could-not-load state has **no button** (operator's earlier call). A non-committed simulation of a **Retry** variant was requested to evaluate adding one; if adopted, finding 5 reopens. |
-| D | **Accepted residuals (no action unless felt live).** | 🟢 Acknowledged | (1) finding 1 — the row spinner is also visible behind the confirmation modal (operator OK); (2) finding 6 — a changed-count refresh may be announced twice (Announcer + the count live region); (3) finding 3 — success toasts vanish when `ShowOperationSummaries` is off (intended). |
+| #   | Still-open item                                                                                                                    | Kind               | Notes                                                                                                                                                                                                                                                                                   |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------- | ------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| A   | **No hands-on run yet.** All fixes are code-level and pass build/lint/tests, but none has been _exercised in a running extension_. | ⚠️ Verification    | The original point of a UX review — walk each journey live (slow cluster for finding 1, a rejected create for finding 2, a screen reader for finding 6, a forced load failure for finding 5).                                                                                           |
+| B   | **Diagrams + "story in one paragraph" describe the _pre-fix_ baseline.**                                                           | 📄 Doc staleness   | Kept for context (they show _what was found_), but the red nodes are now resolved — see the caveat under the interaction map. Do not read them as current bugs.                                                                                                                         |
+| C   | **Finding 5 retry button is being reconsidered.**                                                                                  | 🔄 Possible reopen | The shipped could-not-load state has **no button** (operator's earlier call). A non-committed simulation of a **Retry** variant was requested to evaluate adding one; if adopted, finding 5 reopens.                                                                                    |
+| D   | **Accepted residuals (no action unless felt live).**                                                                               | 🟢 Acknowledged    | (1) finding 1 — the row spinner is also visible behind the confirmation modal (operator OK); (2) finding 6 — a changed-count refresh may be announced twice (Announcer + the count live region); (3) finding 3 — success toasts vanish when `ShowOperationSummaries` is off (intended). |
 
 > **Bottom line:** the PR-blocking review work is done. The only true follow-ups are a live
 > pass (A) and deciding the Retry-button question (C); (B) is a doc-refresh chore and (D) is
@@ -395,12 +395,14 @@ const handleCreateSubmit = async (input) => {
 | **Keep drawer open + inline error (above)**               | Recovery is right where the data is; matches shell/playground handoff | Loses the "instant close feels fast" behavior; drawer blocks the row |
 | **Close, but reopen the drawer automatically on failure** | Preserves the fast-close optimism; still lands the user on the form   | A modal + auto-reopen can feel like a flicker                        |
 | **Keep modal, add an explicit "Edit &amp; retry" button** | Smallest change to current flow                                       | Still a detour; user acts, _then_ sees the form                      |
+
 > ✅ **Implemented (Iteration 1):** extended `common.displayErrorMessage` to accept `actions`
 > and return the picked one; the create-failure modal now offers **Edit and retry**, which
 > calls `openCreateDialog()` with the preserved form (the fast drawer-close is kept). Files:
 > [appRouter.ts](../../../../src/webviews/_integration/appRouter.ts#L140),
 > [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L343).
 > Commit: see `feat(indexView): add Edit and retry to the create-index failure modal`.
+
 ### 3. Sibling index actions terminate on inconsistent feedback surfaces ⚠️
 
 **Priority:** P1 · **Status:** ✅ Implemented · **✅ Verified in code**
@@ -414,17 +416,18 @@ const handleCreateSubmit = async (input) => {
 >
 > Applied matrix:
 >
-> | Action | Success | Failure |
-> | --- | --- | --- |
-> | Create | toast (gated) | **modal** (already) |
-> | Delete | toast (gated) | **modal** (was toast) |
-> | Hide / Unhide | **toast (gated, new)** | **modal** (was toast) |
-> | Prepare in playground/shell | target opens | **modal** (was toast) |
-> | Raw definition open | editor opens | **modal** (finding J1) |
-> | List load / background refresh | — | non-modal toast (passive, unchanged — avoids modal spam on the 5s poll) |
-> | Tree delete/hide/unhide | toast (gated, unchanged) | **modal** (was azext non-modal) |
+> | Action                         | Success                  | Failure                                                                 |
+> | ------------------------------ | ------------------------ | ----------------------------------------------------------------------- |
+> | Create                         | toast (gated)            | **modal** (already)                                                     |
+> | Delete                         | toast (gated)            | **modal** (was toast)                                                   |
+> | Hide / Unhide                  | **toast (gated, new)**   | **modal** (was toast)                                                   |
+> | Prepare in playground/shell    | target opens             | **modal** (was toast)                                                   |
+> | Raw definition open            | editor opens             | **modal** (finding J1)                                                  |
+> | List load / background refresh | —                        | non-modal toast (passive, unchanged — avoids modal spam on the 5s poll) |
+> | Tree delete/hide/unhide        | toast (gated, unchanged) | **modal** (was azext non-modal)                                         |
 
 > ✅ **Implemented (Iteration 1):**
+>
 > - Extended `common.displayInformationMessage` with an `asOperationSummary` flag that routes
 >   through `showConfirmationAsInSettings`, so webview completion toasts honour the same
 >   `ShowOperationSummaries` setting as the tree. Files:
@@ -437,7 +440,7 @@ const handleCreateSubmit = async (input) => {
 >   [dropIndex.ts](../../../../src/commands/index.dropIndex/dropIndex.ts#L64),
 >   [hideIndex.ts](../../../../src/commands/index.hideIndex/hideIndex.ts#L72),
 >   [unhideIndex.ts](../../../../src/commands/index.unhideIndex/unhideIndex.ts#L66).
-> Commit: see `fix(indexView): unify index-action feedback (modal failures, gated success toasts)`.
+>   Commit: see `fix(indexView): unify index-action feedback (modal failures, gated success toasts)`.
 
 > ✅ **Follow-up (Iteration 2):** the gated-toast pattern now has a named helper. Added
 > `showOperationSummary(message)` in `IndexesTab` (the webview counterpart to the tree's
@@ -767,7 +770,7 @@ context, not open findings:
 
 - ✅ Delete, Hide, and Unhide share one detailed host-side modal across webview and Explorer.
   The documented tradeoff is that tree delete no longer honors the configurable typed/word
-  confirmation style. See [Index Management UI notes](index-management-ui-notes.md#4-safe-host-side-confirmations-unified-across-webview--tree-view).
+  confirmation style. See [Index Management UI notes](feature-01-index-management-overview.md#4-safe-host-side-confirmations-unified-across-webview--tree-view).
 - ✅ The `_id_` action buttons use `disabledFocusable` and explanatory tooltips, so keyboard
   users can reach the protected-state explanation. See
   [IndexTable.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx#L300).
@@ -815,17 +818,17 @@ resolved here rolls into Iteration 2.
 
 #### Iteration 1 outcome
 
-| Finding | Result |
-| --- | --- |
-| J1 · raw-definition error | ✅ Implemented (`fix(indexView): surface raw-definition open failure as a modal`) |
-| 1 · row progress timing | ✅ Implemented (`fix(indexView): show row progress during the actual index operation`) |
-| 2 · create-fail recovery | ✅ Implemented (`feat(indexView): add Edit and retry to the create-index failure modal`) |
-| 3 · feedback matrix | ✅ Implemented (`fix(indexView): unify index-action feedback…`) |
-| 4 · schema prerequisites | ✅ Implemented (`fix(indexView): open create drawer without blocking on schema prerequisites`) |
-| 6 · accessibility | ✅ Implemented (`feat(indexView): announce list refresh lifecycle to screen readers`) |
-| 7 · sort/expansion reset | ✅ Implemented (`fix(indexView): retain sort and expanded rows across manual refresh`) |
-| 8 · toolbar re-entry | 🚫 Closed (won't fix) — operator: "leave as is" |
-| 5 · empty-state | 🟡 **Deferred to Iteration 2** — needs clarification (resolved below) |
+| Finding                   | Result                                                                                         |
+| ------------------------- | ---------------------------------------------------------------------------------------------- |
+| J1 · raw-definition error | ✅ Implemented (`fix(indexView): surface raw-definition open failure as a modal`)              |
+| 1 · row progress timing   | ✅ Implemented (`fix(indexView): show row progress during the actual index operation`)         |
+| 2 · create-fail recovery  | ✅ Implemented (`feat(indexView): add Edit and retry to the create-index failure modal`)       |
+| 3 · feedback matrix       | ✅ Implemented (`fix(indexView): unify index-action feedback…`)                                |
+| 4 · schema prerequisites  | ✅ Implemented (`fix(indexView): open create drawer without blocking on schema prerequisites`) |
+| 6 · accessibility         | ✅ Implemented (`feat(indexView): announce list refresh lifecycle to screen readers`)          |
+| 7 · sort/expansion reset  | ✅ Implemented (`fix(indexView): retain sort and expanded rows across manual refresh`)         |
+| 8 · toolbar re-entry      | 🚫 Closed (won't fix) — operator: "leave as is"                                                |
+| 5 · empty-state           | 🟡 **Deferred to Iteration 2** — needs clarification (resolved below)                          |
 
 **Open questions — all resolved in Iteration 2 (2026-07-22)**
 

@@ -2,7 +2,7 @@
 
 > **Who this is for:** anyone about to do a hands-on UX review of the redesigned
 > **Create Index** experience in Index Management, or anyone triaging the findings.
-> **What this is:** a pre-seeded follow-up to [the original UX review](ux-review.md).
+> **What this is:** a pre-seeded follow-up to [the original UX review](ux-review-iteration-1-2.md).
 > It maps the current Standard / Wildcard / Vector journeys, records code-backed risks
 > introduced by the new iteration, and carries forward every unresolved verification item
 > from the earlier review.
@@ -12,8 +12,8 @@
   create lifecycle in `IndexesTab.tsx`
 - **PR / branch:** [microsoft/vscode-documentdb#732](https://github.com/microsoft/vscode-documentdb/pull/732) ·
   `dev/khelanmodi/index-management-ui`
-- **Related design docs:** [Index Management UI notes](index-management-ui-notes.md) ·
-  [Vector index support](vector-index-support.md) · [Original UX review](ux-review.md)
+- **Related design docs:** [Index Management UI notes](feature-01-index-management-overview.md) ·
+  [Vector index support](feature-03-vector-index-support.md) · [Original UX review](ux-review-iteration-1-2.md)
 - **Scope:** the redesigned create drawer, mode switching, validation, progressive
   disclosure, preview and command hand-off, feedback, accessibility, narrow layouts, and
   regressions in the already-reviewed list/action journeys
@@ -28,7 +28,7 @@ degraded terminal state. Findings below are code-backed **Flags** or explicitly 
 **Open (soft)** checks that need visual/runtime confirmation. The operator should now walk
 the journeys in the running extension; observations and decisions will be added here.
 
-The second half of the preparation cross-checks the original `ux-review.md` item by item.
+The second half of the preparation cross-checks the original `ux-review-iteration-1-2.md` item by item.
 Implemented items remain regression checks, the deliberately closed toolbar re-entry item
 stays closed, and the unresolved Retry question is carried into this iteration rather than
 being silently dropped.
@@ -225,7 +225,7 @@ prepared command.
   [indexViewRouter.ts](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L239).
 - 🔍 The design contract says to implement this form for Azure DocumentDB, not substitute an
   Atlas search-index command, and records the authoritative capability source as an open
-  decision. See [vector-index-support.md](vector-index-support.md#open-decisions).
+  decision. See [vector-index-support.md](feature-03-vector-index-support.md#open-decisions).
 
 💡 **Suggestion:** Until a reliable capability response exists, label Vector as a preview
 with explicit Azure DocumentDB scope and explain that server support is verified on create.
@@ -418,7 +418,7 @@ Refresh toolbar remains visible, or whether an in-context Retry action is still 
 
 - 🔁 Original finding 5 was implemented as a message with no button by operator decision,
   then the original review's final audit explicitly left a Retry variant under
-  reconsideration. See [ux-review.md](ux-review.md#still-open-audit-2026-07-22).
+  reconsideration. See [ux-review-iteration-1-2.md](ux-review-iteration-1-2.md#still-open-audit-2026-07-22).
 - 🔍 The current state still renders only the message in
   [IndexList.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexList.tsx#L191).
 

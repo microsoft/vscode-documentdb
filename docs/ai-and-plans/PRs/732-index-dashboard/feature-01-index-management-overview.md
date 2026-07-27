@@ -25,11 +25,11 @@ discoverable and safe using only the server APIs already available to us
 telemetry to a follow-up.
 
 The index metadata (types, properties) is backed by the operator registry work
-documented separately in this folder (`documentdb-supported-indexes.md`,
-`operator-registry-scraper-updates.md`).
+documented separately in this folder (`reference-01-documentdb-supported-indexes.md`,
+`reference-02-operator-registry-scraper.md`).
 
 The CollectionView chrome changes delivered with the dashboard are documented
-in [CollectionView Toolbar / Tab Redesign](./collectionview-toolbar-tab-redesign.md),
+in [CollectionView Toolbar / Tab Redesign](./feature-02-collectionview-toolbar-redesign.md),
 including the per-work-item implementation progress and validation checkpoints.
 
 ---
@@ -104,8 +104,8 @@ including the per-work-item implementation progress and validation checkpoints.
     `path.$**`) with a live generated-key preview, plus an optional
     include/exclude **projection**. The projection is a schema-aware field list
     that serializes to `{ field: 0 | 1 }`, and is offered **only on the
-    all-fields `$**` key** because the server rejects a projection on a scoped
-    key. An empty scoped path collapses to `$**`, so a blank path never errors.
+    all-fields `$**`key** because the server rejects a projection on a scoped
+key. An empty scoped path collapses to`$\*\*`, so a blank path never errors.
   - **Vector** is a placeholder tab; creation is intentionally not wired yet.
 - Rarely-needed options (partial filter, collation) live on a pushed
   **Advanced** sub-page. Standard and Wildcard each keep an independent Advanced
@@ -258,7 +258,7 @@ here so the final code does not look arbitrary:
   editor.** The projection could have stayed a relaxed-JSON editor like partial
   filter / collation. Instead it is an **Include / Exclude** choice plus a
   schema-aware field list, because the include-vs-exclude rule (you cannot mix
-  them except `_id`), the "$** key only" restriction, and the whole-subtree
+  them except `_id`), the "$\*\* key only" restriction, and the whole-subtree
   semantics are easy to get wrong by hand. A mode-aware hint spells out that a
   listed path covers every field nested under it.
 

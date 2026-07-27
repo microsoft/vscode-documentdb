@@ -34,9 +34,9 @@ New deeper-review items: **NEW-1** (shell/playground command loses BSON fidelity
 
 The review compared `dev/khelanmodi/index-management-ui` with `origin/main` and used the design context in this folder:
 
-- `index-management-ui-notes.md`
-- `documentdb-supported-indexes.md`
-- `operator-registry-scraper-updates.md`
+- `feature-01-index-management-overview.md`
+- `reference-01-documentdb-supported-indexes.md`
+- `reference-02-operator-registry-scraper.md`
 
 The intended review bar is the documented **80% happy path**. Deliberately unsupported index types, deep index-build telemetry, stronger typed delete confirmation, and smart JSON completion are not treated as defects. Webview end-to-end test coverage is also explicitly excluded because it is already on the roadmap.
 

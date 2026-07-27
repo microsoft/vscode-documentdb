@@ -1002,7 +1002,7 @@ has three tabs:
 
 Standard and Wildcard have focused forms and preserve their draft state. Vector
 is now a working create form as well (see the implementation-progress entries
-below); the notes in this section describe the *original placeholder* state for
+below); the notes in this section describe the _original placeholder_ state for
 historical context.
 
 Original Vector limitations (now resolved):
@@ -1509,7 +1509,7 @@ relevant:
 
 - **Algorithm as radio cards:** the algorithm dropdown became three parallel
   selectable cards (HNSW / IVF / DiskANN), each carrying its own one-line
-  description *inside* the card. The previous dropdown could only show the
+  description _inside_ the card. The previous dropdown could only show the
   chosen algorithm's description above it. Implemented as an ARIA `radiogroup`
   of buttons with roving `tabindex` and arrow-key navigation.
 - **Flatter drawer:** the tinted background boxes behind option groups were
@@ -1519,12 +1519,12 @@ relevant:
   section so they no longer float loose at the foot of the form.
 - **Disabled-reason hint:** a live, muted requirement line now sits above the
   footer whenever the primary action is disabled, naming exactly what is still
-  needed (e.g. *Add at least one index field*, *Enter the vector dimensions*).
+  needed (e.g. _Add at least one index field_, _Enter the vector dimensions_).
   It updates as the form is filled, clears when valid, and is announced via
   `role="status"`.
 - **Required markers:** the shared `DrawerSection` gained a `required` marker
-  (a Fluent-style asterisk) applied to the Standard *Index fields* and Vector
-  *Vector field* sections; Dimensions already carried a `Field required` marker.
+  (a Fluent-style asterisk) applied to the Standard _Index fields_ and Vector
+  _Vector field_ sections; Dimensions already carried a `Field required` marker.
   The asterisks are decorative (`aria-hidden`) — the requirement is conveyed
   functionally by the disabled action and the hint.
 - **No premature name error:** an empty custom vector index name no longer shows
@@ -1738,9 +1738,9 @@ to support and must not leave a selectable but nonfunctional option.
 
 ## Related repository material
 
-- [DocumentDB-supported indexes](./documentdb-supported-indexes.md)
-- [Collection View toolbar/tab redesign](./collectionview-toolbar-tab-redesign.md)
-- [Index Management UI notes](./index-management-ui-notes.md)
+- [DocumentDB-supported indexes](./reference-01-documentdb-supported-indexes.md)
+- [Collection View toolbar/tab redesign](./feature-02-collectionview-toolbar-redesign.md)
+- [Index Management UI notes](./feature-01-index-management-overview.md)
 - [Generated index reference](../../../../packages/documentdb-js-operator-registry/src/indexReference.ts)
 - [Current Create Index drawer](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx)
 - [Create-index validation and builder](../../../../src/webviews/documentdb/indexView/indexCreation.ts)
