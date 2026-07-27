@@ -10,6 +10,7 @@ import { type AtlasSession } from '../auth/AtlasSession';
 import { ATLAS_API_BASE_URL } from '../config';
 import {
     type AtlasCluster,
+    type AtlasDatabaseUser,
     type AtlasOrganization,
     type AtlasProject,
     type AtlasUserInfo,
@@ -35,6 +36,14 @@ const ATLAS_PAGE_SIZE = 500;
  * malformed `totalCount` can never spin an unbounded request loop.
  */
 const ATLAS_MAX_PAGES = 100;
+
+/**
+ * Resource version sent in `Accept` when an endpoint does not declare a newer one.
+ *
+ * Atlas versions each resource independently, so the header is not global: asking for a version
+ * a resource never published is rejected rather than silently downgraded.
+ */
+const ATLAS_DEFAULT_API_VERSION = '2023-02-01';
 
 /**
  * Client for the MongoDB Atlas Admin API v2.
@@ -100,13 +109,28 @@ export class AtlasApiClient {
     }
 
     /**
+     * Lists the database users defined in a project.
+     *
+     * Requires only the `Project Read Only` role, the same level the cluster listing already
+     * needs, so any credential that can see a cluster can also see its users. Passwords are never
+     * returned. This resource is still published at `2023-01-01`, hence the version override.
+     */
+    async listDatabaseUsers(projectId: string, signal?: AbortSignal): Promise<AtlasDatabaseUser[]> {
+        return this.requestAllPages<AtlasDatabaseUser>(
+            `/groups/${encodeURIComponent(projectId)}/databaseUsers`,
+            signal,
+            '2023-01-01',
+        );
+    }
+
+    /**
      * Walks every page of a paginated Atlas list endpoint and returns the concatenated results.
      *
      * Atlas paginates with `pageNum` (1-based) + `itemsPerPage` and reports `totalCount`. The loop
      * stops as soon as a short page arrives, the reported total is reached, or the defensive page
      * ceiling is hit, so a missing or wrong `totalCount` cannot cause an unbounded fetch.
      */
-    private async requestAllPages<T>(path: string, signal?: AbortSignal): Promise<T[]> {
+    private async requestAllPages<T>(path: string, signal?: AbortSignal, apiVersion?: string): Promise<T[]> {
         const separator = path.includes('?') ? '&' : '?';
         const collected: T[] = [];
         const startedAt = monotonicNow();
@@ -114,7 +138,7 @@ export class AtlasApiClient {
 
         for (let pageNum = 1; pageNum <= ATLAS_MAX_PAGES; pageNum++) {
             const pagePath = `${path}${separator}itemsPerPage=${String(ATLAS_PAGE_SIZE)}&pageNum=${String(pageNum)}`;
-            const response = await this.request<AtlasPaginatedResponse<T>>(pagePath, signal);
+            const response = await this.request<AtlasPaginatedResponse<T>>(pagePath, signal, apiVersion);
             const results = Array.isArray(response.results) ? response.results : [];
             collected.push(...results);
             pagesFetched = pageNum;
@@ -161,9 +185,9 @@ export class AtlasApiClient {
      * change the outcome; it only doubles the requests, mints a throwaway token, and makes the
      * failure take twice as long to surface.
      */
-    private async request<T>(path: string, signal?: AbortSignal): Promise<T> {
+    private async request<T>(path: string, signal?: AbortSignal, apiVersion?: string): Promise<T> {
         try {
-            return await this.requestOnce<T>(path, signal);
+            return await this.requestOnce<T>(path, signal, apiVersion);
         } catch (error) {
             const isExpiredToken = error instanceof AtlasApiError && error.statusCode === 401;
             const canRefresh = this.sessionManager !== undefined && this.session.type === 'serviceaccount';
@@ -175,7 +199,7 @@ export class AtlasApiClient {
                 const refreshedSession = await this.sessionManager!.tryRefreshIfPossible();
                 if (refreshedSession) {
                     this.session = refreshedSession;
-                    return await this.requestOnce<T>(path, signal);
+                    return await this.requestOnce<T>(path, signal, apiVersion);
                 }
                 atlasWarn(`${this.describeClient()} could not mint a fresh token; surfacing the original failure`);
             }
@@ -188,11 +212,11 @@ export class AtlasApiClient {
      * Performs a single authenticated request to the Atlas Admin API.
      * Handles Service Account Bearer and API Key Digest authentication transparently.
      */
-    private async requestOnce<T>(path: string, signal?: AbortSignal): Promise<T> {
+    private async requestOnce<T>(path: string, signal?: AbortSignal, apiVersion?: string): Promise<T> {
         const url = `${ATLAS_API_BASE_URL}${path}`;
         const startedAt = monotonicNow();
         const headers: Record<string, string> = {
-            Accept: 'application/vnd.atlas.2023-02-01+json',
+            Accept: `application/vnd.atlas.${apiVersion ?? ATLAS_DEFAULT_API_VERSION}+json`,
         };
 
         if (this.session.type === 'serviceaccount') {

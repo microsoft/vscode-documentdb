@@ -78,7 +78,10 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                         treeId: `${this.id}/${cluster.name.replaceAll('/', '_')}`,
                         viewId: Views.DiscoveryView,
                     };
-                    return new AtlasClusterItem('', treeCluster);
+                    return new AtlasClusterItem('', treeCluster, undefined, {
+                        service: this.discoveryService,
+                        ownerCredentialId: this.ownerCredentialId,
+                    });
                 });
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : String(error);

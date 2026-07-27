@@ -25,10 +25,14 @@ import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { nonNullValue } from '../../../utils/nonNull';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
+import { AtlasApiClient } from '../api/AtlasApiClient';
 import { isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
 import { buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
-import { monotonicNow } from '../atlasTrace';
+import { atlasTrace, monotonicNow } from '../atlasTrace';
 import { DISCOVERY_PROVIDER_ID } from '../config';
+import { toAtlasDatabaseUserCandidates, type AtlasDatabaseUserCandidate } from '../connect/atlasDatabaseUsers';
+import { SelectAtlasDatabaseUserStep } from '../connect/SelectAtlasDatabaseUserStep';
+import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasClusterState } from '../models/AtlasProjectModel';
 
@@ -53,6 +57,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
          * `organization · project` next to a flat cluster row.
          */
         private readonly contextDescription?: string,
+        /**
+         * The discovery service and the credential that surfaced this cluster. Optional so the
+         * item stays constructible without them; when absent the sign-in flow simply asks for a
+         * username instead of offering the project's database users.
+         */
+        private readonly discovery?: { service: AtlasDiscoveryService; ownerCredentialId: string },
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;
@@ -66,6 +76,31 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      */
     public getAtlasConsoleUrl(): string {
         return `https://cloud.mongodb.com/v2/${this.cluster.projectId}#/clusters/detail/${this.cluster.name}`;
+    }
+
+    /**
+     * Lists the database users that apply to this cluster, for the username prompt.
+     *
+     * Reuses the very credential that discovered the cluster, so no extra sign-in is involved and
+     * the call needs no permission the user has not already granted. Failures propagate to the
+     * step, which downgrades to a plain username prompt rather than blocking sign-in.
+     */
+    private async listDatabaseUserCandidates(signal: AbortSignal): Promise<AtlasDatabaseUserCandidate[]> {
+        if (!this.discovery) {
+            return [];
+        }
+
+        const { service, ownerCredentialId } = this.discovery;
+        const session = await service.sessionRegistry.getSession(ownerCredentialId);
+        if (!session) {
+            atlasTrace(`cluster "${this.cluster.name}": no usable session, skipping the database user lookup`);
+            return [];
+        }
+
+        const client = new AtlasApiClient(session, service.sessionRegistry.refresherFor(ownerCredentialId));
+        const users = await client.listDatabaseUsers(this.cluster.projectId, signal);
+
+        return toAtlasDatabaseUserCandidates(users, this.cluster.name);
     }
 
     /**
@@ -294,7 +329,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
+            promptSteps: [
+                new ChooseAuthMethodStep(),
+                new SelectAtlasDatabaseUserStep((signal) => this.listDatabaseUserCandidates(signal), this.cluster.name),
+                new ProvideUserNameStep(),
+                new ProvidePasswordStep(),
+            ],
             title: l10n.t('Authenticate to Connect with Your Atlas Cluster'),
             showLoadingPrompt: true,
         });

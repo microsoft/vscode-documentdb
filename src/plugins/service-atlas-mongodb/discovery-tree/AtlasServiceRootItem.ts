@@ -144,7 +144,10 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             };
             const orgName = orgNames.get(entry.orgId);
             const context = orgName ? `${orgName} · ${entry.projectName}` : entry.projectName;
-            return new AtlasClusterItem('', treeCluster, context);
+            return new AtlasClusterItem('', treeCluster, context, {
+                service: this.discoveryService,
+                ownerCredentialId: entry.ownerCredentialId,
+            });
         });
     }
 
