@@ -153,18 +153,27 @@ export function resolveCredentialLabel(record: AtlasCredentialRecord): string {
 
 /**
  * Classifies a thrown error into the taxonomy the UX reacts to.
+ *
+ * `errorCode` is carried through for the log. The HTTP status alone is ambiguous: several very
+ * different problems share `403`, and only Atlas's own code separates them.
  */
-export function classifyAtlasError(error: unknown): { kind: AtlasErrorKind; status?: number; message: string } {
+export function classifyAtlasError(error: unknown): {
+    kind: AtlasErrorKind;
+    status?: number;
+    message: string;
+    errorCode?: string;
+} {
     if (error instanceof AtlasApiError) {
+        const errorCode = error.errorCode;
         switch (error.statusCode) {
             case 401:
-                return { kind: 'auth', status: 401, message: error.message };
+                return { kind: 'auth', status: 401, message: error.message, errorCode };
             case 403:
-                return { kind: 'forbidden', status: 403, message: error.message };
+                return { kind: 'forbidden', status: 403, message: error.message, errorCode };
             case 429:
-                return { kind: 'rateLimited', status: 429, message: error.message };
+                return { kind: 'rateLimited', status: 429, message: error.message, errorCode };
             default:
-                return { kind: 'other', status: error.statusCode, message: error.message };
+                return { kind: 'other', status: error.statusCode, message: error.message, errorCode };
         }
     }
 
@@ -440,8 +449,17 @@ export class AtlasDiscoveryService {
         if (failure) {
             const classified = classifyAtlasError(failure.reason);
             atlasTrace(
-                `${owner}: discovery failed (${classified.kind}${classified.status ? ` ${String(classified.status)}` : ''}) - ${classified.message}`,
+                `${owner}: discovery failed (${classified.kind}${classified.status ? ` ${String(classified.status)}` : ''}${classified.errorCode ? ` ${classified.errorCode}` : ''}) - ${classified.message}`,
             );
+            if (classified.errorCode === 'IP_ADDRESS_NOT_ON_ACCESS_LIST') {
+                // Worth spelling out, because the surrounding log looks self-contradictory: the
+                // token was minted seconds earlier from the same machine. Atlas applies the access
+                // list when a token is *used*, not when it is created, and the list is configured
+                // per credential, so a sibling credential on the same IP can be working fine.
+                atlasTrace(
+                    `${owner}: Atlas rejected the caller's IP. The API access list is configured per credential, and it is enforced when a token is used rather than when it is minted, so another credential may still work from this same machine.`,
+                );
+            }
             return {
                 record,
                 organizations: [],

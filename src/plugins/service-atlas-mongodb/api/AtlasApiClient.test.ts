@@ -20,6 +20,7 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
+import { ext } from '../../../extensionVariables';
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasApiClient, AtlasApiError } from './AtlasApiClient';
 
@@ -27,11 +28,11 @@ const session = { type: 'serviceaccount', accessToken: 'token-1' } as const;
 
 const fetchMock = jest.fn();
 
-function jsonResponse(body: unknown, status = 200): Response {
+function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}): Response {
     return {
         ok: status >= 200 && status < 300,
         status,
-        headers: { get: (): string | null => null },
+        headers: { get: (name: string): string | null => headers[name.toLowerCase()] ?? null },
         json: () => Promise.resolve(body),
         text: () => Promise.resolve(JSON.stringify(body)),
     } as unknown as Response;
@@ -56,7 +57,71 @@ function requestedUrls(): string[] {
 
 beforeEach(() => {
     fetchMock.mockReset();
+    (ext.outputChannel.warn as jest.Mock).mockClear();
+    (ext.outputChannel.trace as jest.Mock).mockClear();
     global.fetch = fetchMock as unknown as typeof fetch;
+});
+
+describe('AtlasApiClient error reporting', () => {
+    it('keeps the whole Atlas error envelope instead of reducing it to detail', async () => {
+        // errorCode is the only stable, machine-readable part, and it is what separates an IP
+        // access list rejection from any other 403.
+        fetchMock.mockResolvedValueOnce(
+            jsonResponse(
+                {
+                    error: 403,
+                    errorCode: 'IP_ADDRESS_NOT_ON_ACCESS_LIST',
+                    reason: 'Forbidden',
+                    detail: 'IP address 203.0.113.9 is not allowed to access this resource.',
+                    parameters: ['203.0.113.9'],
+                },
+                403,
+            ),
+        );
+
+        const error = await new AtlasApiClient(session).listProjects().catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(AtlasApiError);
+        expect((error as AtlasApiError).errorCode).toBe('IP_ADDRESS_NOT_ON_ACCESS_LIST');
+        expect((error as AtlasApiError).detail).toContain('203.0.113.9');
+
+        const warning = String((ext.outputChannel.warn as jest.Mock).mock.calls[0][0]);
+        expect(warning).toContain('errorCode=IP_ADDRESS_NOT_ON_ACCESS_LIST');
+        expect(warning).toContain('reason=Forbidden');
+        expect(warning).toContain('detail=IP address 203.0.113.9');
+        expect(warning).toContain('parameters=["203.0.113.9"]');
+    });
+
+    it('traces the rate-limit headers, which are the only way to spot throttling', async () => {
+        fetchMock.mockResolvedValueOnce(
+            jsonResponse({ errorCode: 'RATE_LIMITED', detail: 'Too many requests.' }, 429, {
+                'retry-after': '30',
+                'x-ratelimit-remaining': '0',
+                'x-request-id': 'req-abc',
+            }),
+        );
+
+        await expect(new AtlasApiClient(session).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
+
+        const traced = (ext.outputChannel.trace as jest.Mock).mock.calls.map((call) => String(call[0])).join('\n');
+        expect(traced).toContain('retry-after=30');
+        expect(traced).toContain('x-ratelimit-remaining=0');
+        expect(traced).toContain('x-request-id=req-abc');
+    });
+
+    it('keeps a bounded slice of a non-JSON error body rather than dropping it', async () => {
+        fetchMock.mockResolvedValueOnce({
+            ok: false,
+            status: 502,
+            headers: { get: (): string | null => null },
+            json: () => Promise.reject(new Error('not json')),
+            text: () => Promise.resolve('<html>Bad Gateway</html>'),
+        } as unknown as Response);
+
+        await expect(new AtlasApiClient(session).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
+
+        expect(String((ext.outputChannel.warn as jest.Mock).mock.calls[0][0])).toContain('body=<html>Bad Gateway');
+    });
 });
 
 describe('AtlasApiClient pagination', () => {

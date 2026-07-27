@@ -258,20 +258,25 @@ export class AtlasApiClient {
 
     /**
      * Handles API error responses with user-friendly messages.
+     *
+     * The whole Atlas error envelope is traced, not just `detail`. Atlas answers with
+     * `{ error, errorCode, reason, detail, parameters }`, and `errorCode` is the only part that is
+     * stable and machine-readable: it is what separates `IP_ADDRESS_NOT_ON_ACCESS_LIST` from any
+     * other `403`, and a throttled request from a genuinely forbidden one. Reducing all of that to
+     * `detail` made real diagnosis guesswork.
      */
     private async handleErrorResponse(response: Response): Promise<never> {
-        let detail: string;
-
-        try {
-            const errorBody = (await response.json()) as { detail?: string; error?: string; reason?: string };
-            detail = errorBody.detail ?? errorBody.error ?? errorBody.reason ?? '';
-        } catch {
-            detail = await response.text();
-        }
+        const body = await readAtlasErrorBody(response);
+        const detail = body.detail ?? body.reason ?? body.raw ?? '';
 
         atlasWarn(
-            `${this.describeClient()} request failed with ${String(response.status)}${detail ? `: ${detail}` : ''}`,
+            `${this.describeClient()} request failed with ${String(response.status)}${describeAtlasErrorBody(body)}`,
         );
+
+        const diagnostics = describeDiagnosticHeaders(response);
+        if (diagnostics) {
+            atlasTrace(`${this.describeClient()} response diagnostics: ${diagnostics}`);
+        }
 
         switch (response.status) {
             case 401:
@@ -281,6 +286,7 @@ export class AtlasApiClient {
                         : vscode.l10n.t('Authentication failed. Please sign in again.'),
                     response.status,
                     detail,
+                    body.errorCode,
                 );
             case 403:
                 throw new AtlasApiError(
@@ -289,22 +295,115 @@ export class AtlasApiClient {
                         : vscode.l10n.t('Access denied. Verify your API key has the required permissions.'),
                     response.status,
                     detail,
+                    body.errorCode,
                 );
             case 404:
-                throw new AtlasApiError(vscode.l10n.t('Resource not found.'), response.status);
+                throw new AtlasApiError(vscode.l10n.t('Resource not found.'), response.status, detail, body.errorCode);
             case 429:
                 throw new AtlasApiError(
                     vscode.l10n.t('Rate limited by Atlas API. Please try again shortly.'),
                     response.status,
+                    detail,
+                    body.errorCode,
                 );
             default:
                 throw new AtlasApiError(
                     vscode.l10n.t('Atlas API error ({0}): {1}', String(response.status), detail),
                     response.status,
                     detail,
+                    body.errorCode,
                 );
         }
     }
+}
+
+/** The error envelope the Atlas Admin API returns, plus the raw text when it is not JSON. */
+interface AtlasErrorBody {
+    /** Stable machine-readable code, for example `IP_ADDRESS_NOT_ON_ACCESS_LIST`. */
+    errorCode?: string;
+    /** Short reason phrase, for example `Forbidden`. */
+    reason?: string;
+    /** Human-readable explanation, often the most useful part. */
+    detail?: string;
+    /** Values Atlas substituted into `detail`. */
+    parameters?: unknown[];
+    /** Response text, kept when the body was not JSON at all. */
+    raw?: string;
+}
+
+/** Longest response text kept when the error body is not JSON. */
+const MAX_RAW_ERROR_LENGTH = 500;
+
+async function readAtlasErrorBody(response: Response): Promise<AtlasErrorBody> {
+    let text: string;
+    try {
+        text = await response.text();
+    } catch {
+        return {};
+    }
+
+    try {
+        const parsed = JSON.parse(text) as AtlasErrorBody;
+        return {
+            errorCode: typeof parsed.errorCode === 'string' ? parsed.errorCode : undefined,
+            reason: typeof parsed.reason === 'string' ? parsed.reason : undefined,
+            detail: typeof parsed.detail === 'string' ? parsed.detail : undefined,
+            parameters: Array.isArray(parsed.parameters) ? parsed.parameters : undefined,
+        };
+    } catch {
+        // Not JSON: keep a bounded slice of whatever came back rather than dropping it silently.
+        return { raw: text.slice(0, MAX_RAW_ERROR_LENGTH) };
+    }
+}
+
+/** Renders every populated part of the error envelope for the log. */
+function describeAtlasErrorBody(body: AtlasErrorBody): string {
+    const parts: string[] = [];
+    if (body.errorCode) {
+        parts.push(`errorCode=${body.errorCode}`);
+    }
+    if (body.reason) {
+        parts.push(`reason=${body.reason}`);
+    }
+    if (body.detail) {
+        parts.push(`detail=${body.detail}`);
+    }
+    if (body.parameters && body.parameters.length > 0) {
+        parts.push(`parameters=${JSON.stringify(body.parameters)}`);
+    }
+    if (body.raw) {
+        parts.push(`body=${body.raw}`);
+    }
+    return parts.length > 0 ? `: ${parts.join(' ')}` : '';
+}
+
+/**
+ * Response headers worth logging when a request fails.
+ *
+ * Throttling is the case this exists for: Atlas can answer a throttled request with a status that
+ * does not obviously say "slow down", and the rate-limit headers are the only way to tell. The
+ * request id makes a report to MongoDB support actionable. Nothing here can carry credentials.
+ */
+const DIAGNOSTIC_HEADERS = [
+    'retry-after',
+    'x-ratelimit-limit',
+    'x-ratelimit-remaining',
+    'x-ratelimit-reset',
+    'x-envoy-upstream-service-time',
+    'x-request-id',
+    'request-id',
+    'date',
+];
+
+function describeDiagnosticHeaders(response: Response): string {
+    const parts: string[] = [];
+    for (const name of DIAGNOSTIC_HEADERS) {
+        const value = response.headers.get(name);
+        if (value) {
+            parts.push(`${name}=${value}`);
+        }
+    }
+    return parts.join(' ');
 }
 
 /**
@@ -315,6 +414,11 @@ export class AtlasApiError extends Error {
         message: string,
         public readonly statusCode: number,
         public readonly detail?: string,
+        /**
+         * Atlas's stable machine-readable code, for example `IP_ADDRESS_NOT_ON_ACCESS_LIST`.
+         * The status alone is ambiguous: several very different problems share `403`.
+         */
+        public readonly errorCode?: string,
     ) {
         super(message);
         this.name = 'AtlasApiError';
