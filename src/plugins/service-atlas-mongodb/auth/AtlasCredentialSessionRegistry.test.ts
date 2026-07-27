@@ -48,6 +48,7 @@ jest.mock('../../../extensionVariables', () => ({
             },
             onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
+        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
     },
 }));
 

@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as vscode from 'vscode';
+import { atlasTrace, atlasWarn, formatMs } from '../atlasTrace';
 import { type AtlasSessionRefresher } from '../auth/AtlasCredentialSessionRegistry';
 import { type AtlasSession } from '../auth/AtlasSession';
 import { ATLAS_API_BASE_URL } from '../config';
@@ -49,10 +50,13 @@ export class AtlasApiClient {
      * (Service Account) are transparently refreshed and the request retried once if
      * the access token is rejected (401/403). The user is only signed out - and therefore
      * prompted to sign in again - when the credentials themselves are completely rejected.
+     * @param owner Optional secret-free credential description used to correlate trace output
+     * when several credentials are querying Atlas at the same time.
      */
     constructor(
         session: AtlasSession,
         private readonly sessionManager?: AtlasSessionRefresher,
+        private readonly owner?: string,
     ) {
         this.session = session;
     }
@@ -105,12 +109,15 @@ export class AtlasApiClient {
     private async requestAllPages<T>(path: string, signal?: AbortSignal): Promise<T[]> {
         const separator = path.includes('?') ? '&' : '?';
         const collected: T[] = [];
+        const startedAt = Date.now();
+        let pagesFetched = 0;
 
         for (let pageNum = 1; pageNum <= ATLAS_MAX_PAGES; pageNum++) {
             const pagePath = `${path}${separator}itemsPerPage=${String(ATLAS_PAGE_SIZE)}&pageNum=${String(pageNum)}`;
             const response = await this.request<AtlasPaginatedResponse<T>>(pagePath, signal);
             const results = Array.isArray(response.results) ? response.results : [];
             collected.push(...results);
+            pagesFetched = pageNum;
 
             if (results.length < ATLAS_PAGE_SIZE) {
                 break;
@@ -122,7 +129,23 @@ export class AtlasApiClient {
             }
         }
 
+        if (pagesFetched === ATLAS_MAX_PAGES) {
+            atlasWarn(
+                `${this.describeClient()} GET ${path} hit the ${String(ATLAS_MAX_PAGES)}-page ceiling; results may be truncated`,
+            );
+        }
+
+        atlasTrace(
+            `${this.describeClient()} GET ${path} -> ${String(collected.length)} item(s) across ${String(pagesFetched)} page(s) in ${formatMs(startedAt)}`,
+        );
+
         return collected;
+    }
+
+    /** Short, secret-free description of this client for log correlation. */
+    private describeClient(): string {
+        const auth = this.session.type === 'serviceaccount' ? 'service account' : 'api key';
+        return this.owner ? `[${this.owner} · ${auth}]` : `[${auth}]`;
     }
 
     /**
@@ -143,11 +166,15 @@ export class AtlasApiClient {
             const canRefresh = this.sessionManager !== undefined && this.session.type === 'serviceaccount';
 
             if (isAuthFailure && canRefresh) {
+                atlasTrace(
+                    `${this.describeClient()} access token rejected on ${path}; minting a fresh token and retrying once`,
+                );
                 const refreshedSession = await this.sessionManager!.tryRefreshIfPossible();
                 if (refreshedSession) {
                     this.session = refreshedSession;
                     return await this.requestOnce<T>(path, signal);
                 }
+                atlasWarn(`${this.describeClient()} could not mint a fresh token; surfacing the original failure`);
             }
 
             throw error;
@@ -160,6 +187,7 @@ export class AtlasApiClient {
      */
     private async requestOnce<T>(path: string, signal?: AbortSignal): Promise<T> {
         const url = `${ATLAS_API_BASE_URL}${path}`;
+        const startedAt = Date.now();
         const headers: Record<string, string> = {
             Accept: 'application/vnd.atlas.2023-02-01+json',
         };
@@ -168,6 +196,7 @@ export class AtlasApiClient {
             headers['Authorization'] = `Bearer ${this.session.accessToken}`;
 
             const response = await fetch(url, { method: 'GET', headers, signal });
+            atlasTrace(`${this.describeClient()} GET ${path} -> ${String(response.status)} in ${formatMs(startedAt)}`);
 
             if (!response.ok) {
                 await this.handleErrorResponse(response);
@@ -202,6 +231,9 @@ export class AtlasApiClient {
             headers['Authorization'] = authHeader;
 
             const authedResponse = await fetch(url, { method: 'GET', headers, signal });
+            atlasTrace(
+                `${this.describeClient()} GET ${path} -> ${String(authedResponse.status)} in ${formatMs(startedAt)} (digest challenge answered)`,
+            );
 
             if (!authedResponse.ok) {
                 await this.handleErrorResponse(authedResponse);
@@ -209,6 +241,10 @@ export class AtlasApiClient {
 
             return (await authedResponse.json()) as T;
         }
+
+        atlasTrace(
+            `${this.describeClient()} GET ${path} -> ${String(initialResponse.status)} in ${formatMs(startedAt)}`,
+        );
 
         if (!initialResponse.ok) {
             await this.handleErrorResponse(initialResponse);
@@ -229,6 +265,10 @@ export class AtlasApiClient {
         } catch {
             detail = await response.text();
         }
+
+        atlasWarn(
+            `${this.describeClient()} request failed with ${String(response.status)}${detail ? `: ${detail}` : ''}`,
+        );
 
         switch (response.status) {
             case 401:

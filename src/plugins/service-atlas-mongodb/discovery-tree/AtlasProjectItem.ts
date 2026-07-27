@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { AtlasExperience } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import {
@@ -15,6 +17,7 @@ import {
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { AtlasApiClient } from '../api/AtlasApiClient';
+import { atlasTrace } from '../atlasTrace';
 import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { createAtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasProject } from '../models/AtlasProjectModel';
@@ -43,6 +46,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
+        atlasTrace(`project "${this.project.name}": expanding, listing clusters through its owning credential`);
         const session = await this.discoveryService.sessionRegistry.getSession(this.ownerCredentialId);
         if (!session) {
             await showAtlasLoadFailure(
@@ -87,6 +91,18 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
         return (
             children?.some((child) => isTreeElementWithContextValue(child) && child.contextValue === 'error') ?? false
         );
+    }
+
+    /**
+     * Refreshing a project re-derives its owning credential's session before listing clusters, so
+     * a role change made in Atlas takes effect immediately instead of waiting for the cached
+     * Service Account token to expire.
+     */
+    public async refresh(_context: IActionContext): Promise<void> {
+        atlasTrace(`project "${this.project.name}": explicit refresh requested`);
+        await this.discoveryService.sessionRegistry.refreshSession(this.ownerCredentialId);
+        ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
+        ext.discoveryBranchDataProvider.refresh(this);
     }
 
     public getTreeItem(): vscode.TreeItem {

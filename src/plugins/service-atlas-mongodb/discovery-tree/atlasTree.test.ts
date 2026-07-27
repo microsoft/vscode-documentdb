@@ -61,7 +61,7 @@ jest.mock('../../../extensionVariables', () => ({
             onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
         discoveryBranchDataProvider: { refresh: jest.fn(), resetNodeErrorState: jest.fn() },
-        outputChannel: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
+        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
     },
 }));
 
@@ -136,10 +136,16 @@ function snapshotOf(overrides: Partial<AtlasDiscoverySnapshot> = {}): AtlasDisco
 function serviceStub(snapshot: AtlasDiscoverySnapshot): AtlasDiscoveryService {
     return {
         listAll: jest.fn().mockResolvedValue(snapshot),
+        refreshAll: jest.fn().mockResolvedValue(snapshot),
         invalidate: jest.fn(),
         reset: jest.fn(),
         retryCredential: jest.fn(),
-        sessionRegistry: { getSession: jest.fn(), refresherFor: jest.fn(), invalidate: jest.fn() },
+        sessionRegistry: {
+            getSession: jest.fn(),
+            refresherFor: jest.fn(),
+            invalidate: jest.fn(),
+            refreshSession: jest.fn(),
+        },
     } as unknown as AtlasDiscoveryService;
 }
 
@@ -257,14 +263,15 @@ describe('AtlasServiceRootItem', () => {
         expect(children[0].id).not.toContain('retry');
     });
 
-    it('re-queries every credential on an explicit refresh', async () => {
+    it('re-queries every credential with a fresh session on an explicit refresh', async () => {
         const service = serviceStub(snapshotOf());
         const root = new AtlasServiceRootItem(service, 'discoveryView');
 
         await root.refresh({} as IActionContext);
 
-        expect(service.invalidate).toHaveBeenCalled();
-        expect(service.listAll).toHaveBeenCalledWith({ forceRefresh: true, includeClusters: false });
+        // refreshAll re-derives every session, which is what makes a role change in Atlas visible
+        // instead of reusing a Service Account token minted with the old scope.
+        expect(service.refreshAll).toHaveBeenCalledWith({ includeClusters: false });
     });
 
     it('marks the current view mode in the context value so the toggle can be gated', () => {
@@ -388,5 +395,17 @@ describe('AtlasOrganizationItem', () => {
         expect(treeItem.description).toBeUndefined();
         expect((treeItem.iconPath as { id: string }).id).toBe('organization');
         expect((treeItem.tooltip as unknown as MarkdownStringMock).value).toContain('\\*\\*Acme\\*\\*');
+    });
+
+    it('re-queries the fleet when the organization itself is refreshed', async () => {
+        // Regression: the organization's children come from the shared snapshot, so without its own
+        // refresh hook the generic path just re-read the cache. A user who widened a credential's
+        // roles in Atlas and refreshed the organization kept seeing the stale `empty` placeholder.
+        const service = serviceStub(snapshotOf());
+        const item = new AtlasOrganizationItem('root', org('org-1', 'Acme Corp'), service);
+
+        await item.refresh({} as IActionContext);
+
+        expect(service.refreshAll).toHaveBeenCalled();
     });
 });

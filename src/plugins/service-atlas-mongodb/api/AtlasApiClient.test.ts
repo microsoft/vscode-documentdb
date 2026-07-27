@@ -14,6 +14,12 @@ jest.mock('vscode', () => ({
     },
 }));
 
+jest.mock('../../../extensionVariables', () => ({
+    ext: {
+        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
+    },
+}));
+
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasApiClient, AtlasApiError } from './AtlasApiClient';
 

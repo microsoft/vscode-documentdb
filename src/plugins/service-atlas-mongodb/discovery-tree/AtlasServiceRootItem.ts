@@ -15,6 +15,7 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
+import { atlasTrace } from '../atlasTrace';
 import { getAtlasViewMode } from '../commands/switchAtlasViewMode';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { readAtlasCredentials } from '../credentials/atlasCredentialStore';
@@ -67,10 +68,14 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
     async getChildren(): Promise<ExtTreeElementBase[]> {
         const credentials = await readAtlasCredentials();
         if (credentials.length === 0) {
+            atlasTrace('root: no credentials stored, showing the sign-in row');
             return [this.createSignInNode()];
         }
 
         const listMode = getAtlasViewMode() === 'list';
+        atlasTrace(
+            `root: expanding in ${listMode ? 'list' : 'tree'} mode with ${String(credentials.length)} credential(s)`,
+        );
         const snapshot = await this.discoveryService.listAll({ includeClusters: listMode });
 
         const children: ExtTreeElementBase[] = [];
@@ -85,6 +90,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
         );
 
         if (children.length === 0) {
+            atlasTrace('root: nothing visible to any credential, showing the empty placeholder');
             return [
                 createEmptyPlaceholderNode(
                     this,
@@ -142,16 +148,13 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
     }
 
     /**
-     * Explicit refresh re-attempts every credential, healthy and failed alike. Passive expansion
-     * reuses the cached snapshot, so a persistently failing credential is not hammered every time
-     * a node is expanded.
+     * Explicit refresh re-attempts every credential, healthy and failed alike, and re-derives
+     * every session first. Passive expansion reuses the cached snapshot, so a persistently failing
+     * credential is not hammered every time a node is expanded.
      */
     public async refresh(_context: IActionContext): Promise<void> {
-        this.discoveryService.invalidate();
-        await this.discoveryService.listAll({
-            forceRefresh: true,
-            includeClusters: getAtlasViewMode() === 'list',
-        });
+        atlasTrace('root: explicit refresh requested');
+        await this.discoveryService.refreshAll({ includeClusters: getAtlasViewMode() === 'list' });
         ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
         ext.discoveryBranchDataProvider.refresh(this);
     }

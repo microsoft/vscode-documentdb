@@ -15,6 +15,7 @@
  * - a credential whose secret was rejected can be marked failed without disturbing its peers.
  */
 
+import { atlasTrace, atlasWarn, shortId } from '../atlasTrace';
 import {
     cacheServiceAccountToken,
     readAtlasCredentialSecrets,
@@ -105,12 +106,14 @@ export class AtlasCredentialSessionRegistry {
 
         const secrets = await readAtlasCredentialSecrets(credentialId);
         if (!secrets) {
+            atlasWarn(`credential ${shortId(credentialId)} has no stored secret; cannot build a session`);
             return undefined;
         }
 
         if (secrets.authMethod === 'apikey') {
             // Digest auth carries no token, so there is nothing to refresh. Re-deriving the
             // session is still the right answer: it picks up a secret the user just replaced.
+            atlasTrace(`credential ${shortId(credentialId)}: re-derived api key session from storage`);
             return this.storeSession(credentialId, {
                 type: 'apikey',
                 publicKey: secrets.publicKey,
@@ -118,6 +121,7 @@ export class AtlasCredentialSessionRegistry {
             });
         }
 
+        atlasTrace(`credential ${shortId(credentialId)}: forcing a fresh service account token`);
         return this.mintServiceAccountToken(credentialId, secrets);
     }
 
@@ -144,10 +148,12 @@ export class AtlasCredentialSessionRegistry {
     private async resolveSession(credentialId: string): Promise<AtlasSession | undefined> {
         const secrets = await readAtlasCredentialSecrets(credentialId);
         if (!secrets) {
+            atlasWarn(`credential ${shortId(credentialId)} has no stored secret; cannot build a session`);
             return undefined;
         }
 
         if (secrets.authMethod === 'apikey') {
+            atlasTrace(`credential ${shortId(credentialId)}: using api key session (digest auth, no token)`);
             return this.storeSession(credentialId, {
                 type: 'apikey',
                 publicKey: secrets.publicKey,
@@ -156,9 +162,13 @@ export class AtlasCredentialSessionRegistry {
         }
 
         if (secrets.accessToken && !isExpired(secrets.expiresAt)) {
+            atlasTrace(`credential ${shortId(credentialId)}: reusing the cached service account token`);
             return this.storeSession(credentialId, { type: 'serviceaccount', accessToken: secrets.accessToken });
         }
 
+        atlasTrace(
+            `credential ${shortId(credentialId)}: cached service account token is missing or expired, minting a new one`,
+        );
         return this.mintServiceAccountToken(credentialId, secrets);
     }
 
@@ -166,6 +176,7 @@ export class AtlasCredentialSessionRegistry {
         credentialId: string,
         secrets: AtlasCredentialSecrets & { authMethod: 'serviceaccount' },
     ): Promise<AtlasSession | undefined> {
+        const startedAt = Date.now();
         try {
             const tokenResponse = await fetchServiceAccountToken(secrets.clientId, secrets.clientSecret);
             await cacheServiceAccountToken(
@@ -173,13 +184,18 @@ export class AtlasCredentialSessionRegistry {
                 tokenResponse.access_token,
                 Date.now() + tokenResponse.expires_in * 1000,
             );
+            atlasTrace(
+                `credential ${shortId(credentialId)}: minted a service account token in ${String(Date.now() - startedAt)}ms, valid for ${String(tokenResponse.expires_in)}s`,
+            );
             return this.storeSession(credentialId, {
                 type: 'serviceaccount',
                 accessToken: tokenResponse.access_token,
             });
-        } catch {
+        } catch (error) {
             // The credential keeps its stored secret so the user can fix the Atlas-side problem
             // and retry from the credential-management flow without re-entering it.
+            const message = error instanceof Error ? error.message : String(error);
+            atlasWarn(`credential ${shortId(credentialId)}: service account token request failed: ${message}`);
             return undefined;
         }
     }

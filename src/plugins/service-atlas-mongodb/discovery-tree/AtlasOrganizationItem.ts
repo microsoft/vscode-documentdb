@@ -3,7 +3,9 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
+import { ext } from '../../../extensionVariables';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import {
     isTreeElementWithContextValue,
@@ -11,6 +13,7 @@ import {
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
+import { atlasTrace } from '../atlasTrace';
 import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasOrganization } from '../models/AtlasProjectModel';
 import { AtlasProjectItem } from './AtlasProjectItem';
@@ -47,6 +50,10 @@ export class AtlasOrganizationItem implements TreeElement, TreeElementWithContex
         const snapshot = await this.discoveryService.listAll();
         const projects = snapshot.projects.filter((entry) => entry.project.orgId === this.organization.id);
 
+        atlasTrace(
+            `organization "${this.organization.name}": ${String(projects.length)} project(s) from the current snapshot`,
+        );
+
         if (projects.length === 0) {
             return [
                 createEmptyPlaceholderNode(
@@ -74,6 +81,21 @@ export class AtlasOrganizationItem implements TreeElement, TreeElementWithContex
         return (
             children?.some((child) => isTreeElementWithContextValue(child) && child.contextValue === 'error') ?? false
         );
+    }
+
+    /**
+     * Refreshing an organization re-attempts the whole fleet, because its project children come
+     * from the shared snapshot rather than from a request of its own.
+     *
+     * Without this hook the generic refresh path would simply re-read the cached snapshot, so a
+     * user who fixed roles in Atlas and refreshed the organization they were looking at would keep
+     * seeing the stale result.
+     */
+    public async refresh(_context: IActionContext): Promise<void> {
+        atlasTrace(`organization "${this.organization.name}": explicit refresh requested`);
+        await this.discoveryService.refreshAll();
+        ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
+        ext.discoveryBranchDataProvider.refresh(this);
     }
 
     public getTreeItem(): vscode.TreeItem {

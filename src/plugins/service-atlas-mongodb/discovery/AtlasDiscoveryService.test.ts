@@ -54,6 +54,7 @@ jest.mock('../../../extensionVariables', () => ({
             },
             onDidChange: (): { dispose: () => void } => ({ dispose: (): void => {} }),
         },
+        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
     },
 }));
 
@@ -276,6 +277,28 @@ describe('AtlasDiscoveryService.listAll', () => {
 
         await service.listAll({ forceRefresh: true });
         expect(mockListProjects).toHaveBeenCalledTimes(2);
+    });
+
+    it('re-derives every session on refreshAll so an Atlas role change is picked up', async () => {
+        // Regression: a Service Account access token carries the roles it was minted with and is
+        // cached for its lifetime. Reusing it after the user widened the account's roles kept
+        // reporting the old, empty scope until the token expired.
+        await addApiKeyCredential('aaaaaaaa');
+        mockListOrganizations.mockResolvedValue([{ id: 'org-1', name: 'Acme Corp' }]);
+        mockListProjects.mockResolvedValueOnce([]).mockResolvedValueOnce([project('p1', 'Payments')]);
+
+        const registry = new AtlasCredentialSessionRegistry();
+        const refreshSession = jest.spyOn(registry, 'refreshSession');
+        const service = new AtlasDiscoveryService(registry);
+
+        const before = await service.listAll();
+        expect(before.projects).toEqual([]);
+        expect(refreshSession).not.toHaveBeenCalled();
+
+        const after = await service.refreshAll();
+
+        expect(refreshSession).toHaveBeenCalledTimes(1);
+        expect(after.projects.map((p) => p.project.name)).toEqual(['Payments']);
     });
 
     it('re-queries when clusters are requested but the cached snapshot has none', async () => {

@@ -20,6 +20,7 @@
 import * as l10n from '@vscode/l10n';
 import { createConcurrencyLimiter } from '../../../utils/concurrencyLimiter';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
+import { atlasTrace, describeCredential, formatMs } from '../atlasTrace';
 import { AtlasCredentialSessionRegistry } from '../auth/AtlasCredentialSessionRegistry';
 import {
     getAtlasCredential,
@@ -99,6 +100,12 @@ export interface ListAllOptions {
     readonly includeClusters?: boolean;
     /** Ignore the cached snapshot and re-query every credential. */
     readonly forceRefresh?: boolean;
+    /**
+     * Re-derive every credential's session before querying, discarding cached Service Account
+     * access tokens. Needed after the user changes roles in Atlas, because a token carries the
+     * scope it was minted with. Prefer {@link AtlasDiscoveryService.refreshAll}.
+     */
+    readonly forceFreshSessions?: boolean;
     readonly signal?: AbortSignal;
 }
 
@@ -188,18 +195,46 @@ export class AtlasDiscoveryService {
         const needsClusters = options.includeClusters === true;
 
         if (!options.forceRefresh && this.snapshot && (!needsClusters || this.snapshot.clustersIncluded)) {
+            atlasTrace(
+                `listAll: serving the cached snapshot (${String(this.snapshot.organizations.length)} org(s), ${String(this.snapshot.projects.length)} project(s), ${String(this.snapshot.credentialErrors.length)} credential error(s))`,
+            );
             return this.snapshot;
         }
 
         if (this.inflight && !options.forceRefresh) {
+            atlasTrace('listAll: joining the in-flight discovery pass');
             return this.inflight;
         }
 
-        const work = this.buildSnapshot(needsClusters, options.signal).finally(() => {
-            this.inflight = undefined;
-        });
+        const work = this.buildSnapshot(needsClusters, options.signal, options.forceFreshSessions === true).finally(
+            () => {
+                this.inflight = undefined;
+            },
+        );
         this.inflight = work;
         return work;
+    }
+
+    /**
+     * Re-attempts the whole fleet from scratch: drops the cached snapshot **and** re-derives every
+     * credential's session before querying.
+     *
+     * Re-deriving the session is the part that matters after a permissions change in Atlas. A
+     * Service Account access token is minted with the roles the account had at that moment and is
+     * cached for its lifetime, so reusing it would keep reporting the old scope for up to an hour
+     * after the user grants a new role. An explicit refresh is a deliberate user action, so paying
+     * for one token mint per credential is the right trade.
+     */
+    public async refreshAll(
+        options: { includeClusters?: boolean; signal?: AbortSignal } = {},
+    ): Promise<AtlasDiscoverySnapshot> {
+        atlasTrace('refreshAll: dropping the cached snapshot and every cached session');
+        this.invalidate();
+        return this.listAll({
+            ...options,
+            forceRefresh: true,
+            forceFreshSessions: true,
+        });
     }
 
     /**
@@ -251,13 +286,24 @@ export class AtlasDiscoveryService {
         this.invalidate();
     }
 
-    private async buildSnapshot(includeClusters: boolean, signal?: AbortSignal): Promise<AtlasDiscoverySnapshot> {
+    private async buildSnapshot(
+        includeClusters: boolean,
+        signal?: AbortSignal,
+        forceFreshSessions = false,
+    ): Promise<AtlasDiscoverySnapshot> {
         const credentials = await readAtlasCredentials();
         const limit = createConcurrencyLimiter({ concurrency: CREDENTIAL_CONCURRENCY });
+        const startedAt = Date.now();
+
+        atlasTrace(
+            `listAll: querying ${String(credentials.length)} credential(s), clusters ${includeClusters ? 'included' : 'deferred to project expand'}${forceFreshSessions ? ', forcing fresh sessions' : ''}`,
+        );
 
         // `allSettled`, not `all`: a rejected credential must not discard its healthy peers.
         const settled = await Promise.allSettled(
-            credentials.map((record) => limit(() => this.queryCredential(record, includeClusters, signal))),
+            credentials.map((record) =>
+                limit(() => this.queryCredential(record, includeClusters, signal, forceFreshSessions)),
+            ),
         );
 
         const results: CredentialResult[] = [];
@@ -292,6 +338,11 @@ export class AtlasDiscoveryService {
         const snapshot = mergeResults(results, includeClusters);
         this.snapshot = snapshot;
         this.lastResults = results;
+
+        atlasTrace(
+            `listAll: done in ${formatMs(startedAt)} - ${String(snapshot.organizations.length)} org(s), ${String(snapshot.projects.length)} project(s), ${String(snapshot.clusters.length)} cluster(s), ${String(snapshot.credentialErrors.length)} credential error(s), ${String(snapshot.projectErrors.length)} project error(s)`,
+        );
+
         return snapshot;
     }
 
@@ -307,11 +358,16 @@ export class AtlasDiscoveryService {
         record: AtlasCredentialRecord,
         includeClusters: boolean,
         signal?: AbortSignal,
+        forceFreshSession = false,
     ): Promise<CredentialResult> {
         const label = resolveCredentialLabel(record);
-        const session = await this.sessions.getSession(record.id);
+        const owner = describeCredential(label, record.id);
+        const session = forceFreshSession
+            ? await this.sessions.refreshSession(record.id)
+            : await this.sessions.getSession(record.id);
 
         if (!session) {
+            atlasTrace(`${owner}: no usable session, reporting an auth error for this credential only`);
             return {
                 record,
                 organizations: [],
@@ -328,7 +384,7 @@ export class AtlasDiscoveryService {
             };
         }
 
-        const client = new AtlasApiClient(session, this.sessions.refresherFor(record.id));
+        const client = new AtlasApiClient(session, this.sessions.refresherFor(record.id), owner);
 
         let organizations: AtlasOrganization[] = [];
         let projects: AtlasProject[] = [];
@@ -343,6 +399,9 @@ export class AtlasDiscoveryService {
             ]);
         } catch (error) {
             const classified = classifyAtlasError(error);
+            atlasTrace(
+                `${owner}: discovery failed (${classified.kind}${classified.status ? ` ${String(classified.status)}` : ''}) - ${classified.message}`,
+            );
             return {
                 record,
                 organizations: [],
@@ -358,6 +417,17 @@ export class AtlasDiscoveryService {
                     retryable: true,
                 },
             };
+        }
+
+        atlasTrace(
+            `${owner}: sees ${String(organizations.length)} organization(s) and ${String(projects.length)} project(s)`,
+        );
+        if (projects.length === 0) {
+            // A healthy 200 with an empty list is an authoritative answer, not a failure. Saying so
+            // explicitly makes the difference from a 401/403 obvious in the log.
+            atlasTrace(
+                `${owner}: Atlas answered with an empty project list; this is a permissions/scope result, not an error`,
+            );
         }
 
         await this.cacheOrganizationMetadata(record, organizations);
@@ -387,6 +457,9 @@ export class AtlasDiscoveryService {
             }
 
             const classified = classifyAtlasError(outcome.reason);
+            atlasTrace(
+                `${owner}: cluster list for project "${project.name}" failed (${classified.kind}) - ${classified.message}`,
+            );
             projectErrors.push({
                 credentialId: record.id,
                 label,
@@ -398,6 +471,10 @@ export class AtlasDiscoveryService {
                 retryable: true,
             });
         }
+
+        atlasTrace(
+            `${owner}: found ${String(clusters.length)} cluster(s) across ${String(projects.length)} project(s)`,
+        );
 
         return { record, organizations, projects, clusters, projectErrors };
     }
