@@ -45,8 +45,9 @@ export class AtlasOrganizationItem implements TreeElement, TreeElementWithContex
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        // Uses the cached snapshot: expanding an organization must never re-attempt a credential
-        // that is already known to be failing.
+        // Reads the shared snapshot, which is cached only briefly: expanding several organizations
+        // in one go must not re-run the fleet query per node, but navigating back later should see
+        // current data rather than a frozen one.
         const snapshot = await this.discoveryService.listAll();
         const projects = snapshot.projects.filter((entry) => entry.project.orgId === this.organization.id);
 

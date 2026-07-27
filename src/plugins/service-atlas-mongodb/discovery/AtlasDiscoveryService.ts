@@ -116,6 +116,25 @@ const CREDENTIAL_CONCURRENCY = 4;
 const PROJECT_CONCURRENCY = 5;
 
 /**
+ * How long a snapshot may be served to passive tree expansion before it is re-fetched.
+ *
+ * The cache exists to stop a single interaction burst (expand the root, then expand three
+ * organizations) from re-running the fleet query four times, and to keep `ownerCredentialId`
+ * coherent between an organization node and its project children. Neither of those needs the
+ * cache to survive longer than the burst itself.
+ *
+ * Making it an invalidate-only cache is what produced stale-tree bugs: every node type had to
+ * remember to invalidate, and the one that forgot showed a permanently outdated answer. A short
+ * window removes that whole class of bug at the cost of a couple of fast requests, which is the
+ * right trade for an API with no timeouts and a 1-to-2 credential happy path.
+ *
+ * It cannot replace explicit invalidation for permissions changes: a Service Account access token
+ * carries the scope it was minted with and lives for about an hour, so an explicit refresh still
+ * has to re-derive sessions. See {@link AtlasDiscoveryService.refreshAll}.
+ */
+const SNAPSHOT_TTL_MS = 30_000;
+
+/**
  * Resolves the user-facing label for a credential: an explicit user label wins, then the cached
  * organization name, then a non-secret identity hint, then the record ID.
  */
@@ -174,6 +193,7 @@ export interface CredentialResult {
  */
 export class AtlasDiscoveryService {
     private snapshot: AtlasDiscoverySnapshot | undefined;
+    private snapshotTakenAt = 0;
     private lastResults: CredentialResult[] | undefined;
     private inflight: Promise<AtlasDiscoverySnapshot> | undefined;
 
@@ -188,17 +208,23 @@ export class AtlasDiscoveryService {
      * Returns everything visible across every stored credential. Never rejects because of a
      * single credential; per-credential failures come back in `credentialErrors`.
      *
-     * The cached snapshot is reused on passive tree expansion so a persistently failing credential
-     * is not re-attempted on every expand. An explicit refresh passes `forceRefresh`.
+     * The cached snapshot is reused on passive tree expansion, but only for {@link SNAPSHOT_TTL_MS},
+     * so navigating around cannot keep serving an answer the user has since fixed in Atlas. An
+     * explicit refresh passes `forceRefresh` and does not wait for the window to close.
      */
     public async listAll(options: ListAllOptions = {}): Promise<AtlasDiscoverySnapshot> {
         const needsClusters = options.includeClusters === true;
 
         if (!options.forceRefresh && this.snapshot && (!needsClusters || this.snapshot.clustersIncluded)) {
-            atlasTrace(
-                `listAll: serving the cached snapshot (${String(this.snapshot.organizations.length)} org(s), ${String(this.snapshot.projects.length)} project(s), ${String(this.snapshot.credentialErrors.length)} credential error(s))`,
-            );
-            return this.snapshot;
+            const age = Date.now() - this.snapshotTakenAt;
+            if (age < SNAPSHOT_TTL_MS) {
+                atlasTrace(
+                    `listAll: serving the cached snapshot, ${String(age)}ms old (${String(this.snapshot.organizations.length)} org(s), ${String(this.snapshot.projects.length)} project(s), ${String(this.snapshot.credentialErrors.length)} credential error(s))`,
+                );
+                return this.snapshot;
+            }
+
+            atlasTrace(`listAll: the cached snapshot is ${String(age)}ms old and has expired, re-querying`);
         }
 
         if (this.inflight && !options.forceRefresh) {
@@ -242,6 +268,7 @@ export class AtlasDiscoveryService {
      */
     public invalidate(): void {
         this.snapshot = undefined;
+        this.snapshotTakenAt = 0;
         this.lastResults = undefined;
         this.inflight = undefined;
     }
@@ -337,6 +364,7 @@ export class AtlasDiscoveryService {
 
         const snapshot = mergeResults(results, includeClusters);
         this.snapshot = snapshot;
+        this.snapshotTakenAt = Date.now();
         this.lastResults = results;
 
         atlasTrace(
@@ -350,6 +378,7 @@ export class AtlasDiscoveryService {
     private commit(results: CredentialResult[], clustersIncluded: boolean): AtlasDiscoverySnapshot {
         const snapshot = mergeResults(results, clustersIncluded);
         this.snapshot = snapshot;
+        this.snapshotTakenAt = Date.now();
         this.lastResults = results;
         return snapshot;
     }

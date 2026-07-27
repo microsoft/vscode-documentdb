@@ -264,7 +264,7 @@ describe('AtlasDiscoveryService.listAll', () => {
         expect(snapshot.clusters[0].projectName).toBe('Payments');
     });
 
-    it('caches the snapshot so passive reads never re-query a failing credential', async () => {
+    it('caches the snapshot so a burst of passive reads never re-queries a failing credential', async () => {
         await addApiKeyCredential('aaaaaaaa');
         mockListOrganizations.mockRejectedValue(new AtlasApiErrorMock('Credentials rejected', 401));
         mockListProjects.mockRejectedValue(new AtlasApiErrorMock('Credentials rejected', 401));
@@ -276,6 +276,29 @@ describe('AtlasDiscoveryService.listAll', () => {
         expect(mockListProjects).toHaveBeenCalledTimes(1);
 
         await service.listAll({ forceRefresh: true });
+        expect(mockListProjects).toHaveBeenCalledTimes(2);
+    });
+
+    it('expires the cached snapshot so passive reads cannot serve an indefinitely stale answer', async () => {
+        // Regression guard for the invalidate-only cache: every node type had to remember to
+        // invalidate, and the one that forgot showed an outdated tree forever.
+        await addApiKeyCredential('aaaaaaaa');
+        mockListOrganizations.mockResolvedValue([{ id: 'org-1', name: 'Acme Corp' }]);
+        mockListProjects.mockResolvedValue([]);
+
+        const service = newService();
+        await service.listAll();
+        await service.listAll();
+        expect(mockListProjects).toHaveBeenCalledTimes(1);
+
+        const realNow = Date.now;
+        try {
+            Date.now = () => realNow() + 60_000;
+            await service.listAll();
+        } finally {
+            Date.now = realNow;
+        }
+
         expect(mockListProjects).toHaveBeenCalledTimes(2);
     });
 
