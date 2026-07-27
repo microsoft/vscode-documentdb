@@ -183,15 +183,15 @@ implemented old item remains below as a regression journey.
 
 ## Priority index
 
-| #   | Priority | Item                                                               | Origin                  | Status         |
-| --- | -------- | ------------------------------------------------------------------ | ----------------------- | -------------- |
-| 1   | **P1**   | Vector creation is exposed without capability gating               | New Vector iteration    | 🔗 Tracked     |
-| 2   | **P1**   | Enabled empty Wildcard projection is silently omitted              | New Wildcard iteration  | 🚫 Closed      |
-| 3   | **P1**   | Revealed custom-name inputs have no accessible name                | New drawer iteration    | ✅ Implemented |
-| 4   | **P1**   | Advanced/Preview page changes do not manage or restore focus       | New drawer iteration    | ✅ Implemented |
-| 5   | **P2**   | Standard and Wildcard option drafts must be independent            | New drawer iteration    | ✅ Implemented |
-| 6   | **P2**   | Fixed-width rows and non-wrapping footer need narrow-panel support | New drawer iteration    | ✅ Implemented |
-| 7   | **P3**   | First-load failure still has no Retry affordance                   | Original review audit C | 🚫 Closed      |
+| #   | Priority | Item                                                               | Origin                  | Status                      |
+| --- | -------- | ------------------------------------------------------------------ | ----------------------- | --------------------------- |
+| 1   | **P1**   | Vector creation is exposed without capability gating               | New Vector iteration    | 🔗 Tracked                  |
+| 2   | **P1**   | Enabled empty Wildcard projection is silently omitted              | New Wildcard iteration  | 🚫 Closed                   |
+| 3   | **P1**   | Revealed custom-name inputs have no accessible name                | New drawer iteration    | ✅ Implemented (`414c0d2c`) |
+| 4   | **P1**   | Advanced/Preview page changes do not manage or restore focus       | New drawer iteration    | ✅ Implemented (`414c0d2c`) |
+| 5   | **P2**   | Standard and Wildcard option drafts must be independent            | New drawer iteration    | ✅ Implemented (`414c0d2c`) |
+| 6   | **P2**   | Fixed-width rows and non-wrapping footer need narrow-panel support | New drawer iteration    | ✅ Implemented (`414c0d2c`) |
+| 7   | **P3**   | First-load failure still has no Retry affordance                   | Original review audit C | 🚫 Closed                   |
 
 ## P0 — Blocking (the user gets stuck)
 
@@ -269,7 +269,7 @@ blocks Create. See [O2](#o2-what-should-an-empty-enabled-projection-mean-item-2)
 
 ### 3. Revealed custom-name inputs have no accessible name ⚠️
 
-**Priority:** P1 · **Status:** ✅ Implemented in working tree
+**Priority:** P1 · **Status:** ✅ Implemented in commit `414c0d2c`
 
 > **Decision (Iteration 3):** fix the accessible name. **Reason (operator):** the revealed
 > custom-name field is an interactive input and must announce its purpose independently of
@@ -295,12 +295,12 @@ name without a separate ARIA-only string.
 > ✅ **Implemented (Iteration 3):** added a visible localized **Index name** `Field` label to
 > the Standard/Wildcard and Vector custom-name inputs. File:
 > [CreateIndexDrawer.tsx](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx).
-> Working-tree implementation; commit reference pending. Verified by TypeScript and focused
+> Committed in `414c0d2c`. Verified by TypeScript and focused
 > formatting checks; full validation is recorded in the iteration outcome.
 
 ### 4. Advanced/Preview page changes do not manage or restore focus ⚠️
 
-**Priority:** P1 · **Status:** ✅ Implemented in working tree
+**Priority:** P1 · **Status:** ✅ Implemented in commit `414c0d2c`
 
 > **Decision (Iteration 3):** manage focus on every pushed-page transition. **Reason
 > (operator):** keyboard and screen-reader users need an explicit signal that the drawer body
@@ -330,15 +330,15 @@ keyboard traversal and Narrator/Screen Reader.
 > focus the pushed-page title, and restore focus to the matching entry on Back. The focused
 > title has a visible focus ring. Files:
 > [CreateIndexDrawer.tsx](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx) ·
-> [indexView.scss](../../../../src/webviews/documentdb/indexView/indexView.scss). Working-tree
-> implementation; commit reference pending. Verified by TypeScript and focused formatting
+> [indexView.scss](../../../../src/webviews/documentdb/indexView/indexView.scss). Committed in
+> `414c0d2c`. Verified by TypeScript and focused formatting
 > checks; complete keyboard/screen-reader confirmation remains part of the live pass.
 
 ## P2 — Polish, expectation, or feature gap
 
 ### 5. Standard and Wildcard option drafts must be independent ⚠️
 
-**Priority:** P2 · **Status:** ✅ Implemented in working tree
+**Priority:** P2 · **Status:** ✅ Implemented in commit `414c0d2c`
 
 > **Decision (Iteration 3):** make Standard, Wildcard, and Vector behave as three completely
 > independent dialogs. **Reason (operator):** switching index kind must not carry names,
@@ -365,11 +365,11 @@ rendering, previewing, and submitting.
 > [wildcardIndexForm.ts](../../../../src/webviews/documentdb/indexView/wildcardIndexForm.ts) ·
 > [CreateIndexDrawer.tsx](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx) ·
 > [wildcardIndexForm.test.ts](../../../../src/webviews/documentdb/indexView/wildcardIndexForm.test.ts).
-> Working-tree implementation; commit reference pending. Focused Jest result: 19 tests pass.
+> Committed in `414c0d2c`. Focused Jest result: 19 tests pass.
 
 ### 6. Fixed-width rows and non-wrapping footer need narrow-panel proof ⚠️
 
-**Priority:** P2 · **Status:** ✅ Implemented in working tree
+**Priority:** P2 · **Status:** ✅ Implemented in commit `414c0d2c`
 
 > **Decision (Iteration 3):** add wrapping support where the layout permits it; accept the
 > existing layout only if wrapping is not practical. **Reason (operator):** controls must
@@ -396,8 +396,8 @@ requirement line wraps independently above them.
 > ✅ **Implemented (Iteration 3):** field and projection rows now wrap, the type selector can
 > shrink from its preferred width, footer actions wrap, and the requirement line aligns
 > correctly when it spans multiple lines. File:
-> [indexView.scss](../../../../src/webviews/documentdb/indexView/indexView.scss). Working-tree
-> implementation; commit reference pending. Focused formatting and TypeScript checks pass;
+> [indexView.scss](../../../../src/webviews/documentdb/indexView/indexView.scss). Committed in
+> `414c0d2c`. Focused formatting and TypeScript checks pass;
 > narrow-panel and 200% zoom inspection remain in the live pass.
 
 ## P3 — Nice-to-have / cosmetic / acknowledged
@@ -469,15 +469,15 @@ The old review is not superseded silently. This table records the full carry-for
 
 ### Iteration 3 (2026-07-27) — pre-assessment seeded
 
-| #   | Item                              | Decision (why)                                                                    | Outcome            |
-| --- | --------------------------------- | --------------------------------------------------------------------------------- | ------------------ |
-| 1   | Vector capability gating          | Defer proper gating to the patch release; coordinate provider switching with #815 | 🔗 Tracked in #816 |
-| 2   | Empty enabled Wildcard projection | Accept omission because the resulting index definition is valid                   | 🚫 Closed          |
-| 3   | Custom-name accessible labels     | Add visible labels so each revealed input has an independent accessible name      | ✅ Implemented     |
-| 4   | Pushed-page focus management      | Focus pushed-page title and restore the opening entry on Back                     | ✅ Implemented     |
-| 5   | Independent per-kind drafts       | Treat the three kinds as fully independent dialogs                                | ✅ Implemented     |
-| 6   | Narrow-panel layout               | Add wrapping where practical                                                      | ✅ Implemented     |
-| 7   | Could-not-load Retry              | Ignore; toolbar Refresh is sufficient                                             | 🚫 Closed          |
+| #   | Item                              | Decision (why)                                                                    | Outcome                     |
+| --- | --------------------------------- | --------------------------------------------------------------------------------- | --------------------------- |
+| 1   | Vector capability gating          | Defer proper gating to the patch release; coordinate provider switching with #815 | 🔗 Tracked in #816          |
+| 2   | Empty enabled Wildcard projection | Accept omission because the resulting index definition is valid                   | 🚫 Closed                   |
+| 3   | Custom-name accessible labels     | Add visible labels so each revealed input has an independent accessible name      | ✅ Implemented (`414c0d2c`) |
+| 4   | Pushed-page focus management      | Focus pushed-page title and restore the opening entry on Back                     | ✅ Implemented (`414c0d2c`) |
+| 5   | Independent per-kind drafts       | Treat the three kinds as fully independent dialogs                                | ✅ Implemented (`414c0d2c`) |
+| 6   | Narrow-panel layout               | Add wrapping where practical                                                      | ✅ Implemented (`414c0d2c`) |
+| 7   | Could-not-load Retry              | Ignore; toolbar Refresh is sufficient                                             | 🚫 Closed                   |
 
 **Iteration 3 validation:** `npm run l10n`, `npm run prettier-fix`, `npm run lint`,
 `npx jest --no-coverage` (165 suites, 2,747 tests), and `npm run build` all pass. Lint
