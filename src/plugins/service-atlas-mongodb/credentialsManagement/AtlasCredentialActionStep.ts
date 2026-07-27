@@ -7,12 +7,13 @@ import { AzureWizardPromptStep, GoBackError, UserCancelledError } from '@microso
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { openAtlasCredentialsWebview } from '../../../webviews/documentdb/atlasCredentials/atlasCredentialsController';
-import { removeAtlasCredential } from '../credentials/atlasCredentialStore';
+import { readAtlasCredentialSecrets, removeAtlasCredential } from '../credentials/atlasCredentialStore';
 import { type AtlasCredentialsManagementWizardContext } from './AtlasCredentialsManagementWizardContext';
+import { buildAtlasAccessUrl } from './atlasDeepLinks';
 import { ATLAS_CREDENTIAL_MANAGEMENT_EXIT } from './SelectAtlasCredentialStep';
 
 interface CredentialActionQuickPickItem extends vscode.QuickPickItem {
-    action?: 'retry' | 'update' | 'remove' | 'back' | 'exit';
+    action?: 'retry' | 'openInAtlas' | 'update' | 'remove' | 'back' | 'exit';
 }
 
 /**
@@ -34,6 +35,18 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
                 detail: l10n.t('Re-attempt this credential only, leaving the others untouched.'),
                 iconPath: new vscode.ThemeIcon('refresh'),
                 action: 'retry',
+            },
+            {
+                // The two failures the extension can name but not fix, a denied IP access list and
+                // a role that is too narrow to see anything, are both only resolvable in the Atlas
+                // console, several clicks deep behind an organization picker.
+                label: l10n.t('Open in MongoDB Atlas'),
+                detail:
+                    status?.record.authMethod === 'serviceaccount'
+                        ? l10n.t('Review this Service Account\u2019s roles and IP access list in your browser.')
+                        : l10n.t('Review the organization\u2019s API keys and their IP access lists in your browser.'),
+                iconPath: new vscode.ThemeIcon('link-external'),
+                action: 'openInAtlas',
             },
             {
                 label: l10n.t('Update credentials…'),
@@ -71,6 +84,9 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
         switch (selected.action) {
             case 'retry':
                 await this.retry(context, credentialId, label);
+                return;
+            case 'openInAtlas':
+                await this.openInAtlas(context, credentialId);
                 return;
             case 'update':
                 await this.update(context, credentialId, label);
@@ -114,6 +130,42 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
 
         // Reload the list so the row reflects the new status, then return to it.
         context.credentials = [];
+        context.selectedCredentialId = undefined;
+        throw new GoBackError();
+    }
+
+    /**
+     * Opens this credential's access settings in the Atlas web console.
+     *
+     * Returns to the credential list rather than exiting: the user goes to Atlas, changes a role
+     * or allows their IP, comes back, and the next thing they need is "Retry". Nothing is marked
+     * as changed, because nothing in local storage was touched.
+     */
+    private async openInAtlas(context: AtlasCredentialsManagementWizardContext, credentialId: string): Promise<never> {
+        context.telemetry.properties.atlasCredentialAction = 'openInAtlas';
+
+        const record = context.credentials.find((candidate) => candidate.record.id === credentialId)?.record;
+
+        // The Service Account client id is the only part of the deep link that lives in secret
+        // storage. It is an identifier rather than a secret, but a read failure must not block the
+        // navigation, so it degrades to the organization's Service Account list.
+        let clientId: string | undefined;
+        if (record?.authMethod === 'serviceaccount') {
+            const secrets = await readAtlasCredentialSecrets(credentialId);
+            clientId = secrets?.authMethod === 'serviceaccount' ? secrets.clientId : undefined;
+        }
+
+        const url = record ? buildAtlasAccessUrl(record, clientId) : 'https://cloud.mongodb.com';
+        context.telemetry.properties.atlasDeepLinkTarget = record?.orgId
+            ? record.authMethod === 'serviceaccount'
+                ? clientId
+                    ? 'serviceAccount'
+                    : 'serviceAccounts'
+                : 'apiKeys'
+            : 'root';
+
+        await vscode.env.openExternal(vscode.Uri.parse(url));
+
         context.selectedCredentialId = undefined;
         throw new GoBackError();
     }

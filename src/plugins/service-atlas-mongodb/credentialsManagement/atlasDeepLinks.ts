@@ -1,0 +1,50 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/**
+ * Deep links into the MongoDB Atlas web UI.
+ *
+ * These exist for the failures the extension can diagnose but cannot fix. A `403` from an enforced
+ * IP access list, or a `200 []` caused by a too-narrow role, is only resolvable in Atlas itself,
+ * and the settings page is several clicks deep behind an organization picker. Handing the user the
+ * exact page turns "your credential needs attention" into something actionable.
+ *
+ * The URLs follow the shape the Atlas console uses today. They are best-effort navigation aids:
+ * an outdated link lands the user on an Atlas page rather than breaking anything, so every builder
+ * degrades to the least specific destination it can still be sure about.
+ */
+
+import { type AtlasCredentialRecord } from '../credentials/atlasCredentialStore';
+
+/** Root of the MongoDB Atlas web console. */
+const ATLAS_CLOUD_ROOT = 'https://cloud.mongodb.com';
+
+/**
+ * Builds the Atlas access-management URL for a credential.
+ *
+ * - Service Account with a known client ID: its detail page, which is where its roles and its own
+ *   IP access list live.
+ * - Service Account without a known client ID: the organization's Service Account list.
+ * - API Key: the organization's API key list. Per-key deep links need an internal key ID that the
+ *   Admin API does not hand back with the data used here, and the list is one click away.
+ * - No cached organization ID: the Atlas console root. This happens when a credential has never
+ *   completed a single successful request, which is exactly the `403` case, so the fallback has to
+ *   stay useful rather than being treated as an error.
+ *
+ * @param clientId Service Account client ID, read from secret storage. Ignored for API keys.
+ */
+export function buildAtlasAccessUrl(record: AtlasCredentialRecord, clientId?: string): string {
+    if (!record.orgId) {
+        return ATLAS_CLOUD_ROOT;
+    }
+
+    const access = `${ATLAS_CLOUD_ROOT}/v2#/org/${encodeURIComponent(record.orgId)}/access`;
+
+    if (record.authMethod !== 'serviceaccount') {
+        return `${access}/apiKeys`;
+    }
+
+    return clientId ? `${access}/serviceAccounts/${encodeURIComponent(clientId)}` : `${access}/serviceAccounts`;
+}

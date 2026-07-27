@@ -12,6 +12,8 @@ jest.mock('vscode', () => ({
     },
     QuickPickItemKind: { Separator: -1, Default: 0 },
     ProgressLocation: { Notification: 15 },
+    Uri: { parse: jest.fn((value: string) => ({ toString: () => value })) },
+    env: { openExternal: jest.fn().mockResolvedValue(true) },
     window: {
         showInformationMessage: jest.fn(),
         withProgress: jest.fn(async (_options: unknown, task: () => Promise<unknown>) => task()),
@@ -84,10 +86,12 @@ import {
     readAtlasCredentials,
     resetAtlasCredentialStoreCache,
     upsertAtlasCredential,
+    type AtlasCredentialRecord,
 } from '../credentials/atlasCredentialStore';
 import { type AtlasDiscoveryService, type AtlasDiscoverySnapshot } from '../discovery/AtlasDiscoveryService';
 import { AtlasCredentialActionStep } from './AtlasCredentialActionStep';
 import { type AtlasCredentialsManagementWizardContext } from './AtlasCredentialsManagementWizardContext';
+import { buildAtlasAccessUrl } from './atlasDeepLinks';
 import { SelectAtlasCredentialStep } from './SelectAtlasCredentialStep';
 
 interface QuickPickLike {
@@ -152,6 +156,7 @@ beforeEach(() => {
     resetAtlasCredentialStoreCache();
     mockOpenWebview.mockReset();
     (vscode.window.showInformationMessage as jest.Mock).mockReset();
+    (vscode.env.openExternal as jest.Mock).mockClear();
 });
 
 describe('SelectAtlasCredentialStep', () => {
@@ -316,6 +321,26 @@ describe('AtlasCredentialActionStep', () => {
         expect(context.changed).toBe(true);
     });
 
+    it('deep-links a Service Account to its own Atlas page and changes nothing locally', async () => {
+        const { record } = await upsertAtlasCredential(
+            { authMethod: 'serviceaccount', clientId: 'mdb_sa_id_6a6535fe4a4e5dd61fcd3c9a', clientSecret: 'secret' },
+            { orgId: '5ec7c48379933f4c750e478b' },
+        );
+
+        const context = buildContext((items) => items.find((item) => item.action === 'openInAtlas')!);
+        context.credentials = [{ record: { ...record, orgId: '5ec7c48379933f4c750e478b' }, label: 'Work SA' }];
+        context.selectedCredentialId = record.id;
+
+        await expect(new AtlasCredentialActionStep().prompt(context)).rejects.toBeInstanceOf(GoBackErrorMock);
+
+        expect(vscode.Uri.parse).toHaveBeenCalledWith(
+            'https://cloud.mongodb.com/v2#/org/5ec7c48379933f4c750e478b/access/serviceAccounts/mdb_sa_id_6a6535fe4a4e5dd61fcd3c9a',
+        );
+        expect(vscode.env.openExternal).toHaveBeenCalled();
+        // Navigating to Atlas touches no local storage, so it must not claim a change.
+        expect(context.changed).toBe(false);
+    });
+
     it('leaves the working credential untouched when an update is cancelled', async () => {
         mockOpenWebview.mockResolvedValue(false);
         const [context, credentialId] = await contextWithSelection(
@@ -350,5 +375,38 @@ describe('AtlasCredentialActionStep', () => {
         const [context] = await contextWithSelection((items) => items.find((item) => item.action === 'exit')!);
 
         await expect(new AtlasCredentialActionStep().prompt(context)).rejects.toBeInstanceOf(UserCancelledErrorMock);
+    });
+});
+
+describe('buildAtlasAccessUrl', () => {
+    const base: AtlasCredentialRecord = { id: 'r1', authMethod: 'apikey', order: 0 };
+
+    it('sends an API key to the organization key list, because per-key deep links need an internal id', () => {
+        expect(buildAtlasAccessUrl({ ...base, orgId: '5ec7c48379933f4c750e478b' })).toBe(
+            'https://cloud.mongodb.com/v2#/org/5ec7c48379933f4c750e478b/access/apiKeys',
+        );
+    });
+
+    it('sends a Service Account to its own page when the client id is known', () => {
+        expect(
+            buildAtlasAccessUrl(
+                { ...base, authMethod: 'serviceaccount', orgId: '5ec7c48379933f4c750e478b' },
+                'mdb_sa_id_6a6535fe4a4e5dd61fcd3c9a',
+            ),
+        ).toBe(
+            'https://cloud.mongodb.com/v2#/org/5ec7c48379933f4c750e478b/access/serviceAccounts/mdb_sa_id_6a6535fe4a4e5dd61fcd3c9a',
+        );
+    });
+
+    it('falls back to the Service Account list when the client id cannot be read', () => {
+        expect(buildAtlasAccessUrl({ ...base, authMethod: 'serviceaccount', orgId: 'org-1' })).toBe(
+            'https://cloud.mongodb.com/v2#/org/org-1/access/serviceAccounts',
+        );
+    });
+
+    it('falls back to the console root when no organization has been observed yet', () => {
+        // A credential rejected by an IP access list may never have completed a request, so it has
+        // no cached org id. That is exactly when the user needs the link, so it must not be dropped.
+        expect(buildAtlasAccessUrl({ ...base, authMethod: 'serviceaccount' })).toBe('https://cloud.mongodb.com');
     });
 });
