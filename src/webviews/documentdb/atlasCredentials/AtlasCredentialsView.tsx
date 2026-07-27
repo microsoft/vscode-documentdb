@@ -70,6 +70,8 @@ const useStyles = makeStyles({
     heroIcon: { color: tokens.colorBrandForeground1, fontSize: '44px', flexShrink: 0 },
     muted: { color: tokens.colorNeutralForeground2 },
     section: { display: 'flex', flexDirection: 'column', gap: '12px' },
+    sectionHeader: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    breadcrumbDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '16px' },
     cardGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -364,6 +366,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
         <Breadcrumb aria-label={l10n.t('Progress')}>
             {steps.map((step, index) => {
                 const isCurrent = index === currentStepIndex;
+                const isCompleted = index < currentStepIndex || (step.id === 'success' && isCurrent);
                 const canNavigate =
                     index < currentStepIndex && !stepsLocked && (step.id === 'choose' || step.id === 'form');
                 return (
@@ -372,6 +375,11 @@ export const AtlasCredentialsView = (): JSX.Element => {
                             <BreadcrumbButton
                                 current={isCurrent}
                                 disabled={!isCurrent && !canNavigate}
+                                icon={
+                                    isCompleted ? (
+                                        <CheckmarkCircleFilled aria-hidden className={styles.breadcrumbDone} />
+                                    ) : undefined
+                                }
                                 onClick={canNavigate ? () => goToStep(step.id) : undefined}
                             >
                                 {step.label}
@@ -414,9 +422,12 @@ export const AtlasCredentialsView = (): JSX.Element => {
 
     const methodChoice = (
         <section className={styles.section} aria-labelledby="atlas-auth-method-heading">
-            <Text id="atlas-auth-method-heading" as="h2" size={500} weight="semibold">
-                {l10n.t('How do you want to connect?')}
-            </Text>
+            <div className={styles.sectionHeader}>
+                <Text id="atlas-auth-method-heading" as="h2" size={500} weight="semibold">
+                    {l10n.t('Choose an authentication method')}
+                </Text>
+                <Text className={styles.muted}>{l10n.t('Pick how DocumentDB signs in to MongoDB Atlas.')}</Text>
+            </div>
             <div className={styles.cardGrid} role="group" aria-labelledby="atlas-auth-method-heading">
                 {methodCard(
                     'serviceaccount',
@@ -509,18 +520,11 @@ export const AtlasCredentialsView = (): JSX.Element => {
     ) : null;
 
     const methodName = isApiKey
-        ? l10n.t('Connect with a MongoDB Atlas API Key')
-        : l10n.t('Connect with a MongoDB Atlas Service Account');
+        ? l10n.t('Provide your MongoDB Atlas API Key')
+        : l10n.t('Provide your MongoDB Atlas Service Account');
     const form = (
         <section className={styles.section} aria-labelledby="atlas-credential-form-heading">
             <div className={styles.formHeader}>
-                {!isEdit && (
-                    <div>
-                        <Button appearance="subtle" icon={<ArrowLeftRegular />} onClick={handleBack}>
-                            {l10n.t('Back to authentication methods')}
-                        </Button>
-                    </div>
-                )}
                 <Text id="atlas-credential-form-heading" as="h2" size={500} weight="semibold">
                     {methodName}
                 </Text>
@@ -593,15 +597,20 @@ export const AtlasCredentialsView = (): JSX.Element => {
         }
         return 'pending';
     };
+    const verifyTitle = isApiKey
+        ? l10n.t('Verify your MongoDB Atlas API Key')
+        : l10n.t('Verify your MongoDB Atlas Service Account');
+    const verifySubtitle = checkFailed
+        ? l10n.t("We couldn't verify your credentials. Review the details below.")
+        : l10n.t('Checking your credentials with MongoDB Atlas…');
     const checking = (
         <section className={styles.section} aria-labelledby="atlas-checking-heading">
-            <Text id="atlas-checking-heading" as="h2" size={500} weight="semibold">
-                {checkFailed
-                    ? l10n.t('Verification failed')
-                    : isApiKey
-                      ? l10n.t('Checking your API Key…')
-                      : l10n.t('Checking your Service Account…')}
-            </Text>
+            <div className={styles.sectionHeader}>
+                <Text id="atlas-checking-heading" as="h2" size={500} weight="semibold">
+                    {verifyTitle}
+                </Text>
+                <Text className={styles.muted}>{verifySubtitle}</Text>
+            </div>
             <div className={styles.stageList} role="list" aria-label={l10n.t('Credential check progress')}>
                 {checkStages.map((label, index) => (
                     <StageRow key={label} label={label} status={stageStatusAt(index)} />
@@ -623,6 +632,11 @@ export const AtlasCredentialsView = (): JSX.Element => {
             <Text id="atlas-success-heading" as="h2" size={500} weight="semibold">
                 {isEdit ? l10n.t('Credential updated') : l10n.t('Credential added')}
             </Text>
+            <div className={styles.stageList} role="list" aria-label={l10n.t('Completed credential checks')}>
+                {checkStages.map((label) => (
+                    <StageRow key={label} label={label} status="done" />
+                ))}
+            </div>
             <MessageBar intent="success">
                 <MessageBarBody>
                     <div className={styles.messageContent}>
@@ -631,15 +645,10 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     </div>
                 </MessageBarBody>
             </MessageBar>
-            <div className={styles.stageList} role="list" aria-label={l10n.t('Completed credential checks')}>
-                {checkStages.map((label) => (
-                    <StageRow key={label} label={label} status="done" />
-                ))}
-            </div>
             {submitError && errorMessage}
             <div className={styles.actions}>
                 <Button appearance="primary" disabled={isCompleting} onClick={() => void handleDone()}>
-                    {isCompleting ? l10n.t('Closing…') : l10n.t('Done')}
+                    {isCompleting ? l10n.t('Closing…') : l10n.t('Close')}
                 </Button>
             </div>
         </section>
