@@ -108,7 +108,8 @@ including the per-work-item implementation progress and validation checkpoints.
     key. An empty scoped path collapses to `$**`, so a blank path never errors.
   - **Vector** is a placeholder tab; creation is intentionally not wired yet.
 - Rarely-needed options (partial filter, collation) live on a pushed
-  **Advanced** sub-page, shared by the Standard and Wildcard kinds.
+  **Advanced** sub-page. Standard and Wildcard each keep an independent Advanced
+  draft, matching the rule that the three kinds behave like separate dialogs.
 - A **Preview as JSON** sub-page (same push/back navigation as Advanced) renders
   the assembled `createIndex(...)` specification read-only in a fill-height
   Monaco editor, so the user can review the exact key/options before creating.

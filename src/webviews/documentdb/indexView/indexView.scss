@@ -418,13 +418,14 @@
         display: flex;
         flex-direction: row;
         align-items: center;
+        flex-wrap: wrap;
         gap: 8px;
     }
 
     // A muted, non-alarming requirement hint (info icon + short sentence).
     .submitRequirement {
         display: flex;
-        align-items: center;
+        align-items: flex-start;
         gap: 6px;
         color: var(--colorNeutralForeground3);
         font-size: var(--fontSizeBase200);
@@ -434,6 +435,11 @@
             font-size: 16px;
             color: var(--colorNeutralForeground3);
         }
+    }
+
+    .drawerPageTitle:focus-visible {
+        outline: 2px solid var(--colorStrokeFocus2);
+        outline-offset: 2px;
     }
 }
 
@@ -515,12 +521,13 @@
         display: flex;
         flex-direction: row;
         align-items: center;
+        flex-wrap: wrap;
         gap: 10px;
     }
 
     // The field-name combobox grows to fill the row.
     .fieldGrow {
-        flex: 1 1 0;
+        flex: 1 1 180px;
         min-width: 0;
     }
 
@@ -532,8 +539,8 @@
     // The per-field type dropdown is wide enough to hold the longest option
     // label ("Geospatial (2dsphere)") on a single line without wrapping.
     .fieldType {
-        flex: 0 0 210px;
-        min-width: 0;
+        flex: 0 1 210px;
+        min-width: 160px;
         white-space: nowrap;
     }
 
@@ -713,6 +720,7 @@
         display: flex;
         flex-direction: row;
         align-items: center;
+        flex-wrap: wrap;
         gap: 10px;
     }
 

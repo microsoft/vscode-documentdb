@@ -26,6 +26,10 @@ describe('create index form state', () => {
             nameEnabled: false,
             partialText: '{  }',
             collationText: '{  }',
+            wildcardName: '',
+            wildcardNameEnabled: false,
+            wildcardPartialText: '{  }',
+            wildcardCollationText: '{  }',
             wildcardScope: 'all',
             wildcardPath: '',
             wildcardProjectionEnabled: false,
@@ -33,6 +37,21 @@ describe('create index form state', () => {
         });
         expect(state.fields).toEqual([{ id: 'test-field', field: '', type: 'asc' }]);
         expect(state.wildcardProjectionFields).toEqual([{ id: 'test-field', field: '' }]);
+    });
+
+    it('keeps Standard and Wildcard option drafts independent', () => {
+        const state = createInitialIndexFormState(createFieldId);
+        state.name = 'standard_name';
+        state.nameEnabled = true;
+        state.partialText = '{ standard: true }';
+        state.collationText = "{ locale: 'en' }";
+
+        expect(state).toMatchObject({
+            wildcardName: '',
+            wildcardNameEnabled: false,
+            wildcardPartialText: '{  }',
+            wildcardCollationText: '{  }',
+        });
     });
 });
 

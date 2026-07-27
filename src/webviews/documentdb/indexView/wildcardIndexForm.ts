@@ -44,14 +44,16 @@ export interface CreateIndexFormState {
     ttlEnabled: boolean;
     ttlSeconds: string;
     ttlConfigured: boolean;
-
-    // --- Shared by Standard and Wildcard ------------------------------------
     name: string;
     nameEnabled: boolean;
     partialText: string;
     collationText: string;
 
     // --- Wildcard mode draft ------------------------------------------------
+    wildcardName: string;
+    wildcardNameEnabled: boolean;
+    wildcardPartialText: string;
+    wildcardCollationText: string;
     wildcardScope: WildcardScope;
     wildcardPath: string;
     /** Whether the wildcard projection is configured (fields list below applies). */
@@ -118,6 +120,10 @@ export function createInitialIndexFormState(createFieldId: FieldIdFactory = make
         nameEnabled: false,
         partialText: '{  }',
         collationText: '{  }',
+        wildcardName: '',
+        wildcardNameEnabled: false,
+        wildcardPartialText: '{  }',
+        wildcardCollationText: '{  }',
         wildcardScope: 'all',
         wildcardPath: '',
         wildcardProjectionEnabled: false,

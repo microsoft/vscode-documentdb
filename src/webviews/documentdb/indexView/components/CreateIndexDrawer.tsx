@@ -321,6 +321,10 @@ export const CreateIndexDrawer = ({
         ttlSeconds,
         partialText,
         collationText,
+        wildcardName,
+        wildcardNameEnabled,
+        wildcardPartialText,
+        wildcardCollationText,
         wildcardScope,
         wildcardPath,
         wildcardProjectionEnabled,
@@ -349,6 +353,11 @@ export const CreateIndexDrawer = ({
     // Roving-focus targets for the algorithm radio-card group, so arrow keys can
     // move focus to the newly selected card.
     const algorithmCardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+    const advancedEntryRef = useRef<HTMLButtonElement>(null);
+    const previewEntryRef = useRef<HTMLButtonElement>(null);
+    const pageTitleRef = useRef<HTMLSpanElement>(null);
+    const previousPageRef = useRef<DrawerPage>(page);
+    const lastMainEntryRef = useRef<Exclude<DrawerPage, 'main'>>('advanced');
 
     const reset = useCallback((): void => {
         setPage('main');
@@ -367,6 +376,20 @@ export const CreateIndexDrawer = ({
         }
     }, [resetSignal, reset]);
 
+    useEffect(() => {
+        const previousPage = previousPageRef.current;
+        previousPageRef.current = page;
+        if (previousPage === page) {
+            return;
+        }
+        if (page === 'main') {
+            const entry = lastMainEntryRef.current === 'advanced' ? advancedEntryRef : previewEntryRef;
+            entry.current?.focus();
+        } else {
+            pageTitleRef.current?.focus();
+        }
+    }, [page]);
+
     // Closing preserves the form; only an explicit reset (or a successful
     // create) clears it.
     const handleCancel = (): void => {
@@ -381,6 +404,11 @@ export const CreateIndexDrawer = ({
         // filter and collation, so there is nothing kind-specific to leave.
         setPage('main');
         setForm((prev) => ({ ...prev, indexKind: kind }));
+    };
+
+    const openPushedPage = (nextPage: Exclude<DrawerPage, 'main'>): void => {
+        lastMainEntryRef.current = nextPage;
+        setPage(nextPage);
     };
 
     // --- Standard field list ------------------------------------------------
@@ -468,8 +496,12 @@ export const CreateIndexDrawer = ({
     // Single source of truth for "is this advanced option meaningfully set?" —
     // a blank object ({} / whitespace) counts as not set. Used everywhere so the
     // Advanced entry badge, its summary, and the payload never disagree.
-    const hasPartialFilter = !isBlankIndexOption(partialText);
-    const hasCollation = !isBlankIndexOption(collationText);
+    const fieldName = indexKind === 'wildcard' ? wildcardName : name;
+    const fieldNameEnabled = indexKind === 'wildcard' ? wildcardNameEnabled : nameEnabled;
+    const fieldPartialText = indexKind === 'wildcard' ? wildcardPartialText : partialText;
+    const fieldCollationText = indexKind === 'wildcard' ? wildcardCollationText : collationText;
+    const hasPartialFilter = !isBlankIndexOption(fieldPartialText);
+    const hasCollation = !isBlankIndexOption(fieldCollationText);
 
     // The structured projection editor collapses to a plain object; `undefined`
     // means "nothing meaningful configured" so it is treated like an omitted
@@ -634,14 +666,14 @@ export const CreateIndexDrawer = ({
             const payload: FieldCreateIndexInput = {
                 fields: [{ field: buildWildcardKey(wildcardScope, wildcardPath), type: 'asc' }],
             };
-            if (nameEnabled && name.trim() !== '') {
-                payload.name = name.trim();
+            if (fieldNameEnabled && fieldName.trim() !== '') {
+                payload.name = fieldName.trim();
             }
             if (hasPartialFilter) {
-                payload.partialFilterExpression = partialText.trim();
+                payload.partialFilterExpression = fieldPartialText.trim();
             }
             if (hasCollation) {
-                payload.collation = collationText.trim();
+                payload.collation = fieldCollationText.trim();
             }
             if (hasWildcardProjection) {
                 payload.wildcardProjection = JSON.stringify(wildcardProjectionObject);
@@ -652,8 +684,8 @@ export const CreateIndexDrawer = ({
         const payload: FieldCreateIndexInput = {
             fields: completedRows.map((r) => ({ field: r.field.trim(), type: r.type })),
         };
-        if (nameEnabled && name.trim() !== '') {
-            payload.name = name.trim();
+        if (fieldNameEnabled && fieldName.trim() !== '') {
+            payload.name = fieldName.trim();
         }
         if (unique) {
             payload.unique = true;
@@ -665,10 +697,10 @@ export const CreateIndexDrawer = ({
             payload.expireAfterSeconds = parsedTtlSeconds;
         }
         if (hasPartialFilter) {
-            payload.partialFilterExpression = partialText.trim();
+            payload.partialFilterExpression = fieldPartialText.trim();
         }
         if (hasCollation) {
-            payload.collation = collationText.trim();
+            payload.collation = fieldCollationText.trim();
         }
         return payload;
     };
@@ -840,16 +872,28 @@ export const CreateIndexDrawer = ({
     const nameOption = (
         <OptionRow
             label={l10n.t('Name - use a custom index name')}
-            checked={nameEnabled}
+            checked={fieldNameEnabled}
             disabled={interactionDisabled}
-            onToggle={(checked) => setForm((prev) => ({ ...prev, nameEnabled: checked }))}
+            onToggle={(checked) =>
+                setForm((prev) =>
+                    indexKind === 'wildcard'
+                        ? { ...prev, wildcardNameEnabled: checked }
+                        : { ...prev, nameEnabled: checked },
+                )
+            }
         >
-            {nameEnabled && (
-                <Field>
+            {fieldNameEnabled && (
+                <Field label={l10n.t('Index name')}>
                     <Input
-                        value={name}
+                        value={fieldName}
                         disabled={interactionDisabled}
-                        onChange={(e) => setForm((prev) => ({ ...prev, name: e.target.value }))}
+                        onChange={(e) =>
+                            setForm((prev) =>
+                                indexKind === 'wildcard'
+                                    ? { ...prev, wildcardName: e.target.value }
+                                    : { ...prev, name: e.target.value },
+                            )
+                        }
                     />
                 </Field>
             )}
@@ -866,7 +910,7 @@ export const CreateIndexDrawer = ({
             onToggle={(checked) => setForm((prev) => ({ ...prev, vectorNameEnabled: checked }))}
         >
             {vectorNameEnabled && (
-                <Field>
+                <Field label={l10n.t('Index name')}>
                     <Input
                         value={vectorName}
                         disabled={interactionDisabled}
@@ -881,10 +925,11 @@ export const CreateIndexDrawer = ({
     // Shared entry to the pushed Advanced sub-page (partial filter + collation).
     const advancedEntry = (
         <button
+            ref={advancedEntryRef}
             type="button"
             className="advancedEntry"
             disabled={interactionDisabled}
-            onClick={() => setPage('advanced')}
+            onClick={() => openPushedPage('advanced')}
         >
             <SettingsRegular className="advancedEntryIcon" />
             <span className="advancedEntryText">
@@ -906,10 +951,11 @@ export const CreateIndexDrawer = ({
     // Shared entry to the pushed JSON preview sub-page.
     const previewEntry = (
         <button
+            ref={previewEntryRef}
             type="button"
             className="advancedEntry"
             disabled={interactionDisabled}
-            onClick={() => setPage('preview')}
+            onClick={() => openPushedPage('preview')}
         >
             <BracesRegular className="advancedEntryIcon" />
             <span className="advancedEntryText">
@@ -977,11 +1023,13 @@ export const CreateIndexDrawer = ({
         >
             <DrawerHeader>
                 <DrawerHeaderTitle action={headerActions}>
-                    {page === 'advanced'
-                        ? l10n.t('Advanced settings')
-                        : page === 'preview'
-                          ? l10n.t('JSON preview')
-                          : l10n.t('Create Index')}
+                    <span ref={pageTitleRef} className="drawerPageTitle" tabIndex={page === 'main' ? undefined : -1}>
+                        {page === 'advanced'
+                            ? l10n.t('Advanced settings')
+                            : page === 'preview'
+                              ? l10n.t('JSON preview')
+                              : l10n.t('Create Index')}
+                    </span>
                 </DrawerHeaderTitle>
             </DrawerHeader>
 
@@ -1780,9 +1828,15 @@ export const CreateIndexDrawer = ({
                                 example={"{ status: { $eq: 'active' } }"}
                             >
                                 <JsonInputEditor
-                                    value={partialText}
+                                    value={fieldPartialText}
                                     readOnly={interactionDisabled}
-                                    onChange={(value) => setForm((prev) => ({ ...prev, partialText: value }))}
+                                    onChange={(value) =>
+                                        setForm((prev) =>
+                                            indexKind === 'wildcard'
+                                                ? { ...prev, wildcardPartialText: value }
+                                                : { ...prev, partialText: value },
+                                        )
+                                    }
                                     ariaLabel={l10n.t('Partial filter expression: enter a JSON object')}
                                 />
                             </DrawerSection>
@@ -1793,9 +1847,15 @@ export const CreateIndexDrawer = ({
                                 example={"{ locale: 'en', strength: 2 }"}
                             >
                                 <JsonInputEditor
-                                    value={collationText}
+                                    value={fieldCollationText}
                                     readOnly={interactionDisabled}
-                                    onChange={(value) => setForm((prev) => ({ ...prev, collationText: value }))}
+                                    onChange={(value) =>
+                                        setForm((prev) =>
+                                            indexKind === 'wildcard'
+                                                ? { ...prev, wildcardCollationText: value }
+                                                : { ...prev, collationText: value },
+                                        )
+                                    }
                                     ariaLabel={l10n.t('Collation: enter a JSON object')}
                                 />
                             </DrawerSection>
