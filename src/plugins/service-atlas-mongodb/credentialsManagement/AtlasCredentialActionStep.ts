@@ -204,11 +204,17 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
     ): Promise<never> {
         context.telemetry.properties.atlasCredentialAction = 'signOut';
 
+        // Short, constant title with the credential name in the detail, matching
+        // `removeConnection` and `deleteFolder`. A title that changes with the subject reads as a
+        // different dialog every time and pushes the part the user must actually read out of view.
         await context.ui.showWarningMessage(
-            l10n.t('Sign out of the MongoDB Atlas credential "{0}"?', label),
+            l10n.t('Are you sure?'),
             {
                 modal: true,
-                detail: l10n.t('Only this credential and its secrets are removed. Other credentials stay signed in.'),
+                detail:
+                    l10n.t('Sign out of the MongoDB Atlas credential "{0}"?', label) +
+                    '\n' +
+                    l10n.t('Only this credential and its secrets are removed. Other credentials stay signed in.'),
             },
             { title: l10n.t('Sign out') },
         );
