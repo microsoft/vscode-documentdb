@@ -149,6 +149,22 @@ describe('listCurrentOperations', () => {
         });
     });
 
+    it('drops the server background threads reported as op "none"', async () => {
+        const { client } = createFakeClient({
+            aggregate: () => [
+                { opid: 1, op: 'none', ns: '', active: true, desc: 'Checkpointer' },
+                { opid: 2, op: 'none', ns: '', active: true, desc: 'JournalFlusher' },
+                { opid: 3, op: 'command', ns: 'admin.$cmd.aggregate', active: true, desc: 'conn4' },
+            ],
+        });
+
+        const result = await listCurrentOperations(client);
+
+        expect(result.operations).toHaveLength(1);
+        expect(result.operations[0].opid).toBe('3');
+        expect(result.operations[0].clientDescription).toBe('conn4');
+    });
+
     it('falls back to the legacy currentOp command when the aggregation fails', async () => {
         const { client } = createFakeClient({
             adminCommand: (command) => {

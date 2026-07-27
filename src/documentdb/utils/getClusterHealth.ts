@@ -193,9 +193,21 @@ function mapCurrentOp(op: Document): CurrentOpEntry {
         namespace: toStringOrNull(op.ns) ?? '',
         secsRunning: toNumberOrNull(op.secs_running),
         active: op.active === true,
-        clientDescription: toStringOrNull(op.client) ?? toStringOrNull(op.appName),
+        clientDescription: toStringOrNull(op.client) ?? toStringOrNull(op.appName) ?? toStringOrNull(op.desc),
         commandPreview,
     };
+}
+
+/**
+ * Filters out the server's own background threads (`Checkpointer`, `JournalFlusher`, …).
+ * They are reported as `op: 'none'` against no namespace, cannot be killed, and would
+ * otherwise make the "Active Operations" tile read non-zero on a completely idle cluster.
+ */
+function isUserOperation(op: Document): boolean {
+    const operationType = toStringOrNull(op.op);
+    const namespace = toStringOrNull(op.ns);
+
+    return !(operationType === null || operationType === 'none') || namespace !== null;
 }
 
 /**
@@ -218,7 +230,7 @@ export async function listCurrentOperations(client: MongoClient): Promise<Curren
             .aggregate([{ $currentOp: { allUsers: true, idleConnections: false } }, { $limit: CURRENT_OP_LIMIT }])
             .toArray();
 
-        return { operations: documents.map(mapCurrentOp), errors };
+        return { operations: documents.filter(isUserOperation).map(mapCurrentOp), errors };
     } catch {
         errors.push('$currentOp');
     }
@@ -227,7 +239,10 @@ export async function listCurrentOperations(client: MongoClient): Promise<Curren
         const result = await client.db().admin().command({ currentOp: 1 });
         const inprog = Array.isArray(result.inprog) ? (result.inprog as Document[]) : [];
 
-        return { operations: inprog.slice(0, CURRENT_OP_LIMIT).map(mapCurrentOp), errors: [] };
+        return {
+            operations: inprog.filter(isUserOperation).slice(0, CURRENT_OP_LIMIT).map(mapCurrentOp),
+            errors: [],
+        };
     } catch {
         errors.push('currentOp');
     }
