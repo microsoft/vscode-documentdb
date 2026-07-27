@@ -21,13 +21,14 @@ export const ATLAS_CREDENTIAL_MANAGEMENT_EXIT = 'exitAtlasCredentialManagement';
 interface CredentialQuickPickItem extends vscode.QuickPickItem {
     credentialId?: string;
     isAddOption?: boolean;
+    isRetryAllOption?: boolean;
     isSignOutAllOption?: boolean;
     isExitOption?: boolean;
 }
 
 /**
  * First step of the credential-management wizard: the list of stored credentials plus the
- * fleet-level actions (add, sign out of all, exit).
+ * fleet-level actions (retry all, add, sign out of all, exit).
  *
  * Credential management deliberately lives outside the discovery tree, exactly like the Azure
  * account flow, so the healthy tree never has to carry credential-management rows.
@@ -52,14 +53,26 @@ export class SelectAtlasCredentialStep extends AzureWizardPromptStep<AtlasCreden
                 credentialId: status.record.id,
             }));
 
-            const trailingItems: CredentialQuickPickItem[] = [
-                { label: '', kind: vscode.QuickPickItemKind.Separator },
-                {
-                    label: l10n.t('Add a credential…'),
-                    iconPath: new vscode.ThemeIcon('add'),
-                    isAddOption: true,
-                },
-            ];
+            const trailingItems: CredentialQuickPickItem[] = [{ label: '', kind: vscode.QuickPickItemKind.Separator }];
+
+            if (credentialItems.length > 0) {
+                // Without this the list is a snapshot: every row shows the status from the last
+                // discovery pass, and the only way to re-check is to walk into each credential in
+                // turn. With several failures that is both tedious and misleading, because the
+                // rows the user is not looking at keep showing stale outcomes.
+                trailingItems.push({
+                    label: l10n.t('Retry all'),
+                    detail: l10n.t('Re-check every credential against MongoDB Atlas, including the healthy ones.'),
+                    iconPath: new vscode.ThemeIcon('refresh'),
+                    isRetryAllOption: true,
+                });
+            }
+
+            trailingItems.push({
+                label: l10n.t('Add a credential…'),
+                iconPath: new vscode.ThemeIcon('add'),
+                isAddOption: true,
+            });
 
             if (credentialItems.length > 0) {
                 trailingItems.push({
@@ -101,6 +114,11 @@ export class SelectAtlasCredentialStep extends AzureWizardPromptStep<AtlasCreden
             throw new UserCancelledError(ATLAS_CREDENTIAL_ADDED);
         }
 
+        if (selected.isRetryAllOption) {
+            await this.retryAll(context);
+            return;
+        }
+
         if (selected.isSignOutAllOption) {
             context.telemetry.properties.atlasCredentialAction = 'signOutAll';
             const confirm = l10n.t('Sign out of all');
@@ -129,12 +147,43 @@ export class SelectAtlasCredentialStep extends AzureWizardPromptStep<AtlasCreden
     public shouldPrompt(context: AtlasCredentialsManagementWizardContext): boolean {
         return !context.selectedCredentialId;
     }
+
+    /**
+     * Re-attempts the whole fleet and returns to the refreshed list.
+     *
+     * Uses `refreshAll` rather than a plain `invalidate`, so cached Service Account access tokens
+     * are discarded too. A token carries the roles it was minted with, and the most common reason
+     * to open this flow at all is that the user just changed something in Atlas.
+     */
+    private async retryAll(context: AtlasCredentialsManagementWizardContext): Promise<void> {
+        context.telemetry.properties.atlasCredentialAction = 'retryAll';
+
+        const snapshot = await vscode.window.withProgress(
+            {
+                location: vscode.ProgressLocation.Notification,
+                title: l10n.t('Re-checking every MongoDB Atlas credential…'),
+            },
+            () => context.discoveryService.refreshAll(),
+        );
+
+        context.telemetry.measurements.atlasFailedCredentialCountAfterRetryAll = snapshot.credentialErrors.length;
+        context.changed = true;
+
+        if (snapshot.credentialErrors.length === 0) {
+            void vscode.window.showInformationMessage(l10n.t('Every MongoDB Atlas credential is signed in.'));
+        }
+
+        // Reload the statuses so every row reflects the new outcome, then show the list again.
+        context.credentials = [];
+        await this.prompt(context);
+    }
 }
 
 /**
  * Reads every credential and pairs it with the failure recorded for it in the latest discovery
- * snapshot. Uses the cached snapshot, so opening the manager does not re-hammer a credential that
- * is already known to be failing.
+ * snapshot. Reads the snapshot rather than re-querying, so simply opening the manager does not
+ * re-hammer a credential that is already known to be failing. "Retry all" is the explicit way to
+ * ask for fresh statuses.
  */
 export async function loadCredentialStatuses(
     context: AtlasCredentialsManagementWizardContext,

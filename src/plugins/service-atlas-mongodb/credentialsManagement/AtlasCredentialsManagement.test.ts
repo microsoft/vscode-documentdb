@@ -112,11 +112,14 @@ function buildContext(
     pick: (items: QuickPickLike[]) => QuickPickLike,
     snapshot: AtlasDiscoverySnapshot = emptySnapshot(),
 ): AtlasCredentialsManagementWizardContext & {
-    discoveryService: jest.Mocked<Pick<AtlasDiscoveryService, 'listAll' | 'invalidate' | 'reset' | 'retryCredential'>>;
+    discoveryService: jest.Mocked<
+        Pick<AtlasDiscoveryService, 'listAll' | 'refreshAll' | 'invalidate' | 'reset' | 'retryCredential'>
+    >;
 } {
     const sessionRegistry = { invalidate: jest.fn(), invalidateAll: jest.fn() };
     const discoveryService = {
         listAll: jest.fn().mockResolvedValue(snapshot),
+        refreshAll: jest.fn().mockResolvedValue(snapshot),
         invalidate: jest.fn(),
         reset: jest.fn(),
         retryCredential: jest.fn().mockResolvedValue(snapshot),
@@ -137,7 +140,7 @@ function buildContext(
         changed: false,
     } as unknown as AtlasCredentialsManagementWizardContext & {
         discoveryService: jest.Mocked<
-            Pick<AtlasDiscoveryService, 'listAll' | 'invalidate' | 'reset' | 'retryCredential'>
+            Pick<AtlasDiscoveryService, 'listAll' | 'refreshAll' | 'invalidate' | 'reset' | 'retryCredential'>
         >;
     };
 }
@@ -162,6 +165,7 @@ describe('SelectAtlasCredentialStep', () => {
         await expect(new SelectAtlasCredentialStep().prompt(context)).rejects.toBeInstanceOf(UserCancelledErrorMock);
         expect(seen.some((item) => item.isAddOption)).toBe(true);
         expect(seen.some((item) => item.isSignOutAllOption)).toBe(false);
+        expect(seen.some((item) => item.isRetryAllOption)).toBe(false);
     });
 
     it('lists stored credentials with their failure reason', async () => {
@@ -244,6 +248,25 @@ describe('SelectAtlasCredentialStep', () => {
         await expect(readAtlasCredentials()).resolves.toEqual([]);
         expect(context.changed).toBe(true);
         expect(context.discoveryService.reset).toHaveBeenCalled();
+    });
+
+    it('re-checks the whole fleet on retry all and returns to the refreshed list', async () => {
+        await upsertAtlasCredential({ authMethod: 'apikey', publicKey: 'pub-1', privateKey: 'priv-1' });
+
+        let call = 0;
+        const context = buildContext((items) => {
+            call++;
+            // Without a fleet-wide retry the list is a snapshot of the last discovery pass, so the
+            // user would have to walk into every credential in turn to re-check them.
+            return call === 1 ? items.find((item) => item.isRetryAllOption)! : items.find((item) => item.isExitOption)!;
+        });
+
+        await expect(new SelectAtlasCredentialStep().prompt(context)).rejects.toBeInstanceOf(UserCancelledErrorMock);
+
+        expect(context.discoveryService.refreshAll).toHaveBeenCalledTimes(1);
+        expect(context.changed).toBe(true);
+        // The list was shown a second time, with statuses reloaded from the fresh snapshot.
+        expect(call).toBe(2);
     });
 });
 
