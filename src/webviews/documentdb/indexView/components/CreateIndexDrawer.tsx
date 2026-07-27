@@ -493,7 +493,6 @@ export const CreateIndexDrawer = ({
     const vectorFieldValue = vectorField.trim();
     const parsedDimensions = parsePositiveInt(vectorDimensions);
     const vectorNameValue = vectorName.trim();
-    const vectorNameValid = !vectorNameEnabled || (vectorNameValue !== '' && vectorNameValue !== '*');
 
     // Compression compatibility: half precision applies to IVF/HNSW, product
     // quantization to DiskANN. If the current choice is incompatible with the
@@ -539,7 +538,6 @@ export const CreateIndexDrawer = ({
     const vectorValid =
         vectorFieldValue !== '' &&
         parsedDimensions !== undefined &&
-        vectorNameValid &&
         algorithmTuningValid &&
         pqCompressedDimsValid &&
         pqSampleSizeValid;
@@ -822,10 +820,7 @@ export const CreateIndexDrawer = ({
             onToggle={(checked) => setForm((prev) => ({ ...prev, vectorNameEnabled: checked }))}
         >
             {vectorNameEnabled && (
-                <Field
-                    validationState={vectorNameValid ? 'none' : 'error'}
-                    validationMessage={vectorNameValid ? undefined : l10n.t('Enter an index name other than "*".')}
-                >
+                <Field>
                     <Input
                         value={vectorName}
                         disabled={interactionDisabled}
