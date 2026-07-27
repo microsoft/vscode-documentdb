@@ -590,7 +590,6 @@
   "Enter a whole number from 1000 to 100000.": "Enter a whole number from 1000 to 100000.",
   "Enter a whole number from 2 to 100.": "Enter a whole number from 2 to 100.",
   "Enter a whole number from 20 to 2048.": "Enter a whole number from 20 to 2048.",
-  "Enter an index name other than \"*\".": "Enter an index name other than \"*\".",
   "Enter folder name": "Enter folder name",
   "Enter new folder name": "Enter new folder name",
   "Enter the Azure VM tag key used for discovering DocumentDB instances.": "Enter the Azure VM tag key used for discovering DocumentDB instances.",

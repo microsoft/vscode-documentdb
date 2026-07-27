@@ -335,6 +335,10 @@ export const CreateIndexDrawer = ({
     const vectorAlgorithmOptions = useMemo(() => buildVectorAlgorithmOptions(), []);
     const vectorSimilarityOptions = useMemo(() => buildVectorSimilarityOptions(), []);
 
+    // Roving-focus targets for the algorithm radio-card group, so arrow keys can
+    // move focus to the newly selected card.
+    const algorithmCardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+
     const reset = useCallback((): void => {
         setPage('main');
         setForm(createInitialIndexFormState());
@@ -543,6 +547,17 @@ export const CreateIndexDrawer = ({
         pqSampleSizeValid;
 
     const vectorAlgorithmLabel = vectorAlgorithmOptions.find((o) => o.value === vectorAlgorithm)?.label ?? '';
+
+    // Select the algorithm `offset` positions from the current one (wrapping) and
+    // move focus to its card, so the radio-card group is keyboard navigable.
+    const moveAlgorithmSelection = (offset: number): void => {
+        const values = vectorAlgorithmOptions.map((option) => option.value);
+        const currentIndex = values.indexOf(vectorAlgorithm);
+        const next = values[(currentIndex + offset + values.length) % values.length];
+        setForm((prev) => ({ ...prev, vectorAlgorithm: next }));
+        algorithmCardRefs.current[next]?.focus();
+    };
+
     const vectorCompressionLabel =
         effectiveCompression === 'half'
             ? l10n.t('Half precision')
@@ -1381,33 +1396,53 @@ export const CreateIndexDrawer = ({
 
                                 <DrawerSection
                                     title={l10n.t('Algorithm')}
-                                    hint={
-                                        vectorAlgorithmOptions.find((o) => o.value === vectorAlgorithm)?.hint ??
-                                        l10n.t('Approximate nearest-neighbor algorithm used to build the index.')
-                                    }
+                                    hint={l10n.t('Approximate nearest-neighbor algorithm used to build the index.')}
                                 >
-                                    <Dropdown
-                                        selectedOptions={[vectorAlgorithm]}
-                                        value={vectorAlgorithmLabel}
-                                        disabled={interactionDisabled}
-                                        onOptionSelect={(_, data) => {
-                                            const value = data.optionValue;
-                                            if (
-                                                value === 'vector-ivf' ||
-                                                value === 'vector-hnsw' ||
-                                                value === 'vector-diskann'
-                                            ) {
-                                                setForm((prev) => ({ ...prev, vectorAlgorithm: value }));
-                                            }
-                                        }}
+                                    <div
+                                        className="vectorAlgorithmCards"
+                                        role="radiogroup"
                                         aria-label={l10n.t('Vector algorithm')}
                                     >
-                                        {vectorAlgorithmOptions.map((option) => (
-                                            <Option key={option.value} value={option.value} text={option.label}>
-                                                {option.label}
-                                            </Option>
-                                        ))}
-                                    </Dropdown>
+                                        {vectorAlgorithmOptions.map((option) => {
+                                            const selected = vectorAlgorithm === option.value;
+                                            return (
+                                                <button
+                                                    key={option.value}
+                                                    ref={(node) => {
+                                                        algorithmCardRefs.current[option.value] = node;
+                                                    }}
+                                                    type="button"
+                                                    role="radio"
+                                                    aria-checked={selected}
+                                                    tabIndex={selected ? 0 : -1}
+                                                    className={
+                                                        selected
+                                                            ? 'vectorAlgoCard vectorAlgoCardSelected'
+                                                            : 'vectorAlgoCard'
+                                                    }
+                                                    disabled={interactionDisabled}
+                                                    onClick={() =>
+                                                        setForm((prev) => ({ ...prev, vectorAlgorithm: option.value }))
+                                                    }
+                                                    onKeyDown={(event) => {
+                                                        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
+                                                            event.preventDefault();
+                                                            moveAlgorithmSelection(1);
+                                                        } else if (
+                                                            event.key === 'ArrowLeft' ||
+                                                            event.key === 'ArrowUp'
+                                                        ) {
+                                                            event.preventDefault();
+                                                            moveAlgorithmSelection(-1);
+                                                        }
+                                                    }}
+                                                >
+                                                    <span className="vectorAlgoCardTitle">{option.label}</span>
+                                                    <span className="vectorAlgoCardHint">{option.hint}</span>
+                                                </button>
+                                            );
+                                        })}
+                                    </div>
                                 </DrawerSection>
 
                                 <DrawerSection
