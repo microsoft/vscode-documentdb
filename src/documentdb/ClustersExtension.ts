@@ -49,6 +49,7 @@ import { unhideIndex } from '../commands/index.unhideIndex/unhideIndex';
 import { learnMoreAboutServiceProvider } from '../commands/learnMoreAboutServiceProvider/learnMoreAboutServiceProvider';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
+import { openClusterDashboard } from '../commands/openClusterDashboard/openClusterDashboard';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
 import { openDocumentView } from '../commands/openDocument/openDocument';
 import {
@@ -867,6 +868,11 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommandWithTreeNodeUnwrapping(
                     ShellCommandIds.open,
                     withTreeNodeCommandCorrelation(openInteractiveShell),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.clusterDashboard.open',
+                    withTreeNodeCommandCorrelation(openClusterDashboard),
                 );
 
                 // Inline button variant — same handler, different activationSource
