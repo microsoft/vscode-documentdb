@@ -83,7 +83,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
 
     /**
      * Reveals and expands the Atlas root node in the discovery tree after a successful sign-in.
-     * Non-critical — failures are logged but do not affect the sign-in outcome.
+     * Non-critical: failures are logged but do not affect the sign-in outcome.
      */
     private async revealAtlasRoot(): Promise<void> {
         try {
@@ -91,7 +91,7 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
             const rootItems = await ext.discoveryBranchDataProvider.getChildren(undefined as never);
             const atlasRoot = rootItems?.find((item) => item.id === rootId);
             if (!atlasRoot) {
-                ext.outputChannel.warn('[AtlasDiscovery] Could not reveal Atlas root — root node not found.');
+                ext.outputChannel.warn('[AtlasDiscovery] Could not reveal Atlas root: root node not found.');
                 return;
             }
             await ext.discoveryTreeView.reveal(atlasRoot, { select: false, focus: false, expand: true });

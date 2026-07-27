@@ -30,7 +30,11 @@ import {
  * a graceful exit from a real cancellation. Keeping the two providers on the same shape is what
  * makes the credential flows maintainable side by side.
  *
- * @returns `true` when credential storage changed and the discovery tree should refresh.
+ * One deliberate difference: leaving this flow always forces a full Atlas refresh, not only when
+ * storage changed. See the comment at the call site.
+ *
+ * @returns `true` when credential storage changed and the caller (for example the connection
+ * wizard) may proceed.
  */
 export async function configureAtlasCredentials(
     context: IActionContext,
@@ -75,9 +79,15 @@ export async function configureAtlasCredentials(
                 }
             }
 
-            if (wizardContext.changed) {
-                refreshDiscoveryTree(node);
-            }
+            // Credential management always ends with a full Atlas refresh, even when nothing was
+            // stored. This is deliberately stronger than the shared discovery default of
+            // refreshing only when storage changed, because Atlas has state the extension cannot
+            // observe: the user may have granted a role or added project access in the Atlas UI
+            // while this QuickPick was open, and a Service Account access token carries the scope
+            // it was minted with for about an hour. Dropping the sessions as well as the snapshot
+            // is what makes such a change visible immediately instead of at the next token expiry.
+            discoveryService.reset();
+            refreshDiscoveryTree(node);
 
             // Only report success when something actually happened; a cancelled or dismissed flow
             // must never claim that credential management completed.
