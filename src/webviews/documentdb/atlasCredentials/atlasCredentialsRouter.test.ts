@@ -113,6 +113,7 @@ describe('atlasCredentialsRouter', () => {
 
         expect(result).toEqual({
             success: false,
+            failedStage: 0,
             error: {
                 kind: 'ipAccess',
                 title: 'This IP address is not allowed',

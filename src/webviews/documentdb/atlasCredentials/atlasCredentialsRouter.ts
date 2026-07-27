@@ -76,7 +76,7 @@ export interface CredentialSubmitError {
  */
 export type SubmitResult =
     | { readonly success: true }
-    | { readonly success: false; readonly error: CredentialSubmitError };
+    | { readonly success: false; readonly error: CredentialSubmitError; readonly failedStage: number };
 
 /**
  * Builds a user-facing message for a MongoDB Atlas API rejection, adding the
@@ -219,10 +219,14 @@ export const atlasCredentialsRouter = router({
                 await client.listProjects();
             } catch (error) {
                 myCtx.telemetry.properties.authSuccess = 'false';
-                return { success: false, error: await describeAtlasError(myCtx, error, 'apikey') };
+                return { success: false, error: await describeAtlasError(myCtx, error, 'apikey'), failedStage: 0 };
             }
 
-            await persistCredential(myCtx, { authMethod: 'apikey', publicKey, privateKey });
+            try {
+                await persistCredential(myCtx, { authMethod: 'apikey', publicKey, privateKey });
+            } catch (error) {
+                return { success: false, error: await describeAtlasError(myCtx, error, 'apikey'), failedStage: 1 };
+            }
             myCtx.credentialsStored = true;
             myCtx.telemetry.properties.authSuccess = 'true';
             return { success: true };
@@ -270,6 +274,7 @@ export const atlasCredentialsRouter = router({
                                       'MongoDB Atlas did not accept the Client ID and secret. Check both values and try again.',
                                   ),
                               },
+                    failedStage: 0,
                 };
             }
 
@@ -281,16 +286,25 @@ export const atlasCredentialsRouter = router({
                 return {
                     success: false,
                     error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId),
+                    failedStage: 1,
                 };
             }
 
-            await persistCredential(myCtx, {
-                authMethod: 'serviceaccount',
-                clientId,
-                clientSecret,
-                accessToken,
-                expiresAt: String(Date.now() + expiresIn * 1000),
-            });
+            try {
+                await persistCredential(myCtx, {
+                    authMethod: 'serviceaccount',
+                    clientId,
+                    clientSecret,
+                    accessToken,
+                    expiresAt: String(Date.now() + expiresIn * 1000),
+                });
+            } catch (error) {
+                return {
+                    success: false,
+                    error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId),
+                    failedStage: 2,
+                };
+            }
 
             myCtx.credentialsStored = true;
             myCtx.telemetry.properties.authSuccess = 'true';

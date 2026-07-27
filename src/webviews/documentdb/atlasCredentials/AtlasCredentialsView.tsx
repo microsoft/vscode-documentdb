@@ -18,7 +18,9 @@ import {
     makeStyles,
     mergeClasses,
     MessageBar,
+    MessageBarActions,
     MessageBarBody,
+    MessageBarTitle,
     Radio,
     Spinner,
     Text,
@@ -37,7 +39,7 @@ import {
 } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { Fragment, type JSX, useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, type JSX, useCallback, useMemo, useState } from 'react';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
@@ -47,13 +49,6 @@ import { type CredentialSubmitError } from './atlasCredentialsRouter';
 const ATLAS_API_KEY_DOCS_URL = 'https://www.mongodb.com/docs/atlas/configure-api-access/';
 const ATLAS_SERVICE_ACCOUNT_DOCS_URL = 'https://www.mongodb.com/docs/atlas/api/service-accounts-overview/';
 const ATLAS_CONSOLE_URL = 'https://cloud.mongodb.com/';
-
-/**
- * How long each checking stage stays "active" before the next one lights up. The final stage keeps
- * spinning until the host actually resolves, so a slow validation still reads as live progress and
- * a fast one simply jumps to the success screen.
- */
-const CHECK_STAGE_ADVANCE_MS = 850;
 
 type Phase = 'choose' | 'form' | 'checking' | 'success';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
@@ -175,7 +170,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
     const [submitError, setSubmitError] = useState<CredentialSubmitError | undefined>();
     const [showSecret, setShowSecret] = useState(false);
     const [isCompleting, setIsCompleting] = useState(false);
-    const [activeStage, setActiveStage] = useState(0);
+    const [failedStage, setFailedStage] = useState<number | undefined>(undefined);
     const isApiKey = chosenMethod === 'apikey';
     const isEdit = configuration.mode === 'edit';
 
@@ -234,16 +229,13 @@ export const AtlasCredentialsView = (): JSX.Element => {
     );
     const canSubmit = fieldSpecs.every((spec) => (values[spec.key] ?? '').trim().length > 0);
 
-    // The steps the host walks through when validating. They double as the live progress list on
-    // the checking screen and the completed list on the success screen, so both read consistently.
+    // The real steps the host performs, per method. For an API key a single digest call both
+    // authenticates and lists projects, so there is no separate "sign in" step. These labels double
+    // as the progress list while verifying and the completed list on success.
     const checkStages = useMemo(
         () =>
             isApiKey
-                ? [
-                      l10n.t('Connecting to MongoDB Atlas'),
-                      l10n.t('Checking access to your projects'),
-                      l10n.t('Saving the credential'),
-                  ]
+                ? [l10n.t('Verifying with MongoDB Atlas'), l10n.t('Saving the credential')]
                 : [
                       l10n.t('Signing in to MongoDB Atlas'),
                       l10n.t('Checking access to your projects'),
@@ -251,18 +243,6 @@ export const AtlasCredentialsView = (): JSX.Element => {
                   ],
         [isApiKey],
     );
-
-    // Walk the active stage forward while the host validates, holding on the last step until the
-    // mutation resolves. Advancing inside the timer keeps the effect free of direct set-state.
-    useEffect(() => {
-        if (phase !== 'checking') {
-            return;
-        }
-        const timer = setInterval(() => {
-            setActiveStage((current) => (current < checkStages.length - 1 ? current + 1 : current));
-        }, CHECK_STAGE_ADVANCE_MS);
-        return () => clearInterval(timer);
-    }, [phase, checkStages.length]);
 
     const openLink = useCallback(
         (url: string): void => {
@@ -297,7 +277,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
             return;
         }
         setSubmitError(undefined);
-        setActiveStage(0);
+        setFailedStage(undefined);
         setPhase('checking');
         try {
             const result =
@@ -316,6 +296,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 // Stay on the verification screen and surface the error there; the user chooses when
                 // to go back rather than being bounced to the form automatically.
                 setSubmitError(result.error);
+                setFailedStage(result.failedStage);
             }
         } catch (error) {
             setSubmitError({
@@ -323,6 +304,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 title: l10n.t("We couldn't check this credential"),
                 message: error instanceof Error ? error.message : String(error),
             });
+            setFailedStage(0);
         }
     }, [canSubmit, chosenMethod, phase, trpcClient, values]);
 
@@ -502,20 +484,17 @@ export const AtlasCredentialsView = (): JSX.Element => {
     );
 
     const errorMessage = submitError ? (
-        <MessageBar intent="error">
+        <MessageBar intent="error" layout="multiline">
             <MessageBarBody>
-                <div className={styles.messageContent}>
-                    <Text weight="semibold">{submitError.title}</Text>
-                    <Text>{submitError.message}</Text>
-                    {submitError.action && (
-                        <div>
-                            <Button appearance="secondary" onClick={() => openLink(submitError.action!.url)}>
-                                {submitError.action.label}
-                            </Button>
-                        </div>
-                    )}
-                </div>
+                <MessageBarTitle>{submitError.title}</MessageBarTitle> {submitError.message}
             </MessageBarBody>
+            {submitError.action && (
+                <MessageBarActions>
+                    <Button appearance="secondary" onClick={() => openLink(submitError.action!.url)}>
+                        {submitError.action.label}
+                    </Button>
+                </MessageBarActions>
+            )}
         </MessageBar>
     ) : null;
 
@@ -589,13 +568,15 @@ export const AtlasCredentialsView = (): JSX.Element => {
 
     const checkFailed = phase === 'checking' && submitError !== undefined;
     const stageStatusAt = (index: number): StageStatus => {
-        if (index < activeStage) {
-            return 'done';
+        if (failedStage !== undefined) {
+            if (index < failedStage) {
+                return 'done';
+            }
+            return index === failedStage ? 'error' : 'pending';
         }
-        if (index === activeStage) {
-            return checkFailed ? 'error' : 'active';
-        }
-        return 'pending';
+        // Verifying: the host does not stream per-step progress, so only the first step is shown
+        // active and later steps stay pending rather than pretending to have finished.
+        return index === 0 ? 'active' : 'pending';
     };
     const verifyTitle = isApiKey
         ? l10n.t('Verify your MongoDB Atlas API Key')
@@ -637,12 +618,10 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     <StageRow key={label} label={label} status="done" />
                 ))}
             </div>
-            <MessageBar intent="success">
+            <MessageBar intent="success" layout="multiline">
                 <MessageBarBody>
-                    <div className={styles.messageContent}>
-                        <Text weight="semibold">{l10n.t('Everything was successful.')}</Text>
-                        <Text>{l10n.t('Your credential was checked and saved.')}</Text>
-                    </div>
+                    <MessageBarTitle>{l10n.t('Everything was successful.')}</MessageBarTitle>{' '}
+                    {l10n.t('Your credential was checked and saved.')}
                 </MessageBarBody>
             </MessageBar>
             {submitError && errorMessage}
