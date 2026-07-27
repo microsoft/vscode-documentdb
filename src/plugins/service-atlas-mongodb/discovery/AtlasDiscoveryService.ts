@@ -280,26 +280,31 @@ export class AtlasDiscoveryService {
      * credential-management "Retry" action calls this instead of a full refresh: only the selected
      * credential issues requests, and every other credential's last known result is reused.
      *
+     * Like {@link refreshAll}, it re-derives the session rather than reusing the cached one. The
+     * user's actual flow is to open the credential manager, fix something in the Atlas web UI, and
+     * come back to press Retry, and a Service Account access token carries the roles it was minted
+     * with, so reusing it would report the pre-change answer.
+     *
      * Falls back to a full refresh when there is no cached snapshot to fold into.
      */
     public async retryCredential(credentialId: string, signal?: AbortSignal): Promise<AtlasDiscoverySnapshot> {
-        this.sessions.invalidate(credentialId);
-
         const previous = this.lastResults;
         const snapshot = this.snapshot;
         if (!previous || !snapshot) {
+            this.sessions.invalidate(credentialId);
             this.invalidate();
-            return this.listAll({ forceRefresh: true, signal });
+            return this.listAll({ forceRefresh: true, forceFreshSessions: true, signal });
         }
 
         const record = await getAtlasCredential(credentialId);
         if (!record) {
             // The credential is gone; simply drop its contribution.
+            this.sessions.invalidate(credentialId);
             const remaining = previous.filter((result) => result.record.id !== credentialId);
             return this.commit(remaining, snapshot.clustersIncluded);
         }
 
-        const refreshed = await this.queryCredential(record, snapshot.clustersIncluded, signal);
+        const refreshed = await this.queryCredential(record, snapshot.clustersIncluded, signal, true);
         const merged = previous.some((result) => result.record.id === credentialId)
             ? previous.map((result) => (result.record.id === credentialId ? refreshed : result))
             : [...previous, refreshed];
@@ -418,16 +423,22 @@ export class AtlasDiscoveryService {
         let organizations: AtlasOrganization[] = [];
         let projects: AtlasProject[] = [];
 
-        try {
-            // Different endpoints with independent scopes, so they are safe to run together. The
-            // Azure "sequential or you get wrong data" caveat applies to tenants vs subscriptions
-            // inside one provider, not to these two Atlas calls.
-            [organizations, projects] = await Promise.all([
-                client.listOrganizations(signal),
-                client.listProjects(signal),
-            ]);
-        } catch (error) {
-            const classified = classifyAtlasError(error);
+        // Different endpoints with independent scopes, so they are safe to run together. The
+        // Azure "sequential or you get wrong data" caveat applies to tenants vs subscriptions
+        // inside one provider, not to these two Atlas calls.
+        //
+        // `allSettled`, not `all`: `all` rejects as soon as the first request fails and leaves the
+        // other one running, so its failure lands in the log after the credential has already been
+        // recorded as failed and reads like a second, racing pass. Waiting for both also makes the
+        // reported error deterministic instead of whichever request happened to lose the race.
+        const [orgOutcome, projectOutcome] = await Promise.allSettled([
+            client.listOrganizations(signal),
+            client.listProjects(signal),
+        ]);
+
+        const failure = [orgOutcome, projectOutcome].find((outcome) => outcome.status === 'rejected');
+        if (failure) {
+            const classified = classifyAtlasError(failure.reason);
             atlasTrace(
                 `${owner}: discovery failed (${classified.kind}${classified.status ? ` ${String(classified.status)}` : ''}) - ${classified.message}`,
             );
@@ -447,6 +458,9 @@ export class AtlasDiscoveryService {
                 },
             };
         }
+
+        organizations = orgOutcome.status === 'fulfilled' ? orgOutcome.value : [];
+        projects = projectOutcome.status === 'fulfilled' ? projectOutcome.value : [];
 
         atlasTrace(
             `${owner}: sees ${String(organizations.length)} organization(s) and ${String(projects.length)} project(s)`,

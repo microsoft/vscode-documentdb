@@ -133,4 +133,17 @@ describe('AtlasApiClient pagination', () => {
         expect(refresher.tryRefreshIfPossible).toHaveBeenCalledTimes(1);
         expect(fetchMock).toHaveBeenCalledTimes(2);
     });
+
+    it('does not mint a new token on 403, because a new token carries the same roles', async () => {
+        // 403 means authenticated but not permitted: an enforced IP access list, or roles that are
+        // too narrow. Re-minting cannot change the outcome, it only doubles the requests and makes
+        // the failure take twice as long to surface.
+        fetchMock.mockResolvedValueOnce(jsonResponse({ detail: 'IP address is not allowed' }, 403));
+
+        const refresher = { tryRefreshIfPossible: jest.fn() };
+
+        await expect(new AtlasApiClient(session, refresher).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
+        expect(refresher.tryRefreshIfPossible).not.toHaveBeenCalled();
+        expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
 });

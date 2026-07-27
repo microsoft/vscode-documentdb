@@ -324,6 +324,29 @@ describe('AtlasDiscoveryService.listAll', () => {
         expect(after.projects.map((p) => p.project.name)).toEqual(['Payments']);
     });
 
+    it('re-derives the session on a single-credential retry and leaves peers untouched', async () => {
+        // The real flow is: open the credential manager, fix something in the Atlas web UI, come
+        // back and press Retry. Reusing the cached token would report the pre-change answer.
+        const failingId = await addApiKeyCredential('aaaaaaaa');
+        await addApiKeyCredential('bbbbbbbb');
+        mockListOrganizations.mockResolvedValue([{ id: 'org-1', name: 'Acme Corp' }]);
+        mockListProjects.mockResolvedValue([]);
+
+        const registry = new AtlasCredentialSessionRegistry();
+        const refreshSession = jest.spyOn(registry, 'refreshSession');
+        const service = new AtlasDiscoveryService(registry);
+
+        await service.listAll();
+        const callsAfterFirstPass = mockListProjects.mock.calls.length;
+
+        await service.retryCredential(failingId);
+
+        expect(refreshSession).toHaveBeenCalledTimes(1);
+        expect(refreshSession).toHaveBeenCalledWith(failingId);
+        // Only the retried credential issued another request; its peer reused its last result.
+        expect(mockListProjects.mock.calls.length).toBe(callsAfterFirstPass + 1);
+    });
+
     it('re-queries when clusters are requested but the cached snapshot has none', async () => {
         await addApiKeyCredential('aaaaaaaa');
         mockListOrganizations.mockResolvedValue([{ id: 'org-1', name: 'Acme Corp' }]);

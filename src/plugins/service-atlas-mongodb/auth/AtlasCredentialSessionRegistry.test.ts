@@ -214,4 +214,26 @@ describe('AtlasCredentialSessionRegistry', () => {
 
         expect(mockFetchToken).toHaveBeenCalledTimes(1);
     });
+
+    it('shares one in-flight refresh between concurrent callers', async () => {
+        // A credential's discovery pass issues its organization and project requests together, so
+        // a rejected token makes both ask for a new one at the same moment. Without dedupe that
+        // minted two throwaway tokens for a single credential.
+        const { record } = await upsertAtlasCredential({
+            authMethod: 'serviceaccount',
+            clientId: 'client-1',
+            clientSecret: 'secret-1',
+        });
+        mockFetchToken.mockResolvedValue({ access_token: 'token-fresh', token_type: 'Bearer', expires_in: 3600 });
+
+        const registry = new AtlasCredentialSessionRegistry();
+        const [first, second] = await Promise.all([
+            registry.refreshSession(record.id),
+            registry.refreshSession(record.id),
+        ]);
+
+        expect(mockFetchToken).toHaveBeenCalledTimes(1);
+        expect(first).toEqual({ type: 'serviceaccount', accessToken: 'token-fresh' });
+        expect(second).toEqual(first);
+    });
 });

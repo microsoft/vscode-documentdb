@@ -48,7 +48,7 @@ export class AtlasApiClient {
      * @param session The active Atlas session used to authenticate requests.
      * @param sessionManager Optional session refresher. When provided, token-based sessions
      * (Service Account) are transparently refreshed and the request retried once if
-     * the access token is rejected (401/403). The user is only signed out - and therefore
+     * the access token is rejected (401). The user is only signed out - and therefore
      * prompted to sign in again - when the credentials themselves are completely rejected.
      * @param owner Optional secret-free credential description used to correlate trace output
      * when several credentials are querying Atlas at the same time.
@@ -151,21 +151,24 @@ export class AtlasApiClient {
     /**
      * Makes an authenticated request to the Atlas Admin API.
      *
-     * For token-based sessions (Service Account) backed by a session manager, a single
-     * silent token refresh is attempted when the access token is rejected (401/403), and the
-     * request is retried with the freshly minted token. If the credentials are completely
-     * rejected, {@link AtlasSessionManager} signs out and the original error propagates so the
-     * caller can prompt the user to sign in again.
+     * For token-based sessions (Service Account) backed by a session manager, a single silent
+     * token refresh is attempted when the access token is rejected with `401`, and the request is
+     * retried with the freshly minted token.
+     *
+     * `403` deliberately does **not** trigger a refresh. Atlas returns it when the caller is
+     * authenticated but not permitted: an enforced IP access list, or roles that are too narrow.
+     * A new token carries exactly the same identity and the same roles, so re-minting cannot
+     * change the outcome; it only doubles the requests, mints a throwaway token, and makes the
+     * failure take twice as long to surface.
      */
     private async request<T>(path: string, signal?: AbortSignal): Promise<T> {
         try {
             return await this.requestOnce<T>(path, signal);
         } catch (error) {
-            const isAuthFailure =
-                error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403);
+            const isExpiredToken = error instanceof AtlasApiError && error.statusCode === 401;
             const canRefresh = this.sessionManager !== undefined && this.session.type === 'serviceaccount';
 
-            if (isAuthFailure && canRefresh) {
+            if (isExpiredToken && canRefresh) {
                 atlasTrace(
                     `${this.describeClient()} access token rejected on ${path}; minting a fresh token and retrying once`,
                 );

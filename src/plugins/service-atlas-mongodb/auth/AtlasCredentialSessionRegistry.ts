@@ -47,8 +47,8 @@ function isExpired(expiresAtMs: string | undefined): boolean {
 }
 
 /**
- * A refresher bound to exactly one credential. Handed to {@link AtlasApiClient} so a 401/403 on
- * that credential triggers a re-mint for that credential only.
+ * A refresher bound to exactly one credential. Handed to {@link AtlasApiClient} so a rejected
+ * access token on that credential triggers a re-mint for that credential only.
  */
 class AtlasCredentialSession implements AtlasSessionRefresher {
     constructor(
@@ -71,6 +71,7 @@ class AtlasCredentialSession implements AtlasSessionRefresher {
 export class AtlasCredentialSessionRegistry {
     private readonly sessions = new Map<string, AtlasSession>();
     private readonly inflight = new Map<string, Promise<AtlasSession | undefined>>();
+    private readonly inflightRefresh = new Map<string, Promise<AtlasSession | undefined>>();
 
     /**
      * Returns a usable session for the credential, minting or refreshing a Service Account token
@@ -100,8 +101,28 @@ export class AtlasCredentialSessionRegistry {
     /**
      * Forces a fresh Service Account token for the credential. API Key credentials have nothing to
      * refresh, so their stored session is simply returned again.
+     *
+     * Concurrent callers share one refresh. A credential's discovery pass issues its organization
+     * and project requests together, so an expired token makes both of them ask for a new one at
+     * the same moment; without this, that mints two throwaway tokens for one credential.
      */
     public async refreshSession(credentialId: string): Promise<AtlasSession | undefined> {
+        const pending = this.inflightRefresh.get(credentialId);
+        if (pending) {
+            atlasTrace(`credential ${shortId(credentialId)}: joining the in-flight session refresh`);
+            return pending;
+        }
+
+        const work = this.performRefresh(credentialId).finally(() => {
+            if (this.inflightRefresh.get(credentialId) === work) {
+                this.inflightRefresh.delete(credentialId);
+            }
+        });
+        this.inflightRefresh.set(credentialId, work);
+        return work;
+    }
+
+    private async performRefresh(credentialId: string): Promise<AtlasSession | undefined> {
         this.sessions.delete(credentialId);
 
         const secrets = await readAtlasCredentialSecrets(credentialId);
@@ -132,12 +153,14 @@ export class AtlasCredentialSessionRegistry {
     public invalidate(credentialId: string): void {
         this.sessions.delete(credentialId);
         this.inflight.delete(credentialId);
+        this.inflightRefresh.delete(credentialId);
     }
 
     /** Drops every cached session. Used by "sign out of all". */
     public invalidateAll(): void {
         this.sessions.clear();
         this.inflight.clear();
+        this.inflightRefresh.clear();
     }
 
     /** Returns a refresher scoped to a single credential. */
