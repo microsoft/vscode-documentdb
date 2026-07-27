@@ -55,6 +55,15 @@ export class SelectAtlasCredentialStep extends AzureWizardPromptStep<AtlasCreden
 
             const trailingItems: CredentialQuickPickItem[] = [{ label: '', kind: vscode.QuickPickItemKind.Separator }];
 
+            // Adding comes first: this flow is the everyday way to widen what discovery can see,
+            // not just a recovery surface, and a single credential is frequently least-privileged.
+            trailingItems.push({
+                label: l10n.t('Add a credential…'),
+                detail: l10n.t('Connect another API Key or Service Account to see more organizations and projects.'),
+                iconPath: new vscode.ThemeIcon('add'),
+                isAddOption: true,
+            });
+
             if (credentialItems.length > 0) {
                 // Without this the list is a snapshot: every row shows the status from the last
                 // discovery pass, and the only way to re-check is to walk into each credential in
@@ -66,15 +75,7 @@ export class SelectAtlasCredentialStep extends AzureWizardPromptStep<AtlasCreden
                     iconPath: new vscode.ThemeIcon('refresh'),
                     isRetryAllOption: true,
                 });
-            }
 
-            trailingItems.push({
-                label: l10n.t('Add a credential…'),
-                iconPath: new vscode.ThemeIcon('add'),
-                isAddOption: true,
-            });
-
-            if (credentialItems.length > 0) {
                 trailingItems.push({
                     label: l10n.t('Sign out of all'),
                     iconPath: new vscode.ThemeIcon('sign-out'),

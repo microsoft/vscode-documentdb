@@ -372,6 +372,7 @@
   "Configuring tenant filtering…": "Configuring tenant filtering…",
   "Conflict Resolution: {strategyName}": "Conflict Resolution: {strategyName}",
   "Connect": "Connect",
+  "Connect another API Key or Service Account to see more organizations and projects.": "Connect another API Key or Service Account to see more organizations and projects.",
   "Connect database": "Connect database",
   "Connect this playground to a database": "Connect this playground to a database",
   "Connect to a different database…": "Connect to a different database…",

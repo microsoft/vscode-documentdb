@@ -207,6 +207,26 @@ describe('SelectAtlasCredentialStep', () => {
         expect(seen.some((item) => item.isSignOutAllOption)).toBe(true);
     });
 
+    it('lists the fleet actions in order: add, retry all, sign out of all, exit', async () => {
+        await upsertAtlasCredential({ authMethod: 'apikey', publicKey: 'pub-1', privateKey: 'priv-1' });
+
+        let seen: QuickPickLike[] = [];
+        const context = buildContext((items) => {
+            seen = items;
+            return items.find((item) => item.isExitOption)!;
+        });
+
+        await expect(new SelectAtlasCredentialStep().prompt(context)).rejects.toBeInstanceOf(UserCancelledErrorMock);
+
+        // Adding comes first because this flow is the everyday way to widen what discovery can
+        // see, not just a recovery surface.
+        const actions = seen
+            .filter((item) => item.isAddOption ?? item.isRetryAllOption ?? item.isSignOutAllOption ?? item.isExitOption)
+            .map((item) => item.label);
+        expect(actions).toEqual(['Add a credential…', 'Retry all', 'Sign out of all', 'Exit']);
+        expect(seen.find((item) => item.isAddOption)?.detail).toBeTruthy();
+    });
+
     it('selects a credential so the action step can take over', async () => {
         const { record } = await upsertAtlasCredential({
             authMethod: 'apikey',
