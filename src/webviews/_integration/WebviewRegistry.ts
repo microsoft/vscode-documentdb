@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ClusterDashboard } from '../documentdb/clusterDashboard/ClusterDashboard';
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
 
@@ -35,6 +36,7 @@ import { DocumentView } from '../documentdb/documentView/documentView';
  * {@link WebviewName} enforces that at compile time.
  */
 export const WebviewRegistry = {
+    clusterDashboard: ClusterDashboard,
     collectionView: CollectionView,
     documentView: DocumentView,
 } as const;
