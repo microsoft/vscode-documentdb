@@ -127,3 +127,139 @@ describe('wildcard index creation', () => {
         );
     });
 });
+
+describe('vector index creation', () => {
+    const hnswInput: CreateIndexInput = {
+        kind: 'vector',
+        field: 'embedding',
+        dimensions: 1536,
+        similarity: 'COS',
+        algorithm: { kind: 'vector-hnsw', m: 16, efConstruction: 64 },
+    };
+
+    it('builds a cosmosSearch key with HNSW options', () => {
+        const spec = buildIndexSpec(hnswInput);
+        expect(spec.key).toEqual({ embedding: 'cosmosSearch' });
+        expect(spec.cosmosSearchOptions).toEqual({
+            kind: 'vector-hnsw',
+            dimensions: 1536,
+            similarity: 'COS',
+            m: 16,
+            efConstruction: 64,
+        });
+        // No explicit name → the server generates one.
+        expect(spec.name).toBeUndefined();
+    });
+
+    it('builds IVF options with numLists', () => {
+        const spec = buildIndexSpec({
+            kind: 'vector',
+            field: 'embedding',
+            dimensions: 4,
+            similarity: 'L2',
+            algorithm: { kind: 'vector-ivf', numLists: 10 },
+        });
+        expect(spec.cosmosSearchOptions).toEqual({
+            kind: 'vector-ivf',
+            dimensions: 4,
+            similarity: 'L2',
+            numLists: 10,
+        });
+    });
+
+    it('builds DiskANN options with product quantization', () => {
+        const spec = buildIndexSpec({
+            kind: 'vector',
+            field: 'embedding',
+            name: 'embedding_pq',
+            dimensions: 1536,
+            similarity: 'IP',
+            algorithm: { kind: 'vector-diskann', maxDegree: 32, lBuild: 50 },
+            compression: { kind: 'pq', pqCompressedDims: 96, pqSampleSize: 2000 },
+        });
+        expect(spec.name).toBe('embedding_pq');
+        expect(spec.cosmosSearchOptions).toEqual({
+            kind: 'vector-diskann',
+            dimensions: 1536,
+            similarity: 'IP',
+            maxDegree: 32,
+            lBuild: 50,
+            compression: 'pq',
+            pqCompressedDims: 96,
+            pqSampleSize: 2000,
+        });
+    });
+
+    it('adds half-precision compression for HNSW', () => {
+        const spec = buildIndexSpec({
+            ...hnswInput,
+            dimensions: 3072,
+            compression: { kind: 'half' },
+        } as CreateIndexInput);
+        expect(spec.cosmosSearchOptions).toMatchObject({ compression: 'half' });
+    });
+
+    it('renders a createIndex shell command with cosmosSearchOptions', () => {
+        expect(buildCreateIndexShellCommand('products', hnswInput)).toBe(
+            'db.getCollection("products").createIndex({"embedding":"cosmosSearch"}, ' +
+                '{"cosmosSearchOptions":{"kind":"vector-hnsw","dimensions":1536,"similarity":"COS","m":16,"efConstruction":64}})',
+        );
+    });
+
+    it('includes an explicit name in the shell command', () => {
+        const command = buildCreateIndexShellCommand('products', { ...hnswInput, name: 'my_vec' } as CreateIndexInput);
+        expect(command).toContain('"name":"my_vec"');
+        expect(command).toContain('"cosmosSearchOptions"');
+    });
+
+    it('accepts a valid vector definition', () => {
+        expect(CreateIndexInputSchema.safeParse(hnswInput).success).toBe(true);
+    });
+
+    it.each([
+        {
+            name: 'm below the minimum',
+            input: { ...hnswInput, algorithm: { kind: 'vector-hnsw', m: 1, efConstruction: 64 } },
+        },
+        {
+            name: 'efConstruction below 2 × m',
+            input: { ...hnswInput, algorithm: { kind: 'vector-hnsw', m: 40, efConstruction: 64 } },
+        },
+        {
+            name: 'half precision on DiskANN',
+            input: {
+                kind: 'vector',
+                field: 'embedding',
+                dimensions: 1536,
+                similarity: 'COS',
+                algorithm: { kind: 'vector-diskann', maxDegree: 32, lBuild: 50 },
+                compression: { kind: 'half' },
+            },
+        },
+        {
+            name: 'product quantization on HNSW',
+            input: { ...hnswInput, compression: { kind: 'pq' } },
+        },
+        {
+            name: 'compressed dimensions not smaller than dimensions',
+            input: {
+                kind: 'vector',
+                field: 'embedding',
+                dimensions: 96,
+                similarity: 'COS',
+                algorithm: { kind: 'vector-diskann', maxDegree: 32, lBuild: 50 },
+                compression: { kind: 'pq', pqCompressedDims: 96 },
+            },
+        },
+        {
+            name: 'non-integer dimensions',
+            input: { ...hnswInput, dimensions: 1.5 },
+        },
+        {
+            name: 'reserved index name',
+            input: { ...hnswInput, name: '*' },
+        },
+    ])('rejects an invalid vector definition: $name', ({ input }) => {
+        expect(CreateIndexInputSchema.safeParse(input).success).toBe(false);
+    });
+});

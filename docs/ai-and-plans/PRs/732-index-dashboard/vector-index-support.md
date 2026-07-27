@@ -1423,6 +1423,83 @@ for IVF, HNSW, DiskANN, and compression variants.
 
 ---
 
+### 2026-07-27: Vector index creation (Phases 2–4)
+
+The Vector tab is now a working create form for Azure DocumentDB
+`cosmosSearch` indexes. Phases 2, 3, and 4 landed together as a single vertical
+slice covering all three algorithms and both compression modes.
+
+Typed contract and validation (Phase 2):
+
+- `CreateIndexInput` is now a discriminated union of a field-keyed
+  `FieldCreateIndexInput` (Standard/Wildcard) and a `VectorCreateIndexInput`
+  (`kind: 'vector'`). Invalid states such as a vector index with TTL, or an IVF
+  index carrying HNSW settings, are unrepresentable. `isVectorCreateIndexInput()`
+  narrows the union at every consumer.
+- `CreateIndexInputSchema` became a `z.union` of the existing field schema and a
+  new vector schema. The vector schema uses discriminated unions for the
+  algorithm (`vector-ivf` / `vector-hnsw` / `vector-diskann`) and compression
+  (`half` / `pq`), with the documented service ranges: HNSW `m` 2–100 and
+  `efConstruction` 4–1000 (and `>= 2 * m`), DiskANN `maxDegree` 20–2048 and
+  `lBuild` 10–500, PQ `pqSampleSize` 1000–100000. Cross-field rules (half →
+  IVF/HNSW, PQ → DiskANN, `pqCompressedDims < dimensions`) live in a top-level
+  refinement.
+- `buildIndexSpec()` and `buildCreateIndexShellCommand()` branch to a vector
+  builder that emits `key: { <field>: 'cosmosSearch' }` plus a
+  `cosmosSearchOptions` object. Direct create and Playground/Shell hand-offs use
+  the same builder, so the previewed command equals the submitted command.
+- `IndexSpecification` gained an explicit typed `cosmosSearchOptions` field
+  instead of relying only on the `[key: string]: unknown` escape hatch.
+
+Drawer and draft (Phases 3–4):
+
+- `CreateIndexFormState` carries an independent Vector draft (field, name,
+  dimensions, similarity, algorithm, per-algorithm tuning, compression, and PQ
+  tuning). Switching among Standard, Wildcard, and Vector preserves all three
+  drafts; Vector never mutates Standard's field list.
+- The Vector main form is deliberately compact — vector field, algorithm
+  (with a one-line recommendation), dimensions + similarity, and an optional
+  custom name — matching the focused shape of the other two tabs. Algorithm
+  tuning and compression live behind the shared **Advanced settings** page,
+  which is now index-kind aware.
+- Compression choices are constrained to valid pairings (half for IVF/HNSW, PQ
+  for DiskANN); an incompatible selection collapses to "none" for the payload,
+  preview, and validation rather than producing an invalid command.
+- JSON preview, direct **Create Index**, **Create in Playground**, and **Create
+  in Shell** are all enabled for Vector and render the `cosmosSearchOptions`
+  document.
+- Optimistic "Creating…" rows now understand vector input: the key uses the
+  `cosmosSearch` sentinel (so `classifyIndex()` badges it **Vector**), the
+  default name matches the server's `<field>_cosmosSearch`, and the algorithm
+  badge appears immediately.
+- Create telemetry records privacy-safe vector facts only: algorithm,
+  similarity, compression kind, and a dimensions measurement — never the field
+  name or vector values.
+
+Implementation choices:
+
+1. **Discriminated union over optional fields:** A kind-tagged union keeps the
+   vector and field-keyed contracts from leaking into one another and lets Zod
+   validate each shape against its own rules.
+2. **HNSW as the default algorithm:** Its documented defaults (`m: 16`,
+   `efConstruction: 64`) are well established and it is the balanced
+   general-purpose choice, matching the recommended first vertical slice. No
+   dataset-size guidance is encoded as a validation rule.
+3. **Compression behind Advanced:** The main form stays minimal; tuning and
+   compression are progressive disclosure, consistent with the Standard tab's
+   Advanced page.
+4. **Name left to the server by default:** When no custom name is given the
+   service generates `<field>_cosmosSearch`; the input placeholder previews that
+   value so the optimistic row reconciles by name.
+
+Validation status: focused unit tests cover each algorithm's spec, compression
+variants, the shell command, and the invalid-combination matrix. The repository
+l10n, Prettier, ESLint, Jest (2746 tests), and `tsc` build checks all pass.
+End-to-end creation against a live Azure DocumentDB vCore deployment is the
+remaining manual verification step (Phase 6).
+
+---
+
 ## Capability and action handling
 
 Verified on one Azure DocumentDB vCore deployment on 2026-07-27:

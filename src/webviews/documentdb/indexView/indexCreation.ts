@@ -7,9 +7,17 @@ import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parse
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
 import { type IndexSpecification } from '../../../documentdb/LlmEnhancedFeatureApis';
-import { type CreateIndexInput, type FieldIndexType } from './types';
+import {
+    isVectorCreateIndexInput,
+    type CreateIndexInput,
+    type FieldIndexType,
+    type VectorCreateIndexInput,
+} from './types';
 
 const FieldIndexTypeSchema = z.enum(['asc', 'desc', 'text', '2dsphere', 'hashed']);
+
+/** Index key sentinel that marks a field as a DocumentDB vector. */
+const VECTOR_INDEX_DIRECTION = 'cosmosSearch';
 
 /** True when an index key contains the wildcard token. */
 export function isWildcardKey(field: string): boolean {
@@ -40,8 +48,8 @@ function isBlankOptionText(text: string | undefined): boolean {
     return trimmed === '' || /^\{\s*\}$/.test(trimmed);
 }
 
-/** Strict create-index input validation shared by direct creation and command handoffs. */
-export const CreateIndexInputSchema = z
+/** Strict field-keyed (Standard/Wildcard) create-index input validation. */
+const FieldCreateIndexInputSchema = z
     .object({
         fields: z
             .array(
@@ -146,6 +154,95 @@ export const CreateIndexInputSchema = z
         }
     });
 
+/** Distance metric accepted by a DocumentDB vector index. */
+const VectorSimilaritySchema = z.enum(['COS', 'L2', 'IP']);
+
+/**
+ * Algorithm choice plus its own build-time tuning. Ranges mirror the current
+ * Azure DocumentDB service documentation. The cross-field
+ * `efConstruction >= 2 * m` HNSW rule is enforced in the top-level refinement
+ * because a discriminated-union member cannot carry its own refinement.
+ */
+const VectorAlgorithmSchema = z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('vector-ivf'), numLists: z.number().int().positive() }),
+    z.object({
+        kind: z.literal('vector-hnsw'),
+        m: z.number().int().min(2).max(100),
+        efConstruction: z.number().int().min(4).max(1000),
+    }),
+    z.object({
+        kind: z.literal('vector-diskann'),
+        maxDegree: z.number().int().min(20).max(2048),
+        lBuild: z.number().int().min(10).max(500),
+    }),
+]);
+
+/** Optional index compression: half precision or product quantization. */
+const VectorCompressionSchema = z.discriminatedUnion('kind', [
+    z.object({ kind: z.literal('half') }),
+    z.object({
+        kind: z.literal('pq'),
+        pqCompressedDims: z.number().int().positive().optional(),
+        pqSampleSize: z.number().int().min(1000).max(100000).optional(),
+    }),
+]);
+
+/** Strict vector (`cosmosSearch`) create-index input validation. */
+const VectorCreateIndexInputSchema = z
+    .object({
+        kind: z.literal('vector'),
+        field: z.string().min(1),
+        name: z
+            .string()
+            .refine((name) => name.trim() !== '*', { message: l10n.t('The index name "*" is reserved.') })
+            .optional(),
+        dimensions: z.number().int().positive(),
+        similarity: VectorSimilaritySchema,
+        algorithm: VectorAlgorithmSchema,
+        compression: VectorCompressionSchema.optional(),
+    })
+    .superRefine((input, ctx) => {
+        if (input.algorithm.kind === 'vector-hnsw' && input.algorithm.efConstruction < 2 * input.algorithm.m) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['algorithm', 'efConstruction'],
+                message: l10n.t('Build candidates (efConstruction) must be at least 2 × connections (m).'),
+            });
+        }
+        if (input.compression?.kind === 'half' && input.algorithm.kind === 'vector-diskann') {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['compression'],
+                message: l10n.t('Half precision is only available for IVF and HNSW indexes.'),
+            });
+        }
+        if (input.compression?.kind === 'pq' && input.algorithm.kind !== 'vector-diskann') {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['compression'],
+                message: l10n.t('Product quantization is only available for DiskANN indexes.'),
+            });
+        }
+        if (
+            input.compression?.kind === 'pq' &&
+            input.compression.pqCompressedDims !== undefined &&
+            input.compression.pqCompressedDims >= input.dimensions
+        ) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['compression', 'pqCompressedDims'],
+                message: l10n.t('Compressed dimensions must be smaller than the vector dimensions.'),
+            });
+        }
+    });
+
+/**
+ * Strict create-index input validation shared by direct creation and command
+ * handoffs. A union so vector payloads are validated against the vector
+ * contract and field-keyed payloads against the Standard/Wildcard contract.
+ */
+export const CreateIndexInputSchema = z.union([VectorCreateIndexInputSchema, FieldCreateIndexInputSchema]);
+
 /** Map a per-field index type onto its wire-level key value. */
 function fieldTypeToKeyValue(type: FieldIndexType): number | string {
     switch (type) {
@@ -186,8 +283,61 @@ function parseOptionObject(text: string | undefined, label: string): Record<stri
     return parsed as Record<string, unknown>;
 }
 
+/** Assemble the `cosmosSearchOptions` document for a vector index. */
+function buildCosmosSearchOptions(input: VectorCreateIndexInput): Record<string, unknown> {
+    const options: Record<string, unknown> = {
+        kind: input.algorithm.kind,
+        dimensions: input.dimensions,
+        similarity: input.similarity,
+    };
+
+    switch (input.algorithm.kind) {
+        case 'vector-ivf':
+            options.numLists = input.algorithm.numLists;
+            break;
+        case 'vector-hnsw':
+            options.m = input.algorithm.m;
+            options.efConstruction = input.algorithm.efConstruction;
+            break;
+        case 'vector-diskann':
+            options.maxDegree = input.algorithm.maxDegree;
+            options.lBuild = input.algorithm.lBuild;
+            break;
+    }
+
+    if (input.compression?.kind === 'half') {
+        options.compression = 'half';
+    } else if (input.compression?.kind === 'pq') {
+        options.compression = 'pq';
+        if (input.compression.pqCompressedDims !== undefined) {
+            options.pqCompressedDims = input.compression.pqCompressedDims;
+        }
+        if (input.compression.pqSampleSize !== undefined) {
+            options.pqSampleSize = input.compression.pqSampleSize;
+        }
+    }
+
+    return options;
+}
+
+/** Build the driver index specification for a DocumentDB vector index. */
+function buildVectorIndexSpec(input: VectorCreateIndexInput): IndexSpecification {
+    const spec: IndexSpecification = {
+        key: { [input.field]: VECTOR_INDEX_DIRECTION },
+        cosmosSearchOptions: buildCosmosSearchOptions(input),
+    };
+    if (input.name && input.name.trim().length > 0) {
+        spec.name = input.name.trim();
+    }
+    return spec;
+}
+
 /** Build the driver index specification from validated drawer input. */
 export function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
+    if (isVectorCreateIndexInput(input)) {
+        return buildVectorIndexSpec(input);
+    }
+
     const key: Record<string, number | string> = {};
 
     for (const entry of input.fields) {
@@ -227,9 +377,21 @@ export function buildIndexSpec(input: CreateIndexInput): IndexSpecification {
 
 /** Render a createIndex invocation for playground and shell handoffs. */
 export function buildCreateIndexShellCommand(collectionName: string, input: CreateIndexInput): string {
+    const collection = JSON.stringify(collectionName);
+
+    if (isVectorCreateIndexInput(input)) {
+        const spec = buildVectorIndexSpec(input);
+        const keyJson = JSON.stringify(spec.key);
+        const optionEntries: string[] = [];
+        if (spec.name !== undefined) {
+            optionEntries.push(`${JSON.stringify('name')}:${JSON.stringify(spec.name)}`);
+        }
+        optionEntries.push(`${JSON.stringify('cosmosSearchOptions')}:${JSON.stringify(spec.cosmosSearchOptions)}`);
+        return `db.getCollection(${collection}).createIndex(${keyJson}, {${optionEntries.join(',')}})`;
+    }
+
     const spec = buildIndexSpec(input);
     const { key, partialFilterExpression, collation, wildcardProjection, ...serializableOptions } = spec;
-    const collection = JSON.stringify(collectionName);
     const keyJson = JSON.stringify(key);
     const optionEntries = Object.entries(serializableOptions).map(
         ([option, value]) => `${JSON.stringify(option)}:${JSON.stringify(value)}`,

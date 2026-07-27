@@ -13,7 +13,13 @@ import { IndexList } from './components/indexList';
 import { IndexManagementToolbar } from './components/IndexManagementToolbar';
 import { IndexMetricsRow } from './components/IndexMetricsRow';
 import './indexView.scss';
-import { type CreateIndexInput, type FieldIndexType, type IndexRow } from './types';
+import {
+    isVectorCreateIndexInput,
+    type CreateIndexInput,
+    type FieldIndexType,
+    type IndexRow,
+    type VectorIndexOptions,
+} from './types';
 import { formatBytes, formatOps } from './utils/format';
 
 /** How often to re-poll while at least one index is building or being created. */
@@ -40,6 +46,8 @@ interface PendingCreate {
     hasPartialFilter: boolean;
     hasCollation: boolean;
     hasWildcardProjection: boolean;
+    /** Known vector settings, shown while a vector index is being created. */
+    vectorOptions?: VectorIndexOptions;
 }
 
 /** Map a per-field index type onto its wire-level key value (mirrors the router). */
@@ -59,6 +67,43 @@ function keyDirection(type: FieldIndexType): number | string {
  * the placeholder row matches the index the server will report.
  */
 function pendingCreateFromInput(input: CreateIndexInput): PendingCreate {
+    if (isVectorCreateIndexInput(input)) {
+        // A vector key uses the `cosmosSearch` sentinel; with no explicit name the
+        // server names it `<field>_cosmosSearch`, matching that direction.
+        const name = input.name && input.name.trim() !== '' ? input.name.trim() : `${input.field}_cosmosSearch`;
+        const vectorOptions: VectorIndexOptions = {
+            kind: input.algorithm.kind,
+            dimensions: input.dimensions,
+            similarity: input.similarity,
+        };
+        if (input.algorithm.kind === 'vector-ivf') {
+            vectorOptions.numLists = input.algorithm.numLists;
+        } else if (input.algorithm.kind === 'vector-hnsw') {
+            vectorOptions.m = input.algorithm.m;
+            vectorOptions.efConstruction = input.algorithm.efConstruction;
+        } else {
+            vectorOptions.maxDegree = input.algorithm.maxDegree;
+            vectorOptions.lBuild = input.algorithm.lBuild;
+        }
+        if (input.compression?.kind === 'half') {
+            vectorOptions.compression = 'half';
+        } else if (input.compression?.kind === 'pq') {
+            vectorOptions.compression = 'pq';
+            vectorOptions.pqCompressedDims = input.compression.pqCompressedDims;
+            vectorOptions.pqSampleSize = input.compression.pqSampleSize;
+        }
+        return {
+            name,
+            key: [{ field: input.field, direction: 'cosmosSearch' }],
+            unique: false,
+            sparse: false,
+            hasPartialFilter: false,
+            hasCollation: false,
+            hasWildcardProjection: false,
+            vectorOptions,
+        };
+    }
+
     const key = input.fields.map((f) => ({ field: f.field, direction: keyDirection(f.type) }));
     const name =
         input.name && input.name.trim() !== ''
@@ -308,6 +353,7 @@ export const IndexesTab = (): JSX.Element => {
                 partialFilterExpression: p.hasPartialFilter ? {} : undefined,
                 collation: p.hasCollation ? {} : undefined,
                 wildcardProjection: p.hasWildcardProjection ? {} : undefined,
+                vectorOptions: p.vectorOptions,
                 usageOps: 0,
                 isDefault: false,
                 statsAvailable: false,

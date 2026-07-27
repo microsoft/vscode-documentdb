@@ -554,6 +554,20 @@
         border-radius: var(--borderRadiusMedium);
     }
 
+    // Two side-by-side vector inputs (e.g. Dimensions + Similarity) that wrap to
+    // a single column when the drawer is too narrow to hold both.
+    .vectorDualField {
+        display: flex;
+        flex-direction: row;
+        gap: 12px;
+        flex-wrap: wrap;
+
+        > * {
+            flex: 1 1 160px;
+            min-width: 0;
+        }
+    }
+
     // The scoped "Parent path" is a sub-setting of the "Fields below a path"
     // radio, so indent it to start where the radio *labels* start: past the
     // 16px indicator, its two horizontal-S margins, and the label's own

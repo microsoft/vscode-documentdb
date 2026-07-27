@@ -42,7 +42,14 @@ import {
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
 import { LARGE_COLLECTION_THRESHOLD_DOCS } from '../constants';
-import { type CreateIndexInput, type FieldIndexType } from '../types';
+import {
+    type CreateIndexInput,
+    type FieldCreateIndexInput,
+    type FieldIndexType,
+    type VectorAlgorithmSpec,
+    type VectorCompressionSpec,
+    type VectorCreateIndexInput,
+} from '../types';
 import {
     buildWildcardKey,
     buildWildcardProjectionObject,
@@ -51,6 +58,7 @@ import {
     isWildcardParentPathValid,
     makeProjectionFieldId,
     type IndexKind,
+    type VectorCompressionChoice,
     type WildcardProjectionMode,
     type WildcardScope,
 } from '../wildcardIndexForm';
@@ -77,6 +85,42 @@ function buildTypeLabels(): ReadonlyArray<{ value: FieldIndexType; label: string
 /** True when `type` is an ordinary ascending/descending b-tree key. */
 function isBTreeType(type: FieldIndexType): boolean {
     return type === 'asc' || type === 'desc';
+}
+
+/** Vector-algorithm options and a one-line description of each. */
+function buildVectorAlgorithmOptions(): ReadonlyArray<{
+    value: VectorAlgorithmSpec['kind'];
+    label: string;
+    hint: string;
+}> {
+    return [
+        { value: 'vector-hnsw', label: l10n.t('HNSW'), hint: l10n.t('Balanced speed and recall for most workloads.') },
+        { value: 'vector-ivf', label: l10n.t('IVF'), hint: l10n.t('Fast, light build for smaller collections.') },
+        {
+            value: 'vector-diskann',
+            label: l10n.t('DiskANN'),
+            hint: l10n.t('Scalable graph recommended for large collections.'),
+        },
+    ];
+}
+
+/** Similarity-metric options for a vector index. */
+function buildVectorSimilarityOptions(): ReadonlyArray<{ value: 'COS' | 'L2' | 'IP'; label: string }> {
+    return [
+        { value: 'COS', label: l10n.t('Cosine (COS)') },
+        { value: 'L2', label: l10n.t('Euclidean (L2)') },
+        { value: 'IP', label: l10n.t('Inner product (IP)') },
+    ];
+}
+
+/** Parse a non-empty string as a strictly positive integer, or `undefined`. */
+function parsePositiveInt(text: string): number | undefined {
+    const trimmed = text.trim();
+    if (trimmed === '') {
+        return undefined;
+    }
+    const value = Number.parseInt(trimmed, 10);
+    return value > 0 && String(value) === trimmed ? value : undefined;
 }
 
 /** Render a field's key value as a JS literal: `1` / `-1` or a quoted sentinel. */
@@ -271,9 +315,25 @@ export const CreateIndexDrawer = ({
         wildcardProjectionEnabled,
         wildcardProjectionMode,
         wildcardProjectionFields,
+        vectorField,
+        vectorNameEnabled,
+        vectorName,
+        vectorDimensions,
+        vectorSimilarity,
+        vectorAlgorithm,
+        vectorNumLists,
+        vectorM,
+        vectorEfConstruction,
+        vectorMaxDegree,
+        vectorLBuild,
+        vectorCompression,
+        vectorPqCompressedDims,
+        vectorPqSampleSize,
     } = form;
 
     const typeLabels = useMemo(() => buildTypeLabels(), []);
+    const vectorAlgorithmOptions = useMemo(() => buildVectorAlgorithmOptions(), []);
+    const vectorSimilarityOptions = useMemo(() => buildVectorSimilarityOptions(), []);
 
     const reset = useCallback((): void => {
         setPage('main');
@@ -429,16 +489,92 @@ export const CreateIndexDrawer = ({
     const wildcardPathValid = indexKind !== 'wildcard' || isWildcardParentPathValid(wildcardPath);
     const interactionDisabled = submitting;
 
-    const advancedHasContent = hasPartialFilter || hasCollation;
+    // --- Vector form --------------------------------------------------------
+    const vectorFieldValue = vectorField.trim();
+    const parsedDimensions = parsePositiveInt(vectorDimensions);
+    const vectorNameValue = vectorName.trim();
+    const vectorNameValid = !vectorNameEnabled || (vectorNameValue !== '' && vectorNameValue !== '*');
+
+    // Compression compatibility: half precision applies to IVF/HNSW, product
+    // quantization to DiskANN. If the current choice is incompatible with the
+    // selected algorithm it collapses to "none", so the payload, preview, and
+    // validation never carry an invalid pairing.
+    const compressionAllowed: ReadonlyArray<VectorCompressionChoice> =
+        vectorAlgorithm === 'vector-diskann' ? ['none', 'pq'] : ['none', 'half'];
+    const effectiveCompression: VectorCompressionChoice = compressionAllowed.includes(vectorCompression)
+        ? vectorCompression
+        : 'none';
+
+    const parsedNumLists = parsePositiveInt(vectorNumLists);
+    const parsedM = parsePositiveInt(vectorM);
+    const parsedEfConstruction = parsePositiveInt(vectorEfConstruction);
+    const parsedMaxDegree = parsePositiveInt(vectorMaxDegree);
+    const parsedLBuild = parsePositiveInt(vectorLBuild);
+
+    const inRange = (value: number | undefined, min: number, max: number): value is number =>
+        value !== undefined && value >= min && value <= max;
+
+    const algorithmTuningValid =
+        vectorAlgorithm === 'vector-ivf'
+            ? parsedNumLists !== undefined
+            : vectorAlgorithm === 'vector-hnsw'
+              ? inRange(parsedM, 2, 100) &&
+                inRange(parsedEfConstruction, 4, 1000) &&
+                parsedEfConstruction >= 2 * parsedM
+              : inRange(parsedMaxDegree, 20, 2048) && inRange(parsedLBuild, 10, 500);
+
+    // PQ tuning is optional; a value is only validated when it is non-empty.
+    const parsedPqCompressedDims =
+        vectorPqCompressedDims.trim() === '' ? undefined : parsePositiveInt(vectorPqCompressedDims);
+    const parsedPqSampleSize = vectorPqSampleSize.trim() === '' ? undefined : parsePositiveInt(vectorPqSampleSize);
+    const pqCompressedDimsValid =
+        effectiveCompression !== 'pq' ||
+        vectorPqCompressedDims.trim() === '' ||
+        (parsedPqCompressedDims !== undefined &&
+            parsedDimensions !== undefined &&
+            parsedPqCompressedDims < parsedDimensions);
+    const pqSampleSizeValid =
+        effectiveCompression !== 'pq' || vectorPqSampleSize.trim() === '' || inRange(parsedPqSampleSize, 1000, 100000);
+
+    const vectorValid =
+        vectorFieldValue !== '' &&
+        parsedDimensions !== undefined &&
+        vectorNameValid &&
+        algorithmTuningValid &&
+        pqCompressedDimsValid &&
+        pqSampleSizeValid;
+
+    const vectorAlgorithmLabel = vectorAlgorithmOptions.find((o) => o.value === vectorAlgorithm)?.label ?? '';
+    const vectorCompressionLabel =
+        effectiveCompression === 'half'
+            ? l10n.t('Half precision')
+            : effectiveCompression === 'pq'
+              ? l10n.t('Product quantization')
+              : '';
+
+    const advancedHasContent =
+        indexKind === 'vector' ? effectiveCompression !== 'none' : hasPartialFilter || hasCollation;
 
     // Which advanced settings are populated — surfaced on the entry so the user
-    // can tell at a glance that something is configured behind it.
-    const advancedSummary = [
-        hasPartialFilter ? l10n.t('Partial filter') : undefined,
-        hasCollation ? l10n.t('Collation') : undefined,
-    ]
-        .filter((part): part is string => part !== undefined)
-        .join(' · ');
+    // can tell at a glance what is configured behind it.
+    const advancedSummary =
+        indexKind === 'vector'
+            ? [
+                  l10n.t('{0} tuning', vectorAlgorithmLabel),
+                  vectorCompressionLabel === '' ? undefined : vectorCompressionLabel,
+              ]
+                  .filter((part): part is string => part !== undefined)
+                  .join(' · ')
+            : [hasPartialFilter ? l10n.t('Partial filter') : undefined, hasCollation ? l10n.t('Collation') : undefined]
+                  .filter((part): part is string => part !== undefined)
+                  .join(' · ');
+
+    // The Advanced entry's default sub-label depends on which settings live
+    // behind it for the active index kind.
+    const advancedDefaultSub =
+        indexKind === 'vector'
+            ? l10n.t('Algorithm tuning, compression')
+            : l10n.t('Partial filter expression, custom collation');
 
     const canSubmit =
         !submitting &&
@@ -446,13 +582,12 @@ export const CreateIndexDrawer = ({
             ? completedRows.length > 0 && ttlNumberValid
             : indexKind === 'wildcard'
               ? wildcardPathValid
-              : false);
+              : vectorValid);
 
-    // Assemble the payload once; shared by the direct create and the
-    // playground/shell hand-offs so all three produce an identical index.
-    const buildPayload = (): CreateIndexInput => {
+    // Assemble the field-keyed (Standard/Wildcard) payload.
+    const buildFieldPayload = (): FieldCreateIndexInput => {
         if (indexKind === 'wildcard') {
-            const payload: CreateIndexInput = {
+            const payload: FieldCreateIndexInput = {
                 fields: [{ field: buildWildcardKey(wildcardScope, wildcardPath), type: 'asc' }],
             };
             if (nameEnabled && name.trim() !== '') {
@@ -470,7 +605,7 @@ export const CreateIndexDrawer = ({
             return payload;
         }
 
-        const payload: CreateIndexInput = {
+        const payload: FieldCreateIndexInput = {
             fields: completedRows.map((r) => ({ field: r.field.trim(), type: r.type })),
         };
         if (nameEnabled && name.trim() !== '') {
@@ -494,13 +629,102 @@ export const CreateIndexDrawer = ({
         return payload;
     };
 
+    // Assemble the vector (cosmosSearch) payload. Only the selected algorithm's
+    // tuning is carried, and compression is dropped unless it is compatible.
+    const buildVectorPayload = (): VectorCreateIndexInput => {
+        let algorithm: VectorAlgorithmSpec;
+        if (vectorAlgorithm === 'vector-ivf') {
+            algorithm = { kind: 'vector-ivf', numLists: parsedNumLists ?? 0 };
+        } else if (vectorAlgorithm === 'vector-hnsw') {
+            algorithm = { kind: 'vector-hnsw', m: parsedM ?? 0, efConstruction: parsedEfConstruction ?? 0 };
+        } else {
+            algorithm = { kind: 'vector-diskann', maxDegree: parsedMaxDegree ?? 0, lBuild: parsedLBuild ?? 0 };
+        }
+
+        let compression: VectorCompressionSpec | undefined;
+        if (effectiveCompression === 'half') {
+            compression = { kind: 'half' };
+        } else if (effectiveCompression === 'pq') {
+            const pq: Extract<VectorCompressionSpec, { kind: 'pq' }> = { kind: 'pq' };
+            if (parsedPqCompressedDims !== undefined) {
+                pq.pqCompressedDims = parsedPqCompressedDims;
+            }
+            if (parsedPqSampleSize !== undefined) {
+                pq.pqSampleSize = parsedPqSampleSize;
+            }
+            compression = pq;
+        }
+
+        const payload: VectorCreateIndexInput = {
+            kind: 'vector',
+            field: vectorFieldValue,
+            dimensions: parsedDimensions ?? 0,
+            similarity: vectorSimilarity,
+            algorithm,
+        };
+        if (vectorNameEnabled && vectorNameValue !== '') {
+            payload.name = vectorNameValue;
+        }
+        if (compression) {
+            payload.compression = compression;
+        }
+        return payload;
+    };
+
+    // Assemble the payload once; shared by the direct create and the
+    // playground/shell hand-offs so all three produce an identical index.
+    const buildPayload = (): CreateIndexInput => (indexKind === 'vector' ? buildVectorPayload() : buildFieldPayload());
+
+    // Build a read-only, JS-style preview of the vector specification passed to
+    // createIndex(). The `cosmosSearch` key and its `cosmosSearchOptions` object
+    // are expanded so the preview matches the submitted command exactly.
+    const buildVectorPreviewText = (): string => {
+        const payload = buildVectorPayload();
+        const optionLines: string[] = [
+            `kind: '${payload.algorithm.kind}'`,
+            `dimensions: ${payload.dimensions}`,
+            `similarity: '${payload.similarity}'`,
+        ];
+        if (payload.algorithm.kind === 'vector-ivf') {
+            optionLines.push(`numLists: ${payload.algorithm.numLists}`);
+        } else if (payload.algorithm.kind === 'vector-hnsw') {
+            optionLines.push(`m: ${payload.algorithm.m}`);
+            optionLines.push(`efConstruction: ${payload.algorithm.efConstruction}`);
+        } else {
+            optionLines.push(`maxDegree: ${payload.algorithm.maxDegree}`);
+            optionLines.push(`lBuild: ${payload.algorithm.lBuild}`);
+        }
+        if (payload.compression?.kind === 'half') {
+            optionLines.push(`compression: 'half'`);
+        } else if (payload.compression?.kind === 'pq') {
+            optionLines.push(`compression: 'pq'`);
+            if (payload.compression.pqCompressedDims !== undefined) {
+                optionLines.push(`pqCompressedDims: ${payload.compression.pqCompressedDims}`);
+            }
+            if (payload.compression.pqSampleSize !== undefined) {
+                optionLines.push(`pqSampleSize: ${payload.compression.pqSampleSize}`);
+            }
+        }
+
+        const entries: string[] = [`key: { ${JSON.stringify(payload.field)}: 'cosmosSearch' }`];
+        if (payload.name !== undefined) {
+            entries.push(`name: ${JSON.stringify(payload.name)}`);
+        }
+        const optionsBody = optionLines.map((line) => `        ${line}`).join(',\n');
+        entries.push(`cosmosSearchOptions: {\n${optionsBody}\n    }`);
+        return `{\n${entries.map((entry) => `    ${entry}`).join(',\n')}\n}`;
+    };
+
     // Build a read-only, JS-style preview of the specification passed to
     // createIndex(). Partial filter / collation are relaxed JSON parsed on the
     // host, so here they are embedded verbatim (continuation lines re-indented to
     // sit under their property). The wildcard projection is already a plain
     // object, so it is expanded directly.
     const buildPreviewText = (): string => {
-        const payload = buildPayload();
+        if (indexKind === 'vector') {
+            return buildVectorPreviewText();
+        }
+        const payload = buildFieldPayload();
         const reindent = (text: string): string => text.replace(/\n/g, '\n    ');
         const entries: string[] = [];
 
@@ -588,6 +812,31 @@ export const CreateIndexDrawer = ({
         </OptionRow>
     );
 
+    // Vector "custom index name" option. Left off, the server names the index
+    // `<field>_cosmosSearch`; the input placeholder previews that default.
+    const vectorNameOption = (
+        <OptionRow
+            label={l10n.t('Name - use a custom index name')}
+            checked={vectorNameEnabled}
+            disabled={interactionDisabled}
+            onToggle={(checked) => setForm((prev) => ({ ...prev, vectorNameEnabled: checked }))}
+        >
+            {vectorNameEnabled && (
+                <Field
+                    validationState={vectorNameValid ? 'none' : 'error'}
+                    validationMessage={vectorNameValid ? undefined : l10n.t('Enter an index name other than "*".')}
+                >
+                    <Input
+                        value={vectorName}
+                        disabled={interactionDisabled}
+                        placeholder={vectorFieldValue !== '' ? `${vectorFieldValue}_cosmosSearch` : undefined}
+                        onChange={(e) => setForm((prev) => ({ ...prev, vectorName: e.target.value }))}
+                    />
+                </Field>
+            )}
+        </OptionRow>
+    );
+
     // Shared entry to the pushed Advanced sub-page (partial filter + collation).
     const advancedEntry = (
         <button
@@ -600,7 +849,7 @@ export const CreateIndexDrawer = ({
             <span className="advancedEntryText">
                 <span className="advancedEntryTitle">{l10n.t('Advanced settings')}</span>
                 <span className="advancedEntrySub">
-                    {advancedSummary !== '' ? advancedSummary : l10n.t('Partial filter expression, custom collation')}
+                    {advancedSummary !== '' ? advancedSummary : advancedDefaultSub}
                 </span>
             </span>
             {advancedHasContent ? (
@@ -1108,47 +1357,377 @@ export const CreateIndexDrawer = ({
                         )}
 
                         {indexKind === 'vector' && (
-                            <DrawerSection
-                                title={l10n.t('Vector index')}
-                                hint={l10n.t('Similarity search over vector embeddings.')}
-                            >
-                                <MessageBar intent="info">
-                                    <MessageBarBody>
-                                        <MessageBarTitle>{l10n.t('Not yet available')}</MessageBarTitle>
-                                        {l10n.t('Vector index creation will be added in a future update.')}
-                                    </MessageBarBody>
-                                </MessageBar>
-                            </DrawerSection>
+                            <>
+                                <DrawerSection
+                                    title={l10n.t('Vector field')}
+                                    hint={l10n.t(
+                                        'The document field that stores the embedding array. Only one vector is indexed per path.',
+                                    )}
+                                >
+                                    <div className="fieldRow">
+                                        <FieldNameCombobox
+                                            value={vectorField}
+                                            suggestions={fieldSuggestions}
+                                            disabled={interactionDisabled}
+                                            onChange={(value) => setForm((prev) => ({ ...prev, vectorField: value }))}
+                                        />
+                                        <Tooltip content={l10n.t('Clear field')} relationship="description" withArrow>
+                                            <Button
+                                                appearance="subtle"
+                                                size="small"
+                                                icon={<ArrowResetRegular />}
+                                                aria-label={l10n.t('Clear field')}
+                                                disabled={interactionDisabled}
+                                                onClick={() => setForm((prev) => ({ ...prev, vectorField: '' }))}
+                                            />
+                                        </Tooltip>
+                                    </div>
+                                </DrawerSection>
+
+                                <DrawerSection
+                                    title={l10n.t('Algorithm')}
+                                    hint={
+                                        vectorAlgorithmOptions.find((o) => o.value === vectorAlgorithm)?.hint ??
+                                        l10n.t('Approximate nearest-neighbor algorithm used to build the index.')
+                                    }
+                                >
+                                    <Dropdown
+                                        selectedOptions={[vectorAlgorithm]}
+                                        value={vectorAlgorithmLabel}
+                                        disabled={interactionDisabled}
+                                        onOptionSelect={(_, data) => {
+                                            const value = data.optionValue;
+                                            if (
+                                                value === 'vector-ivf' ||
+                                                value === 'vector-hnsw' ||
+                                                value === 'vector-diskann'
+                                            ) {
+                                                setForm((prev) => ({ ...prev, vectorAlgorithm: value }));
+                                            }
+                                        }}
+                                        aria-label={l10n.t('Vector algorithm')}
+                                    >
+                                        {vectorAlgorithmOptions.map((option) => (
+                                            <Option key={option.value} value={option.value} text={option.label}>
+                                                {option.label}
+                                            </Option>
+                                        ))}
+                                    </Dropdown>
+                                </DrawerSection>
+
+                                <DrawerSection
+                                    title={l10n.t('Dimensions and similarity')}
+                                    hint={l10n.t(
+                                        'Dimensions is the fixed number of values in each vector; it comes from the embedding model. Similarity is the distance metric used to compare vectors.',
+                                    )}
+                                >
+                                    <div className="vectorDualField">
+                                        <Field
+                                            label={l10n.t('Dimensions')}
+                                            required
+                                            validationState={
+                                                vectorDimensions.trim() === '' || parsedDimensions !== undefined
+                                                    ? 'none'
+                                                    : 'error'
+                                            }
+                                            validationMessage={
+                                                vectorDimensions.trim() === '' || parsedDimensions !== undefined
+                                                    ? undefined
+                                                    : l10n.t('Enter a positive whole number using digits only.')
+                                            }
+                                        >
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                value={vectorDimensions}
+                                                placeholder={l10n.t('e.g. 1536')}
+                                                disabled={interactionDisabled}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({ ...prev, vectorDimensions: e.target.value }))
+                                                }
+                                            />
+                                        </Field>
+                                        <Field label={l10n.t('Similarity')}>
+                                            <Dropdown
+                                                selectedOptions={[vectorSimilarity]}
+                                                value={
+                                                    vectorSimilarityOptions.find((o) => o.value === vectorSimilarity)
+                                                        ?.label ?? ''
+                                                }
+                                                disabled={interactionDisabled}
+                                                onOptionSelect={(_, data) => {
+                                                    const value = data.optionValue;
+                                                    if (value === 'COS' || value === 'L2' || value === 'IP') {
+                                                        setForm((prev) => ({ ...prev, vectorSimilarity: value }));
+                                                    }
+                                                }}
+                                                aria-label={l10n.t('Similarity metric')}
+                                            >
+                                                {vectorSimilarityOptions.map((option) => (
+                                                    <Option key={option.value} value={option.value} text={option.label}>
+                                                        {option.label}
+                                                    </Option>
+                                                ))}
+                                            </Dropdown>
+                                        </Field>
+                                    </div>
+                                </DrawerSection>
+
+                                <DrawerSection
+                                    title={l10n.t('Options')}
+                                    hint={l10n.t('Index-level properties applied to the whole index.')}
+                                >
+                                    <div className="typeOptions">{vectorNameOption}</div>
+                                </DrawerSection>
+
+                                {advancedEntry}
+                                {previewEntry}
+                            </>
                         )}
                     </div>
                 ) : page === 'advanced' ? (
-                    <div className="createIndexForm">
-                        <DrawerSection
-                            title={l10n.t('Partial filter expression')}
-                            hint={l10n.t('Only index documents that match this filter. Enter a JSON object.')}
-                            example={"{ status: { $eq: 'active' } }"}
-                        >
-                            <JsonInputEditor
-                                value={partialText}
-                                readOnly={interactionDisabled}
-                                onChange={(value) => setForm((prev) => ({ ...prev, partialText: value }))}
-                                ariaLabel={l10n.t('Partial filter expression: enter a JSON object')}
-                            />
-                        </DrawerSection>
+                    indexKind === 'vector' ? (
+                        <div className="createIndexForm">
+                            <DrawerSection
+                                title={l10n.t('Algorithm tuning')}
+                                hint={l10n.t(
+                                    'Build-time settings for the selected algorithm. The defaults follow the current service recommendations.',
+                                )}
+                            >
+                                <div className="vectorDualField">
+                                    {vectorAlgorithm === 'vector-ivf' && (
+                                        <Field
+                                            label={l10n.t('Number of lists')}
+                                            validationState={parsedNumLists !== undefined ? 'none' : 'error'}
+                                            validationMessage={
+                                                parsedNumLists !== undefined
+                                                    ? undefined
+                                                    : l10n.t('Enter a positive whole number.')
+                                            }
+                                        >
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                value={vectorNumLists}
+                                                disabled={interactionDisabled}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({ ...prev, vectorNumLists: e.target.value }))
+                                                }
+                                            />
+                                        </Field>
+                                    )}
+                                    {vectorAlgorithm === 'vector-hnsw' && (
+                                        <>
+                                            <Field
+                                                label={l10n.t('Connections (m)')}
+                                                validationState={inRange(parsedM, 2, 100) ? 'none' : 'error'}
+                                                validationMessage={
+                                                    inRange(parsedM, 2, 100)
+                                                        ? undefined
+                                                        : l10n.t('Enter a whole number from 2 to 100.')
+                                                }
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min={2}
+                                                    max={100}
+                                                    value={vectorM}
+                                                    disabled={interactionDisabled}
+                                                    onChange={(e) =>
+                                                        setForm((prev) => ({ ...prev, vectorM: e.target.value }))
+                                                    }
+                                                />
+                                            </Field>
+                                            <Field
+                                                label={l10n.t('Build candidates (efConstruction)')}
+                                                validationState={
+                                                    inRange(parsedEfConstruction, 4, 1000) &&
+                                                    (parsedM === undefined || parsedEfConstruction >= 2 * parsedM)
+                                                        ? 'none'
+                                                        : 'error'
+                                                }
+                                                validationMessage={
+                                                    inRange(parsedEfConstruction, 4, 1000) &&
+                                                    (parsedM === undefined || parsedEfConstruction >= 2 * parsedM)
+                                                        ? undefined
+                                                        : l10n.t('Enter 4 to 1000 and at least 2 × connections (m).')
+                                                }
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min={4}
+                                                    max={1000}
+                                                    value={vectorEfConstruction}
+                                                    disabled={interactionDisabled}
+                                                    onChange={(e) =>
+                                                        setForm((prev) => ({
+                                                            ...prev,
+                                                            vectorEfConstruction: e.target.value,
+                                                        }))
+                                                    }
+                                                />
+                                            </Field>
+                                        </>
+                                    )}
+                                    {vectorAlgorithm === 'vector-diskann' && (
+                                        <>
+                                            <Field
+                                                label={l10n.t('Maximum degree')}
+                                                validationState={inRange(parsedMaxDegree, 20, 2048) ? 'none' : 'error'}
+                                                validationMessage={
+                                                    inRange(parsedMaxDegree, 20, 2048)
+                                                        ? undefined
+                                                        : l10n.t('Enter a whole number from 20 to 2048.')
+                                                }
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min={20}
+                                                    max={2048}
+                                                    value={vectorMaxDegree}
+                                                    disabled={interactionDisabled}
+                                                    onChange={(e) =>
+                                                        setForm((prev) => ({
+                                                            ...prev,
+                                                            vectorMaxDegree: e.target.value,
+                                                        }))
+                                                    }
+                                                />
+                                            </Field>
+                                            <Field
+                                                label={l10n.t('Build candidates (lBuild)')}
+                                                validationState={inRange(parsedLBuild, 10, 500) ? 'none' : 'error'}
+                                                validationMessage={
+                                                    inRange(parsedLBuild, 10, 500)
+                                                        ? undefined
+                                                        : l10n.t('Enter a whole number from 10 to 500.')
+                                                }
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min={10}
+                                                    max={500}
+                                                    value={vectorLBuild}
+                                                    disabled={interactionDisabled}
+                                                    onChange={(e) =>
+                                                        setForm((prev) => ({ ...prev, vectorLBuild: e.target.value }))
+                                                    }
+                                                />
+                                            </Field>
+                                        </>
+                                    )}
+                                </div>
+                            </DrawerSection>
 
-                        <DrawerSection
-                            title={l10n.t('Collation')}
-                            hint={l10n.t('Language-specific comparison rules. Enter a JSON object.')}
-                            example={"{ locale: 'en', strength: 2 }"}
-                        >
-                            <JsonInputEditor
-                                value={collationText}
-                                readOnly={interactionDisabled}
-                                onChange={(value) => setForm((prev) => ({ ...prev, collationText: value }))}
-                                ariaLabel={l10n.t('Collation: enter a JSON object')}
-                            />
-                        </DrawerSection>
-                    </div>
+                            <DrawerSection
+                                title={l10n.t('Compression')}
+                                hint={
+                                    vectorAlgorithm === 'vector-diskann'
+                                        ? l10n.t(
+                                              'Product quantization compresses vectors to support higher dimensions on DiskANN indexes.',
+                                          )
+                                        : l10n.t(
+                                              'Half precision stores index values at lower precision on IVF and HNSW indexes.',
+                                          )
+                                }
+                            >
+                                <RadioGroup
+                                    value={effectiveCompression}
+                                    disabled={interactionDisabled}
+                                    aria-label={l10n.t('Vector index compression')}
+                                    onChange={(_, data) => {
+                                        const value = data.value;
+                                        if (value === 'none' || value === 'half' || value === 'pq') {
+                                            setForm((prev) => ({ ...prev, vectorCompression: value }));
+                                        }
+                                    }}
+                                >
+                                    <Radio value="none" label={l10n.t('None')} />
+                                    {vectorAlgorithm !== 'vector-diskann' && (
+                                        <Radio value="half" label={l10n.t('Half precision')} />
+                                    )}
+                                    {vectorAlgorithm === 'vector-diskann' && (
+                                        <Radio value="pq" label={l10n.t('Product quantization')} />
+                                    )}
+                                </RadioGroup>
+
+                                {effectiveCompression === 'pq' && (
+                                    <div className="vectorDualField">
+                                        <Field
+                                            label={l10n.t('Compressed dimensions (optional)')}
+                                            validationState={pqCompressedDimsValid ? 'none' : 'error'}
+                                            validationMessage={
+                                                pqCompressedDimsValid
+                                                    ? undefined
+                                                    : l10n.t('Enter a positive whole number below the dimensions.')
+                                            }
+                                        >
+                                            <Input
+                                                type="number"
+                                                min={1}
+                                                value={vectorPqCompressedDims}
+                                                disabled={interactionDisabled}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({
+                                                        ...prev,
+                                                        vectorPqCompressedDims: e.target.value,
+                                                    }))
+                                                }
+                                            />
+                                        </Field>
+                                        <Field
+                                            label={l10n.t('Sample size (optional)')}
+                                            validationState={pqSampleSizeValid ? 'none' : 'error'}
+                                            validationMessage={
+                                                pqSampleSizeValid
+                                                    ? undefined
+                                                    : l10n.t('Enter a whole number from 1000 to 100000.')
+                                            }
+                                        >
+                                            <Input
+                                                type="number"
+                                                min={1000}
+                                                max={100000}
+                                                value={vectorPqSampleSize}
+                                                disabled={interactionDisabled}
+                                                onChange={(e) =>
+                                                    setForm((prev) => ({ ...prev, vectorPqSampleSize: e.target.value }))
+                                                }
+                                            />
+                                        </Field>
+                                    </div>
+                                )}
+                            </DrawerSection>
+                        </div>
+                    ) : (
+                        <div className="createIndexForm">
+                            <DrawerSection
+                                title={l10n.t('Partial filter expression')}
+                                hint={l10n.t('Only index documents that match this filter. Enter a JSON object.')}
+                                example={"{ status: { $eq: 'active' } }"}
+                            >
+                                <JsonInputEditor
+                                    value={partialText}
+                                    readOnly={interactionDisabled}
+                                    onChange={(value) => setForm((prev) => ({ ...prev, partialText: value }))}
+                                    ariaLabel={l10n.t('Partial filter expression: enter a JSON object')}
+                                />
+                            </DrawerSection>
+
+                            <DrawerSection
+                                title={l10n.t('Collation')}
+                                hint={l10n.t('Language-specific comparison rules. Enter a JSON object.')}
+                                example={"{ locale: 'en', strength: 2 }"}
+                            >
+                                <JsonInputEditor
+                                    value={collationText}
+                                    readOnly={interactionDisabled}
+                                    onChange={(value) => setForm((prev) => ({ ...prev, collationText: value }))}
+                                    ariaLabel={l10n.t('Collation: enter a JSON object')}
+                                />
+                            </DrawerSection>
+                        </div>
+                    )
                 ) : (
                     <div className="createIndexForm previewForm">
                         <DrawerSection

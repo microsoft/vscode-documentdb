@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type FieldIndexType } from './types';
+import { type FieldIndexType, type VectorAlgorithmKind, type VectorSimilarity } from './types';
 
 /**
  * The three mutually-exclusive index creation modes surfaced as tabs at the top
@@ -17,6 +17,9 @@ export type WildcardScope = 'all' | 'path';
 
 /** Whether the wildcard projection lists fields to include or to exclude. */
 export type WildcardProjectionMode = 'include' | 'exclude';
+
+/** The three compression choices offered on the Vector advanced page. */
+export type VectorCompressionChoice = 'none' | 'half' | 'pq';
 
 export interface IndexFieldDraft {
     id: string;
@@ -57,6 +60,29 @@ export interface CreateIndexFormState {
     wildcardProjectionMode: WildcardProjectionMode;
     /** Field paths the projection includes or excludes. */
     wildcardProjectionFields: ProjectionFieldDraft[];
+
+    // --- Vector mode draft --------------------------------------------------
+    /** The single field path the vector is indexed on. */
+    vectorField: string;
+    /** Whether a custom index name is used (otherwise the server names it). */
+    vectorNameEnabled: boolean;
+    vectorName: string;
+    /** Number of values per vector, kept as text so the input can be empty. */
+    vectorDimensions: string;
+    vectorSimilarity: VectorSimilarity;
+    vectorAlgorithm: VectorAlgorithmKind;
+    /** IVF tuning. */
+    vectorNumLists: string;
+    /** HNSW tuning. */
+    vectorM: string;
+    vectorEfConstruction: string;
+    /** DiskANN tuning. */
+    vectorMaxDegree: string;
+    vectorLBuild: string;
+    /** Optional compression and its product-quantization tuning. */
+    vectorCompression: VectorCompressionChoice;
+    vectorPqCompressedDims: string;
+    vectorPqSampleSize: string;
 }
 
 export type FieldIdFactory = () => string;
@@ -97,6 +123,24 @@ export function createInitialIndexFormState(createFieldId: FieldIdFactory = make
         wildcardProjectionEnabled: false,
         wildcardProjectionMode: 'include',
         wildcardProjectionFields: [blankProjectionField(createFieldId)],
+        // Vector defaults: HNSW is the balanced general-purpose algorithm and its
+        // documented service defaults (m 16, efConstruction 64) are the starting
+        // point. Dimensions have no sensible default — they come from the
+        // embedding model — so the field starts empty and is required.
+        vectorField: '',
+        vectorNameEnabled: false,
+        vectorName: '',
+        vectorDimensions: '',
+        vectorSimilarity: 'COS',
+        vectorAlgorithm: 'vector-hnsw',
+        vectorNumLists: '10',
+        vectorM: '16',
+        vectorEfConstruction: '64',
+        vectorMaxDegree: '32',
+        vectorLBuild: '50',
+        vectorCompression: 'none',
+        vectorPqCompressedDims: '',
+        vectorPqSampleSize: '',
     };
 }
 

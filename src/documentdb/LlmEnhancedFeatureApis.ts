@@ -49,6 +49,8 @@ export interface IndexSpecification {
     partialFilterExpression?: Document;
     // Wildcard index field inclusion/exclusion document
     wildcardProjection?: Document;
+    // DocumentDB vector index options (used with a `cosmosSearch` key value)
+    cosmosSearchOptions?: Document;
     // Additional index options
     [key: string]: unknown;
 }

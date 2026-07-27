@@ -49,7 +49,7 @@ import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
 import { FIELD_SUGGESTION_LIMIT } from './constants';
 import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema } from './indexCreation';
-import { type IndexRow } from './types';
+import { isVectorCreateIndexInput, type IndexRow } from './types';
 import { getVectorIndexOptions } from './utils/vectorIndex';
 
 export type RouterContext = BaseRouterContext & {
@@ -244,10 +244,20 @@ export const indexViewRouter = router({
         const client = await ClustersClient.getClient(myCtx.clusterId);
         const spec = buildIndexSpec(input);
 
-        myCtx.actionContext.telemetry.properties.fieldTypes = input.fields.map((f) => f.type).join(',');
-        myCtx.actionContext.telemetry.properties.compound = String(input.fields.length > 1);
-        myCtx.actionContext.telemetry.properties.ttl = String(typeof input.expireAfterSeconds === 'number');
-        myCtx.actionContext.telemetry.measurements.fieldCount = input.fields.length;
+        if (isVectorCreateIndexInput(input)) {
+            // Privacy-safe vector telemetry: algorithm, metric, compression, and a
+            // dimensions bucket — never the field name or vector values.
+            myCtx.actionContext.telemetry.properties.indexKind = 'vector';
+            myCtx.actionContext.telemetry.properties.vectorAlgorithm = input.algorithm.kind;
+            myCtx.actionContext.telemetry.properties.vectorSimilarity = input.similarity;
+            myCtx.actionContext.telemetry.properties.vectorCompression = input.compression?.kind ?? 'none';
+            myCtx.actionContext.telemetry.measurements.vectorDimensions = input.dimensions;
+        } else {
+            myCtx.actionContext.telemetry.properties.fieldTypes = input.fields.map((f) => f.type).join(',');
+            myCtx.actionContext.telemetry.properties.compound = String(input.fields.length > 1);
+            myCtx.actionContext.telemetry.properties.ttl = String(typeof input.expireAfterSeconds === 'number');
+            myCtx.actionContext.telemetry.measurements.fieldCount = input.fields.length;
+        }
 
         const result = await client.createIndex(myCtx.databaseName, myCtx.collectionName, spec);
         if (result.ok === 0 || result.note) {
