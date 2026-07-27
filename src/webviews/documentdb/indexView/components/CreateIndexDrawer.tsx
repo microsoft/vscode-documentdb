@@ -6,8 +6,8 @@
 import {
     Button,
     Combobox,
-    Divider,
     DrawerBody,
+    DrawerFooter,
     DrawerHeader,
     DrawerHeaderTitle,
     Dropdown,
@@ -981,7 +981,18 @@ export const CreateIndexDrawer = ({
                                             >
                                                 {wildcardProjectionEnabled && (
                                                     <div className="wildcardProjectionBody">
-                                                        <Field label={l10n.t('Projection mode')}>
+                                                        <Field
+                                                            label={l10n.t('Projection mode')}
+                                                            hint={
+                                                                wildcardProjectionMode === 'include'
+                                                                    ? l10n.t(
+                                                                          'Only the selected paths, and every field nested under them, are indexed. All other fields are excluded.',
+                                                                      )
+                                                                    : l10n.t(
+                                                                          'The selected paths, and every field nested under them, are excluded. All other fields are indexed.',
+                                                                      )
+                                                            }
+                                                        >
                                                             <RadioGroup
                                                                 value={wildcardProjectionMode}
                                                                 disabled={interactionDisabled}
@@ -1156,7 +1167,7 @@ export const CreateIndexDrawer = ({
                 )}
             </DrawerBody>
 
-            <div className="createIndexDrawerFooter">
+            <DrawerFooter>
                 {page !== 'main' ? (
                     <Button
                         appearance="secondary"
@@ -1194,7 +1205,6 @@ export const CreateIndexDrawer = ({
                                 onClick={() => void handleCreateIn('shell')}
                             />
                         </Tooltip>
-                        <Divider vertical className="createIndexFooterDivider" />
                         <Button
                             appearance="secondary"
                             icon={<ArrowResetRegular />}
@@ -1205,7 +1215,7 @@ export const CreateIndexDrawer = ({
                         </Button>
                     </>
                 )}
-            </div>
+            </DrawerFooter>
         </OverlayDrawer>
     );
 };

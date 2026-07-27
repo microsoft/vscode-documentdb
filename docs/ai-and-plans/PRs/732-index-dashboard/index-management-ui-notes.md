@@ -94,8 +94,24 @@ including the per-work-item implementation progress and validation checkpoints.
   - **Index-level options** (unique, sparse, TTL, name, partial filter,
     collation) kept separate, because they apply to the whole index.
 - TTL is surfaced only when valid (a single-field b-tree index).
+- The drawer opens on a **three-kind tab strip** — **Standard**, **Wildcard**,
+  and **Vector** (a stub for a future iteration) — so each index family gets a
+  focused form instead of one increasingly conditional one. Each kind keeps its
+  own draft, so switching tabs never destroys another kind's work.
+  - **Standard** carries the per-field keys and index-level options described
+    above.
+  - **Wildcard** offers a **scope** (all fields `$**`, or fields below a scoped
+    `path.$**`) with a live generated-key preview, plus an optional
+    include/exclude **projection**. The projection is a schema-aware field list
+    that serializes to `{ field: 0 | 1 }`, and is offered **only on the
+    all-fields `$**` key** because the server rejects a projection on a scoped
+    key. An empty scoped path collapses to `$**`, so a blank path never errors.
+  - **Vector** is a placeholder tab; creation is intentionally not wired yet.
 - Rarely-needed options (partial filter, collation) live on a pushed
-  **Advanced** sub-page.
+  **Advanced** sub-page, shared by the Standard and Wildcard kinds.
+- A **Preview as JSON** sub-page (same push/back navigation as Advanced) renders
+  the assembled `createIndex(...)` specification read-only in a fill-height
+  Monaco editor, so the user can review the exact key/options before creating.
 - The same assembled payload feeds three actions: create directly, or hand the
   built `createIndex(...)` command off to a **playground** or the **interactive
   shell**.
@@ -223,6 +239,36 @@ type without touching this plain base.
 
 We iterated on the UX several times. These are the notable changes of mind, kept
 here so the final code does not look arbitrary:
+
+- **Wildcard as an Advanced toggle with a destructive confirmation → its own
+  tab.** Wildcard first lived _inside_ Advanced as a switch that, when enabled,
+  replaced the Standard field rows with `$**` and cleared the incompatible
+  options (unique / sparse / TTL). Because that silently discarded the user's
+  Standard draft, it needed a host-side confirmation modal
+  (`confirmEnableWildcardIndex`) spelling out exactly what would be replaced and
+  cleared. Folding a second index _shape_ into the Standard form made both the
+  form and its validation conditional and forced that warning dialog. We split
+  the drawer into explicit **Standard / Wildcard / Vector** tabs with per-kind
+  drafts; switching kinds is now non-destructive, so the confirmation dialog, its
+  `confirmEnableWildcardIndex` tRPC procedure/schema, and the impact-details type
+  were all deleted.
+
+- **Raw JSON box for the wildcard projection → structured include/exclude
+  editor.** The projection could have stayed a relaxed-JSON editor like partial
+  filter / collation. Instead it is an **Include / Exclude** choice plus a
+  schema-aware field list, because the include-vs-exclude rule (you cannot mix
+  them except `_id`), the "$** key only" restriction, and the whole-subtree
+  semantics are easy to get wrong by hand. A mode-aware hint spells out that a
+  listed path covers every field nested under it.
+
+- **Manual body `padding-bottom` → native `DrawerFooter` spacing.** The footer
+  began as a custom `<div>` with a `border-top`; the scrolling body had no bottom
+  padding, so content butted against that divider, and we added a 32 px
+  `padding-bottom` to the body to compensate. Swapping the div for Fluent's
+  **`DrawerFooter`** (which brings its own top padding) made that manual padding
+  redundant — stacked, the two produced a ~44 px gap that was most obvious under
+  the fill-height JSON preview. We removed the manual padding and let the native
+  footer own the body-to-footer gap.
 
 - **Row background tint for touched rows → spinner.** We first highlighted
   created / deleted / hidden / unhidden rows with an accented background tint (a
