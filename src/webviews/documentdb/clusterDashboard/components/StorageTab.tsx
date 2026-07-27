@@ -5,6 +5,8 @@
 
 import {
     Button,
+    MessageBar,
+    MessageBarBody,
     Spinner,
     Table,
     TableBody,
@@ -57,8 +59,33 @@ export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTab
                 {isRefreshing && <Spinner size="tiny" aria-label={l10n.t('Refreshing…')} />}
             </div>
 
+            {storageStats.errors.length > 0 && (
+                <MessageBar intent="warning">
+                    <MessageBarBody>
+                        {l10n.t('Some storage statistics could not be read: {reason}', {
+                            reason: storageStats.errors.join('; '),
+                        })}
+                    </MessageBarBody>
+                </MessageBar>
+            )}
+
+            {storageStats.omittedDatabaseCount > 0 && (
+                <MessageBar intent="info">
+                    <MessageBarBody>
+                        {l10n.t('Showing the first {shown} databases; {omitted} more are not listed.', {
+                            shown: String(storageStats.databases.length),
+                            omitted: String(storageStats.omittedDatabaseCount),
+                        })}
+                    </MessageBarBody>
+                </MessageBar>
+            )}
+
             {storageStats.databases.length === 0 ? (
-                <div className="emptyState">{l10n.t('No user databases were reported for this cluster.')}</div>
+                <div className="emptyState">
+                    {storageStats.errors.length > 0
+                        ? l10n.t('Storage statistics are unavailable for this cluster.')
+                        : l10n.t('No user databases were reported for this cluster.')}
+                </div>
             ) : (
                 <Table size="small" aria-label={l10n.t('Storage per database')}>
                     <TableHeader>

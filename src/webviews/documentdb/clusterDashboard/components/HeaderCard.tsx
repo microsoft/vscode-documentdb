@@ -71,8 +71,21 @@ export const HeaderCard = ({
 
     const version = metadata?.['serverInfo_version'] ?? PLACEHOLDER;
     const platform = metadata?.['serverInfo_platform'] ?? PLACEHOLDER;
-    const topology = metadata?.['topology_type'] ?? PLACEHOLDER;
     const host = extractHostName(metadata?.['hostInfo_json']) ?? PLACEHOLDER;
+
+    // `topology_type` is `hello.msg`, which only mongos sets ('isdbgrid'); every
+    // standalone, emulator, and replica-set primary would render the literal word
+    // 'unknown', and a mongos would render a raw wire token. Report the server count
+    // instead, which is meaningful everywhere.
+    const serverCount = metadata?.['topology_numberOfServers'];
+    const topology =
+        metadata?.['topology_type'] === 'isdbgrid'
+            ? l10n.t('Sharded cluster')
+            : serverCount !== undefined && Number(serverCount) > 1
+              ? l10n.t('Replica set ({count} servers)', { count: serverCount })
+              : serverCount !== undefined
+                ? l10n.t('Standalone')
+                : PLACEHOLDER;
 
     return (
         <Card className="headerCard" appearance="filled">

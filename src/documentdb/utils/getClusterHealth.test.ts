@@ -3,15 +3,21 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type MongoClient } from 'mongodb';
+import { type Document, type MongoClient } from 'mongodb';
 
-import { getStorageStats, killOperation, listCurrentOperations, sampleClusterHealth } from './getClusterHealth';
+import {
+    getFailedCommandName,
+    getStorageStats,
+    killOperation,
+    listCurrentOperations,
+    sampleClusterHealth,
+} from './getClusterHealth';
 
 type CommandHandler = (command: Record<string, unknown>) => unknown;
 
 interface FakeClientOptions {
     adminCommand?: CommandHandler;
-    aggregate?: () => unknown[];
+    aggregate?: (pipeline: Document[]) => unknown[];
     listDatabases?: () => unknown;
     dbCommand?: (databaseName: string, command: Record<string, unknown>) => unknown;
 }
@@ -45,12 +51,12 @@ function createFakeClient(options: FakeClientOptions): {
     const client = {
         db: (databaseName?: string) => ({
             admin: () => admin,
-            aggregate: () => ({
+            aggregate: (pipeline: Document[]) => ({
                 toArray: (): Promise<unknown[]> => {
                     if (!options.aggregate) {
                         return Promise.reject(new Error('$currentOp not supported'));
                     }
-                    return Promise.resolve(options.aggregate());
+                    return Promise.resolve(options.aggregate(pipeline));
                 },
             }),
             command: (command: Record<string, unknown>): Promise<unknown> => {
@@ -84,10 +90,28 @@ describe('sampleClusterHealth', () => {
         const sample = await sampleClusterHealth(client);
 
         expect(sample.pingLatencyMs).not.toBeNull();
-        expect(sample.errors).toContain('serverStatus');
+        expect(sample.errors.map(getFailedCommandName)).toContain('serverStatus');
+        // The reason must survive: it is the only signal distinguishing an unsupported
+        // command from Unauthorized or a TLS timeout once telemetry is suppressed.
+        expect(sample.errors.join(' ')).toContain('CommandNotSupported');
         expect(sample.uptimeSeconds).toBeNull();
         expect(sample.opcounters).toBeNull();
         expect(sample.activeOperations).toBe(1);
+    });
+
+    it('records a null latency and the reason when the ping itself fails', async () => {
+        const { client } = createFakeClient({
+            adminCommand: () => {
+                throw new Error('connection timed out');
+            },
+        });
+
+        const sample = await sampleClusterHealth(client);
+
+        // The whole connection-state machine keys on this being null.
+        expect(sample.pingLatencyMs).toBeNull();
+        expect(sample.errors.map(getFailedCommandName)).toContain('ping');
+        expect(sample.errors.join(' ')).toContain('connection timed out');
     });
 
     it('reads uptime, connections and opcounters when serverStatus is available', async () => {
@@ -140,6 +164,7 @@ describe('listCurrentOperations', () => {
         expect(result.operations).toHaveLength(1);
         expect(result.operations[0]).toEqual({
             opid: '42',
+            opidIsNumeric: true,
             type: 'query',
             namespace: 'sales.orders',
             secsRunning: 9,
@@ -154,7 +179,7 @@ describe('listCurrentOperations', () => {
             aggregate: () => [
                 { opid: 1, op: 'none', ns: '', active: true, desc: 'Checkpointer' },
                 { opid: 2, op: 'none', ns: '', active: true, desc: 'JournalFlusher' },
-                { opid: 3, op: 'command', ns: 'admin.$cmd.aggregate', active: true, desc: 'conn4' },
+                { opid: 3, op: 'query', ns: 'sales.orders', active: true, desc: 'conn4' },
             ],
         });
 
@@ -163,6 +188,68 @@ describe('listCurrentOperations', () => {
         expect(result.operations).toHaveLength(1);
         expect(result.operations[0].opid).toBe('3');
         expect(result.operations[0].clientDescription).toBe('conn4');
+    });
+
+    it('drops the $currentOp query that is collecting the list', async () => {
+        // The server reports the inspecting aggregation itself. Keeping it would floor the
+        // Active Operations tile at 1 on an idle cluster and put a permanent phantom row in
+        // the table whose Kill button terminates the dashboard's own poll.
+        const { client } = createFakeClient({
+            aggregate: () => [
+                {
+                    opid: 10,
+                    op: 'command',
+                    ns: 'admin.$cmd.aggregate',
+                    active: true,
+                    command: { aggregate: 1, pipeline: [{ $currentOp: { allUsers: true } }, { $limit: 100 }] },
+                },
+                { opid: 11, op: 'query', ns: 'sales.orders', active: true },
+            ],
+        });
+
+        const result = await listCurrentOperations(client);
+
+        expect(result.operations.map((operation) => operation.opid)).toEqual(['11']);
+    });
+
+    it('drops the legacy currentOp command that is collecting the list', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.currentOp === 1) {
+                    return {
+                        inprog: [
+                            { opid: 20, op: 'command', ns: 'admin.$cmd', active: true, command: { currentOp: 1 } },
+                            { opid: 21, op: 'update', ns: 'sales.orders', active: true },
+                        ],
+                    };
+                }
+                throw new Error('unexpected command');
+            },
+        });
+
+        const result = await listCurrentOperations(client);
+
+        expect(result.operations.map((operation) => operation.opid)).toEqual(['21']);
+    });
+
+    it('excludes background threads before the result limit is applied', async () => {
+        // Regression guard: filtering after `$limit` lets background threads consume the
+        // whole budget so real user operations vanish on a busy server.
+        const stages: Document[] = [];
+        const { client } = createFakeClient({
+            aggregate: (pipeline) => {
+                stages.push(...pipeline);
+                return [];
+            },
+        });
+
+        await listCurrentOperations(client);
+
+        const matchIndex = stages.findIndex((stage) => '$match' in stage);
+        const limitIndex = stages.findIndex((stage) => '$limit' in stage);
+
+        expect(matchIndex).toBeGreaterThanOrEqual(0);
+        expect(limitIndex).toBeGreaterThan(matchIndex);
     });
 
     it('falls back to the legacy currentOp command when the aggregation fails', async () => {
@@ -180,6 +267,7 @@ describe('listCurrentOperations', () => {
         expect(result.errors).toEqual([]);
         expect(result.operations).toHaveLength(1);
         expect(result.operations[0].opid).toBe('op-1');
+        expect(result.operations[0].opidIsNumeric).toBe(false);
     });
 
     it('reports both command names when neither form is supported', async () => {
@@ -188,25 +276,42 @@ describe('listCurrentOperations', () => {
         const result = await listCurrentOperations(client);
 
         expect(result.operations).toEqual([]);
-        expect(result.errors).toEqual(['$currentOp', 'currentOp']);
+        expect(result.errors.map(getFailedCommandName)).toEqual(['$currentOp', 'currentOp']);
     });
 });
 
 describe('killOperation', () => {
-    it('sends a numeric opid when the identifier is numeric', async () => {
+    it('sends a numeric opid when the server reported a number', async () => {
         const { client, adminCommands } = createFakeClient({ adminCommand: () => ({ ok: 1 }) });
 
-        await killOperation(client, '42');
+        await killOperation(client, '42', true);
 
         expect(adminCommands).toEqual([{ killOp: 1, op: 42 }]);
     });
 
-    it('sends the opid as-is when it is not numeric', async () => {
+    it('sends a string opid unchanged when the server reported a string', async () => {
         const { client, adminCommands } = createFakeClient({ adminCommand: () => ({ ok: 1 }) });
 
-        await killOperation(client, 'shard0:1234');
+        await killOperation(client, 'shard0:1234', false);
 
         expect(adminCommands).toEqual([{ killOp: 1, op: 'shard0:1234' }]);
+    });
+
+    it('preserves a numeric-looking string opid rather than coercing it', async () => {
+        // Azure DocumentDB (vCore) reports string opids. `Number('12345')` would send a
+        // number the server does not match, and an int64 beyond MAX_SAFE_INTEGER would be
+        // rounded onto a *different* operation.
+        const { client, adminCommands } = createFakeClient({ adminCommand: () => ({ ok: 1 }) });
+
+        await killOperation(client, '9007199254740993', false);
+
+        expect(adminCommands).toEqual([{ killOp: 1, op: '9007199254740993' }]);
+    });
+
+    it('reports whether the server acknowledged the request', async () => {
+        const { client } = createFakeClient({ adminCommand: () => ({ ok: 0 }) });
+
+        await expect(killOperation(client, '42', true)).resolves.toBe(false);
     });
 });
 
@@ -235,8 +340,40 @@ describe('getStorageStats', () => {
         expect(stats.databases.map((database) => database.name)).toEqual(['sales', 'archive']);
         expect(stats.databases[0].dataSizeBytes).toBe(90);
         expect(stats.databases[1].dataSizeBytes).toBeNull();
-        expect(stats.errors).toEqual(['dbStats:archive']);
-        expect(stats.totalSizeBytes).toBe(303);
+        expect(stats.errors).toHaveLength(1);
+        expect(stats.errors[0]).toContain('dbStats:archive');
+        // The total must reconcile with the rendered rows (100 + 200), NOT with
+        // listDatabases.totalSize (303), which also counts admin/local/config.
+        expect(stats.totalSizeBytes).toBe(300);
+        expect(stats.omittedDatabaseCount).toBe(0);
+    });
+
+    it('reports how many databases were omitted by the inspection cap', async () => {
+        const databases = Array.from({ length: 25 }, (_, index) => ({
+            name: `db${index}`,
+            sizeOnDisk: 10,
+        }));
+
+        const { client } = createFakeClient({
+            listDatabases: () => ({ databases }),
+            dbCommand: () => ({ dataSize: 5, indexSize: 1, collections: 1, objects: 1 }),
+        });
+
+        const stats = await getStorageStats(client);
+
+        expect(stats.databases).toHaveLength(20);
+        expect(stats.omittedDatabaseCount).toBe(5);
+    });
+
+    it('keeps a reported size of zero instead of falling back to storageSize', async () => {
+        const { client } = createFakeClient({
+            listDatabases: () => ({ databases: [{ name: 'empty', sizeOnDisk: 0 }] }),
+            dbCommand: () => ({ dataSize: 0, indexSize: 0, collections: 0, objects: 0, storageSize: 4096 }),
+        });
+
+        const stats = await getStorageStats(client);
+
+        expect(stats.databases[0].sizeOnDiskBytes).toBe(0);
     });
 
     it('returns an error marker when listDatabases is unavailable', async () => {
@@ -246,6 +383,6 @@ describe('getStorageStats', () => {
 
         expect(stats.databases).toEqual([]);
         expect(stats.totalSizeBytes).toBeNull();
-        expect(stats.errors).toEqual(['listDatabases']);
+        expect(stats.errors.map(getFailedCommandName)).toEqual(['listDatabases']);
     });
 });

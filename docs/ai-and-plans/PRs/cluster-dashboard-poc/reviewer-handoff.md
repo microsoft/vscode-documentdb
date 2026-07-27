@@ -82,13 +82,16 @@ Ordered by how likely it is to matter.
 2. **Visual layout has never been seen rendered.** Types and SCSS compile; appearance,
    spacing, two-panels-side-by-side, and light↔dark re-theming are unobserved. Expect to
    want CSS tweaks on the first run.
-3. **The background-thread filter** (`isUserOperation`, commit `9015de8d`) — is it too
-   aggressive for other server types? It drops entries that are `op: 'none'` **and** have
-   no namespace. Without it, the Active Operations tile read `3` on an idle cluster.
+3. **The background-thread and self-op filters** (`isUserOperation` /
+   `isSelfInspectionQuery`) — are they too aggressive for other server types? Without
+   them the Active Operations tile read non-zero on an idle cluster and the Kill button
+   could terminate the dashboard's own poll.
 4. **Polling cost.** Each 5 s health sample runs `ping` + `serverStatus` + `$currentOp`,
-   and the Operations tab polls `$currentOp` again independently while mounted. Acceptable
-   for a POC; the obvious consolidation target before shipping. Telemetry is suppressed on
-   both polled procedures.
+   and the Operations tab polls `$currentOp` again independently while mounted. Both
+   loops now have in-flight guards so they cannot stack, but they are still two separate
+   pollers — the obvious consolidation target before shipping. Telemetry is suppressed on
+   both polled procedures. Neither loop pauses when the panel is hidden
+   (`retainContextWhenHidden`), which is a known remaining gap.
 5. **Two plan corrections worth confirming** — `isDisposed` is a getter not a method
    (`WebviewController.ts:384`), and telemetry suppression goes through
    `ctx.actionContext.telemetry` (matching `collectionViewRouter.ts:684`). Details in

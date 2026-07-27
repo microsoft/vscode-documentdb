@@ -8,7 +8,11 @@ import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
 
-import { type ClusterHealthSample, type ClusterStorageStats } from '../../../documentdb/utils/getClusterHealth';
+import {
+    getFailedCommandName,
+    type ClusterHealthSample,
+    type ClusterStorageStats,
+} from '../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import './clusterDashboard.scss';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
@@ -27,6 +31,9 @@ const MAX_SAMPLES = 60;
 /** Consecutive failed polls after which the dashboard reports the cluster as disconnected. */
 const FAILURE_THRESHOLD = 2;
 
+/** Storage is refreshed every Nth health tick — `dbStats` per database is far heavier. */
+const STORAGE_REFRESH_MULTIPLIER = 12;
+
 export const ClusterDashboard = (): JSX.Element => {
     /**
      * Use the configuration object to access the data passed to the webview at its creation.
@@ -44,6 +51,7 @@ export const ClusterDashboard = (): JSX.Element => {
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
+    const [opcountersUnsupported, setOpcountersUnsupported] = useState(false);
     const [selectedTab, setSelectedTab] = useState<DashboardTab>('overview');
 
     /**
@@ -51,9 +59,22 @@ export const ClusterDashboard = (): JSX.Element => {
      * so without this flag a late response could write state after the panel was torn down.
      */
     const disposedRef = useRef(false);
+    /**
+     * Prevents overlapping health polls. Non-emulator connections use the driver's 30 s
+     * `serverSelectionTimeoutMS`, so an unreachable cluster answers far slower than the
+     * 5 s interval; without this guard the interval stacks samples faster than they drain,
+     * each re-entering `getClient`, and the backlog also makes `timestampMs` non-monotonic.
+     */
+    const sampleInFlightRef = useRef(false);
+    const storageInFlightRef = useRef(false);
 
     const loadStorageStats = useCallback(async (): Promise<void> => {
+        if (storageInFlightRef.current) {
+            return;
+        }
+        storageInFlightRef.current = true;
         setIsRefreshingStorage(true);
+
         try {
             const stats = await trpcClient.clusterDashboard.getStorageStats.query();
             if (!disposedRef.current) {
@@ -68,6 +89,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 });
             }
         } finally {
+            storageInFlightRef.current = false;
             if (!disposedRef.current) {
                 setIsRefreshingStorage(false);
             }
@@ -105,6 +127,11 @@ export const ClusterDashboard = (): JSX.Element => {
     // Health polling loop. Failures are absorbed so a transient error does not clear the charts.
     useEffect(() => {
         const tick = (): void => {
+            if (sampleInFlightRef.current) {
+                return;
+            }
+            sampleInFlightRef.current = true;
+
             trpcClient.clusterDashboard.getHealthSample
                 .query()
                 .then((sample) => {
@@ -113,11 +140,17 @@ export const ClusterDashboard = (): JSX.Element => {
                     }
                     setSamples((previous) => [...previous.slice(-(MAX_SAMPLES - 1)), sample]);
                     setConsecutiveFailures((failures) => (sample.pingLatencyMs === null ? failures + 1 : 0));
+                    if (sample.errors.some((entry) => getFailedCommandName(entry) === 'serverStatus')) {
+                        setOpcountersUnsupported(true);
+                    }
                 })
                 .catch(() => {
                     if (!disposedRef.current) {
                         setConsecutiveFailures((failures) => failures + 1);
                     }
+                })
+                .finally(() => {
+                    sampleInFlightRef.current = false;
                 });
         };
 
@@ -126,6 +159,18 @@ export const ClusterDashboard = (): JSX.Element => {
 
         return () => clearInterval(intervalId);
     }, [configuration.refreshIntervalMs, trpcClient]);
+
+    // Storage refreshes on a much slower cadence than the health sample: `dbStats` per
+    // database is far heavier than a ping, but leaving it to a single load would freeze
+    // two tiles that sit in the live strip looking identical to the 5 s ones.
+    useEffect(() => {
+        const intervalId = setInterval(
+            () => void loadStorageStats(),
+            configuration.refreshIntervalMs * STORAGE_REFRESH_MULTIPLIER,
+        );
+
+        return () => clearInterval(intervalId);
+    }, [configuration.refreshIntervalMs, loadStorageStats]);
 
     const latestSample = samples.length > 0 ? samples[samples.length - 1] : null;
 
@@ -162,7 +207,9 @@ export const ClusterDashboard = (): JSX.Element => {
             </TabList>
 
             <div className="dashboardContent">
-                {selectedTab === 'overview' && <OverviewTab samples={samples} />}
+                {selectedTab === 'overview' && (
+                    <OverviewTab samples={samples} opcountersUnsupported={opcountersUnsupported} />
+                )}
                 {selectedTab === 'operations' && <OperationsTab refreshIntervalMs={configuration.refreshIntervalMs} />}
                 {selectedTab === 'storage' && (
                     <StorageTab

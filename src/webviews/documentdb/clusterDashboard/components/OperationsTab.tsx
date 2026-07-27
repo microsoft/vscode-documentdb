@@ -5,6 +5,8 @@
 
 import {
     Button,
+    MessageBar,
+    MessageBarBody,
     Spinner,
     Table,
     TableBody,
@@ -31,23 +33,41 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
     const trpcClient = useTrpcClient();
 
     const [operations, setOperations] = useState<CurrentOpEntry[] | null>(null);
-    const [unsupported, setUnsupported] = useState(false);
+    const [serverErrors, setServerErrors] = useState<string[]>([]);
+    const [loadError, setLoadError] = useState<string | null>(null);
     const [killingOpid, setKillingOpid] = useState<string | null>(null);
 
-    // The polling loop lives in a ref-guarded closure so a refresh triggered by the Kill
-    // button and the interval tick can never both write a stale result after unmount.
     const disposedRef = useRef(false);
+    /**
+     * Prevents overlapping polls. A slow or unreachable cluster can take far longer to
+     * answer than the refresh interval, and without this the interval stacks requests
+     * faster than they drain.
+     */
+    const inFlightRef = useRef(false);
 
     const loadOperations = useCallback(async (): Promise<void> => {
+        if (inFlightRef.current) {
+            return;
+        }
+        inFlightRef.current = true;
+
         try {
             const result = await trpcClient.clusterDashboard.getCurrentOperations.query();
             if (disposedRef.current) {
                 return;
             }
             setOperations(result.operations);
-            setUnsupported(result.errors.length > 0);
-        } catch {
-            // Polling failures are silent by design: the table keeps the last known rows.
+            setServerErrors(result.errors);
+            setLoadError(null);
+        } catch (error) {
+            if (!disposedRef.current) {
+                // Surface the failure instead of leaving the first load stuck on a spinner
+                // with the Refresh button unreachable.
+                setLoadError(error instanceof Error ? error.message : String(error));
+                setOperations((previous) => previous ?? []);
+            }
+        } finally {
+            inFlightRef.current = false;
         }
     }, [trpcClient]);
 
@@ -69,10 +89,21 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
             try {
                 const result = await trpcClient.clusterDashboard.killOperation.mutate({
                     opid: operation.opid,
+                    opidIsNumeric: operation.opidIsNumeric,
                     namespace: operation.namespace,
                 });
 
-                if (result.killed) {
+                if (result.outcome === 'failed') {
+                    void trpcClient.common.displayErrorMessage.mutate({
+                        message: l10n.t('The server did not accept the request to kill operation "{opid}".', {
+                            opid: operation.opid,
+                        }),
+                        modal: false,
+                        cause: '',
+                    });
+                }
+
+                if (result.outcome !== 'cancelled') {
                     await loadOperations();
                 }
             } catch (error) {
@@ -88,9 +119,23 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
         [loadOperations, trpcClient],
     );
 
+    const toolbar = (
+        <div className="tabToolbar">
+            <Button
+                appearance="subtle"
+                icon={<ArrowClockwiseRegular />}
+                onClick={() => void loadOperations()}
+                aria-label={l10n.t('Refresh the list of running operations')}
+            >
+                {l10n.t('Refresh')}
+            </Button>
+        </div>
+    );
+
     if (operations === null) {
         return (
             <div className="tabPanel">
+                {toolbar}
                 <Spinner size="small" label={l10n.t('Loading operations…')} />
             </div>
         );
@@ -100,25 +145,29 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
         <div className="tabPanel">
             <Announcer
                 when={operations.length > 0}
-                message={l10n.t('{count} operations are running.', { count: operations.length })}
+                message={
+                    operations.length === 1
+                        ? l10n.t('{countOne} operation is running.', { countOne: operations.length })
+                        : l10n.t('{countMany} operations are running.', { countMany: operations.length })
+                }
             />
 
-            <div className="tabToolbar">
-                <Button
-                    appearance="subtle"
-                    icon={<ArrowClockwiseRegular />}
-                    onClick={() => void loadOperations()}
-                    aria-label={l10n.t('Refresh the list of running operations')}
-                >
-                    {l10n.t('Refresh')}
-                </Button>
-            </div>
+            {toolbar}
+
+            {loadError !== null && (
+                <MessageBar intent="error">
+                    <MessageBarBody>
+                        {l10n.t('Could not read running operations: {reason}', { reason: loadError })}
+                    </MessageBarBody>
+                </MessageBar>
+            )}
 
             {operations.length === 0 ? (
                 <div className="emptyState">
-                    {unsupported
+                    {serverErrors.length > 0
                         ? l10n.t(
-                              'Running operations could not be read from this cluster. The signed-in user may lack the permission required to list operations.',
+                              'Running operations could not be read from this cluster ({reason}). The signed-in user may lack the permission required to list operations.',
+                              { reason: serverErrors.join('; ') },
                           )
                         : l10n.t('No operations are currently running.')}
                 </div>
@@ -136,8 +185,10 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                         </TableRow>
                     </TableHeader>
                     <TableBody>
-                        {operations.map((operation) => (
-                            <TableRow key={operation.opid}>
+                        {operations.map((operation, index) => (
+                            // `opid` alone is not a safe key: `mapCurrentOp` yields '' for
+                            // any entry whose opid the server omitted, which collides.
+                            <TableRow key={`${operation.opid}:${index}`}>
                                 <TableCell>{operation.opid || '—'}</TableCell>
                                 <TableCell>{operation.type}</TableCell>
                                 <TableCell>

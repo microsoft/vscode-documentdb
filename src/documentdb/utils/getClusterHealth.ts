@@ -30,6 +30,28 @@ const COMMAND_PREVIEW_MAX_LENGTH = 2000;
 const SYSTEM_DATABASES = new Set(['admin', 'local', 'config']);
 
 /**
+ * Formats a failed command as `name: reason` for the sample's `errors` array.
+ *
+ * The sibling `getClusterMetadata.ts` records the message of every failed command
+ * (`serverStatus_error` etc.) and this module claims to copy its resilience model — but a
+ * bare `catch {}` would discard it. Since the dashboard's stated top risk is vCore
+ * behaviour, and telemetry is suppressed on the polled procedures, this string is the only
+ * way to tell `Unauthorized` from `CommandNotSupported` from a TLS timeout.
+ */
+function describeCommandFailure(commandName: string, error: unknown): string {
+    const message = error instanceof Error ? error.message : String(error);
+
+    return message ? `${commandName}: ${message}` : commandName;
+}
+
+/** The command name portion of a {@link describeCommandFailure} entry. */
+export function getFailedCommandName(errorEntry: string): string {
+    const separatorIndex = errorEntry.indexOf(':');
+
+    return separatorIndex === -1 ? errorEntry : errorEntry.slice(0, separatorIndex);
+}
+
+/**
  * A single point-in-time health sample of a cluster.
  * Every numeric field is `null` when the server did not answer the command that provides it.
  */
@@ -68,8 +90,13 @@ export interface ClusterDatabaseStorage {
 /** Aggregated storage figures for a cluster. */
 export interface ClusterStorageStats {
     databases: ClusterDatabaseStorage[];
-    /** `listDatabases.totalSize`, or the sum of the per-database sizes when absent. */
+    /**
+     * Sum of `sizeOnDiskBytes` across the databases in {@link databases} — i.e. exactly
+     * the rows the Storage tab renders, so the Total always reconciles with them.
+     */
     totalSizeBytes: number | null;
+    /** User databases beyond {@link DATABASE_STATS_LIMIT} that were not inspected. */
+    omittedDatabaseCount: number;
     /** Names of the commands that failed while collecting these statistics. */
     errors: string[];
 }
@@ -85,6 +112,18 @@ export interface CurrentOpEntry {
     type: string;
     /** `ns`, i.e. `database.collection`. */
     namespace: string;
+    /**
+     * `true` when the server reported `opid` as a number rather than a string.
+     *
+     * `killOp` requires the identifier in the *same* type the server used: self-hosted
+     * servers report numeric opids and reject a string, Azure DocumentDB (vCore) reports
+     * string opids and rejects a number. `opid` is stringified for display and React keys,
+     * so this flag is what preserves the original type across the wire to
+     * {@link killOperation}. Re-deriving it with `Number(opid)` would be wrong: it silently
+     * accepts `'0x1A'`/`'1e3'` and loses precision above `Number.MAX_SAFE_INTEGER`, which
+     * would kill a *different* operation.
+     */
+    opidIsNumeric: boolean;
     /** `secs_running`, when the server reports it. */
     secsRunning: number | null;
     /** `active` flag. */
@@ -153,8 +192,8 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
         const startedAt = performance.now();
         await adminDb.command({ ping: 1 });
         sample.pingLatencyMs = performance.now() - startedAt;
-    } catch {
-        sample.errors.push('ping');
+    } catch (error) {
+        sample.errors.push(describeCommandFailure('ping', error));
     }
 
     try {
@@ -164,11 +203,10 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
             (serverStatus.connections as Record<string, unknown> | undefined)?.current,
         );
         sample.opcounters = toCounterRecord(serverStatus.opcounters);
-    } catch {
+    } catch (error) {
         // Expected on Azure DocumentDB (vCore): `serverStatus` is not supported there.
-        sample.errors.push('serverStatus');
+        sample.errors.push(describeCommandFailure('serverStatus', error));
     }
-
     const currentOperations = await listCurrentOperations(client);
     if (currentOperations.errors.length > 0) {
         sample.errors.push(...currentOperations.errors);
@@ -189,6 +227,7 @@ function mapCurrentOp(op: Document): CurrentOpEntry {
 
     return {
         opid: String(op.opid ?? ''),
+        opidIsNumeric: typeof op.opid === 'number',
         type: toStringOrNull(op.op) ?? 'unknown',
         namespace: toStringOrNull(op.ns) ?? '',
         secsRunning: toNumberOrNull(op.secs_running),
@@ -199,15 +238,54 @@ function mapCurrentOp(op: Document): CurrentOpEntry {
 }
 
 /**
- * Filters out the server's own background threads (`Checkpointer`, `JournalFlusher`, …).
- * They are reported as `op: 'none'` against no namespace, cannot be killed, and would
- * otherwise make the "Active Operations" tile read non-zero on a completely idle cluster.
+ * `$match` stage dropping the server's own background threads (`Checkpointer`,
+ * `JournalFlusher`, …), which are reported as `op: 'none'` against no namespace.
+ *
+ * They cannot be killed and would otherwise make the "Active Operations" tile read
+ * non-zero on a completely idle cluster. This runs **before** `$limit` so background
+ * threads cannot consume the result budget and hide real user operations on a busy
+ * server — the case where the Operations tab matters most.
  */
+const EXCLUDE_BACKGROUND_THREADS = {
+    $match: {
+        $or: [{ op: { $ne: 'none' } }, { ns: { $nin: ['', null] } }],
+    },
+};
+
+/** Client-side equivalent of {@link EXCLUDE_BACKGROUND_THREADS} for the legacy path. */
 function isUserOperation(op: Document): boolean {
     const operationType = toStringOrNull(op.op);
     const namespace = toStringOrNull(op.ns);
 
     return !(operationType === null || operationType === 'none') || namespace !== null;
+}
+
+/**
+ * `true` for the very query that is collecting this list.
+ *
+ * `$currentOp` reports the aggregation issuing it, and the legacy `currentOp` command
+ * reports itself the same way. Without this the dashboard watches itself: the Active
+ * Operations tile floors at 1 on an idle cluster, the sparkline is a flat line at 1, and
+ * the Operations tab shows a permanent phantom row whose Kill button terminates the
+ * dashboard's own poll. No `$currentOp` option suppresses it, so it is filtered here.
+ */
+function isSelfInspectionQuery(op: Document): boolean {
+    const command = op.command as Record<string, unknown> | undefined;
+    if (!command) {
+        return false;
+    }
+
+    // Legacy form: `{ currentOp: 1 }`.
+    if (command.currentOp !== undefined) {
+        return true;
+    }
+
+    // Aggregation form: a pipeline whose first stage is `$currentOp`.
+    const pipeline = command.pipeline;
+    return (
+        Array.isArray(pipeline) &&
+        pipeline.some((stage) => typeof stage === 'object' && stage !== null && '$currentOp' in stage)
+    );
 }
 
 /**
@@ -227,12 +305,24 @@ export async function listCurrentOperations(client: MongoClient): Promise<Curren
     try {
         const documents = await client
             .db('admin')
-            .aggregate([{ $currentOp: { allUsers: true, idleConnections: false } }, { $limit: CURRENT_OP_LIMIT }])
+            .aggregate([
+                // `idleSessions` (not `idleConnections`, which already defaults to false) is
+                // what keeps parked sessions out of the result.
+                { $currentOp: { allUsers: true, idleConnections: false, idleSessions: false } },
+                EXCLUDE_BACKGROUND_THREADS,
+                { $limit: CURRENT_OP_LIMIT },
+            ])
             .toArray();
 
-        return { operations: documents.filter(isUserOperation).map(mapCurrentOp), errors };
-    } catch {
-        errors.push('$currentOp');
+        return {
+            // Also filtered client-side: the `$match` above is the load-bearing fix (it
+            // runs before `$limit`), but repeating it here keeps behaviour identical if a
+            // server ignores or rejects the stage, and matches the legacy path exactly.
+            operations: documents.filter((op) => isUserOperation(op) && !isSelfInspectionQuery(op)).map(mapCurrentOp),
+            errors,
+        };
+    } catch (error) {
+        errors.push(describeCommandFailure('$currentOp', error));
     }
 
     try {
@@ -240,11 +330,14 @@ export async function listCurrentOperations(client: MongoClient): Promise<Curren
         const inprog = Array.isArray(result.inprog) ? (result.inprog as Document[]) : [];
 
         return {
-            operations: inprog.filter(isUserOperation).slice(0, CURRENT_OP_LIMIT).map(mapCurrentOp),
+            operations: inprog
+                .filter((op) => isUserOperation(op) && !isSelfInspectionQuery(op))
+                .slice(0, CURRENT_OP_LIMIT)
+                .map(mapCurrentOp),
             errors: [],
         };
-    } catch {
-        errors.push('currentOp');
+    } catch (error) {
+        errors.push(describeCommandFailure('currentOp', error));
     }
 
     return { operations: [], errors };
@@ -253,17 +346,19 @@ export async function listCurrentOperations(client: MongoClient): Promise<Curren
 /**
  * Terminates a running operation.
  *
- * `killOp` expects the same opid type the server reported: a number on self-hosted
- * servers, a string on Azure DocumentDB (vCore).
- *
  * @param client - A connected MongoClient.
- * @param opid - The operation identifier as reported by {@link listCurrentOperations}.
+ * @param opid - The operation identifier exactly as reported by {@link listCurrentOperations}.
+ * @param opidIsNumeric - Whether the server reported the identifier as a number.
+ *                        See {@link CurrentOpEntry.opidIsNumeric} for why this is carried
+ *                        rather than re-derived.
+ * @returns `true` when the server acknowledged the request.
  */
-export async function killOperation(client: MongoClient, opid: string): Promise<void> {
-    const numericOpid = Number(opid);
-    const op: number | string = Number.isNaN(numericOpid) || opid.trim() === '' ? opid : numericOpid;
+export async function killOperation(client: MongoClient, opid: string, opidIsNumeric: boolean): Promise<boolean> {
+    const op: number | string = opidIsNumeric ? Number(opid) : opid;
 
-    await client.db().admin().command({ killOp: 1, op });
+    const result = await client.db().admin().command({ killOp: 1, op });
+
+    return result.ok === 1;
 }
 
 /**
@@ -283,13 +378,21 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
     let listed: Document;
     try {
         listed = await adminDb.listDatabases();
-    } catch {
-        return { databases: [], totalSizeBytes: null, errors: ['listDatabases'] };
+    } catch (error) {
+        return {
+            databases: [],
+            totalSizeBytes: null,
+            omittedDatabaseCount: 0,
+            errors: [describeCommandFailure('listDatabases', error)],
+        };
     }
 
-    const entries = (Array.isArray(listed.databases) ? (listed.databases as Document[]) : [])
-        .filter((entry) => typeof entry.name === 'string' && !SYSTEM_DATABASES.has(entry.name as string))
-        .slice(0, DATABASE_STATS_LIMIT);
+    const allUserDatabases = (Array.isArray(listed.databases) ? (listed.databases as Document[]) : []).filter(
+        (entry) => typeof entry.name === 'string' && !SYSTEM_DATABASES.has(entry.name as string),
+    );
+
+    const entries = allUserDatabases.slice(0, DATABASE_STATS_LIMIT);
+    const omittedDatabaseCount = allUserDatabases.length - entries.length;
 
     const databases = await Promise.all(
         entries.map(async (entry): Promise<ClusterDatabaseStorage> => {
@@ -309,20 +412,25 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
                 database.indexSizeBytes = toNumberOrNull(stats.indexSize);
                 database.collections = toNumberOrNull(stats.collections);
                 database.objects = toNumberOrNull(stats.objects);
-                database.sizeOnDiskBytes = database.sizeOnDiskBytes ?? toNumberOrNull(stats.storageSize);
-            } catch {
-                errors.push(`dbStats:${name}`);
+                // `??` rather than `||`: a genuine 0 is a real answer and must not be
+                // replaced, but `null` (field absent) should fall back to storageSize.
+                database.sizeOnDiskBytes ??= toNumberOrNull(stats.storageSize);
+            } catch (error) {
+                errors.push(describeCommandFailure(`dbStats:${name}`, error));
             }
 
             return database;
         }),
     );
 
+    // Deliberately NOT `listed.totalSize`: that counts admin/local/config and any database
+    // past the cap, so it would not equal the sum of the rows actually rendered. A 5 GB
+    // oplog would put the Total several GB above a single visible row.
+    const sizedDatabases = databases.filter((database) => database.sizeOnDiskBytes !== null);
     const totalSizeBytes =
-        toNumberOrNull(listed.totalSize) ??
-        (databases.length > 0
-            ? databases.reduce((total, database) => total + (database.sizeOnDiskBytes ?? 0), 0)
-            : null);
+        sizedDatabases.length > 0
+            ? sizedDatabases.reduce((total, database) => total + (database.sizeOnDiskBytes ?? 0), 0)
+            : null;
 
-    return { databases, totalSizeBytes, errors };
+    return { databases, totalSizeBytes, omittedDatabaseCount, errors };
 }

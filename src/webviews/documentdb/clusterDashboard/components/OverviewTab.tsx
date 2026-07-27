@@ -13,6 +13,8 @@ import { Sparkline } from './Sparkline';
 
 export interface OverviewTabProps {
     samples: ClusterHealthSample[];
+    /** True once at least one sample reported that the server has no `serverStatus`. */
+    opcountersUnsupported: boolean;
 }
 
 interface OpcounterRate {
@@ -78,7 +80,7 @@ function ChartCard({
     );
 }
 
-export const OverviewTab = ({ samples }: OverviewTabProps): JSX.Element => {
+export const OverviewTab = ({ samples, opcountersUnsupported }: OverviewTabProps): JSX.Element => {
     const latestSample = samples.length > 0 ? samples[samples.length - 1] : null;
     const opcounterRates = computeOpcounterRates(samples);
 
@@ -111,9 +113,11 @@ export const OverviewTab = ({ samples }: OverviewTabProps): JSX.Element => {
                 <div className="chartTitle">{l10n.t('Operations per second')}</div>
                 {opcounterRates.length === 0 ? (
                     <div className="emptyState">
-                        {l10n.t(
-                            'Operation counters are not reported by this cluster. Azure DocumentDB (vCore) does not support the serverStatus command.',
-                        )}
+                        {opcountersUnsupported
+                            ? l10n.t(
+                                  'Operation counters are not reported by this cluster. Azure DocumentDB (vCore) does not support the serverStatus command.',
+                              )
+                            : l10n.t('Collecting…')}
                     </div>
                 ) : (
                     <ul className="opcounterList">

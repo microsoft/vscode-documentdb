@@ -30,9 +30,10 @@ export const Sparkline = ({
     color = 'var(--vscode-charts-blue, currentColor)',
     filled = false,
 }: SparklineProps): JSX.Element => {
-    const points = data.filter((value): value is number => value !== null && Number.isFinite(value));
+    const points = data.map((value) => (value !== null && Number.isFinite(value) ? value : null));
+    const present = points.filter((value): value is number => value !== null);
 
-    if (points.length < 2) {
+    if (present.length < 2) {
         return (
             <svg className="sparkline" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
                 <line
@@ -48,39 +49,82 @@ export const Sparkline = ({
         );
     }
 
-    const minimum = Math.min(...points);
-    const maximum = Math.max(...points);
-    // A flat series would divide by zero; render it as a centered horizontal line instead.
-    const range = maximum - minimum || 1;
+    const minimum = Math.min(...present);
+    const maximum = Math.max(...present);
+    const isFlat = maximum === minimum;
+    // A flat series has no range to normalize against; draw it through the vertical centre
+    // rather than at y=0, which would render stable low latency as a "dead" bottom line.
+    const range = isFlat ? 1 : maximum - minimum;
     const padding = 2;
     const usableHeight = height - padding * 2;
-    const stepX = width / (points.length - 1);
+    // Positions are keyed to the slot index, not to the index among present values, so a
+    // gap does not shift every earlier point sideways on each poll.
+    const stepX = points.length > 1 ? width / (points.length - 1) : width;
 
-    const coordinates = points.map((value, index) => {
+    const toPoint = (value: number, index: number): string => {
         const x = index * stepX;
-        const y = padding + usableHeight - ((value - minimum) / range) * usableHeight;
+        const y = isFlat
+            ? padding + usableHeight / 2
+            : padding + usableHeight - ((value - minimum) / range) * usableHeight;
         return `${x.toFixed(2)},${y.toFixed(2)}`;
+    };
+
+    // Split into contiguous runs so a gap (null = unsupported/failed sample) renders as a
+    // break in the line instead of being stitched over, which would show an outage as a
+    // healthy line stretched to "now".
+    const segments: string[][] = [];
+    let currentSegment: string[] = [];
+    points.forEach((value, index) => {
+        if (value === null) {
+            if (currentSegment.length > 0) {
+                segments.push(currentSegment);
+                currentSegment = [];
+            }
+            return;
+        }
+        currentSegment.push(toPoint(value, index));
     });
+    if (currentSegment.length > 0) {
+        segments.push(currentSegment);
+    }
+
+    const longestSegment = segments.reduce(
+        (longest, segment) => (segment.length > longest.length ? segment : longest),
+        [...[]] as string[],
+    );
 
     return (
         <svg className="sparkline" viewBox={`0 0 ${width} ${height}`} preserveAspectRatio="none" aria-hidden="true">
-            {filled && (
+            {filled && longestSegment.length > 1 && (
                 <polygon
-                    points={`0,${height} ${coordinates.join(' ')} ${width},${height}`}
+                    points={`${longestSegment[0].split(',')[0]},${height} ${longestSegment.join(' ')} ${longestSegment[longestSegment.length - 1].split(',')[0]},${height}`}
                     fill={color}
                     fillOpacity={0.15}
                     stroke="none"
                 />
             )}
-            <polyline
-                points={coordinates.join(' ')}
-                fill="none"
-                stroke={color}
-                strokeWidth={1.5}
-                strokeLinejoin="round"
-                strokeLinecap="round"
-                vectorEffect="non-scaling-stroke"
-            />
+            {segments.map((segment, index) =>
+                segment.length > 1 ? (
+                    <polyline
+                        key={index}
+                        points={segment.join(' ')}
+                        fill="none"
+                        stroke={color}
+                        strokeWidth={1.5}
+                        strokeLinejoin="round"
+                        strokeLinecap="round"
+                        vectorEffect="non-scaling-stroke"
+                    />
+                ) : (
+                    <circle
+                        key={index}
+                        cx={Number(segment[0].split(',')[0])}
+                        cy={Number(segment[0].split(',')[1])}
+                        r={1.5}
+                        fill={color}
+                    />
+                ),
+            )}
         </svg>
     );
 };

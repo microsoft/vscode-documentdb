@@ -5,7 +5,9 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 
+import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
@@ -23,6 +25,16 @@ export function openClusterDashboard(context: IActionContext, node: ClusterItemB
     }
 
     context.telemetry.properties.experience = node?.experience.api;
+
+    // Verify credentials are available before opening the panel. Without this, a
+    // never-expanded connection opens a dashboard that cannot connect and then re-fails
+    // its poll every few seconds with no sign-in affordance. Matches openInteractiveShell.
+    if (!CredentialCache.hasCredentials(node.cluster.clusterId)) {
+        void vscode.window.showErrorMessage(
+            l10n.t('Not signed in to {0}. Please authenticate first.', node.cluster.name),
+        );
+        return;
+    }
 
     // Extract viewId from the cluster model, or infer from treeId prefix
     // The viewId tells us which branch data provider owns this node

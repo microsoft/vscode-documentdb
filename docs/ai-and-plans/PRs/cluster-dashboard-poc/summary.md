@@ -126,15 +126,23 @@ panel for the same cluster after a drag-and-drop.
 
 ## Bug found by live testing
 
-`$currentOp` reports the server's own background threads (`Checkpointer`,
-`JournalFlusher`) as `op: "none"` against an empty namespace. These are not user
-operations and cannot be killed, but they made the **Active Operations tile read `3` on a
-completely idle cluster** — which would have been visible and confusing in the demo.
+Two separate things were inflating the Active Operations tile on an idle cluster:
 
-Commit `9015de8d` adds an `isUserOperation` filter (drop entries that are `op: 'none'`
-_and_ have no namespace) plus a regression test, and falls back to the connection
-description (`desc`, e.g. `conn4`) for the client column when `client`/`appName` are
-absent. This is the same filter Compass applies, for the same reason.
+1. `$currentOp` reports the server's own background threads (`Checkpointer`,
+   `JournalFlusher`) as `op: "none"` against an empty namespace.
+2. `$currentOp` also reports **the very aggregation issuing it**, so the dashboard was
+   watching itself — the tile floored at 1, the sparkline was a flat line at 1, and the
+   Operations tab carried a permanent phantom row whose Kill button would have terminated
+   the dashboard's own poll.
+
+Both are now filtered (`EXCLUDE_BACKGROUND_THREADS` as a `$match` **before** `$limit`, so
+background threads cannot consume the result budget and hide real user operations on a
+busy server; `isSelfInspectionQuery` for the self-op). Verified live: an idle cluster now
+reports `activeOperations = 0`, and a long-running `$where` scan is still listed and
+killable.
+
+`mapCurrentOp` also falls back to the connection description (`desc`, e.g. `conn4`) for
+the client column when `client`/`appName` are absent.
 
 ## Corrections to the source plan
 
@@ -178,8 +186,17 @@ Known gaps a reviewer should weigh before this is more than a demo:
   there; the `$currentOp` → `currentOp` → permissions-empty-state chain is implemented and
   unit-tested but never exercised against real vCore. This is the single most important
   thing to try before showing the dashboard to anyone on Azure.
-- **Duplicate `currentOp` polling** between the health sample and the Operations tab.
+- **Duplicate `currentOp` polling** between the health sample and the Operations tab, and
+  neither loop pauses while the panel is hidden.
 - **Refresh interval is a constant** (`DASHBOARD_REFRESH_INTERVAL_MS = 5000`), not a setting.
+- **Connection lifecycle is not wired up.** Deleting or re-authenticating a connection does
+  not close or invalidate an open dashboard (`removeConnection` clears credentials but does
+  not call `deleteClient`), and the dedup path returns the existing panel without refreshing
+  its title, so a renamed connection keeps a stale tab title.
+- **The router calls `ClustersClient.getClient` directly**, bypassing
+  `ClusterItemBase.beforeCachedClientConnect()`. Kubernetes port-forward setup therefore
+  never runs for a dashboard, so a k8s cluster (whose node does carry the context value the
+  menu item keys on) will fail to connect even though the tree works.
 
 ## Out of scope (deferred to post-POC)
 
