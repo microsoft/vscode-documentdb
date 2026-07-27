@@ -32,6 +32,7 @@ import { Fragment, useEffect, useRef, type JSX } from 'react';
 import { type IndexRow } from '../../types';
 import { formatBytes, formatOps } from '../../utils/format';
 import { classifyIndex } from '../../utils/indexType';
+import { vectorIndexSearchText } from '../../utils/vectorIndex';
 import { IndexPropertiesView } from './IndexPropertiesView';
 import { IndexRowDetails } from './IndexRowDetails';
 import { IndexStatusIndicator } from './IndexStatusIndicator';
@@ -101,6 +102,7 @@ function propertySortKey(index: IndexRow): string {
         index.partialFilterExpression !== undefined ? 'partial' : '',
         index.collation !== undefined ? 'collation' : '',
         index.wildcardProjection !== undefined ? 'wildcard' : '',
+        vectorIndexSearchText(index.vectorOptions),
     ]
         .filter(Boolean)
         .join(' ');

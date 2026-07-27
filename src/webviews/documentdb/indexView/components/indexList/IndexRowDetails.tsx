@@ -11,6 +11,7 @@ import { useTrpcClient } from '../../../../_integration/useTrpcClient';
 import '../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
 import { formatDate, formatOps, formatShellJson } from '../../utils/format';
+import { formatVectorAlgorithm } from '../../utils/vectorIndex';
 
 /**
  * Describe a single key entry: the compact glyph shown on the badge and the
@@ -35,8 +36,36 @@ function describeKeyType(direction: number | string): { glyph: string; label: st
             return { glyph: 'geoHaystack', label: l10n.t('geoHaystack (geospatial)') };
         case 'hashed':
             return { glyph: 'hashed', label: l10n.t('hashed') };
+        case 'cosmosSearch':
+            return { glyph: 'vector', label: l10n.t('vector') };
         default:
             return { glyph: String(direction), label: String(direction) };
+    }
+}
+
+function formatVectorSimilarity(similarity: string): string {
+    switch (similarity) {
+        case 'COS':
+            return l10n.t('Cosine (COS)');
+        case 'L2':
+            return l10n.t('Euclidean (L2)');
+        case 'IP':
+            return l10n.t('Inner product (IP)');
+        default:
+            return similarity;
+    }
+}
+
+function formatVectorCompression(compression: string | undefined): string {
+    switch (compression) {
+        case 'half':
+            return l10n.t('Half precision');
+        case 'pq':
+            return l10n.t('Product quantization');
+        case undefined:
+            return l10n.t('None');
+        default:
+            return compression;
     }
 }
 
@@ -118,6 +147,72 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
             </div>
 
             <dl className="detailFacts">
+                {index.vectorOptions?.kind && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Algorithm')}</dt>
+                        <dd>{formatVectorAlgorithm(index.vectorOptions.kind)}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.dimensions !== undefined && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Dimensions')}</dt>
+                        <dd>{index.vectorOptions.dimensions}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.similarity && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Similarity')}</dt>
+                        <dd>{formatVectorSimilarity(index.vectorOptions.similarity)}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.numLists !== undefined && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Lists')}</dt>
+                        <dd>{index.vectorOptions.numLists}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.m !== undefined && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Connections (m)')}</dt>
+                        <dd>{index.vectorOptions.m}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.efConstruction !== undefined && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Build candidates (efConstruction)')}</dt>
+                        <dd>{index.vectorOptions.efConstruction}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.maxDegree !== undefined && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Maximum degree')}</dt>
+                        <dd>{index.vectorOptions.maxDegree}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.lBuild !== undefined && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Build candidates (lBuild)')}</dt>
+                        <dd>{index.vectorOptions.lBuild}</dd>
+                    </div>
+                )}
+                {index.vectorOptions && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Compression')}</dt>
+                        <dd>{formatVectorCompression(index.vectorOptions.compression)}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.pqCompressedDims !== undefined && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Compressed dimensions')}</dt>
+                        <dd>{index.vectorOptions.pqCompressedDims}</dd>
+                    </div>
+                )}
+                {index.vectorOptions?.pqSampleSize !== undefined && (
+                    <div className="detailFact">
+                        <dt>{l10n.t('Training sample size')}</dt>
+                        <dd>{index.vectorOptions.pqSampleSize}</dd>
+                    </div>
+                )}
                 {index.statsAvailable && (
                     <div className="detailFact">
                         <dt>{l10n.t('Usage')}</dt>

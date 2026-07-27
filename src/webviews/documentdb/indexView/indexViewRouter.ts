@@ -32,9 +32,7 @@
  *         confirm DocumentDB behaviour and surface a better error if needed.
  *      2. `hideIndex` / `unhideIndex` rely on server-side `collMod`; gate them
  *         off for cluster tiers that don't support it.
- *      3. Search-index types (`$search`, vector) aren't surfaced — the table
- *         filter ignores them on purpose for v1.
- *      4. Edit-then-recreate flow is not implemented in the UI; the delete +
+ *      3. Edit-then-recreate flow is not implemented in the UI; the delete +
  *         create round-trip is the current workaround.
  * =============================================================================
  */
@@ -52,6 +50,7 @@ import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../
 import { FIELD_SUGGESTION_LIMIT } from './constants';
 import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema } from './indexCreation';
 import { type IndexRow } from './types';
+import { getVectorIndexOptions } from './utils/vectorIndex';
 
 export type RouterContext = BaseRouterContext & {
     /** Stable cluster identifier for cache/client lookups. */
@@ -85,6 +84,7 @@ function toIndexRow(
         partialFilterExpression: asRecord(raw.partialFilterExpression),
         collation: asRecord(raw.collation),
         wildcardProjection: asRecord(raw.wildcardProjection),
+        vectorOptions: getVectorIndexOptions(raw),
         sizeBytes,
         usageOps: usage?.ops,
         usageSince: usage?.since,

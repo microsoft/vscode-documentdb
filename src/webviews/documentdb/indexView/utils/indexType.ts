@@ -12,6 +12,8 @@ import {
 } from '../constants';
 import { type IndexRow, type IndexTypeBadge } from '../types';
 
+const VECTOR_INDEX_DIRECTION = 'cosmosSearch';
+
 /**
  * Classify an index into one of the display badge categories.
  *
@@ -30,6 +32,9 @@ export function classifyIndex(index: Pick<IndexRow, 'name' | 'key'>): IndexTypeB
     }
 
     for (const { field, direction } of index.key) {
+        if (direction === VECTOR_INDEX_DIRECTION) {
+            return 'Vector';
+        }
         if (direction === TEXT_INDEX_DIRECTION) {
             return 'Text';
         }

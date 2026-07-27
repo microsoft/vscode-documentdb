@@ -9,6 +9,7 @@ import { type JSX } from 'react';
 import '../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
 import { formatShellJson } from '../../utils/format';
+import { formatVectorAlgorithm } from '../../utils/vectorIndex';
 
 export interface IndexPropertiesViewProps {
     index: IndexRow;
@@ -47,6 +48,10 @@ export const IndexPropertiesView = ({ index }: IndexPropertiesViewProps): JSX.El
     }
     if (index.wildcardProjection) {
         badges.push({ label: l10n.t('Wildcard'), tooltip: formatShellJson(index.wildcardProjection) });
+    }
+    if (index.vectorOptions) {
+        const algorithm = formatVectorAlgorithm(index.vectorOptions.kind);
+        if (algorithm) badges.push({ label: algorithm });
     }
     if (index.hidden) badges.push({ label: l10n.t('Hidden') });
 

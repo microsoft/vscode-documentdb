@@ -6,6 +6,7 @@
 import * as l10n from '@vscode/l10n';
 import { useEffect, useMemo, useRef, useState, type JSX } from 'react';
 import { type IndexRow } from '../../types';
+import { vectorIndexSearchText } from '../../utils/vectorIndex';
 import { IndexListFilterBar, type QuickFilters } from './IndexListFilterBar';
 import { IndexTable, type IndexSortState } from './IndexTable';
 import { IndexTableSkeleton } from './IndexTableSkeleton';
@@ -140,7 +141,9 @@ export const IndexList = ({
             if (query) {
                 const nameMatch = index.name.toLowerCase().includes(query);
                 const fieldMatch = index.key.some((k) => k.field.toLowerCase().includes(query));
-                if (!nameMatch && !fieldMatch) {
+                const isVector = index.key.some((key) => key.direction === 'cosmosSearch');
+                const vectorMatch = isVector && `vector ${vectorIndexSearchText(index.vectorOptions)}`.includes(query);
+                if (!nameMatch && !fieldMatch && !vectorMatch) {
                     return false;
                 }
             }

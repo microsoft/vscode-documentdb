@@ -27,6 +27,8 @@ export interface IndexRow {
     collation?: Record<string, unknown>;
     /** Wildcard projection document (only present on wildcard indexes with a projection). */
     wildcardProjection?: Record<string, unknown>;
+    /** Known options reported for a DocumentDB vector index. */
+    vectorOptions?: VectorIndexOptions;
     /** Bytes consumed by this index in storage (from collStats.indexSizes). */
     sizeBytes?: number;
     /** Number of times the index has been used since `usageSince`. */
@@ -46,6 +48,21 @@ export interface IndexRow {
     state?: 'ready' | 'building' | 'creating';
 }
 
+/** Display-safe subset of the options returned in `cosmosSearchOptions`. */
+export interface VectorIndexOptions {
+    kind?: string;
+    dimensions?: number;
+    similarity?: string;
+    numLists?: number;
+    m?: number;
+    efConstruction?: number;
+    maxDegree?: number;
+    lBuild?: number;
+    compression?: string;
+    pqCompressedDims?: number;
+    pqSampleSize?: number;
+}
+
 /** Logical badge category used for the colour-coded Type column. */
 export type IndexTypeBadge =
     | 'Default'
@@ -55,7 +72,8 @@ export type IndexTypeBadge =
     | 'Text'
     | 'Geospatial'
     | 'Wildcard'
-    | 'Hashed';
+    | 'Hashed'
+    | 'Vector';
 
 /** Sort direction stored alongside a field in the create-index form. */
 export type SortDirection = 1 | -1;
