@@ -56,7 +56,13 @@ function createFakeClient(options: FakeClientOptions): {
                     if (!options.aggregate) {
                         return Promise.reject(new Error('$currentOp not supported'));
                     }
-                    return Promise.resolve(options.aggregate(pipeline));
+                    try {
+                        return Promise.resolve(options.aggregate(pipeline));
+                    } catch (error) {
+                        // Rejected rather than thrown synchronously, so a handler that
+                        // refuses a pipeline behaves like a real driver failure.
+                        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+                    }
                 },
             }),
             command: (command: Record<string, unknown>): Promise<unknown> => {
@@ -139,6 +145,54 @@ describe('sampleClusterHealth', () => {
         expect(sample.connectionsCurrent).toBe(12);
         expect(sample.opcounters).toEqual({ query: 5, insert: 2 });
         expect(sample.activeOperations).toBe(0);
+    });
+
+    it('issues every command of a sample concurrently', async () => {
+        // Run in sequence, an unreachable cluster pays the server-selection timeout once per
+        // command, so the header badge stays on "Connecting…" for minutes. This guards the
+        // failure case by observing the healthy one: all three must be in flight at once.
+        const started: string[] = [];
+        let release = (): void => {};
+        const gate = new Promise<void>((resolve) => {
+            release = resolve;
+        });
+
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                started.push(command.ping === 1 ? 'ping' : 'serverStatus');
+                return gate.then(() => ({ ok: 1, uptime: 1 }));
+            },
+            aggregate: () => {
+                started.push('currentOp');
+                return [];
+            },
+        });
+
+        const pending = sampleClusterHealth(client);
+
+        expect(started).toEqual(['ping', 'serverStatus', 'currentOp']);
+
+        release();
+        await pending;
+    });
+
+    it('keeps the error order stable regardless of which command fails first', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                // serverStatus answers immediately while the ping is still resolving, so a
+                // naive push-on-completion would report them out of order.
+                if (command.ping === 1) {
+                    return Promise.resolve().then(() => {
+                        throw new Error('ping failed');
+                    });
+                }
+                throw new Error('serverStatus failed');
+            },
+        });
+
+        const sample = await sampleClusterHealth(client);
+
+        expect(sample.errors.map(getFailedCommandName)).toEqual(['ping', 'serverStatus', '$currentOp', 'currentOp']);
     });
 });
 
@@ -277,6 +331,123 @@ describe('listCurrentOperations', () => {
 
         expect(result.operations).toEqual([]);
         expect(result.errors.map(getFailedCommandName)).toEqual(['$currentOp', 'currentOp']);
+    });
+
+    it('reports the cluster-wide scope when the privileged form succeeds', async () => {
+        const { client } = createFakeClient({ aggregate: () => [] });
+
+        const result = await listCurrentOperations(client);
+
+        expect(result.scope).toBe('all');
+    });
+
+    it('falls back to own operations when the cluster-wide forms are refused', async () => {
+        // A connection without the `inprog` privilege: both cluster-wide forms are refused,
+        // but the account may always see its own operations. Without the fallback the
+        // Operations tab is permanently empty on a least-privileged account.
+        const { client } = createFakeClient({
+            aggregate: (pipeline) => {
+                const stage = pipeline[0] as { $currentOp?: { allUsers?: boolean } };
+                if (stage.$currentOp?.allUsers === true) {
+                    throw new Error('not authorized on admin to execute command');
+                }
+                return [{ opid: 5, op: 'query', ns: 'sales.orders', active: true }];
+            },
+            adminCommand: () => {
+                throw new Error('not authorized on admin to execute command');
+            },
+        });
+
+        const result = await listCurrentOperations(client);
+
+        expect(result.scope).toBe('own');
+        expect(result.operations.map((operation) => operation.opid)).toEqual(['5']);
+        // A successful fallback is not an error — surfacing one would put a permanent
+        // warning on the tab of every cluster that only supports the narrower form.
+        expect(result.errors).toEqual([]);
+    });
+
+    it('uses $ownOps as the last resort when only the legacy command exists', async () => {
+        const { client, adminCommands } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.currentOp === 1 && command.$ownOps === true) {
+                    return { inprog: [{ opid: 'op-9', op: 'update', ns: 'sales.orders', active: true }] };
+                }
+                throw new Error('not authorized on admin to execute command');
+            },
+        });
+
+        const result = await listCurrentOperations(client);
+
+        expect(result.scope).toBe('own');
+        expect(result.operations.map((operation) => operation.opid)).toEqual(['op-9']);
+        expect(adminCommands).toContainEqual({ currentOp: 1, $ownOps: true });
+    });
+
+    it('stops after the first attempt when the cluster is unreachable', async () => {
+        // Every attempt would pay the full server-selection timeout, so a dead connection
+        // must cost one timeout rather than four — the sample interval depends on it.
+        let attempts = 0;
+        const { client } = createFakeClient({
+            aggregate: () => {
+                attempts += 1;
+                const error = new Error('Server selection timed out after 30000 ms');
+                error.name = 'MongoServerSelectionError';
+                throw error;
+            },
+            adminCommand: () => {
+                attempts += 1;
+                throw new Error('unexpected command');
+            },
+        });
+
+        const result = await listCurrentOperations(client);
+
+        expect(attempts).toBe(1);
+        expect(result.operations).toEqual([]);
+        expect(result.errors.map(getFailedCommandName)).toEqual(['$currentOp']);
+    });
+
+    it('redacts credential-bearing commands caught in flight', async () => {
+        // `currentOp` reports commands verbatim, and `commandPreview` is rendered in a
+        // webview tooltip. An authentication handshake or a user-management command caught
+        // mid-flight must never carry its secret across that boundary.
+        const { client } = createFakeClient({
+            aggregate: () => [
+                {
+                    opid: 1,
+                    op: 'command',
+                    ns: 'admin.$cmd',
+                    active: true,
+                    command: { saslStart: 1, payload: 'biwsbj1h' },
+                },
+                {
+                    opid: 2,
+                    op: 'command',
+                    ns: 'admin.$cmd',
+                    active: true,
+                    command: { createUser: 'alice', pwd: 'hunter2', roles: ['readWrite'] },
+                },
+                {
+                    opid: 3,
+                    op: 'command',
+                    ns: 'sales.$cmd',
+                    active: true,
+                    command: { find: 'orders', filter: { key: 'AKIAsecret' } },
+                },
+            ],
+        });
+
+        const result = await listCurrentOperations(client);
+        const previews = result.operations.map((operation) => operation.commandPreview);
+
+        expect(previews[0]).toBe('{"saslStart":"[redacted]"}');
+        expect(previews[1]).toBe('{"createUser":"[redacted]"}');
+        // A nested credential field is redacted without discarding the rest of the command,
+        // which is what makes the preview useful at all.
+        expect(previews[2]).toBe('{"find":"orders","filter":{"key":"[redacted]"}}');
+        expect(previews.join(' ')).not.toContain('hunter2');
+        expect(previews.join(' ')).not.toContain('biwsbj1h');
     });
 });
 

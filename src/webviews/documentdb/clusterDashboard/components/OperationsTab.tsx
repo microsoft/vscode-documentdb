@@ -20,7 +20,7 @@ import { ArrowClockwiseRegular, DismissCircleRegular } from '@fluentui/react-ico
 import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
-import { type CurrentOpEntry } from '../../../../documentdb/utils/getClusterHealth';
+import { type CurrentOpEntry, type CurrentOpScope } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { Announcer } from '../../../components/accessibility';
 
@@ -33,6 +33,7 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
     const trpcClient = useTrpcClient();
 
     const [operations, setOperations] = useState<CurrentOpEntry[] | null>(null);
+    const [scope, setScope] = useState<CurrentOpScope>('all');
     const [serverErrors, setServerErrors] = useState<string[]>([]);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [killingOpid, setKillingOpid] = useState<string | null>(null);
@@ -57,6 +58,7 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                 return;
             }
             setOperations(result.operations);
+            setScope(result.scope);
             setServerErrors(result.errors);
             setLoadError(null);
         } catch (error) {
@@ -158,6 +160,19 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                 <MessageBar intent="error">
                     <MessageBarBody>
                         {l10n.t('Could not read running operations: {reason}', { reason: loadError })}
+                    </MessageBarBody>
+                </MessageBar>
+            )}
+
+            {scope === 'own' && (
+                // The list is real but partial: without the `inprog` privilege the server
+                // only reports the signed-in user's operations. Saying so is the difference
+                // between a narrowed list and a wrong one.
+                <MessageBar intent="info">
+                    <MessageBarBody>
+                        {l10n.t(
+                            'Showing only your own operations. Listing every user’s operations requires the "inprog" privilege on this cluster.',
+                        )}
                     </MessageBarBody>
                 </MessageBar>
             )}

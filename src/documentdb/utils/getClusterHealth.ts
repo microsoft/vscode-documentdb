@@ -30,6 +30,40 @@ const COMMAND_PREVIEW_MAX_LENGTH = 2000;
 const SYSTEM_DATABASES = new Set(['admin', 'local', 'config']);
 
 /**
+ * Commands whose *entire* body is credential material, so only the command name survives
+ * into a preview. `saslStart`/`saslContinue` carry the SCRAM exchange in `payload`, and the
+ * user-management commands carry the cleartext password in `pwd`.
+ */
+const CREDENTIAL_COMMANDS = new Set([
+    'createuser',
+    'updateuser',
+    'saslstart',
+    'saslcontinue',
+    'authenticate',
+    'copydbsaslstart',
+    'copydbgetnonce',
+    'getnonce',
+]);
+
+/** Field names redacted wherever they appear in a command document, at any depth. */
+const CREDENTIAL_FIELDS = new Set([
+    'pwd',
+    'payload',
+    'key',
+    'speculativeauthenticate',
+    'credentials',
+    'salt',
+    'saltedpassword',
+    'clientkey',
+    'serverkey',
+    'storedkey',
+    'passwordhash',
+]);
+
+/** Marker substituted for redacted values. Data inside a JSON blob, so not localized. */
+const REDACTED_VALUE = '[redacted]';
+
+/**
  * Formats a failed command as `name: reason` for the sample's `errors` array.
  *
  * The sibling `getClusterMetadata.ts` records the message of every failed command
@@ -134,9 +168,23 @@ export interface CurrentOpEntry {
     commandPreview: string;
 }
 
+/**
+ * Breadth of a {@link listCurrentOperations} result.
+ *
+ * `'all'` — every user's operations. `'own'` — only the operations of the signed-in user,
+ * which is all a connection without the `inprog` privilege is allowed to see.
+ */
+export type CurrentOpScope = 'all' | 'own';
+
 /** Result of {@link listCurrentOperations}. */
 export interface CurrentOperationsResult {
     operations: CurrentOpEntry[];
+    /**
+     * Whether the returned list covers the whole cluster or only the caller's own
+     * operations. The dashboard says so explicitly rather than presenting a partial list
+     * as complete.
+     */
+    scope: CurrentOpScope;
     /** Names of the commands that failed while listing operations. */
     errors: string[];
 }
@@ -188,26 +236,48 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
 
     const adminDb = client.db().admin();
 
-    try {
-        const startedAt = performance.now();
-        await adminDb.command({ ping: 1 });
-        sample.pingLatencyMs = performance.now() - startedAt;
-    } catch (error) {
-        sample.errors.push(describeCommandFailure('ping', error));
-    }
+    // Issued concurrently rather than one after another. The commands are independent, and
+    // run in sequence an unreachable cluster pays the server-selection timeout once per
+    // command — several minutes before the header badge can leave "Connecting…", far longer
+    // than the polling interval. Concurrency can inflate the measured ping slightly, since
+    // the other commands compete for the same connection pool; a few milliseconds of noise
+    // on a latency reading is worth bounding the failure case to a single timeout.
+    const [pingError, serverStatusError, currentOperations] = await Promise.all([
+        (async (): Promise<string | null> => {
+            try {
+                const startedAt = performance.now();
+                await adminDb.command({ ping: 1 });
+                sample.pingLatencyMs = performance.now() - startedAt;
+                return null;
+            } catch (error) {
+                return describeCommandFailure('ping', error);
+            }
+        })(),
+        (async (): Promise<string | null> => {
+            try {
+                const serverStatus = await adminDb.command({ serverStatus: 1 });
+                sample.uptimeSeconds = toNumberOrNull(serverStatus.uptime);
+                sample.connectionsCurrent = toNumberOrNull(
+                    (serverStatus.connections as Record<string, unknown> | undefined)?.current,
+                );
+                sample.opcounters = toCounterRecord(serverStatus.opcounters);
+                return null;
+            } catch (error) {
+                // Expected on Azure DocumentDB (vCore): `serverStatus` is not supported there.
+                return describeCommandFailure('serverStatus', error);
+            }
+        })(),
+        listCurrentOperations(client),
+    ]);
 
-    try {
-        const serverStatus = await adminDb.command({ serverStatus: 1 });
-        sample.uptimeSeconds = toNumberOrNull(serverStatus.uptime);
-        sample.connectionsCurrent = toNumberOrNull(
-            (serverStatus.connections as Record<string, unknown> | undefined)?.current,
-        );
-        sample.opcounters = toCounterRecord(serverStatus.opcounters);
-    } catch (error) {
-        // Expected on Azure DocumentDB (vCore): `serverStatus` is not supported there.
-        sample.errors.push(describeCommandFailure('serverStatus', error));
+    // Collected after the fact so `errors` keeps a stable ping/serverStatus/currentOp order
+    // regardless of which command happened to finish first.
+    if (pingError !== null) {
+        sample.errors.push(pingError);
     }
-    const currentOperations = await listCurrentOperations(client);
+    if (serverStatusError !== null) {
+        sample.errors.push(serverStatusError);
+    }
     if (currentOperations.errors.length > 0) {
         sample.errors.push(...currentOperations.errors);
     } else {
@@ -217,10 +287,37 @@ export async function sampleClusterHealth(client: MongoClient): Promise<ClusterH
     return sample;
 }
 
+/**
+ * Serializes an in-flight command for the Operations tab tooltip, with credential material
+ * stripped first.
+ *
+ * `currentOp` reports commands verbatim, so an authentication handshake or a `createUser`
+ * caught mid-flight carries the SCRAM payload or a cleartext password. Serialized as-is it
+ * would cross the webview bridge and render in a tooltip — the repository forbids surfacing
+ * passwords or tokens, and a preview is never worth a credential.
+ */
+function buildCommandPreview(command: unknown): string {
+    if (typeof command !== 'object' || command === null) {
+        return '';
+    }
+
+    // The command name is the first key of the document, by wire-protocol convention.
+    const commandName = Object.keys(command)[0];
+    if (commandName !== undefined && CREDENTIAL_COMMANDS.has(commandName.toLowerCase())) {
+        return JSON.stringify({ [commandName]: REDACTED_VALUE });
+    }
+
+    return (
+        JSON.stringify(command, (key, value: unknown) =>
+            CREDENTIAL_FIELDS.has(key.toLowerCase()) ? REDACTED_VALUE : value,
+        ) ?? ''
+    );
+}
+
 function mapCurrentOp(op: Document): CurrentOpEntry {
     let commandPreview = '';
     try {
-        commandPreview = JSON.stringify(op.command ?? {}).slice(0, COMMAND_PREVIEW_MAX_LENGTH);
+        commandPreview = buildCommandPreview(op.command).slice(0, COMMAND_PREVIEW_MAX_LENGTH);
     } catch {
         commandPreview = '';
     }
@@ -289,58 +386,153 @@ function isSelfInspectionQuery(op: Document): boolean {
 }
 
 /**
+ * Names of the driver's connectivity error classes.
+ *
+ * Matched structurally rather than with `instanceof`, because importing them would be a
+ * *runtime* import of `mongodb`: the webview imports {@link getFailedCommandName} from this
+ * module as a value, and the extension bundles every webview into a single chunk, so a
+ * value import here drags the whole driver into the browser bundle.
+ */
+const CONNECTIVITY_ERROR_NAMES = new Set([
+    'MongoNetworkError',
+    'MongoNetworkTimeoutError',
+    'MongoServerSelectionError',
+    'MongoTopologyClosedError',
+    'MongoNotConnectedError',
+]);
+
+/**
+ * `true` when the cluster could not be reached at all, as opposed to reaching it and being
+ * refused. Only the former means retrying a different command form is pointless.
+ */
+function isConnectivityFailure(error: unknown): boolean {
+    const name = (error as { name?: unknown } | null)?.name;
+
+    return typeof name === 'string' && CONNECTIVITY_ERROR_NAMES.has(name);
+}
+
+/** One way of asking a server for its in-flight operations. */
+interface CurrentOpAttempt {
+    /**
+     * Command form, used verbatim as the `errors` label. Deliberately *not* the scope: two
+     * attempts that differ only in breadth fail for the same reason and produce the same
+     * string, which is then deduplicated into a single entry.
+     */
+    commandName: '$currentOp' | 'currentOp';
+    scope: CurrentOpScope;
+    run: (client: MongoClient) => Promise<Document[]>;
+}
+
+/**
+ * Ordered fallback chain for listing operations.
+ *
+ * Both cluster-wide forms require the `inprog` privilege, which a least-privileged account
+ * does not have — on such a connection the first two attempts fail and the Operations tab
+ * would otherwise be permanently empty. The own-operations forms need no privilege at all,
+ * so the tab degrades to a narrower list instead of nothing.
+ *
+ * Ordered by breadth first and command form second: a complete list from the legacy command
+ * is more useful than a self-only list from the modern one.
+ */
+const CURRENT_OP_ATTEMPTS: CurrentOpAttempt[] = [
+    {
+        commandName: '$currentOp',
+        scope: 'all',
+        run: (client) =>
+            client
+                .db('admin')
+                .aggregate([
+                    // `idleSessions` (not `idleConnections`, which already defaults to
+                    // false) is what keeps parked sessions out of the result.
+                    { $currentOp: { allUsers: true, idleConnections: false, idleSessions: false } },
+                    EXCLUDE_BACKGROUND_THREADS,
+                    { $limit: CURRENT_OP_LIMIT },
+                ])
+                .toArray(),
+    },
+    {
+        commandName: 'currentOp',
+        scope: 'all',
+        run: async (client) => {
+            const result = await client.db().admin().command({ currentOp: 1 });
+
+            return Array.isArray(result.inprog) ? (result.inprog as Document[]) : [];
+        },
+    },
+    {
+        commandName: '$currentOp',
+        scope: 'own',
+        run: (client) =>
+            client
+                .db('admin')
+                .aggregate([
+                    { $currentOp: { allUsers: false, idleConnections: false, idleSessions: false } },
+                    EXCLUDE_BACKGROUND_THREADS,
+                    { $limit: CURRENT_OP_LIMIT },
+                ])
+                .toArray(),
+    },
+    {
+        commandName: 'currentOp',
+        scope: 'own',
+        run: async (client) => {
+            const result = await client.db().admin().command({ currentOp: 1, $ownOps: true });
+
+            return Array.isArray(result.inprog) ? (result.inprog as Document[]) : [];
+        },
+    },
+];
+
+/**
  * Lists the operations currently running on the cluster.
  *
- * Prefers the `$currentOp` aggregation stage (the modern form, and the one Azure
- * DocumentDB documents as supported) and falls back to the legacy `currentOp` command.
- * The raw server documents are never returned — they are mapped to {@link CurrentOpEntry}
- * so the payload stays small.
+ * Walks {@link CURRENT_OP_ATTEMPTS} until one succeeds, so an unsupported command form or a
+ * missing `inprog` privilege narrows the result rather than emptying it. The raw server
+ * documents are never returned — they are mapped to {@link CurrentOpEntry} so the payload
+ * stays small.
  *
  * @param client - A connected MongoClient.
- * @returns The mapped operations, or an empty list plus the failed command names in `errors`.
+ * @returns The mapped operations and the breadth they cover, or an empty list plus the
+ *          failed command names in `errors`.
  */
 export async function listCurrentOperations(client: MongoClient): Promise<CurrentOperationsResult> {
     const errors: string[] = [];
 
-    try {
-        const documents = await client
-            .db('admin')
-            .aggregate([
-                // `idleSessions` (not `idleConnections`, which already defaults to false) is
-                // what keeps parked sessions out of the result.
-                { $currentOp: { allUsers: true, idleConnections: false, idleSessions: false } },
-                EXCLUDE_BACKGROUND_THREADS,
-                { $limit: CURRENT_OP_LIMIT },
-            ])
-            .toArray();
+    for (const attempt of CURRENT_OP_ATTEMPTS) {
+        try {
+            const documents = await attempt.run(client);
 
-        return {
-            // Also filtered client-side: the `$match` above is the load-bearing fix (it
-            // runs before `$limit`), but repeating it here keeps behaviour identical if a
-            // server ignores or rejects the stage, and matches the legacy path exactly.
-            operations: documents.filter((op) => isUserOperation(op) && !isSelfInspectionQuery(op)).map(mapCurrentOp),
-            errors,
-        };
-    } catch (error) {
-        errors.push(describeCommandFailure('$currentOp', error));
+            return {
+                // Filtered client-side as well as in the pipeline: the `$match` stage is the
+                // load-bearing fix (it runs before `$limit`), but repeating it here keeps
+                // behaviour identical if a server ignores or rejects the stage, and makes
+                // every attempt in the chain produce the same shape.
+                operations: documents
+                    .filter((op) => isUserOperation(op) && !isSelfInspectionQuery(op))
+                    .slice(0, CURRENT_OP_LIMIT)
+                    .map(mapCurrentOp),
+                scope: attempt.scope,
+                // A successful fallback is not an error: earlier attempts failing is the
+                // chain working as designed, and surfacing them would put a permanent
+                // warning on the tab of every cluster that only supports one form.
+                errors: [],
+            };
+        } catch (error) {
+            const description = describeCommandFailure(attempt.commandName, error);
+            if (!errors.includes(description)) {
+                errors.push(description);
+            }
+
+            // An unreachable cluster fails every attempt identically, each paying the full
+            // server-selection timeout. Stop at the first one so a dead connection costs a
+            // single timeout rather than four.
+            if (isConnectivityFailure(error)) {
+                break;
+            }
+        }
     }
 
-    try {
-        const result = await client.db().admin().command({ currentOp: 1 });
-        const inprog = Array.isArray(result.inprog) ? (result.inprog as Document[]) : [];
-
-        return {
-            operations: inprog
-                .filter((op) => isUserOperation(op) && !isSelfInspectionQuery(op))
-                .slice(0, CURRENT_OP_LIMIT)
-                .map(mapCurrentOp),
-            errors: [],
-        };
-    } catch (error) {
-        errors.push(describeCommandFailure('currentOp', error));
-    }
-
-    return { operations: [], errors };
+    return { operations: [], scope: 'all', errors };
 }
 
 /**

@@ -42,6 +42,50 @@ function extractHostName(hostInfoJson: string | undefined): string | null {
     }
 }
 
+/**
+ * Reads `topology_numberOfServers`, which `getClusterMetadata` stores as a string.
+ * Returns `null` for absent, blank, or non-numeric values so they render as the
+ * placeholder rather than being silently coerced into a topology claim.
+ */
+function parseServerCount(rawServerCount: string | undefined): number | null {
+    if (rawServerCount === undefined || rawServerCount.trim() === '') {
+        return null;
+    }
+
+    const parsed = Number(rawServerCount);
+
+    return Number.isFinite(parsed) ? parsed : null;
+}
+
+/**
+ * Describes the cluster's shape from the metadata `getClusterMetadata` collected.
+ *
+ * `topology_numberOfServers` is `hello.hosts.length`, and `hosts` is only present on a
+ * replica-set member: 0 means a genuine standalone (or a mongos, which the `isdbgrid`
+ * branch has already claimed), while 1 is a *single-member replica set* — a common local
+ * setup, and one that supports transactions and change streams, so calling it "Standalone"
+ * misinforms.
+ */
+function describeTopology(metadata: Record<string, string | undefined> | undefined): string {
+    if (metadata?.['topology_type'] === 'isdbgrid') {
+        return l10n.t('Sharded cluster');
+    }
+
+    const serverCount = parseServerCount(metadata?.['topology_numberOfServers']);
+
+    if (serverCount === null) {
+        return PLACEHOLDER;
+    }
+    if (serverCount === 0) {
+        return l10n.t('Standalone');
+    }
+    if (serverCount === 1) {
+        return l10n.t('Replica set (1 server)');
+    }
+
+    return l10n.t('Replica set ({count} servers)', { count: serverCount });
+}
+
 function DetailItem({ label, value }: { label: string; value: string }): JSX.Element {
     return (
         <div className="headerDetail">
@@ -77,15 +121,7 @@ export const HeaderCard = ({
     // standalone, emulator, and replica-set primary would render the literal word
     // 'unknown', and a mongos would render a raw wire token. Report the server count
     // instead, which is meaningful everywhere.
-    const serverCount = metadata?.['topology_numberOfServers'];
-    const topology =
-        metadata?.['topology_type'] === 'isdbgrid'
-            ? l10n.t('Sharded cluster')
-            : serverCount !== undefined && Number(serverCount) > 1
-              ? l10n.t('Replica set ({count} servers)', { count: serverCount })
-              : serverCount !== undefined
-                ? l10n.t('Standalone')
-                : PLACEHOLDER;
+    const topology = describeTopology(metadata);
 
     return (
         <Card className="headerCard" appearance="filled">
