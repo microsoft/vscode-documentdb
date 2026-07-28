@@ -9,11 +9,13 @@ import { z } from 'zod';
 
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import {
+    getClusterPrivileges,
     getStorageStats,
     killOperation,
     listCurrentOperations,
     sampleClusterHealth,
     type ClusterHealthSample,
+    type ClusterPrivileges,
     type ClusterStorageStats,
     type CurrentOperationsResult,
 } from '../../../documentdb/utils/getClusterHealth';
@@ -76,6 +78,18 @@ export const clusterDashboardRouter = router({
         const client = await ClustersClient.getClient(myCtx.clusterId);
 
         return sampleClusterHealth(client.getMongoClient());
+    }),
+
+    /**
+     * What the signed-in user is allowed to do. One-shot: privileges do not change during a
+     * session, and this only drives whether an action is offered, never whether data loads.
+     */
+    getPrivileges: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterPrivileges> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+
+        const client = await ClustersClient.getClient(myCtx.clusterId);
+
+        return getClusterPrivileges(client.getMongoClient());
     }),
 
     /** Storage breakdown for the Storage tab. */

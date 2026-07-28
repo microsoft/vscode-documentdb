@@ -189,6 +189,62 @@ export interface CurrentOperationsResult {
     errors: string[];
 }
 
+/** What the signed-in user is allowed to do, as far as the server will say. */
+export interface ClusterPrivileges {
+    /**
+     * Whether the user may terminate operations. `null` when the server did not report its
+     * privileges at all — the dashboard then leaves the action enabled and lets the server
+     * refuse, because disabling a button that would have worked is the worse error.
+     */
+    canKillOperations: boolean | null;
+    /** Names of the commands that failed while reading privileges. */
+    errors: string[];
+}
+
+/** The `killOp` privilege, as spelled in `connectionStatus.authInfo`. */
+const KILL_OPERATION_ACTION = 'killop';
+
+/**
+ * Reads the signed-in user's privileges.
+ *
+ * Used only to explain why an action is unavailable — never to decide whether a command is
+ * *supported*. The two are independent: an Azure DocumentDB (vCore) admin is granted the
+ * `serverStatus` action while the server rejects the command outright, so predicting
+ * capability from privileges would be wrong in both directions.
+ *
+ * @param client - A connected MongoClient.
+ * @returns The privileges that could be determined; unknowns stay `null` rather than
+ *          defaulting to "denied".
+ */
+export async function getClusterPrivileges(client: MongoClient): Promise<ClusterPrivileges> {
+    try {
+        const status = await client.db().admin().command({ connectionStatus: 1, showPrivileges: true });
+        const authInfo = status.authInfo as { authenticatedUserPrivileges?: unknown } | undefined;
+        const privileges = authInfo?.authenticatedUserPrivileges;
+
+        if (!Array.isArray(privileges)) {
+            // Reported nothing rather than reporting an empty set: not the same as "denied".
+            return { canKillOperations: null, errors: [] };
+        }
+
+        // Any resource, not just `{cluster: true}`, even though that is where servers put it
+        // today. Missing a grant filed elsewhere would disable a button that works, while an
+        // over-broad match at worst leaves it enabled for the server to refuse.
+        const canKillOperations = privileges.some((privilege) => {
+            const actions = (privilege as { actions?: unknown } | null)?.actions;
+
+            return (
+                Array.isArray(actions) &&
+                actions.some((action) => typeof action === 'string' && action.toLowerCase() === KILL_OPERATION_ACTION)
+            );
+        });
+
+        return { canKillOperations, errors: [] };
+    } catch (error) {
+        return { canKillOperations: null, errors: [describeCommandFailure('connectionStatus', error)] };
+    }
+}
+
 function toNumberOrNull(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }

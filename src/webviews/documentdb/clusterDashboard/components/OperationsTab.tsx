@@ -29,12 +29,59 @@ export interface OperationsTabProps {
     refreshIntervalMs: number;
 }
 
+/**
+ * Renders the per-row Kill button, explaining any reason it is unavailable.
+ *
+ * A disabled Fluent button emits no pointer events, so the tooltip is anchored on a
+ * wrapping span — without it the explanation would be unreachable, which is the whole point
+ * of showing one.
+ *
+ * `canKillOperations` is deliberately three-valued: `false` disables with an explanation,
+ * while `null` (the server did not report privileges) leaves the button enabled and lets
+ * the server refuse. Disabling on "unknown" would block an action that works.
+ */
+function renderKillButton(
+    operation: CurrentOpEntry,
+    killingOpid: string | null,
+    canKillOperations: boolean | null,
+    onKill: () => void,
+): JSX.Element {
+    const missingPrivilege = canKillOperations === false;
+    const button = (
+        <Button
+            appearance="subtle"
+            size="small"
+            icon={<DismissCircleRegular />}
+            disabled={operation.opid === '' || killingOpid !== null || missingPrivilege}
+            onClick={onKill}
+            aria-label={l10n.t('Kill operation {opid}', { opid: operation.opid })}
+        >
+            {l10n.t('Kill')}
+        </Button>
+    );
+
+    if (!missingPrivilege) {
+        return button;
+    }
+
+    return (
+        <Tooltip
+            content={l10n.t('Terminating operations requires the "killOp" privilege, which this account lacks.')}
+            relationship="description"
+        >
+            <span>{button}</span>
+        </Tooltip>
+    );
+}
+
 export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.Element => {
     const trpcClient = useTrpcClient();
 
     const [operations, setOperations] = useState<CurrentOpEntry[] | null>(null);
     const [scope, setScope] = useState<CurrentOpScope>('all');
     const [serverErrors, setServerErrors] = useState<string[]>([]);
+    /** `null` until known, and left `null` when the server does not report privileges. */
+    const [canKillOperations, setCanKillOperations] = useState<boolean | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [killingOpid, setKillingOpid] = useState<string | null>(null);
 
@@ -71,6 +118,23 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
         } finally {
             inFlightRef.current = false;
         }
+    }, [trpcClient]);
+
+    useEffect(() => {
+        // Read once per mount rather than on the poll: privileges do not change within a
+        // session, and a failure here must not disturb the operations list.
+        void trpcClient.clusterDashboard.getPrivileges
+            .query()
+            .then((privileges) => {
+                if (!disposedRef.current) {
+                    setCanKillOperations(privileges.canKillOperations);
+                }
+            })
+            .catch(() => {
+                // Deliberately silent, and deliberately leaves the state `null`: an
+                // unanswered privilege probe means "unknown", so Kill stays enabled and the
+                // server gets to decide.
+            });
     }, [trpcClient]);
 
     useEffect(() => {
@@ -218,16 +282,12 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                 <TableCell>{operation.active ? l10n.t('Yes') : l10n.t('No')}</TableCell>
                                 <TableCell>{operation.clientDescription ?? '—'}</TableCell>
                                 <TableCell>
-                                    <Button
-                                        appearance="subtle"
-                                        size="small"
-                                        icon={<DismissCircleRegular />}
-                                        disabled={operation.opid === '' || killingOpid !== null}
-                                        onClick={() => void handleKill(operation)}
-                                        aria-label={l10n.t('Kill operation {opid}', { opid: operation.opid })}
-                                    >
-                                        {l10n.t('Kill')}
-                                    </Button>
+                                    {renderKillButton(
+                                        operation,
+                                        killingOpid,
+                                        canKillOperations,
+                                        () => void handleKill(operation),
+                                    )}
                                 </TableCell>
                             </TableRow>
                         ))}

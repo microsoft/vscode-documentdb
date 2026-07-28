@@ -86,6 +86,45 @@ function describeTopology(metadata: Record<string, string | undefined> | undefin
     return l10n.t('Replica set ({count} servers)', { count: serverCount });
 }
 
+/**
+ * Names the product behind the connection.
+ *
+ * `hello.internal.kind` identifies an Azure DocumentDB server, and `domainInfo_api`
+ * distinguishes the vCore and RU offerings from the host suffix. Both are already collected
+ * by `getClusterMetadata`, so this costs no extra round trip. Returns `null` for a server
+ * that identifies as neither — a local emulator or a generic MongoDB server, where the row
+ * would add nothing over the version that is already shown.
+ */
+function describeProduct(metadata: Record<string, string | undefined> | undefined): string | null {
+    const kind = metadata?.['topology_hello_internal_kind'];
+    const api = metadata?.['domainInfo_api'];
+
+    if (kind === 'azuredocumentdb') {
+        return api ? l10n.t('Azure DocumentDB ({api})', { api }) : l10n.t('Azure DocumentDB');
+    }
+
+    return kind ?? null;
+}
+
+/**
+ * Formats `hello.internal.documentdb_versions`, which `getClusterMetadata` stores as a
+ * `;`-joined list (e.g. `1.114-0;1.115.0;12.1-1`). Reported verbatim rather than reduced to
+ * a single number: the entries are separate component versions, and picking one would be
+ * guessing which the reader cares about.
+ */
+function formatEngineVersions(rawVersions: string | undefined): string | null {
+    if (!rawVersions) {
+        return null;
+    }
+
+    const versions = rawVersions
+        .split(';')
+        .map((version) => version.trim())
+        .filter((version) => version.length > 0);
+
+    return versions.length > 0 ? versions.join(', ') : null;
+}
+
 function DetailItem({ label, value }: { label: string; value: string }): JSX.Element {
     return (
         <div className="headerDetail">
@@ -113,9 +152,34 @@ export const HeaderCard = ({
     const connectionAppearance =
         connectionState === 'connected' ? 'success' : connectionState === 'disconnected' ? 'danger' : 'warning';
 
+    // Rows the server may not answer at all. Azure DocumentDB (vCore) returns no
+    // `buildInfo.platform` and a `hostInfo` with empty `os`/`system` fields, so rendering
+    // these unconditionally left two of five rows showing a bare dash. They are dropped
+    // instead, and the product/engine rows below — which vCore *does* report — take their
+    // place. Nothing here arrives later in the session, so a row can never pop in.
+    const optionalDetails: Array<{ label: string; value: string }> = [];
+
+    const product = describeProduct(metadata);
+    if (product !== null) {
+        optionalDetails.push({ label: l10n.t('Product'), value: product });
+    }
+
+    const engineVersions = formatEngineVersions(metadata?.['topology_hello_internal_documentdb_versions']);
+    if (engineVersions !== null) {
+        optionalDetails.push({ label: l10n.t('Engine'), value: engineVersions });
+    }
+
+    const platform = metadata?.['serverInfo_platform'];
+    if (platform !== undefined && platform !== '') {
+        optionalDetails.push({ label: l10n.t('Platform'), value: platform });
+    }
+
+    const host = extractHostName(metadata?.['hostInfo_json']);
+    if (host !== null) {
+        optionalDetails.push({ label: l10n.t('Host'), value: host });
+    }
+
     const version = metadata?.['serverInfo_version'] ?? PLACEHOLDER;
-    const platform = metadata?.['serverInfo_platform'] ?? PLACEHOLDER;
-    const host = extractHostName(metadata?.['hostInfo_json']) ?? PLACEHOLDER;
 
     // `topology_type` is `hello.msg`, which only mongos sets ('isdbgrid'); every
     // standalone, emulator, and replica-set primary would render the literal word
@@ -141,9 +205,15 @@ export const HeaderCard = ({
             ) : (
                 <div className="headerDetails">
                     <DetailItem label={l10n.t('Server version')} value={version} />
-                    <DetailItem label={l10n.t('Platform')} value={platform} />
+                    {optionalDetails.map((detail) => (
+                        <DetailItem key={detail.label} label={detail.label} value={detail.value} />
+                    ))}
                     <DetailItem label={l10n.t('Topology')} value={topology} />
-                    <DetailItem label={l10n.t('Host')} value={host} />
+                    {/*
+                     * Kept even when empty, unlike the rows above: `uptimeSeconds` comes from
+                     * the live sample rather than the one-shot metadata, so it can arrive on
+                     * a later poll and must hold its place in the layout.
+                     */}
                     <DetailItem
                         label={l10n.t('Uptime')}
                         value={formatUptime(latestSample?.uptimeSeconds, PLACEHOLDER)}

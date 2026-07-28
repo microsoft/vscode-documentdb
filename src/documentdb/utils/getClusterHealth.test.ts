@@ -6,6 +6,7 @@
 import { type Document, type MongoClient } from 'mongodb';
 
 import {
+    getClusterPrivileges,
     getFailedCommandName,
     getStorageStats,
     killOperation,
@@ -545,6 +546,60 @@ describe('killOperation', () => {
         const { client } = createFakeClient({ adminCommand: () => ({ ok: 0 }) });
 
         await expect(killOperation(client, '42', true)).resolves.toBe(false);
+    });
+});
+
+describe('getClusterPrivileges', () => {
+    it('finds the killOp privilege in the cluster resource grant', async () => {
+        // Shape taken from a live Azure DocumentDB (vCore) cluster.
+        const { client, adminCommands } = createFakeClient({
+            adminCommand: () => ({
+                authInfo: {
+                    authenticatedUserRoles: [{ role: 'root', db: 'admin' }],
+                    authenticatedUserPrivileges: [
+                        { resource: { db: '', collection: '' }, actions: ['find', 'insert'] },
+                        { resource: { cluster: true }, actions: ['getLog', 'killop', 'listDatabases'] },
+                    ],
+                },
+            }),
+        });
+
+        const privileges = await getClusterPrivileges(client);
+
+        expect(privileges.canKillOperations).toBe(true);
+        expect(privileges.errors).toEqual([]);
+        expect(adminCommands).toEqual([{ connectionStatus: 1, showPrivileges: true }]);
+    });
+
+    it('reports the privilege as absent when no grant carries it', async () => {
+        const { client } = createFakeClient({
+            adminCommand: () => ({
+                authInfo: {
+                    authenticatedUserPrivileges: [{ resource: { cluster: true }, actions: ['listDatabases'] }],
+                },
+            }),
+        });
+
+        await expect(getClusterPrivileges(client)).resolves.toMatchObject({ canKillOperations: false });
+    });
+
+    it('stays unknown rather than denied when the server reports no privileges', async () => {
+        // "Did not say" is not "said no": disabling Kill here would block an action that
+        // works, so the button stays enabled and the server gets to refuse.
+        const { client } = createFakeClient({
+            adminCommand: () => ({ authInfo: { authenticatedUserRoles: [{ role: 'root', db: 'admin' }] } }),
+        });
+
+        await expect(getClusterPrivileges(client)).resolves.toEqual({ canKillOperations: null, errors: [] });
+    });
+
+    it('stays unknown when the command itself fails', async () => {
+        const { client } = createFakeClient({});
+
+        const privileges = await getClusterPrivileges(client);
+
+        expect(privileges.canKillOperations).toBeNull();
+        expect(privileges.errors.map(getFailedCommandName)).toEqual(['connectionStatus']);
     });
 });
 
