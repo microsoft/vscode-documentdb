@@ -3,8 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { getConfirmationAsInSettings } from './getConfirmation';
 
 /** Which index operation is being confirmed. */
 export type IndexActionKind = 'delete' | 'hide' | 'unhide';
@@ -45,11 +47,16 @@ function copyFor(kind: IndexActionKind): { title: string; actionLabel: string; e
 }
 
 /**
- * Confirm a delete / hide / unhide of an index via a single, consistent modal
- * VS Code dialog. The body lists the index name (and collection when provided),
- * its size and usage — one per line — followed by a short note describing the
- * effect. Shared by the Index Management webview and the tree-view commands so
- * every entry point offers the same level of detail and the same interaction.
+ * Confirm a delete / hide / unhide of an index. The body lists the index name
+ * (and collection when provided), its size and usage — one per line — followed
+ * by a short note describing the effect. Shared by the Index Management webview
+ * and the tree-view commands so every entry point offers the same level of detail.
+ *
+ * Deletion is irreversible and therefore routes through
+ * `getConfirmationAsInSettings`, honoring the user's configured destructive-action
+ * confirmation style (word / challenge / click) just like `deleteCollection` and
+ * `deleteDatabase`. The reversible hide / unhide actions keep the lighter
+ * single-click warning modal.
  *
  * @returns `true` when the user confirms the action, `false` when they cancel.
  */
@@ -72,6 +79,25 @@ export async function confirmIndexAction(
     );
     const detail = lines.join('\n');
 
+    // Deletion is irreversible, so honor the user's configured destructive-action
+    // confirmation style (word / challenge / click) exactly like deleteCollection and
+    // deleteDatabase. `getConfirmationAsInSettings` throws UserCancelledError when the
+    // user dismisses the word-confirmation input box; translate that into `false` so the
+    // shared boolean contract (true = confirmed, false = cancelled) holds for every caller.
+    if (kind === 'delete') {
+        try {
+            return await getConfirmationAsInSettings(title, detail, details.indexName, {
+                fallbackWord: 'delete',
+            });
+        } catch (error) {
+            if (error instanceof UserCancelledError) {
+                return false;
+            }
+            throw error;
+        }
+    }
+
+    // Hide / unhide are reversible, so they keep the lighter single-click modal.
     const result = await vscode.window.showWarningMessage(title, { modal: true, detail }, actionLabel);
     return result === actionLabel;
 }
