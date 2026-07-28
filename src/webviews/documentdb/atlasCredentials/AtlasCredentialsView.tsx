@@ -338,7 +338,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 </Text>
                 <div>
                     <Text className={styles.muted}>
-                        {l10n.t('Connect MongoDB Atlas so DocumentDB can discover your clusters.')}
+                        {l10n.t('Connect MongoDB Atlas to discover your clusters.')}
                     </Text>
                 </div>
             </div>
@@ -415,7 +415,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 <Text id="atlas-auth-method-heading" as="h2" size={500} weight="semibold">
                     {l10n.t('Choose an authentication method')}
                 </Text>
-                <Text className={styles.muted}>{l10n.t('Pick how DocumentDB signs in to MongoDB Atlas.')}</Text>
+                <Text className={styles.muted}>{l10n.t('Pick how we sign in to MongoDB Atlas.')}</Text>
             </div>
             <div className={styles.cardGrid} role="group" aria-labelledby="atlas-auth-method-heading">
                 {methodCard(
