@@ -155,6 +155,8 @@ disabledFocusable={isProtected || isPending || isBusy}
 - Alternative: guard inside the handlers (`if (busyNames.has(name)) return;`) — belt-and-suspenders but gives no visible signal.
 - **Best choice:** add `isBusy` to `disabledFocusable` on both buttons (optionally plus the handler guard as defense in depth). The UI-level fix gives the clearest feedback with the least code.
 
+> **RESOLVED (2026-07-28)** — commit [`414b44e`](https://github.com/microsoft/vscode-documentdb/commit/414b44ee7a78b202a0a1955d27afc4472500636d). Both the Delete and Hide/Unhide action buttons now include the existing `isBusy` (derived from `busyNames`) in their `disabledFocusable` condition (`isProtected || isPending || isBusy`). Using `disabledFocusable` keeps the button focusable so its tooltip/disabled reason stays reachable, while a second mutation cannot be dispatched during the in-flight op and the minimum-spinner tail.
+
 ### LOW-2: Accepted comments in raw advanced options can break generated Shell/Playground commands
 
 Disposition: **To be done (must fix).** Executable-code wrappers must serialize or isolate every embedded fragment safely, even when the current producer generates that fragment from trusted structured UI state.
