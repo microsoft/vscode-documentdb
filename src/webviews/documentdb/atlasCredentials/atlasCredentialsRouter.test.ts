@@ -24,6 +24,18 @@ jest.mock('@vscode/l10n', () => ({
     ),
 }));
 
+jest.mock('../../../extensionVariables', () => ({
+    ext: {
+        outputChannel: {
+            error: jest.fn(),
+            warn: jest.fn(),
+            info: jest.fn(),
+            trace: jest.fn(),
+            show: jest.fn(),
+        },
+    },
+}));
+
 jest.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
     class AtlasApiErrorMock extends Error {
         constructor(
@@ -147,5 +159,25 @@ describe('atlasCredentialsRouter', () => {
         await caller.complete();
 
         expect(context.onCredentialsStored).toHaveBeenCalledTimes(1);
+    });
+
+    it('trims surrounding whitespace from submitted credentials before validating and storing', async () => {
+        mockListProjects.mockResolvedValue([]);
+        mockUpsertAtlasCredential.mockResolvedValue({
+            created: true,
+            record: { id: 'credential-1', authMethod: 'apikey', order: 0 },
+        });
+        const context = createContext();
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        await expect(
+            caller.submitApiKey({ publicKey: '  abcdef12  ', privateKey: '\t private-key \n' }),
+        ).resolves.toEqual({ success: true });
+
+        // The stored secret carries no leading/trailing whitespace.
+        expect(mockUpsertAtlasCredential).toHaveBeenCalledWith(
+            { authMethod: 'apikey', publicKey: 'abcdef12', privateKey: 'private-key' },
+            {},
+        );
     });
 });

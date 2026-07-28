@@ -31,6 +31,7 @@ import {
 } from '../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { ext } from '../../../extensionVariables';
 
 /**
  * Context for the MongoDB Atlas credential webview. Carries the target credential (when updating)
@@ -79,6 +80,32 @@ export type SubmitResult =
     | { readonly success: false; readonly error: CredentialSubmitError; readonly failedStage: number };
 
 /**
+ * Logs the full, raw verification failure to the extension output channel at error level (so it is
+ * visible without raising the log level). The user reaches it from the error MessageBar's "Show
+ * details" action. Includes the backend `detail`/`errorCode` verbatim so a support report is
+ * actionable, while the inline UI keeps a short, friendly message.
+ */
+function logVerificationFailure(authMethod: 'apikey' | 'serviceaccount', error: unknown): void {
+    let raw: string;
+    if (error instanceof AtlasApiError) {
+        const parts = [`status=${String(error.statusCode)}`];
+        if (error.errorCode) {
+            parts.push(`errorCode=${error.errorCode}`);
+        }
+        if (error.detail) {
+            parts.push(`detail=${error.detail}`);
+        }
+        parts.push(`message=${error.message}`);
+        raw = parts.join(' ');
+    } else if (error instanceof Error) {
+        raw = error.stack ?? error.message;
+    } else {
+        raw = String(error);
+    }
+    ext.outputChannel.error(`MongoDB Atlas credential verification failed [${authMethod}]: ${raw}`);
+}
+
+/**
  * Builds a user-facing message for a MongoDB Atlas API rejection, adding the
  * Access-List / permissions hint for authentication failures (401/403).
  */
@@ -88,6 +115,7 @@ async function describeAtlasError(
     authMethod: 'apikey' | 'serviceaccount',
     clientId?: string,
 ): Promise<CredentialSubmitError> {
+    logVerificationFailure(authMethod, error);
     const isNetworkError =
         error instanceof TypeError ||
         (error instanceof Error && /network|fetch failed|ENOTFOUND|ECONNREFUSED|ETIMEDOUT/i.test(error.message));
@@ -203,8 +231,8 @@ export const atlasCredentialsRouter = router({
     submitApiKey: publicProcedureWithTelemetry
         .input(
             z.object({
-                publicKey: z.string().min(1),
-                privateKey: z.string().min(1),
+                publicKey: z.string().trim().min(1),
+                privateKey: z.string().trim().min(1),
             }),
         )
         .mutation(async ({ input, ctx }): Promise<SubmitResult> => {
@@ -239,8 +267,8 @@ export const atlasCredentialsRouter = router({
     submitServiceAccount: publicProcedureWithTelemetry
         .input(
             z.object({
-                clientId: z.string().min(1),
-                clientSecret: z.string().min(1),
+                clientId: z.string().trim().min(1),
+                clientSecret: z.string().trim().min(1),
             }),
         )
         .mutation(async ({ input, ctx }): Promise<SubmitResult> => {
@@ -316,5 +344,10 @@ export const atlasCredentialsRouter = router({
         if (myCtx.credentialsStored) {
             myCtx.onCredentialsStored();
         }
+    }),
+
+    /** Reveals the extension's output channel, where the full verification error was logged. */
+    showLog: publicProcedureWithTelemetry.mutation((): void => {
+        ext.outputChannel.show();
     }),
 });

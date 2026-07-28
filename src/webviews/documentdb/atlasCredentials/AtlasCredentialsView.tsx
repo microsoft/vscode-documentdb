@@ -251,6 +251,10 @@ export const AtlasCredentialsView = (): JSX.Element => {
         [trpcClient],
     );
 
+    const showDetails = useCallback((): void => {
+        void trpcClient.atlasCredentials.showLog.mutate();
+    }, [trpcClient]);
+
     const handleBack = useCallback((): void => {
         setSubmitError(undefined);
         setShowSecret(false);
@@ -348,7 +352,10 @@ export const AtlasCredentialsView = (): JSX.Element => {
         <Breadcrumb aria-label={l10n.t('Progress')}>
             {steps.map((step, index) => {
                 const isCurrent = index === currentStepIndex;
-                const isCompleted = index < currentStepIndex || (step.id === 'success' && isCurrent);
+                // "Choose method" opens pre-satisfied (a default method is always selected), so it
+                // carries a check from the start - an exception unique to the first step.
+                const isCompleted =
+                    step.id === 'choose' || index < currentStepIndex || (step.id === 'success' && isCurrent);
                 const canNavigate =
                     index < currentStepIndex && !stepsLocked && (step.id === 'choose' || step.id === 'form');
                 return (
@@ -484,17 +491,20 @@ export const AtlasCredentialsView = (): JSX.Element => {
     );
 
     const errorMessage = submitError ? (
-        <MessageBar intent="error" layout="multiline">
+        <MessageBar intent="error" layout="multiline" icon={<ErrorCircleFilled />}>
             <MessageBarBody>
                 <MessageBarTitle>{submitError.title}</MessageBarTitle> {submitError.message}
             </MessageBarBody>
-            {submitError.action && (
-                <MessageBarActions>
+            <MessageBarActions>
+                {submitError.action && (
                     <Button appearance="secondary" onClick={() => openLink(submitError.action!.url)}>
                         {submitError.action.label}
                     </Button>
-                </MessageBarActions>
-            )}
+                )}
+                <Button appearance="secondary" onClick={showDetails}>
+                    {l10n.t('Show details')}
+                </Button>
+            </MessageBarActions>
         </MessageBar>
     ) : null;
 
