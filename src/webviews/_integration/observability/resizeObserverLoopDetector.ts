@@ -40,11 +40,22 @@ const BURST_THRESHOLD = 5;
 /**
  * Install the sustained-loop detector on `window`. Safe to call once at webview
  * bootstrap; a no-op when there is no `window` (e.g. under tests).
+ *
+ * Installation is idempotent: a `window`-scoped sentinel survives HMR / React
+ * Refresh module replacement in development, so re-executing the entry module
+ * never stacks a second capture-phase listener (which would keep its own rate
+ * counter and duplicate the once-per-burst warning).
  */
 export function installResizeObserverLoopDetector(): void {
     if (typeof window === 'undefined') {
         return;
     }
+
+    const flaggedWindow = window as Window & { __documentDBResizeObserverLoopDetectorInstalled?: boolean };
+    if (flaggedWindow.__documentDBResizeObserverLoopDetectorInstalled) {
+        return;
+    }
+    flaggedWindow.__documentDBResizeObserverLoopDetectorInstalled = true;
 
     let windowStart = 0;
     let count = 0;
