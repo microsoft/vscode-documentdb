@@ -4,18 +4,20 @@ Review date: 2026-07-27
 
 Reassessed: 2026-07-28 (vector-limit source and generated-command comment handling)
 
+Independent re-review: 2026-07-28 (second reviewer). Every finding below was re-verified against the current branch; all six original findings are confirmed and none were fabricated. Severities were revisited and left unchanged, except that one new **Medium** finding (MEDIUM-2) was added. Per-finding **Reviewer verification & recommended solution** blocks with code-level directions, trade-offs, and a recommended pick were added inline.
+
 PR: https://github.com/microsoft/vscode-documentdb/pull/732
 
 Baseline: `origin/main` (`c745a327`) ... `dev/khelanmodi/index-management-ui` (`d0854f25`)
 
 ## Severity summary
 
-| Severity | Count | Summary                                                                                                                                             |
-| -------- | ----: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Critical |     0 | No extension-wide outage, confirmed data-loss path, or security boundary break found.                                                               |
-| High     |     0 | No issue met the bar for broad or difficult-to-recover user harm.                                                                                   |
-| Medium   |     1 | Index deletion bypasses the configured destructive-action confirmation style.                                                                       |
-| Low      |     5 | Repeatable in-flight actions, a shell-command rendering edge case, host-schema defense gaps, one screen-reader issue, and a dev-only listener leak. |
+| Severity | Count | Summary                                                                                                                                                                                        |
+| -------- | ----: | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Critical |     0 | No extension-wide outage, confirmed data-loss path, or security boundary break found.                                                                                                          |
+| High     |     0 | No issue met the bar for broad or difficult-to-recover user harm.                                                                                                                              |
+| Medium   |     2 | Index deletion bypasses the configured destructive-action confirmation style (MEDIUM-1); sustained background build-poll failures spam an error toast every 5s (MEDIUM-2, added on re-review). |
+| Low      |     5 | Repeatable in-flight actions, a shell-command rendering edge case, host-schema defense gaps, one screen-reader issue, and a dev-only listener leak.                                            |
 
 ## Review scope
 
@@ -56,6 +58,67 @@ The feature overview documents this as a deliberate consistency tradeoff. That e
 
 Suggested direction: retain the rich size/usage/effect text, but route `kind: 'delete'` through `getConfirmationAsInSettings`. Hide and unhide are reversible and can continue using the shared click modal if that consistency is preferred.
 
+**Reviewer verification & recommended solution (2026-07-28):** Confirmed. `git show origin/main:src/commands/index.dropIndex/dropIndex.ts` used `getConfirmationAsInSettings(...)`; both the tree command and [indexViewRouter.ts](../../../../src/webviews/documentdb/indexView/indexViewRouter.ts#L342-L365) now call single-button `confirmIndexAction('delete', …)`. The setting default is `wordConfirmation` and its description explicitly covers "operations that cannot be undone, such as deleting resources". Severity **Medium** kept. One nuance: an index carries no data, so "cannot be undone" overstates harm relative to `deleteCollection`/`deleteDatabase`; the finding stands on the "silently overrides a public safety preference" basis rather than data loss.
+
+Route only `kind: 'delete'` through the shared gate while keeping the rich detail text; leave reversible hide/unhide on the click modal:
+
+```ts
+// confirmIndexAction.ts
+if (kind === 'delete') {
+  // Reuse the tested gate used by deleteCollection/deleteDatabase (word / challenge / click).
+  return getConfirmationAsInSettings(title, detail, details.indexName, { fallbackWord: l10n.t('delete') });
+}
+const result = await vscode.window.showWarningMessage(title, { modal: true, detail }, actionLabel);
+return result === actionLabel;
+```
+
+- Why it works: restores the pre-PR contract and reuses the same helper every other destructive command uses; `fallbackWord` handles index names outside `[a-zA-Z]` or longer than the limit.
+- Pros: consistent with sibling delete commands; respects the default word gate; keeps hide/unhide friction-free. Cons: word/challenge modes present the size/usage detail more plainly (input-box `prompt` vs modal `detail`); delete loses exact visual parity with hide/unhide.
+- Alternatives: (a) add a separate opt-in setting for strict index-delete — extra config, doesn't fix the default regression; (b) always word-confirm delete regardless of setting — ignores users who chose click confirmation.
+- **Best choice:** route `delete` through `getConfirmationAsInSettings`. It removes the regression, restores cross-command consistency, and the plainer presentation is an acceptable, well-precedented trade-off.
+
+### MEDIUM-2: Sustained background build-poll failures spam an error toast every 5 seconds
+
+Added on independent re-review (2026-07-28). Not present in the original report.
+
+Files:
+
+- [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L243-L296)
+- [IndexesTab.tsx](../../../../src/webviews/documentdb/indexView/IndexesTab.tsx#L374-L394)
+
+While any row is `building` or `creating`, the poll re-arms every `BUILD_POLL_INTERVAL_MS` (5s). `refresh()`'s catch block calls `showError(...)` unconditionally (only gated by the generation guard) and does not distinguish `source === 'background'` from `manual`:
+
+```ts
+} catch (error) {
+    if (generation === refreshGenerationRef.current) {
+        setLoadFailed(true);
+        showError(l10n.t('Failed to load indexes.'), error); // fires on EVERY background poll
+        ...
+```
+
+Scenario: an index is building and the cluster becomes briefly unreachable (sleep / VPN drop / tier hiccup). The rows stay `building`, so `active` stays true and the poll re-arms indefinitely, stacking a "Failed to load indexes." notification every 5 seconds until the connection returns or the user hits refresh. VS Code does not de-dupe these. The original report lists "build polling re-arms after failed attempts" as a positive non-finding; it missed that the same re-arm turns a transient outage into notification spam.
+
+This is **Medium**: no data harm, but a real, user-visible nuisance loop on the normal path.
+
+Suggested direction: suppress the toast for background polls; keep the inline `loadFailed` banner. `shouldAnnounce` is already computed (`initial || source === 'manual'`) and is exactly the right gate:
+
+```ts
+} catch (error) {
+    if (generation === refreshGenerationRef.current) {
+        setLoadFailed(true);
+        if (shouldAnnounce) {                 // initial or manual only
+            showError(l10n.t('Failed to load indexes.'), error);
+            announce(l10n.t('Could not load indexes.'), 'assertive');
+        }
+    }
+}
+```
+
+- Why it works: background failures update the inline `loadFailed` state (banner) without stacking toasts; manual/initial loads still surface the error.
+- Pros: minimal change, reuses an existing signal, preserves the visible banner. Cons: a purely-background failure becomes silent except for the banner — acceptable since the user did not initiate it.
+- Alternative: latch the toast to fire only on the first background failure (false→true transition of `loadFailed`) — more code, marginal benefit.
+- **Best choice:** gate the toast on `shouldAnnounce`. Smallest correct fix and consistent with the existing announce policy.
+
 ### LOW-1: Busy rows leave destructive and visibility actions enabled
 
 Files:
@@ -75,6 +138,18 @@ Scenario:
 This is **Low** because every request still has a confirmation, and the server should reject a duplicate operation rather than corrupt state. It is nevertheless a real concurrency bug in the row state machine.
 
 Suggested direction: include `isBusy` in both buttons' `disabledFocusable` conditions. That keeps the disabled reason focusable while making the spinner state operationally inert.
+
+**Reviewer verification & recommended solution (2026-07-28):** Confirmed. [IndexTable.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTable.tsx#L340-L370) uses `disabledFocusable={isProtected || isPending}` on both action buttons — `isBusy` is omitted. `handleDelete`/`handleToggleHidden` call `addBusy(name)` before the mutation, but the host confirmation modal blocks the window, so the practical duplicate-dispatch window is after confirming, during the server op plus the `MIN_ACTION_VISIBLE_MS` tail. Severity **Low** kept.
+
+```tsx
+// IndexTable.tsx — both action buttons
+disabledFocusable={isProtected || isPending || isBusy}
+```
+
+- Why it works: `isBusy` already derives from `busyNames`; adding it to `disabledFocusable` (not `disabled`) keeps the button focusable so the tooltip/disabled reason stays reachable while a second dispatch is impossible during the in-flight op and tail.
+- Pros: one line, existing state, keyboard/AT friendly. Cons: brief "disabled" appearance during the success tail; negligible.
+- Alternative: guard inside the handlers (`if (busyNames.has(name)) return;`) — belt-and-suspenders but gives no visible signal.
+- **Best choice:** add `isBusy` to `disabledFocusable` on both buttons (optionally plus the handler guard as defense in depth). The UI-level fix gives the clearest feedback with the least code.
 
 ### LOW-2: Accepted comments in raw advanced options can break generated Shell/Playground commands
 
@@ -107,6 +182,23 @@ This is **Low** because it affects the optional Shell/Playground handoff for a n
 
 The generated command does not need to retain comments. Suggested direction: render the parsed value with a shell-BSON serializer that preserves BSON values but omits comments, or place generated closing delimiters on a new line outside a trailing line comment. Add parity tests so direct creation and the two handoffs accept the same advanced input.
 
+**Reviewer verification & recommended solution (2026-07-28):** Confirmed, and the scope is exactly `partialFilterExpression` and `collation`: [CreateIndexDrawer.tsx](../../../../src/webviews/documentdb/indexView/components/CreateIndexDrawer.tsx#L665-L705) forwards those two as raw `.trim()` text, while `wildcardProjection` is sent as `JSON.stringify(wildcardProjectionObject)` (structured, comment-free through the UI). [indexCreation.ts](../../../../src/webviews/documentdb/indexView/indexCreation.ts#L398-L410) embeds the raw option text and appends `})` on the same physical line, so a `//` line comment swallows the delimiters. Severity **Low** kept; disposition remains must-fix (issue #817).
+
+Two viable directions:
+
+```ts
+// (a) Re-serialize the already-parsed object (preserves BSON constructors, drops comments)
+import { toJSString } from 'mongodb-query-parser';
+optionEntries.push(`${JSON.stringify('partialFilterExpression')}:${toJSString(partialFilterExpression)}`);
+
+// (b) Multi-line the options object so closing delimiters sit on their own line
+return `db.getCollection(${collection}).createIndex(${keyJson}, {\n${optionEntries.join(',\n')}\n})`;
+```
+
+- (a) Pros: correct for any comment style and whitespace; keeps `ISODate(...)`/`NumberLong(...)`. Cons: adds/relies on `mongodb-query-parser` and needs a round-trip check against the loose parser's accepted input.
+- (b) Pros: zero deps, tiny change. Cons: does not neutralize an unterminated block comment (`/* …`) and preserves the comment text in the handoff.
+- **Best choice:** (a) re-serialize, because the stated requirement (#817) is to "serialize or isolate every embedded fragment safely"; (b) is an acceptable stopgap if adding a dependency is undesirable. Pair either with parity tests asserting direct-create and both handoffs accept the same commented advanced input.
+
 ### LOW-3: The host schema can reinterpret malformed vector requests and accepts whitespace-only fields
 
 File: [indexCreation.ts](../../../../src/webviews/documentdb/indexView/indexCreation.ts#L50-L64), [indexCreation.ts](../../../../src/webviews/documentdb/indexView/indexCreation.ts#L193-L200), [indexCreation.ts](../../../../src/webviews/documentdb/indexView/indexCreation.ts#L237-L242)
@@ -120,6 +212,28 @@ The current UI constructs disjoint payloads and trims its fields, so these are n
 
 Suggested direction: make each union member strict (or otherwise forbid `kind` on field-keyed payloads), and validate `field.trim().length > 0` at the host boundary. Tests should cover mixed-shape vector payloads and whitespace-only standard/vector fields.
 
+**Reviewer verification & recommended solution (2026-07-28):** Confirmed. [indexCreation.ts](../../../../src/webviews/documentdb/indexView/indexCreation.ts#L242-L246) defines `CreateIndexInputSchema = z.union([VectorCreateIndexInputSchema, FieldCreateIndexInputSchema])`; the field member is a plain (non-strict) `z.object` that strips an unknown `kind`, and both field schemas use `z.string().min(1)` (accepts whitespace). Reachable only via a crafted/stale RPC (the drawer emits disjoint, trimmed payloads), so defense-in-depth **Low** kept.
+
+```ts
+const FieldCreateIndexInputSchema = z
+  .object({
+    fields: z
+      .array(
+        z.object({
+          field: z.string().refine((s) => s.trim().length > 0, l10n.t('Field path is required.')),
+          type: FieldIndexTypeSchema,
+        }),
+      )
+      .min(1),
+    // …
+  })
+  .strict(); // reject a stray `kind` so a malformed vector cannot degrade to a field index
+```
+
+- Why it works: `.strict()` makes a `kind:'vector'` payload fail both members instead of silently becoming a field index; the `trim` refine rejects whitespace-only paths at the boundary.
+- Pros: closes both gaps with clear errors. Cons: a true `z.discriminatedUnion('kind', …)` would route deterministically but requires the field payload to carry a `kind` discriminator (a small shape change across the drawer).
+- **Best choice:** keep `z.union` but make each member `.strict()` and add the `trim` refine — minimal change fixing both issues without reshaping the drawer payloads. Add tests for a mixed-shape vector payload and whitespace-only fields.
+
 ### LOW-4: Index type badges risk duplicate screen-reader announcements
 
 File: [IndexTypeBadgeView.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTypeBadgeView.tsx#L27-L35)
@@ -131,6 +245,18 @@ The badge sets `aria-label={type}` and renders the same type as visible text. Th
 This is **Low**: it affects announcement quality rather than access to an operation, and behavior varies by assistive technology.
 
 Suggested direction: remove the redundant `aria-label` and let the visible text provide the name. If a richer label is added later, wrap the visible text in `aria-hidden="true"` as used by the existing focusable-badge pattern.
+
+**Reviewer verification & recommended solution (2026-07-28):** Confirmed. [IndexTypeBadgeView.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTypeBadgeView.tsx#L30-L34) sets `aria-label={type}` and renders the same `type` (with NBSP) as visible text. NBSP is announced as a space, so the accessible name is identical and may be read twice. Best classified as a **nit** (AT-dependent, blocks no operation).
+
+```tsx
+<Badge appearance="tint" color={BADGE_COLOR} shape="rounded" size={size}>
+  {type.replace(/ /g, '\u00A0')}
+</Badge>
+```
+
+- Why it works: the visible text already supplies the accessible name; removing `aria-label` eliminates the double source.
+- Pros/Cons: pure improvement, no downside. If a richer label is ever needed, wrap the visible text in `aria-hidden="true"` per the repo's focusable-badge pattern.
+- **Best choice:** drop the `aria-label`.
 
 ### LOW-5: The dev-only ResizeObserver detector installs duplicate listeners under hot reload
 
@@ -147,6 +273,23 @@ Copilot thread: [ResizeObserver detector installation is not idempotent](https:/
 This is **Low** because the code is dead-code-eliminated from production and affects only long-running development webviews. It still undermines the detector's purpose: duplicated warnings make its signal less trustworthy.
 
 Suggested direction: make installation idempotent with a `globalThis`/`window` sentinel that survives module replacement, or register an HMR dispose callback that removes the exact listener.
+
+**Reviewer verification & recommended solution (2026-07-28):** Confirmed. [resizeObserverLoopDetector.ts](../../../../src/webviews/_integration/observability/resizeObserverLoopDetector.ts#L44-L80) adds a `window` 'error' listener on every call with no guard, and [index.tsx](../../../../src/webviews/index.tsx#L23-L25) calls it from `render()` under a `NODE_ENV !== 'production'` guard, so HMR re-execution can stack listeners. Dev-only, dead-code-eliminated from production — **nit**.
+
+```ts
+export function installResizeObserverLoopDetector(): void {
+  if (typeof window === 'undefined') return;
+  const w = window as Window & { __rroLoopDetectorInstalled?: boolean };
+  if (w.__rroLoopDetectorInstalled) return;
+  w.__rroLoopDetectorInstalled = true;
+  // …existing addEventListener…
+}
+```
+
+- Why it works: a `window`-scoped sentinel survives HMR module replacement, so only one listener is ever attached.
+- Pros: trivial, no HMR API coupling. Cons: sentinel persists for the session (fine for a dev-only diagnostic).
+- Alternative: register `module.hot.dispose` to remove the exact listener — cleaner teardown but more code and bundler coupling.
+- **Best choice:** the `window` sentinel — least code for a dev-only utility while restoring the "warn once per burst" guarantee.
 
 ## Unresolved Copilot comments
 
@@ -167,7 +310,7 @@ No other unresolved Copilot reviewer threads were present when this report was p
 - Create/drop and hide/unhide inspect their normalized command documents and surface server failures instead of reporting unconditional success.
 - Optional `collStats` and `$indexStats` failures are isolated. The main list still renders, and tree confirmation details fall back to a dash.
 - The empty catches in `CreateIndexDrawer` are intentional: the parent displays the error and the drawer retains the form for retry. The empty catches in the tree confirmation-stat helper intentionally degrade optional metrics independently.
-- Refresh responses use a generation guard, and build polling re-arms after failed attempts, preventing the stale-response and stopped-polling regressions from the earlier review.
+- Refresh responses use a generation guard, and build polling re-arms after failed attempts, preventing the stale-response and stopped-polling regressions from the earlier review. (Re-review caveat: the same unconditional re-arm surfaces a repeated error toast on sustained background failure — see MEDIUM-2.)
 - Microsoft Learn currently documents vector-index maxima of 2,000 dimensions without compression, 4,000 with half precision, and 16,000 with product quantization. No documented backend command or capability response exposes those maxima: `hello`, `buildInfo`, and `listCommands` provide topology, version, wire limits, and command availability rather than per-feature parameter constraints. Hard-coding the Learn values, or mapping server versions to them, would make the extension track service evolution. The server remains the authority and its rejection is surfaced with the form preserved, so the absence of client-side maximum validation is not treated as a finding.
 - Direct create and command handoff preserve BSON constructors in advanced options; LOW-2 is specifically about positioning or removing comments that the selected loose parser explicitly accepts, not the previously fixed BSON-fidelity issue.
 - Vector definitions observed in the feature notes are normalized from `cosmosSearchOptions`, with a fallback for the alternate `cosmosSearch` container.
@@ -187,6 +330,6 @@ A report-integrity check also confirmed that all 16 unique local Markdown target
 
 ## Recommended order
 
-1. Restore configured confirmation behavior for deletion (MEDIUM-1).
+1. Restore configured confirmation behavior for deletion (MEDIUM-1) and stop the background build-poll error-toast spam (MEDIUM-2) — both affect the normal user path.
 2. Disable busy-row actions and fix raw-comment command rendering (LOW-1, LOW-2).
-3. Tighten the RPC schema and address the two small Copilot implementation concerns (LOW-3 through LOW-5).
+3. Tighten the RPC schema and address the small Copilot implementation concerns (LOW-3 through LOW-5).
