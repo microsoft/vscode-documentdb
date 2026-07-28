@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import { buildCreateIndexShellCommand, buildIndexSpec, CreateIndexInputSchema } from './indexCreation';
 import { type CreateIndexInput } from './types';
 
@@ -261,5 +262,86 @@ describe('vector index creation', () => {
         },
     ])('rejects an invalid vector definition: $name', ({ input }) => {
         expect(CreateIndexInputSchema.safeParse(input).success).toBe(false);
+    });
+});
+
+describe('advanced-option comment handling in the shell/playground handoff', () => {
+    // The two advanced editors (partial filter, collation) forward raw, loose
+    // BSON text that the parser accepts with line comments. The generated
+    // command must stay valid — a trailing `//` comment must not swallow the
+    // option separator or the closing `})`. These tests assert parity: the same
+    // commented input that direct creation (buildIndexSpec) accepts also yields a
+    // handoff command whose options object re-parses to the identical value.
+
+    /** Re-parse the options object of a generated createIndex command. */
+    function parseGeneratedOptions(command: string, key: Record<string, unknown>): Record<string, unknown> {
+        const prefix = `db.getCollection("users").createIndex(${JSON.stringify(key)}, `;
+        expect(command.startsWith(prefix)).toBe(true);
+        // Drop the trailing `)` that closes the createIndex(...) call; what
+        // remains is the options object literal.
+        const optionsText = command.slice(prefix.length, -1);
+        return parseShellBSON(optionsText, { mode: ParseMode.Loose }) as Record<string, unknown>;
+    }
+
+    it('keeps a line comment in the partial filter from breaking the command', () => {
+        const input: CreateIndexInput = {
+            fields: [{ field: 'status', type: 'asc' }],
+            partialFilterExpression: '{ active: true } // only active documents',
+        };
+
+        // Direct creation accepts the commented input.
+        expect(() => buildIndexSpec(input)).not.toThrow();
+        expect(buildIndexSpec(input).partialFilterExpression).toEqual({ active: true });
+
+        const command = buildCreateIndexShellCommand('users', input);
+        // The closing delimiters sit on their own line, not after the comment.
+        expect(command).toMatch(/\n\}\)$/);
+        expect(parseGeneratedOptions(command, { status: 1 })).toEqual({
+            partialFilterExpression: { active: true },
+        });
+    });
+
+    it('keeps line comments in both partial filter and collation valid together', () => {
+        const input: CreateIndexInput = {
+            fields: [{ field: 'status', type: 'asc' }],
+            partialFilterExpression: '{ active: true } // filter',
+            collation: '{ locale: "en" } // english',
+        };
+
+        expect(() => buildIndexSpec(input)).not.toThrow();
+
+        const command = buildCreateIndexShellCommand('users', input);
+        // A line comment must never be immediately followed by a separator or
+        // closing delimiter on the same physical line.
+        expect(command).not.toMatch(/\/\/[^\n]*[,}]/);
+        expect(parseGeneratedOptions(command, { status: 1 })).toEqual({
+            partialFilterExpression: { active: true },
+            collation: { locale: 'en' },
+        });
+    });
+
+    it('preserves a line comment alongside a serialized option such as name', () => {
+        const input: CreateIndexInput = {
+            fields: [{ field: 'status', type: 'asc' }],
+            name: 'active_only',
+            partialFilterExpression: '{ active: true } // note',
+        };
+
+        const command = buildCreateIndexShellCommand('users', input);
+        expect(parseGeneratedOptions(command, { status: 1 })).toEqual({
+            name: 'active_only',
+            partialFilterExpression: { active: true },
+        });
+    });
+
+    it('rejects an unterminated block comment on both direct creation and the handoff', () => {
+        const input: CreateIndexInput = {
+            fields: [{ field: 'status', type: 'asc' }],
+            partialFilterExpression: '{ active: true } /* unterminated',
+        };
+
+        // Parity: both paths reject the same invalid input.
+        expect(() => buildIndexSpec(input)).toThrow(/partial filter/i);
+        expect(() => buildCreateIndexShellCommand('users', input)).toThrow(/partial filter/i);
     });
 });

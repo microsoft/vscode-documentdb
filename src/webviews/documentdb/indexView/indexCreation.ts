@@ -411,5 +411,16 @@ export function buildCreateIndexShellCommand(collectionName: string, input: Crea
     if (optionEntries.length === 0) {
         return `db.getCollection(${collection}).createIndex(${keyJson})`;
     }
-    return `db.getCollection(${collection}).createIndex(${keyJson}, {${optionEntries.join(',')}})`;
+    // Raw advanced-option fragments (partial filter / collation / wildcard
+    // projection) are embedded verbatim to preserve BSON constructors such as
+    // ISODate(...). The loose parser that validated them in buildIndexSpec above
+    // accepts line comments, so a fragment can legitimately end in a `//` comment
+    // that runs to the end of its physical line. To keep such a comment from
+    // swallowing the option separator or the closing `})`, every entry is placed
+    // on its own line and separated with a *leading* comma — the comma and the
+    // closing delimiters therefore always start a fresh line, never sharing one
+    // with a trailing comment. (Unterminated block comments are already rejected
+    // by the parse in buildIndexSpec, so every fragment reaching this point is
+    // valid and safely isolated on its own line.)
+    return `db.getCollection(${collection}).createIndex(${keyJson}, {\n${optionEntries.join('\n,')}\n})`;
 }
