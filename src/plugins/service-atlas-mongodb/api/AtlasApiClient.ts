@@ -448,3 +448,26 @@ export class AtlasApiError extends Error {
         this.name = 'AtlasApiError';
     }
 }
+
+/**
+ * Recognises the several distinct 403 error codes Atlas uses for IP access-list problems: the
+ * caller's IP is not on the API access list (`IP_ADDRESS_NOT_ON_ACCESS_LIST`), or the organization
+ * mandates an access list the caller is not on (`ORG_REQUIRES_ACCESS_LIST`). They are all fixed the
+ * same way - add the current IP to the relevant access list in Atlas - so every path that tailors a
+ * message or a deep link for an IP problem must treat them alike, rather than mistaking one for a
+ * missing-role "permissions" failure.
+ *
+ * Shared as the single source of truth so the webview, discovery, and credential manager cannot
+ * drift apart on which codes count. Accepts `unknown` and self-guards on type/status, so callers
+ * can hand it a raw caught error.
+ */
+export function isAtlasIpAccessListError(error: unknown): boolean {
+    if (!(error instanceof AtlasApiError) || error.statusCode !== 403) {
+        return false;
+    }
+    if (error.errorCode && /ACCESS_LIST/i.test(error.errorCode)) {
+        return true;
+    }
+    // Some responses carry no machine-readable code; fall back to the human-readable text.
+    return `${error.detail ?? ''} ${error.message}`.toLowerCase().includes('access list');
+}

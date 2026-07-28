@@ -156,6 +156,14 @@ export function resolveCredentialLabel(record: AtlasCredentialRecord): string {
  *
  * `errorCode` is carried through for the log. The HTTP status alone is ambiguous: several very
  * different problems share `403`, and only Atlas's own code separates them.
+ *
+ * This is the **tree / discovery** classifier. It stays deliberately coarse - every 403 becomes
+ * `forbidden` - because the tree's only recovery is to hand the user to the credential manager,
+ * which then offers the same deep link regardless of the exact 403. The **webview credential flow**
+ * needs a finer split (IP access list vs missing role) and classifies separately in
+ * `describeAtlasError` (see `atlasCredentialsRouter.ts`). The two classifiers are intentionally
+ * duplicated rather than merged, but if this one ever needs to tell an IP access-list 403 apart it
+ * must reuse the shared `isAtlasIpAccessListError` predicate so both paths agree on which codes count.
  */
 export function classifyAtlasError(error: unknown): {
     kind: AtlasErrorKind;

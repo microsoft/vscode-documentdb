@@ -16,37 +16,49 @@
  * degrades to the least specific destination it can still be sure about.
  */
 
+import { type AtlasAuthMethod } from './auth/AtlasSession';
 import { type AtlasCredentialRecord } from './credentials/atlasCredentialStore';
 
 /** Root of the MongoDB Atlas web console. */
 const ATLAS_CLOUD_ROOT = 'https://cloud.mongodb.com';
 
 /**
- * Builds the Atlas access-management URL for a credential.
+ * Builds the Atlas access-management URL from the raw identity pieces.
+ *
+ * {@link buildAtlasAccessUrl} is the preferred form when a stored {@link AtlasCredentialRecord} is
+ * available. This lower-level variant exists for the add flow, where no record has been persisted
+ * yet but the organization was just resolved live from the authenticated client.
  *
  * - Service Account with a known client ID: its detail page, which is where its roles and its own
  *   IP access list live.
  * - Service Account without a known client ID: the organization's Service Account list.
  * - API Key: the organization's API key list. Per-key deep links need an internal key ID that the
  *   Admin API does not hand back with the data used here, and the list is one click away.
- * - No cached organization ID: the Atlas console root. This happens when a credential has never
- *   completed a single successful request, which is exactly the `403` case, so the fallback has to
- *   stay useful rather than being treated as an error.
+ * - No organization ID: the Atlas console root, a useful landing page rather than a broken link.
  *
- * @param clientId Service Account client ID, read from secret storage. Ignored for API keys.
+ * @param clientId Service Account client ID. Ignored for API keys.
  */
-export function buildAtlasAccessUrl(record: AtlasCredentialRecord, clientId?: string): string {
-    if (!record.orgId) {
+export function buildAtlasAccessUrlFor(authMethod: AtlasAuthMethod, orgId?: string, clientId?: string): string {
+    if (!orgId) {
         return ATLAS_CLOUD_ROOT;
     }
 
-    const access = `${ATLAS_CLOUD_ROOT}/v2#/org/${encodeURIComponent(record.orgId)}/access`;
+    const access = `${ATLAS_CLOUD_ROOT}/v2#/org/${encodeURIComponent(orgId)}/access`;
 
-    if (record.authMethod !== 'serviceaccount') {
+    if (authMethod !== 'serviceaccount') {
         return `${access}/apiKeys`;
     }
 
     return clientId ? `${access}/serviceAccounts/${encodeURIComponent(clientId)}` : `${access}/serviceAccounts`;
+}
+
+/**
+ * Builds the Atlas access-management URL for a stored credential.
+ *
+ * @param clientId Service Account client ID, read from secret storage. Ignored for API keys.
+ */
+export function buildAtlasAccessUrl(record: AtlasCredentialRecord, clientId?: string): string {
+    return buildAtlasAccessUrlFor(record.authMethod, record.orgId, clientId);
 }
 
 /**

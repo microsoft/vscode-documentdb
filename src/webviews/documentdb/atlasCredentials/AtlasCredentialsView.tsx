@@ -4,6 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    Accordion,
+    AccordionHeader,
+    AccordionItem,
+    AccordionPanel,
     Body1,
     Breadcrumb,
     BreadcrumbButton,
@@ -29,6 +33,7 @@ import {
 import {
     ArrowLeftRegular,
     CheckmarkCircleFilled,
+    CircleHintFilled,
     CircleRegular,
     CloudRegular,
     ErrorCircleFilled,
@@ -46,12 +51,24 @@ import { Announcer } from '../../components/accessibility/Announcer';
 import { type AtlasCredentialsWebviewConfig } from './atlasCredentialsController';
 import { type CredentialSubmitError } from './atlasCredentialsRouter';
 
-const ATLAS_API_KEY_DOCS_URL = 'https://www.mongodb.com/docs/atlas/configure-api-access/';
-const ATLAS_SERVICE_ACCOUNT_DOCS_URL = 'https://www.mongodb.com/docs/atlas/api/service-accounts-overview/';
 const ATLAS_CONSOLE_URL = 'https://cloud.mongodb.com/';
 
 type Phase = 'choose' | 'form' | 'checking' | 'success';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
+
+// Renders a localized sentence, bolding any segment wrapped in **double asterisks**. Keeping the
+// emphasis markers inside the l10n string lets translators move the bold keywords naturally.
+const renderWithEmphasis = (text: string): JSX.Element[] =>
+    text
+        .split(/(\*\*[^*]+\*\*)/g)
+        .filter((segment) => segment.length > 0)
+        .map((segment, index) =>
+            segment.startsWith('**') && segment.endsWith('**') ? (
+                <strong key={index}>{segment.slice(2, -2)}</strong>
+            ) : (
+                <Fragment key={index}>{segment}</Fragment>
+            ),
+        );
 
 const useStyles = makeStyles({
     root: {
@@ -62,11 +79,17 @@ const useStyles = makeStyles({
         padding: '24px',
     },
     hero: { display: 'flex', alignItems: 'center', gap: '16px' },
-    heroIcon: { color: tokens.colorBrandForeground1, fontSize: '44px', flexShrink: 0 },
+    heroIcon: { color: tokens.colorBrandForeground1, fontSize: '56px', flexShrink: 0 },
     muted: { color: tokens.colorNeutralForeground2 },
     section: { display: 'flex', flexDirection: 'column', gap: '12px' },
     sectionHeader: { display: 'flex', flexDirection: 'column', gap: '4px' },
     breadcrumbDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '16px' },
+    // Inherit the breadcrumb button's own text colour, so the hint dot matches whatever state the
+    // step is in (the active/current item gets its colour for free).
+    breadcrumbPending: { color: 'inherit', fontSize: '16px' },
+    // Keep completed steps bold. Fluent only bolds the `current` item, so a step dropped back to
+    // regular weight when it stopped being current, and the width change shifted the whole row.
+    breadcrumbButtonDone: { fontWeight: tokens.fontWeightSemibold },
     cardGrid: {
         display: 'grid',
         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
@@ -88,20 +111,16 @@ const useStyles = makeStyles({
         flexWrap: 'wrap',
     },
     formHeader: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    guide: { display: 'flex', flexDirection: 'column', gap: '4px' },
-    guideSummary: { cursor: 'pointer', userSelect: 'none' },
-    guideHeading: { fontWeight: tokens.fontWeightSemibold, color: tokens.colorNeutralForeground2 },
     stepList: {
-        margin: '4px 0 0 0',
+        margin: 0,
         paddingLeft: '20px',
         color: tokens.colorNeutralForeground2,
         display: 'flex',
         flexDirection: 'column',
-        gap: '6px',
+        gap: '8px',
     },
     fields: { display: 'flex', flexDirection: 'column', gap: '14px' },
     secretButton: { minWidth: '28px' },
-    checkHint: { color: tokens.colorNeutralForeground2 },
     stageList: {
         display: 'flex',
         flexDirection: 'column',
@@ -277,7 +296,10 @@ export const AtlasCredentialsView = (): JSX.Element => {
     );
 
     const handleSubmit = useCallback(async (): Promise<void> => {
-        if (!chosenMethod || !canSubmit || phase !== 'form') {
+        // Allow a first submit from the form, or a retry from the verify screen (which stays on
+        // 'checking' with the error shown) - for example after the user fixes an Atlas access list.
+        const canRetry = phase === 'checking' && submitError !== undefined;
+        if (!chosenMethod || !canSubmit || (phase !== 'form' && !canRetry)) {
             return;
         }
         setSubmitError(undefined);
@@ -310,7 +332,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
             });
             setFailedStage(0);
         }
-    }, [canSubmit, chosenMethod, phase, trpcClient, values]);
+    }, [canSubmit, chosenMethod, phase, submitError, trpcClient, values]);
 
     const handleDone = useCallback(async (): Promise<void> => {
         if (isCompleting) {
@@ -334,10 +356,14 @@ export const AtlasCredentialsView = (): JSX.Element => {
             <CloudRegular aria-hidden className={styles.heroIcon} />
             <div>
                 <Text as="h1" size={700} weight="semibold">
-                    {isEdit ? l10n.t('Update MongoDB Atlas credentials') : l10n.t('Add a MongoDB Atlas credential')}
+                    {isEdit ? l10n.t('Update MongoDB Atlas connection') : l10n.t('Add a MongoDB Atlas connection')}
                 </Text>
                 <div>
-                    <Text className={styles.muted}>{l10n.t('Connect MongoDB Atlas to discover your clusters.')}</Text>
+                    <Text className={styles.muted}>
+                        {l10n.t(
+                            'Connect MongoDB Atlas to browse, open, and manage your clusters without leaving VS Code.',
+                        )}
+                    </Text>
                 </div>
             </div>
         </div>
@@ -362,10 +388,13 @@ export const AtlasCredentialsView = (): JSX.Element => {
                             <BreadcrumbButton
                                 current={isCurrent}
                                 disabled={!isCurrent && !canNavigate}
+                                className={isCompleted ? styles.breadcrumbButtonDone : undefined}
                                 icon={
                                     isCompleted ? (
                                         <CheckmarkCircleFilled aria-hidden className={styles.breadcrumbDone} />
-                                    ) : undefined
+                                    ) : (
+                                        <CircleHintFilled aria-hidden className={styles.breadcrumbPending} />
+                                    )
                                 }
                                 onClick={canNavigate ? () => goToStep(step.id) : undefined}
                             >
@@ -455,41 +484,44 @@ export const AtlasCredentialsView = (): JSX.Element => {
     );
 
     const guide = (
-        <div className={styles.guide}>
-            <div>
-                <Link onClick={() => openLink(ATLAS_CONSOLE_URL)}>{l10n.t('Open MongoDB Atlas')}</Link>
-                {' · '}
-                <Link onClick={() => openLink(isApiKey ? ATLAS_API_KEY_DOCS_URL : ATLAS_SERVICE_ACCOUNT_DOCS_URL)}>
-                    {l10n.t('View documentation')}
-                </Link>
-            </div>
-            <details>
-                <summary className={styles.guideSummary}>
-                    <Body1 as="span" className={styles.guideHeading}>
-                        {l10n.t('Where do I find these values?')}
-                    </Body1>
-                </summary>
-                <ol className={styles.stepList}>
-                    <li>
-                        <Body1 as="span">{l10n.t('Sign in to MongoDB Atlas and select your Organization.')}</Body1>
-                    </li>
-                    <li>
-                        <Body1 as="span">
-                            {l10n.t('Under IDENTITY & ACCESS in the left sidebar, open Applications.')}
-                        </Body1>
-                    </li>
-                    <li>
-                        <Body1 as="span">
-                            {isApiKey
-                                ? l10n.t('Open API Keys, add a key, set its permissions, and copy both values.')
-                                : l10n.t(
-                                      'Open Service Accounts, add an account, set its permissions, and copy both values.',
-                                  )}
-                        </Body1>
-                    </li>
-                </ol>
-            </details>
-        </div>
+        <Accordion collapsible>
+            <AccordionItem value="guide">
+                <AccordionHeader>{l10n.t('Where do I find these values?')}</AccordionHeader>
+                <AccordionPanel>
+                    <ol className={styles.stepList}>
+                        <li>
+                            <Body1 as="span">
+                                {l10n.t('Sign in to')}{' '}
+                                <Link onClick={() => openLink(ATLAS_CONSOLE_URL)}>{l10n.t('MongoDB Atlas')}</Link>{' '}
+                                {renderWithEmphasis(l10n.t('and select your **organization**.'))}
+                            </Body1>
+                        </li>
+                        <li>
+                            <Body1 as="span">
+                                {renderWithEmphasis(
+                                    l10n.t('In the left sidebar, under **Identity & Access**, open **Applications**.'),
+                                )}
+                            </Body1>
+                        </li>
+                        <li>
+                            <Body1 as="span">
+                                {isApiKey
+                                    ? renderWithEmphasis(
+                                          l10n.t(
+                                              'Go to **API Keys**, create a key, set its permissions, then copy the **Public Key** and **Private Key**.',
+                                          ),
+                                      )
+                                    : renderWithEmphasis(
+                                          l10n.t(
+                                              'Go to **Service Accounts**, create one, set its permissions, then copy the **Client ID** and **Client Secret**.',
+                                          ),
+                                      )}
+                            </Body1>
+                        </li>
+                    </ol>
+                </AccordionPanel>
+            </AccordionItem>
+        </Accordion>
     );
 
     const errorMessage = submitError ? (
@@ -501,6 +533,11 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 {submitError.action && (
                     <Button appearance="secondary" onClick={() => openLink(submitError.action!.url)}>
                         {submitError.action.label}
+                    </Button>
+                )}
+                {submitError.action && (
+                    <Button appearance="secondary" onClick={() => void handleSubmit()}>
+                        {l10n.t('Retry')}
                     </Button>
                 )}
                 <Button appearance="secondary" onClick={showDetails}>
@@ -521,14 +558,14 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 </Text>
                 <Text className={styles.muted}>
                     {isApiKey
-                        ? l10n.t('Paste the Public Key and Private Key from your MongoDB Atlas API key below.')
+                        ? l10n.t(
+                              'Copy the Public Key and Private Key from an API Key in MongoDB Atlas. We use them to sign in and show the clusters you can access.',
+                          )
                         : l10n.t(
-                              'Paste the Client ID and Client Secret from your MongoDB Atlas Service Account below.',
+                              'Copy the Client ID and Client Secret from a Service Account in MongoDB Atlas. We use them to sign in and show the clusters you can access.',
                           )}
                 </Text>
             </div>
-            {guide}
-            {errorMessage}
             <form
                 className={styles.fields}
                 onSubmit={(event) => {
@@ -561,9 +598,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                         />
                     </Field>
                 ))}
-                <Text className={styles.checkHint} size={200}>
-                    {l10n.t('We check these with MongoDB Atlas before saving them.')}
-                </Text>
+                {guide}
                 <div className={styles.actions}>
                     {!isEdit && (
                         <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={handleBack}>
@@ -596,9 +631,9 @@ export const AtlasCredentialsView = (): JSX.Element => {
     const verifyTitle = isApiKey
         ? l10n.t('Verify your MongoDB Atlas API Key')
         : l10n.t('Verify your MongoDB Atlas Service Account');
-    const verifySubtitle = checkFailed
-        ? l10n.t("We couldn't verify your credentials. Review the details below.")
-        : l10n.t('Checking your credentials with MongoDB Atlas…');
+    // A standard lead-in shown under the title in every verify state; it introduces the check list
+    // below without narrating live progress.
+    const verifySubtitle = l10n.t('We check your credentials with MongoDB Atlas before saving your connection.');
     const checking = (
         <section className={styles.section} aria-labelledby="atlas-checking-heading">
             <div className={styles.sectionHeader}>
@@ -612,10 +647,23 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     <StageRow key={label} label={label} status={stageStatusAt(index)} />
                 ))}
             </div>
+            {checkFailed && (
+                <Text className={styles.muted}>
+                    {l10n.t("We couldn't verify your credentials. Review the details below.")}
+                </Text>
+            )}
             {checkFailed && errorMessage}
             {checkFailed && (
                 <div className={styles.actions}>
-                    <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => setPhase('form')}>
+                    <Button
+                        appearance="secondary"
+                        icon={<ArrowLeftRegular />}
+                        onClick={() => {
+                            setSubmitError(undefined);
+                            setFailedStage(undefined);
+                            setPhase('form');
+                        }}
+                    >
                         {l10n.t('Back')}
                     </Button>
                 </div>

@@ -56,6 +56,17 @@ jest.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
                 return mockListProjects() as Promise<unknown>;
             }
         },
+        // Mirrors the real predicate in AtlasApiClient.ts (the module is fully mocked here, so the
+        // shared implementation is not available and has to be reproduced for the mock error class).
+        isAtlasIpAccessListError: (error: unknown): boolean => {
+            if (!(error instanceof AtlasApiErrorMock) || error.statusCode !== 403) {
+                return false;
+            }
+            if (error.errorCode && /ACCESS_LIST/i.test(error.errorCode)) {
+                return true;
+            }
+            return `${error.detail ?? ''} ${error.message}`.toLowerCase().includes('access list');
+        },
     };
 });
 
@@ -130,7 +141,7 @@ describe('atlasCredentialsRouter', () => {
                 kind: 'ipAccess',
                 title: 'This IP address is not allowed',
                 message:
-                    "MongoDB Atlas blocked requests from this IP address. Add it to this credential's API access list, then try again.",
+                    "MongoDB Atlas blocked this request because your IP address isn't on the allowed access list. Add your current IP address in MongoDB Atlas, then retry.",
                 action: {
                     label: 'Open access settings in MongoDB Atlas',
                     url: 'https://cloud.mongodb.com/v2#/org/org-1/access/apiKeys',

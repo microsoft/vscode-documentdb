@@ -5,6 +5,7 @@
 
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './atlasCredentialsRouter';
@@ -83,6 +84,22 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             webviewName: 'atlasCredentials',
             config: { authMethod: options.authMethod, mode, credentialLabel: options.credentialLabel },
             context,
+            // Give the panel tab the DocumentDB brand icon so it reads as one of the extension's own
+            // surfaces, the same way the collection and document webviews set their own tab icons.
+            icon: {
+                light: vscode.Uri.joinPath(
+                    ext.context.extensionUri,
+                    'resources',
+                    'icons',
+                    'vscode-documentdb-icon-light-themes.svg',
+                ),
+                dark: vscode.Uri.joinPath(
+                    ext.context.extensionUri,
+                    'resources',
+                    'icons',
+                    'vscode-documentdb-icon-dark-themes.svg',
+                ),
+            },
         });
 
         state.controller.onDisposed(() => finish(context.credentialsStored));

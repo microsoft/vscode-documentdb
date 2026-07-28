@@ -1322,6 +1322,7 @@ as written; the reasoning is recorded here rather than only in the commit messag
 | Logged durations moved to the monotonic clock ([1789949c](https://github.com/microsoft/vscode-documentdb/commit/1789949c))                                                                                                             | Not in the plan; found by reading a live trace                                                                            | A wall-clock step backwards mid-request produced lines like `GET /orgs -> 200 in -157ms`. An impossible value in a diagnostic log discredits every other number on the line. The snapshot TTL moved too, and that was a real bug: a negative `age` satisfies `age < TTL`, so a stale snapshot could be served indefinitely. Token `expiresAt` stays on the wall clock because it is persisted across processes.                                                                                                                                                                                                                                                           |
 | Per-credential **Remove** renamed to **Sign out**                                                                                                                                                                                      | Step 3 lists the action as **Remove**                                                                                     | The fleet-level action is **Sign out of all**, so a different verb for the identical single-credential operation made the two read as different things. Both delete the stored secret. The internal storage function keeps the name `removeAtlasCredential`, since removal is what it does; only the user-facing verb and the telemetry value (`signOut`, pairing with `signOutAll`) changed.                                                                                                                                                                                                                                                                             |
 | Atlas clusters drop the DocumentDB brand mark for the `server-environment` codicon                                                                                                                                                     | Step 4 gave the cluster row a static provider-identity icon copied from the Kubernetes plugin                             | `resources/icons/vscode-documentdb-cluster-{light,dark}-themes.svg` are byte-identical to `vscode-documentdb-icon-{light,dark}-themes.svg`, i.e. the DocumentDB product logo rather than a generic cluster glyph. The Kubernetes plugin is right to use it because it discovers real DocumentDB deployments; stamping it on somebody else's managed service is a branding claim the extension should not make. `server-environment` is what the Connections view already draws for a non-emulator cluster, so a discovered Atlas cluster and a saved one now read the same, with no new asset and no third-party trademark shipped. Pinned by `AtlasClusterItem.test.ts`. |
+| Add/Update credential webview reworked (card method picker, breadcrumb, accordion guide, "connection" wording) and its error handling unified: `ORG_REQUIRES_ACCESS_LIST` now reads as an IP-access problem, the reconfigure error bar gained **Retry**, and add-flow deep links resolve the organization live | Extends item 6; broadens the per-credential deep link ([a3c96ac7](https://github.com/microsoft/vscode-documentdb/commit/a3c96ac7)) beyond `IP_ADDRESS_NOT_ON_ACCESS_LIST` | Detailed below under _The Add/Update credential webview was reworked, with unified IP-access handling_. |
 
 **Follow-up filed:** [#814](https://github.com/microsoft/vscode-documentdb/issues/814) tracks using the
 Admin API access-list endpoints to turn these diagnostics into precise, actionable messages.
@@ -1384,6 +1385,59 @@ The machine's egress address was in fact rotating within a corporate NAT pool. T
 exposed the negative-duration bug turned out to be a side effect of the same network transition
 that changed the address. **Resolved by allowlisting the whole CIDR block rather than a single
 address**, after which the behaviour was stable. No extension change was needed.
+
+##### The Add/Update credential webview was reworked, with unified IP-access handling
+
+The guided credential webview (item 6) was rebuilt around the Local Quick Start layout, and the
+error handling behind it was tightened after exercising both auth methods against a live account.
+
+The surface:
+
+- **Method choice is two selectable Fluent cards** — Service Account (_Recommended_) and API Key
+  (_Legacy, simplest_) — with radio selection, replacing the plain method list.
+- **A Breadcrumb tracks progress** across four phases: Choose method → Enter details → Verify →
+  Done. Edit mode opens on the form and drops the first step.
+- **"Where do I find these values?" moved into a Fluent Accordion** with the key UI terms bolded and
+  the **Open MongoDB Atlas** link folded into step 1.
+- **Titles read "Add a MongoDB Atlas connection" / "Update MongoDB Atlas connection".** "Connection"
+  rather than "credential" matches how the rest of the UI names a data source and pluralises cleanly
+  for the multi-credential list. The product name was dropped from the body copy, and every text
+  input is `.trim()`-ed.
+- **The Verify screen is honest about progress.** One standard subtitle, and a per-method check list
+  built from the real host steps (API Key: verify + save; Service Account: sign in + check projects
+  + save). There is no fake timer, so the step that actually failed is the one marked, and the
+  error bar renders below the checks.
+
+The error handling — three related corrections found in live use:
+
+- **IP access-list detection is unified and broadened.** A live `403 ORG_REQUIRES_ACCESS_LIST` (the
+  organization mandates an access list) was being mis-classified as a missing-role "permissions"
+  failure. A single predicate `isAtlasIpAccessListError` on `AtlasApiError` now recognises any
+  `ACCESS_LIST` code, with a fallback on the human-readable detail/message, and self-guards on
+  `403`. The webview flow (`describeAtlasError`) uses it. The tree/discovery classifier
+  (`classifyAtlasError`) stays deliberately coarse — every `403` becomes `forbidden` and funnels to
+  the credential manager, which offers the same deep link — but both classifiers now carry
+  cross-referencing comments pointing at the shared predicate, so the two intentionally-separate
+  copies cannot drift on which codes count.
+- **The reconfigure error bar gained Retry.** IP-access and missing-role failures are fixed in the
+  Atlas console and then re-tried with the same values, so the verify-screen error bar now offers
+  **Retry** (re-submits in place) next to the Atlas deep link and **Show details**. It shows only
+  for errors that carry the reconfigure deep link, since retrying a wrong secret cannot help.
+- **Deep links resolve the organization in the add flow.** The per-credential deep link previously
+  had an `orgId` only for stored credentials, so a brand-new credential fell back to the console
+  root. `buildAtlasAccessUrl(record)` now delegates to a lower-level
+  `buildAtlasAccessUrlFor(authMethod, orgId, clientId)`, and during add the host resolves the
+  organization live via `listOrganizations()`, targeting
+  `…/org/{orgId}/access/serviceAccounts/{clientId}` (Service Account) or `…/apiKeys` (API key) —
+  matching the stored-credential link. Best-effort: a credential also barred from `/orgs` still
+  degrades to the console root.
+
+`isAtlasIpAccessListError` lives next to `AtlasApiError` in `AtlasApiClient.ts` as the single source
+of truth; the router test reproduces it inside its module mock (the whole `AtlasApiClient` module is
+mocked there) with a comment marking it a deliberate mirror. For `ORG_REQUIRES_ACCESS_LIST` the deep
+link currently lands on the credential's own access page (the same target as the per-IP case),
+consistent across the webview and the credential manager; precise org-access-list targeting is part
+of the [#814](https://github.com/microsoft/vscode-documentdb/issues/814) follow-up.
 
 ### Step 1 — Live API gates closed
 

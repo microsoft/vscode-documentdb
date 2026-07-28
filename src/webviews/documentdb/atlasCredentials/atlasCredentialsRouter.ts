@@ -22,8 +22,12 @@
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
 import { ext } from '../../../extensionVariables';
-import { AtlasApiClient, AtlasApiError } from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
-import { buildAtlasAccessUrl } from '../../../plugins/service-atlas-mongodb/atlasDeepLinks';
+import {
+    AtlasApiClient,
+    AtlasApiError,
+    isAtlasIpAccessListError,
+} from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
+import { buildAtlasAccessUrlFor } from '../../../plugins/service-atlas-mongodb/atlasDeepLinks';
 import {
     getAtlasCredential,
     replaceAtlasCredentialSecrets,
@@ -106,14 +110,23 @@ function logVerificationFailure(authMethod: 'apikey' | 'serviceaccount', error: 
 }
 
 /**
- * Builds a user-facing message for a MongoDB Atlas API rejection, adding the
- * Access-List / permissions hint for authentication failures (401/403).
+ * Builds a user-facing message for a MongoDB Atlas API rejection, adding the Access-List /
+ * permissions hint for authentication failures (401/403).
+ *
+ * This is the **webview credential flow's** error classifier. The **tree / discovery flow** has its
+ * own, intentionally coarser copy - `classifyAtlasError` in `AtlasDiscoveryService` - which maps
+ * every 403 to `forbidden` and hands the user to the credential manager. The two are deliberately
+ * kept separate (different surfaces, different granularity), but both decide "is this an IP
+ * access-list problem?" through the one shared predicate `isAtlasIpAccessListError`, so they cannot
+ * drift on which 403s count as an IP issue versus a missing role. If you change the IP-detection
+ * rule, change it in that shared predicate - and both paths stay in step.
  */
 async function describeAtlasError(
     ctx: WithTelemetry<RouterContext>,
     error: unknown,
     authMethod: 'apikey' | 'serviceaccount',
     clientId?: string,
+    client?: AtlasApiClient,
 ): Promise<CredentialSubmitError> {
     logVerificationFailure(authMethod, error);
     const isNetworkError =
@@ -157,13 +170,13 @@ async function describeAtlasError(
     }
 
     if (error.statusCode === 403) {
-        const action = await buildAtlasErrorAction(ctx, authMethod, clientId);
-        if (error.errorCode === 'IP_ADDRESS_NOT_ON_ACCESS_LIST') {
+        const action = await buildAtlasErrorAction(ctx, authMethod, clientId, client);
+        if (isAtlasIpAccessListError(error)) {
             return {
                 kind: 'ipAccess',
                 title: l10n.t('This IP address is not allowed'),
                 message: l10n.t(
-                    "MongoDB Atlas blocked requests from this IP address. Add it to this credential's API access list, then try again.",
+                    "MongoDB Atlas blocked this request because your IP address isn't on the allowed access list. Add your current IP address in MongoDB Atlas, then retry.",
                 ),
                 action,
             };
@@ -190,15 +203,27 @@ async function buildAtlasErrorAction(
     ctx: WithTelemetry<RouterContext>,
     authMethod: 'apikey' | 'serviceaccount',
     clientId?: string,
+    client?: AtlasApiClient,
 ): Promise<CredentialErrorAction> {
-    const record = ctx.credentialId ? await getAtlasCredential(ctx.credentialId) : undefined;
-    const url = record
-        ? buildAtlasAccessUrl(record, authMethod === 'serviceaccount' ? clientId : undefined)
-        : 'https://cloud.mongodb.com';
+    // Edit (rotate) flow: the stored record already cached the organization from an earlier
+    // successful discovery, so reuse it without another call.
+    let orgId = ctx.credentialId ? (await getAtlasCredential(ctx.credentialId))?.orgId : undefined;
+
+    // Add flow: no record exists yet, but the credential just authenticated. Ask Atlas which
+    // organization it belongs to so the deep link can target it. Best-effort - a credential barred
+    // from /orgs as well simply degrades to the least specific destination.
+    if (!orgId && client) {
+        try {
+            const organizations = await client.listOrganizations();
+            orgId = organizations[0]?.id;
+        } catch {
+            // Ignore: fall back to the least specific destination below.
+        }
+    }
 
     return {
         label: l10n.t('Open access settings in MongoDB Atlas'),
-        url,
+        url: buildAtlasAccessUrlFor(authMethod, orgId, authMethod === 'serviceaccount' ? clientId : undefined),
     };
 }
 
@@ -242,12 +267,16 @@ export const atlasCredentialsRouter = router({
             const publicKey = input.publicKey.trim();
             const privateKey = input.privateKey.trim();
 
+            const client = new AtlasApiClient({ type: 'apikey', publicKey, privateKey });
             try {
-                const client = new AtlasApiClient({ type: 'apikey', publicKey, privateKey });
                 await client.listProjects();
             } catch (error) {
                 myCtx.telemetry.properties.authSuccess = 'false';
-                return { success: false, error: await describeAtlasError(myCtx, error, 'apikey'), failedStage: 0 };
+                return {
+                    success: false,
+                    error: await describeAtlasError(myCtx, error, 'apikey', undefined, client),
+                    failedStage: 0,
+                };
             }
 
             try {
@@ -306,14 +335,14 @@ export const atlasCredentialsRouter = router({
                 };
             }
 
+            const client = new AtlasApiClient({ type: 'serviceaccount', accessToken });
             try {
-                const client = new AtlasApiClient({ type: 'serviceaccount', accessToken });
                 await client.listProjects();
             } catch (error) {
                 myCtx.telemetry.properties.authSuccess = 'false';
                 return {
                     success: false,
-                    error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId),
+                    error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId, client),
                     failedStage: 1,
                 };
             }
