@@ -337,9 +337,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     {isEdit ? l10n.t('Update MongoDB Atlas credentials') : l10n.t('Add a MongoDB Atlas credential')}
                 </Text>
                 <div>
-                    <Text className={styles.muted}>
-                        {l10n.t('Connect MongoDB Atlas to discover your clusters.')}
-                    </Text>
+                    <Text className={styles.muted}>{l10n.t('Connect MongoDB Atlas to discover your clusters.')}</Text>
                 </div>
             </div>
         </div>
@@ -393,7 +391,11 @@ export const AtlasCredentialsView = (): JSX.Element => {
             selected={pendingMethod === method}
             onSelectionChange={(_event, data) => data.selected && setPendingMethod(method)}
             floatingAction={
-                <Radio checked={pendingMethod === method} onChange={() => setPendingMethod(method)} aria-label={title} />
+                <Radio
+                    checked={pendingMethod === method}
+                    onChange={() => setPendingMethod(method)}
+                    aria-label={title}
+                />
             }
         >
             <CardHeader

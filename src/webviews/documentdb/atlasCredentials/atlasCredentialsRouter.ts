@@ -21,6 +21,7 @@
 
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
+import { ext } from '../../../extensionVariables';
 import { AtlasApiClient, AtlasApiError } from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
 import { buildAtlasAccessUrl } from '../../../plugins/service-atlas-mongodb/atlasDeepLinks';
 import {
@@ -31,7 +32,6 @@ import {
 } from '../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
-import { ext } from '../../../extensionVariables';
 
 /**
  * Context for the MongoDB Atlas credential webview. Carries the target credential (when updating)
