@@ -275,8 +275,14 @@ export const IndexesTab = (): JSX.Element => {
             } catch (error) {
                 if (generation === refreshGenerationRef.current) {
                     setLoadFailed(true);
-                    showError(l10n.t('Failed to load indexes.'), error);
+                    // Only surface the toast for initial / manual loads. The 5s build
+                    // poll re-arms while a row is building, so a sustained outage would
+                    // otherwise stack a "Failed to load indexes." notification every
+                    // interval. Background failures still update the inline loadFailed
+                    // banner, which is the appropriate signal for a load the user did
+                    // not initiate.
                     if (shouldAnnounce) {
+                        showError(l10n.t('Failed to load indexes.'), error);
                         announce(l10n.t('Could not load indexes.'), 'assertive');
                     }
                 }
