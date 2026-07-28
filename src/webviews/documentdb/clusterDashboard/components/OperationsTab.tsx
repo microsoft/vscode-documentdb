@@ -395,9 +395,12 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                     </TableHeader>
                     <TableBody>
                         {operations.map((operation, index) => (
-                            // `opid` alone is not a safe key: `mapCurrentOp` yields '' for
-                            // any entry whose opid the server omitted, which collides.
-                            <TableRow key={`${operation.opid}:${index}`}>
+                            // Keyed by opid so a row keeps its identity across the 5 s
+                            // re-render — an index-based key remounts every row below a
+                            // vanished one, snapping its open Actions menu shut. The index
+                            // is only the fallback for rows whose opid the server omitted
+                            // ('' would collide).
+                            <TableRow key={operation.opid === '' ? `unidentified:${index}` : operation.opid}>
                                 <TableCell>{operation.opid || '—'}</TableCell>
                                 <TableCell>{operation.type}</TableCell>
                                 <TableCell>
@@ -460,8 +463,14 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
-                                    {history.map((entry, index) => (
-                                        <TableRow key={`${entry.opid}:${entry.firstSeenMs}:${index}`}>
+                                    {history.map((entry) => (
+                                        // No index in the key: the list re-sorts by last
+                                        // sighting on every poll, so an index component
+                                        // would remount rows and close any open menu.
+                                        // opid + namespace + firstSeen is unique — two
+                                        // sightings that share all three were merged into
+                                        // one entry by `recordObservedOperations`.
+                                        <TableRow key={`${entry.opid}:${entry.namespace}:${entry.firstSeenMs}`}>
                                             <TableCell>{entry.opid}</TableCell>
                                             <TableCell>{entry.type}</TableCell>
                                             <TableCell>
