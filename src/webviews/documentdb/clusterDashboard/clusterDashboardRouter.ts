@@ -21,10 +21,12 @@ import {
     type ClusterStorageStats,
     type CurrentOperationsResult,
 } from '../../../documentdb/utils/getClusterHealth';
+import { CopilotService } from '../../../services/copilotService';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../../utils/dialogs/showConfirmation';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { buildAskCopilotPrompt } from './askCopilotPrompt';
 import {
     clearObservedOperations,
     getObservedOperations,
@@ -157,6 +159,46 @@ export const clusterDashboardRouter = router({
         .mutation(async ({ input }): Promise<void> => {
             await vscode.env.clipboard.writeText(input.command);
             showConfirmationAsInSettings(l10n.t('Command copied to the clipboard.'));
+        }),
+
+    /**
+     * Opens Copilot Chat preloaded with an operation and its cluster context.
+     *
+     * The value over pasting into chat by hand is what travels along: the redacted command
+     * document, the observed runtime, and the platform's command support — so the model
+     * does not recommend tools this server rejects. The handoff goes to the chat UI rather
+     * than an inline completion so the user can keep interrogating from there.
+     */
+    askCopilotAboutOperation: publicProcedureWithTelemetry
+        .input(
+            z.object({
+                opid: z.string(),
+                type: z.string(),
+                namespace: z.string(),
+                commandPreview: z.string(),
+                secsRunning: z.number().nullable(),
+                clientDescription: z.string().nullable(),
+                ended: z.boolean(),
+            }),
+        )
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            if (!(await CopilotService.isAvailable())) {
+                throw new Error(
+                    l10n.t(
+                        'GitHub Copilot is not available. Please install the GitHub Copilot extension and ensure you have an active subscription.',
+                    ),
+                );
+            }
+
+            // Cached per client, so this does not re-run the metadata commands.
+            const client = await ClustersClient.getClient(myCtx.clusterId);
+            const metadata = await client.getClusterMetadata();
+
+            const prompt = buildAskCopilotPrompt(myCtx.clusterDisplayName, metadata, input);
+
+            await vscode.commands.executeCommand('workbench.action.chat.open', { query: prompt });
         }),
 
     /** Opens the Collection View for an operation's namespace. */

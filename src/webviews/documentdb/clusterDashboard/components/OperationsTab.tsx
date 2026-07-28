@@ -33,6 +33,7 @@ import {
     DeleteRegular,
     DismissCircleRegular,
     OpenRegular,
+    SparkleRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
@@ -215,6 +216,32 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
         [trpcClient],
     );
 
+    const handleAskCopilot = useCallback(
+        async (operation: CurrentOpEntry | ObservedOperation): Promise<void> => {
+            // Live rows and history rows carry their runtime under different names; the
+            // prompt only cares about the longest figure either can offer.
+            const isHistoryEntry = 'longestSecsRunning' in operation;
+            try {
+                await trpcClient.clusterDashboard.askCopilotAboutOperation.mutate({
+                    opid: operation.opid,
+                    type: operation.type,
+                    namespace: operation.namespace,
+                    commandPreview: operation.commandPreview,
+                    secsRunning: isHistoryEntry ? operation.longestSecsRunning : operation.secsRunning,
+                    clientDescription: operation.clientDescription,
+                    ended: isHistoryEntry ? operation.ended : false,
+                });
+            } catch (error) {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Failed to ask Copilot about the operation.'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            }
+        },
+        [trpcClient],
+    );
+
     const handleClearHistory = useCallback(async (): Promise<void> => {
         try {
             await trpcClient.clusterDashboard.clearOperationHistory.mutate();
@@ -263,6 +290,9 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                     ? l10n.t('Kill (requires the "killOp" privilege)')
                                     : l10n.t('Kill operation')}
                             </MenuItem>
+                            <MenuItem icon={<SparkleRegular />} onClick={() => void handleAskCopilot(operation)}>
+                                {l10n.t('Ask Copilot')}
+                            </MenuItem>
                             <MenuItem
                                 icon={<CopyRegular />}
                                 disabled={operation.commandPreview === ''}
@@ -282,7 +312,7 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                 </Menu>
             );
         },
-        [canKillOperations, handleCopyCommand, handleKill, handleOpenNamespace, killingOpid],
+        [canKillOperations, handleAskCopilot, handleCopyCommand, handleKill, handleOpenNamespace, killingOpid],
     );
 
     const toolbar = (
@@ -469,6 +499,12 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                                     </MenuTrigger>
                                                     <MenuPopover>
                                                         <MenuList>
+                                                            <MenuItem
+                                                                icon={<SparkleRegular />}
+                                                                onClick={() => void handleAskCopilot(entry)}
+                                                            >
+                                                                {l10n.t('Ask Copilot')}
+                                                            </MenuItem>
                                                             <MenuItem
                                                                 icon={<CopyRegular />}
                                                                 disabled={entry.commandPreview === ''}
