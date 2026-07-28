@@ -266,6 +266,68 @@ describe('listCurrentOperations', () => {
         expect(result.operations.map((operation) => operation.opid)).toEqual(['11']);
     });
 
+    it('drops the vCore self-inspection op, which reports no pipeline', async () => {
+        // Observed on Azure DocumentDB (vCore): the inspecting aggregation is reported as
+        // `{aggregate: ''}` with no namespace, so the pipeline check cannot see it and the
+        // tab shows a permanent unkillable row on an idle cluster.
+        const { client } = createFakeClient({
+            aggregate: () => [
+                { opid: '10000012901:1785186130769978', op: 'command', active: true, command: { aggregate: '' } },
+                { opid: '10000012902:1785186130769979', op: 'command', ns: 'sales.orders', active: true },
+            ],
+        });
+
+        const result = await listCurrentOperations(client);
+
+        expect(result.operations.map((operation) => operation.opid)).toEqual(['10000012902:1785186130769979']);
+    });
+
+    it('drops the vCore parallel workers of a single user aggregation', async () => {
+        // vCore fans one aggregation out internally and reports every worker as its own op
+        // with an empty opid, so a single slow query rendered as three rows — two of them
+        // unkillable duplicates — and tripled the Active Operations tile.
+        const { client } = createFakeClient({
+            aggregate: () => [
+                { opid: '10000053116:1785197164497492', op: 'command', ns: 'analytics.events', active: true },
+                {
+                    opid: '',
+                    op: 'command',
+                    ns: 'analytics.events',
+                    active: true,
+                    parallelWorker: true,
+                    leaderOpPatter: 53116,
+                },
+                {
+                    opid: '',
+                    op: 'command',
+                    ns: 'analytics.events',
+                    active: true,
+                    parallelWorker: true,
+                    leaderOpPatter: 53116,
+                },
+            ],
+        });
+
+        const result = await listCurrentOperations(client);
+
+        expect(result.operations.map((operation) => operation.opid)).toEqual(['10000053116:1785197164497492']);
+    });
+
+    it('excludes parallel workers in the pipeline, before the result limit', async () => {
+        const stages: Document[] = [];
+        const { client } = createFakeClient({
+            aggregate: (pipeline) => {
+                stages.push(...pipeline);
+                return [];
+            },
+        });
+
+        await listCurrentOperations(client);
+
+        // Serialized so the workers cannot consume the `$limit` budget on a busy cluster.
+        expect(JSON.stringify(stages)).toContain('parallelWorker');
+    });
+
     it('drops the legacy currentOp command that is collecting the list', async () => {
         const { client } = createFakeClient({
             adminCommand: (command) => {

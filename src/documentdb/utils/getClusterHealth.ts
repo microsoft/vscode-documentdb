@@ -335,22 +335,34 @@ function mapCurrentOp(op: Document): CurrentOpEntry {
 }
 
 /**
- * `$match` stage dropping the server's own background threads (`Checkpointer`,
- * `JournalFlusher`, …), which are reported as `op: 'none'` against no namespace.
+ * `$match` stage dropping the entries that are not user operations:
  *
- * They cannot be killed and would otherwise make the "Active Operations" tile read
- * non-zero on a completely idle cluster. This runs **before** `$limit` so background
- * threads cannot consume the result budget and hide real user operations on a busy
- * server — the case where the Operations tab matters most.
+ * - the server's own background threads (`Checkpointer`, `JournalFlusher`, …), reported as
+ *   `op: 'none'` against no namespace;
+ * - Azure DocumentDB (vCore) parallel workers, the internal shards of one user aggregation.
+ *
+ * Neither can be killed, and both inflate the "Active Operations" tile — background threads
+ * make an idle cluster read non-zero, and vCore reports one slow aggregation as a leader
+ * plus two or more workers, so the tile reads roughly triple. This runs **before** `$limit`
+ * so they cannot consume the result budget and hide real user operations on a busy server —
+ * the case where the Operations tab matters most.
  */
 const EXCLUDE_BACKGROUND_THREADS = {
     $match: {
-        $or: [{ op: { $ne: 'none' } }, { ns: { $nin: ['', null] } }],
+        $and: [{ $or: [{ op: { $ne: 'none' } }, { ns: { $nin: ['', null] } }] }, { parallelWorker: { $ne: true } }],
     },
 };
 
 /** Client-side equivalent of {@link EXCLUDE_BACKGROUND_THREADS} for the legacy path. */
 function isUserOperation(op: Document): boolean {
+    // vCore fans an aggregation out internally and reports every worker as its own op, each
+    // with an empty `opid` — so they arrive as unkillable duplicate rows sharing the
+    // leader's namespace. `leaderOpPatter` [sic] points back at the operation the user
+    // actually started, which is the row worth showing.
+    if (op.parallelWorker === true) {
+        return false;
+    }
+
     const operationType = toStringOrNull(op.op);
     const namespace = toStringOrNull(op.ns);
 
@@ -379,10 +391,19 @@ function isSelfInspectionQuery(op: Document): boolean {
 
     // Aggregation form: a pipeline whose first stage is `$currentOp`.
     const pipeline = command.pipeline;
-    return (
+    if (
         Array.isArray(pipeline) &&
         pipeline.some((stage) => typeof stage === 'object' && stage !== null && '$currentOp' in stage)
-    );
+    ) {
+        return true;
+    }
+
+    // Azure DocumentDB (vCore) does not report the pipeline at all — the inspecting
+    // aggregation arrives as `{ aggregate: '' }` with no namespace, so neither check above
+    // can see it and the dashboard ends up permanently watching itself. A database-level
+    // aggregation against no collection is the only shape this matches, and the poll is by
+    // far its most likely source.
+    return command.aggregate === '' && toStringOrNull(op.ns) === null;
 }
 
 /**
