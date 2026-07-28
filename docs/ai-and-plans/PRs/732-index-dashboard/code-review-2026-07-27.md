@@ -121,6 +121,8 @@ Suggested direction: suppress the toast for background polls; keep the inline `l
 - Alternative: latch the toast to fire only on the first background failure (false→true transition of `loadFailed`) — more code, marginal benefit.
 - **Best choice:** gate the toast on `shouldAnnounce`. Smallest correct fix and consistent with the existing announce policy.
 
+> **RESOLVED (2026-07-28)** — commit [`0204b97`](https://github.com/microsoft/vscode-documentdb/commit/0204b97d4dd6344835a49b449bee4a58103a883f). The `refresh()` catch block now gates both `showError(...)` and the assertive announcement on the existing `shouldAnnounce` signal (`initial || source === 'manual'`). Background poll failures update only the inline `loadFailed` banner, so a sustained outage while a row is building no longer stacks a toast every 5s; manual and initial loads still surface the error.
+
 ### LOW-1: Busy rows leave destructive and visibility actions enabled
 
 Files:
