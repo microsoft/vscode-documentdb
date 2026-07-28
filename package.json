@@ -164,7 +164,7 @@
     "@azure/arm-resources": "~7.0.0",
     "@azure/cosmos": "~4.7.0",
     "@azure/identity": "~4.13.0",
-    "@fluentui/react-components": "~9.73.3",
+    "@fluentui/react-components": "~9.74.4",
     "@fluentui/react-icons": "~2.0.320",
     "@kubernetes/client-node": "1.4.0",
     "@microsoft/vscode-azext-azureauth": "~4.1.1",

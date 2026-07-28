@@ -9,35 +9,144 @@
 
 //@import '@fluentui/react/dist/sass/_References';
 
-.row-separator {
-    padding: 10px;
-}
+// =============================================================================
+//  Shared constants
+// =============================================================================
 
+// Space reserved around the tab strip so the Fluent focus outline (a
+// `--strokeWidthThick` stroke drawn just outside the tab, plus its offset) clears
+// the webview's own edges instead of being cropped. Derived from the focus stroke
+// width so it tracks the theme rather than a magic number — ~4px today. The tab
+// band re-escapes this inset with a matching negative margin, so its background
+// still reaches every edge.
+$tab-focus-inset: calc(2 * var(--strokeWidthThick));
+
+// =============================================================================
+//  Collection view — layout regions, top to bottom:
+//    .collectionTabList  → tab strip + full-width header band
+//    .collectionTabPanel → the active tab's content, which stacks:
+//        .primaryActionBar       → the tab's main toolbar row
+//        .queryEditor            → query editor (Documents / Query Insights)
+//        .resultsDisplayArea     → results grid (Documents)
+//        .toolbarTableNavigation → table pager (Documents / Table view)
+// =============================================================================
 .collectionView {
     @extend .selectionDisabled;
 
     display: flex;
     flex-direction: column;
-    row-gap: 10px;
+    row-gap: 0;
 
     height: 100vh;
 
-    // Hide overflow only on larger viewports where the 1px scrollbar is clearly a rounding error
-    // caused by cumulative fractional pixel rounding (e.g., 34.799px + 41.904px + ... = 645px vs 644px viewport).
-    // On smaller screens (< 400px), keep scrollbars visible for accessibility and legitimate content overflow.
+    // Standard neutral surface for the whole view. With the full-bleed margin
+    // below, this also paints the strips reclaimed from the body padding so they
+    // match the theme instead of showing through to the raw editor background.
+    background-color: var(--colorNeutralBackground1);
+
+    // Full-bleed: VS Code gives every webview <body> a default horizontal padding.
+    // Break out of it so the view — and the full-width header band below — reaches
+    // the window's left/right edges. The calc keeps this robust to the exact body
+    // padding value.
+    margin-inline: calc(50% - 50vw);
+
+    // Reserve the focus-outline allowance on every side of the content (see
+    // $tab-focus-inset) so nothing — the tab focus ring in particular — is
+    // cropped by the webview's edges. The header band re-escapes this on the
+    // left/right/top so its background still spans edge-to-edge.
+    padding-inline: $tab-focus-inset;
+
+    // On larger viewports, clip rather than hide overflow. `clip` (with a small
+    // clip-margin) does three things `hidden` could not: it still suppresses the
+    // 1px cumulative-rounding scrollbar, it lets focus rings bleed a few px past
+    // the view's edges instead of being cropped, and it lets the header band's
+    // negative margin escape the padding above to reach the window edges.
+    // On smaller screens (< 400px), keep scrollbars visible for accessibility.
     @media (min-height: 400px) {
-        overflow-y: hidden;
+        overflow: clip;
+        overflow-clip-margin: var(--spacingHorizontalSNudge); // 6px
     }
 
-    .toolbarMainView {
-        padding-top: 10px;
+    // ---- Tab strip (also the full-width header band) -----------------------
+    .collectionTabList {
+        // Uses Fluent neutral aliases so it tracks the theme. It escapes the
+        // view's horizontal content inset with a matching negative margin so the
+        // background spans edge-to-edge, then re-applies that inset as padding so
+        // the tabs line up with the panel content below.
+        background-color: var(--colorNeutralBackground2);
+        border-bottom: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+        box-sizing: border-box;
+        flex-shrink: 0;
+        min-width: 0;
+        margin-inline: calc(-1 * #{$tab-focus-inset}); // cancel the view's horizontal inset
+        padding-inline: $tab-focus-inset; // realign the tabs with the content below
+        margin-bottom: var(--spacingVerticalS); // 8px gap below the header band
+        // Match the focus inset on top too: the view clips at its top edge (and
+        // nothing renders above the webview), so the tabs must sit this far down
+        // for their focus outline to clear the top instead of being cut.
+        padding-top: $tab-focus-inset;
+        padding-bottom: var(--spacingVerticalXXS); // 2px
+    }
 
+    .queryInsightsTabLabel {
+        display: flex;
+        align-items: center;
+        gap: var(--spacingHorizontalSNudge); // 6px
+    }
+
+    // ---- Active tab panel --------------------------------------------------
+    .collectionTabPanel {
+        display: flex;
+        flex: 1 1 auto;
+        flex-direction: column;
+        min-height: 0;
+        row-gap: var(--spacingVerticalMNudge); // 10px between stacked regions
+    }
+
+    // ---- Primary action bar (the tab's main toolbar row) -------------------
+    //
+    // `.primaryActionBar` is the shared row chrome used by every tab. The
+    // Documents / Query Insights tabs layer `.collectionQueryActionBar` on top
+    // for their two-toolbar grid; the Indexes tab applies it straight to its
+    // Fluent Toolbar. `.actionBarToolbar` styles the Fluent toolbars inside.
+    .primaryActionBar {
+        box-sizing: border-box;
+        flex-shrink: 0;
+        min-height: 32px; // matches a Fluent control's height
+        padding-inline: var(--spacingHorizontalMNudge); // 10px content gutter
+        // Breathing room between the tab strip's bottom border and the toolbar
+        // buttons, so their gap from the top reads closer to their gap from the
+        // left. Deliberately a margin (not padding): the full amount shows as a
+        // gap instead of being partly swallowed by the toolbar's vertical
+        // centering. Tweak to taste — XXS 2px · XS 4px · SNudge 6px · S 8px.
+        margin-top: var(--spacingVerticalXS); // 4px
+        text-wrap: nowrap;
+    }
+
+    .actionBarToolbar {
+        column-gap: var(--spacingHorizontalXS); // 4px between buttons
+    }
+
+    // Fluent's Toolbar carries its own small horizontal padding. Zero it inside
+    // the action bars so the first/last controls sit exactly on the 10px gutter —
+    // lining up Documents "Find Query", the Documents results navigation, and
+    // Indexes "Create Index" (and their right edges with the data gutter). The
+    // Indexes toolbar owns the gutter via .primaryActionBar and is left out here.
+    .collectionQueryActionBar .fui-Toolbar,
+    .resultsActionBar .fui-Toolbar {
+        padding-inline: 0;
+    }
+
+    // Documents / Query Insights: primary toolbar + right-aligned overflow toolbar.
+    .collectionQueryActionBar {
         display: grid;
         grid-template-columns: auto minmax(0, 1fr);
         align-items: center;
-        gap: 10px;
+        gap: var(--spacingHorizontalMNudge); // 10px
 
-        text-wrap: nowrap;
+        > .fui-Toolbar:first-child {
+            flex-wrap: nowrap;
+        }
 
         // The overflow toolbar (second column) needs these styles so the
         // FluentUI Overflow manager can measure and clip items correctly.
@@ -65,20 +174,33 @@
         }
     }
 
+    // Documents: results navigation row (pager controls + view switcher).
     .resultsActionBar {
+        box-sizing: border-box;
         display: flex;
         flex-direction: row;
-        justify-content: space-between;
         align-items: center;
-        gap: 10px;
+        justify-content: space-between;
+        gap: var(--spacingHorizontalMNudge); // 10px
+        padding-inline: var(--spacingHorizontalMNudge); // 10px content gutter
     }
 
+    // ---- Query editor ------------------------------------------------------
+    .queryEditor {
+        box-sizing: border-box;
+        // Match the 10px content gutter on both sides so the Monaco filter box's
+        // border lines up with the Find Query button above it.
+        padding-inline: var(--spacingHorizontalMNudge);
+    }
+
+    // ---- Results grid ------------------------------------------------------
     .resultsDisplayArea {
         @extend .selectionDisabled;
 
         flex-grow: 1;
         flex-shrink: 1;
-        min-height: 0; // Required for flexbox children to shrink below content size
+        min-height: 0; // Let flex children shrink below content size
+        margin-inline: var(--spacingHorizontalMNudge); // 10px content gutter
 
         z-index: 0; // Ensure this is below any floating elements like context menus, especially from Monaco editor
 
@@ -103,30 +225,37 @@
         .loadingAnimationTable {
             .headerRow {
                 align-items: center;
-                padding-bottom: 10px;
+                padding-bottom: var(--spacingVerticalMNudge); // 10px
             }
 
             .dataGrid {
                 display: grid;
                 grid-template-columns: 1fr 1fr 1fr 1fr;
-                gap: 10px;
+                gap: var(--spacingHorizontalMNudge); // 10px
             }
         }
     }
 
+    // ---- Table pager (Documents / Table view) ------------------------------
     .toolbarTableNavigation {
-        margin-top: -10px;
+        // Pull up to cancel the tab panel's row-gap so the pager sits flush under
+        // the grid above it.
+        margin-top: calc(-1 * var(--spacingVerticalMNudge)); // -10px
+        padding-inline: var(--spacingHorizontalMNudge); // 10px content gutter
     }
 }
 
+// =============================================================================
+//  Shared helpers (global — also used by other webviews)
+// =============================================================================
 .progressBar {
     position: absolute;
-    left: 0px;
-    top: 0px;
+    top: 0;
+    left: 0;
 }
 
 .toolbarDividerTransparent {
-    padding: 4px;
+    padding: var(--spacingHorizontalXS); // 4px
 }
 
 .lblPageNumber {

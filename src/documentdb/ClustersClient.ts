@@ -124,6 +124,7 @@ export interface IndexItemModel {
     hidden?: boolean;
     expireAfterSeconds?: number;
     partialFilterExpression?: Document;
+    cosmosSearchOptions?: Document;
     status?: string;
     queryable?: boolean;
     fields?: unknown[];

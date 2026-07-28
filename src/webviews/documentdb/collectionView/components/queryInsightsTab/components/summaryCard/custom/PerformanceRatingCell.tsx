@@ -131,7 +131,7 @@ export const PerformanceRatingCell: React.FC<PerformanceRatingCellProps> = ({
     } else if (rating === undefined) {
         // Undefined: data loading — render a structured skeleton that mirrors the real layout
         customContent = (
-            <Skeleton aria-label={l10n.t('Loading performance rating')}>
+            <Skeleton appearance="translucent" aria-label={l10n.t('Loading performance rating')}>
                 <div className="efficiencyIndicator efficiencyIndicator--skeleton">
                     {/* Row 1: dot skeleton + rating-text skeleton */}
                     <SkeletonItem shape="circle" size={12} className="efficiencyDotSkeleton" />

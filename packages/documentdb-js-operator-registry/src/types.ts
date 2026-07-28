@@ -96,6 +96,23 @@ export interface OperatorEntry {
 }
 
 /**
+ * A single index type or index property supported by DocumentDB, scraped from
+ * the "Index types" / "Index properties" tables on the compatibility page.
+ *
+ * Generated into `indexReference.ts` — see `scripts/scrape-operator-docs.ts`.
+ */
+export interface IndexReferenceEntry {
+    /** Display name, e.g. "Single Field", "Wildcard", "TTL". */
+    readonly name: string;
+
+    /** Human-readable one-line description from the docs. */
+    readonly description: string;
+
+    /** Whether DocumentDB supports this index type / property. */
+    readonly supported: boolean;
+}
+
+/**
  * Filter configuration for {@link getFilteredCompletions}.
  */
 export interface CompletionFilter {
