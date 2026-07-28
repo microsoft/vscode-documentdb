@@ -27,9 +27,12 @@ export interface IndexTypeBadgeViewProps {
 
 export const IndexTypeBadgeView = ({ type, size = 'medium' }: IndexTypeBadgeViewProps): JSX.Element => {
     // Keep multi-word labels (e.g. "Single Field") on one line so the badge
-    // doesn't wrap and blow up the row height — use a non-breaking space.
+    // doesn't wrap and blow up the row height — use a non-breaking space. The
+    // visible text already supplies the accessible name (a non-breaking space is
+    // announced as a space), so no `aria-label` is set: a redundant one would let
+    // some screen readers announce the type twice.
     return (
-        <Badge appearance="tint" color={BADGE_COLOR} shape="rounded" size={size} aria-label={type}>
+        <Badge appearance="tint" color={BADGE_COLOR} shape="rounded" size={size}>
             {type.replace(/ /g, '\u00A0')}
         </Badge>
     );
