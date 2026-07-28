@@ -370,9 +370,9 @@ export const AtlasCredentialsView = (): JSX.Element => {
         </div>
     );
 
-    // Once verification starts a credential may already be saved, so earlier steps stop being
-    // navigable and simply show progress.
-    const stepsLocked = phase === 'checking' || phase === 'success';
+    // Keep earlier steps locked while verification is active or after the credential is saved.
+    // A failed check unlocks them so the user can return through either breadcrumb.
+    const stepsLocked = phase === 'success' || (phase === 'checking' && submitError === undefined);
     const progress = (
         <Breadcrumb aria-label={l10n.t('Progress')}>
             {steps.map((step, index) => {
@@ -680,20 +680,22 @@ export const AtlasCredentialsView = (): JSX.Element => {
 
     const success = (
         <section className={styles.section} aria-labelledby="atlas-success-heading">
-            <Text id="atlas-success-heading" as="h2" size={500} weight="semibold">
-                {isEdit ? l10n.t('Credential updated') : l10n.t('Credential added')}
-            </Text>
+            <div className={styles.sectionHeader}>
+                <Text id="atlas-success-heading" as="h2" size={500} weight="semibold">
+                    {isEdit ? l10n.t('Credential updated') : l10n.t('Credential added')}
+                </Text>
+                <Text className={styles.muted}>{l10n.t('Your credential was successfully checked and saved.')}</Text>
+            </div>
             <div className={styles.stageList} role="list" aria-label={l10n.t('Completed credential checks')}>
                 {checkStages.map((label) => (
                     <StageRow key={label} label={label} status="done" />
                 ))}
             </div>
-            <MessageBar intent="success" layout="multiline">
-                <MessageBarBody>
-                    <MessageBarTitle>{l10n.t('Everything was successful.')}</MessageBarTitle>{' '}
-                    {l10n.t('Your credential was checked and saved.')}
-                </MessageBarBody>
-            </MessageBar>
+            <Text>
+                {l10n.t(
+                    'You can now close this tab and explore your MongoDB Atlas clusters in the Service Discovery area.',
+                )}
+            </Text>
             {submitError && errorMessage}
             <div className={styles.actions}>
                 <Button appearance="primary" disabled={isCompleting} onClick={() => void handleDone()}>
