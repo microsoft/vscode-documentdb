@@ -242,6 +242,8 @@ const FieldCreateIndexInputSchema = z
 - Pros: closes both gaps with clear errors. Cons: a true `z.discriminatedUnion('kind', …)` would route deterministically but requires the field payload to carry a `kind` discriminator (a small shape change across the drawer).
 - **Best choice:** keep `z.union` but make each member `.strict()` and add the `trim` refine — minimal change fixing both issues without reshaping the drawer payloads. Add tests for a mixed-shape vector payload and whitespace-only fields.
 
+> **RESOLVED (2026-07-28)** — commit [`463089f`](https://github.com/microsoft/vscode-documentdb/commit/463089fb24c3fe25b9b60bfa4b74c63adecf011f). Both union members now end in `.strict()`, so a payload carrying `kind: 'vector'` (or any unknown top-level key) fails both members instead of silently stripping the discriminator and degrading into a field index. The field-path `z.string().min(1)` on both the standard and vector schemas is replaced with a `trim`-based refine that rejects whitespace-only paths at the boundary. The drawer's `buildFieldPayload`/`buildVectorPayload` emit only the allowed, trimmed keys, so normal usage is unaffected. Added tests for a mixed-shape vector payload, a stray top-level key, and whitespace-only standard/vector field paths.
+
 ### LOW-4: Index type badges risk duplicate screen-reader announcements
 
 File: [IndexTypeBadgeView.tsx](../../../../src/webviews/documentdb/indexView/components/indexList/IndexTypeBadgeView.tsx#L27-L35)
