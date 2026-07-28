@@ -55,6 +55,25 @@ function isCollectionNamespace(namespace: string): boolean {
     return separatorIndex > 0 && separatorIndex < namespace.length - 1;
 }
 
+/**
+ * Renders an operation id, truncated with the full value in a tooltip.
+ *
+ * Azure DocumentDB (vCore) reports ids like `10000053116:1785197164497492` — 28 characters
+ * that, in a `flex: 1` table cell, push every following column off its heading. Monospaced
+ * so the digits line up down the column.
+ */
+function OperationIdCell({ opid }: { opid: string }): JSX.Element {
+    if (opid === '') {
+        return <span className="opidValue">—</span>;
+    }
+
+    return (
+        <Tooltip content={opid} relationship="description">
+            <span className="opidValue">{opid}</span>
+        </Tooltip>
+    );
+}
+
 /** Renders a `lastSeenMs` timestamp as a short "how long ago" label. */
 function formatSeenAgo(lastSeenMs: number, nowMs: number): string {
     const secondsAgo = Math.max(0, Math.round((nowMs - lastSeenMs) / 1000));
@@ -381,16 +400,16 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                         : l10n.t('No operations are currently running.')}
                 </div>
             ) : (
-                <Table size="small" aria-label={l10n.t('Running operations')}>
+                <Table size="small" className="operationsTable" aria-label={l10n.t('Running operations')}>
                     <TableHeader>
                         <TableRow>
-                            <TableHeaderCell>{l10n.t('Operation ID')}</TableHeaderCell>
-                            <TableHeaderCell>{l10n.t('Type')}</TableHeaderCell>
+                            <TableHeaderCell className="opidColumn">{l10n.t('Operation ID')}</TableHeaderCell>
+                            <TableHeaderCell className="narrowColumn">{l10n.t('Type')}</TableHeaderCell>
                             <TableHeaderCell>{l10n.t('Namespace')}</TableHeaderCell>
-                            <TableHeaderCell>{l10n.t('Running (s)')}</TableHeaderCell>
-                            <TableHeaderCell>{l10n.t('Active')}</TableHeaderCell>
+                            <TableHeaderCell className="narrowColumn">{l10n.t('Running (s)')}</TableHeaderCell>
+                            <TableHeaderCell className="narrowColumn">{l10n.t('Active')}</TableHeaderCell>
                             <TableHeaderCell>{l10n.t('Client')}</TableHeaderCell>
-                            <TableHeaderCell>{l10n.t('Actions')}</TableHeaderCell>
+                            <TableHeaderCell className="actionsColumn">{l10n.t('Actions')}</TableHeaderCell>
                         </TableRow>
                     </TableHeader>
                     <TableBody>
@@ -401,20 +420,26 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                             // is only the fallback for rows whose opid the server omitted
                             // ('' would collide).
                             <TableRow key={operation.opid === '' ? `unidentified:${index}` : operation.opid}>
-                                <TableCell>{operation.opid || '—'}</TableCell>
-                                <TableCell>{operation.type}</TableCell>
+                                <TableCell className="opidColumn">
+                                    <OperationIdCell opid={operation.opid} />
+                                </TableCell>
+                                <TableCell className="narrowColumn">{operation.type}</TableCell>
                                 <TableCell>
                                     <Tooltip
                                         content={operation.commandPreview || l10n.t('No command details reported.')}
                                         relationship="description"
                                     >
-                                        <span>{operation.namespace || '—'}</span>
+                                        <span className="truncatedValue">{operation.namespace || '—'}</span>
                                     </Tooltip>
                                 </TableCell>
-                                <TableCell>{operation.secsRunning ?? '—'}</TableCell>
-                                <TableCell>{operation.active ? l10n.t('Yes') : l10n.t('No')}</TableCell>
-                                <TableCell>{operation.clientDescription ?? '—'}</TableCell>
-                                <TableCell>{renderRowActions(operation)}</TableCell>
+                                <TableCell className="narrowColumn">{operation.secsRunning ?? '—'}</TableCell>
+                                <TableCell className="narrowColumn">
+                                    {operation.active ? l10n.t('Yes') : l10n.t('No')}
+                                </TableCell>
+                                <TableCell>
+                                    <span className="truncatedValue">{operation.clientDescription ?? '—'}</span>
+                                </TableCell>
+                                <TableCell className="actionsColumn">{renderRowActions(operation)}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
@@ -450,16 +475,24 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                 </MessageBarBody>
                             </MessageBar>
 
-                            <Table size="small" aria-label={l10n.t('Recently seen operations')}>
+                            <Table
+                                size="small"
+                                className="operationsTable"
+                                aria-label={l10n.t('Recently seen operations')}
+                            >
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHeaderCell>{l10n.t('Operation ID')}</TableHeaderCell>
-                                        <TableHeaderCell>{l10n.t('Type')}</TableHeaderCell>
+                                        <TableHeaderCell className="opidColumn">
+                                            {l10n.t('Operation ID')}
+                                        </TableHeaderCell>
+                                        <TableHeaderCell className="narrowColumn">{l10n.t('Type')}</TableHeaderCell>
                                         <TableHeaderCell>{l10n.t('Namespace')}</TableHeaderCell>
-                                        <TableHeaderCell>{l10n.t('Longest (s)')}</TableHeaderCell>
-                                        <TableHeaderCell>{l10n.t('Seen')}</TableHeaderCell>
-                                        <TableHeaderCell>{l10n.t('Status')}</TableHeaderCell>
-                                        <TableHeaderCell>{l10n.t('Actions')}</TableHeaderCell>
+                                        <TableHeaderCell className="narrowColumn">
+                                            {l10n.t('Longest (s)')}
+                                        </TableHeaderCell>
+                                        <TableHeaderCell className="narrowColumn">{l10n.t('Seen')}</TableHeaderCell>
+                                        <TableHeaderCell className="narrowColumn">{l10n.t('Status')}</TableHeaderCell>
+                                        <TableHeaderCell className="actionsColumn">{l10n.t('Actions')}</TableHeaderCell>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -471,8 +504,10 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                         // sightings that share all three were merged into
                                         // one entry by `recordObservedOperations`.
                                         <TableRow key={`${entry.opid}:${entry.namespace}:${entry.firstSeenMs}`}>
-                                            <TableCell>{entry.opid}</TableCell>
-                                            <TableCell>{entry.type}</TableCell>
+                                            <TableCell className="opidColumn">
+                                                <OperationIdCell opid={entry.opid} />
+                                            </TableCell>
+                                            <TableCell className="narrowColumn">{entry.type}</TableCell>
                                             <TableCell>
                                                 <Tooltip
                                                     content={
@@ -480,12 +515,16 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                                     }
                                                     relationship="description"
                                                 >
-                                                    <span>{entry.namespace || '—'}</span>
+                                                    <span className="truncatedValue">{entry.namespace || '—'}</span>
                                                 </Tooltip>
                                             </TableCell>
-                                            <TableCell>{entry.longestSecsRunning ?? '—'}</TableCell>
-                                            <TableCell>{formatSeenAgo(entry.lastSeenMs, nowMs)}</TableCell>
-                                            <TableCell>
+                                            <TableCell className="narrowColumn">
+                                                {entry.longestSecsRunning ?? '—'}
+                                            </TableCell>
+                                            <TableCell className="narrowColumn">
+                                                {formatSeenAgo(entry.lastSeenMs, nowMs)}
+                                            </TableCell>
+                                            <TableCell className="narrowColumn">
                                                 <Badge
                                                     appearance="tint"
                                                     color={entry.ended ? 'informative' : 'success'}
@@ -493,7 +532,7 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                                     {entry.ended ? l10n.t('Ended') : l10n.t('Running')}
                                                 </Badge>
                                             </TableCell>
-                                            <TableCell>
+                                            <TableCell className="actionsColumn">
                                                 <Menu>
                                                     <MenuTrigger disableButtonEnhancement>
                                                         <MenuButton

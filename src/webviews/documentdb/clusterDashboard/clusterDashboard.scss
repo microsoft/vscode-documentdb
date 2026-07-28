@@ -128,6 +128,56 @@
         }
     }
 
+    // Fluent table cells are `flex: 1 1 0` with no minimum, so any long value pushes the
+    // columns after it out from under their headings. Azure DocumentDB (vCore) reports
+    // operation ids like `10000053116:1785197164497492` — 28 characters — which overlapped
+    // the next column outright. Columns are given explicit widths and long values truncate
+    // with the full text available in a tooltip.
+    .operationsTable {
+        table-layout: fixed;
+        width: 100%;
+
+        .fui-TableCell,
+        .fui-TableHeaderCell {
+            // Without this a flex item refuses to shrink below its content width, which is
+            // what defeats `text-overflow` inside a table cell.
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .opidColumn {
+            flex: 0 0 190px;
+        }
+
+        .narrowColumn {
+            flex: 0 0 92px;
+        }
+
+        .actionsColumn {
+            flex: 0 0 104px;
+        }
+    }
+
+    .opidValue {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        // Monospaced so the digits line up down the column and a truncated id is still
+        // comparable at a glance.
+        font-family: var(--vscode-editor-font-family, monospace);
+        font-size: 12px;
+    }
+
+    .truncatedValue {
+        display: block;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
     .emptyState {
         padding: 16px 4px;
         color: var(--vscode-descriptionForeground);
