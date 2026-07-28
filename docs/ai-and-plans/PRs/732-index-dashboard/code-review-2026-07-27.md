@@ -303,6 +303,8 @@ export function installResizeObserverLoopDetector(): void {
 - Alternative: register `module.hot.dispose` to remove the exact listener — cleaner teardown but more code and bundler coupling.
 - **Best choice:** the `window` sentinel — least code for a dev-only utility while restoring the "warn once per burst" guarantee.
 
+> **RESOLVED (2026-07-28)** — commit [`5318241`](https://github.com/microsoft/vscode-documentdb/commit/5318241924f50bc04d6ea55d04f2f400693132f5). `installResizeObserverLoopDetector()` now guards on a `window`-scoped sentinel (`__documentDBResizeObserverLoopDetectorInstalled`) that survives HMR / React Refresh module replacement, so re-executing the entry module never stacks a second capture-phase listener. Dev-only utility, dead-code-eliminated from production.
+
 ## Unresolved Copilot comments
 
 All unresolved Copilot reviewer threads were fetched from GitHub after the independent review. They are merged into the findings above rather than duplicated.
