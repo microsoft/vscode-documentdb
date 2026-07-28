@@ -119,6 +119,8 @@ export interface ClusterDatabaseStorage {
     collections: number | null;
     /** `dbStats.objects`. */
     objects: number | null;
+    /** `dbStats.indexes` — number of indexes across the database's collections. */
+    indexes: number | null;
 }
 
 /** Aggregated storage figures for a cluster. */
@@ -673,6 +675,7 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
                 indexSizeBytes: null,
                 collections: null,
                 objects: null,
+                indexes: null,
             };
 
             try {
@@ -681,6 +684,7 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
                 database.indexSizeBytes = toNumberOrNull(stats.indexSize);
                 database.collections = toNumberOrNull(stats.collections);
                 database.objects = toNumberOrNull(stats.objects);
+                database.indexes = toNumberOrNull(stats.indexes);
                 // `??` rather than `||`: a genuine 0 is a real answer and must not be
                 // replaced, but `null` (field absent) should fall back to storageSize.
                 database.sizeOnDiskBytes ??= toNumberOrNull(stats.storageSize);

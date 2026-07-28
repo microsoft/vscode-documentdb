@@ -4,57 +4,51 @@
  *--------------------------------------------------------------------------------------------*/
 
 import * as l10n from '@vscode/l10n';
-import { type JSX, type ReactNode } from 'react';
+import { type JSX } from 'react';
 
-import { type ClusterHealthSample, type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
+import { type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 // TODO(dashboard): promote metricsRow to src/webviews/components/ so views don't reach into each other.
 import {
     CountMetric,
     GenericMetric,
     MetricsRow,
-    TimeMetric,
 } from '../../collectionView/components/queryInsightsTab/components/metricsRow';
 import { formatBytes } from '../formatUtils';
-import { Sparkline } from './Sparkline';
 
 export interface StatusStripProps {
-    samples: ClusterHealthSample[];
     storageStats: ClusterStorageStats | null;
-    /** True once the poller has missed two samples in a row; the tiles then show stale data. */
-    isStale: boolean;
 }
 
-const NOT_AVAILABLE = (): string => l10n.t('Not available on this server');
+/**
+ * The dashboard's headline numbers: what the cluster *contains*.
+ *
+ * Deliberately static — no sparklines, no polling artifacts. The strip summarizes the data
+ * inventory (storage, documents, databases/collections, indexes), which changes on the
+ * timescale of deployments, not seconds; per the dashboard's motion rule, nothing above the
+ * fold animates. Liveness (connection state, latency) lives in the header badge instead.
+ *
+ * `undefined` values render the metric row's loading skeleton; `null` renders the
+ * "not reported" placeholder.
+ */
+export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => {
+    const NOT_REPORTED = l10n.t('Not reported by this server');
 
-function Tile({ children, series }: { children: ReactNode; series?: Array<number | null> }): JSX.Element {
-    return (
-        <div className="statusTile">
-            {children}
-            {series && (
-                <div className="statusTileSparkline">
-                    <Sparkline data={series} />
-                </div>
-            )}
-        </div>
-    );
-}
-
-export const StatusStrip = ({ samples, storageStats, isStale }: StatusStripProps): JSX.Element => {
-    const latestSample = samples.length > 0 ? samples[samples.length - 1] : null;
-
-    // `undefined` renders a loading skeleton, `null` renders the "not available" placeholder.
-    const latencyMs = latestSample ? latestSample.pingLatencyMs : undefined;
-    const activeOperations = latestSample ? latestSample.activeOperations : undefined;
-
-    const totalCollections =
+    /** Sums a per-database figure, treating "no database reported it" as null. */
+    const sumAcrossDatabases = (read: (db: ClusterStorageStats['databases'][number]) => number | null) =>
         storageStats === null
             ? undefined
             : storageStats.databases.reduce<number | null>((total, database) => {
-                  if (database.collections === null) {
+                  const value = read(database);
+                  if (value === null) {
                       return total;
                   }
-                  return (total ?? 0) + database.collections;
+                  return (total ?? 0) + value;
               }, null);
+
+    const totalDocuments = sumAcrossDatabases((database) => database.objects);
+    const totalCollections = sumAcrossDatabases((database) => database.collections);
+    const totalIndexes = sumAcrossDatabases((database) => database.indexes);
+    const totalIndexBytes = sumAcrossDatabases((database) => database.indexSizeBytes);
 
     const databaseSummary =
         storageStats === null
@@ -64,46 +58,56 @@ export const StatusStrip = ({ samples, storageStats, isStale }: StatusStripProps
                   collections: totalCollections === null ? '—' : String(totalCollections),
               });
 
+    const indexSummary =
+        storageStats === null
+            ? undefined
+            : totalIndexes === null
+              ? NOT_REPORTED
+              : totalIndexBytes === null
+                ? String(totalIndexes)
+                : l10n.t('{count} · {size}', { count: String(totalIndexes), size: formatBytes(totalIndexBytes) });
+
     return (
-        <div className={isStale ? 'statusStrip statusStripStale' : 'statusStrip'}>
+        <div className="statusStrip">
             <MetricsRow>
-                <Tile series={samples.map((sample) => sample.pingLatencyMs)}>
-                    <TimeMetric
-                        label={l10n.t('Latency')}
-                        valueMs={latencyMs}
-                        nullValuePlaceholder={l10n.t('Unreachable')}
-                        tooltipExplanation={l10n.t('Round-trip time of the last ping to the cluster.')}
-                    />
-                </Tile>
-
-                <Tile series={samples.map((sample) => sample.activeOperations)}>
-                    <CountMetric
-                        label={l10n.t('Active Operations')}
-                        value={activeOperations}
-                        nullValuePlaceholder={NOT_AVAILABLE()}
-                        tooltipExplanation={l10n.t('Operations currently reported as running by the cluster.')}
-                    />
-                </Tile>
-
-                <Tile>
+                <div className="statusTile">
                     <GenericMetric
                         label={l10n.t('Storage Used')}
                         value={
-                            storageStats === null
-                                ? undefined
-                                : formatBytes(storageStats.totalSizeBytes, NOT_AVAILABLE())
+                            storageStats === null ? undefined : formatBytes(storageStats.totalSizeBytes, NOT_REPORTED)
                         }
-                        tooltipExplanation={l10n.t('Total size on disk reported for all user databases.')}
+                        tooltipExplanation={l10n.t(
+                            'Total size on disk reported for all user databases. This is the data footprint, not the provisioned disk.',
+                        )}
                     />
-                </Tile>
+                </div>
 
-                <Tile>
+                <div className="statusTile">
+                    <CountMetric
+                        label={l10n.t('Documents')}
+                        value={totalDocuments}
+                        nullValuePlaceholder={NOT_REPORTED}
+                        tooltipExplanation={l10n.t('Total documents across all user databases.')}
+                    />
+                </div>
+
+                <div className="statusTile">
                     <GenericMetric
                         label={l10n.t('Databases / Collections')}
                         value={databaseSummary}
                         tooltipExplanation={l10n.t('Number of user databases and the collections they contain.')}
                     />
-                </Tile>
+                </div>
+
+                <div className="statusTile">
+                    <GenericMetric
+                        label={l10n.t('Indexes')}
+                        value={indexSummary}
+                        tooltipExplanation={l10n.t(
+                            'Number of indexes across all user databases, and their total size.',
+                        )}
+                    />
+                </div>
             </MetricsRow>
         </div>
     );

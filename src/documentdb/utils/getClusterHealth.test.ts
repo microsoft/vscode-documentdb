@@ -619,7 +619,7 @@ describe('getStorageStats', () => {
                 if (databaseName === 'archive') {
                     throw new Error('dbStats failed');
                 }
-                return { dataSize: 90, indexSize: 10, collections: 3, objects: 500 };
+                return { dataSize: 90, indexSize: 10, collections: 3, objects: 500, indexes: 7 };
             },
         });
 
@@ -627,7 +627,9 @@ describe('getStorageStats', () => {
 
         expect(stats.databases.map((database) => database.name)).toEqual(['sales', 'archive']);
         expect(stats.databases[0].dataSizeBytes).toBe(90);
+        expect(stats.databases[0].indexes).toBe(7);
         expect(stats.databases[1].dataSizeBytes).toBeNull();
+        expect(stats.databases[1].indexes).toBeNull();
         expect(stats.errors).toHaveLength(1);
         expect(stats.errors[0]).toContain('dbStats:archive');
         // The total must reconcile with the rendered rows (100 + 200), NOT with

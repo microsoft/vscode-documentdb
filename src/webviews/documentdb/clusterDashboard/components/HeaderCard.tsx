@@ -196,6 +196,16 @@ export const HeaderCard = ({
                 <Badge appearance="filled" color={connectionAppearance} aria-label={connectionLabel}>
                     {connectionLabel}
                 </Badge>
+                {/*
+                 * Liveness lives here, next to the badge that already asserts it — not as a
+                 * chart. A number is the honest representation of a ping; the strip below is
+                 * reserved for what the cluster contains.
+                 */}
+                {connectionState === 'connected' && latestSample?.pingLatencyMs != null && (
+                    <span className="headerLatency">
+                        {l10n.t('{latency} ms', { latency: Math.round(latestSample.pingLatencyMs) })}
+                    </span>
+                )}
             </div>
 
             {clusterInfo === null ? (

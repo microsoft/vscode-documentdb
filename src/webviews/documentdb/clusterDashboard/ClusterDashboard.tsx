@@ -18,13 +18,13 @@ import { useTrpcClient } from '../../_integration/useTrpcClient';
 import './clusterDashboard.scss';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
 import { type ClusterDashboardInfo } from './clusterDashboardRouter';
+import { ActivityTab } from './components/ActivityTab';
 import { HeaderCard, type ConnectionState } from './components/HeaderCard';
 import { OperationsTab } from './components/OperationsTab';
-import { OverviewTab } from './components/OverviewTab';
 import { StatusStrip } from './components/StatusStrip';
 import { StorageTab } from './components/StorageTab';
 
-type DashboardTab = 'overview' | 'operations' | 'storage';
+type DashboardTab = 'data' | 'operations' | 'activity';
 
 /** Number of samples kept in the webview for the sparklines (5 minutes at a 5 s cadence). */
 const MAX_SAMPLES = 60;
@@ -53,7 +53,9 @@ export const ClusterDashboard = (): JSX.Element => {
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
     const [opcountersUnsupported, setOpcountersUnsupported] = useState(false);
-    const [selectedTab, setSelectedTab] = useState<DashboardTab>('overview');
+    // The inventory is the landing view: the dashboard is a map of the cluster's data
+    // first, and a monitoring surface only where the server can actually support one.
+    const [selectedTab, setSelectedTab] = useState<DashboardTab>('data');
 
     /**
      * Guards every asynchronous state write. The polling closures outlive a single render,
@@ -203,6 +205,19 @@ export const ClusterDashboard = (): JSX.Element => {
               ? 'connected'
               : 'connecting';
 
+    // The dashboard's shape is grown from the capability probe: a tab exists only when the
+    // server can answer it. `serverStatus_uptime` in the one-shot metadata means the server
+    // answered `serverStatus`, which is everything the Activity charts are made of — on
+    // Azure DocumentDB (vCore) the command is rejected, and a tab that could only show a
+    // sampling artifact dressed up as a rate would move without informing. Checked from
+    // metadata rather than the live samples so the tab set is stable from first render.
+    const activitySupported = clusterInfo?.metadata['serverStatus_uptime'] !== undefined && !opcountersUnsupported;
+
+    // If a later sample proves serverStatus unsupported while Activity is selected, the tab
+    // vanishes from under the selection; fall back to the landing view rather than pointing
+    // the TabList at a tab that no longer exists.
+    const effectiveTab: DashboardTab = selectedTab === 'activity' && !activitySupported ? 'data' : selectedTab;
+
     return (
         <div className="clusterDashboard">
             <HeaderCard
@@ -212,11 +227,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 connectionState={connectionState}
             />
 
-            <StatusStrip
-                samples={samples}
-                storageStats={storageStats}
-                isStale={consecutiveFailures >= FAILURE_THRESHOLD}
-            />
+            <StatusStrip storageStats={storageStats} />
 
             <div className="dashboardToolbar">
                 <Button
@@ -231,26 +242,26 @@ export const ClusterDashboard = (): JSX.Element => {
             </div>
 
             <TabList
-                selectedValue={selectedTab}
+                selectedValue={effectiveTab}
                 onTabSelect={(_event, data) => setSelectedTab(data.value as DashboardTab)}
                 aria-label={l10n.t('Cluster dashboard sections')}
             >
-                <Tab value="overview">{l10n.t('Overview')}</Tab>
+                <Tab value="data">{l10n.t('Data')}</Tab>
                 <Tab value="operations">{l10n.t('Operations')}</Tab>
-                <Tab value="storage">{l10n.t('Storage')}</Tab>
+                {activitySupported && <Tab value="activity">{l10n.t('Activity')}</Tab>}
             </TabList>
 
             <div className="dashboardContent">
-                {selectedTab === 'overview' && (
-                    <OverviewTab samples={samples} opcountersUnsupported={opcountersUnsupported} />
-                )}
-                {selectedTab === 'operations' && <OperationsTab refreshIntervalMs={configuration.refreshIntervalMs} />}
-                {selectedTab === 'storage' && (
+                {effectiveTab === 'data' && (
                     <StorageTab
                         storageStats={storageStats}
                         isRefreshing={isRefreshingStorage}
                         onRefresh={() => void loadStorageStats()}
                     />
+                )}
+                {effectiveTab === 'operations' && <OperationsTab refreshIntervalMs={configuration.refreshIntervalMs} />}
+                {effectiveTab === 'activity' && (
+                    <ActivityTab samples={samples} opcountersUnsupported={opcountersUnsupported} />
                 )}
             </div>
         </div>

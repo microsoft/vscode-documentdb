@@ -11,7 +11,7 @@ import { type ClusterHealthSample } from '../../../../documentdb/utils/getCluste
 import { formatCount } from '../../collectionView/components/queryInsightsTab/components/metricsRow';
 import { Sparkline } from './Sparkline';
 
-export interface OverviewTabProps {
+export interface ActivityTabProps {
     samples: ClusterHealthSample[];
     /** True once at least one sample reported that the server has no `serverStatus`. */
     opcountersUnsupported: boolean;
@@ -80,7 +80,7 @@ function ChartCard({
     );
 }
 
-export const OverviewTab = ({ samples, opcountersUnsupported }: OverviewTabProps): JSX.Element => {
+export const ActivityTab = ({ samples, opcountersUnsupported }: ActivityTabProps): JSX.Element => {
     const latestSample = samples.length > 0 ? samples[samples.length - 1] : null;
     const opcounterRates = computeOpcounterRates(samples);
 
@@ -95,7 +95,7 @@ export const OverviewTab = ({ samples, opcountersUnsupported }: OverviewTabProps
             : formatCount(latestSample.activeOperations);
 
     return (
-        <div className="overviewTab">
+        <div className="activityTab">
             <ChartCard
                 title={l10n.t('Ping latency')}
                 caption={latencyCaption}

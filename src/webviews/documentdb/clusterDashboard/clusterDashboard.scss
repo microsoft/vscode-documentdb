@@ -66,10 +66,10 @@
         text-overflow: ellipsis;
     }
 
-    // The status strip dims as a whole once polling has missed two samples in a row,
-    // so a frozen number is never mistaken for a live one.
-    .statusStripStale {
-        opacity: 0.55;
+    .headerLatency {
+        font-size: 12px;
+        color: var(--vscode-descriptionForeground);
+        white-space: nowrap;
     }
 
     .statusTile {
@@ -77,11 +77,6 @@
         flex-direction: column;
         min-width: 0;
         gap: 4px;
-    }
-
-    .statusTileSparkline {
-        height: 36px;
-        padding: 0 4px;
     }
 
     .sparkline {
@@ -184,7 +179,7 @@
         max-width: 640px;
     }
 
-    .overviewTab {
+    .activityTab {
         display: flex;
         flex-direction: column;
         gap: 12px;
