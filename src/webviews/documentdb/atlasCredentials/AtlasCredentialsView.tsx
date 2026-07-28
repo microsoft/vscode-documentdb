@@ -119,6 +119,7 @@ const useStyles = makeStyles({
         flexDirection: 'column',
         gap: '8px',
     },
+    guideHeaderBrand: { color: tokens.colorBrandForeground1 },
     fields: { display: 'flex', flexDirection: 'column', gap: '14px' },
     secretButton: { minWidth: '28px' },
     stageList: {
@@ -483,43 +484,49 @@ export const AtlasCredentialsView = (): JSX.Element => {
         </section>
     );
 
+    const guideSteps = (
+        <ol className={styles.stepList}>
+            <li>
+                <Body1 as="span">
+                    {l10n.t('Sign in to')}{' '}
+                    <Link onClick={() => openLink(ATLAS_CONSOLE_URL)}>{l10n.t('MongoDB Atlas')}</Link>{' '}
+                    {renderWithEmphasis(l10n.t('and select your **organization**.'))}
+                </Body1>
+            </li>
+            <li>
+                <Body1 as="span">
+                    {renderWithEmphasis(
+                        l10n.t('In the left sidebar, under **Identity & Access**, open **Applications**.'),
+                    )}
+                </Body1>
+            </li>
+            <li>
+                <Body1 as="span">
+                    {isApiKey
+                        ? renderWithEmphasis(
+                              l10n.t(
+                                  'Go to **API Keys**, create a key, set its permissions, then copy the **Public Key** and **Private Key**.',
+                              ),
+                          )
+                        : renderWithEmphasis(
+                              l10n.t(
+                                  'Go to **Service Accounts**, create one, set its permissions, then copy the **Client ID** and **Client Secret**.',
+                              ),
+                          )}
+                </Body1>
+            </li>
+        </ol>
+    );
+
     const guide = (
         <Accordion collapsible>
             <AccordionItem value="guide">
-                <AccordionHeader>{l10n.t('Where do I find these values?')}</AccordionHeader>
-                <AccordionPanel>
-                    <ol className={styles.stepList}>
-                        <li>
-                            <Body1 as="span">
-                                {l10n.t('Sign in to')}{' '}
-                                <Link onClick={() => openLink(ATLAS_CONSOLE_URL)}>{l10n.t('MongoDB Atlas')}</Link>{' '}
-                                {renderWithEmphasis(l10n.t('and select your **organization**.'))}
-                            </Body1>
-                        </li>
-                        <li>
-                            <Body1 as="span">
-                                {renderWithEmphasis(
-                                    l10n.t('In the left sidebar, under **Identity & Access**, open **Applications**.'),
-                                )}
-                            </Body1>
-                        </li>
-                        <li>
-                            <Body1 as="span">
-                                {isApiKey
-                                    ? renderWithEmphasis(
-                                          l10n.t(
-                                              'Go to **API Keys**, create a key, set its permissions, then copy the **Public Key** and **Private Key**.',
-                                          ),
-                                      )
-                                    : renderWithEmphasis(
-                                          l10n.t(
-                                              'Go to **Service Accounts**, create one, set its permissions, then copy the **Client ID** and **Client Secret**.',
-                                          ),
-                                      )}
-                            </Body1>
-                        </li>
-                    </ol>
-                </AccordionPanel>
+                <AccordionHeader>
+                    <Text weight="semibold" className={styles.guideHeaderBrand}>
+                        {l10n.t('Where do I find these values?')}
+                    </Text>
+                </AccordionHeader>
+                <AccordionPanel>{guideSteps}</AccordionPanel>
             </AccordionItem>
         </Accordion>
     );
