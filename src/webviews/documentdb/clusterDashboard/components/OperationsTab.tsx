@@ -4,7 +4,18 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    Accordion,
+    AccordionHeader,
+    AccordionItem,
+    AccordionPanel,
+    Badge,
     Button,
+    Menu,
+    MenuButton,
+    MenuItem,
+    MenuList,
+    MenuPopover,
+    MenuTrigger,
     MessageBar,
     MessageBarBody,
     Spinner,
@@ -16,68 +27,55 @@ import {
     TableRow,
     Tooltip,
 } from '@fluentui/react-components';
-import { ArrowClockwiseRegular, DismissCircleRegular } from '@fluentui/react-icons';
+import {
+    ArrowClockwiseRegular,
+    CopyRegular,
+    DeleteRegular,
+    DismissCircleRegular,
+    OpenRegular,
+} from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 
 import { type CurrentOpEntry, type CurrentOpScope } from '../../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../../_integration/useTrpcClient';
 import { Announcer } from '../../../components/accessibility';
+import { type ObservedOperation } from '../operationHistory';
 
 export interface OperationsTabProps {
     /** Polling cadence inherited from the panel configuration. */
     refreshIntervalMs: number;
 }
 
-/**
- * Renders the per-row Kill button, explaining any reason it is unavailable.
- *
- * A disabled Fluent button emits no pointer events, so the tooltip is anchored on a
- * wrapping span — without it the explanation would be unreachable, which is the whole point
- * of showing one.
- *
- * `canKillOperations` is deliberately three-valued: `false` disables with an explanation,
- * while `null` (the server did not report privileges) leaves the button enabled and lets
- * the server refuse. Disabling on "unknown" would block an action that works.
- */
-function renderKillButton(
-    operation: CurrentOpEntry,
-    killingOpid: string | null,
-    canKillOperations: boolean | null,
-    onKill: () => void,
-): JSX.Element {
-    const missingPrivilege = canKillOperations === false;
-    const button = (
-        <Button
-            appearance="subtle"
-            size="small"
-            icon={<DismissCircleRegular />}
-            disabled={operation.opid === '' || killingOpid !== null || missingPrivilege}
-            onClick={onKill}
-            aria-label={l10n.t('Kill operation {opid}', { opid: operation.opid })}
-        >
-            {l10n.t('Kill')}
-        </Button>
-    );
+/** `true` when a namespace names a collection, i.e. can be opened. */
+function isCollectionNamespace(namespace: string): boolean {
+    const separatorIndex = namespace.indexOf('.');
 
-    if (!missingPrivilege) {
-        return button;
+    return separatorIndex > 0 && separatorIndex < namespace.length - 1;
+}
+
+/** Renders a `lastSeenMs` timestamp as a short "how long ago" label. */
+function formatSeenAgo(lastSeenMs: number, nowMs: number): string {
+    const secondsAgo = Math.max(0, Math.round((nowMs - lastSeenMs) / 1000));
+
+    if (secondsAgo < 60) {
+        return l10n.t('{seconds}s ago', { seconds: secondsAgo });
     }
 
-    return (
-        <Tooltip
-            content={l10n.t('Terminating operations requires the "killOp" privilege, which this account lacks.')}
-            relationship="description"
-        >
-            <span>{button}</span>
-        </Tooltip>
-    );
+    return l10n.t('{minutes}m ago', { minutes: Math.round(secondsAgo / 60) });
 }
 
 export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.Element => {
     const trpcClient = useTrpcClient();
 
     const [operations, setOperations] = useState<CurrentOpEntry[] | null>(null);
+    const [history, setHistory] = useState<ObservedOperation[]>([]);
+    /**
+     * Reference point for the history's "seen N ago" column, refreshed with each poll.
+     * Host and webview run on the same machine, so the host-stamped `lastSeenMs` values are
+     * directly comparable to this.
+     */
+    const [nowMs, setNowMs] = useState<number>(() => Date.now());
     const [scope, setScope] = useState<CurrentOpScope>('all');
     const [serverErrors, setServerErrors] = useState<string[]>([]);
     /** `null` until known, and left `null` when the server does not report privileges. */
@@ -105,6 +103,8 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                 return;
             }
             setOperations(result.operations);
+            setHistory(result.history);
+            setNowMs(Date.now());
             setScope(result.scope);
             setServerErrors(result.errors);
             setLoadError(null);
@@ -183,6 +183,106 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
             }
         },
         [loadOperations, trpcClient],
+    );
+
+    const handleCopyCommand = useCallback(
+        async (operation: CurrentOpEntry | ObservedOperation): Promise<void> => {
+            try {
+                await trpcClient.clusterDashboard.copyCommand.mutate({ command: operation.commandPreview });
+            } catch (error) {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Failed to copy the command.'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            }
+        },
+        [trpcClient],
+    );
+
+    const handleOpenNamespace = useCallback(
+        async (namespace: string): Promise<void> => {
+            try {
+                await trpcClient.clusterDashboard.openNamespace.mutate({ namespace });
+            } catch (error) {
+                void trpcClient.common.displayErrorMessage.mutate({
+                    message: l10n.t('Failed to open the collection.'),
+                    modal: false,
+                    cause: error instanceof Error ? error.message : String(error),
+                });
+            }
+        },
+        [trpcClient],
+    );
+
+    const handleClearHistory = useCallback(async (): Promise<void> => {
+        try {
+            await trpcClient.clusterDashboard.clearOperationHistory.mutate();
+            if (!disposedRef.current) {
+                setHistory([]);
+            }
+        } catch (error) {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to clear the operation history.'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }, [trpcClient]);
+
+    /**
+     * Per-row action menu.
+     *
+     * The reason Kill is unavailable is put in the item's own label rather than a tooltip:
+     * a disabled menu item emits no pointer events, so an attached tooltip would be
+     * unreachable — and an unexplained disabled action is worse than no action.
+     */
+    const renderRowActions = useCallback(
+        (operation: CurrentOpEntry): JSX.Element => {
+            const missingPrivilege = canKillOperations === false;
+
+            return (
+                <Menu>
+                    <MenuTrigger disableButtonEnhancement>
+                        <MenuButton
+                            appearance="subtle"
+                            size="small"
+                            aria-label={l10n.t('Actions for operation {opid}', { opid: operation.opid || '—' })}
+                        >
+                            {l10n.t('Actions')}
+                        </MenuButton>
+                    </MenuTrigger>
+                    <MenuPopover>
+                        <MenuList>
+                            <MenuItem
+                                icon={<DismissCircleRegular />}
+                                disabled={operation.opid === '' || killingOpid !== null || missingPrivilege}
+                                onClick={() => void handleKill(operation)}
+                            >
+                                {missingPrivilege
+                                    ? l10n.t('Kill (requires the "killOp" privilege)')
+                                    : l10n.t('Kill operation')}
+                            </MenuItem>
+                            <MenuItem
+                                icon={<CopyRegular />}
+                                disabled={operation.commandPreview === ''}
+                                onClick={() => void handleCopyCommand(operation)}
+                            >
+                                {l10n.t('Copy command')}
+                            </MenuItem>
+                            <MenuItem
+                                icon={<OpenRegular />}
+                                disabled={!isCollectionNamespace(operation.namespace)}
+                                onClick={() => void handleOpenNamespace(operation.namespace)}
+                            >
+                                {l10n.t('Open collection')}
+                            </MenuItem>
+                        </MenuList>
+                    </MenuPopover>
+                </Menu>
+            );
+        },
+        [canKillOperations, handleCopyCommand, handleKill, handleOpenNamespace, killingOpid],
     );
 
     const toolbar = (
@@ -281,18 +381,121 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                 <TableCell>{operation.secsRunning ?? '—'}</TableCell>
                                 <TableCell>{operation.active ? l10n.t('Yes') : l10n.t('No')}</TableCell>
                                 <TableCell>{operation.clientDescription ?? '—'}</TableCell>
-                                <TableCell>
-                                    {renderKillButton(
-                                        operation,
-                                        killingOpid,
-                                        canKillOperations,
-                                        () => void handleKill(operation),
-                                    )}
-                                </TableCell>
+                                <TableCell>{renderRowActions(operation)}</TableCell>
                             </TableRow>
                         ))}
                     </TableBody>
                 </Table>
+            )}
+
+            {history.length > 0 && (
+                // Collapsed by default: the running table answers the primary question, and
+                // this answers the one people ask second — "what has run since I opened
+                // this?" — which a snapshot alone cannot.
+                <Accordion collapsible className="operationHistory">
+                    <AccordionItem value="history">
+                        <AccordionHeader>
+                            {l10n.t('Recently seen operations ({count})', { count: history.length })}
+                        </AccordionHeader>
+                        <AccordionPanel>
+                            <div className="tabToolbar">
+                                <Button
+                                    appearance="subtle"
+                                    size="small"
+                                    icon={<DeleteRegular />}
+                                    onClick={() => void handleClearHistory()}
+                                >
+                                    {l10n.t('Clear history')}
+                                </Button>
+                            </div>
+
+                            <MessageBar intent="info">
+                                <MessageBarBody>
+                                    {l10n.t(
+                                        'Operations seen by this dashboard since it was opened. Anything that started and finished between two refreshes never appears here.',
+                                    )}
+                                </MessageBarBody>
+                            </MessageBar>
+
+                            <Table size="small" aria-label={l10n.t('Recently seen operations')}>
+                                <TableHeader>
+                                    <TableRow>
+                                        <TableHeaderCell>{l10n.t('Operation ID')}</TableHeaderCell>
+                                        <TableHeaderCell>{l10n.t('Type')}</TableHeaderCell>
+                                        <TableHeaderCell>{l10n.t('Namespace')}</TableHeaderCell>
+                                        <TableHeaderCell>{l10n.t('Longest (s)')}</TableHeaderCell>
+                                        <TableHeaderCell>{l10n.t('Seen')}</TableHeaderCell>
+                                        <TableHeaderCell>{l10n.t('Status')}</TableHeaderCell>
+                                        <TableHeaderCell>{l10n.t('Actions')}</TableHeaderCell>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {history.map((entry, index) => (
+                                        <TableRow key={`${entry.opid}:${entry.firstSeenMs}:${index}`}>
+                                            <TableCell>{entry.opid}</TableCell>
+                                            <TableCell>{entry.type}</TableCell>
+                                            <TableCell>
+                                                <Tooltip
+                                                    content={
+                                                        entry.commandPreview || l10n.t('No command details reported.')
+                                                    }
+                                                    relationship="description"
+                                                >
+                                                    <span>{entry.namespace || '—'}</span>
+                                                </Tooltip>
+                                            </TableCell>
+                                            <TableCell>{entry.longestSecsRunning ?? '—'}</TableCell>
+                                            <TableCell>{formatSeenAgo(entry.lastSeenMs, nowMs)}</TableCell>
+                                            <TableCell>
+                                                <Badge
+                                                    appearance="tint"
+                                                    color={entry.ended ? 'informative' : 'success'}
+                                                >
+                                                    {entry.ended ? l10n.t('Ended') : l10n.t('Running')}
+                                                </Badge>
+                                            </TableCell>
+                                            <TableCell>
+                                                <Menu>
+                                                    <MenuTrigger disableButtonEnhancement>
+                                                        <MenuButton
+                                                            appearance="subtle"
+                                                            size="small"
+                                                            aria-label={l10n.t('Actions for operation {opid}', {
+                                                                opid: entry.opid,
+                                                            })}
+                                                        >
+                                                            {l10n.t('Actions')}
+                                                        </MenuButton>
+                                                    </MenuTrigger>
+                                                    <MenuPopover>
+                                                        <MenuList>
+                                                            <MenuItem
+                                                                icon={<CopyRegular />}
+                                                                disabled={entry.commandPreview === ''}
+                                                                onClick={() => void handleCopyCommand(entry)}
+                                                            >
+                                                                {l10n.t('Copy command')}
+                                                            </MenuItem>
+                                                            <MenuItem
+                                                                icon={<OpenRegular />}
+                                                                disabled={!isCollectionNamespace(entry.namespace)}
+                                                                onClick={() =>
+                                                                    void handleOpenNamespace(entry.namespace)
+                                                                }
+                                                            >
+                                                                {l10n.t('Open collection')}
+                                                            </MenuItem>
+                                                        </MenuList>
+                                                    </MenuPopover>
+                                                </Menu>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
+                        </AccordionPanel>
+                    </AccordionItem>
+                </Accordion>
             )}
         </div>
     );

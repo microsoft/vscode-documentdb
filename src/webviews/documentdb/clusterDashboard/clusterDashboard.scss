@@ -109,6 +109,25 @@
         gap: 8px;
     }
 
+    .dashboardToolbar {
+        display: flex;
+        align-items: center;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    .operationHistory {
+        margin-top: 8px;
+
+        // The accordion nests a toolbar, a message bar and a table; without this they sit
+        // flush against each other, unlike the spacing `.tabPanel` gives the tab body.
+        .fui-AccordionPanel {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+    }
+
     .emptyState {
         padding: 16px 4px;
         color: var(--vscode-descriptionForeground);

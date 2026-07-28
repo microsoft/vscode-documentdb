@@ -3,7 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Tab, TabList } from '@fluentui/react-components';
+import { Button, Tab, TabList } from '@fluentui/react-components';
+import { ArrowDownloadRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
@@ -172,6 +173,27 @@ export const ClusterDashboard = (): JSX.Element => {
         return () => clearInterval(intervalId);
     }, [configuration.refreshIntervalMs, loadStorageStats]);
 
+    const [isExporting, setIsExporting] = useState(false);
+
+    const exportDiagnostics = useCallback(async (): Promise<void> => {
+        setIsExporting(true);
+        try {
+            // The samples only exist here — everything else is re-read on the host, so the
+            // export reflects the cluster now rather than whatever the webview last rendered.
+            await trpcClient.clusterDashboard.exportDiagnostics.mutate({ samples });
+        } catch (error) {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to export diagnostics.'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        } finally {
+            if (!disposedRef.current) {
+                setIsExporting(false);
+            }
+        }
+    }, [samples, trpcClient]);
+
     const latestSample = samples.length > 0 ? samples[samples.length - 1] : null;
 
     const connectionState: ConnectionState =
@@ -195,6 +217,18 @@ export const ClusterDashboard = (): JSX.Element => {
                 storageStats={storageStats}
                 isStale={consecutiveFailures >= FAILURE_THRESHOLD}
             />
+
+            <div className="dashboardToolbar">
+                <Button
+                    appearance="subtle"
+                    icon={<ArrowDownloadRegular />}
+                    disabled={isExporting}
+                    onClick={() => void exportDiagnostics()}
+                    aria-label={l10n.t('Export a diagnostics snapshot of this cluster')}
+                >
+                    {l10n.t('Export diagnostics')}
+                </Button>
+            </div>
 
             <TabList
                 selectedValue={selectedTab}
