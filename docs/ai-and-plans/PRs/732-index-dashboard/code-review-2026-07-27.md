@@ -268,6 +268,8 @@ Suggested direction: remove the redundant `aria-label` and let the visible text 
 - Pros/Cons: pure improvement, no downside. If a richer label is ever needed, wrap the visible text in `aria-hidden="true"` per the repo's focusable-badge pattern.
 - **Best choice:** drop the `aria-label`.
 
+> **RESOLVED (2026-07-28)** — commit [`760f4fd`](https://github.com/microsoft/vscode-documentdb/commit/760f4fd2b1c6b9e91298d94c460f5b80d8f327f1). Removed the redundant `aria-label={type}` from `IndexTypeBadgeView`; the visible text (with its non-breaking space, which is announced as a space) already supplies the accessible name, so the double announcement source is eliminated.
+
 ### LOW-5: The dev-only ResizeObserver detector installs duplicate listeners under hot reload
 
 Files:
