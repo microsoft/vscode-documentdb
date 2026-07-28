@@ -345,3 +345,52 @@ describe('advanced-option comment handling in the shell/playground handoff', () 
         expect(() => buildCreateIndexShellCommand('users', input)).toThrow(/partial filter/i);
     });
 });
+
+describe('create-index schema boundary hardening', () => {
+    const validVectorInput: CreateIndexInput = {
+        kind: 'vector',
+        field: 'embedding',
+        dimensions: 1536,
+        similarity: 'COS',
+        algorithm: { kind: 'vector-hnsw', m: 16, efConstruction: 64 },
+    };
+
+    it('rejects a malformed vector payload instead of degrading it to a field index', () => {
+        // Carries the vector discriminator but is otherwise a valid field-keyed
+        // payload. Without strict members the field schema would strip `kind` and
+        // accept it as a standard index; strict members reject it outright.
+        const mixed = {
+            kind: 'vector',
+            fields: [{ field: 'name', type: 'asc' }],
+        };
+
+        expect(CreateIndexInputSchema.safeParse(mixed).success).toBe(false);
+    });
+
+    it('rejects an unknown top-level key on a field-keyed payload', () => {
+        const withStrayKey = {
+            fields: [{ field: 'name', type: 'asc' }],
+            bogus: true,
+        };
+
+        expect(CreateIndexInputSchema.safeParse(withStrayKey).success).toBe(false);
+    });
+
+    it.each(['   ', '\t', '\n'])('rejects a whitespace-only standard field path: %j', (field) => {
+        expect(CreateIndexInputSchema.safeParse({ fields: [{ field, type: 'asc' }] }).success).toBe(false);
+    });
+
+    it.each(['   ', '\t', '\n'])('rejects a whitespace-only vector field path: %j', (field) => {
+        expect(CreateIndexInputSchema.safeParse({ ...validVectorInput, field }).success).toBe(false);
+    });
+
+    it('still accepts the disjoint payloads the drawer emits', () => {
+        expect(
+            CreateIndexInputSchema.safeParse({
+                fields: [{ field: 'name', type: 'asc' }],
+                unique: true,
+            }).success,
+        ).toBe(true);
+        expect(CreateIndexInputSchema.safeParse(validVectorInput).success).toBe(true);
+    });
+});

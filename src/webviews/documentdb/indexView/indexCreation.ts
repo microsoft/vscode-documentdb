@@ -54,7 +54,9 @@ const FieldCreateIndexInputSchema = z
         fields: z
             .array(
                 z.object({
-                    field: z.string().min(1),
+                    field: z
+                        .string()
+                        .refine((value) => value.trim().length > 0, { message: l10n.t('Field path is required.') }),
                     type: FieldIndexTypeSchema,
                 }),
             )
@@ -70,6 +72,10 @@ const FieldCreateIndexInputSchema = z
         collation: z.string().optional(),
         wildcardProjection: z.string().optional(),
     })
+    // Reject unknown top-level keys so a malformed vector payload (which carries
+    // `kind: 'vector'`) cannot silently strip its discriminator and degrade into a
+    // valid field-keyed index request.
+    .strict()
     .superRefine((input, ctx) => {
         const fieldNames = new Set<string>();
         const wildcardFields = input.fields.filter((entry) => isWildcardKey(entry.field.trim()));
@@ -191,7 +197,7 @@ const VectorCompressionSchema = z.discriminatedUnion('kind', [
 const VectorCreateIndexInputSchema = z
     .object({
         kind: z.literal('vector'),
-        field: z.string().min(1),
+        field: z.string().refine((value) => value.trim().length > 0, { message: l10n.t('Field path is required.') }),
         name: z
             .string()
             .refine((name) => name.trim() !== '*', { message: l10n.t('The index name "*" is reserved.') })
@@ -201,6 +207,9 @@ const VectorCreateIndexInputSchema = z
         algorithm: VectorAlgorithmSchema,
         compression: VectorCompressionSchema.optional(),
     })
+    // Reject unknown top-level keys so a field-keyed payload cannot ride along on
+    // a vector request (mirrors the field-schema hardening above).
+    .strict()
     .superRefine((input, ctx) => {
         if (input.algorithm.kind === 'vector-hnsw' && input.algorithm.efConstruction < 2 * input.algorithm.m) {
             ctx.addIssue({
