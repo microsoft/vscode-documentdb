@@ -666,6 +666,47 @@ describe('getStorageStats', () => {
         expect(stats.databases[0].sizeOnDiskBytes).toBe(0);
     });
 
+    it('keeps a zero the server confirms is empty', async () => {
+        const { client } = createFakeClient({
+            listDatabases: () => ({ databases: [{ name: 'empty', sizeOnDisk: 0, empty: true }] }),
+            dbCommand: () => ({ dataSize: 0, indexSize: 0, collections: 0, objects: 0, storageSize: 4096 }),
+        });
+
+        const stats = await getStorageStats(client);
+
+        // Overwriting this with `storageSize` would report preallocated overhead as data.
+        expect(stats.databases[0].sizeOnDiskBytes).toBe(0);
+    });
+
+    it('falls back to storageSize when a non-empty database reports a size of zero', async () => {
+        // Observed on a live Azure DocumentDB (vCore) cluster: every `listDatabases` entry
+        // comes back `{sizeOnDisk: 0, empty: false}` however much data it holds, which
+        // rendered the whole Storage tab as "0 B".
+        const { client } = createFakeClient({
+            listDatabases: () => ({
+                databases: [
+                    { name: 'sales', sizeOnDisk: 0, empty: false },
+                    { name: 'iot', sizeOnDisk: 0, empty: false },
+                ],
+            }),
+            dbCommand: (databaseName) => ({
+                dataSize: 100,
+                indexSize: 10,
+                collections: 2,
+                objects: 50,
+                indexes: 3,
+                storageSize: databaseName === 'sales' ? 12984320 : 20357120,
+            }),
+        });
+
+        const stats = await getStorageStats(client);
+
+        expect(stats.databases.map((database) => database.sizeOnDiskBytes)).toEqual([12984320, 20357120]);
+        // The Total must reconcile with the rendered rows, which it could not while every
+        // row read zero.
+        expect(stats.totalSizeBytes).toBe(33341440);
+    });
+
     it('returns an error marker when listDatabases is unavailable', async () => {
         const { client } = createFakeClient({});
 

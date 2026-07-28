@@ -251,6 +251,29 @@ function toNumberOrNull(value: unknown): number | null {
     return typeof value === 'number' && Number.isFinite(value) ? value : null;
 }
 
+/**
+ * Reads `listDatabases.databases[].sizeOnDisk`, rejecting a zero the server has already
+ * contradicted.
+ *
+ * Azure DocumentDB (vCore) answers `listDatabases` with `sizeOnDisk: 0` for *every*
+ * database while setting `empty: false` on the same entry — so taking the figure literally
+ * renders the whole Storage tab as `0 B` on a cluster holding hundreds of megabytes. A zero
+ * next to `empty: false` is the server declining to answer, and is reported as `null` so the
+ * caller falls back to `dbStats.storageSize`.
+ *
+ * A zero the server has *not* contradicted is kept: a genuinely empty database is 0 bytes,
+ * and overwriting that with `storageSize` would report preallocated overhead as data.
+ */
+function toReportedDatabaseSize(entry: Document): number | null {
+    const sizeOnDisk = toNumberOrNull(entry.sizeOnDisk);
+
+    if (sizeOnDisk === 0 && entry.empty === false) {
+        return null;
+    }
+
+    return sizeOnDisk;
+}
+
 function toStringOrNull(value: unknown): string | null {
     return typeof value === 'string' && value.length > 0 ? value : null;
 }
@@ -670,7 +693,7 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
             const name = entry.name as string;
             const database: ClusterDatabaseStorage = {
                 name,
-                sizeOnDiskBytes: toNumberOrNull(entry.sizeOnDisk),
+                sizeOnDiskBytes: toReportedDatabaseSize(entry),
                 dataSizeBytes: null,
                 indexSizeBytes: null,
                 collections: null,
