@@ -77,6 +77,8 @@ return result === actionLabel;
 - Alternatives: (a) add a separate opt-in setting for strict index-delete — extra config, doesn't fix the default regression; (b) always word-confirm delete regardless of setting — ignores users who chose click confirmation.
 - **Best choice:** route `delete` through `getConfirmationAsInSettings`. It removes the regression, restores cross-command consistency, and the plainer presentation is an acceptable, well-precedented trade-off.
 
+> **RESOLVED (2026-07-28)** — commit [`2eff210`](https://github.com/microsoft/vscode-documentdb/commit/2eff210468000b03089832d8584647507beac36b). `confirmIndexAction` now routes `kind: 'delete'` through `getConfirmationAsInSettings(title, detail, indexName, { fallbackWord: 'delete' })`, restoring the configured word/challenge/click gate used by `deleteCollection`/`deleteDatabase`. The rich size/usage/effect detail text is preserved and reversible hide/unhide keep the lighter single-click modal. `UserCancelledError` from the word-entry input box is caught and translated to `false` so the shared boolean contract holds for both the tree command and the webview router. Used the plain `'delete'` fallback word (matching the sibling delete commands) instead of a localized one, so no new l10n string was added.
+
 ### MEDIUM-2: Sustained background build-poll failures spam an error toast every 5 seconds
 
 Added on independent re-review (2026-07-28). Not present in the original report.
