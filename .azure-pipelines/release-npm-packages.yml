@@ -130,8 +130,8 @@ variables:
     # part of a single address and rejected as an invalid email). Prefer a TEAM
     # security group or distribution list so releases are not tied to a single
     # person. Override in ADO -> Variables.
-    EsrpReleaseOwners: 'guanzhousong@microsoft.com,tnaumowicz@microsoft.com'
-    EsrpReleaseApprovers: 'guanzhousong@microsoft.com,tnaumowicz@microsoft.com'
+    EsrpReleaseOwners: 'guanzhousong@microsoft.com,CosmosSDKTeam@service.microsoft.com'
+    EsrpReleaseApprovers: 'guanzhousong@microsoft.com,CosmosSDKTeam@service.microsoft.com'
 
 extends:
     template: v2/OneBranch.Official.CrossPlat.yml@templates
