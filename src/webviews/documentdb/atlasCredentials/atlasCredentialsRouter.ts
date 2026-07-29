@@ -60,7 +60,14 @@ export type RouterContext = BaseRouterContext & {
     onCredentialsStored: () => void;
 };
 
-export type CredentialErrorKind = 'authentication' | 'ipAccess' | 'permissions' | 'rateLimit' | 'network' | 'unknown';
+export type CredentialErrorKind =
+    | 'authentication'
+    | 'ipAccess'
+    | 'noProjects'
+    | 'permissions'
+    | 'rateLimit'
+    | 'network'
+    | 'unknown';
 
 export interface CredentialErrorAction {
     readonly label: string;
@@ -227,6 +234,24 @@ async function buildAtlasErrorAction(
     };
 }
 
+async function describeNoProjectsError(
+    ctx: WithTelemetry<RouterContext>,
+    authMethod: 'apikey' | 'serviceaccount',
+    client: AtlasApiClient,
+    clientId?: string,
+): Promise<CredentialSubmitError> {
+    ext.outputChannel.warn(`MongoDB Atlas credential verification returned no accessible projects [${authMethod}]`);
+
+    return {
+        kind: 'noProjects',
+        title: l10n.t('No accessible projects found'),
+        message: l10n.t(
+            'MongoDB Atlas accepted the credential but returned no projects. The organization may not contain any projects, or the credential may need an organization or project role.',
+        ),
+        action: await buildAtlasErrorAction(ctx, authMethod, clientId, client),
+    };
+}
+
 /**
  * Persists a validated credential: replacing an existing record's secret when the webview was
  * opened in edit mode, otherwise adding (or refreshing) a record for that Atlas identity.
@@ -250,8 +275,8 @@ async function persistCredential(ctx: WithTelemetry<RouterContext>, secrets: Atl
 export const atlasCredentialsRouter = router({
     /**
      * Validates and stores a MongoDB Atlas API Key (public + private key pair).
-     * The key is validated with a real discovery call first, so a credential that authenticates
-     * but cannot list projects is rejected inline instead of being stored as "working".
+     * The key is validated with a real discovery call first, so a credential that cannot see any
+     * projects is rejected inline instead of being stored as "working".
      */
     submitApiKey: publicProcedureWithTelemetry
         .input(
@@ -269,7 +294,14 @@ export const atlasCredentialsRouter = router({
 
             const client = new AtlasApiClient({ type: 'apikey', publicKey, privateKey });
             try {
-                await client.listProjects();
+                const projects = await client.listProjects();
+                if (projects.length === 0) {
+                    return {
+                        success: false,
+                        error: await describeNoProjectsError(myCtx, 'apikey', client),
+                        failedStage: 0,
+                    };
+                }
             } catch (error) {
                 myCtx.telemetry.properties.authSuccess = 'false';
                 return {
@@ -291,7 +323,8 @@ export const atlasCredentialsRouter = router({
 
     /**
      * Validates and stores a MongoDB Atlas Service Account (client id + secret) by
-     * acquiring a token via the client_credentials grant and confirming it can discover projects.
+     * acquiring a token via the client_credentials grant and confirming it can discover at least
+     * one project.
      */
     submitServiceAccount: publicProcedureWithTelemetry
         .input(
@@ -337,7 +370,14 @@ export const atlasCredentialsRouter = router({
 
             const client = new AtlasApiClient({ type: 'serviceaccount', accessToken });
             try {
-                await client.listProjects();
+                const projects = await client.listProjects();
+                if (projects.length === 0) {
+                    return {
+                        success: false,
+                        error: await describeNoProjectsError(myCtx, 'serviceaccount', client, clientId),
+                        failedStage: 1,
+                    };
+                }
             } catch (error) {
                 myCtx.telemetry.properties.authSuccess = 'false';
                 return {
