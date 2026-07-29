@@ -1439,6 +1439,22 @@ link currently lands on the credential's own access page (the same target as the
 consistent across the webview and the credential manager; precise org-access-list targeting is part
 of the [#814](https://github.com/microsoft/vscode-documentdb/issues/814) follow-up.
 
+**Discovery (2026-07-28) — an IP-blocked _first_ add cannot resolve the organization at all, so its
+deep link necessarily degrades to the console root.** A general `[openUrl]` trace was added to the
+shared `openUrl` procedure in
+[appRouter.ts](../../../../src/webviews/_integration/appRouter.ts) — it logs the exact URL right
+before `openExternal`, so what the deep link points at can be confirmed from the DocumentDB output
+channel. For a Service Account whose first add is blocked by the org's access list, the trace showed
+`https://cloud.mongodb.com` (root): there is no stored record yet, so no cached `orgId`, and the one
+call that would report it — `listOrganizations()` — is barred by the **same** access list that
+produced the error (chicken-and-egg). Decoding the Service Account access token (a JWT) was
+investigated as an offline fallback, but the **organization id is not present in the token's
+claims**, so the precise link cannot be built without a successful Admin API call. Net: the
+`…/org/{orgId}/access/serviceAccounts/{clientId}` link resolves only when the org is already known (a
+stored credential, or after the user adds their IP and presses **Retry** so `listOrganizations()`
+succeeds); a first-attempt IP-blocked add falls back to the console root by design. Precise targeting
+stays under [#814](https://github.com/microsoft/vscode-documentdb/issues/814).
+
 ### Step 1 — Live API gates closed
 
 The POC established feasibility, selected the architecture, and completed the blocking checks in

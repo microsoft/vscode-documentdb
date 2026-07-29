@@ -41,6 +41,7 @@ import {
     EyeRegular,
     KeyRegular,
     PersonAccountsRegular,
+    WarningRegular,
 } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
@@ -54,7 +55,7 @@ import { type CredentialSubmitError } from './atlasCredentialsRouter';
 const ATLAS_CONSOLE_URL = 'https://cloud.mongodb.com/';
 
 type Phase = 'choose' | 'form' | 'checking' | 'success';
-type StageStatus = 'pending' | 'active' | 'done' | 'error';
+type StageStatus = 'pending' | 'active' | 'done' | 'error' | 'warning';
 
 // Renders a localized sentence, bolding any segment wrapped in **double asterisks**. Keeping the
 // emphasis markers inside the l10n string lets translators move the bold keywords naturally.
@@ -133,6 +134,7 @@ const useStyles = makeStyles({
     stageRow: { display: 'flex', alignItems: 'center', gap: '10px', minHeight: '20px' },
     stageDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '18px', flexShrink: 0 },
     stageError: { color: tokens.colorPaletteRedForeground1, fontSize: '18px', flexShrink: 0 },
+    stageWarning: { color: tokens.colorStatusWarningForeground1, fontSize: '18px', flexShrink: 0 },
     stagePending: { color: tokens.colorNeutralForeground4, fontSize: '18px', flexShrink: 0 },
     messageContent: { display: 'flex', flexDirection: 'column', gap: '8px' },
 });
@@ -163,6 +165,9 @@ const StageRow = ({ label, status }: StageRowProps): JSX.Element => {
     } else if (status === 'error') {
         icon = <ErrorCircleFilled aria-hidden className={styles.stageError} />;
         statusText = l10n.t('failed');
+    } else if (status === 'warning') {
+        icon = <WarningRegular aria-hidden className={styles.stageWarning} />;
+        statusText = l10n.t('warning');
     } else {
         icon = <CircleRegular aria-hidden className={styles.stagePending} />;
         statusText = l10n.t('pending');
@@ -531,8 +536,13 @@ export const AtlasCredentialsView = (): JSX.Element => {
         </Accordion>
     );
 
+    const isNoProjectsWarning = submitError?.kind === 'noProjects';
     const errorMessage = submitError ? (
-        <MessageBar intent="error" layout="multiline" icon={<ErrorCircleFilled />}>
+        <MessageBar
+            intent={isNoProjectsWarning ? 'warning' : 'error'}
+            layout="multiline"
+            icon={isNoProjectsWarning ? <WarningRegular /> : <ErrorCircleFilled />}
+        >
             <MessageBarBody>
                 <MessageBarTitle>{submitError.title}</MessageBarTitle> {submitError.message}
             </MessageBarBody>
@@ -547,9 +557,11 @@ export const AtlasCredentialsView = (): JSX.Element => {
                         {l10n.t('Retry')}
                     </Button>
                 )}
-                <Button appearance="secondary" onClick={showDetails}>
-                    {l10n.t('Show details')}
-                </Button>
+                {!isNoProjectsWarning && (
+                    <Button appearance="secondary" onClick={showDetails}>
+                        {l10n.t('Show details')}
+                    </Button>
+                )}
             </MessageBarActions>
         </MessageBar>
     ) : null;
@@ -629,7 +641,10 @@ export const AtlasCredentialsView = (): JSX.Element => {
             if (index < failedAt) {
                 return 'done';
             }
-            return index === failedAt ? 'error' : 'pending';
+            if (index === failedAt) {
+                return isNoProjectsWarning ? 'warning' : 'error';
+            }
+            return 'pending';
         }
         // Verifying: the host does not stream per-step progress, so only the first step is shown
         // active and later steps stay pending rather than pretending to have finished.

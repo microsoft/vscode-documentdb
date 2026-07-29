@@ -6,6 +6,7 @@
 import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-webview';
 
 const mockListProjects = jest.fn();
+const mockFetchServiceAccountToken = jest.fn();
 const mockGetAtlasCredential = jest.fn();
 const mockUpsertAtlasCredential = jest.fn();
 const mockReplaceAtlasCredentialSecrets = jest.fn();
@@ -70,6 +71,10 @@ jest.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
     };
 });
 
+jest.mock('../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient', () => ({
+    fetchServiceAccountToken: (...args: unknown[]) => mockFetchServiceAccountToken(...args) as unknown,
+}));
+
 jest.mock('../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore', () => ({
     getAtlasCredential: (...args: unknown[]) => mockGetAtlasCredential(...args) as unknown,
     replaceAtlasCredentialSecrets: (...args: unknown[]) => mockReplaceAtlasCredentialSecrets(...args) as unknown,
@@ -109,6 +114,7 @@ function createContext(credentialId?: string): RouterContext & {
 
 beforeEach(() => {
     mockListProjects.mockReset();
+    mockFetchServiceAccountToken.mockReset();
     mockGetAtlasCredential.mockReset();
     mockUpsertAtlasCredential.mockReset();
     mockReplaceAtlasCredentialSecrets.mockReset();
@@ -153,7 +159,7 @@ describe('atlasCredentialsRouter', () => {
     });
 
     it('keeps the panel open after saving until the success screen is completed', async () => {
-        mockListProjects.mockResolvedValue([]);
+        mockListProjects.mockResolvedValue([{ id: 'project-1' }]);
         mockUpsertAtlasCredential.mockResolvedValue({
             created: true,
             record: { id: 'credential-1', authMethod: 'apikey', order: 0 },
@@ -175,8 +181,55 @@ describe('atlasCredentialsRouter', () => {
         expect(context.onCredentialsStored).toHaveBeenCalledTimes(1);
     });
 
-    it('trims surrounding whitespace from submitted credentials before validating and storing', async () => {
+    it('does not store a credential when Atlas returns no accessible projects', async () => {
         mockListProjects.mockResolvedValue([]);
+        const context = createContext();
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        await expect(caller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' })).resolves.toEqual({
+            success: false,
+            failedStage: 0,
+            error: {
+                kind: 'noProjects',
+                title: 'No accessible projects found',
+                message:
+                    'MongoDB Atlas accepted the credential but returned no projects. The organization may not contain any projects, or the credential may need an organization or project role.',
+                action: {
+                    label: 'Open access settings in MongoDB Atlas',
+                    url: 'https://cloud.mongodb.com',
+                },
+            },
+        });
+
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+        expect(context.credentialState.credentialsStored).toBe(false);
+    });
+
+    it('reports the project-access stage for a service account with no accessible projects', async () => {
+        mockFetchServiceAccountToken.mockResolvedValue({ access_token: 'access-token', expires_in: 3600 });
+        mockListProjects.mockResolvedValue([]);
+        const context = createContext();
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        const result = await caller.submitServiceAccount({
+            clientId: 'client-id',
+            clientSecret: 'client-secret',
+        });
+
+        expect(result).toMatchObject({
+            success: false,
+            failedStage: 1,
+            error: {
+                kind: 'noProjects',
+                title: 'No accessible projects found',
+            },
+        });
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+        expect(context.credentialState.credentialsStored).toBe(false);
+    });
+
+    it('trims surrounding whitespace from submitted credentials before validating and storing', async () => {
+        mockListProjects.mockResolvedValue([{ id: 'project-1' }]);
         mockUpsertAtlasCredential.mockResolvedValue({
             created: true,
             record: { id: 'credential-1', authMethod: 'apikey', order: 0 },
