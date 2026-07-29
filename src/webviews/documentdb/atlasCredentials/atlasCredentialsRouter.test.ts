@@ -100,7 +100,7 @@ function createContext(credentialId?: string): RouterContext & {
         dbExperience: API.DocumentDB,
         webviewName: 'atlasCredentials',
         credentialId,
-        credentialsStored: false,
+        credentialState: { credentialsStored: false },
         onCredentialPersisted: jest.fn(),
         onCredentialsStored: jest.fn(),
         telemetry: { properties: {}, measurements: {} },
@@ -131,7 +131,7 @@ describe('atlasCredentialsRouter', () => {
             order: 0,
         });
         const context = createContext('credential-1');
-        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+        const caller = createCallerFactory(atlasCredentialsRouter)({ ...context });
 
         const result = await caller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' });
 
@@ -149,7 +149,7 @@ describe('atlasCredentialsRouter', () => {
                 },
             },
         });
-        expect(context.credentialsStored).toBe(false);
+        expect(context.credentialState.credentialsStored).toBe(false);
     });
 
     it('keeps the panel open after saving until the success screen is completed', async () => {
@@ -159,17 +159,18 @@ describe('atlasCredentialsRouter', () => {
             record: { id: 'credential-1', authMethod: 'apikey', order: 0 },
         });
         const context = createContext();
-        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+        const submitCaller = createCallerFactory(atlasCredentialsRouter)({ ...context });
 
-        await expect(caller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' })).resolves.toEqual({
-            success: true,
-        });
+        await expect(
+            submitCaller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' }),
+        ).resolves.toEqual({ success: true });
 
-        expect(context.credentialsStored).toBe(true);
+        expect(context.credentialState.credentialsStored).toBe(true);
         expect(context.onCredentialPersisted).toHaveBeenCalledTimes(1);
         expect(context.onCredentialsStored).not.toHaveBeenCalled();
 
-        await caller.complete();
+        const completeCaller = createCallerFactory(atlasCredentialsRouter)({ ...context });
+        await completeCaller.complete();
 
         expect(context.onCredentialsStored).toHaveBeenCalledTimes(1);
     });

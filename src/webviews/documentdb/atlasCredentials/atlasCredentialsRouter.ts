@@ -55,9 +55,10 @@ export type RouterContext = BaseRouterContext & {
     onCredentialPersisted: () => void;
     /**
      * Tracks whether this panel stored a credential, including when the user closes the success
-     * screen instead of selecting Done.
+     * screen instead of selecting Done. This must be a shared object because the webview framework
+     * shallow-clones the router context for each operation.
      */
-    credentialsStored: boolean;
+    credentialState: { credentialsStored: boolean };
     /** Invoked from the success screen's Done action to resolve the opener and dispose the panel. */
     onCredentialsStored: () => void;
 };
@@ -286,7 +287,7 @@ export const atlasCredentialsRouter = router({
             } catch (error) {
                 return { success: false, error: await describeAtlasError(myCtx, error, 'apikey'), failedStage: 1 };
             }
-            myCtx.credentialsStored = true;
+            myCtx.credentialState.credentialsStored = true;
             myCtx.onCredentialPersisted();
             myCtx.telemetry.properties.authSuccess = 'true';
             return { success: true };
@@ -366,7 +367,7 @@ export const atlasCredentialsRouter = router({
                 };
             }
 
-            myCtx.credentialsStored = true;
+            myCtx.credentialState.credentialsStored = true;
             myCtx.onCredentialPersisted();
             myCtx.telemetry.properties.authSuccess = 'true';
             return { success: true };
@@ -374,7 +375,7 @@ export const atlasCredentialsRouter = router({
 
     complete: publicProcedureWithTelemetry.mutation(({ ctx }): void => {
         const myCtx = ctx as WithTelemetry<RouterContext>;
-        if (myCtx.credentialsStored) {
+        if (myCtx.credentialState.credentialsStored) {
             myCtx.onCredentialsStored();
         }
     }),

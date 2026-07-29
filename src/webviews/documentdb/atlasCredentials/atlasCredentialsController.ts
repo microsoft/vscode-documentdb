@@ -50,7 +50,10 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
         let settled = false;
         // Held in an object so the `onCredentialsStored` closure can reference the
         // controller that is only created further below.
-        const state: { controller?: AppWebviewController<AtlasCredentialsWebviewConfig> } = {};
+        const state: {
+            controller?: AppWebviewController<AtlasCredentialsWebviewConfig>;
+            credentialsStored: boolean;
+        } = { credentialsStored: false };
 
         const finish = (result: boolean): void => {
             if (settled) {
@@ -77,7 +80,7 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             webviewName: 'atlasCredentials',
             credentialId: options.credentialId,
             credentialLabel: options.credentialLabel,
-            credentialsStored: false,
+            credentialState: state,
             onCredentialPersisted,
             onCredentialsStored,
         };
@@ -105,7 +108,7 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             },
         });
 
-        state.controller.onDisposed(() => finish(context.credentialsStored));
+        state.controller.onDisposed(() => finish(state.credentialsStored));
     });
 }
 
