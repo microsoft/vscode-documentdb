@@ -311,6 +311,7 @@ export class AtlasApiClient {
                     response.status,
                     detail,
                     body.errorCode,
+                    body.parameters,
                 );
             case 403:
                 throw new AtlasApiError(
@@ -320,15 +321,23 @@ export class AtlasApiClient {
                     response.status,
                     detail,
                     body.errorCode,
+                    body.parameters,
                 );
             case 404:
-                throw new AtlasApiError(vscode.l10n.t('Resource not found.'), response.status, detail, body.errorCode);
+                throw new AtlasApiError(
+                    vscode.l10n.t('Resource not found.'),
+                    response.status,
+                    detail,
+                    body.errorCode,
+                    body.parameters,
+                );
             case 429:
                 throw new AtlasApiError(
                     vscode.l10n.t('Rate limited by Atlas API. Please try again shortly.'),
                     response.status,
                     detail,
                     body.errorCode,
+                    body.parameters,
                 );
             default:
                 throw new AtlasApiError(
@@ -336,6 +345,7 @@ export class AtlasApiClient {
                     response.status,
                     detail,
                     body.errorCode,
+                    body.parameters,
                 );
         }
     }
@@ -443,6 +453,8 @@ export class AtlasApiError extends Error {
          * The status alone is ambiguous: several very different problems share `403`.
          */
         public readonly errorCode?: string,
+        /** Values Atlas substituted into `detail`, such as a rejected IP address. */
+        public readonly parameters?: readonly unknown[],
     ) {
         super(message);
         this.name = 'AtlasApiError';

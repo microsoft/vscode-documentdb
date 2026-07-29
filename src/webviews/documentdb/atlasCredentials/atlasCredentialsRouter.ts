@@ -182,12 +182,20 @@ async function describeAtlasError(
     if (error.statusCode === 403) {
         const action = await buildAtlasErrorAction(ctx, authMethod, clientId, client);
         if (isAtlasIpAccessListError(error)) {
+            const rejectedIp = error.parameters?.find(
+                (parameter): parameter is string => typeof parameter === 'string',
+            );
             return {
                 kind: 'ipAccess',
                 title: l10n.t('This IP address is not allowed'),
-                message: l10n.t(
-                    "MongoDB Atlas blocked this request because your IP address isn't on the allowed access list. Add your current IP address in MongoDB Atlas, then retry.",
-                ),
+                message: rejectedIp
+                    ? l10n.t(
+                          "MongoDB Atlas blocked this request because IP address {0} isn't on the allowed access list. Add this IP address in MongoDB Atlas, then retry.",
+                          rejectedIp,
+                      )
+                    : l10n.t(
+                          "MongoDB Atlas blocked this request because your IP address isn't on the allowed access list. Add your current IP address in MongoDB Atlas, then retry.",
+                      ),
                 action,
             };
         }

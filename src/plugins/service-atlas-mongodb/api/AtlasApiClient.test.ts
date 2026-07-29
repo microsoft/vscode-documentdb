@@ -84,6 +84,7 @@ describe('AtlasApiClient error reporting', () => {
         expect(error).toBeInstanceOf(AtlasApiError);
         expect((error as AtlasApiError).errorCode).toBe('IP_ADDRESS_NOT_ON_ACCESS_LIST');
         expect((error as AtlasApiError).detail).toContain('203.0.113.9');
+        expect((error as AtlasApiError).parameters).toEqual(['203.0.113.9']);
 
         const warning = String((ext.outputChannel.warn as jest.Mock).mock.calls[0][0]);
         expect(warning).toContain('errorCode=IP_ADDRESS_NOT_ON_ACCESS_LIST');
