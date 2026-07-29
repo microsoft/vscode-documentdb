@@ -272,7 +272,7 @@ export const HeaderCard = ({
                  * chart. A number is the honest representation of a ping; the strip below is
                  * reserved for what the cluster contains.
                  */}
-                {connectionState === 'connected' && latestSample?.pingLatencyMs != null && (
+                {connectionState === 'connected' && typeof latestSample?.pingLatencyMs === 'number' && (
                     <span className="headerLatency">
                         {l10n.t('{latency} ms', { latency: Math.round(latestSample.pingLatencyMs) })}
                     </span>

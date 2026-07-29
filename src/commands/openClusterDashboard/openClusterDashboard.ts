@@ -5,7 +5,6 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as vscode from 'vscode';
 
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
@@ -44,7 +43,7 @@ function extractAzureInfo(node: ClusterItemBase): ClusterDashboardAzureInfo | un
     return Object.values(info).some((value) => value !== undefined) ? info : undefined;
 }
 
-export function openClusterDashboard(context: IActionContext, node: ClusterItemBase): void {
+export async function openClusterDashboard(context: IActionContext, node: ClusterItemBase): Promise<void> {
     // added manually here as this function can be called bypassing our general command registration
     trackJourneyCorrelationId(context, node);
 
@@ -54,13 +53,16 @@ export function openClusterDashboard(context: IActionContext, node: ClusterItemB
 
     context.telemetry.properties.experience = node?.experience.api;
 
-    // Verify credentials are available before opening the panel. Without this, a
-    // never-expanded connection opens a dashboard that cannot connect and then re-fails
-    // its poll every few seconds with no sign-in affordance. Matches openInteractiveShell.
-    if (!CredentialCache.hasCredentials(node.cluster.clusterId)) {
-        void vscode.window.showErrorMessage(
-            l10n.t('Not signed in to {0}. Please authenticate first.', node.cluster.name),
-        );
+    // A dashboard opened without credentials cannot connect, and would re-fail its poll
+    // every few seconds with no sign-in affordance. Rather than refusing and telling the
+    // user to go expand the tree node first — making them do the extension's bookkeeping —
+    // run the same authentication the tree runs. Cached credentials make this a no-op.
+    context.telemetry.properties.wasSignedIn = String(CredentialCache.hasCredentials(node.cluster.clusterId));
+
+    const client = await node.connect();
+    if (!client) {
+        // `connect()` has already surfaced the reason, or the user cancelled the prompt.
+        context.telemetry.properties.connectionResult = 'failed';
         return;
     }
 
