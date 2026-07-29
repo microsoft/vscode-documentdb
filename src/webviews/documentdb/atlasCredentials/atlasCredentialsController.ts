@@ -60,6 +60,8 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             resolve(result);
         };
 
+        const onCredentialPersisted = (): void => finish(true);
+
         const onCredentialsStored = (): void => {
             finish(true);
             // Dispose on the next tick so the mutation's success response is
@@ -76,6 +78,7 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
             credentialId: options.credentialId,
             credentialLabel: options.credentialLabel,
             credentialsStored: false,
+            onCredentialPersisted,
             onCredentialsStored,
         };
 

@@ -101,6 +101,7 @@ function createContext(credentialId?: string): RouterContext & {
         webviewName: 'atlasCredentials',
         credentialId,
         credentialsStored: false,
+        onCredentialPersisted: jest.fn(),
         onCredentialsStored: jest.fn(),
         telemetry: { properties: {}, measurements: {} },
     };
@@ -165,6 +166,7 @@ describe('atlasCredentialsRouter', () => {
         });
 
         expect(context.credentialsStored).toBe(true);
+        expect(context.onCredentialPersisted).toHaveBeenCalledTimes(1);
         expect(context.onCredentialsStored).not.toHaveBeenCalled();
 
         await caller.complete();

@@ -51,6 +51,8 @@ export type RouterContext = BaseRouterContext & {
     credentialId?: string;
     /** Optional user-supplied friendly name persisted alongside the credential. */
     credentialLabel?: string;
+    /** Resolves the opener so it can refresh the discovery tree before the success screen appears. */
+    onCredentialPersisted: () => void;
     /**
      * Tracks whether this panel stored a credential, including when the user closes the success
      * screen instead of selecting Done.
@@ -285,6 +287,7 @@ export const atlasCredentialsRouter = router({
                 return { success: false, error: await describeAtlasError(myCtx, error, 'apikey'), failedStage: 1 };
             }
             myCtx.credentialsStored = true;
+            myCtx.onCredentialPersisted();
             myCtx.telemetry.properties.authSuccess = 'true';
             return { success: true };
         }),
@@ -364,6 +367,7 @@ export const atlasCredentialsRouter = router({
             }
 
             myCtx.credentialsStored = true;
+            myCtx.onCredentialPersisted();
             myCtx.telemetry.properties.authSuccess = 'true';
             return { success: true };
         }),
