@@ -9,12 +9,40 @@ import * as vscode from 'vscode';
 
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
+import { type AzureClusterModel } from '../../tree/azure-views/models/AzureClusterModel';
 import { type ClusterItemBase } from '../../tree/documentdb/ClusterItemBase';
 import { trackJourneyCorrelationId } from '../../utils/commandTelemetry';
-import { openClusterDashboardWebview } from '../../webviews/documentdb/clusterDashboard/clusterDashboardController';
+import {
+    openClusterDashboardWebview,
+    type ClusterDashboardAzureInfo,
+} from '../../webviews/documentdb/clusterDashboard/clusterDashboardController';
 
 /** Refresh cadence of the dashboard's live tiles. Not user-configurable yet (preview). */
 const DASHBOARD_REFRESH_INTERVAL_MS = 5000;
+
+/**
+ * Reads the Azure resource facts off a cluster node, when it has any.
+ *
+ * The properties live on `AzureClusterModel` subtypes and are already populated by the
+ * discovery views from ARM, so this is a read rather than a fetch. The cast mirrors
+ * `ClusterItemBase.getTreeItem`, which surfaces the same facts in the node tooltip.
+ * Returns `undefined` for a non-Azure cluster so the header omits the rows entirely
+ * rather than rendering a row of dashes.
+ */
+function extractAzureInfo(node: ClusterItemBase): ClusterDashboardAzureInfo | undefined {
+    const azureProps = node.cluster as unknown as Partial<AzureClusterModel>;
+
+    const info: ClusterDashboardAzureInfo = {
+        location: azureProps.location,
+        sku: azureProps.sku,
+        nodeCount: azureProps.nodeCount,
+        diskSize: azureProps.diskSize,
+        enableHa: azureProps.enableHa,
+        replicaRole: azureProps.replicaRole,
+    };
+
+    return Object.values(info).some((value) => value !== undefined) ? info : undefined;
+}
 
 export function openClusterDashboard(context: IActionContext, node: ClusterItemBase): void {
     // added manually here as this function can be called bypassing our general command registration
@@ -45,6 +73,7 @@ export function openClusterDashboard(context: IActionContext, node: ClusterItemB
         clusterDisplayName: node.cluster.name,
         viewId: viewId,
         refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
+        azure: extractAzureInfo(node),
     });
 
     view.revealToForeground();

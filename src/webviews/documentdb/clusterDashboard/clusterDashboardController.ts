@@ -10,6 +10,29 @@ import { API } from '../../../DocumentDBExperiences';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
 import { type RouterContext } from './clusterDashboardRouter';
 
+/**
+ * Azure resource facts for an Azure-backed cluster.
+ *
+ * Taken from the tree's `AzureClusterModel`, which the discovery views already populated
+ * from ARM — so the dashboard shows the cluster's shape and resilience at no extra API
+ * cost. Every field is optional: a local emulator, a self-hosted server, or a connection
+ * added by connection string has none of them, and the header simply omits those rows.
+ */
+export type ClusterDashboardAzureInfo = {
+    /** Azure region id, e.g. `westus2`. */
+    location?: string;
+    /** Compute tier, e.g. `M10`. */
+    sku?: string;
+    /** Number of shards/nodes. */
+    nodeCount?: number;
+    /** Provisioned disk size, in GB. */
+    diskSize?: number;
+    /** Whether in-region high availability (standby replicas per shard) is enabled. */
+    enableHa?: boolean;
+    /** Cross-region replication role, e.g. `Primary`. */
+    replicaRole?: string;
+};
+
 export type ClusterDashboardWebviewConfigurationType = {
     /**
      * Stable cluster identifier used for client/credential lookups.
@@ -25,6 +48,8 @@ export type ClusterDashboardWebviewConfigurationType = {
     viewId: string;
     /** Polling cadence of the live health tiles, in milliseconds. */
     refreshIntervalMs: number;
+    /** Azure resource facts, when the cluster came from an Azure-backed tree node. */
+    azure?: ClusterDashboardAzureInfo;
 };
 
 /**

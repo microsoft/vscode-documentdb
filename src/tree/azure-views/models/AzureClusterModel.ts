@@ -54,6 +54,13 @@ export interface AzureClusterModel extends BaseClusterModel {
     /** High availability enabled */
     enableHa?: boolean;
 
+    /**
+     * Role this cluster plays in cross-region replication, as reported by ARM
+     * (`properties.replica.role`) — typically `Primary`, or a replica role on the read-only
+     * copy of a cluster. Absent when the cluster is not part of a replication pair.
+     */
+    replicaRole?: string;
+
     // Additional Azure-specific properties can be added as needed
     // These match what's returned from the ARM API and stored in the legacy ClusterModel
 

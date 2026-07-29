@@ -8,6 +8,8 @@ import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
 import { type ClusterHealthSample } from '../../../../documentdb/utils/getClusterHealth';
+import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
+import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
 import { formatUptime } from '../formatUtils';
 
@@ -19,6 +21,8 @@ export interface HeaderCardProps {
     clusterInfo: ClusterDashboardInfo | null;
     latestSample: ClusterHealthSample | null;
     connectionState: ConnectionState;
+    /** Azure resource facts, absent for a non-Azure cluster. */
+    azure?: ClusterDashboardAzureInfo;
 }
 
 const PLACEHOLDER = '—';
@@ -125,6 +129,55 @@ function formatEngineVersions(rawVersions: string | undefined): string | null {
     return versions.length > 0 ? versions.join(', ') : null;
 }
 
+/**
+ * Summarises the provisioned compute as one line, e.g. `M10 · 1 node · 128 GB`.
+ * Returns `null` when ARM reported none of it.
+ */
+function describeCompute(azure: ClusterDashboardAzureInfo | undefined): string | null {
+    const parts: string[] = [];
+
+    if (azure?.sku !== undefined) {
+        parts.push(azure.sku);
+    }
+    if (azure?.nodeCount !== undefined) {
+        parts.push(
+            azure.nodeCount === 1 ? l10n.t('1 node') : l10n.t('{count} nodes', { count: String(azure.nodeCount) }),
+        );
+    }
+    if (azure?.diskSize !== undefined) {
+        parts.push(l10n.t('{size} GB', { size: String(azure.diskSize) }));
+    }
+
+    return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/**
+ * Resilience warnings shown as badges beside the connection state.
+ *
+ * These answer "is this cluster safe?", the question neither the data inventory nor the
+ * running-operations list addresses. They are deliberately static facts, not metrics: a
+ * cluster without high availability is a production-readiness finding, and a read-only
+ * connection is something a user needs to know *before* attempting a write.
+ */
+function collectResilienceWarnings(
+    metadata: Record<string, string | undefined> | undefined,
+    azure: ClusterDashboardAzureInfo | undefined,
+): string[] {
+    const warnings: string[] = [];
+
+    // `hello.readOnly` is answered by every server, so this warning is not Azure-specific:
+    // it also catches a connection pinned to a secondary.
+    if (metadata?.['topology_readOnly'] === 'true') {
+        warnings.push(l10n.t('Read-only connection'));
+    }
+
+    if (azure?.enableHa === false) {
+        warnings.push(l10n.t('No high availability'));
+    }
+
+    return warnings;
+}
+
 function DetailItem({ label, value }: { label: string; value: string }): JSX.Element {
     return (
         <div className="headerDetail">
@@ -139,6 +192,7 @@ export const HeaderCard = ({
     clusterInfo,
     latestSample,
     connectionState,
+    azure,
 }: HeaderCardProps): JSX.Element => {
     const metadata = clusterInfo?.metadata;
 
@@ -179,6 +233,23 @@ export const HeaderCard = ({
         optionalDetails.push({ label: l10n.t('Host'), value: host });
     }
 
+    // Azure facts the discovery views already fetched from ARM — the cluster's shape, which
+    // the data plane cannot report at all on vCore.
+    if (azure?.location !== undefined) {
+        optionalDetails.push({ label: l10n.t('Region'), value: regionToDisplayName(azure.location) });
+    }
+
+    const compute = describeCompute(azure);
+    if (compute !== null) {
+        optionalDetails.push({ label: l10n.t('Compute'), value: compute });
+    }
+
+    if (azure?.replicaRole !== undefined) {
+        optionalDetails.push({ label: l10n.t('Replication role'), value: azure.replicaRole });
+    }
+
+    const resilienceWarnings = collectResilienceWarnings(metadata, azure);
+
     const version = metadata?.['serverInfo_version'] ?? PLACEHOLDER;
 
     // `topology_type` is `hello.msg`, which only mongos sets ('isdbgrid'); every
@@ -206,6 +277,11 @@ export const HeaderCard = ({
                         {l10n.t('{latency} ms', { latency: Math.round(latestSample.pingLatencyMs) })}
                     </span>
                 )}
+                {resilienceWarnings.map((warning) => (
+                    <Badge key={warning} appearance="outline" color="warning">
+                        {warning}
+                    </Badge>
+                ))}
             </div>
 
             {clusterInfo === null ? (

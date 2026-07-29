@@ -225,6 +225,7 @@ export const ClusterDashboard = (): JSX.Element => {
                 clusterInfo={clusterInfo}
                 latestSample={latestSample}
                 connectionState={connectionState}
+                azure={configuration.azure}
             />
 
             <StatusStrip storageStats={storageStats} />
