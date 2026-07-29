@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Button, Tab, TabList } from '@fluentui/react-components';
-import { ArrowDownloadRegular } from '@fluentui/react-icons';
+import { ArrowDownloadRegular, WindowConsoleRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useRef, useState, type JSX } from 'react';
@@ -196,6 +196,18 @@ export const ClusterDashboard = (): JSX.Element => {
         }
     }, [samples, trpcClient]);
 
+    const openShell = useCallback(async (): Promise<void> => {
+        try {
+            await trpcClient.clusterDashboard.openShell.mutate();
+        } catch (error) {
+            void trpcClient.common.displayErrorMessage.mutate({
+                message: l10n.t('Failed to open the interactive shell.'),
+                modal: false,
+                cause: error instanceof Error ? error.message : String(error),
+            });
+        }
+    }, [trpcClient]);
+
     const latestSample = samples.length > 0 ? samples[samples.length - 1] : null;
 
     const connectionState: ConnectionState =
@@ -231,6 +243,14 @@ export const ClusterDashboard = (): JSX.Element => {
             <StatusStrip storageStats={storageStats} />
 
             <div className="dashboardToolbar">
+                <Button
+                    appearance="subtle"
+                    icon={<WindowConsoleRegular />}
+                    onClick={() => void openShell()}
+                    aria-label={l10n.t('Open an interactive shell on this cluster')}
+                >
+                    {l10n.t('Open Shell')}
+                </Button>
                 <Button
                     appearance="subtle"
                     icon={<ArrowDownloadRegular />}

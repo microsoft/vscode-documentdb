@@ -10,6 +10,7 @@ import { z } from 'zod';
 
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
+import { ShellCommandIds } from '../../../documentdb/shell/constants';
 import {
     getClusterPrivileges,
     getStorageStats,
@@ -151,6 +152,21 @@ export const clusterDashboardRouter = router({
         const myCtx = ctx as WithTelemetry<RouterContext>;
 
         clearObservedOperations(myCtx.clusterId);
+    }),
+
+    /**
+     * Opens the interactive shell against this cluster.
+     *
+     * Routed through the existing shell command rather than reimplemented, so the dashboard
+     * inherits its terminal wiring, telemetry and connection handling unchanged.
+     */
+    openShell: publicProcedureWithTelemetry.mutation(async ({ ctx }): Promise<void> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+
+        await vscode.commands.executeCommand(ShellCommandIds.openWithInput, {
+            clusterId: myCtx.clusterId,
+            clusterDisplayName: myCtx.clusterDisplayName,
+        });
     }),
 
     /** Copies an operation's command document to the clipboard. */

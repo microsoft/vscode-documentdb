@@ -111,6 +111,12 @@
         gap: 8px;
     }
 
+    // Pushed to the end of the tab toolbar so Refresh stays first in the tab order.
+    .tabFilter {
+        margin-inline-start: auto;
+        max-width: 240px;
+    }
+
     .operationHistory {
         margin-top: 8px;
 
@@ -171,6 +177,16 @@
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
+    }
+
+    // Truncated cells are focusable so their hidden text stays reachable; without an
+    // explicit outline the focus ring is invisible against the table background, which is
+    // the defect class the current accessibility audit is filing.
+    .opidValue:focus-visible,
+    .truncatedValue:focus-visible {
+        outline: 1px solid var(--vscode-focusBorder);
+        outline-offset: 1px;
+        border-radius: 2px;
     }
 
     .emptyState {

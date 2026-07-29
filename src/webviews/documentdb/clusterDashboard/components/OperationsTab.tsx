@@ -56,7 +56,42 @@ function isCollectionNamespace(namespace: string): boolean {
 }
 
 /**
- * Renders an operation id, truncated with the full value in a tooltip.
+ * A cell whose value is truncated on screen but must stay reachable.
+ *
+ * The tooltip is anchored on a focusable element carrying the full value as its accessible
+ * name: a tooltip on a plain `<span>` renders on hover only, so keyboard and screen-reader
+ * users get no route to text the ellipsis has hidden. `tabIndex={0}` puts it in the tab
+ * order and makes the Fluent tooltip open on focus as well as hover.
+ */
+function TruncatedCell({
+    value,
+    tooltip,
+    className,
+    emptyPlaceholder = '—',
+}: {
+    value: string;
+    /** Tooltip text; defaults to the value itself. */
+    tooltip?: string;
+    className: string;
+    emptyPlaceholder?: string;
+}): JSX.Element {
+    if (value === '' && tooltip === undefined) {
+        return <span className={className}>{emptyPlaceholder}</span>;
+    }
+
+    const content = tooltip ?? value;
+
+    return (
+        <Tooltip content={content} relationship="label" withArrow>
+            <span className={className} tabIndex={0} role="button" aria-label={content}>
+                {value === '' ? emptyPlaceholder : value}
+            </span>
+        </Tooltip>
+    );
+}
+
+/**
+ * Renders an operation id, truncated with the full value reachable.
  *
  * Azure DocumentDB (vCore) reports ids like `10000053116:1785197164497492` — 28 characters
  * that, in a `flex: 1` table cell, push every following column off its heading. Monospaced
@@ -67,11 +102,7 @@ function OperationIdCell({ opid }: { opid: string }): JSX.Element {
         return <span className="opidValue">—</span>;
     }
 
-    return (
-        <Tooltip content={opid} relationship="description">
-            <span className="opidValue">{opid}</span>
-        </Tooltip>
-    );
+    return <TruncatedCell value={opid} className="opidValue" />;
 }
 
 /** Renders a `lastSeenMs` timestamp as a short "how long ago" label. */
@@ -102,6 +133,13 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
     const [canKillOperations, setCanKillOperations] = useState<boolean | null>(null);
     const [loadError, setLoadError] = useState<string | null>(null);
     const [killingOpid, setKillingOpid] = useState<string | null>(null);
+    /**
+     * Outcome of the last row action, announced to assistive technology.
+     *
+     * Kill and Clear history change the table but say nothing a screen reader can hear —
+     * the confirmation toast is a host notification outside this document.
+     */
+    const [actionAnnouncement, setActionAnnouncement] = useState<string>('');
 
     const disposedRef = useRef(false);
     /**
@@ -190,6 +228,15 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                 }
 
                 if (result.outcome !== 'cancelled') {
+                    setActionAnnouncement(
+                        result.outcome === 'requested'
+                            ? l10n.t('Kill request sent for operation {opid}.', { opid: operation.opid })
+                            : result.outcome === 'gone'
+                              ? l10n.t('Operation {opid} is no longer running.', { opid: operation.opid })
+                              : l10n.t('The server did not accept the request to kill operation {opid}.', {
+                                    opid: operation.opid,
+                                }),
+                    );
                     await loadOperations();
                 }
             } catch (error) {
@@ -266,6 +313,7 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
             await trpcClient.clusterDashboard.clearOperationHistory.mutate();
             if (!disposedRef.current) {
                 setHistory([]);
+                setActionAnnouncement(l10n.t('Operation history cleared.'));
             }
         } catch (error) {
             void trpcClient.common.displayErrorMessage.mutate({
@@ -367,6 +415,10 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                 }
             />
 
+            {/* Kill and Clear history are otherwise silent: their confirmation toast is a
+                host notification, outside this document and unreachable from here. */}
+            <Announcer when={actionAnnouncement !== ''} message={actionAnnouncement} />
+
             {toolbar}
 
             {loadError !== null && (
@@ -425,19 +477,21 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                 </TableCell>
                                 <TableCell className="narrowColumn">{operation.type}</TableCell>
                                 <TableCell>
-                                    <Tooltip
-                                        content={operation.commandPreview || l10n.t('No command details reported.')}
-                                        relationship="description"
-                                    >
-                                        <span className="truncatedValue">{operation.namespace || '—'}</span>
-                                    </Tooltip>
+                                    <TruncatedCell
+                                        value={operation.namespace}
+                                        tooltip={operation.commandPreview || l10n.t('No command details reported.')}
+                                        className="truncatedValue"
+                                    />
                                 </TableCell>
                                 <TableCell className="narrowColumn">{operation.secsRunning ?? '—'}</TableCell>
                                 <TableCell className="narrowColumn">
                                     {operation.active ? l10n.t('Yes') : l10n.t('No')}
                                 </TableCell>
                                 <TableCell>
-                                    <span className="truncatedValue">{operation.clientDescription ?? '—'}</span>
+                                    <TruncatedCell
+                                        value={operation.clientDescription ?? ''}
+                                        className="truncatedValue"
+                                    />
                                 </TableCell>
                                 <TableCell className="actionsColumn">{renderRowActions(operation)}</TableCell>
                             </TableRow>
@@ -509,14 +563,13 @@ export const OperationsTab = ({ refreshIntervalMs }: OperationsTabProps): JSX.El
                                             </TableCell>
                                             <TableCell className="narrowColumn">{entry.type}</TableCell>
                                             <TableCell>
-                                                <Tooltip
-                                                    content={
+                                                <TruncatedCell
+                                                    value={entry.namespace}
+                                                    tooltip={
                                                         entry.commandPreview || l10n.t('No command details reported.')
                                                     }
-                                                    relationship="description"
-                                                >
-                                                    <span className="truncatedValue">{entry.namespace || '—'}</span>
-                                                </Tooltip>
+                                                    className="truncatedValue"
+                                                />
                                             </TableCell>
                                             <TableCell className="narrowColumn">
                                                 {entry.longestSecsRunning ?? '—'}
