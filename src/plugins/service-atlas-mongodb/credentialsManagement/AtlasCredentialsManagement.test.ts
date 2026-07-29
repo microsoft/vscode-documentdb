@@ -60,6 +60,7 @@ jest.mock('../../../extensionVariables', () => ({
                 keys: () => Array.from(globalStateBacking.keys()),
             },
         },
+        discoveryBranchDataProvider: { refresh: jest.fn(), resetNodeErrorState: jest.fn() },
         secretStorage: {
             get: async (key: string): Promise<string | undefined> =>
                 secretStorageBacking.has(key) ? secretStorageBacking.get(key) : undefined,
@@ -81,7 +82,9 @@ jest.mock('../../../webviews/documentdb/atlasCredentials/atlasCredentialsControl
 }));
 
 import * as vscode from 'vscode';
+import { ext } from '../../../extensionVariables';
 import { StorageService } from '../../../services/storageService';
+import { type TreeElement } from '../../../tree/TreeElement';
 import { buildAtlasAccessUrl } from '../atlasDeepLinks';
 import {
     readAtlasCredentials,
@@ -90,6 +93,7 @@ import {
     type AtlasCredentialRecord,
 } from '../credentials/atlasCredentialStore';
 import { type AtlasDiscoveryService, type AtlasDiscoverySnapshot } from '../discovery/AtlasDiscoveryService';
+import { addAtlasCredential } from './addAtlasCredential';
 import { AtlasCredentialActionStep } from './AtlasCredentialActionStep';
 import { type AtlasCredentialsManagementWizardContext } from './AtlasCredentialsManagementWizardContext';
 import { SelectAtlasCredentialStep } from './SelectAtlasCredentialStep';
@@ -157,6 +161,25 @@ beforeEach(() => {
     mockOpenWebview.mockReset();
     (vscode.window.showInformationMessage as jest.Mock).mockReset();
     (vscode.env.openExternal as jest.Mock).mockClear();
+});
+
+describe('addAtlasCredential', () => {
+    it('does not open credential management after the add webview is closed', async () => {
+        mockOpenWebview.mockResolvedValue(false);
+        const context = buildContext(() => {
+            throw new Error('The direct add path must not show a QuickPick.');
+        });
+        const node = { id: 'discoveryView/atlas-mongodb' } as TreeElement;
+
+        const stored = await addAtlasCredential(context, context.discoveryService as AtlasDiscoveryService, node);
+
+        expect(stored).toBe(false);
+        expect(mockOpenWebview).toHaveBeenCalledTimes(1);
+        expect(context.ui.showQuickPick).not.toHaveBeenCalled();
+        expect(context.discoveryService.reset).toHaveBeenCalledTimes(1);
+        expect(ext.discoveryBranchDataProvider.resetNodeErrorState).toHaveBeenCalledWith(node.id);
+        expect(ext.discoveryBranchDataProvider.refresh).toHaveBeenCalledWith(node);
+    });
 });
 
 describe('SelectAtlasCredentialStep', () => {

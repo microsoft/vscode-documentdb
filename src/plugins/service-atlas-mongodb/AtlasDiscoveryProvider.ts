@@ -12,6 +12,7 @@ import { type DiscoveryProvider } from '../../services/discoveryServices';
 import { type TreeElement } from '../../tree/TreeElement';
 import { DESCRIPTION, DISCOVERY_PROVIDER_ID, ICON_PATH, LABEL, WIZARD_TITLE } from './config';
 import { readAtlasCredentials } from './credentials/atlasCredentialStore';
+import { addAtlasCredential } from './credentialsManagement/addAtlasCredential';
 import { configureAtlasCredentials } from './credentialsManagement/configureAtlasCredentials';
 import { AtlasServiceRootItem } from './discovery-tree/AtlasServiceRootItem';
 import { AtlasExecuteStep } from './discovery-wizard/AtlasExecuteStep';
@@ -77,6 +78,14 @@ export class AtlasDiscoveryProvider extends Disposable implements DiscoveryProvi
 
         if (changed) {
             // Reveal and expand the root so projects appear without a manual expand.
+            void this.revealAtlasRoot();
+        }
+    }
+
+    async addCredential(context: IActionContext, node: TreeElement): Promise<void> {
+        const changed = await addAtlasCredential(context, this.discoveryService, node);
+
+        if (changed) {
             void this.revealAtlasRoot();
         }
     }

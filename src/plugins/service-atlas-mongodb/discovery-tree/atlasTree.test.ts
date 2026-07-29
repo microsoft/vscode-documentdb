@@ -160,10 +160,11 @@ describe('AtlasServiceRootItem', () => {
     it('offers a sign-in row when no credentials are stored', async () => {
         const root = new AtlasServiceRootItem(serviceStub(snapshotOf()), 'discoveryView');
 
-        const children = (await root.getChildren()) as Array<{ id: string }>;
+        const children = (await root.getChildren()) as Array<{ id: string; commandId?: string }>;
 
         expect(children).toHaveLength(1);
         expect(children[0].id).toContain('/sign-in');
+        expect(children[0].commandId).toBe('vscode-documentdb.command.internal.atlas.addCredential');
     });
 
     it('renders a quiet organization tree with no descriptions on the happy path', async () => {

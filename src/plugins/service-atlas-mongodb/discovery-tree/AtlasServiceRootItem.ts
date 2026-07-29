@@ -19,6 +19,7 @@ import { atlasTrace } from '../atlasTrace';
 import { getAtlasViewMode } from '../commands/switchAtlasViewMode';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { readAtlasCredentials } from '../credentials/atlasCredentialStore';
+import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../credentialsManagement/addAtlasCredential';
 import {
     snapshotHasFailures,
     type AtlasDiscoveryService,
@@ -185,7 +186,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             id: `${this.id}/sign-in`,
             label: vscode.l10n.t('Sign in to view MongoDB Atlas clusters'),
             iconPath: new vscode.ThemeIcon('sign-in'),
-            commandId: 'vscode-documentdb.command.discoveryView.manageCredentials',
+            commandId: ADD_ATLAS_CREDENTIAL_COMMAND_ID,
             commandArgs: [this],
         });
     }
