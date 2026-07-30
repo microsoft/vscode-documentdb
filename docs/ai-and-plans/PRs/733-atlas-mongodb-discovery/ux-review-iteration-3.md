@@ -821,7 +821,12 @@ _Follow-up PR; sequence after item 6._
 >    credential must never blank the fleet.
 > 2. **Re-entering the same Atlas identity updates the existing record instead of adding a
 >    duplicate.** The record ID stays stable across a secret rotation, which is what keeps tree
->    paths and saved connections valid.
+>    paths and saved connections valid. A later live test exposed that the original implementation
+>    matched on the 8-character display hint, causing all Service Account IDs with the shared
+>    `mdb_sa_id_` prefix to collide. Matching now compares the complete Public Key or Client ID from
+>    SecretStorage. During update that identity field is populated and disabled; only the Private
+>    Key or Client Secret can rotate. Using another identity requires removing the entry and adding
+>    a new credential.
 
 ✅ **Implemented (Iteration 4):** [ee2bf417](https://github.com/microsoft/vscode-documentdb/commit/ee2bf417)
 (store, per-credential sessions, `listAll()` aggregation, pagination),

@@ -8,6 +8,7 @@ import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-w
 const mockListProjects = jest.fn();
 const mockFetchServiceAccountToken = jest.fn();
 const mockGetAtlasCredential = jest.fn();
+const mockReadAtlasCredentialSecrets = jest.fn();
 const mockUpsertAtlasCredential = jest.fn();
 const mockReplaceAtlasCredentialSecrets = jest.fn();
 
@@ -78,6 +79,7 @@ jest.mock('../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient
 
 jest.mock('../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore', () => ({
     getAtlasCredential: (...args: unknown[]) => mockGetAtlasCredential(...args) as unknown,
+    readAtlasCredentialSecrets: (...args: unknown[]) => mockReadAtlasCredentialSecrets(...args) as unknown,
     replaceAtlasCredentialSecrets: (...args: unknown[]) => mockReplaceAtlasCredentialSecrets(...args) as unknown,
     upsertAtlasCredential: (...args: unknown[]) => mockUpsertAtlasCredential(...args) as unknown,
 }));
@@ -117,6 +119,12 @@ beforeEach(() => {
     mockListProjects.mockReset();
     mockFetchServiceAccountToken.mockReset();
     mockGetAtlasCredential.mockReset();
+    mockReadAtlasCredentialSecrets.mockReset();
+    mockReadAtlasCredentialSecrets.mockResolvedValue({
+        authMethod: 'apikey',
+        publicKey: 'public-key',
+        privateKey: 'private-key',
+    });
     mockUpsertAtlasCredential.mockReset();
     mockReplaceAtlasCredentialSecrets.mockReset();
 });
@@ -272,5 +280,49 @@ describe('atlasCredentialsRouter', () => {
             { authMethod: 'apikey', publicKey: 'abcdef12', privateKey: 'private-key' },
             {},
         );
+    });
+
+    it('rejects changing an API Key identity before contacting Atlas', async () => {
+        mockReadAtlasCredentialSecrets.mockResolvedValue({
+            authMethod: 'apikey',
+            publicKey: 'original-public-key',
+            privateKey: 'original-private-key',
+        });
+        const caller = createCallerFactory(atlasCredentialsRouter)({ ...createContext('credential-1') });
+
+        await expect(
+            caller.submitApiKey({ publicKey: 'different-public-key', privateKey: 'new-private-key' }),
+        ).resolves.toEqual({
+            success: false,
+            failedStage: 0,
+            error: {
+                kind: 'identity',
+                title: 'The credential identity cannot be changed',
+                message: 'To use a different Public Key, sign out and add a new credential.',
+            },
+        });
+        expect(mockListProjects).not.toHaveBeenCalled();
+        expect(mockReplaceAtlasCredentialSecrets).not.toHaveBeenCalled();
+    });
+
+    it('rejects changing a Service Account identity before requesting a token', async () => {
+        mockReadAtlasCredentialSecrets.mockResolvedValue({
+            authMethod: 'serviceaccount',
+            clientId: 'original-client-id',
+            clientSecret: 'original-client-secret',
+        });
+        const caller = createCallerFactory(atlasCredentialsRouter)({ ...createContext('credential-1') });
+
+        await expect(
+            caller.submitServiceAccount({ clientId: 'different-client-id', clientSecret: 'new-client-secret' }),
+        ).resolves.toMatchObject({
+            success: false,
+            error: {
+                kind: 'identity',
+                message: 'To use a different Client ID, sign out and add a new credential.',
+            },
+        });
+        expect(mockFetchServiceAccountToken).not.toHaveBeenCalled();
+        expect(mockReplaceAtlasCredentialSecrets).not.toHaveBeenCalled();
     });
 });

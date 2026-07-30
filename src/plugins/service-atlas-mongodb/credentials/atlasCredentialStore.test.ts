@@ -117,6 +117,27 @@ describe('atlasCredentialStore', () => {
         });
     });
 
+    it('keeps Service Accounts with the same identity hint independent', async () => {
+        const first = await upsertAtlasCredential({
+            authMethod: 'serviceaccount',
+            clientId: 'mdb_sa_id_111111111111111111111111',
+            clientSecret: 'first-secret',
+        });
+        const second = await upsertAtlasCredential({
+            authMethod: 'serviceaccount',
+            clientId: 'mdb_sa_id_222222222222222222222222',
+            clientSecret: 'second-secret',
+        });
+
+        expect(second.created).toBe(true);
+        expect(second.record.id).not.toBe(first.record.id);
+        await expect(readAtlasCredentials()).resolves.toHaveLength(2);
+        await expect(readAtlasCredentialSecrets(first.record.id)).resolves.toMatchObject({
+            clientId: 'mdb_sa_id_111111111111111111111111',
+            clientSecret: 'first-secret',
+        });
+    });
+
     it('reuses the record id when the same Atlas identity is re-entered', async () => {
         const first = await upsertAtlasCredential({
             authMethod: 'apikey',
@@ -154,6 +175,27 @@ describe('atlasCredentialStore', () => {
         expect(updated?.label).toBe('Team key');
         expect(updated?.orgName).toBe('Acme Corp');
         await expect(readAtlasCredentialSecrets(record.id)).resolves.toMatchObject({ clientSecret: 'secret-2' });
+    });
+
+    it('rejects changing the public identity during secret replacement', async () => {
+        const { record } = await upsertAtlasCredential({
+            authMethod: 'apikey',
+            publicKey: 'public-key-1',
+            privateKey: 'private-key-1',
+        });
+
+        await expect(
+            replaceAtlasCredentialSecrets(record.id, {
+                authMethod: 'apikey',
+                publicKey: 'public-key-2',
+                privateKey: 'private-key-2',
+            }),
+        ).rejects.toThrow('Atlas credential identity cannot be changed');
+        await expect(readAtlasCredentialSecrets(record.id)).resolves.toEqual({
+            authMethod: 'apikey',
+            publicKey: 'public-key-1',
+            privateKey: 'private-key-1',
+        });
     });
 
     it('updates metadata without dropping secrets', async () => {

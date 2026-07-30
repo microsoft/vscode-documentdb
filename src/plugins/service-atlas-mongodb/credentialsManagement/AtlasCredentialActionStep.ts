@@ -180,7 +180,23 @@ export class AtlasCredentialActionStep extends AzureWizardPromptStep<AtlasCreden
     ): Promise<never> {
         context.telemetry.properties.atlasCredentialAction = 'update';
 
-        const stored = await openAtlasCredentialsWebview({ credentialId, credentialLabel: label });
+        const secrets = await readAtlasCredentialSecrets(credentialId);
+        if (!secrets) {
+            void vscode.window.showErrorMessage(
+                l10n.t('The stored credential could not be read. Sign out and add it again.'),
+            );
+            context.credentials = [];
+            context.selectedCredentialId = undefined;
+            throw new GoBackError();
+        }
+
+        const credentialIdentity = secrets.authMethod === 'apikey' ? secrets.publicKey : secrets.clientId;
+        const stored = await openAtlasCredentialsWebview({
+            authMethod: secrets.authMethod,
+            credentialId,
+            credentialLabel: label,
+            credentialIdentity,
+        });
 
         context.telemetry.properties.atlasCredentialUpdateResult = stored ? 'succeeded' : 'cancelled';
 

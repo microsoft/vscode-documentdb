@@ -30,6 +30,7 @@ import {
 import { buildAtlasAccessUrlFor } from '../../../plugins/service-atlas-mongodb/atlasDeepLinks';
 import {
     getAtlasCredential,
+    readAtlasCredentialSecrets,
     replaceAtlasCredentialSecrets,
     upsertAtlasCredential,
     type AtlasCredentialSecrets,
@@ -65,6 +66,7 @@ export type RouterContext = BaseRouterContext & {
 
 export type CredentialErrorKind =
     | 'authentication'
+    | 'identity'
     | 'ipAccess'
     | 'noProjects'
     | 'permissions'
@@ -283,6 +285,39 @@ async function persistCredential(ctx: WithTelemetry<RouterContext>, secrets: Atl
     ctx.telemetry.properties.credentialCreated = created ? 'true' : 'false';
 }
 
+async function validateUpdateIdentity(
+    ctx: WithTelemetry<RouterContext>,
+    authMethod: AtlasCredentialSecrets['authMethod'],
+    identity: string,
+): Promise<CredentialSubmitError | undefined> {
+    if (!ctx.credentialId) {
+        return undefined;
+    }
+
+    const stored = await readAtlasCredentialSecrets(ctx.credentialId);
+    if (!stored) {
+        return {
+            kind: 'identity',
+            title: l10n.t('This credential no longer exists'),
+            message: l10n.t('Close this view and add the credential again.'),
+        };
+    }
+
+    const storedIdentity = stored.authMethod === 'apikey' ? stored.publicKey : stored.clientId;
+    if (stored.authMethod === authMethod && storedIdentity === identity) {
+        return undefined;
+    }
+
+    return {
+        kind: 'identity',
+        title: l10n.t('The credential identity cannot be changed'),
+        message:
+            authMethod === 'apikey'
+                ? l10n.t('To use a different Public Key, sign out and add a new credential.')
+                : l10n.t('To use a different Client ID, sign out and add a new credential.'),
+    };
+}
+
 export const atlasCredentialsRouter = router({
     /**
      * Validates and stores a MongoDB Atlas API Key (public + private key pair).
@@ -302,6 +337,11 @@ export const atlasCredentialsRouter = router({
 
             const publicKey = input.publicKey.trim();
             const privateKey = input.privateKey.trim();
+
+            const identityError = await validateUpdateIdentity(myCtx, 'apikey', publicKey);
+            if (identityError) {
+                return { success: false, error: identityError, failedStage: 0 };
+            }
 
             const client = new AtlasApiClient({ type: 'apikey', publicKey, privateKey });
             try {
@@ -351,6 +391,11 @@ export const atlasCredentialsRouter = router({
 
             const clientId = input.clientId.trim();
             const clientSecret = input.clientSecret.trim();
+
+            const identityError = await validateUpdateIdentity(myCtx, 'serviceaccount', clientId);
+            if (identityError) {
+                return { success: false, error: identityError, failedStage: 0 };
+            }
 
             let accessToken: string;
             let expiresIn: number;

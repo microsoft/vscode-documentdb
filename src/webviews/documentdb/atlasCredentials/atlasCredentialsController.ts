@@ -12,9 +12,9 @@ import { type RouterContext } from './atlasCredentialsRouter';
 
 /**
  * Configuration passed to the MongoDB Atlas credential webview. Serialised as JSON, so
- * it carries **no secret material** - only which auth method to render a form
- * for and whether the panel is adding or updating a credential. The entered credentials
- * travel back to the host through a tRPC mutation.
+ * it carries **no secret material** - only which auth method to render, whether the panel is
+ * adding or updating a credential, and the public identity shown during an update. The entered
+ * credentials travel back to the host through a tRPC mutation.
  */
 export type AtlasCredentialsWebviewConfig = {
     /**
@@ -26,6 +26,8 @@ export type AtlasCredentialsWebviewConfig = {
     readonly mode: 'add' | 'edit';
     /** Friendly name of the credential being updated, shown in the edit header. */
     readonly credentialLabel?: string;
+    /** Existing Public Key or Client ID. Shown read-only while its paired secret is rotated. */
+    readonly credentialIdentity?: string;
 };
 
 /** Options for {@link openAtlasCredentialsWebview}. */
@@ -36,6 +38,8 @@ export interface OpenAtlasCredentialsOptions {
     readonly credentialId?: string;
     /** Friendly name persisted with the credential and shown in the panel header. */
     readonly credentialLabel?: string;
+    /** Existing Public Key or Client ID. Required by the edit flow and safe to show in the webview. */
+    readonly credentialIdentity?: string;
 }
 
 /**
@@ -88,7 +92,12 @@ export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions
         state.controller = openAppWebview<AtlasCredentialsWebviewConfig>({
             title,
             webviewName: 'atlasCredentials',
-            config: { authMethod: options.authMethod, mode, credentialLabel: options.credentialLabel },
+            config: {
+                authMethod: options.authMethod,
+                mode,
+                credentialLabel: options.credentialLabel,
+                credentialIdentity: options.credentialIdentity,
+            },
             context,
             // Give the panel tab the DocumentDB brand icon so it reads as one of the extension's own
             // surfaces, the same way the collection and document webviews set their own tab icons.

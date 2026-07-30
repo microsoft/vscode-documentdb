@@ -295,7 +295,14 @@ export const AtlasCredentialsView = (): JSX.Element => {
     const [phase, setPhase] = useState<Phase>(initialMethod ? 'form' : 'choose');
     const [chosenMethod, setChosenMethod] = useState<AtlasAuthMethod | undefined>(initialMethod);
     const [pendingMethod, setPendingMethod] = useState<AtlasAuthMethod | undefined>(initialMethod ?? 'serviceaccount');
-    const [values, setValues] = useState<Record<string, string>>({});
+    const [values, setValues] = useState<Record<string, string>>((): Record<string, string> => {
+        if (!configuration.credentialIdentity) {
+            return {};
+        }
+        return configuration.authMethod === 'apikey'
+            ? { publicKey: configuration.credentialIdentity }
+            : { clientId: configuration.credentialIdentity };
+    });
     const [submitError, setSubmitError] = useState<CredentialSubmitError | undefined>();
     const [showSecret, setShowSecret] = useState(false);
     const [isCompleting, setIsCompleting] = useState(false);
@@ -740,13 +747,28 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 }}
             >
                 {fieldSpecs.map((spec) => (
-                    <Field key={spec.key} label={spec.label} required>
+                    <Field
+                        key={spec.key}
+                        label={spec.label}
+                        required
+                        hint={
+                            isEdit && !spec.secret
+                                ? isApiKey
+                                    ? l10n.t('To use a different Public Key, sign out and add a new credential.')
+                                    : l10n.t('To use a different Client ID, sign out and add a new credential.')
+                                : undefined
+                        }
+                    >
                         <Input
                             type={spec.secret && !showSecret ? 'password' : 'text'}
                             value={values[spec.key] ?? ''}
                             placeholder={spec.placeholder}
-                            onChange={(_event, data) =>
-                                setValues((previous) => ({ ...previous, [spec.key]: data.value }))
+                            disabled={isEdit && !spec.secret}
+                            onChange={
+                                isEdit && !spec.secret
+                                    ? undefined
+                                    : (_event, data) =>
+                                          setValues((previous) => ({ ...previous, [spec.key]: data.value }))
                             }
                             contentAfter={
                                 spec.secret ? (
@@ -823,7 +845,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 <Text id="atlas-success-heading" as="h2" size={500} weight="semibold">
                     {isEdit ? l10n.t('Credential updated') : l10n.t('Credential added')}
                 </Text>
-                <Text className={styles.muted}>{l10n.t('Your credential was successfully checked and saved.')}</Text>
+                <Text className={styles.muted}>{l10n.t('Everything checked out with MongoDB Atlas.')}</Text>
             </div>
             <div className={styles.stageList} role="list" aria-label={l10n.t('Completed credential checks')}>
                 {checkStages.map((label) => (
@@ -835,6 +857,12 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     'You can now close this tab and explore your MongoDB Atlas clusters in the Service Discovery area.',
                 )}
             </Text>
+            <MessageBar intent="success">
+                <MessageBarBody>
+                    <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>{' '}
+                    {l10n.t('Your credential was successfully checked and saved, and is ready to use.')}
+                </MessageBarBody>
+            </MessageBar>
             {submitError && errorMessage}
         </section>
     );

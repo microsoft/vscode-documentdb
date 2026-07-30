@@ -359,7 +359,12 @@ describe('AtlasCredentialActionStep', () => {
 
         await expect(new AtlasCredentialActionStep().prompt(context)).rejects.toBeInstanceOf(GoBackErrorMock);
         expect(mockOpenWebview).toHaveBeenCalledWith(
-            expect.objectContaining({ credentialId, credentialLabel: 'Work key' }),
+            expect.objectContaining({
+                authMethod: 'apikey',
+                credentialId,
+                credentialLabel: 'Work key',
+                credentialIdentity: 'pub-1',
+            }),
         );
         expect(context.changed).toBe(true);
     });

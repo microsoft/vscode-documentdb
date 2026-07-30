@@ -227,11 +227,8 @@ export async function upsertAtlasCredential(
     secrets: AtlasCredentialSecrets,
     metadata: AtlasCredentialMetadataUpdate = {},
 ): Promise<UpsertAtlasCredentialResult> {
-    const identity = identityOf(secrets);
     const records = await ensureCache();
-    const existing = records.find(
-        (record) => record.authMethod === secrets.authMethod && record.identityHint === identityHint(identity),
-    );
+    const existing = await findCredentialByIdentity(records, secrets);
 
     if (existing) {
         const updated: AtlasCredentialRecord = {
@@ -251,7 +248,7 @@ export async function upsertAtlasCredential(
         label: metadata.label,
         orgId: metadata.orgId,
         orgName: metadata.orgName,
-        identityHint: identityHint(identity),
+        identityHint: identityHint(identityOf(secrets)),
         order: nextOrder(records),
     };
 
@@ -278,10 +275,17 @@ export async function replaceAtlasCredentialSecrets(
         return undefined;
     }
 
+    const currentSecrets = await readAtlasCredentialSecrets(id);
+    if (
+        !currentSecrets ||
+        currentSecrets.authMethod !== secrets.authMethod ||
+        identityOf(currentSecrets) !== identityOf(secrets)
+    ) {
+        throw new Error('Atlas credential identity cannot be changed');
+    }
+
     const updated: AtlasCredentialRecord = {
         ...existing,
-        authMethod: secrets.authMethod,
-        identityHint: identityHint(identityOf(secrets)),
         label: metadata.label ?? existing.label,
         orgId: metadata.orgId ?? existing.orgId,
         orgName: metadata.orgName ?? existing.orgName,
@@ -379,6 +383,24 @@ function identityOf(secrets: AtlasCredentialSecrets): string {
 
 function identityHint(identity: string): string {
     return identity.slice(0, IDENTITY_HINT_LENGTH);
+}
+
+async function findCredentialByIdentity(
+    records: readonly AtlasCredentialRecord[],
+    secrets: AtlasCredentialSecrets,
+): Promise<AtlasCredentialRecord | undefined> {
+    const identity = identityOf(secrets);
+    for (const record of records) {
+        if (record.authMethod !== secrets.authMethod) {
+            continue;
+        }
+
+        const storedSecrets = await readAtlasCredentialSecrets(record.id);
+        if (storedSecrets?.authMethod === secrets.authMethod && identityOf(storedSecrets) === identity) {
+            return record;
+        }
+    }
+    return undefined;
 }
 
 function secretsToArray(secrets: AtlasCredentialSecrets | undefined): string[] | undefined {

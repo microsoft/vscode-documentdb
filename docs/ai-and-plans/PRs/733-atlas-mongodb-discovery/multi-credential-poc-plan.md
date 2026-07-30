@@ -539,7 +539,10 @@ flowchart LR
 ```
 
 - **Update** replaces the stored secret only **after** the new one validates, so a failed update
-  never destroys the previous working credential (§5.2, item #12).
+  never destroys the previous working credential (§5.2, item #12). The Public Key or Client ID is
+  the immutable identity of the record: edit mode displays that field disabled and allows only the
+  Private Key or Client Secret to rotate. To use a different identity, remove the old entry and add
+  a new credential.
 - **Remove** deletes only that credential's secrets and its tree nodes; other credentials are
   untouched.
 - **Sign out of all** clears every credential after a single confirm.
