@@ -564,6 +564,25 @@
         row-gap: 0;
     }
 
+    // The switch plus its info icon, kept on one line and vertically centered.
+    .optionSwitchRow {
+        display: flex;
+        align-items: center;
+        column-gap: 4px;
+    }
+
+    // Small, focusable info icon revealing the option's explanation on hover/focus.
+    .optionInfoIcon {
+        font-size: 14px;
+        opacity: 0.6;
+        cursor: help;
+
+        &:hover,
+        &:focus-visible {
+            opacity: 1;
+        }
+    }
+
     // Restore the default label font-size on the small switch. Only the font
     // size is overridden (not line-height) so the compact small line box — and
     // thus the label's vertical alignment with the toggle — is preserved. The

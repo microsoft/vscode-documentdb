@@ -170,14 +170,15 @@ function DrawerSection({
 }
 
 /**
- * One index-level option: a compact switch whose label carries a short
- * parenthetical explanation, plus an optional reason shown when the option is
- * disabled and any revealed input. The detail container is rendered only when
- * there is something to show, and lives in a single `.optionDetail` block so
- * its layout is tuned in one place.
+ * One index-level option: a compact switch with a short label, an optional
+ * info icon that reveals a longer explanation on hover/focus, plus an
+ * optional reason shown when the option is disabled and any revealed input.
+ * The detail container is rendered only when there is something to show, and
+ * lives in a single `.optionDetail` block so its layout is tuned in one place.
  */
 function OptionRow({
     label,
+    tooltip,
     checked,
     disabled = false,
     disabledReason,
@@ -185,6 +186,8 @@ function OptionRow({
     children,
 }: {
     label: string;
+    /** Longer explanation shown via a tooltip on the info icon next to the label. */
+    tooltip?: string;
     checked: boolean;
     disabled?: boolean;
     disabledReason?: string;
@@ -195,16 +198,23 @@ function OptionRow({
     const hasDetail = reason !== undefined || Boolean(children);
     return (
         <div className="optionItem">
-            <Switch
-                size="small"
-                checked={checked}
-                disabled={disabled}
-                onChange={(_, data) => onToggle(data.checked)}
-                // The small size shrinks the label to fontSizeBase200; override just
-                // the font-size back to the default via the label slot, keeping the
-                // small line-height so the label stays aligned with the toggle.
-                label={{ children: label, className: 'optionSwitchLabel' }}
-            />
+            <div className="optionSwitchRow">
+                <Switch
+                    size="small"
+                    checked={checked}
+                    disabled={disabled}
+                    onChange={(_, data) => onToggle(data.checked)}
+                    // The small size shrinks the label to fontSizeBase200; override just
+                    // the font-size back to the default via the label slot, keeping the
+                    // small line-height so the label stays aligned with the toggle.
+                    label={{ children: label, className: 'optionSwitchLabel' }}
+                />
+                {tooltip && (
+                    <Tooltip content={tooltip} relationship="description" withArrow>
+                        <InfoRegular className="optionInfoIcon" tabIndex={0} aria-label={tooltip} />
+                    </Tooltip>
+                )}
+            </div>
             {hasDetail && (
                 <div className="optionDetail">
                     {reason !== undefined && <div className="optionDescription">{reason}</div>}
@@ -871,7 +881,8 @@ export const CreateIndexDrawer = ({
     // The input is revealed only while the option is on.
     const nameOption = (
         <OptionRow
-            label={l10n.t('Name - use a custom index name')}
+            label={l10n.t('Name')}
+            tooltip={l10n.t('Use a custom index name.')}
             checked={fieldNameEnabled}
             disabled={interactionDisabled}
             onToggle={(checked) =>
@@ -904,7 +915,8 @@ export const CreateIndexDrawer = ({
     // `<field>_cosmosSearch`; the input placeholder previews that default.
     const vectorNameOption = (
         <OptionRow
-            label={l10n.t('Name - use a custom index name')}
+            label={l10n.t('Name')}
+            tooltip={l10n.t('Use a custom index name.')}
             checked={vectorNameEnabled}
             disabled={interactionDisabled}
             onToggle={(checked) => setForm((prev) => ({ ...prev, vectorNameEnabled: checked }))}
@@ -1158,13 +1170,15 @@ export const CreateIndexDrawer = ({
                                 >
                                     <div className="typeOptions">
                                         <OptionRow
-                                            label={l10n.t('Unique - rejects duplicate values')}
+                                            label={l10n.t('Unique')}
+                                            tooltip={l10n.t('Rejects duplicate values.')}
                                             checked={unique}
                                             disabled={interactionDisabled}
                                             onToggle={(checked) => setForm((prev) => ({ ...prev, unique: checked }))}
                                         />
                                         <OptionRow
-                                            label={l10n.t('Sparse - only indexes documents that contain the field')}
+                                            label={l10n.t('Sparse')}
+                                            tooltip={l10n.t('Only indexes documents that contain the field.')}
                                             checked={sparse && !sparseDisabled}
                                             disabled={sparseDisabled || interactionDisabled}
                                             disabledReason={l10n.t(
@@ -1173,7 +1187,8 @@ export const CreateIndexDrawer = ({
                                             onToggle={(checked) => setForm((prev) => ({ ...prev, sparse: checked }))}
                                         />
                                         <OptionRow
-                                            label={l10n.t('TTL - auto-deletes documents after a set age')}
+                                            label={l10n.t('TTL')}
+                                            tooltip={l10n.t('Auto-deletes documents after a set age.')}
                                             checked={ttlActive}
                                             disabled={!isSingleBTree || interactionDisabled}
                                             disabledReason={l10n.t(
