@@ -67,8 +67,7 @@ parameters:
     #                    contenttype='Maven' instead of 'npm'. ESRP authenticates and accepts
     #                    the request, then fails at the final content-validation step because
     #                    the payload is not a Maven artifact. NOTHING IS PUBLISHED. This trick
-    #                    is documented by the ESRP team:
-    #                      https://eng.ms/docs/.../release-onboarding (Usage FAQ)
+    #                    is an internally validated technique.
     #
     #                    NOTE: A failed run in this mode does NOT, by itself, prove the auth
     #                    path worked - it could also fail on bad SC, KV permissions, cert
@@ -127,9 +126,10 @@ variables:
 
     # ESRP release notification / approval contacts. Comma-separated list of
     # email addresses (the EsrpRelease task splits on ',' - a ';' is treated as
-    # part of a single address and rejected as an invalid email). Prefer a TEAM
-    # security group or distribution list so releases are not tied to a single
-    # person. Override in ADO -> Variables.
+    # part of a single address and rejected as an invalid email). Each address
+    # must be an individual Microsoft alias; distribution lists and security
+    # groups are not supported. List at least two people so releases are not
+    # tied to a single person. Override in ADO -> Variables.
     EsrpReleaseOwners: 'guanzhousong@microsoft.com,tnaumowicz@microsoft.com'
     EsrpReleaseApprovers: 'guanzhousong@microsoft.com,tnaumowicz@microsoft.com'
 
@@ -488,7 +488,6 @@ extends:
                                         Write-Output "[Success] No forbidden files detected ($($entries.Count) entries scanned)"
 
                               # Publish to npmjs.org via ESRP Release
-                              # Docs: https://eng.ms/docs/microsoft-security/identity/trust-and-security-services/tss-release-distribute/tss-release-esrp-parent/release-onboarding
                               #
                               # Authentication: the Azure RM service connection 'DOCDBEXT_ESRP_RELEASE'
                               # uses Workload Identity Federation, which handles auth to Azure / Key
