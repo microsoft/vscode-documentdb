@@ -200,8 +200,8 @@ and **multi-credential management** modeled on the Azure accounts flow — plus 
 | #   | Priority | Item                                                                          | ≈ Files | Reviewer?  | Status                                                                                      |
 | --- | -------- | ----------------------------------------------------------------------------- | ------- | ---------- | ------------------------------------------------------------------------------------------- |
 | 1   | **P1**   | Root auto-opens the auth picker on expand — should just show the sign-in node | ~5      | 🗣️ #1      | ✅ Implemented                                                                              |
-| 2   | **P1**   | Auth-recovery tree node wording is inconsistent                               | ~5      | 🗣️ #3/live | 🟠 Open — reopened 2026-07-23                                                               |
-| 3   | **P1**   | No-projects result uses a non-actionable information row                      | ~5      | 🗣️ #4/live | 🟠 Open — reopened 2026-07-23                                                               |
+| 2   | **P1**   | Auth-recovery tree node wording is inconsistent                               | ~5      | 🗣️ #3/live | ✅ Implemented (Iteration 4) — consolidated "revisit credentials" row ([9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f))                                                               |
+| 3   | **P1**   | No-projects result uses a non-actionable information row                      | ~5      | 🗣️ #4/live | ✅ Implemented (Iteration 4) — classified empty/401/403 handling ([ee2bf417](https://github.com/microsoft/vscode-documentdb/commit/ee2bf417), [9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f))                                                               |
 | 4   | **P1**   | Project-level failures are passive rows (root uses modal + retry)             | ~5      | —          | ✅ Implemented                                                                              |
 | 5   | **P1**   | Wizard steps throw raw errors → close the flow (no in-flow recovery)          | ~5      | (🗣️ #3)    | ✅ Implemented ([313950f2](https://github.com/microsoft/vscode-documentdb/commit/313950f2)) |
 | 14  | **P1**   | Remove all filtering (org + project) and its storage — release cleanup        | ~10     | 🗣️ live    | ✅ Implemented ([a7737b70](https://github.com/microsoft/vscode-documentdb/commit/a7737b70)) |
@@ -253,8 +253,8 @@ surfacing. All live in `AtlasServiceRootItem` / `AtlasProjectItem` / the auth fl
 | ----- | ------------------------------------------------------------------------- | ------------------------------------------------------------- | ------------ | ------------------------------------------------------ |
 | 1     | **Item 1** — remove auto-prompt; expand shows only the sign-in node       | `AtlasServiceRootItem` (+ delete `consumeSuppressAutoPrompt`) | ~5           | ✅ Implemented — establishes the single sign-in entry  |
 | 2     | **Item 4** — project errors → modal + single retry node; detail to output | `AtlasProjectItem`, shared `showLoadFailure` helper           | ~5           | ✅ Implemented — defines the shared modal+retry helper |
-| 3a    | **Item 2** — align auth-recovery tree action wording                      | `AtlasServiceRootItem`, shared tree-action wording            | ~5           | 🟠 Reopened — follow-up to Iteration 3 implementation  |
-| 3b    | **Item 3** — no-projects result → modal + canonical retry node            | `AtlasServiceRootItem.fetchProjectItems`, retry-node cache    | ~5           | 🟠 Reopened — follow-up to Iteration 3 implementation  |
+| 3a    | **Item 2** — align auth-recovery tree action wording                      | `AtlasServiceRootItem`, shared tree-action wording | ~5 | ✅ Implemented (Iteration 4) — consolidated **revisit credentials** row ([9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f))  |
+| 3b    | **Item 3** — no-projects result → modal + canonical retry node            | `AtlasServiceRootItem.fetchProjectItems`, retry-node cache | ~5 | ✅ Implemented (Iteration 4) — empty/401/403 classification ([ee2bf417](https://github.com/microsoft/vscode-documentdb/commit/ee2bf417), [9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f))  |
 
 > Sequence: 1 establishes the single sign-in entry, 4 defines the shared modal+retry helper,
 > then 2 and 3 reuse that helper for the auth-failure and empty-state cases **in parallel**.
@@ -414,8 +414,9 @@ Keep both rows styled as actionable error/recovery nodes. Do not shorten the sec
 **Update credentials** and do not use the wizard-only **Manage MongoDB Atlas Credentials...**
 wording in this tree context.
 
-**Status:** 🟠 **Open.** Update the tree label and verify both actions from the failed-auth
-state before accepting this item as closed.
+**Status:** ✅ **Superseded → Implemented (Iteration 4).** The interim label fix was replaced by the
+consolidated **Click here to revisit credentials** row; both recovery actions moved into the credential
+manager it opens (see the Decision and implementation below).
 
 > **Decision (Iteration 4, Step 4):** The interim label fix is **superseded**. The two recovery
 > rows are replaced by the selected design's single consolidated row, **Click here to revisit
@@ -495,9 +496,9 @@ When the Atlas request returns no visible projects:
    When the user clicks **Click here to retry**, clear the cached failure and load again; if
    the result is still empty, show the explanatory modal again and restore the retry node.
 
-**Status:** 🟠 **Open.** This follow-up changes the presentation agreed in Iteration 3; it
-requires implementation plus hands-on verification for both an under-permissioned key and a
-genuinely empty account.
+**Status:** ✅ **Superseded → Implemented (Iteration 4).** `200 []` is treated as an authoritative `empty`
+placeholder (no misleading retry); only `401`/`403`/rate-limit/network raise the consolidated recovery
+action (see the Decision and implementation below).
 
 > **Decision (Iteration 4, Steps 2 and 4):** The Iteration 4.1 proposal to show a modal plus
 > **Click here to retry** for every no-projects result is **superseded**, exactly as this
@@ -1084,8 +1085,8 @@ the next one; nothing is dropped without a terminal status.
 
 | #   | Item                                                                   | Recommendation                                                                                                                                                    | Outcome                                                |
 | --- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------ |
-| 2   | Auth-recovery error-node wording                                       | Keep **Click here to retry** and rename **Update credentials** to **Click here to update credentials**, matching established actionable tree rows                 | 🟠 Open — implementation and hands-on testing required |
-| 3   | Non-actionable **No projects visible to this API key** information row | Replace it with a concise modal explanation + canonical **Click here to retry** node; show the modal again only after an explicit retry still returns no projects | 🟠 Open — implementation and hands-on testing required |
+| 2   | Auth-recovery error-node wording                                       | Keep **Click here to retry** and rename **Update credentials** to **Click here to update credentials**, matching established actionable tree rows | ✅ Implemented (Iteration 4) — superseded by the consolidated **revisit credentials** row ([9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f)) |
+| 3   | Non-actionable **No projects visible to this API key** information row | Replace it with a concise modal explanation + canonical **Click here to retry** node; show the modal again only after an explicit retry still returns no projects | ✅ Implemented (Iteration 4) — `200 []` is an authoritative `empty` placeholder; only 401/403/rate-limit/network raise recovery ([ee2bf417](https://github.com/microsoft/vscode-documentdb/commit/ee2bf417), [9c8baa0f](https://github.com/microsoft/vscode-documentdb/commit/9c8baa0f)) |
 
 ---
 
