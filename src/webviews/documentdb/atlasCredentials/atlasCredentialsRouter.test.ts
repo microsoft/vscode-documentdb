@@ -102,7 +102,9 @@ import { createCallerFactory } from '../../_integration/trpc';
 import { atlasCredentialsRouter, type RouterContext } from './atlasCredentialsRouter';
 
 function createContext(credentialId?: string): RouterContext & {
-    telemetry: { properties: Record<string, string>; measurements: Record<string, number> };
+    actionContext: {
+        telemetry: { properties: Record<string, string>; measurements: Record<string, number> };
+    };
 } {
     return {
         dbExperience: API.DocumentDB,
@@ -111,7 +113,9 @@ function createContext(credentialId?: string): RouterContext & {
         credentialState: { credentialsStored: false },
         onCredentialPersisted: jest.fn(),
         onCredentialsStored: jest.fn(),
-        telemetry: { properties: {}, measurements: {} },
+        actionContext: {
+            telemetry: { properties: {}, measurements: {} },
+        },
     };
 }
 

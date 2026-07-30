@@ -275,14 +275,14 @@ async function persistCredential(ctx: WithTelemetry<RouterContext>, secrets: Atl
     if (ctx.credentialId) {
         const updated = await replaceAtlasCredentialSecrets(ctx.credentialId, secrets, metadata);
         if (updated) {
-            ctx.telemetry.properties.credentialUpdated = 'true';
+            ctx.actionContext.telemetry.properties.credentialUpdated = 'true';
             return;
         }
         // The record disappeared while the webview was open; fall through and add it back.
     }
 
     const { created } = await upsertAtlasCredential(secrets, metadata);
-    ctx.telemetry.properties.credentialCreated = created ? 'true' : 'false';
+    ctx.actionContext.telemetry.properties.credentialCreated = created ? 'true' : 'false';
 }
 
 async function validateUpdateIdentity(
@@ -333,7 +333,7 @@ export const atlasCredentialsRouter = router({
         )
         .mutation(async ({ input, ctx }): Promise<SubmitResult> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            myCtx.telemetry.properties.authMethod = 'apikey';
+            myCtx.actionContext.telemetry.properties.authMethod = 'apikey';
 
             const publicKey = input.publicKey.trim();
             const privateKey = input.privateKey.trim();
@@ -354,7 +354,7 @@ export const atlasCredentialsRouter = router({
                     };
                 }
             } catch (error) {
-                myCtx.telemetry.properties.authSuccess = 'false';
+                myCtx.actionContext.telemetry.properties.authSuccess = 'false';
                 return {
                     success: false,
                     error: await describeAtlasError(myCtx, error, 'apikey', undefined, client),
@@ -369,7 +369,7 @@ export const atlasCredentialsRouter = router({
             }
             myCtx.credentialState.credentialsStored = true;
             myCtx.onCredentialPersisted();
-            myCtx.telemetry.properties.authSuccess = 'true';
+            myCtx.actionContext.telemetry.properties.authSuccess = 'true';
             return { success: true };
         }),
 
@@ -387,7 +387,7 @@ export const atlasCredentialsRouter = router({
         )
         .mutation(async ({ input, ctx }): Promise<SubmitResult> => {
             const myCtx = ctx as WithTelemetry<RouterContext>;
-            myCtx.telemetry.properties.authMethod = 'serviceaccount';
+            myCtx.actionContext.telemetry.properties.authMethod = 'serviceaccount';
 
             const clientId = input.clientId.trim();
             const clientSecret = input.clientSecret.trim();
@@ -407,7 +407,7 @@ export const atlasCredentialsRouter = router({
                 accessToken = tokenResponse.access_token;
                 expiresIn = tokenResponse.expires_in;
             } catch (error) {
-                myCtx.telemetry.properties.authSuccess = 'false';
+                myCtx.actionContext.telemetry.properties.authSuccess = 'false';
                 const networkError = await describeAtlasError(myCtx, error, 'serviceaccount', clientId);
                 return {
                     success: false,
@@ -436,7 +436,7 @@ export const atlasCredentialsRouter = router({
                     };
                 }
             } catch (error) {
-                myCtx.telemetry.properties.authSuccess = 'false';
+                myCtx.actionContext.telemetry.properties.authSuccess = 'false';
                 return {
                     success: false,
                     error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId, client),
@@ -462,7 +462,7 @@ export const atlasCredentialsRouter = router({
 
             myCtx.credentialState.credentialsStored = true;
             myCtx.onCredentialPersisted();
-            myCtx.telemetry.properties.authSuccess = 'true';
+            myCtx.actionContext.telemetry.properties.authSuccess = 'true';
             return { success: true };
         }),
 
