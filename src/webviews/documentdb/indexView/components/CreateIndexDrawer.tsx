@@ -95,13 +95,13 @@ function buildVectorAlgorithmOptions(): ReadonlyArray<{
     hint: string;
 }> {
     return [
-        { value: 'vector-hnsw', label: l10n.t('HNSW'), hint: l10n.t('Balanced speed and recall for most workloads.') },
-        { value: 'vector-ivf', label: l10n.t('IVF'), hint: l10n.t('Fast, light build for smaller collections.') },
         {
             value: 'vector-diskann',
             label: l10n.t('DiskANN'),
             hint: l10n.t('Scalable graph recommended for large collections.'),
         },
+        { value: 'vector-ivf', label: l10n.t('IVF'), hint: l10n.t('Fast, light build for smaller collections.') },
+        { value: 'vector-hnsw', label: l10n.t('HNSW'), hint: l10n.t('Balanced speed and recall for most workloads.') },
     ];
 }
 

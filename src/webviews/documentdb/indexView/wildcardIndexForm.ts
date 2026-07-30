@@ -129,16 +129,16 @@ export function createInitialIndexFormState(createFieldId: FieldIdFactory = make
         wildcardProjectionEnabled: false,
         wildcardProjectionMode: 'include',
         wildcardProjectionFields: [blankProjectionField(createFieldId)],
-        // Vector defaults: HNSW is the balanced general-purpose algorithm and its
-        // documented service defaults (m 16, efConstruction 64) are the starting
-        // point. Dimensions have no sensible default — they come from the
-        // embedding model — so the field starts empty and is required.
+        // Vector defaults: DiskANN is the recommended scalable algorithm and is
+        // shown first/preselected. Dimensions have no sensible default — they
+        // come from the embedding model — so the field starts empty and is
+        // required.
         vectorField: '',
         vectorNameEnabled: false,
         vectorName: '',
         vectorDimensions: '',
         vectorSimilarity: 'COS',
-        vectorAlgorithm: 'vector-hnsw',
+        vectorAlgorithm: 'vector-diskann',
         vectorNumLists: '10',
         vectorM: '16',
         vectorEfConstruction: '64',
