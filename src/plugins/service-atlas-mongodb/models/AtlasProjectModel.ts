@@ -78,3 +78,43 @@ export interface AtlasElectableSpecs {
 export type AtlasClusterState = 'IDLE' | 'CREATING' | 'UPDATING' | 'DELETING' | 'REPAIRING' | 'UNKNOWN';
 
 export type AtlasClusterType = 'REPLICASET' | 'SHARDED' | 'GEOSHARDED';
+
+/**
+ * A database user defined in an Atlas project.
+ *
+ * Database users are project-scoped, not cluster-scoped: `scopes` is what ties a user to
+ * particular clusters, and an empty `scopes` array means the user applies to every cluster in
+ * the project. Atlas never returns the password.
+ */
+export interface AtlasDatabaseUser {
+    readonly username: string;
+    /**
+     * Authentication database. `admin` is a SCRAM (username plus password) user; `$external`
+     * means the user authenticates through X.509, AWS IAM, LDAP or OIDC and therefore cannot be
+     * used with the username and password prompt.
+     */
+    readonly databaseName: string;
+    readonly description?: string;
+    readonly scopes?: AtlasDatabaseUserScope[];
+    readonly roles?: AtlasDatabaseUserRole[];
+
+    /**
+     * Which non-SCRAM method a `$external` user signs in with. Atlas sets exactly one of these to
+     * something other than `NONE`, so together they name the method precisely.
+     */
+    readonly x509Type?: string;
+    readonly awsIAMType?: string;
+    readonly ldapAuthType?: string;
+    readonly oidcAuthType?: string;
+}
+
+export interface AtlasDatabaseUserScope {
+    readonly name: string;
+    readonly type: 'CLUSTER' | 'DATA_LAKE' | 'STREAM';
+}
+
+export interface AtlasDatabaseUserRole {
+    readonly roleName: string;
+    readonly databaseName?: string;
+    readonly collectionName?: string;
+}

@@ -5,41 +5,59 @@
 
 import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
-import { type AtlasSessionManager } from '../../../plugins/service-atlas-mongodb/auth/AtlasSessionManager';
 import { type AppWebviewController, openAppWebview } from '../../_integration/openAppWebview';
 import { type RouterContext } from './atlasCredentialsRouter';
 
 /**
  * Configuration passed to the MongoDB Atlas credential webview. Serialised as JSON, so
- * it carries **no secret material** — only which auth method to render a form
- * for. The entered credentials travel back to the host through a tRPC mutation.
+ * it carries **no secret material** - only which auth method to render, whether the panel is
+ * adding or updating a credential, and the public identity shown during an update. The entered
+ * credentials travel back to the host through a tRPC mutation.
  */
 export type AtlasCredentialsWebviewConfig = {
-    readonly authMethod: AtlasAuthMethod;
+    /**
+     * Pre-selected auth method. When omitted, the webview opens on its method-choice step so the
+     * whole add flow stays one guided surface.
+     */
+    readonly authMethod?: AtlasAuthMethod;
+    /** `edit` renders "update" wording; the host replaces the secret of an existing credential. */
+    readonly mode: 'add' | 'edit';
+    /** Friendly name of the credential being updated, shown in the edit header. */
+    readonly credentialLabel?: string;
+    /** Existing Public Key or Client ID. Shown read-only while its paired secret is rotated. */
+    readonly credentialIdentity?: string;
 };
 
+/** Options for {@link openAtlasCredentialsWebview}. */
+export interface OpenAtlasCredentialsOptions {
+    /** Pre-selected auth method. Omit to let the user choose inside the webview. */
+    readonly authMethod?: AtlasAuthMethod;
+    /** Existing credential whose secret should be replaced once the new one validates. */
+    readonly credentialId?: string;
+    /** Friendly name persisted with the credential and shown in the panel header. */
+    readonly credentialLabel?: string;
+    /** Existing Public Key or Client ID. Required by the edit flow and safe to show in the webview. */
+    readonly credentialIdentity?: string;
+}
+
 /**
- * Opens the guided credential-entry webview for the given auth method and
- * resolves once the user either successfully stores credentials or closes the
- * panel.
- *
- * Returning a `Promise<boolean>` keeps the existing auth-flow contract
- * (`executeAtlasAuthFlow`) intact, so every caller — the discovery tree and the
- * new-connection wizard — continues to work without change.
+ * Opens the guided credential-entry webview and resolves once the user either successfully stores
+ * credentials or closes the panel.
  *
  * @returns `true` when credentials were validated and stored; `false` when the
  *          user closed the panel without completing.
  */
-export function openAtlasCredentialsWebview(
-    authMethod: AtlasAuthMethod,
-    sessionManager: AtlasSessionManager,
-): Promise<boolean> {
+export function openAtlasCredentialsWebview(options: OpenAtlasCredentialsOptions = {}): Promise<boolean> {
     return new Promise<boolean>((resolve) => {
         let settled = false;
         // Held in an object so the `onCredentialsStored` closure can reference the
         // controller that is only created further below.
-        const state: { controller?: AppWebviewController<AtlasCredentialsWebviewConfig> } = {};
+        const state: {
+            controller?: AppWebviewController<AtlasCredentialsWebviewConfig>;
+            credentialsStored: boolean;
+        } = { credentialsStored: false };
 
         const finish = (result: boolean): void => {
             if (settled) {
@@ -49,6 +67,8 @@ export function openAtlasCredentialsWebview(
             resolve(result);
         };
 
+        const onCredentialPersisted = (): void => finish(true);
+
         const onCredentialsStored = (): void => {
             finish(true);
             // Dispose on the next tick so the mutation's success response is
@@ -56,25 +76,60 @@ export function openAtlasCredentialsWebview(
             setTimeout(() => state.controller?.dispose(), 0);
         };
 
-        const title =
-            authMethod === 'apikey'
-                ? vscode.l10n.t('Connect with a MongoDB Atlas API Key')
-                : vscode.l10n.t('Connect with a MongoDB Atlas Service Account');
+        const mode = options.credentialId ? 'edit' : 'add';
+        const title = buildTitle(mode, options.authMethod);
 
         const context: RouterContext = {
             dbExperience: API.DocumentDB,
             webviewName: 'atlasCredentials',
-            sessionManager,
+            credentialId: options.credentialId,
+            credentialLabel: options.credentialLabel,
+            credentialState: state,
+            onCredentialPersisted,
             onCredentialsStored,
         };
 
         state.controller = openAppWebview<AtlasCredentialsWebviewConfig>({
             title,
             webviewName: 'atlasCredentials',
-            config: { authMethod },
+            config: {
+                authMethod: options.authMethod,
+                mode,
+                credentialLabel: options.credentialLabel,
+                credentialIdentity: options.credentialIdentity,
+            },
             context,
+            // Give the panel tab the DocumentDB brand icon so it reads as one of the extension's own
+            // surfaces, the same way the collection and document webviews set their own tab icons.
+            icon: {
+                light: vscode.Uri.joinPath(
+                    ext.context.extensionUri,
+                    'resources',
+                    'icons',
+                    'vscode-documentdb-icon-light-themes.svg',
+                ),
+                dark: vscode.Uri.joinPath(
+                    ext.context.extensionUri,
+                    'resources',
+                    'icons',
+                    'vscode-documentdb-icon-dark-themes.svg',
+                ),
+            },
         });
 
-        state.controller.onDisposed(() => finish(false));
+        state.controller.onDisposed(() => finish(state.credentialsStored));
     });
+}
+
+function buildTitle(mode: 'add' | 'edit', authMethod: AtlasAuthMethod | undefined): string {
+    if (mode === 'edit') {
+        return vscode.l10n.t('Update MongoDB Atlas Credentials');
+    }
+    if (authMethod === 'apikey') {
+        return vscode.l10n.t('Connect with a MongoDB Atlas API Key');
+    }
+    if (authMethod === 'serviceaccount') {
+        return vscode.l10n.t('Connect with a MongoDB Atlas Service Account');
+    }
+    return vscode.l10n.t('Add a MongoDB Atlas Credential');
 }

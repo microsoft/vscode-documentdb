@@ -27,6 +27,7 @@ import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
@@ -181,6 +182,12 @@ const commonRouter = router({
             }),
         )
         .mutation(async ({ input }) => {
+            // Trace the exact URL before it leaves the extension host. Deep links (notably the
+            // MongoDB Atlas access-settings links, which carry their target in a `#/...` fragment)
+            // can be reshaped by URL parsing here or by a redirect on the destination's side, so
+            // landing "somewhere else" is hard to diagnose from the UI alone. Logging the raw value
+            // that is about to be opened makes it obvious what was actually requested.
+            ext.outputChannel.info(`[openUrl] Opening external URL: ${input.url}`);
             await openUrl(input.url);
         }),
 });

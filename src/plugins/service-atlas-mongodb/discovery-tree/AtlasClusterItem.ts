@@ -11,7 +11,6 @@ import {
     type IActionContext,
 } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
-import * as path from 'path';
 import * as vscode from 'vscode';
 import { AuthMethodId } from '../../../documentdb/auth/AuthMethod';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
@@ -24,22 +23,21 @@ import { ProvideUserNameStep } from '../../../documentdb/wizards/authenticate/Pr
 import { ext } from '../../../extensionVariables';
 import { ClusterItemBase, type EphemeralClusterCredentials } from '../../../tree/documentdb/ClusterItemBase';
 import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
-import { getResourcesPath } from '../../../utils/icons';
 import { nonNullValue } from '../../../utils/nonNull';
+import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
+import { AtlasApiClient } from '../api/AtlasApiClient';
+import { isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
+import { buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
+import { atlasTrace, monotonicNow } from '../atlasTrace';
 import { DISCOVERY_PROVIDER_ID } from '../config';
+import { toAtlasDatabaseUserCandidates, type AtlasDatabaseUserCandidate } from '../connect/atlasDatabaseUsers';
+import { SelectAtlasDatabaseUserStep } from '../connect/SelectAtlasDatabaseUserStep';
+import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasClusterState } from '../models/AtlasProjectModel';
 
 /** Resource type identifier for telemetry */
 const RESOURCE_TYPE = 'atlas-mongodb-cluster';
-
-/**
- * Escapes markdown special characters so Atlas-provided text is always rendered
- * as plain text rather than being interpreted as markdown formatting or links.
- */
-function escapeMarkdown(text: string): string {
-    return text.replace(/[\\`*_{}[\]()#+\-.!|~]/g, '\\$&');
-}
 
 /**
  * Tree item representing a MongoDB Atlas cluster within a project.
@@ -54,6 +52,17 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
          */
         journeyCorrelationId: string,
         cluster: TreeCluster<AtlasClusterModel>,
+        /**
+         * Context shown instead of the tier/region description, used by List mode to render
+         * `organization · project` next to a flat cluster row.
+         */
+        private readonly contextDescription?: string,
+        /**
+         * The discovery service and the credential that surfaced this cluster. Optional so the
+         * item stays constructible without them; when absent the sign-in flow simply asks for a
+         * username instead of offering the project's database users.
+         */
+        private readonly discovery?: { service: AtlasDiscoveryService; ownerCredentialId: string },
     ) {
         super(cluster);
         this.journeyCorrelationId = journeyCorrelationId;
@@ -67,6 +76,31 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      */
     public getAtlasConsoleUrl(): string {
         return `https://cloud.mongodb.com/v2/${this.cluster.projectId}#/clusters/detail/${this.cluster.name}`;
+    }
+
+    /**
+     * Lists the database users that apply to this cluster, for the username prompt.
+     *
+     * Reuses the very credential that discovered the cluster, so no extra sign-in is involved and
+     * the call needs no permission the user has not already granted. Failures propagate to the
+     * step, which downgrades to a plain username prompt rather than blocking sign-in.
+     */
+    private async listDatabaseUserCandidates(signal: AbortSignal): Promise<AtlasDatabaseUserCandidate[]> {
+        if (!this.discovery) {
+            return [];
+        }
+
+        const { service, ownerCredentialId } = this.discovery;
+        const session = await service.sessionRegistry.getSession(ownerCredentialId);
+        if (!session) {
+            atlasTrace(`cluster "${this.cluster.name}": no usable session, skipping the database user lookup`);
+            return [];
+        }
+
+        const client = new AtlasApiClient(session, service.sessionRegistry.refresherFor(ownerCredentialId));
+        const users = await client.listDatabaseUsers(this.cluster.projectId, signal);
+
+        return toAtlasDatabaseUserCandidates(users, this.cluster.name);
     }
 
     /**
@@ -110,7 +144,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      */
     protected async authenticateAndConnect(): Promise<ClustersClient | null> {
         const result = await callWithTelemetryAndErrorHandling('connect', async (context: IActionContext) => {
-            const connectionStartTime = Date.now();
+            const connectionStartTime = monotonicNow();
             context.telemetry.properties.view = Views.DiscoveryView;
             context.telemetry.properties.discoveryProviderId = DISCOVERY_PROVIDER_ID;
             context.telemetry.properties.connectionInitiatedFrom = 'discoveryView';
@@ -175,19 +209,19 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
                     }),
                 );
 
-                context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                context.telemetry.measurements.connectionEstablishmentTimeMs = monotonicNow() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'success';
                 context.telemetry.properties.connectionCorrelationId = clustersClient.connectionCorrelationId ?? '';
 
                 return clustersClient;
             } catch (error) {
                 if (error instanceof UserCancelledError) {
-                    context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                    context.telemetry.measurements.connectionEstablishmentTimeMs = monotonicNow() - connectionStartTime;
                     context.telemetry.properties.connectionResult = 'cancelled';
                     throw error;
                 }
 
-                context.telemetry.measurements.connectionEstablishmentTimeMs = Date.now() - connectionStartTime;
+                context.telemetry.measurements.connectionEstablishmentTimeMs = monotonicNow() - connectionStartTime;
                 context.telemetry.properties.connectionResult = 'failed';
                 context.telemetry.properties.connectionErrorType = error instanceof Error ? error.name : 'UnknownError';
 
@@ -195,16 +229,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
                     l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
                 );
 
-                void vscode.window.showErrorMessage(
-                    l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
-                    {
-                        modal: true,
-                        detail:
-                            l10n.t('Revisit connection details and try again.') +
-                            '\n\n' +
-                            l10n.t('Error: {error}', { error: error instanceof Error ? error.message : String(error) }),
-                    },
-                );
+                await this.showConnectionFailure(context, error);
 
                 // Clean up failed connection
                 await ClustersClient.deleteClient(this.cluster.clusterId);
@@ -218,11 +243,74 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
     }
 
     /**
+     * Reports a failed connection attempt.
+     *
+     * A TLS-level failure gets its own wording. What can be stated with confidence is only what
+     * the error itself proves: the connection died at the transport layer, and that is not the
+     * shape of an authentication rejection, which arrives as `bad auth : Authentication failed`.
+     * Naming a single cause would be a guess. MongoDB documents that the project IP access list
+     * gates client connections, but it does not document that a blocked address surfaces as this
+     * particular alert, so the modal lists what to check rather than claiming a diagnosis.
+     */
+    private async showConnectionFailure(context: IActionContext, error: unknown): Promise<void> {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+
+        if (!isAtlasTlsHandshakeRejection(error)) {
+            context.telemetry.properties.atlasConnectionFailureKind = 'other';
+            void vscode.window.showErrorMessage(
+                l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+                {
+                    modal: true,
+                    detail:
+                        l10n.t('Revisit connection details and try again.') +
+                        '\n\n' +
+                        l10n.t('Error: {error}', { error: errorMessage }),
+                },
+            );
+            return;
+        }
+
+        context.telemetry.properties.atlasConnectionFailureKind = 'tlsFailure';
+
+        const openNetworkAccess = l10n.t('Open Network Access in Atlas');
+        const selected = await vscode.window.showErrorMessage(
+            l10n.t('Failed to connect to "{cluster}"', { cluster: this.cluster.name }),
+            {
+                modal: true,
+                detail:
+                    l10n.t(
+                        'MongoDB Atlas closed the TLS connection with an internal error. This is a transport-level failure rather than an authentication response, so it is not what an incorrect username or password looks like: those report "bad auth : Authentication failed".',
+                    ) +
+                    '\n\n' +
+                    l10n.t('Worth checking in MongoDB Atlas:') +
+                    '\n' +
+                    l10n.t('- Is this machine\u2019s IP address on the project\u2019s IP access list?') +
+                    '\n' +
+                    l10n.t('- Is the cluster paused, or still being provisioned?') +
+                    '\n\n' +
+                    l10n.t('Error: {error}', { error: errorMessage }),
+            },
+            openNetworkAccess,
+        );
+
+        if (selected === openNetworkAccess) {
+            context.telemetry.properties.atlasNetworkAccessOpened = 'true';
+            await vscode.env.openExternal(vscode.Uri.parse(buildAtlasNetworkAccessUrl(this.cluster.projectId)));
+        }
+    }
+
+    /**
      * Returns the tree item representation with Atlas-specific display.
-     * Uses a stable provider-identity icon (the DocumentDB cluster brand mark, matching
-     * sibling discovery plugins); transient cluster state is surfaced through the
-     * description and tooltip rather than the icon so the tree stays visually stable
-     * across refreshes.
+     *
+     * Deliberately does NOT use `vscode-documentdb-cluster-{light,dark}-themes.svg`. Those
+     * files are byte-identical copies of the DocumentDB product logo, so stamping them on an
+     * Atlas cluster would brand somebody else's managed service as DocumentDB. The Kubernetes
+     * plugin does use them, and correctly so: it discovers actual DocumentDB deployments.
+     *
+     * `server-environment` is the same neutral codicon the Connections view already draws for a
+     * non-emulator cluster, so a discovered Atlas cluster and a saved one read the same.
+     * The icon stays fixed across refreshes; transient cluster state is carried by the
+     * description and tooltip instead.
      */
     getTreeItem(): vscode.TreeItem {
         return {
@@ -231,14 +319,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
             label: this.cluster.name,
             description: this.buildDescription(),
             tooltip: this.buildTooltip(),
-            iconPath: {
-                light: vscode.Uri.file(
-                    path.join(getResourcesPath(), 'icons', 'vscode-documentdb-cluster-light-themes.svg'),
-                ),
-                dark: vscode.Uri.file(
-                    path.join(getResourcesPath(), 'icons', 'vscode-documentdb-cluster-dark-themes.svg'),
-                ),
-            },
+            iconPath: new vscode.ThemeIcon('server-environment'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
         };
     }
@@ -248,7 +329,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      */
     private async promptForCredentials(wizardContext: AuthenticateWizardContext): Promise<boolean> {
         const wizard = new AzureWizard(wizardContext, {
-            promptSteps: [new ChooseAuthMethodStep(), new ProvideUserNameStep(), new ProvidePasswordStep()],
+            promptSteps: [
+                new ChooseAuthMethodStep(),
+                new SelectAtlasDatabaseUserStep((signal) => this.listDatabaseUserCandidates(signal), this.cluster.name),
+                new ProvideUserNameStep(),
+                new ProvidePasswordStep(),
+            ],
             title: l10n.t('Authenticate to Connect with Your Atlas Cluster'),
             showLoadingPrompt: true,
         });
@@ -276,8 +362,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
     private buildDescription(): string {
         const parts: string[] = [];
 
-        // The tier (e.g. "M10") should show. When the tier is unavailable (e.g. serverless clusters), fall back to the provider/region pair.
-        if (this.cluster.instanceSizeName) {
+        if (this.contextDescription) {
+            // List mode already carries the organization and project, so repeating the tier here
+            // would only add noise. State is still worth showing when it is not IDLE.
+            parts.push(this.contextDescription);
+        } else if (this.cluster.instanceSizeName) {
+            // The tier (e.g. "M10") should show. When the tier is unavailable (e.g. serverless clusters), fall back to the provider/region pair.
             parts.push(this.cluster.instanceSizeName);
         } else {
             if (this.cluster.providerName) {

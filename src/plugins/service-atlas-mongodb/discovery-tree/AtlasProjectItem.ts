@@ -3,9 +3,11 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { AtlasExperience } from '../../../DocumentDBExperiences';
+import { ext } from '../../../extensionVariables';
 import { createGenericElementWithContext } from '../../../tree/api/createGenericElementWithContext';
 import { type ExtTreeElementBase, type TreeElement } from '../../../tree/TreeElement';
 import {
@@ -13,16 +15,21 @@ import {
     type TreeElementWithContextValue,
 } from '../../../tree/TreeElementWithContextValue';
 import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWithRetryChildren';
-import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
-import { type AtlasSessionManager } from '../auth/AtlasSessionManager';
+import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
+import { AtlasApiClient } from '../api/AtlasApiClient';
+import { atlasTrace } from '../atlasTrace';
+import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { createAtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasClusterItem } from './AtlasClusterItem';
+import { createEmptyPlaceholderNode } from './atlasTreeNodes';
 import { showAtlasLoadFailure } from './showAtlasLoadFailure';
 
 /**
  * Tree item representing a MongoDB Atlas project.
- * On expand, fetches and displays clusters within the project.
+ *
+ * Clusters are fetched on expand through the credential that owns this project in the merged
+ * snapshot, so a project visible through two credentials still issues exactly one request.
  */
 export class AtlasProjectItem implements TreeElement, TreeElementWithContextValue, TreeElementWithRetryChildren {
     public readonly id: string;
@@ -31,34 +38,34 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
     constructor(
         parentId: string,
         private readonly project: AtlasProject,
-        private readonly sessionManager: AtlasSessionManager,
+        private readonly discoveryService: AtlasDiscoveryService,
+        private readonly ownerCredentialId: string,
         private readonly orgName?: string,
     ) {
         this.id = `${parentId}/${project.id}`;
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        const session = await this.sessionManager.getSession();
+        atlasTrace(`project "${this.project.name}": expanding, listing clusters through its owning credential`);
+        const session = await this.discoveryService.sessionRegistry.getSession(this.ownerCredentialId);
         if (!session) {
             await showAtlasLoadFailure(
                 vscode.l10n.t('Failed to load MongoDB Atlas clusters.'),
-                vscode.l10n.t('Atlas session is not available.'),
+                vscode.l10n.t('The credential for this project was rejected. Update it to continue.'),
             );
             return [this.createRetryNode()];
         }
 
         try {
-            const client = new AtlasApiClient(session, this.sessionManager);
+            const client = new AtlasApiClient(
+                session,
+                this.discoveryService.sessionRegistry.refresherFor(this.ownerCredentialId),
+            );
             const clusters = await client.listClusters(this.project.id);
 
             if (clusters.length === 0) {
                 return [
-                    createGenericElementWithContext({
-                        contextValue: 'info',
-                        id: `${this.id}/no-clusters`,
-                        label: vscode.l10n.t('No clusters found in this project'),
-                        iconPath: new vscode.ThemeIcon('info'),
-                    }),
+                    createEmptyPlaceholderNode(this, vscode.l10n.t('This project does not contain any clusters yet.')),
                 ];
             }
 
@@ -71,14 +78,12 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                         treeId: `${this.id}/${cluster.name.replaceAll('/', '_')}`,
                         viewId: Views.DiscoveryView,
                     };
-                    return new AtlasClusterItem('', treeCluster);
+                    return new AtlasClusterItem('', treeCluster, undefined, {
+                        service: this.discoveryService,
+                        ownerCredentialId: this.ownerCredentialId,
+                    });
                 });
         } catch (error) {
-            if (error instanceof AtlasApiError && (error.statusCode === 401 || error.statusCode === 403)) {
-                await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas clusters.'), error.message);
-                return [this.createRetryNode()];
-            }
-
             const errorMessage = error instanceof Error ? error.message : String(error);
             await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas clusters.'), errorMessage);
             return [this.createRetryNode()];
@@ -91,15 +96,23 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
         );
     }
 
-    public getTreeItem(): vscode.TreeItem {
-        const clusterCount = vscode.l10n.t('{0} clusters', String(this.project.clusterCount));
-        const description = this.orgName ? `${this.orgName} · ${clusterCount}` : clusterCount;
+    /**
+     * Refreshing a project re-derives its owning credential's session before listing clusters, so
+     * a role change made in Atlas takes effect immediately instead of waiting for the cached
+     * Service Account token to expire.
+     */
+    public async refresh(_context: IActionContext): Promise<void> {
+        atlasTrace(`project "${this.project.name}": explicit refresh requested`);
+        await this.discoveryService.sessionRegistry.refreshSession(this.ownerCredentialId);
+        ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
+        ext.discoveryBranchDataProvider.refresh(this);
+    }
 
+    public getTreeItem(): vscode.TreeItem {
         return {
             id: this.id,
             contextValue: this.contextValue,
             label: this.project.name,
-            description,
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('project'),
             collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
@@ -110,16 +123,21 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
         const md = new vscode.MarkdownString();
         md.isTrusted = false;
 
-        md.appendMarkdown(`**${this.project.name}**\n\n`);
+        md.appendMarkdown(`**${escapeMarkdown(this.project.name)}**\n\n`);
         if (this.orgName) {
-            md.appendMarkdown(`- **${vscode.l10n.t('Organization')}:** ${this.orgName}\n`);
+            md.appendMarkdown(`- **${vscode.l10n.t('Organization')}:** ${escapeMarkdown(this.orgName)}\n`);
         }
-        md.appendMarkdown(`- **${vscode.l10n.t('Project ID')}:** ${this.project.id}\n`);
+        md.appendMarkdown(`- **${vscode.l10n.t('Project ID')}:** ${escapeMarkdown(this.project.id)}\n`);
         md.appendMarkdown(`- **${vscode.l10n.t('Clusters')}:** ${String(this.project.clusterCount)}\n`);
 
         return md;
     }
 
+    /**
+     * A scoped cluster-list failure is a project-level problem, not necessarily a credential one,
+     * so it offers a plain retry. Credential-level failures are handled by the single
+     * "revisit credentials" row at the root.
+     */
     private createRetryNode(): TreeElement & TreeElementWithContextValue {
         return createGenericElementWithContext({
             contextValue: 'error',
