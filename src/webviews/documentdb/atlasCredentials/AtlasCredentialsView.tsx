@@ -116,8 +116,9 @@ const useStyles = makeStyles({
     },
     methodIcon: { color: tokens.colorBrandForeground1, fontSize: '24px' },
     methodSummary: { color: tokens.colorNeutralForeground2 },
-    // Standardized navigation footer, pinned to the bottom so content scrolls beneath it. The top
-    // border and upward shadow are always present, mirroring Fluent's Drawer scroll-shadow but static.
+    // Standardized navigation footer, pinned to the bottom so content scrolls beneath it. The 1px top
+    // border + upward shadow fade in only while content is still scrollable beneath the footer (see
+    // footerElevated), like Fluent's Drawer. The transparent border reserves 1px so it never shifts.
     footer: {
         display: 'flex',
         gap: '8px',
@@ -126,9 +127,15 @@ const useStyles = makeStyles({
         flexWrap: 'wrap',
         flexShrink: 0,
         padding: '16px 24px',
-        borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-        boxShadow: '0 -2px 6px rgba(0, 0, 0, 0.08)',
         backgroundColor: tokens.colorNeutralBackground1,
+        borderTop: '1px solid transparent',
+        transitionProperty: 'box-shadow, border-top-color',
+        transitionDuration: tokens.durationNormal,
+        transitionTimingFunction: tokens.curveEasyEase,
+    },
+    footerElevated: {
+        borderTopColor: tokens.colorNeutralStroke2,
+        boxShadow: '0 -2px 6px rgba(0, 0, 0, 0.08)',
     },
     formHeader: { display: 'flex', flexDirection: 'column', gap: '8px' },
     stepList: {
@@ -233,6 +240,32 @@ export const AtlasCredentialsView = (): JSX.Element => {
             heading.focus();
         }
     }, [phase]);
+
+    // Drawer-style footer elevation: show the top border + shadow only while content is scrollable
+    // beneath the footer (overflowing and not yet scrolled to the bottom); hide it when everything
+    // fits or the user has reached the end.
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const [footerElevated, setFooterElevated] = useState(false);
+    const updateFooterElevation = useCallback((): void => {
+        const el = scrollAreaRef.current;
+        if (el) {
+            // Elevated while content is still scrollable beneath the footer (overflowing, not at bottom).
+            setFooterElevated(el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+        }
+    }, []);
+    useEffect(() => {
+        const el = scrollAreaRef.current;
+        const content = contentRef.current;
+        if (!el || !content) {
+            return;
+        }
+        // ResizeObserver fires an initial callback on observe, so elevation is computed on mount and
+        // whenever content height changes per phase or reflow - no synchronous setState needed here.
+        const observer = new ResizeObserver(updateFooterElevation);
+        observer.observe(el);
+        observer.observe(content);
+        return () => observer.disconnect();
+    }, [updateFooterElevation, phase]);
 
     // Breadcrumb progress. Edit mode opens straight on the form, so it drops the "Choose method"
     // step; both flows end on "Done".
@@ -761,7 +794,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
     }
 
     const footer = (
-        <div className={styles.footer}>
+        <div className={mergeClasses(styles.footer, footerElevated && styles.footerElevated)}>
             <Button appearance="primary" disabled={primaryDisabled} onClick={onPrimary}>
                 {primaryLabel}
             </Button>
@@ -773,7 +806,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
 
     return (
         <main className={styles.root}>
-            <div className={styles.scrollArea}>
+            <div className={styles.scrollArea} ref={scrollAreaRef} onScroll={updateFooterElevation}>
                 <div ref={contentRef} className={styles.content}>
                     <Announcer
                         when={phase === 'checking'}
