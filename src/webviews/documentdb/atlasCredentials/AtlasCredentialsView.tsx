@@ -398,7 +398,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
     // A failed check unlocks them so the user can return through either breadcrumb.
     const stepsLocked = phase === 'success' || (phase === 'checking' && submitError === undefined);
     const progress = (
-        <Breadcrumb aria-label={l10n.t('Progress')}>
+        <Breadcrumb aria-label={l10n.t('Credential setup progress')}>
             {steps.map((step, index) => {
                 const isCurrent = index === currentStepIndex;
                 // "Choose method" opens pre-satisfied (a default method is always selected), so it
@@ -412,7 +412,8 @@ export const AtlasCredentialsView = (): JSX.Element => {
                         <BreadcrumbItem>
                             <BreadcrumbButton
                                 current={isCurrent}
-                                disabled={!isCurrent && !canNavigate}
+                                aria-current={isCurrent ? 'step' : undefined}
+                                disabledFocusable={!isCurrent && !canNavigate}
                                 className={isCompleted ? styles.breadcrumbButtonDone : undefined}
                                 icon={
                                     isCompleted ? (
