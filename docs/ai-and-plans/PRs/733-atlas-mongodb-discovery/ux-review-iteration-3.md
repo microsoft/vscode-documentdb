@@ -745,6 +745,19 @@ and stores nothing when cancelled.
 [caa1a823](https://github.com/microsoft/vscode-documentdb/commit/caa1a823) removed the now-unused
 auth-method QuickPick and the flow wrappers.
 
+#### Follow-up — navigation footer & wizard accessibility (2026-07-30)
+
+Standardized the webview's step navigation and closed several wizard a11y gaps. Fluent UI v9 ships
+**no** Wizard/Stepper component (v8's `@fluentui/react-wizard` was never ported); the sanctioned
+approach is a composed `Breadcrumb` + Drawer/Dialog-style body/footer, which this view now follows.
+
+- **Standardized navigation footer** ([02c197c6](https://github.com/microsoft/vscode-documentdb/commit/02c197c6)) — a single footer pinned to the bottom (always-on top border + subtle upward shadow, a static take on Fluent's Drawer scroll-shadow); content scrolls beneath it. Buttons are left-aligned, **primary first, then Back** (Back always present, disabled where there's nowhere to go). The primary label stays `Verify & Save` (disabled) across the verifying/failed states so **Back never shifts**; `Retry` stays in the error `MessageBar` where it's actionable. Adds a local `body { padding: 0 }` reset so the footer spans edge-to-edge past VS Code's default 20px webview gutter — generalization tracked in [#825](https://github.com/microsoft/vscode-documentdb/issues/825).
+- **Breadcrumb semantics** ([f966bf37](https://github.com/microsoft/vscode-documentdb/commit/f966bf37)) — `aria-current="step"` on the active step (Fluent's `current` prop otherwise emits `aria-current="page"`), a descriptive `aria-label` ("Credential setup progress"), and `disabledFocusable` for non-navigable steps so they stay in tab order.
+- **Focus management** ([ac9fe92c](https://github.com/microsoft/vscode-documentdb/commit/ac9fe92c)) — on step change, focus moves to the new step's `<h2>` (content ref, `tabIndex=-1`) instead of falling back to `<body>`; skipped on initial render. Complements the existing `Announcer` live regions for the checking/success phases, partially addressing the audit note's screen-reader concern for validation/loading states.
+
+_Deferred a11y follow-ups:_ live-region announcement on the choose→form transition; consider
+`MessageBar intent="success"` as the done-step surface.
+
 ---
 
 ### 7. Multi-credential management, modeled on the Azure accounts flow 🗣️
