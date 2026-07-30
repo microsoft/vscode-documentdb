@@ -49,8 +49,16 @@ export async function getHiddenDiscoveryProviderIds(): Promise<string[]> {
  * ~6 months after 0.9.2, once users have upgraded past 0.8.x.
  */
 export async function removeLegacyActiveDiscoveryProviderIds(): Promise<void> {
-    if (ext.context.globalState.get(LEGACY_ACTIVE_DISCOVERY_PROVIDER_IDS_KEY) !== undefined) {
-        await ext.context.globalState.update(LEGACY_ACTIVE_DISCOVERY_PROVIDER_IDS_KEY, undefined);
+    // Best-effort: swallow storage errors so this cleanup can never disrupt activation.
+    try {
+        if (ext.context.globalState.get(LEGACY_ACTIVE_DISCOVERY_PROVIDER_IDS_KEY) !== undefined) {
+            await ext.context.globalState.update(LEGACY_ACTIVE_DISCOVERY_PROVIDER_IDS_KEY, undefined);
+        }
+    } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        ext.outputChannel.error(
+            `Failed to remove legacy '${LEGACY_ACTIVE_DISCOVERY_PROVIDER_IDS_KEY}' discovery state: ${message}`,
+        );
     }
 }
 
