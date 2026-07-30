@@ -20,18 +20,29 @@ import {
     Input,
     Link,
     makeStyles,
+    Menu,
+    MenuItem,
+    MenuList,
+    MenuPopover,
+    MenuTrigger,
     mergeClasses,
     MessageBar,
     MessageBarActions,
     MessageBarBody,
     MessageBarTitle,
+    Overflow,
+    OverflowDivider,
+    OverflowItem,
     Radio,
     Spinner,
     Text,
     tokens,
+    useIsOverflowItemVisible,
+    useOverflowMenu,
 } from '@fluentui/react-components';
 import {
     ArrowLeftRegular,
+    bundleIcon,
     CheckmarkCircleFilled,
     CircleHintFilled,
     CircleRegular,
@@ -40,6 +51,8 @@ import {
     EyeOffRegular,
     EyeRegular,
     KeyRegular,
+    MoreHorizontalFilled,
+    MoreHorizontalRegular,
     PersonAccountsRegular,
     WarningRegular,
 } from '@fluentui/react-icons';
@@ -54,6 +67,8 @@ import { type AtlasCredentialsWebviewConfig } from './atlasCredentialsController
 import { type CredentialSubmitError } from './atlasCredentialsRouter';
 
 const ATLAS_CONSOLE_URL = 'https://cloud.mongodb.com/';
+
+const MoreHorizontal = bundleIcon(MoreHorizontalFilled, MoreHorizontalRegular);
 
 type Phase = 'choose' | 'form' | 'checking' | 'success';
 type StageStatus = 'pending' | 'active' | 'done' | 'error' | 'warning';
@@ -206,6 +221,69 @@ const StageRow = ({ label, status }: StageRowProps): JSX.Element => {
                 {label}
             </Text>
         </div>
+    );
+};
+
+// A step's derived breadcrumb state, shared by the inline items and the overflow menu.
+interface StepMeta {
+    readonly id: Phase;
+    readonly label: string;
+    readonly isCurrent: boolean;
+    readonly isCompleted: boolean;
+    readonly canNavigate: boolean;
+}
+
+// Renders a hidden (overflowed) step as a menu item; visible steps render nothing here.
+const StepOverflowMenuItem = ({
+    step,
+    onNavigate,
+}: {
+    readonly step: StepMeta;
+    readonly onNavigate: (id: Phase) => void;
+}): JSX.Element | null => {
+    const isVisible = useIsOverflowItemVisible(step.id);
+    if (isVisible) {
+        return null;
+    }
+    return (
+        <MenuItem disabled={!step.canNavigate} onClick={step.canNavigate ? () => onNavigate(step.id) : undefined}>
+            {step.label}
+        </MenuItem>
+    );
+};
+
+// The "…" breadcrumb entry that collects steps hidden by overflow. Renders nothing until overflow.
+const StepOverflowMenu = ({
+    steps,
+    onNavigate,
+}: {
+    readonly steps: readonly StepMeta[];
+    readonly onNavigate: (id: Phase) => void;
+}): JSX.Element | null => {
+    const { ref, isOverflowing, overflowCount } = useOverflowMenu<HTMLButtonElement>();
+    if (!isOverflowing) {
+        return null;
+    }
+    return (
+        <BreadcrumbItem>
+            <Menu>
+                <MenuTrigger disableButtonEnhancement>
+                    <Button
+                        appearance="subtle"
+                        ref={ref}
+                        icon={<MoreHorizontal />}
+                        aria-label={l10n.t('{0} more steps', String(overflowCount))}
+                    />
+                </MenuTrigger>
+                <MenuPopover>
+                    <MenuList>
+                        {steps.map((step) => (
+                            <StepOverflowMenuItem key={step.id} step={step} onNavigate={onNavigate} />
+                        ))}
+                    </MenuList>
+                </MenuPopover>
+            </Menu>
+        </BreadcrumbItem>
     );
 };
 
@@ -446,41 +524,55 @@ export const AtlasCredentialsView = (): JSX.Element => {
     // Keep earlier steps locked while verification is active or after the credential is saved.
     // A failed check unlocks them so the user can return through either breadcrumb.
     const stepsLocked = phase === 'success' || (phase === 'checking' && submitError === undefined);
+    const stepItems: StepMeta[] = steps.map((step, index) => {
+        const isCurrent = index === currentStepIndex;
+        // "Choose method" opens pre-satisfied (a default method is always selected), so it carries a
+        // check from the start - an exception unique to the first step.
+        const isCompleted = step.id === 'choose' || index < currentStepIndex || (step.id === 'success' && isCurrent);
+        const canNavigate = index < currentStepIndex && !stepsLocked && (step.id === 'choose' || step.id === 'form');
+        return { id: step.id, label: step.label, isCurrent, isCompleted, canNavigate };
+    });
+    // Responsive breadcrumb: when it doesn't fit, steps collapse into a "…" menu. The current step is
+    // given the highest priority so it is the last item overflow ever removes - it never hides.
     const progress = (
-        <Breadcrumb aria-label={l10n.t('Credential setup progress')}>
-            {steps.map((step, index) => {
-                const isCurrent = index === currentStepIndex;
-                // "Choose method" opens pre-satisfied (a default method is always selected), so it
-                // carries a check from the start - an exception unique to the first step.
-                const isCompleted =
-                    step.id === 'choose' || index < currentStepIndex || (step.id === 'success' && isCurrent);
-                const canNavigate =
-                    index < currentStepIndex && !stepsLocked && (step.id === 'choose' || step.id === 'form');
-                return (
+        <Overflow minimumVisible={1}>
+            <Breadcrumb aria-label={l10n.t('Credential setup progress')}>
+                {stepItems.map((step, index) => (
                     <Fragment key={step.id}>
-                        <BreadcrumbItem>
-                            <BreadcrumbButton
-                                current={isCurrent}
-                                aria-current={isCurrent ? 'step' : undefined}
-                                disabledFocusable={!isCurrent && !canNavigate}
-                                className={isCompleted ? styles.breadcrumbButtonDone : undefined}
-                                icon={
-                                    isCompleted ? (
-                                        <CheckmarkCircleFilled aria-hidden className={styles.breadcrumbDone} />
-                                    ) : (
-                                        <CircleHintFilled aria-hidden className={styles.breadcrumbPending} />
-                                    )
-                                }
-                                onClick={canNavigate ? () => goToStep(step.id) : undefined}
-                            >
-                                {step.label}
-                            </BreadcrumbButton>
-                        </BreadcrumbItem>
-                        {index < steps.length - 1 && <BreadcrumbDivider />}
+                        <OverflowItem
+                            id={step.id}
+                            groupId={step.id}
+                            priority={step.isCurrent ? stepItems.length + 1 : 0}
+                        >
+                            <BreadcrumbItem>
+                                <BreadcrumbButton
+                                    current={step.isCurrent}
+                                    aria-current={step.isCurrent ? 'step' : undefined}
+                                    disabledFocusable={!step.isCurrent && !step.canNavigate}
+                                    className={step.isCompleted ? styles.breadcrumbButtonDone : undefined}
+                                    icon={
+                                        step.isCompleted ? (
+                                            <CheckmarkCircleFilled aria-hidden className={styles.breadcrumbDone} />
+                                        ) : (
+                                            <CircleHintFilled aria-hidden className={styles.breadcrumbPending} />
+                                        )
+                                    }
+                                    onClick={step.canNavigate ? () => goToStep(step.id) : undefined}
+                                >
+                                    {step.label}
+                                </BreadcrumbButton>
+                            </BreadcrumbItem>
+                        </OverflowItem>
+                        {index < stepItems.length - 1 && (
+                            <OverflowDivider groupId={step.id}>
+                                <BreadcrumbDivider />
+                            </OverflowDivider>
+                        )}
                     </Fragment>
-                );
-            })}
-        </Breadcrumb>
+                ))}
+                <StepOverflowMenu steps={stepItems} onNavigate={goToStep} />
+            </Breadcrumb>
+        </Overflow>
     );
 
     const methodCard = (
