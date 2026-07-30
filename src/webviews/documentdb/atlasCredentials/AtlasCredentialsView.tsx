@@ -45,7 +45,7 @@ import {
 } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
-import { Fragment, type JSX, useCallback, useMemo, useState } from 'react';
+import { Fragment, type JSX, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
@@ -217,6 +217,22 @@ export const AtlasCredentialsView = (): JSX.Element => {
     const [failedStage, setFailedStage] = useState<number | undefined>(undefined);
     const isApiKey = chosenMethod === 'apikey';
     const isEdit = configuration.mode === 'edit';
+
+    // On step change, move focus to the new step's heading so screen-reader and keyboard users land
+    // on the fresh content instead of focus falling back to <body>. Skipped on the initial render.
+    const contentRef = useRef<HTMLDivElement>(null);
+    const isInitialRender = useRef(true);
+    useEffect(() => {
+        if (isInitialRender.current) {
+            isInitialRender.current = false;
+            return;
+        }
+        const heading = contentRef.current?.querySelector<HTMLElement>('h2');
+        if (heading) {
+            heading.tabIndex = -1;
+            heading.focus();
+        }
+    }, [phase]);
 
     // Breadcrumb progress. Edit mode opens straight on the form, so it drops the "Choose method"
     // step; both flows end on "Done".
@@ -758,7 +774,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
     return (
         <main className={styles.root}>
             <div className={styles.scrollArea}>
-                <div className={styles.content}>
+                <div ref={contentRef} className={styles.content}>
                     <Announcer
                         when={phase === 'checking'}
                         message={l10n.t('Checking your MongoDB Atlas credential.')}
