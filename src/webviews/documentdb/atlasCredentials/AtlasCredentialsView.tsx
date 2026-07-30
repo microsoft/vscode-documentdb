@@ -8,6 +8,8 @@ import {
     AccordionHeader,
     AccordionItem,
     AccordionPanel,
+    // USER-TEST PROTOTYPE: Remove with the footer experiment preview badge.
+    Badge,
     Body1,
     Breadcrumb,
     BreadcrumbButton,
@@ -35,6 +37,8 @@ import {
     OverflowItem,
     Radio,
     Spinner,
+    // USER-TEST PROTOTYPE: Remove with the footer experiment comparison switch.
+    Switch,
     Text,
     tokens,
     useIsOverflowItemVisible,
@@ -93,11 +97,29 @@ const useStyles = makeStyles({
         flexDirection: 'column',
         height: '100vh',
         overflow: 'hidden',
+        // USER-TEST PROTOTYPE: Anchors the temporary comparison switch.
+        position: 'relative',
     },
     scrollArea: {
         flex: 1,
         minHeight: 0,
         overflowY: 'auto',
+    },
+    // USER-TEST PROTOTYPE: Remove both styles with the comparison switch and measurement logic.
+    scrollAreaInlineFooter: {
+        flex: '0 0 auto',
+        overflowY: 'visible',
+    },
+    prototypeToggle: {
+        position: 'absolute',
+        top: '16px',
+        right: '24px',
+        zIndex: 1,
+        padding: '4px 8px',
+        backgroundColor: tokens.colorNeutralBackground1,
+        display: 'flex',
+        alignItems: 'center',
+        gap: '6px',
     },
     content: {
         display: 'flex',
@@ -131,9 +153,7 @@ const useStyles = makeStyles({
     },
     methodIcon: { color: tokens.colorBrandForeground1, fontSize: '24px' },
     methodSummary: { color: tokens.colorNeutralForeground2 },
-    // Standardized navigation footer, pinned to the bottom so content scrolls beneath it. The 1px top
-    // border + upward shadow fade in only while content is still scrollable beneath the footer (see
-    // footerElevated), like Fluent's Drawer. The transparent border reserves 1px so it never shifts.
+    // Navigation footer. The prototype keeps the existing elevation only while docked content overflows.
     footer: {
         display: 'flex',
         gap: '8px',
@@ -326,31 +346,44 @@ export const AtlasCredentialsView = (): JSX.Element => {
         }
     }, [phase]);
 
-    // Drawer-style footer elevation: show the top border + shadow only while content is scrollable
-    // beneath the footer (overflowing and not yet scrolled to the bottom); hide it when everything
-    // fits or the user has reached the end.
+    // USER-TEST PROTOTYPE START: Footer experiment comparison. Remove this state, root/footer refs,
+    // measurement callback, prototype switch, and scrollAreaInlineFooter class after user testing.
+    const [adaptiveFooterEnabled, setAdaptiveFooterEnabled] = useState(true);
+    const [footerDocked, setFooterDocked] = useState(true);
+    const rootRef = useRef<HTMLElement>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const footerRef = useRef<HTMLDivElement>(null);
     const [footerElevated, setFooterElevated] = useState(false);
-    const updateFooterElevation = useCallback((): void => {
-        const el = scrollAreaRef.current;
-        if (el) {
-            // Elevated while content is still scrollable beneath the footer (overflowing, not at bottom).
-            setFooterElevated(el.scrollTop + el.clientHeight < el.scrollHeight - 1);
+    const updateFooterLayout = useCallback((): void => {
+        const root = rootRef.current;
+        const scrollArea = scrollAreaRef.current;
+        const content = contentRef.current;
+        const footer = footerRef.current;
+        if (root && scrollArea && content && footer) {
+            const contentOverflows = content.scrollHeight + footer.offsetHeight > root.clientHeight;
+            const shouldDock = !adaptiveFooterEnabled || contentOverflows;
+            setFooterDocked(shouldDock);
+            setFooterElevated(
+                shouldDock && scrollArea.scrollTop + scrollArea.clientHeight < scrollArea.scrollHeight - 1,
+            );
         }
-    }, []);
+    }, [adaptiveFooterEnabled]);
     useEffect(() => {
+        const root = rootRef.current;
         const el = scrollAreaRef.current;
         const content = contentRef.current;
-        if (!el || !content) {
+        const footer = footerRef.current;
+        if (!root || !el || !content || !footer) {
             return;
         }
-        // ResizeObserver fires an initial callback on observe, so elevation is computed on mount and
-        // whenever content height changes per phase or reflow - no synchronous setState needed here.
-        const observer = new ResizeObserver(updateFooterElevation);
+        const observer = new ResizeObserver(updateFooterLayout);
+        observer.observe(root);
         observer.observe(el);
         observer.observe(content);
+        observer.observe(footer);
         return () => observer.disconnect();
-    }, [updateFooterElevation, phase]);
+    }, [updateFooterLayout, phase]);
+    // USER-TEST PROTOTYPE END
 
     // Breadcrumb progress. Edit mode opens straight on the form, so it drops the "Choose method"
     // step; both flows end on "Done".
@@ -914,7 +947,7 @@ export const AtlasCredentialsView = (): JSX.Element => {
     }
 
     const footer = (
-        <div className={mergeClasses(styles.footer, footerElevated && styles.footerElevated)}>
+        <div ref={footerRef} className={mergeClasses(styles.footer, footerElevated && styles.footerElevated)}>
             <Button appearance="primary" disabled={primaryDisabled} onClick={onPrimary}>
                 {primaryLabel}
             </Button>
@@ -925,8 +958,32 @@ export const AtlasCredentialsView = (): JSX.Element => {
     );
 
     return (
-        <main className={styles.root}>
-            <div className={styles.scrollArea} ref={scrollAreaRef} onScroll={updateFooterElevation}>
+        <main ref={rootRef} className={styles.root}>
+            {/* USER-TEST PROTOTYPE: Remove this switch and badge with the footer experiment logic above. */}
+            <div className={styles.prototypeToggle}>
+                <Switch
+                    checked={adaptiveFooterEnabled}
+                    label={l10n.t('Footer experiment')}
+                    onChange={(_event, data) => setAdaptiveFooterEnabled(data.checked)}
+                />
+                <Badge
+                    appearance="tint"
+                    size="small"
+                    shape="rounded"
+                    color="brand"
+                    aria-label={l10n.t('Footer experiment is in preview')}
+                >
+                    PREVIEW
+                </Badge>
+            </div>
+            <div
+                className={mergeClasses(
+                    styles.scrollArea,
+                    adaptiveFooterEnabled && !footerDocked && styles.scrollAreaInlineFooter,
+                )}
+                ref={scrollAreaRef}
+                onScroll={updateFooterLayout}
+            >
                 <div ref={contentRef} className={styles.content}>
                     <Announcer
                         when={phase === 'form'}
