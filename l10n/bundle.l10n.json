@@ -1090,6 +1090,7 @@
   "OAuth2 client ID and secret. More secure, and the secret expires (8 hours to 365 days) so it has to be rotated periodically.": "OAuth2 client ID and secret. More secure, and the secret expires (8 hours to 365 days) so it has to be rotated periodically.",
   "OK": "OK",
   "Only file-based kubeconfig sources can be opened in the editor.": "Only file-based kubeconfig sources can be opened in the editor.",
+  "Only HTTP(S) URLs are supported.": "Only HTTP(S) URLs are supported.",
   "Only pasted kubeconfig sources can be viewed. Use \"Edit Kubeconfig\" for file sources.": "Only pasted kubeconfig sources can be viewed. Use \"Edit Kubeconfig\" for file sources.",
   "Only this credential and its secrets are removed. Other credentials stay signed in.": "Only this credential and its secrets are removed. Other credentials stay signed in.",
   "Open \"{0}.{1}\" in Query Playground": "Open \"{0}.{1}\" in Query Playground",

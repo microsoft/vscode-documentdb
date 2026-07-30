@@ -28,7 +28,7 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
-import { openUrl } from '../../utils/openUrl';
+import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
@@ -178,16 +178,13 @@ const commonRouter = router({
     openUrl: publicProcedure
         .input(
             z.object({
-                url: z.string(), // URL string to open in default browser
+                url: z.string().refine(isSupportedExternalUrl, {
+                    message: vscode.l10n.t('Only HTTP(S) URLs are supported.'),
+                }),
             }),
         )
         .mutation(async ({ input }) => {
-            // Trace the exact URL before it leaves the extension host. Deep links (notably the
-            // MongoDB Atlas access-settings links, which carry their target in a `#/...` fragment)
-            // can be reshaped by URL parsing here or by a redirect on the destination's side, so
-            // landing "somewhere else" is hard to diagnose from the UI alone. Logging the raw value
-            // that is about to be opened makes it obvious what was actually requested.
-            ext.outputChannel.info(`[openUrl] Opening external URL: ${input.url}`);
+            ext.outputChannel.trace(`[openUrl] Opening external URL: ${formatUrlForLogging(input.url)}`);
             await openUrl(input.url);
         }),
 });

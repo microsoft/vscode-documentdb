@@ -763,6 +763,23 @@ _Research:_ a Sonnet subagent confirmed Fluent v9 has no Wizard/Stepper and that
 _Deferred a11y follow-ups:_ live-region announcement on the choose→form transition; consider
 `MessageBar intent="success"` as the done-step surface.
 
+#### Follow-up — safe shared URL diagnostics (2026-07-30)
+
+A GitHub Copilot review caught that the shared `common.openUrl` procedure logged arbitrary
+webview-provided URLs at info level, including credentials, query values, and fragments. The
+debugging added for Atlas deep links therefore affected every caller of the shared procedure.
+
+- [`src/utils/openUrl.ts`](../../../../src/utils/openUrl.ts) now validates external URLs as HTTP(S)
+  and formats diagnostics from `origin + pathname`, preserving query parameter names while
+  replacing every value with `<redacted>` and replacing the entire fragment with `<redacted>`.
+  Reconstructing from `origin` also strips URL userinfo.
+- [`src/webviews/_integration/appRouter.ts`](../../../../src/webviews/_integration/appRouter.ts)
+  rejects malformed and non-HTTP(S) values before the mutation body runs, logs the sanitized URL
+  at trace rather than info, and opens the original validated URL.
+- [`src/utils/openUrl.test.ts`](../../../../src/utils/openUrl.test.ts) covers accepted HTTP(S)
+  URLs, missing schemes, malformed values, unsupported schemes, credentials, repeated query
+  parameters, encoded parameter names, and fragments. The focused suite passes all 9 cases.
+
 ---
 
 ### 7. Multi-credential management, modeled on the Azure accounts flow 🗣️
