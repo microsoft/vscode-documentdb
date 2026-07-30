@@ -901,6 +901,10 @@ export const AtlasCredentialsView = (): JSX.Element => {
             <div className={styles.scrollArea} ref={scrollAreaRef} onScroll={updateFooterElevation}>
                 <div ref={contentRef} className={styles.content}>
                     <Announcer
+                        when={phase === 'form'}
+                        message={l10n.t('Enter your MongoDB Atlas credential details.')}
+                    />
+                    <Announcer
                         when={phase === 'checking'}
                         message={l10n.t('Checking your MongoDB Atlas credential.')}
                     />

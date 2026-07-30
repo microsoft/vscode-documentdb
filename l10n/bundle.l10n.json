@@ -589,6 +589,7 @@
   "Enter the tenant ID (GUID)": "Enter the tenant ID (GUID)",
   "Enter the username": "Enter the username",
   "Enter the username for {experience}": "Enter the username for {experience}",
+  "Enter your MongoDB Atlas credential details.": "Enter your MongoDB Atlas credential details.",
   "Entra ID": "Entra ID",
   "Entra ID for Azure DocumentDB": "Entra ID for Azure DocumentDB",
   "Error": "Error",
