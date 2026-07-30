@@ -27,9 +27,11 @@ import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
-import { openUrl } from '../../utils/openUrl';
+import { ext } from '../../extensionVariables';
+import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
+import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { WEBVIEW_CONFIG } from './configuration';
@@ -176,16 +178,20 @@ const commonRouter = router({
     openUrl: publicProcedure
         .input(
             z.object({
-                url: z.string(), // URL string to open in default browser
+                url: z.string().refine(isSupportedExternalUrl, {
+                    message: vscode.l10n.t('Only HTTP(S) URLs are supported.'),
+                }),
             }),
         )
         .mutation(async ({ input }) => {
+            ext.outputChannel.trace(`[openUrl] Opening external URL: ${formatUrlForLogging(input.url)}`);
             await openUrl(input.url);
         }),
 });
 
 export const appRouter = router({
     common: commonRouter,
+    atlasCredentials: atlasCredentialsRouter,
     mongoClusters: {
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,

@@ -79,6 +79,7 @@ import { doubleClickDebounceDelay } from '../constants';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { AtlasDiscoveryProvider } from '../plugins/service-atlas-mongodb/AtlasDiscoveryProvider';
+import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongodb/credentialsManagement/addAtlasCredential';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
 import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDiscoveryProvider';
@@ -106,6 +107,7 @@ import { type ClusterItemBase } from '../tree/documentdb/ClusterItemBase';
 import { type CollectionItem } from '../tree/documentdb/CollectionItem';
 import { type DatabaseItem } from '../tree/documentdb/DatabaseItem';
 import { HelpAndFeedbackBranchDataProvider } from '../tree/help-and-feedback-view/HelpAndFeedbackBranchDataProvider';
+import { type TreeElement } from '../tree/TreeElement';
 import { accumulateTelemetry } from '../utils/accumulatingTelemetry';
 import {
     registerCommandWithModalErrors,
@@ -126,6 +128,8 @@ import { ShellTerminalLinkProvider } from './shell/ShellTerminalLinkProvider';
 import { Views } from './Views';
 
 export class ClustersExtension implements vscode.Disposable {
+    private readonly atlasDiscoveryProvider = new AtlasDiscoveryProvider();
+
     async dispose(): Promise<void> {
         // Clean up any active port-forward tunnels
         const { PortForwardTunnelManager } = await import('../plugins/service-kubernetes/portForwardTunnel');
@@ -136,7 +140,7 @@ export class ClustersExtension implements vscode.Disposable {
         DiscoveryService.registerProvider(new AzureDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
-        DiscoveryService.registerProvider(new AtlasDiscoveryProvider());
+        DiscoveryService.registerProvider(this.atlasDiscoveryProvider);
         DiscoveryService.registerProvider(new KubernetesDiscoveryProvider());
 
         // Connection-reachability providers: source-specific steps that make a saved connection
@@ -637,6 +641,13 @@ export class ClustersExtension implements vscode.Disposable {
                 );
 
                 registerCommandWithTreeNodeUnwrapping(
+                    ADD_ATLAS_CREDENTIAL_COMMAND_ID,
+                    withTreeNodeCommandCorrelation((context, node: TreeElement) =>
+                        this.atlasDiscoveryProvider.addCredential(context, node),
+                    ),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
                     'vscode-documentdb.command.discoveryView.learnMoreAboutProvider',
                     withTreeNodeCommandCorrelation(learnMoreAboutServiceProvider),
                 );
@@ -739,6 +750,24 @@ export class ClustersExtension implements vscode.Disposable {
                         const { switchToKubernetesFlatListView } =
                             await import('../plugins/service-kubernetes/commands/switchKubernetesViewMode');
                         await switchToKubernetesFlatListView(context);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.atlas.switchToTreeView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToAtlasTreeView } =
+                            await import('../plugins/service-atlas-mongodb/commands/switchAtlasViewMode');
+                        await switchToAtlasTreeView(context);
+                    }),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    'vscode-documentdb.command.discoveryView.atlas.switchToFlatListView',
+                    withTreeNodeCommandCorrelation(async (context) => {
+                        const { switchToAtlasFlatListView } =
+                            await import('../plugins/service-atlas-mongodb/commands/switchAtlasViewMode');
+                        await switchToAtlasFlatListView(context);
                     }),
                 );
 

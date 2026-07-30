@@ -27,6 +27,7 @@ export class AtlasExecuteStep extends AzureWizardExecuteStep<NewConnectionWizard
         // Clean up wizard properties
         context.properties['atlas.selectedClusterConnectionString'] = undefined;
         context.properties['atlas.selectedProject'] = undefined;
+        context.properties['atlas.selectedProjectCredentialId'] = undefined;
     }
 
     public shouldExecute(context: NewConnectionWizardContext): boolean {

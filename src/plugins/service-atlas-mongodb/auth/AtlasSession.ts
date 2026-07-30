@@ -37,17 +37,3 @@ export interface AtlasServiceAccountSession extends AtlasSessionBase {
  * Union type representing a valid Atlas session.
  */
 export type AtlasSession = AtlasApiKeySession | AtlasServiceAccountSession;
-
-/**
- * Session state enumeration for the state machine.
- */
-export enum AtlasSessionState {
-    /** No session exists */
-    None = 'none',
-    /** Currently authenticating */
-    Authenticating = 'authenticating',
-    /** Active valid session */
-    Active = 'active',
-    /** Session expired, needs refresh or re-auth */
-    Expired = 'expired',
-}
