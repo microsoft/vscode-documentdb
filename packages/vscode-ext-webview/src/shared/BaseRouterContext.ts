@@ -8,22 +8,23 @@
  * extend this with their own application-specific properties (e.g. database
  * connection identifiers, view-specific data).
  *
- * The framework populates {@link BaseRouterContext.signal} per-operation and
- * the telemetry middleware body (when wired) populates
- * {@link BaseRouterContext.telemetry}. Application code is responsible for the
- * rest.
+ * The framework populates {@link BaseRouterContext.signal} per-operation. A
+ * telemetry {@link TelemetryRunner} (when wired via `telemetryMiddlewareBody`)
+ * contributes its own fields to the context — see the field docs below.
+ * Application code is responsible for the rest.
  */
 export interface BaseRouterContext {
     /**
-     * Per-call telemetry bag, populated by the telemetry middleware body when
-     * one is wired (see `telemetryMiddlewareBody` / `TelemetryRunner` in
-     * `@microsoft/vscode-ext-webview/host`).
+     * Optional per-call telemetry bag with the minimal `properties` /
+     * `measurements` shape.
      *
-     * The package does not dictate the telemetry context type: this slot holds
-     * a minimal `properties` / `measurements` shape, and consumers typically
-     * re-type it to their telemetry library's context (for example
-     * `ITelemetryContext` from `@microsoft/vscode-azext-utils`) via an
-     * intersection or a telemetry-typing helper they own.
+     * The telemetry middleware does **not** populate this slot itself: the
+     * {@link TelemetryRunner} you wire chooses what to contribute to `ctx` (for
+     * example an `IActionContext` under `ctx.actionContext`). This field remains
+     * as a convenient, telemetry-library-agnostic place for a plain bag when a
+     * runner opts to contribute one; richer integrations declare their own field
+     * on their context type instead. See `telemetryMiddlewareBody` /
+     * `TelemetryRunner` in `@microsoft/vscode-ext-webview/host`.
      */
     telemetry?: {
         properties: Record<string, string>;

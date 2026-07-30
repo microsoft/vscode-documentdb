@@ -47,20 +47,37 @@ export interface ProcedureLogEntry {
     concurrent?: number;
 }
 
-/**
- * Pluggable sink for {@link loggingMiddlewareBody}. Implement this to route
- * procedure log entries to your own logging channel.
- */
-export interface ProcedureLogger {
-    log(entry: ProcedureLogEntry): void;
+/** The subset of an invocation known before the procedure runs. */
+export interface ProcedureStartEntry {
+    /** The operation kind. */
+    type: ProcedureType;
+    /** The dotted procedure path, e.g. `collectionView.find`. */
+    path: string;
 }
 
 /**
- * Zero-config default logger. Prints a single line per procedure to the
- * console. Replace it with your own {@link ProcedureLogger} in production.
+ * Pluggable sink for {@link loggingMiddlewareBody}. Implement either or both
+ * hooks to route procedure log entries to your own logging channel.
+ *
+ * - `onStart` fires before the procedure runs (span-style start logging);
+ * - `onEnd` fires after it completes (success, failure, or cancellation).
+ *
+ * Both are optional so a consumer can subscribe only to what it needs (for
+ * example log only completions and skip start events).
+ */
+export interface ProcedureLogger {
+    /** Called before the procedure runs. Optional. */
+    onStart?(entry: ProcedureStartEntry): void;
+    /** Called after the procedure completes. Optional. */
+    onEnd?(entry: ProcedureLogEntry): void;
+}
+
+/**
+ * Zero-config default logger. Prints a single line per completed procedure to
+ * the console. Replace it with your own {@link ProcedureLogger} in production.
  */
 export const consoleProcedureLogger: ProcedureLogger = {
-    log(entry: ProcedureLogEntry): void {
+    onEnd(entry: ProcedureLogEntry): void {
         const status = entry.aborted ? 'Canceled' : entry.ok ? 'OK' : 'Failed';
         // eslint-disable-next-line no-console -- this is the package's zero-config default sink
         console.log(
@@ -89,11 +106,13 @@ export async function loggingMiddlewareBody<TResult extends MiddlewareResultLike
     invocation: ProcedureInvocation<TResult>,
     logger: ProcedureLogger = consoleProcedureLogger,
 ): Promise<TResult> {
+    logger.onStart?.({ type: invocation.type, path: invocation.path });
+
     const start = Date.now();
     const result = await invocation.next();
     const durationMs = Date.now() - start;
 
-    logger.log({
+    logger.onEnd?.({
         type: invocation.type,
         path: invocation.path,
         durationMs,

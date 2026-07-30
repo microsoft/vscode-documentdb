@@ -8,12 +8,12 @@
  * with a shared `commonRouter` exposing cross-webview procedures (telemetry
  * helpers, dialog helpers, survey hooks).
  *
- * The tRPC primitives (`publicProcedureWithTelemetry`, `WithTelemetry`, and
- * the re-exports of `publicProcedure` / `router`) live in `./trpc.ts`, a
- * leaf module that this file and every per-view router import from. Keeping
- * them in a separate module avoids a circular import: `appRouter.ts`
- * imports the per-view routers, so the per-view routers must not import
- * value bindings back from `appRouter.ts`.
+ * The tRPC primitives (`publicProcedureWithTelemetry` and the re-exports of
+ * `publicProcedure` / `router`) live in `./trpc.ts`, a leaf module that this
+ * file and every per-view router import from. Keeping them in a separate
+ * module avoids a circular import: `appRouter.ts` imports the per-view
+ * routers, so the per-view routers must not import value bindings back from
+ * `appRouter.ts`.
  *
  * This file also defines the DocumentDB-flavoured `BaseRouterContext` used
  * across procedures.
@@ -35,12 +35,12 @@ import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCred
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { WEBVIEW_CONFIG } from './configuration';
-import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from './trpc';
+import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
 // Re-export tRPC primitives for backward compatibility with existing imports.
 // Prefer importing directly from `./trpc` in new code.
+export type { WithTelemetry } from './trpc';
 export { publicProcedure, publicProcedureWithTelemetry, router };
-export type { WithTelemetry };
 
 /**
  * DocumentDB-flavoured router context. Extends the framework's
@@ -59,7 +59,7 @@ export type { WithTelemetry };
  *
  * ```ts
  * .query(async ({ ctx }) => {
- *     const myCtx = ctx as WithTelemetry<RouterContext>;
+ *     const myCtx = ctx as RouterContext;
  *     // Option 1: pass to APIs that accept AbortSignal (e.g. MongoDB driver)
  *     const cursor = collection.find(filter, { signal: myCtx.signal });
  *     // Option 2: check manually

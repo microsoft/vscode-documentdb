@@ -59,4 +59,25 @@ describe('initWebviewTrpc', () => {
         expect(a.router).not.toBe(b.router);
         expect(a.publicProcedure).not.toBe(b.publicProcedure);
     });
+
+    it('exposes mergeRouters to compose sub-routers into flat procedure paths', async () => {
+        const { router, mergeRouters, publicProcedure, createCallerFactory } = initWebviewTrpc<TestContext>();
+
+        const queriesRouter = router({
+            cwd: publicProcedure.query(({ ctx }) => ctx.workspaceRoot),
+        });
+        const eventsRouter = router({
+            count: publicProcedure.query(({ ctx }) => ctx.requestCount + 1),
+        });
+
+        const appRouter = mergeRouters(queriesRouter, eventsRouter);
+
+        const caller = createCallerFactory(appRouter)({
+            workspaceRoot: '/repo',
+            requestCount: 41,
+        });
+
+        await expect(caller.cwd()).resolves.toBe('/repo');
+        await expect(caller.count()).resolves.toBe(42);
+    });
 });
