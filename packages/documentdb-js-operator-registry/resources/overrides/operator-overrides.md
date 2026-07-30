@@ -226,6 +226,10 @@
 
 ## Array Expression Operators
 
+### $maxN
+
+- **Description:** The $maxN operator retrieves the top N values based on specified filtering criteria.
+
 ### $objectToArray
 
 - **Description:** Converts an object into an array of key-value pair documents.
@@ -264,19 +268,25 @@
 
 ### $minN
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn
+- **Doc Link:** https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$minn
 
 ## Comparison Expression Operators
 
 ### $cmp
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/comparison-query/$cmp
+- **Doc Link:** https://learn.microsoft.com/en-us/documentdb/query/operators/comparison-query/$cmp
+
+## Accumulators ($group, $bucket, $bucketAuto, $setWindowFields)
+
+### $maxN
+
+- **Description:** The $maxN operator retrieves the top N values based on specified filtering criteria.
 
 ## Window Operators
 
 ### $minN
 
-- **Doc Link:** https://learn.microsoft.com/en-us/azure/documentdb/operators/accumulators/$minn
+- **Doc Link:** https://learn.microsoft.com/en-us/documentdb/query/operators/accumulators/$minn
 
 ## Geospatial Operators
 

@@ -28,12 +28,14 @@ import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
 import { ext } from '../../extensionVariables';
+import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
 import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
+import { indexViewRouter } from '../documentdb/indexView/indexViewRouter';
 import { WEBVIEW_CONFIG } from './configuration';
 import { publicProcedure, publicProcedureWithTelemetry, router } from './trpc';
 
@@ -144,18 +146,50 @@ const commonRouter = router({
                 message: z.string(),
                 modal: z.boolean(),
                 cause: z.string(),
+                /**
+                 * Optional action button labels shown on the message. The label
+                 * the user picks is returned as `{ action }` (or `undefined` if
+                 * the message was dismissed) so the caller can react — e.g. an
+                 * "Edit and retry" button that re-opens a form.
+                 */
+                actions: z.array(z.string()).optional(),
             }),
         )
-        .mutation(({ input }) => {
+        .mutation(async ({ input }) => {
             let message = input.message;
             if (input.cause && !input.modal) {
                 message += ` (${input.cause})`;
             }
 
-            void vscode.window.showErrorMessage(message, {
-                modal: input.modal,
-                detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
-            });
+            const action = await vscode.window.showErrorMessage(
+                message,
+                {
+                    modal: input.modal,
+                    detail: input.modal ? input.cause : undefined, // The content of the 'detail' field is only shown when modal is true
+                },
+                ...(input.actions ?? []),
+            );
+            return { action };
+        }),
+    displayInformationMessage: publicProcedure
+        .input(
+            z.object({
+                message: z.string(),
+                /**
+                 * When true, the toast is gated by the
+                 * `documentDB.userInterface.ShowOperationSummaries` setting (via
+                 * `showConfirmationAsInSettings`), so webview completion toasts
+                 * honour the same user preference as the tree-view commands.
+                 */
+                asOperationSummary: z.boolean().optional(),
+            }),
+        )
+        .mutation(({ input }) => {
+            if (input.asOperationSummary) {
+                showConfirmationAsInSettings(input.message);
+            } else {
+                void vscode.window.showInformationMessage(input.message);
+            }
         }),
     surveyPing: publicProcedure
         .input(
@@ -195,6 +229,7 @@ export const appRouter = router({
     mongoClusters: {
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,
+        indexView: indexViewRouter,
     },
 });
 

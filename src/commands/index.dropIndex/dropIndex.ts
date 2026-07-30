@@ -5,11 +5,13 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
-import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
+import { confirmIndexAction } from '../../utils/dialogs/confirmIndexAction';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { getIndexConfirmationStats } from '../index.shared/getIndexConfirmationStats';
 
 export async function dropIndex(context: IActionContext, node: IndexItem): Promise<void> {
     if (!node) {
@@ -27,13 +29,13 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
     const indexName = node.indexInfo.name;
     const collectionName = node.collectionInfo.name;
 
-    const confirmed = await getConfirmationAsInSettings(
-        l10n.t('Delete index?'),
-        l10n.t('Delete index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
-            '\n' +
-            l10n.t('This cannot be undone.'),
-        'delete',
-    );
+    const { sizeText, usageText } = await getIndexConfirmationStats(node);
+    const confirmed = await confirmIndexAction('delete', {
+        indexName,
+        collectionName,
+        sizeText,
+        usageText,
+    });
 
     if (!confirmed) {
         return;
@@ -62,6 +64,18 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
         if (success) {
             showConfirmationAsInSettings(l10n.t('Index "{indexName}" has been deleted.', { indexName }));
         }
+    } catch (error) {
+        // A failed user action is surfaced modally, matching the webview matrix
+        // (failure of a user-triggered action -> modal; completion -> non-modal
+        // toast). We show it ourselves and suppress azext's default non-modal
+        // error, then rethrow so telemetry still records the failure.
+        const detail = error instanceof Error ? error.message : String(error);
+        context.errorHandling.suppressDisplay = true;
+        void vscode.window.showErrorMessage(l10n.t('Failed to delete index "{indexName}".', { indexName }), {
+            modal: true,
+            detail,
+        });
+        throw error;
     } finally {
         // Refresh parent (collection's indexes folder)
         const lastSlashIndex = node.id.lastIndexOf('/');

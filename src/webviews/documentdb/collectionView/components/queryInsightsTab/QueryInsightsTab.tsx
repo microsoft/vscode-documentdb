@@ -880,7 +880,7 @@ export const QueryInsightsMain = (): JSX.Element => {
 
                         {/* Skeleton — shown only while Stage 1 is loading. */}
                         {pipeline.kind === 's1Loading' && (
-                            <Skeleton className="cardSpacing">
+                            <Skeleton appearance="translucent" className="cardSpacing">
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
                                 <SkeletonItem size={16} style={{ marginBottom: '8px' }} />
