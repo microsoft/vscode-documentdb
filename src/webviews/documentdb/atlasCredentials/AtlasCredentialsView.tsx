@@ -49,6 +49,7 @@ import { Fragment, type JSX, useCallback, useMemo, useState } from 'react';
 import { type AtlasAuthMethod } from '../../../plugins/service-atlas-mongodb/auth/AtlasSession';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
+import './atlasCredentials.scss';
 import { type AtlasCredentialsWebviewConfig } from './atlasCredentialsController';
 import { type CredentialSubmitError } from './atlasCredentialsRouter';
 
@@ -73,6 +74,17 @@ const renderWithEmphasis = (text: string): JSX.Element[] =>
 
 const useStyles = makeStyles({
     root: {
+        display: 'flex',
+        flexDirection: 'column',
+        height: '100vh',
+        overflow: 'hidden',
+    },
+    scrollArea: {
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+    },
+    content: {
         display: 'flex',
         flexDirection: 'column',
         gap: '20px',
@@ -104,12 +116,19 @@ const useStyles = makeStyles({
     },
     methodIcon: { color: tokens.colorBrandForeground1, fontSize: '24px' },
     methodSummary: { color: tokens.colorNeutralForeground2 },
-    actions: {
+    // Standardized navigation footer, pinned to the bottom so content scrolls beneath it. The top
+    // border and upward shadow are always present, mirroring Fluent's Drawer scroll-shadow but static.
+    footer: {
         display: 'flex',
         gap: '8px',
-        justifyContent: 'flex-end',
+        justifyContent: 'flex-start',
         alignItems: 'center',
         flexWrap: 'wrap',
+        flexShrink: 0,
+        padding: '16px 24px',
+        borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+        boxShadow: '0 -2px 6px rgba(0, 0, 0, 0.08)',
+        backgroundColor: tokens.colorNeutralBackground1,
     },
     formHeader: { display: 'flex', flexDirection: 'column', gap: '8px' },
     stepList: {
@@ -472,20 +491,6 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     l10n.t('Public and private key pair. Never expires, which suits a personal, set-and-forget setup.'),
                 )}
             </div>
-            <div className={styles.actions}>
-                <Button
-                    appearance="primary"
-                    disabled={!pendingMethod}
-                    onClick={() => {
-                        if (pendingMethod) {
-                            setChosenMethod(pendingMethod);
-                            setPhase('form');
-                        }
-                    }}
-                >
-                    {l10n.t('Continue')}
-                </Button>
-            </div>
         </section>
     );
 
@@ -618,16 +623,8 @@ export const AtlasCredentialsView = (): JSX.Element => {
                     </Field>
                 ))}
                 {guide}
-                <div className={styles.actions}>
-                    {!isEdit && (
-                        <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={handleBack}>
-                            {l10n.t('Back')}
-                        </Button>
-                    )}
-                    <Button type="submit" appearance="primary" disabled={!canSubmit}>
-                        {l10n.t('Verify & Save')}
-                    </Button>
-                </div>
+                {/* Submit stays inside the form so Enter works; the visible button lives in the footer. */}
+                <button type="submit" hidden disabled={!canSubmit} />
             </form>
         </section>
     );
@@ -675,21 +672,6 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 </Text>
             )}
             {checkFailed && errorMessage}
-            {checkFailed && (
-                <div className={styles.actions}>
-                    <Button
-                        appearance="secondary"
-                        icon={<ArrowLeftRegular />}
-                        onClick={() => {
-                            setSubmitError(undefined);
-                            setFailedStage(undefined);
-                            setPhase('form');
-                        }}
-                    >
-                        {l10n.t('Back')}
-                    </Button>
-                </div>
-            )}
         </section>
     );
 
@@ -712,32 +694,92 @@ export const AtlasCredentialsView = (): JSX.Element => {
                 )}
             </Text>
             {submitError && errorMessage}
-            <div className={styles.actions}>
-                <Button appearance="primary" disabled={isCompleting} onClick={() => void handleDone()}>
-                    {isCompleting ? l10n.t('Closing…') : l10n.t('Close')}
-                </Button>
-            </div>
         </section>
+    );
+
+    // Standardized navigation footer: primary action first, then Back. Back is always shown and is
+    // disabled where there is nowhere to go back to (first step, mid-verify, and on success).
+    let primaryLabel: string;
+    let primaryDisabled: boolean;
+    let onPrimary: () => void;
+    let backDisabled: boolean;
+    let onBack: () => void = handleBack;
+
+    if (phase === 'choose') {
+        primaryLabel = l10n.t('Continue');
+        primaryDisabled = !pendingMethod;
+        onPrimary = () => {
+            if (pendingMethod) {
+                setChosenMethod(pendingMethod);
+                setPhase('form');
+            }
+        };
+        backDisabled = true;
+    } else if (phase === 'form') {
+        primaryLabel = l10n.t('Verify & Save');
+        primaryDisabled = !canSubmit;
+        onPrimary = () => void handleSubmit();
+        backDisabled = isEdit;
+    } else if (phase === 'checking') {
+        // Primary stays "Verify & Save" (disabled) whether verifying or failed, so its width is
+        // constant and Back does not shift. Retry lives in the error MessageBar, next to the details.
+        primaryLabel = l10n.t('Verify & Save');
+        primaryDisabled = true;
+        onPrimary = () => undefined;
+        if (checkFailed) {
+            backDisabled = false;
+            onBack = () => {
+                setSubmitError(undefined);
+                setFailedStage(undefined);
+                setPhase('form');
+            };
+        } else {
+            backDisabled = true;
+        }
+    } else {
+        primaryLabel = isCompleting ? l10n.t('Closing…') : l10n.t('Close');
+        primaryDisabled = isCompleting;
+        onPrimary = () => void handleDone();
+        backDisabled = true;
+    }
+
+    const footer = (
+        <div className={styles.footer}>
+            <Button appearance="primary" disabled={primaryDisabled} onClick={onPrimary}>
+                {primaryLabel}
+            </Button>
+            <Button appearance="secondary" icon={<ArrowLeftRegular />} disabled={backDisabled} onClick={onBack}>
+                {l10n.t('Back')}
+            </Button>
+        </div>
     );
 
     return (
         <main className={styles.root}>
-            <Announcer when={phase === 'checking'} message={l10n.t('Checking your MongoDB Atlas credential.')} />
-            <Announcer
-                when={phase === 'success'}
-                message={l10n.t('Everything was successful. Your credential was checked and saved.')}
-            />
-            <Announcer
-                when={submitError !== undefined}
-                message={submitError ? `${submitError.title}. ${submitError.message}` : ''}
-                politeness="assertive"
-            />
-            {hero}
-            {progress}
-            {phase === 'choose' && methodChoice}
-            {phase === 'form' && form}
-            {phase === 'checking' && checking}
-            {phase === 'success' && success}
+            <div className={styles.scrollArea}>
+                <div className={styles.content}>
+                    <Announcer
+                        when={phase === 'checking'}
+                        message={l10n.t('Checking your MongoDB Atlas credential.')}
+                    />
+                    <Announcer
+                        when={phase === 'success'}
+                        message={l10n.t('Everything was successful. Your credential was checked and saved.')}
+                    />
+                    <Announcer
+                        when={submitError !== undefined}
+                        message={submitError ? `${submitError.title}. ${submitError.message}` : ''}
+                        politeness="assertive"
+                    />
+                    {hero}
+                    {progress}
+                    {phase === 'choose' && methodChoice}
+                    {phase === 'form' && form}
+                    {phase === 'checking' && checking}
+                    {phase === 'success' && success}
+                </div>
+            </div>
+            {footer}
         </main>
     );
 };
