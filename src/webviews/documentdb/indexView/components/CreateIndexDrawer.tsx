@@ -1245,6 +1245,16 @@ export const CreateIndexDrawer = ({
                                             className="vectorAlgorithmCards"
                                             aria-label={l10n.t('Wildcard index scope')}
                                             value={wildcardScope}
+                                            disabled={interactionDisabled}
+                                            onChange={(_event, data) => {
+                                                if (
+                                                    data.value === 'all' ||
+                                                    data.value === 'projection' ||
+                                                    data.value === 'path'
+                                                ) {
+                                                    setForm((prev) => ({ ...prev, wildcardScope: data.value }));
+                                                }
+                                            }}
                                         >
                                             {wildcardScopeOptions.map((option) => {
                                                 const selected = wildcardScope === option.value;
@@ -1501,6 +1511,16 @@ export const CreateIndexDrawer = ({
                                         className="vectorAlgorithmCards"
                                         aria-label={l10n.t('Vector algorithm')}
                                         value={vectorAlgorithm}
+                                        disabled={interactionDisabled}
+                                        onChange={(_event, data) => {
+                                            if (
+                                                data.value === 'vector-diskann' ||
+                                                data.value === 'vector-hnsw' ||
+                                                data.value === 'vector-ivf'
+                                            ) {
+                                                setForm((prev) => ({ ...prev, vectorAlgorithm: data.value }));
+                                            }
+                                        }}
                                     >
                                         {vectorAlgorithmOptions.map((option) => {
                                             const selected = vectorAlgorithm === option.value;
