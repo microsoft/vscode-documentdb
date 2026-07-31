@@ -1247,12 +1247,9 @@ export const CreateIndexDrawer = ({
                                             value={wildcardScope}
                                             disabled={interactionDisabled}
                                             onChange={(_event, data) => {
-                                                if (
-                                                    data.value === 'all' ||
-                                                    data.value === 'projection' ||
-                                                    data.value === 'path'
-                                                ) {
-                                                    setForm((prev) => ({ ...prev, wildcardScope: data.value }));
+                                                const scope = data.value;
+                                                if (scope === 'all' || scope === 'projection' || scope === 'path') {
+                                                    setForm((prev) => ({ ...prev, wildcardScope: scope }));
                                                 }
                                             }}
                                         >
@@ -1502,12 +1499,13 @@ export const CreateIndexDrawer = ({
                                         value={vectorAlgorithm}
                                         disabled={interactionDisabled}
                                         onChange={(_event, data) => {
+                                            const algorithm = data.value;
                                             if (
-                                                data.value === 'vector-diskann' ||
-                                                data.value === 'vector-hnsw' ||
-                                                data.value === 'vector-ivf'
+                                                algorithm === 'vector-diskann' ||
+                                                algorithm === 'vector-hnsw' ||
+                                                algorithm === 'vector-ivf'
                                             ) {
-                                                setForm((prev) => ({ ...prev, vectorAlgorithm: data.value }));
+                                                setForm((prev) => ({ ...prev, vectorAlgorithm: algorithm }));
                                             }
                                         }}
                                     >
