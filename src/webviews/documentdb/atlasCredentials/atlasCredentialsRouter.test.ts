@@ -329,4 +329,43 @@ describe('atlasCredentialsRouter', () => {
         expect(mockFetchServiceAccountToken).not.toHaveBeenCalled();
         expect(mockReplaceAtlasCredentialSecrets).not.toHaveBeenCalled();
     });
+
+    it('does not persist an API Key credential when the panel was closed mid-verification', async () => {
+        // The user closes the webview while listProjects() is still in flight. Disposing the panel
+        // aborts the operation signal; the verified input must not become stored state.
+        const controller = new AbortController();
+        mockListProjects.mockImplementation(() => {
+            controller.abort();
+            return Promise.resolve([{ id: 'project-1' }]);
+        });
+        const context = { ...createContext(), signal: controller.signal };
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        await expect(caller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' })).rejects.toThrow();
+
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+        expect(mockReplaceAtlasCredentialSecrets).not.toHaveBeenCalled();
+        expect(context.onCredentialPersisted).not.toHaveBeenCalled();
+        expect(context.credentialState.credentialsStored).toBe(false);
+    });
+
+    it('does not persist a Service Account credential when the panel was closed mid-verification', async () => {
+        const controller = new AbortController();
+        mockFetchServiceAccountToken.mockResolvedValue({ access_token: 'access-token', expires_in: 3600 });
+        mockListProjects.mockImplementation(() => {
+            controller.abort();
+            return Promise.resolve([{ id: 'project-1' }]);
+        });
+        const context = { ...createContext(), signal: controller.signal };
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        await expect(
+            caller.submitServiceAccount({ clientId: 'client-id', clientSecret: 'client-secret' }),
+        ).rejects.toThrow();
+
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+        expect(mockReplaceAtlasCredentialSecrets).not.toHaveBeenCalled();
+        expect(context.onCredentialPersisted).not.toHaveBeenCalled();
+        expect(context.credentialState.credentialsStored).toBe(false);
+    });
 });

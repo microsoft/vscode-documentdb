@@ -362,6 +362,12 @@ export const atlasCredentialsRouter = router({
                 };
             }
 
+            // Verification may finish after the user closed the panel. Disposing the webview aborts
+            // this operation's signal, so a cancelled flow must not turn verified input into stored
+            // state. Checking here (rather than threading the signal through every network call) keeps
+            // the commit boundary honest without plumbing the signal through verification helpers.
+            myCtx.signal?.throwIfAborted();
+
             try {
                 await persistCredential(myCtx, { authMethod: 'apikey', publicKey, privateKey });
             } catch (error) {
@@ -443,6 +449,10 @@ export const atlasCredentialsRouter = router({
                     failedStage: 1,
                 };
             }
+
+            // See the API Key path: a panel closed mid-verification aborts this signal, and a
+            // cancelled flow must not persist the credential it was verifying.
+            myCtx.signal?.throwIfAborted();
 
             try {
                 await persistCredential(myCtx, {

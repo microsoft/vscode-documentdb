@@ -306,6 +306,16 @@ may still consume an Atlas request. Add a deferred-request test for each auth me
 `listProjects()` is pending, resolve it, and assert that neither store function nor completion
 callback runs.
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration).** Added `myCtx.signal?.throwIfAborted()`
+> immediately before `persistCredential()` in both `submitApiKey` and `submitServiceAccount`
+> (optional chaining, per the FINAL DECISION work order). The signal is not threaded through the
+> verification helpers, matching the minimal commit-boundary decision.
+> Fix: [src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts](../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts).
+> Tests: two deferred-abort tests (one per auth method) assert neither the store function nor
+> `onCredentialPersisted` runs, in
+> [atlasCredentialsRouter.test.ts](../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.test.ts).
+
+
 ### MEDIUM-2: Incompatible discovery passes can coalesce or overwrite each other
 
 Source: Independent review.
