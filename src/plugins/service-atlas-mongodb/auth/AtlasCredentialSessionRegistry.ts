@@ -72,6 +72,20 @@ export class AtlasCredentialSessionRegistry {
     private readonly sessions = new Map<string, AtlasSession>();
     private readonly inflight = new Map<string, Promise<AtlasSession | undefined>>();
     private readonly inflightRefresh = new Map<string, Promise<AtlasSession | undefined>>();
+    /**
+     * Bumped by {@link invalidate} / {@link invalidateAll}. A session resolve that started before
+     * the bump is stale by definition - the secret it read may already have been replaced - so it is
+     * allowed to finish, but not to become the cached session. Without this, rotating a credential
+     * and then losing the race against an in-flight discovery pass leaves the old key in memory
+     * until the next full {@link reset}. This is masked in the common flow because
+     * `configureAtlasCredentials()` ends with `discoveryService.reset()` (a full `invalidateAll()`),
+     * but `AtlasCredentialActionStep.update()` relies on the narrow `invalidate(credentialId)` alone.
+     */
+    private readonly generations = new Map<string, number>();
+
+    private currentGeneration(credentialId: string): number {
+        return this.generations.get(credentialId) ?? 0;
+    }
 
     /**
      * Returns a usable session for the credential, minting or refreshing a Service Account token
@@ -123,6 +137,9 @@ export class AtlasCredentialSessionRegistry {
     }
 
     private async performRefresh(credentialId: string): Promise<AtlasSession | undefined> {
+        // Snapshot the generation up front: a concurrent `invalidate()` after this point must make
+        // this refresh's result non-cacheable rather than overwrite the newer state.
+        const generation = this.currentGeneration(credentialId);
         this.sessions.delete(credentialId);
 
         const secrets = await readAtlasCredentialSecrets(credentialId);
@@ -135,15 +152,19 @@ export class AtlasCredentialSessionRegistry {
             // Digest auth carries no token, so there is nothing to refresh. Re-deriving the
             // session is still the right answer: it picks up a secret the user just replaced.
             atlasTrace(`credential ${shortId(credentialId)}: re-derived api key session from storage`);
-            return this.storeSession(credentialId, {
-                type: 'apikey',
-                publicKey: secrets.publicKey,
-                privateKey: secrets.privateKey,
-            });
+            return this.storeSession(
+                credentialId,
+                {
+                    type: 'apikey',
+                    publicKey: secrets.publicKey,
+                    privateKey: secrets.privateKey,
+                },
+                generation,
+            );
         }
 
         atlasTrace(`credential ${shortId(credentialId)}: forcing a fresh service account token`);
-        return this.mintServiceAccountToken(credentialId, secrets);
+        return this.mintServiceAccountToken(credentialId, secrets, generation);
     }
 
     /**
@@ -154,6 +175,9 @@ export class AtlasCredentialSessionRegistry {
         this.sessions.delete(credentialId);
         this.inflight.delete(credentialId);
         this.inflightRefresh.delete(credentialId);
+        // Any resolve/refresh already running for this credential is now stale and must not
+        // repopulate the cache when it finishes.
+        this.generations.set(credentialId, this.currentGeneration(credentialId) + 1);
     }
 
     /** Drops every cached session. Used by "sign out of all". */
@@ -161,6 +185,10 @@ export class AtlasCredentialSessionRegistry {
         this.sessions.clear();
         this.inflight.clear();
         this.inflightRefresh.clear();
+        // Bump every known generation so no in-flight resolve/refresh can repopulate the cache.
+        for (const credentialId of this.generations.keys()) {
+            this.generations.set(credentialId, this.currentGeneration(credentialId) + 1);
+        }
     }
 
     /** Returns a refresher scoped to a single credential. */
@@ -169,6 +197,9 @@ export class AtlasCredentialSessionRegistry {
     }
 
     private async resolveSession(credentialId: string): Promise<AtlasSession | undefined> {
+        // Snapshot the generation before any await, so a concurrent invalidation makes this
+        // resolution non-cacheable rather than letting it overwrite the newer state.
+        const generation = this.currentGeneration(credentialId);
         const secrets = await readAtlasCredentialSecrets(credentialId);
         if (!secrets) {
             atlasWarn(`credential ${shortId(credentialId)} has no stored secret; cannot build a session`);
@@ -177,27 +208,36 @@ export class AtlasCredentialSessionRegistry {
 
         if (secrets.authMethod === 'apikey') {
             atlasTrace(`credential ${shortId(credentialId)}: using api key session (digest auth, no token)`);
-            return this.storeSession(credentialId, {
-                type: 'apikey',
-                publicKey: secrets.publicKey,
-                privateKey: secrets.privateKey,
-            });
+            return this.storeSession(
+                credentialId,
+                {
+                    type: 'apikey',
+                    publicKey: secrets.publicKey,
+                    privateKey: secrets.privateKey,
+                },
+                generation,
+            );
         }
 
         if (secrets.accessToken && !isExpired(secrets.expiresAt)) {
             atlasTrace(`credential ${shortId(credentialId)}: reusing the cached service account token`);
-            return this.storeSession(credentialId, { type: 'serviceaccount', accessToken: secrets.accessToken });
+            return this.storeSession(
+                credentialId,
+                { type: 'serviceaccount', accessToken: secrets.accessToken },
+                generation,
+            );
         }
 
         atlasTrace(
             `credential ${shortId(credentialId)}: cached service account token is missing or expired, minting a new one`,
         );
-        return this.mintServiceAccountToken(credentialId, secrets);
+        return this.mintServiceAccountToken(credentialId, secrets, generation);
     }
 
     private async mintServiceAccountToken(
         credentialId: string,
         secrets: AtlasCredentialSecrets & { authMethod: 'serviceaccount' },
+        generation: number,
     ): Promise<AtlasSession | undefined> {
         const startedAt = monotonicNow();
         try {
@@ -211,10 +251,14 @@ export class AtlasCredentialSessionRegistry {
             atlasTrace(
                 `credential ${shortId(credentialId)}: minted a service account token in ${formatMs(startedAt)}, valid for ${String(tokenResponse.expires_in)}s`,
             );
-            return this.storeSession(credentialId, {
-                type: 'serviceaccount',
-                accessToken: tokenResponse.access_token,
-            });
+            return this.storeSession(
+                credentialId,
+                {
+                    type: 'serviceaccount',
+                    accessToken: tokenResponse.access_token,
+                },
+                generation,
+            );
         } catch (error) {
             // The credential keeps its stored secret so the user can fix the Atlas-side problem
             // and retry from the credential-management flow without re-entering it.
@@ -237,8 +281,13 @@ export class AtlasCredentialSessionRegistry {
         }
     }
 
-    private storeSession(credentialId: string, session: AtlasSession): AtlasSession {
-        this.sessions.set(credentialId, session);
+    private storeSession(credentialId: string, session: AtlasSession, generation: number): AtlasSession {
+        // A resolve/refresh that started before an `invalidate()` is stale: it may hold a session
+        // derived from a secret that has since been replaced. Return it to its caller, but do not
+        // let it repopulate the cache and mask the newer state.
+        if (generation === this.currentGeneration(credentialId)) {
+            this.sessions.set(credentialId, session);
+        }
         return session;
     }
 }

@@ -277,4 +277,42 @@ describe('AtlasCredentialSessionRegistry', () => {
         expect(first).toEqual({ type: 'serviceaccount', accessToken: 'token-fresh' });
         expect(second).toEqual(first);
     });
+
+    it('does not repopulate the in-memory cache from a resolve invalidated mid-flight (MEDIUM-4)', async () => {
+        const { record } = await upsertAtlasCredential({
+            authMethod: 'serviceaccount',
+            clientId: 'client-1',
+            clientSecret: 'secret-1',
+        });
+
+        let resolveToken!: (value: { access_token: string; token_type: string; expires_in: number }) => void;
+        mockFetchToken.mockImplementationOnce(
+            () =>
+                new Promise((resolve) => {
+                    resolveToken = resolve as typeof resolveToken;
+                }),
+        );
+
+        const registry = new AtlasCredentialSessionRegistry();
+        const pending = registry.getSession(record.id);
+
+        // Let resolveSession read the secret and reach the deferred token mint (its generation is
+        // captured synchronously, before this point).
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        // Invalidate while the mint is still in flight: the resolve that finishes next is stale.
+        registry.invalidate(record.id);
+
+        // Resolve with a token already inside the expiry skew, so the follow-up read must re-mint.
+        resolveToken({ access_token: 'stale-token', token_type: 'Bearer', expires_in: 30 });
+        await pending;
+
+        mockFetchToken.mockResolvedValueOnce({ access_token: 'fresh-token', token_type: 'Bearer', expires_in: 3600 });
+        const session = await registry.getSession(record.id);
+
+        // If the stale resolve had repopulated the in-memory cache, getSession would return
+        // 'stale-token' without minting again.
+        expect(session).toEqual({ type: 'serviceaccount', accessToken: 'fresh-token' });
+        expect(mockFetchToken).toHaveBeenCalledTimes(2);
+    });
 });

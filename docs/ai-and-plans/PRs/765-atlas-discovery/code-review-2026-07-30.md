@@ -1025,6 +1025,19 @@ Tests to add (both cheap, both pin the corrected behaviour):
 - Invalidate a credential while `getSession()` is deferred, resolve it, and assert the registry
   cache stays empty rather than being repopulated with the stale session.
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — second-pass fix, no write queue.**
+> Change 1: `updateAtlasCredentialMetadata()` now calls `pushItem(updated, undefined)` and no longer
+> reads or writes the secret (`StorageService.push()` leaves SecretStorage untouched for empty
+> `secrets`), with the required explanatory comment. Change 2: `AtlasCredentialSessionRegistry` gained
+> a per-credential generation map; `resolveSession`/`performRefresh` snapshot the generation before
+> their first `await` and pass it to `storeSession`, which only writes the in-memory cache when the
+> generation still matches; `invalidate()`/`invalidateAll()` bump it. The per-credential write queue
+> (Proposal A) and split-storage schema (Proposal B) were deliberately left out of scope.
+> Fix: [atlasCredentialStore.ts](../../../../src/plugins/service-atlas-mongodb/credentials/atlasCredentialStore.ts),
+> [AtlasCredentialSessionRegistry.ts](../../../../src/plugins/service-atlas-mongodb/auth/AtlasCredentialSessionRegistry.ts).
+> Tests: rotated-secret-survives-metadata-update in the store suite, and the invalidate-mid-flight
+> generation-guard test in the registry suite.
+
 ### LOW-1: External-link failures are silently discarded in the credential webview
 
 Source: Independent review.

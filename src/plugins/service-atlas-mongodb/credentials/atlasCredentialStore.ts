@@ -316,8 +316,12 @@ export async function updateAtlasCredentialMetadata(
         orgName: metadata.orgName ?? existing.orgName,
     };
 
-    const secrets = await readAtlasCredentialSecrets(id);
-    await pushItem(updated, secrets);
+    // Deliberately no secret read here. `StorageService.push()` only writes SecretStorage when
+    // `item.secrets` is a non-empty array, so passing `undefined` leaves the stored secret exactly
+    // as it is. Reading the secret and writing it back was a real hazard: this runs on every
+    // discovery pass (via `cacheOrganizationMetadata`), and a credential rotation completing between
+    // the read and the push would have been silently overwritten with the old secret.
+    await pushItem(updated, undefined);
     invalidateCache();
     return updated;
 }
