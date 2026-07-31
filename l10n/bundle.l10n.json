@@ -1160,6 +1160,7 @@
   "No": "No",
   "No accessible projects found": "No accessible projects found",
   "No Action": "No Action",
+  "No active Kubernetes cluster was found. Check your kubeconfig and try again.": "No active Kubernetes cluster was found. Check your kubeconfig and try again.",
   "No additional cost for most GitHub Copilot subscribers.": "No additional cost for most GitHub Copilot subscribers.",
   "No Atlas cluster connection string available.": "No Atlas cluster connection string available.",
   "No Atlas cluster selected": "No Atlas cluster selected",

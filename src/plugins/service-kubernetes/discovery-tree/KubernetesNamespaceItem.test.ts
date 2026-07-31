@@ -227,6 +227,32 @@ describe('KubernetesNamespaceItem', () => {
             expect(telemetryContextMock.telemetry.properties).toHaveProperty('serviceFetchError', 'true');
         });
 
+        it('should identify a timed-out service request and retain the retry action', async () => {
+            (vscode.window.showErrorMessage as jest.Mock).mockClear();
+            const timeoutError = new Error('localized deadline message');
+            timeoutError.name = 'KubernetesApiTimeoutError';
+            mockListDocumentDBServices.mockRejectedValue(timeoutError);
+
+            const item = new KubernetesNamespaceItem('parent/ctx', 'default', baseContextInfo, 'my-ns', 'corr-1');
+            const children = await item.getChildren();
+
+            expect(children).toHaveLength(1);
+            expect((children![0] as { contextValue?: string }).contextValue).toBe('error');
+            expect(item.hasRetryNode(children)).toBe(true);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to list services in "my-context/my-ns"'),
+                expect.objectContaining({
+                    modal: true,
+                    detail: expect.stringContaining('Connection timed out'),
+                }),
+            );
+            expect(mockOutputChannelError).toHaveBeenCalledWith(expect.stringContaining('localized deadline message'));
+            expect(telemetryContextMock.telemetry.properties).toHaveProperty(
+                'serviceFetchErrorType',
+                'KubernetesApiTimeoutError',
+            );
+        });
+
         it('should show retry node and modal when kubeconfig fails to load', async () => {
             (vscode.window.showErrorMessage as jest.Mock).mockClear();
             mockLoadConfiguredKubeConfig.mockRejectedValue(new Error('ENOENT: config not found'));
