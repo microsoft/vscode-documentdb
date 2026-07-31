@@ -396,12 +396,13 @@
 
     // The body scrolls vertically when the form grows taller than the drawer.
     // A column flex context lets the Preview page's editor fill the free space.
-    // The gap above the footer is provided by DrawerFooter's own top padding, so
-    // the body needs no extra bottom padding of its own.
+    // DrawerBody only gets Fluent's default bottom padding when it is the last
+    // child, so restore a content gap here because DrawerFooter follows it.
     .createIndexDrawerBody {
         display: flex;
         flex-direction: column;
         overflow-y: auto;
+        padding-bottom: var(--spacingVerticalL);
     }
 
     // Main-page footer: an optional "what's still required" line stacked above
