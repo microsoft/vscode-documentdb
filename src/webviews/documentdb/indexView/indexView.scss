@@ -629,61 +629,22 @@
         }
     }
 
-    // Algorithm picker: three parallel selectable cards, each carrying its own
-    // one-line description, that wrap to a column on a narrow drawer. Implemented
-    // as an ARIA radiogroup of buttons so the whole card is the hit target.
+    // Algorithm picker: parallel Fluent selectable cards that wrap to a column
+    // on a narrow drawer.
     .vectorAlgorithmCards {
         display: flex;
         flex-direction: row;
+        align-items: stretch;
         gap: 8px;
         flex-wrap: wrap;
     }
 
     .vectorAlgoCard {
-        display: flex;
-        flex-direction: column;
-        row-gap: 3px;
         flex: 1 1 150px;
+        align-self: stretch;
+        height: auto;
         min-width: 0;
-        padding: 10px 12px;
-        text-align: start;
-        border: 1px solid var(--colorNeutralStroke2);
-        border-radius: var(--borderRadiusMedium);
-        background-color: var(--colorNeutralBackground1);
-        color: inherit;
-        font-family: inherit;
         cursor: pointer;
-
-        &:hover:not(:disabled) {
-            background-color: var(--colorNeutralBackground1Hover);
-        }
-
-        &:disabled {
-            cursor: default;
-            opacity: 0.6;
-        }
-
-        // Match the Fluent focus ring used elsewhere in the drawer.
-        &:focus-visible {
-            outline: 2px solid var(--colorStrokeFocus2);
-            outline-offset: 2px;
-        }
-    }
-
-    // The selected card is tinted and outlined with the brand stroke so the
-    // active algorithm reads at a glance.
-    .vectorAlgoCardSelected {
-        border-color: var(--colorCompoundBrandStroke);
-        background-color: var(--colorNeutralBackground1Selected);
-
-        &:hover:not(:disabled) {
-            background-color: var(--colorNeutralBackground1Selected);
-        }
-    }
-
-    .vectorAlgoCardTitle {
-        font-weight: var(--fontWeightSemibold);
-        font-size: var(--fontSizeBase300);
     }
 
     .vectorAlgoCardHint {

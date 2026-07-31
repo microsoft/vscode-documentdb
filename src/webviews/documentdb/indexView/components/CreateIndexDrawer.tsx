@@ -4,7 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import {
+    Body1,
     Button,
+    Card,
+    CardHeader,
     Combobox,
     DrawerBody,
     DrawerFooter,
@@ -23,6 +26,7 @@ import {
     Switch,
     Tab,
     TabList,
+    Text,
     Tooltip,
 } from '@fluentui/react-components';
 import {
@@ -382,14 +386,6 @@ export const CreateIndexDrawer = ({
     const vectorAlgorithmOptions = useMemo(() => buildVectorAlgorithmOptions(), []);
     const vectorSimilarityOptions = useMemo(() => buildVectorSimilarityOptions(), []);
 
-    // Roving-focus targets for the algorithm radio-card group, so arrow keys can
-    // move focus to the newly selected card.
-    const algorithmCardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
-    const wildcardScopeCardRefs = useRef<Record<WildcardScope, HTMLButtonElement | null>>({
-        all: null,
-        projection: null,
-        path: null,
-    });
     const advancedEntryRef = useRef<HTMLButtonElement>(null);
     const previewEntryRef = useRef<HTMLButtonElement>(null);
     const pageTitleRef = useRef<HTMLSpanElement>(null);
@@ -619,24 +615,6 @@ export const CreateIndexDrawer = ({
         pqSampleSizeValid;
 
     const vectorAlgorithmLabel = vectorAlgorithmOptions.find((o) => o.value === vectorAlgorithm)?.label ?? '';
-
-    const moveWildcardScopeSelection = (offset: number): void => {
-        const values = wildcardScopeOptions.map((option) => option.value);
-        const currentIndex = values.indexOf(wildcardScope);
-        const next = values[(currentIndex + offset + values.length) % values.length];
-        setForm((prev) => ({ ...prev, wildcardScope: next }));
-        wildcardScopeCardRefs.current[next]?.focus();
-    };
-
-    // Select the algorithm `offset` positions from the current one (wrapping) and
-    // move focus to its card, so the radio-card group is keyboard navigable.
-    const moveAlgorithmSelection = (offset: number): void => {
-        const values = vectorAlgorithmOptions.map((option) => option.value);
-        const currentIndex = values.indexOf(vectorAlgorithm);
-        const next = values[(currentIndex + offset + values.length) % values.length];
-        setForm((prev) => ({ ...prev, vectorAlgorithm: next }));
-        algorithmCardRefs.current[next]?.focus();
-    };
 
     const vectorCompressionLabel =
         effectiveCompression === 'half'
@@ -1263,57 +1241,46 @@ export const CreateIndexDrawer = ({
                                     hint={l10n.t('Choose which fields the wildcard index covers.')}
                                 >
                                     <div className="wildcardSettings">
-                                        <div
+                                        <RadioGroup
                                             className="vectorAlgorithmCards"
-                                            role="radiogroup"
                                             aria-label={l10n.t('Wildcard index scope')}
+                                            value={wildcardScope}
+                                            disabled={interactionDisabled}
+                                            onChange={(_event, data) => {
+                                                const scope = data.value;
+                                                if (scope === 'all' || scope === 'projection' || scope === 'path') {
+                                                    setForm((prev) => ({ ...prev, wildcardScope: scope }));
+                                                }
+                                            }}
                                         >
                                             {wildcardScopeOptions.map((option) => {
                                                 const selected = wildcardScope === option.value;
                                                 return (
-                                                    <button
+                                                    <Card
                                                         key={option.value}
-                                                        ref={(node) => {
-                                                            wildcardScopeCardRefs.current[option.value] = node;
-                                                        }}
-                                                        type="button"
-                                                        role="radio"
-                                                        aria-checked={selected}
-                                                        tabIndex={selected ? 0 : -1}
-                                                        className={
-                                                            selected
-                                                                ? 'vectorAlgoCard vectorAlgoCardSelected'
-                                                                : 'vectorAlgoCard'
-                                                        }
+                                                        className="vectorAlgoCard"
+                                                        selected={selected}
                                                         disabled={interactionDisabled}
-                                                        onClick={() =>
-                                                            setForm((prev) => ({
-                                                                ...prev,
-                                                                wildcardScope: option.value,
-                                                            }))
-                                                        }
-                                                        onKeyDown={(event) => {
-                                                            if (
-                                                                event.key === 'ArrowRight' ||
-                                                                event.key === 'ArrowDown'
-                                                            ) {
-                                                                event.preventDefault();
-                                                                moveWildcardScopeSelection(1);
-                                                            } else if (
-                                                                event.key === 'ArrowLeft' ||
-                                                                event.key === 'ArrowUp'
-                                                            ) {
-                                                                event.preventDefault();
-                                                                moveWildcardScopeSelection(-1);
+                                                        onSelectionChange={(_event, data) => {
+                                                            if (data.selected) {
+                                                                setForm((prev) => ({
+                                                                    ...prev,
+                                                                    wildcardScope: option.value,
+                                                                }));
                                                             }
                                                         }}
+                                                        floatingAction={
+                                                            <Radio value={option.value} aria-label={option.label} />
+                                                        }
                                                     >
-                                                        <span className="vectorAlgoCardTitle">{option.label}</span>
-                                                        <span className="vectorAlgoCardHint">{option.hint}</span>
-                                                    </button>
+                                                        <CardHeader
+                                                            header={<Text weight="semibold">{option.label}</Text>}
+                                                        />
+                                                        <Body1 className="vectorAlgoCardHint">{option.hint}</Body1>
+                                                    </Card>
                                                 );
                                             })}
-                                        </div>
+                                        </RadioGroup>
 
                                         <Collapse visible={wildcardScope === 'path'} unmountOnExit>
                                             <Field
@@ -1526,51 +1493,50 @@ export const CreateIndexDrawer = ({
                                     title={l10n.t('Algorithm')}
                                     hint={l10n.t('Approximate nearest-neighbor algorithm used to build the index.')}
                                 >
-                                    <div
+                                    <RadioGroup
                                         className="vectorAlgorithmCards"
-                                        role="radiogroup"
                                         aria-label={l10n.t('Vector algorithm')}
+                                        value={vectorAlgorithm}
+                                        disabled={interactionDisabled}
+                                        onChange={(_event, data) => {
+                                            const algorithm = data.value;
+                                            if (
+                                                algorithm === 'vector-diskann' ||
+                                                algorithm === 'vector-hnsw' ||
+                                                algorithm === 'vector-ivf'
+                                            ) {
+                                                setForm((prev) => ({ ...prev, vectorAlgorithm: algorithm }));
+                                            }
+                                        }}
                                     >
                                         {vectorAlgorithmOptions.map((option) => {
                                             const selected = vectorAlgorithm === option.value;
                                             return (
-                                                <button
+                                                <Card
                                                     key={option.value}
-                                                    ref={(node) => {
-                                                        algorithmCardRefs.current[option.value] = node;
-                                                    }}
-                                                    type="button"
-                                                    role="radio"
-                                                    aria-checked={selected}
-                                                    tabIndex={selected ? 0 : -1}
-                                                    className={
-                                                        selected
-                                                            ? 'vectorAlgoCard vectorAlgoCardSelected'
-                                                            : 'vectorAlgoCard'
-                                                    }
+                                                    className="vectorAlgoCard"
+                                                    selected={selected}
                                                     disabled={interactionDisabled}
-                                                    onClick={() =>
-                                                        setForm((prev) => ({ ...prev, vectorAlgorithm: option.value }))
-                                                    }
-                                                    onKeyDown={(event) => {
-                                                        if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
-                                                            event.preventDefault();
-                                                            moveAlgorithmSelection(1);
-                                                        } else if (
-                                                            event.key === 'ArrowLeft' ||
-                                                            event.key === 'ArrowUp'
-                                                        ) {
-                                                            event.preventDefault();
-                                                            moveAlgorithmSelection(-1);
+                                                    onSelectionChange={(_event, data) => {
+                                                        if (data.selected) {
+                                                            setForm((prev) => ({
+                                                                ...prev,
+                                                                vectorAlgorithm: option.value,
+                                                            }));
                                                         }
                                                     }}
+                                                    floatingAction={
+                                                        <Radio value={option.value} aria-label={option.label} />
+                                                    }
                                                 >
-                                                    <span className="vectorAlgoCardTitle">{option.label}</span>
-                                                    <span className="vectorAlgoCardHint">{option.hint}</span>
-                                                </button>
+                                                    <CardHeader
+                                                        header={<Text weight="semibold">{option.label}</Text>}
+                                                    />
+                                                    <Body1 className="vectorAlgoCardHint">{option.hint}</Body1>
+                                                </Card>
                                             );
                                         })}
-                                    </div>
+                                    </RadioGroup>
                                 </DrawerSection>
 
                                 <DrawerSection
