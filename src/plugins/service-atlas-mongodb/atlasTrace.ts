@@ -32,6 +32,11 @@ export function atlasWarn(message: string): void {
     ext.outputChannel.warn(`${PREFIX} ${message}`);
 }
 
+/** Writes a diagnostic line at error level for a failure worth surfacing without verbose logging. */
+export function atlasError(message: string): void {
+    ext.outputChannel.error(`${PREFIX} ${message}`);
+}
+
 /**
  * Shortens a record ID for log correlation. Record IDs are random UUIDs and carry no secret, but
  * a full UUID on every line makes the log unreadable.

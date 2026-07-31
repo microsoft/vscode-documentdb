@@ -244,7 +244,10 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
 
     private async getClusterItems(project: AtlasProject, credentialId: string): Promise<AtlasClusterQuickPickItem[]> {
         const registry = this.discoveryService.sessionRegistry;
-        const session = await registry.getSession(credentialId);
+        // A transient token failure now throws rather than resolving `undefined`; either way the
+        // wizard's fallback is the same neutral "manage credentials" affordance, so treat any
+        // failure as "no usable session" here instead of surfacing it inside the QuickPick.
+        const session = await registry.getSession(credentialId).catch(() => undefined);
 
         const manageItem: AtlasClusterQuickPickItem = {
             itemType: 'manageCredentials',

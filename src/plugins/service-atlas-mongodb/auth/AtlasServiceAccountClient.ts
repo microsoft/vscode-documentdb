@@ -16,6 +16,25 @@ export interface AtlasServiceAccountTokenResponse {
 }
 
 /**
+ * A non-2xx response from the Atlas Service Account token endpoint.
+ *
+ * Carries the HTTP status and the OAuth `error` code so callers can distinguish a genuinely
+ * rejected client/secret (`400`/`401`, typically `invalid_client`) from a transient failure
+ * (`429`, `5xx`) that must not send the user to re-enter a working credential. A network/DNS
+ * failure surfaces as a `TypeError` from `fetch` and is deliberately left as-is.
+ */
+export class AtlasTokenError extends Error {
+    constructor(
+        message: string,
+        public readonly statusCode: number,
+        public readonly code?: string,
+    ) {
+        super(message);
+        this.name = 'AtlasTokenError';
+    }
+}
+
+/**
  * Fetches an access token using the client_credentials grant.
  * Atlas Service Accounts use client_id + client_secret for machine-to-machine auth.
  *
@@ -47,20 +66,26 @@ export async function fetchServiceAccountToken(
 
     if (!response.ok) {
         let errorDetail = `${response.status}`;
+        let errorCode: string | undefined;
         try {
             const errorBody = (await response.json()) as {
                 error?: string;
                 error_description?: string;
                 errorCode?: string;
             };
-            errorDetail = errorBody.error ?? errorBody.errorCode ?? errorDetail;
+            errorCode = errorBody.error ?? errorBody.errorCode;
+            errorDetail = errorCode ?? errorDetail;
             if (errorBody.error_description) {
                 errorDetail += `: ${errorBody.error_description}`;
             }
         } catch {
             // Ignore JSON parse errors for error body
         }
-        throw new Error(vscode.l10n.t('Failed to authenticate Service Account: {0}', errorDetail));
+        throw new AtlasTokenError(
+            vscode.l10n.t('Failed to authenticate Service Account: {0}', errorDetail),
+            response.status,
+            errorCode,
+        );
     }
 
     return (await response.json()) as AtlasServiceAccountTokenResponse;

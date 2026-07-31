@@ -53,9 +53,22 @@ jest.mock('../../../extensionVariables', () => ({
 }));
 
 const mockFetchToken = jest.fn();
-jest.mock('./AtlasServiceAccountClient', () => ({
-    fetchServiceAccountToken: (...args: unknown[]) => mockFetchToken(...args) as unknown,
-}));
+jest.mock('./AtlasServiceAccountClient', () => {
+    class AtlasTokenErrorMock extends Error {
+        constructor(
+            message: string,
+            public readonly statusCode: number,
+            public readonly code?: string,
+        ) {
+            super(message);
+            this.name = 'AtlasTokenError';
+        }
+    }
+    return {
+        AtlasTokenError: AtlasTokenErrorMock,
+        fetchServiceAccountToken: (...args: unknown[]) => mockFetchToken(...args) as unknown,
+    };
+});
 
 import { StorageService } from '../../../services/storageService';
 import {
@@ -64,6 +77,7 @@ import {
     upsertAtlasCredential,
 } from '../credentials/atlasCredentialStore';
 import { AtlasCredentialSessionRegistry } from './AtlasCredentialSessionRegistry';
+import { AtlasTokenError } from './AtlasServiceAccountClient';
 
 beforeEach(() => {
     globalStateBacking.clear();
@@ -154,7 +168,7 @@ describe('AtlasCredentialSessionRegistry', () => {
 
         mockFetchToken.mockImplementation((clientId: string) =>
             clientId === 'client-broken'
-                ? Promise.reject(new Error('invalid_client'))
+                ? Promise.reject(new AtlasTokenError('invalid_client', 401, 'invalid_client'))
                 : Promise.resolve({ access_token: 'token-ok', token_type: 'Bearer', expires_in: 3600 }),
         );
 
@@ -169,6 +183,33 @@ describe('AtlasCredentialSessionRegistry', () => {
         await expect(readAtlasCredentialSecrets(broken.record.id)).resolves.toMatchObject({
             clientSecret: 'secret-broken',
         });
+    });
+
+    it.each([
+        [429, 'rate limited'],
+        [503, 'service unavailable'],
+    ])('rethrows a transient token failure (%s) instead of reporting a rejected credential', async (status) => {
+        // A `429` / `5xx` must not collapse to `undefined` (which the discovery pass maps to a
+        // credential-rejected error). Rethrowing lets the classifier report rate-limit / network.
+        const { record } = await upsertAtlasCredential({
+            authMethod: 'serviceaccount',
+            clientId: 'client-1',
+            clientSecret: 'secret-1',
+        });
+        mockFetchToken.mockRejectedValue(new AtlasTokenError('transient', status));
+
+        await expect(new AtlasCredentialSessionRegistry().getSession(record.id)).rejects.toBeInstanceOf(AtlasTokenError);
+    });
+
+    it('rethrows a network failure (TypeError) from token acquisition', async () => {
+        const { record } = await upsertAtlasCredential({
+            authMethod: 'serviceaccount',
+            clientId: 'client-1',
+            clientSecret: 'secret-1',
+        });
+        mockFetchToken.mockRejectedValue(new TypeError('fetch failed'));
+
+        await expect(new AtlasCredentialSessionRegistry().getSession(record.id)).rejects.toBeInstanceOf(TypeError);
     });
 
     it('picks up a replaced secret after the credential is invalidated', async () => {

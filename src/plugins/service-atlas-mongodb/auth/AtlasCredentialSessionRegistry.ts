@@ -15,13 +15,13 @@
  * - a credential whose secret was rejected can be marked failed without disturbing its peers.
  */
 
-import { atlasTrace, atlasWarn, formatMs, monotonicNow, shortId } from '../atlasTrace';
+import { atlasError, atlasTrace, atlasWarn, formatMs, monotonicNow, shortId } from '../atlasTrace';
 import {
     cacheServiceAccountToken,
     readAtlasCredentialSecrets,
     type AtlasCredentialSecrets,
 } from '../credentials/atlasCredentialStore';
-import { fetchServiceAccountToken } from './AtlasServiceAccountClient';
+import { AtlasTokenError, fetchServiceAccountToken } from './AtlasServiceAccountClient';
 import { type AtlasSession } from './AtlasSession';
 
 /**
@@ -219,8 +219,21 @@ export class AtlasCredentialSessionRegistry {
             // The credential keeps its stored secret so the user can fix the Atlas-side problem
             // and retry from the credential-management flow without re-entering it.
             const message = error instanceof Error ? error.message : String(error);
-            atlasWarn(`credential ${shortId(credentialId)}: service account token request failed: ${message}`);
-            return undefined;
+
+            // Only a genuinely rejected client/secret (`400`/`401`, typically `invalid_client`)
+            // means the credential is bad. Collapsing every token failure into `undefined` here
+            // made a `429`, a `5xx`, or an offline machine look like a rejected credential and sent
+            // the user to update a working secret. Log the full failure, then rethrow the transient
+            // ones so the discovery pass classifies them as rate-limit / network / other instead.
+            if (error instanceof AtlasTokenError && (error.statusCode === 400 || error.statusCode === 401)) {
+                atlasWarn(
+                    `credential ${shortId(credentialId)}: service account credentials were rejected (${String(error.statusCode)}${error.code ? ` ${error.code}` : ''}): ${message}`,
+                );
+                return undefined;
+            }
+
+            atlasError(`credential ${shortId(credentialId)}: service account token request failed: ${message}`);
+            throw error;
         }
     }
 

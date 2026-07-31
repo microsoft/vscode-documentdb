@@ -764,6 +764,25 @@ permissions. Token-endpoint classification must not replace or intercept that pa
 tests for `invalid_client`, `TypeError`, token `429`, and token `503`, plus the existing Admin API IP
 access-list cases as regression coverage.
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration), with NEW-3.** Added a typed
+> `AtlasTokenError` (status + OAuth code) thrown by `fetchServiceAccountToken`.
+> `mintServiceAccountToken` now logs the full failure via a new `atlasError` helper, returns
+> `undefined` only for a genuinely rejected client/secret (`400`/`401`), and **rethrows** transient
+> failures (`429`, `5xx`, network `TypeError`) so the discovery pass classifies them.
+> `classifyAtlasError` gained an `AtlasTokenError` branch (`429`→`rateLimited`, `5xx`→`other`), and the
+> webview `describeAtlasError` classifies token failures directly, removing the hardcoded
+> authentication override in `submitServiceAccount`. The Admin API `403` / `isAtlasIpAccessListError`
+> path is untouched. The wizard's `getClusterItems` swallows the now-throwing `getSession` to keep
+> its neutral "manage credentials" fallback.
+> Fix: [AtlasServiceAccountClient.ts](../../../../src/plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient.ts),
+> [AtlasCredentialSessionRegistry.ts](../../../../src/plugins/service-atlas-mongodb/auth/AtlasCredentialSessionRegistry.ts),
+> [AtlasDiscoveryService.ts](../../../../src/plugins/service-atlas-mongodb/discovery/AtlasDiscoveryService.ts),
+> [atlasCredentialsRouter.ts](../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.ts),
+> [SelectAtlasSteps.ts](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts),
+> [atlasTrace.ts](../../../../src/plugins/service-atlas-mongodb/atlasTrace.ts).
+> Tests: `invalid_client`, `429`, `503`, and `TypeError` cases in both the session-registry and
+> router suites.
+
 ### MEDIUM-4: Concurrent credential writes can restore stale secrets after rotation or sign-out
 
 Source: Independent follow-up review.
@@ -1710,6 +1729,21 @@ Tests to add:
 - `getChildren()` without a preceding `refresh()` → `showErrorMessage` called once.
 - Two consecutive `getChildren()` calls after one `refresh()` → the second one shows the modal.
 - A `network`-classified failure → the detail contains the retry wording, not the credential wording.
+
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — Proposal A, with MEDIUM-3.**
+> `showAtlasLoadFailure(title, error, hint)` is now `void` (not awaited), logs the real error to the
+> output channel, and renders the hint plus the error text; `recoveryHintFor(kind)` supplies the
+> per-kind wording. `AtlasProjectItem.getChildren()` classifies the failure through
+> `classifyAtlasError` and only shows the modal when the one-shot `suppressNextLoadModal` flag is
+> clear; `refresh()` sets that flag (a passive Refresh), while `retryAuthentication` does not (an
+> explicit retry still shows the modal). The flag is read and reset at the top of `getChildren()`.
+> The no-session branch routes through `recoveryHintFor('auth')`, and `getSession`/`refreshSession`
+> can now throw (MEDIUM-3), handled by the same catch/`.catch(() => undefined)`.
+> Fix: [AtlasProjectItem.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts),
+> [showAtlasLoadFailure.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/showAtlasLoadFailure.ts).
+> Tests: modal-once on expand, no-modal-after-refresh, modal-again on the second expand, and
+> network-wording assertion in
+> [AtlasProjectItem.test.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.test.ts).
 
 ### NEW-4: Digest authentication repeats the unauthenticated challenge on every request
 

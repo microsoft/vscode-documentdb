@@ -22,6 +22,7 @@ import { createConcurrencyLimiter } from '../../../utils/concurrencyLimiter';
 import { AtlasApiClient, AtlasApiError } from '../api/AtlasApiClient';
 import { atlasTrace, describeCredential, formatMs, monotonicNow } from '../atlasTrace';
 import { AtlasCredentialSessionRegistry } from '../auth/AtlasCredentialSessionRegistry';
+import { AtlasTokenError } from '../auth/AtlasServiceAccountClient';
 import {
     getAtlasCredential,
     readAtlasCredentials,
@@ -186,6 +187,19 @@ export function classifyAtlasError(error: unknown): {
     // extension itself cancelled or timed out).
     if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
         return { kind: 'network', message: error.message };
+    }
+
+    // A Service Account token failure that was rethrown as transient (429 / 5xx / unrecognized).
+    // A rejected client/secret (400/401) never reaches here - the session registry returns
+    // `undefined` for those, which the caller maps to the credential-rejected path.
+    if (error instanceof AtlasTokenError) {
+        if (error.statusCode === 429) {
+            return { kind: 'rateLimited', status: 429, message: error.message, errorCode: error.code };
+        }
+        if (error.statusCode === 401 || error.statusCode === 400) {
+            return { kind: 'auth', status: error.statusCode, message: error.message, errorCode: error.code };
+        }
+        return { kind: 'other', status: error.statusCode, message: error.message, errorCode: error.code };
     }
 
     if (error instanceof AtlasApiError) {
