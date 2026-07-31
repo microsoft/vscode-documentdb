@@ -152,6 +152,17 @@ Two things should be recorded alongside it:
   the Digest branch, not the signed URI, is what will actually be felt by API Key users. See
   [NEW-4](#new-4-digest-authentication-repeats-the-unauthenticated-challenge-on-every-request).
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration), together with NEW-4.** `requestOnce()`
+> now derives both the transmitted URL and the Digest request-target from one parsed URL, signing
+> `${pathname}${search}` so the query string is part of the signed target (RFC 7616 §3.4.6).
+> Deviation from the proposal snippet: `new URL(path, ATLAS_API_BASE_URL)` would drop the base's
+> `/api/atlas/v2` path prefix (path segments start with `/`), so the concatenated string is parsed
+> directly instead — same single-parsed-URL intent, correct for the path-prefixed base.
+> Fix: [src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts).
+> Tests: first Digest-branch coverage added in
+> [AtlasApiClient.test.ts](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.test.ts),
+> asserting the signed request-target equals `/api/atlas/v2/groups?itemsPerPage=500&pageNum=1`.
+
 ## Active Findings
 
 ### MEDIUM-1: Closing credential setup can still persist the credential
@@ -1738,6 +1749,19 @@ call and instead avoid duplicate cluster listings (the snapshot already holds cl
 same eight lines and both need the same first Digest unit test, so doing them separately means
 writing that test twice. Assert: a pre-emptive `Authorization` header on the second request, a
 correctly incremented `nc`, and a re-challenge on a `401` with `stale=true`.
+
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration), together with WITHDRAWN-1.** Added a
+> `digestChallenge` field cached per client. `requestOnce()` now answers pre-emptively with the
+> cached challenge and an incrementing `nc` (`++this.digestNonceCount`), only fetching a fresh
+> unauthenticated challenge on the first request or on a `401` re-challenge (the counter resets to 0
+> when a new nonce is adopted). This drops steady-state API Key traffic from two requests per call to
+> one. The `(digest challenge answered)` trace line became `(digest)` because the challenge round-trip
+> is no longer the common path.
+> Fix: [src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts)
+> (`DigestChallenge` exported from
+> [AtlasDigestAuth.ts](../../../../src/plugins/service-atlas-mongodb/api/AtlasDigestAuth.ts)).
+> Tests in [AtlasApiClient.test.ts](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.test.ts):
+> pre-emptive reuse with `nc` advancing 1→2, and a stale-nonce re-challenge resetting `nc` (1,2,1).
 
 ### NEW-5: Non-connectable clusters are guarded in the wizard but not in the tree
 

@@ -15,7 +15,7 @@ import {
     type AtlasProject,
     type AtlasUserInfo,
 } from '../models/AtlasProjectModel';
-import { computeDigestHeader, parseDigestChallenge } from './AtlasDigestAuth';
+import { computeDigestHeader, type DigestChallenge, parseDigestChallenge } from './AtlasDigestAuth';
 
 /** Atlas API response envelope for paginated results */
 interface AtlasPaginatedResponse<T> {
@@ -51,6 +51,13 @@ const ATLAS_DEFAULT_API_VERSION = '2023-02-01';
  */
 export class AtlasApiClient {
     private digestNonceCount = 0;
+    /**
+     * The most recent Digest challenge parsed from a `401`, cached per client so subsequent
+     * requests can answer pre-emptively with an incrementing nonce-count instead of paying an
+     * unauthenticated challenge round-trip every call. Reset (and the counter with it) whenever the
+     * server re-challenges with a stale nonce.
+     */
+    private digestChallenge?: DigestChallenge;
     private session: AtlasSession;
 
     /**
@@ -213,7 +220,12 @@ export class AtlasApiClient {
      * Handles Service Account Bearer and API Key Digest authentication transparently.
      */
     private async requestOnce<T>(path: string, signal?: AbortSignal, apiVersion?: string): Promise<T> {
-        const url = `${ATLAS_API_BASE_URL}${path}`;
+        // Derive the transmitted URL and the Digest request-target from one parsed value so a future
+        // query parameter cannot be added to the request without also appearing in the signed target
+        // (RFC 7616 section 3.4.6). `ATLAS_API_BASE_URL` carries a `/api/atlas/v2` path prefix, so the
+        // base+path string is parsed directly rather than resolving `path` against the base.
+        const parsedUrl = new URL(`${ATLAS_API_BASE_URL}${path}`);
+        const url = parsedUrl.toString();
         const startedAt = monotonicNow();
         const headers: Record<string, string> = {
             Accept: `application/vnd.atlas.${apiVersion ?? ATLAS_DEFAULT_API_VERSION}+json`,
@@ -232,52 +244,66 @@ export class AtlasApiClient {
             return (await response.json()) as T;
         }
 
-        // API Key: HTTP Digest Authentication
-        // First request without auth to get the challenge
-        const initialResponse = await fetch(url, { method: 'GET', headers, signal });
+        // API Key: HTTP Digest Authentication.
+        //
+        // Cache the parsed challenge on the client and reuse it with an incrementing nonce-count
+        // (`nc`) - the RFC 7616 mechanism for reusing a server nonce across requests. This keeps the
+        // steady-state path to a single request per call; only the first request from this client
+        // (no cached challenge) or a stale nonce (a `401` re-challenge) pays the extra
+        // unauthenticated round-trip. Previously the challenge was discarded after every call, so a
+        // fresh nonce was fetched for each request and `digestNonceCount` never served its purpose,
+        // doubling Atlas Admin API traffic for every API Key credential.
+        const session = this.session;
+        const digestUri = `${parsedUrl.pathname}${parsedUrl.search}`;
 
-        if (initialResponse.status === 401) {
-            const wwwAuth = initialResponse.headers.get('www-authenticate');
+        // Answers the given challenge, advancing `nc` for each request that reuses the same nonce.
+        const sendAuthenticated = (challenge: DigestChallenge): Promise<Response> => {
+            const authHeader = computeDigestHeader(
+                'GET',
+                digestUri,
+                session.publicKey,
+                session.privateKey,
+                challenge,
+                ++this.digestNonceCount,
+            );
+            return fetch(url, { method: 'GET', headers: { ...headers, Authorization: authHeader }, signal });
+        };
+
+        // Parses the `WWW-Authenticate` header and resets the per-nonce counter for the new nonce.
+        const adoptChallenge = (response: Response): DigestChallenge => {
+            const wwwAuth = response.headers.get('www-authenticate');
             if (!wwwAuth || !wwwAuth.toLowerCase().startsWith('digest')) {
                 throw new Error(vscode.l10n.t('Atlas API did not return a valid Digest challenge'));
             }
+            this.digestChallenge = parseDigestChallenge(wwwAuth);
+            this.digestNonceCount = 0;
+            return this.digestChallenge;
+        };
 
-            const challenge = parseDigestChallenge(wwwAuth);
-            this.digestNonceCount++;
-
-            const uri = new URL(url).pathname;
-            const authHeader = computeDigestHeader(
-                'GET',
-                uri,
-                this.session.publicKey,
-                this.session.privateKey,
-                challenge,
-                this.digestNonceCount,
-            );
-
-            headers['Authorization'] = authHeader;
-
-            const authedResponse = await fetch(url, { method: 'GET', headers, signal });
-            atlasTrace(
-                `${this.describeClient()} GET ${path} -> ${String(authedResponse.status)} in ${formatMs(startedAt)} (digest challenge answered)`,
-            );
-
-            if (!authedResponse.ok) {
-                await this.handleErrorResponse(authedResponse);
+        let response: Response;
+        if (this.digestChallenge) {
+            response = await sendAuthenticated(this.digestChallenge);
+            if (response.status === 401) {
+                // Cached nonce was rejected (stale, or the server rotated it): re-challenge once.
+                response = await sendAuthenticated(adoptChallenge(response));
             }
-
-            return (await authedResponse.json()) as T;
+        } else {
+            const initialResponse = await fetch(url, { method: 'GET', headers, signal });
+            response =
+                initialResponse.status === 401
+                    ? await sendAuthenticated(adoptChallenge(initialResponse))
+                    : initialResponse;
         }
 
         atlasTrace(
-            `${this.describeClient()} GET ${path} -> ${String(initialResponse.status)} in ${formatMs(startedAt)}`,
+            `${this.describeClient()} GET ${path} -> ${String(response.status)} in ${formatMs(startedAt)} (digest)`,
         );
 
-        if (!initialResponse.ok) {
-            await this.handleErrorResponse(initialResponse);
+        if (!response.ok) {
+            await this.handleErrorResponse(response);
         }
 
-        return (await initialResponse.json()) as T;
+        return (await response.json()) as T;
     }
 
     /**
