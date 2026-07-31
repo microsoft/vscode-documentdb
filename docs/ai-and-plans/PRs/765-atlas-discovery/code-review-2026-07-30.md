@@ -2063,6 +2063,18 @@ The underlying idea (telling the user what they are connected to) is worth doing
 session summary such as "connected to `<cluster>` on `<platform>`", rather than as a terminal-title
 prefix. Not in this PR.
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — reverted.** Removed the `shellLabel`
+> field from `ShellConnectionInfo`, deleted the `shellLabel` computation and both properties in
+> `openInteractiveShell.ts` (plus the now-unused `API` import), and deleted the two `const label = …`
+> lines in `DocumentDBShellPty.ts`. All four original message IDs are restored: `DocumentDB: {0}/{1}`,
+> `DocumentDB Shell: {0}`, `DocumentDB: {0}@{1}/{2}`. `npm run l10n` will remove the placeholder-only
+> IDs at the final checklist step. ISSUE-2 is noted in the executive summary as a follow-up (not
+> auto-filed).
+> Fix: [openInteractiveShell.ts](../../../../src/commands/openInteractiveShell/openInteractiveShell.ts),
+> [DocumentDBShellPty.ts](../../../../src/documentdb/shell/DocumentDBShellPty.ts),
+> [ShellSessionManager.ts](../../../../src/documentdb/shell/ShellSessionManager.ts).
+
+
 ### NEW-9: `config.ts` evaluates `l10n.t()` at module load, against in-repo precedent
 
 **Severity: Low.** Deferred to an extension-wide issue rather than fixed here; see the FINAL DECISION
