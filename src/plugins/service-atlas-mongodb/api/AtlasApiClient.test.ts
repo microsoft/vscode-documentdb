@@ -20,9 +20,15 @@ jest.mock('../../../extensionVariables', () => ({
     },
 }));
 
+jest.mock('./AtlasDigestAuth', () => ({
+    parseDigestChallenge: jest.fn(() => ({ realm: 'realm', nonce: 'nonce', qop: 'auth' })),
+    computeDigestHeader: jest.fn(() => 'Digest computed-value'),
+}));
+
 import { ext } from '../../../extensionVariables';
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasApiClient, AtlasApiError } from './AtlasApiClient';
+import { computeDigestHeader } from './AtlasDigestAuth';
 
 const session = { type: 'serviceaccount', accessToken: 'token-1' } as const;
 
@@ -182,6 +188,19 @@ describe('AtlasApiClient pagination', () => {
         await expect(new AtlasApiClient(session).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
     });
 
+    it('uses a credential-neutral message for a 403 with no detail body', async () => {
+        // The shared client serves both API Keys and Service Accounts, so a fallback that names an
+        // "API key" would be wrong for one of them.
+        fetchMock.mockResolvedValueOnce(jsonResponse({}, 403));
+
+        const error = await new AtlasApiClient(session).listProjects().catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(AtlasApiError);
+        expect((error as AtlasApiError).message).toBe(
+            'Access denied. Verify this credential has the required permissions.',
+        );
+    });
+
     it('refreshes the session once and retries when the token is rejected', async () => {
         fetchMock
             .mockResolvedValueOnce(jsonResponse({ detail: 'token expired' }, 401))
@@ -211,5 +230,74 @@ describe('AtlasApiClient pagination', () => {
         await expect(new AtlasApiClient(session, refresher).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
         expect(refresher.tryRefreshIfPossible).not.toHaveBeenCalled();
         expect(fetchMock).toHaveBeenCalledTimes(1);
+    });
+});
+
+describe('AtlasApiClient API Key Digest authentication', () => {
+    const apiKeySession = { type: 'apikey', publicKey: 'pub', privateKey: 'priv' } as const;
+
+    function challengeResponse(): Response {
+        return {
+            ok: false,
+            status: 401,
+            headers: {
+                get: (name: string): string | null =>
+                    name.toLowerCase() === 'www-authenticate' ? 'Digest realm="atlas", nonce="abc", qop="auth"' : null,
+            },
+            json: () => Promise.resolve({}),
+            text: () => Promise.resolve(''),
+        } as unknown as Response;
+    }
+
+    beforeEach(() => {
+        (computeDigestHeader as jest.Mock).mockClear();
+    });
+
+    it('signs the full request-target including the query string, not just the path', async () => {
+        // RFC 7616 section 3.4.6: the Digest `uri` must match the request target that fetch() sends.
+        // The paginated list URL always carries `?itemsPerPage=...&pageNum=...`, so the signed
+        // request-target must include that query string.
+        fetchMock.mockResolvedValueOnce(challengeResponse()).mockResolvedValueOnce(jsonResponse(page(1, 0, 1)));
+
+        await new AtlasApiClient(apiKeySession).listProjects();
+
+        const digestUri = (computeDigestHeader as jest.Mock).mock.calls[0][1] as string;
+        expect(digestUri).toBe('/api/atlas/v2/groups?itemsPerPage=500&pageNum=1');
+    });
+
+    it('reuses the cached challenge pre-emptively on later requests with an incrementing nonce-count', async () => {
+        // First call answers a challenge (2 fetches); the second call sends the Digest header
+        // straight away using the cached challenge (1 fetch), and `nc` advances 1 -> 2.
+        const client = new AtlasApiClient(apiKeySession);
+        fetchMock
+            .mockResolvedValueOnce(challengeResponse())
+            .mockResolvedValueOnce(jsonResponse(page(1, 0, 1)))
+            .mockResolvedValueOnce(jsonResponse(page(1, 0, 1)));
+
+        await client.listProjects();
+        await client.listProjects();
+
+        expect(fetchMock).toHaveBeenCalledTimes(3);
+        const nonceCounts = (computeDigestHeader as jest.Mock).mock.calls.map((call) => call[5] as number);
+        expect(nonceCounts).toEqual([1, 2]);
+    });
+
+    it('re-challenges once and resets the nonce-count when the cached nonce is rejected', async () => {
+        const client = new AtlasApiClient(apiKeySession);
+        fetchMock
+            // First call: establish the cached challenge.
+            .mockResolvedValueOnce(challengeResponse())
+            .mockResolvedValueOnce(jsonResponse(page(1, 0, 1)))
+            // Second call: the pre-emptive request is rejected (stale nonce), triggering a re-challenge.
+            .mockResolvedValueOnce(challengeResponse())
+            .mockResolvedValueOnce(jsonResponse(page(1, 0, 1)));
+
+        await client.listProjects();
+        await client.listProjects();
+
+        const nonceCounts = (computeDigestHeader as jest.Mock).mock.calls.map((call) => call[5] as number);
+        // 1 = first challenge answered; 2 = pre-emptive attempt on the second call; 1 = counter reset
+        // after the re-challenge adopts the fresh nonce.
+        expect(nonceCounts).toEqual([1, 2, 1]);
     });
 });

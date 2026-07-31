@@ -73,9 +73,22 @@ jest.mock('../../../plugins/service-atlas-mongodb/api/AtlasApiClient', () => {
     };
 });
 
-jest.mock('../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient', () => ({
-    fetchServiceAccountToken: (...args: unknown[]) => mockFetchServiceAccountToken(...args) as unknown,
-}));
+jest.mock('../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient', () => {
+    class AtlasTokenErrorMock extends Error {
+        constructor(
+            message: string,
+            public readonly statusCode: number,
+            public readonly code?: string,
+        ) {
+            super(message);
+            this.name = 'AtlasTokenError';
+        }
+    }
+    return {
+        AtlasTokenError: AtlasTokenErrorMock,
+        fetchServiceAccountToken: (...args: unknown[]) => mockFetchServiceAccountToken(...args) as unknown,
+    };
+});
 
 jest.mock('../../../plugins/service-atlas-mongodb/credentials/atlasCredentialStore', () => ({
     getAtlasCredential: (...args: unknown[]) => mockGetAtlasCredential(...args) as unknown,
@@ -98,6 +111,7 @@ jest.mock('../../_integration/trpc', () => {
 
 import { API } from '../../../DocumentDBExperiences';
 import { AtlasApiError } from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
+import { AtlasTokenError } from '../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient';
 import { createCallerFactory } from '../../_integration/trpc';
 import { atlasCredentialsRouter, type RouterContext } from './atlasCredentialsRouter';
 
@@ -328,5 +342,87 @@ describe('atlasCredentialsRouter', () => {
         });
         expect(mockFetchServiceAccountToken).not.toHaveBeenCalled();
         expect(mockReplaceAtlasCredentialSecrets).not.toHaveBeenCalled();
+    });
+
+    it('does not persist an API Key credential when the panel was closed mid-verification', async () => {
+        // The user closes the webview while listProjects() is still in flight. Disposing the panel
+        // aborts the operation signal; the verified input must not become stored state.
+        const controller = new AbortController();
+        mockListProjects.mockImplementation(() => {
+            controller.abort();
+            return Promise.resolve([{ id: 'project-1' }]);
+        });
+        const context = { ...createContext(), signal: controller.signal };
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        await expect(caller.submitApiKey({ publicKey: 'public-key', privateKey: 'private-key' })).rejects.toThrow();
+
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+        expect(mockReplaceAtlasCredentialSecrets).not.toHaveBeenCalled();
+        expect(context.onCredentialPersisted).not.toHaveBeenCalled();
+        expect(context.credentialState.credentialsStored).toBe(false);
+    });
+
+    it('does not persist a Service Account credential when the panel was closed mid-verification', async () => {
+        const controller = new AbortController();
+        mockFetchServiceAccountToken.mockResolvedValue({ access_token: 'access-token', expires_in: 3600 });
+        mockListProjects.mockImplementation(() => {
+            controller.abort();
+            return Promise.resolve([{ id: 'project-1' }]);
+        });
+        const context = { ...createContext(), signal: controller.signal };
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        await expect(
+            caller.submitServiceAccount({ clientId: 'client-id', clientSecret: 'client-secret' }),
+        ).rejects.toThrow();
+
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+        expect(mockReplaceAtlasCredentialSecrets).not.toHaveBeenCalled();
+        expect(context.onCredentialPersisted).not.toHaveBeenCalled();
+        expect(context.credentialState.credentialsStored).toBe(false);
+    });
+
+    it('reports a rejected Service Account (401) as an authentication error', async () => {
+        mockFetchServiceAccountToken.mockRejectedValue(new AtlasTokenError('invalid_client', 401, 'invalid_client'));
+        const context = createContext();
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        const result = await caller.submitServiceAccount({ clientId: 'client-id', clientSecret: 'client-secret' });
+
+        expect(result).toMatchObject({ success: false, error: { kind: 'authentication' } });
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+    });
+
+    it('reports a transient Service Account token 429 as a rate-limit error, not a rejected credential', async () => {
+        mockFetchServiceAccountToken.mockRejectedValue(new AtlasTokenError('rate limited', 429));
+        const context = createContext();
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        const result = await caller.submitServiceAccount({ clientId: 'client-id', clientSecret: 'client-secret' });
+
+        expect(result).toMatchObject({ success: false, error: { kind: 'rateLimit' } });
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+    });
+
+    it('reports a transient Service Account token 503 as an unknown/retryable error, not a rejected credential', async () => {
+        mockFetchServiceAccountToken.mockRejectedValue(new AtlasTokenError('service unavailable', 503));
+        const context = createContext();
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        const result = await caller.submitServiceAccount({ clientId: 'client-id', clientSecret: 'client-secret' });
+
+        expect(result).toMatchObject({ success: false, error: { kind: 'unknown' } });
+        expect(mockUpsertAtlasCredential).not.toHaveBeenCalled();
+    });
+
+    it('reports a network failure during token acquisition as a network error', async () => {
+        mockFetchServiceAccountToken.mockRejectedValue(new TypeError('fetch failed'));
+        const context = createContext();
+        const caller = createCallerFactory(atlasCredentialsRouter)(context);
+
+        const result = await caller.submitServiceAccount({ clientId: 'client-id', clientSecret: 'client-secret' });
+
+        expect(result).toMatchObject({ success: false, error: { kind: 'network' } });
     });
 });

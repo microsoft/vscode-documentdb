@@ -212,6 +212,28 @@ describe('atlasCredentialStore', () => {
         await expect(readAtlasCredentialSecrets(record.id)).resolves.toMatchObject({ privateKey: 'priv-key-1' });
     });
 
+    it('preserves a rotated secret when a later metadata update lands (MEDIUM-4)', async () => {
+        // The race: a discovery pass reads the record for `cacheOrganizationMetadata`, a rotation
+        // replaces the secret, then the metadata write lands. `updateAtlasCredentialMetadata` no
+        // longer reads or writes the secret, so the rotated value survives.
+        const { record } = await upsertAtlasCredential({
+            authMethod: 'serviceaccount',
+            clientId: 'client-1',
+            clientSecret: 'secret-old',
+        });
+
+        await replaceAtlasCredentialSecrets(record.id, {
+            authMethod: 'serviceaccount',
+            clientId: 'client-1',
+            clientSecret: 'secret-new',
+        });
+        await updateAtlasCredentialMetadata(record.id, { orgName: 'Acme Corp' });
+
+        await expect(readAtlasCredentialSecrets(record.id)).resolves.toMatchObject({ clientSecret: 'secret-new' });
+        const reloaded = await getAtlasCredential(record.id);
+        expect(reloaded?.orgName).toBe('Acme Corp');
+    });
+
     it('caches a Service Account token against one credential only', async () => {
         const target = await upsertAtlasCredential({
             authMethod: 'serviceaccount',

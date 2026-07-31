@@ -8,7 +8,7 @@ import * as crypto from 'crypto';
 /**
  * Parameters parsed from a WWW-Authenticate: Digest header.
  */
-interface DigestChallenge {
+export interface DigestChallenge {
     realm: string;
     nonce: string;
     qop?: string;

@@ -228,7 +228,7 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             }
 
             const connectionString =
-                selected.cluster.connectionStrings.standardSrv ?? selected.cluster.connectionStrings.standard;
+                selected.cluster.connectionStrings?.standardSrv ?? selected.cluster.connectionStrings?.standard;
             if (!connectionString) {
                 throw new UserCancelledError(vscode.l10n.t('No Atlas cluster connection string available.'));
             }
@@ -244,7 +244,10 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
 
     private async getClusterItems(project: AtlasProject, credentialId: string): Promise<AtlasClusterQuickPickItem[]> {
         const registry = this.discoveryService.sessionRegistry;
-        const session = await registry.getSession(credentialId);
+        // A transient token failure now throws rather than resolving `undefined`; either way the
+        // wizard's fallback is the same neutral "manage credentials" affordance, so treat any
+        // failure as "no usable session" here instead of surfacing it inside the QuickPick.
+        const session = await registry.getSession(credentialId).catch(() => undefined);
 
         const manageItem: AtlasClusterQuickPickItem = {
             itemType: 'manageCredentials',
@@ -288,7 +291,7 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
                     description: stateLabel ? `${providerDescription} · ${stateLabel}` : providerDescription,
                     detail:
                         c.stateName === 'IDLE'
-                            ? (c.connectionStrings.standardSrv ?? c.connectionStrings.standard)
+                            ? (c.connectionStrings?.standardSrv ?? c.connectionStrings?.standard)
                             : vscode.l10n.t(
                                   'Visible in the tree, but not connectable until the cluster returns to IDLE.',
                               ),

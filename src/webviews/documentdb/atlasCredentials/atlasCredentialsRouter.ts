@@ -28,6 +28,7 @@ import {
     isAtlasIpAccessListError,
 } from '../../../plugins/service-atlas-mongodb/api/AtlasApiClient';
 import { buildAtlasAccessUrlFor } from '../../../plugins/service-atlas-mongodb/atlasDeepLinks';
+import { AtlasTokenError } from '../../../plugins/service-atlas-mongodb/auth/AtlasServiceAccountClient';
 import {
     getAtlasCredential,
     readAtlasCredentialSecrets,
@@ -149,6 +150,32 @@ async function describeAtlasError(
             kind: 'network',
             title: l10n.t("We couldn't reach MongoDB Atlas"),
             message: l10n.t('Check your internet connection or proxy settings, then try again.'),
+        };
+    }
+
+    // A Service Account token-endpoint failure. Classify by status so a transient `429` / `5xx`
+    // does not tell the user their working Client ID and secret were rejected.
+    if (error instanceof AtlasTokenError) {
+        if (error.statusCode === 400 || error.statusCode === 401) {
+            return {
+                kind: 'authentication',
+                title: l10n.t("We couldn't sign in"),
+                message: l10n.t(
+                    'MongoDB Atlas did not accept the Client ID and secret. Check both values and try again.',
+                ),
+            };
+        }
+        if (error.statusCode === 429) {
+            return {
+                kind: 'rateLimit',
+                title: l10n.t('MongoDB Atlas asked us to slow down'),
+                message: l10n.t('Too many requests were made. Wait briefly, then try again.'),
+            };
+        }
+        return {
+            kind: 'unknown',
+            title: l10n.t("We couldn't reach MongoDB Atlas"),
+            message: l10n.t('MongoDB Atlas could not complete the sign-in right now. Wait briefly, then try again.'),
         };
     }
 
@@ -362,6 +389,12 @@ export const atlasCredentialsRouter = router({
                 };
             }
 
+            // Verification may finish after the user closed the panel. Disposing the webview aborts
+            // this operation's signal, so a cancelled flow must not turn verified input into stored
+            // state. Checking here (rather than threading the signal through every network call) keeps
+            // the commit boundary honest without plumbing the signal through verification helpers.
+            myCtx.signal?.throwIfAborted();
+
             try {
                 await persistCredential(myCtx, { authMethod: 'apikey', publicKey, privateKey });
             } catch (error) {
@@ -408,19 +441,12 @@ export const atlasCredentialsRouter = router({
                 expiresIn = tokenResponse.expires_in;
             } catch (error) {
                 myCtx.actionContext.telemetry.properties.authSuccess = 'false';
-                const networkError = await describeAtlasError(myCtx, error, 'serviceaccount', clientId);
+                // `describeAtlasError` now classifies the typed `AtlasTokenError`, so a transient
+                // `429` / `5xx` keeps its retry wording instead of being collapsed into a
+                // credential-rejected message.
                 return {
                     success: false,
-                    error:
-                        networkError.kind === 'network'
-                            ? networkError
-                            : {
-                                  kind: 'authentication',
-                                  title: l10n.t("We couldn't sign in"),
-                                  message: l10n.t(
-                                      'MongoDB Atlas did not accept the Client ID and secret. Check both values and try again.',
-                                  ),
-                              },
+                    error: await describeAtlasError(myCtx, error, 'serviceaccount', clientId),
                     failedStage: 0,
                 };
             }
@@ -443,6 +469,10 @@ export const atlasCredentialsRouter = router({
                     failedStage: 1,
                 };
             }
+
+            // See the API Key path: a panel closed mid-verification aborts this signal, and a
+            // cancelled flow must not persist the credential it was verifying.
+            myCtx.signal?.throwIfAborted();
 
             try {
                 await persistCredential(myCtx, {

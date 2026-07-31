@@ -148,3 +148,47 @@ describe('AtlasClusterItem icon', () => {
         expect(JSON.stringify(iconPath)).not.toContain('vscode-documentdb');
     });
 });
+
+describe('AtlasClusterItem tooltip', () => {
+    const tooltipText = (item: AtlasClusterItem): string =>
+        (item.getTreeItem().tooltip as unknown as { toString(): string }).toString();
+
+    it('labels the server version without using "MongoDB" as a standalone product name', () => {
+        const tooltip = tooltipText(new AtlasClusterItem('', createTreeCluster()));
+
+        expect(tooltip).toContain('**Server version:**');
+        expect(tooltip).toContain('v7');
+        expect(tooltip).not.toContain('**MongoDB:**');
+    });
+
+    it('renders every field label through the localizer', () => {
+        const tooltip = tooltipText(new AtlasClusterItem('', createTreeCluster()));
+
+        for (const label of ['State', 'Type', 'Tier', 'Provider', 'Region', 'Project']) {
+            expect(tooltip).toContain(`**${label}:**`);
+        }
+        expect(tooltip).toContain('Connection string available');
+    });
+});
+
+describe('AtlasClusterItem connectability (NEW-5)', () => {
+    const tooltipText = (item: AtlasClusterItem): string =>
+        (item.getTreeItem().tooltip as unknown as { toString(): string }).toString();
+
+    it('is expandable when IDLE with a connection string', () => {
+        const item = new AtlasClusterItem('', createTreeCluster());
+        expect(item.getTreeItem().collapsibleState).toBe(1); // Collapsed
+    });
+
+    it('is a leaf when the cluster is not IDLE', () => {
+        const item = new AtlasClusterItem('', { ...createTreeCluster(), stateName: 'CREATING' });
+        expect(item.getTreeItem().collapsibleState).toBe(0); // None
+        expect(tooltipText(item)).toContain('being created');
+    });
+
+    it('is a leaf when no connection string is available', () => {
+        const item = new AtlasClusterItem('', { ...createTreeCluster(), connectionString: undefined });
+        expect(item.getTreeItem().collapsibleState).toBe(0); // None
+        expect(tooltipText(item)).toContain('does not expose a connection string');
+    });
+});

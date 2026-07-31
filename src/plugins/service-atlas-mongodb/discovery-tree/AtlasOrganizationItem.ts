@@ -40,6 +40,8 @@ export class AtlasOrganizationItem implements TreeElement, TreeElementWithContex
         private readonly discoveryService: AtlasDiscoveryService,
         /** True when at least one credential that resolves to this organization is unhealthy. */
         private readonly degraded: boolean = false,
+        /** Correlates the discovery journey down to each cluster; empty when not threaded. */
+        private readonly journeyCorrelationId: string = '',
     ) {
         this.id = `${parentId}/${organization.id}`;
     }
@@ -74,6 +76,7 @@ export class AtlasOrganizationItem implements TreeElement, TreeElementWithContex
                     this.discoveryService,
                     entry.ownerCredentialId,
                     this.organization.name,
+                    this.journeyCorrelationId,
                 ),
         );
     }

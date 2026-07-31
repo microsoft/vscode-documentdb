@@ -18,12 +18,12 @@ import { type TreeElementWithRetryChildren } from '../../../tree/TreeElementWith
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { AtlasApiClient } from '../api/AtlasApiClient';
 import { atlasTrace } from '../atlasTrace';
-import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
+import { type AtlasDiscoveryService, classifyAtlasError } from '../discovery/AtlasDiscoveryService';
 import { createAtlasClusterModel } from '../models/AtlasClusterModel';
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasClusterItem } from './AtlasClusterItem';
 import { createEmptyPlaceholderNode } from './atlasTreeNodes';
-import { showAtlasLoadFailure } from './showAtlasLoadFailure';
+import { recoveryHintFor, showAtlasLoadFailure } from './showAtlasLoadFailure';
 
 /**
  * Tree item representing a MongoDB Atlas project.
@@ -35,28 +35,51 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
     public readonly id: string;
     public contextValue: string = 'enableRefreshCommand;treeItem_atlasProject';
 
+    /**
+     * Set by {@link refresh} and consumed by the next {@link getChildren}.
+     *
+     * Refresh is a passive, whole-subtree action: the user is not asking about this project in
+     * particular, so a failure belongs in the retry node, not a dialog. Expanding the node, or
+     * clicking "Click here to retry" (which routes through `retryAuthentication`, not this method),
+     * *is* a question about this project and still answers with a modal. That asymmetry is what
+     * keeps the two paths distinguishable without extra command plumbing.
+     */
+    private suppressNextLoadModal = false;
+
     constructor(
         parentId: string,
         private readonly project: AtlasProject,
         private readonly discoveryService: AtlasDiscoveryService,
         private readonly ownerCredentialId: string,
         private readonly orgName?: string,
+        /** Correlates the discovery journey down to each cluster; empty when not threaded. */
+        private readonly journeyCorrelationId: string = '',
     ) {
         this.id = `${parentId}/${project.id}`;
     }
 
     async getChildren(): Promise<ExtTreeElementBase[]> {
-        atlasTrace(`project "${this.project.name}": expanding, listing clusters through its owning credential`);
-        const session = await this.discoveryService.sessionRegistry.getSession(this.ownerCredentialId);
-        if (!session) {
-            await showAtlasLoadFailure(
-                vscode.l10n.t('Failed to load MongoDB Atlas clusters.'),
-                vscode.l10n.t('The credential for this project was rejected. Update it to continue.'),
-            );
-            return [this.createRetryNode()];
-        }
+        // One-shot, read (and reset) at the very top so an early return or a throw cannot leave a
+        // stale `true` that silences the next genuine expansion.
+        const quiet = this.suppressNextLoadModal;
+        this.suppressNextLoadModal = false;
 
+        atlasTrace(`project "${this.project.name}": expanding, listing clusters through its owning credential`);
         try {
+            const session = await this.discoveryService.sessionRegistry.getSession(this.ownerCredentialId);
+            if (!session) {
+                // The registry returns `undefined` only for a genuinely rejected/absent credential;
+                // transient token failures throw and are handled by the catch below.
+                if (!quiet) {
+                    showAtlasLoadFailure(
+                        vscode.l10n.t('Failed to load MongoDB Atlas clusters.'),
+                        new Error(vscode.l10n.t('The credential for this project was rejected.')),
+                        recoveryHintFor('auth'),
+                    );
+                }
+                return [this.createRetryNode()];
+            }
+
             const client = new AtlasApiClient(
                 session,
                 this.discoveryService.sessionRegistry.refresherFor(this.ownerCredentialId),
@@ -78,14 +101,21 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                         treeId: `${this.id}/${cluster.name.replaceAll('/', '_')}`,
                         viewId: Views.DiscoveryView,
                     };
-                    return new AtlasClusterItem('', treeCluster, undefined, {
+                    return new AtlasClusterItem(this.journeyCorrelationId, treeCluster, undefined, {
                         service: this.discoveryService,
                         ownerCredentialId: this.ownerCredentialId,
                     });
                 });
         } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            await showAtlasLoadFailure(vscode.l10n.t('Failed to load MongoDB Atlas clusters.'), errorMessage);
+            // Classify so a network / rate-limit failure says "retry" rather than "revisit
+            // credentials". The real error text is carried into the modal and the output channel.
+            if (!quiet) {
+                showAtlasLoadFailure(
+                    vscode.l10n.t('Failed to load MongoDB Atlas clusters.'),
+                    error,
+                    recoveryHintFor(classifyAtlasError(error).kind),
+                );
+            }
             return [this.createRetryNode()];
         }
     }
@@ -102,8 +132,14 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
      * Service Account token to expire.
      */
     public async refresh(_context: IActionContext): Promise<void> {
+        // Refresh is passive: suppress the next expansion's modal so the failure lands quietly in
+        // the retry node. `retryAuthentication` (the "Click here to retry" handler) does not call
+        // this method, so an explicit retry still shows the modal.
+        this.suppressNextLoadModal = true;
         atlasTrace(`project "${this.project.name}": explicit refresh requested`);
-        await this.discoveryService.sessionRegistry.refreshSession(this.ownerCredentialId);
+        // A transient token failure now throws; swallow it so the refresh still resets the error
+        // state and re-runs getChildren, which reclassifies and returns the retry node quietly.
+        await this.discoveryService.sessionRegistry.refreshSession(this.ownerCredentialId).catch(() => undefined);
         ext.discoveryBranchDataProvider.resetNodeErrorState(this.id);
         ext.discoveryBranchDataProvider.refresh(this);
     }

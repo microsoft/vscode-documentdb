@@ -30,6 +30,34 @@ jest.mock('./AtlasClusterItem', () => ({
     AtlasClusterItem: class AtlasClusterItem {},
 }));
 
+const mockListClusters = jest.fn();
+
+jest.mock('../api/AtlasApiClient', () => ({
+    AtlasApiError: class AtlasApiError extends Error {
+        constructor(
+            message: string,
+            public readonly statusCode: number,
+        ) {
+            super(message);
+        }
+    },
+    AtlasApiClient: class AtlasApiClientMock {
+        constructor(
+            public readonly session: unknown,
+            public readonly refresher: unknown,
+        ) {}
+        listClusters = (...args: unknown[]) => mockListClusters(...args) as unknown;
+    },
+}));
+
+jest.mock('../../../extensionVariables', () => ({
+    ext: {
+        outputChannel: { trace: jest.fn(), info: jest.fn(), warn: jest.fn(), error: jest.fn(), appendLine: jest.fn() },
+        discoveryBranchDataProvider: { resetNodeErrorState: jest.fn(), refresh: jest.fn() },
+    },
+}));
+
+import { window } from 'vscode';
 import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasProject } from '../models/AtlasProjectModel';
 import { AtlasProjectItem } from './AtlasProjectItem';
@@ -87,5 +115,74 @@ describe('AtlasProjectItem tooltip', () => {
         const tooltip = item.getTreeItem().tooltip as unknown as MarkdownStringMock;
 
         expect(tooltip.isTrusted).toBe(false);
+    });
+});
+
+describe('AtlasProjectItem getChildren failure handling (NEW-3)', () => {
+    const showErrorMessage = window.showErrorMessage as jest.Mock;
+    const mockGetSession = jest.fn();
+    const mockRefreshSession = jest.fn();
+
+    function makeService(): AtlasDiscoveryService {
+        return {
+            sessionRegistry: {
+                getSession: mockGetSession,
+                refreshSession: mockRefreshSession,
+                refresherFor: () => ({ tryRefreshIfPossible: jest.fn() }),
+            },
+        } as unknown as AtlasDiscoveryService;
+    }
+
+    beforeEach(() => {
+        showErrorMessage.mockReset();
+        mockListClusters.mockReset();
+        mockGetSession.mockReset();
+        mockRefreshSession.mockReset();
+        mockGetSession.mockResolvedValue({ type: 'apikey', publicKey: 'p', privateKey: 's' });
+    });
+
+    it('shows a modal once on a plain expansion failure and returns the retry node', async () => {
+        mockListClusters.mockRejectedValue(new TypeError('fetch failed'));
+        const item = new AtlasProjectItem('parent', buildProject(), makeService(), 'credential-1');
+
+        const children = await item.getChildren();
+
+        expect(showErrorMessage).toHaveBeenCalledTimes(1);
+        expect(children).toHaveLength(1);
+    });
+
+    it('classifies a network failure with retry wording, not credential-blaming wording', async () => {
+        mockListClusters.mockRejectedValue(new TypeError('fetch failed'));
+        const item = new AtlasProjectItem('parent', buildProject(), makeService(), 'credential-1');
+
+        await item.getChildren();
+
+        const detail = (showErrorMessage.mock.calls[0][1] as { detail: string }).detail;
+        expect(detail).toContain('could not be reached');
+        expect(detail).not.toContain('rejected');
+    });
+
+    it('suppresses the modal on the expansion that immediately follows a refresh', async () => {
+        mockListClusters.mockRejectedValue(new TypeError('fetch failed'));
+        mockRefreshSession.mockResolvedValue(undefined);
+        const item = new AtlasProjectItem('parent', buildProject(), makeService(), 'credential-1');
+
+        await item.refresh({} as never);
+        const children = await item.getChildren();
+
+        expect(showErrorMessage).not.toHaveBeenCalled();
+        expect(children).toHaveLength(1);
+    });
+
+    it('shows the modal again on a second expansion after a single refresh', async () => {
+        mockListClusters.mockRejectedValue(new TypeError('fetch failed'));
+        mockRefreshSession.mockResolvedValue(undefined);
+        const item = new AtlasProjectItem('parent', buildProject(), makeService(), 'credential-1');
+
+        await item.refresh({} as never);
+        await item.getChildren(); // quiet
+        await item.getChildren(); // must show
+
+        expect(showErrorMessage).toHaveBeenCalledTimes(1);
     });
 });

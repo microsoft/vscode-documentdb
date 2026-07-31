@@ -348,7 +348,8 @@ export const AtlasCredentialsView = (): JSX.Element => {
 
     // USER-TEST PROTOTYPE START: Footer experiment comparison. Remove this state, root/footer refs,
     // measurement callback, prototype switch, and scrollAreaInlineFooter class after user testing.
-    const [adaptiveFooterEnabled, setAdaptiveFooterEnabled] = useState(true);
+    // Off by default: the experimental adaptive footer position is opt-in via the preview switch.
+    const [adaptiveFooterEnabled, setAdaptiveFooterEnabled] = useState(false);
     const [footerDocked, setFooterDocked] = useState(true);
     const rootRef = useRef<HTMLElement>(null);
     const scrollAreaRef = useRef<HTMLDivElement>(null);

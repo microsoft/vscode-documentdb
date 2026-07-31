@@ -43,7 +43,10 @@ export interface AtlasCluster {
     readonly name: string;
     readonly groupId: string;
     readonly mongoDBVersion: string;
-    readonly connectionStrings: AtlasConnectionStrings;
+    // Optional on purpose: this is a cast from a live API payload, and Atlas omits connection
+    // strings for a cluster that is still being created. Making it optional forces every
+    // dereference to be guarded (see NEW-7). Full boundary validation is tracked as a follow-up.
+    readonly connectionStrings?: AtlasConnectionStrings;
     readonly stateName: AtlasClusterState;
     readonly clusterType: AtlasClusterType;
     readonly providerSettings?: AtlasProviderSettings;
@@ -76,6 +79,16 @@ export interface AtlasElectableSpecs {
 }
 
 export type AtlasClusterState = 'IDLE' | 'CREATING' | 'UPDATING' | 'DELETING' | 'REPAIRING' | 'UNKNOWN';
+
+/** Every recognized {@link AtlasClusterState}, for normalizing an unrecognized value to `UNKNOWN`. */
+export const ATLAS_CLUSTER_STATES: readonly AtlasClusterState[] = [
+    'IDLE',
+    'CREATING',
+    'UPDATING',
+    'DELETING',
+    'REPAIRING',
+    'UNKNOWN',
+];
 
 export type AtlasClusterType = 'REPLICASET' | 'SHARDED' | 'GEOSHARDED';
 

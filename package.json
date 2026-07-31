@@ -1030,19 +1030,19 @@
         {
           "//": "[Index] Hide Index",
           "command": "vscode-documentdb.command.hideIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && !(viewItem =~ /\\bstate_hidden\\b/i) && !(viewItem =~ /\\bstate_default\\b/i) && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && !(viewItem =~ /\\bstate_hidden\\b/i) && !(viewItem =~ /\\bstate_default\\b/i) && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
           "group": "3@1"
         },
         {
           "//": "[Index] Unhide Index",
           "command": "vscode-documentdb.command.unhideIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bstate_hidden\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bstate_hidden\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
           "group": "3@2"
         },
         {
           "//": "[Index] Delete Index",
           "command": "vscode-documentdb.command.dropIndex",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
           "group": "4@1"
         },
         {
@@ -1120,7 +1120,7 @@
         {
           "//": "[Index] Copy Reference",
           "command": "vscode-documentdb.command.copyReference",
-          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU)\\b/i && !listMultiSelection",
+          "when": "view =~ /connectionsView|discoveryView|azure(ResourceGroups|FocusView)/ && viewItem =~ /\\btreeitem_index\\b/i && viewItem =~ /\\bexperience_(documentDB|mongoRU|mongoDBAtlas)\\b/i && !listMultiSelection",
           "group": "yheAlmostLastGroup@1"
         }
       ],
