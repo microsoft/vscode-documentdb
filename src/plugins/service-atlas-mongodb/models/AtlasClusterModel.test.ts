@@ -4,8 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DocumentDBExperience } from '../../../DocumentDBExperiences';
-import { type AtlasCluster } from './AtlasProjectModel';
 import { createAtlasClusterModel } from './AtlasClusterModel';
+import { type AtlasCluster } from './AtlasProjectModel';
 
 function baseCluster(overrides: Partial<AtlasCluster> = {}): AtlasCluster {
     return {

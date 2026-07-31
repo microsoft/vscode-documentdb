@@ -198,7 +198,9 @@ describe('AtlasCredentialSessionRegistry', () => {
         });
         mockFetchToken.mockRejectedValue(new AtlasTokenError('transient', status));
 
-        await expect(new AtlasCredentialSessionRegistry().getSession(record.id)).rejects.toBeInstanceOf(AtlasTokenError);
+        await expect(new AtlasCredentialSessionRegistry().getSession(record.id)).rejects.toBeInstanceOf(
+            AtlasTokenError,
+        );
     });
 
     it('rethrows a network failure (TypeError) from token acquisition', async () => {

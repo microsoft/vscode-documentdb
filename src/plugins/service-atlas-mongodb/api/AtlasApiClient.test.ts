@@ -301,4 +301,3 @@ describe('AtlasApiClient API Key Digest authentication', () => {
         expect(nonceCounts).toEqual([1, 2, 1]);
     });
 });
-

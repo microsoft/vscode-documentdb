@@ -3,8 +3,8 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from './openUrl';
 import * as vscode from 'vscode';
+import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from './openUrl';
 
 jest.mock('vscode', () => ({
     env: { openExternal: jest.fn() },
