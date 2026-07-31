@@ -370,6 +370,17 @@ describe('kubernetesClient', () => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { createCoreApi } = require('./kubernetesClient');
 
+        it('throws an actionable error when the selected context has no active cluster', async () => {
+            const kubeConfig = {
+                setCurrentContext: jest.fn(),
+                getCurrentCluster: jest.fn().mockReturnValue(undefined),
+            };
+
+            await expect(createCoreApi(kubeConfig, 'context-a')).rejects.toThrow(
+                'No active Kubernetes cluster was found. Check your kubeconfig and try again.',
+            );
+        });
+
         it('constructs the generated client with a fresh 30-second timeout signal for every request', async () => {
             const kubeConfig = {
                 setCurrentContext: jest.fn(),

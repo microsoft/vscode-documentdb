@@ -120,7 +120,7 @@ function createKubernetesApiClient<T>(
 ): T {
     const cluster = kubeConfig.getCurrentCluster();
     if (!cluster) {
-        throw new Error('No active cluster!');
+        throw new Error(vscode.l10n.t('No active Kubernetes cluster was found. Check your kubeconfig and try again.'));
     }
 
     const configuration = k8s.createConfiguration({
