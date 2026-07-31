@@ -1514,6 +1514,12 @@ any `experience_(…)` clause omits an API that `experiencesArray` declares.
 **Recommendation: Proposal A now, Proposal B as a small follow-up.** The omission is trivially
 fixable, but nothing in CI would have caught it, and a fifth experience will eventually be added.
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — Proposal A.** Added `mongoDBAtlas` to the
+> four remaining `treeitem_index` `when` clauses (hideIndex, unhideIndex, dropIndex, copyReference).
+> All `experience_(…)` clauses now read `experience_(documentDB|mongoRU|mongoDBAtlas)` (25/25).
+> Proposal B (a `package.json` invariant test) is left as the noted follow-up.
+> Fix: [package.json](../../../../package.json).
+
 ### NEW-3: Project expansion raises a blocking modal that blames credentials for every failure kind
 
 **Severity: Medium.** The reported premise was partly wrong — the modal itself is intended — but the
