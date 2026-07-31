@@ -121,6 +121,24 @@ export abstract class ClusterItemBase<T extends BaseClusterModel = BaseClusterMo
     }
 
     /**
+     * Ensures a cluster-level command can use this connection without requiring
+     * the user to expand the tree node first.
+     *
+     * Cached connections run their source-specific reachability hook (for
+     * example, restoring a Kubernetes ClusterIP port-forward). Connections
+     * without cached credentials reuse the node's normal authentication flow.
+     * This deliberately does not list databases.
+     */
+    public async ensureConnectionReady(): Promise<boolean> {
+        if (CredentialCache.hasCredentials(this.cluster.clusterId)) {
+            await this.beforeCachedClientConnect();
+            return true;
+        }
+
+        return (await this.authenticateAndConnect()) !== null;
+    }
+
+    /**
      * Abstract method to get the credentials for the MongoDB cluster.
      * Must be implemented by subclasses.
      * This is relevant for service discovery scenarios

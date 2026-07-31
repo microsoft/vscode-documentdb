@@ -961,6 +961,7 @@
   "Next steps": "Next steps",
   "No": "No",
   "No Action": "No Action",
+  "No active Kubernetes cluster was found. Check your kubeconfig and try again.": "No active Kubernetes cluster was found. Check your kubeconfig and try again.",
   "No additional cost for most GitHub Copilot subscribers.": "No additional cost for most GitHub Copilot subscribers.",
   "No authenticated tenants found. Use \"Manage Azure Accounts\" in the Discovery View to sign in to tenants.": "No authenticated tenants found. Use \"Manage Azure Accounts\" in the Discovery View to sign in to tenants.",
   "No Authentication": "No Authentication",

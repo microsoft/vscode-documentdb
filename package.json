@@ -154,7 +154,7 @@
     "webpack": "~5.105.4",
     "webpack-bundle-analyzer": "~5.2.0",
     "webpack-cli": "~6.0.1",
-    "webpack-dev-server": "~5.2.5"
+    "webpack-dev-server": "~5.2.6"
   },
   "dependencies": {
     "@azure/arm-compute": "^22.4.0",
@@ -208,10 +208,11 @@
     "vscode-uri": "~3.1.0",
     "zod": "~4.3.6"
   },
-  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest, test-exclude 7 for compatibility.",
+  "//overrides": "Pin transitive dependencies: glob 12.0.x for latest, test-exclude 7 for compatibility. applicationinsights-web-basic pinned to 3.4.1 to DEDUPE the App Insights stack (distinct from the earlier ~3.3.4 pin removed in v0.9.1 via #614, which existed only to restore applicationinsights-common before extension-telemetry@1.5.2 declared it directly). extension-telemetry resolves web-basic@^3.4.1 up to 3.4.2, which exact-pins core-js/channel-js@3.4.2 while common/1ds-* exact-pin core-js@3.4.1 - bundling two core-js copies and risking an unresolved @nevware21/ts-utils named import (isNullOrUndefined) at runtime. 3.4.1 is in-range (not a downgrade) and collapses the stack to one line. Remove once the AI stack resolves to a single core-js without this pin. See #626.",
   "overrides": {
     "glob": "~12.0.0",
-    "test-exclude": "~7.0.1"
+    "test-exclude": "~7.0.1",
+    "@microsoft/applicationinsights-web-basic": "3.4.1"
   },
   "extensionDependencies": [],
   "contributes": {

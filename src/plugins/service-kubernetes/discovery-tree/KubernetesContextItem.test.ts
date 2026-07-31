@@ -395,6 +395,45 @@ describe('KubernetesContextItem', () => {
             expect(maxActiveScans).toBeLessThanOrEqual(5);
         });
 
+        it('should continue scanning remaining namespaces after one namespace times out', async () => {
+            const namespaces = [
+                'namespace-1',
+                'namespace-2',
+                'namespace-timeout',
+                'namespace-4',
+                'namespace-5',
+                'namespace-6',
+                'namespace-working',
+            ];
+            mockListNamespaces.mockResolvedValue(namespaces);
+            mockListDocumentDBServices.mockImplementation(async (_coreApi: unknown, namespace: string) => {
+                if (namespace === 'namespace-timeout') {
+                    const timeoutError = new Error('Operation timed out after 30 seconds.');
+                    timeoutError.name = 'KubernetesApiTimeoutError';
+                    throw timeoutError;
+                }
+
+                return namespace === 'namespace-working'
+                    ? [{ name: 'svc-a', namespace, type: 'ClusterIP', port: 10260 }]
+                    : [];
+            });
+
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
+            const children = await item.getChildren();
+
+            expect(mockListDocumentDBServices).toHaveBeenCalledTimes(namespaces.length);
+            const timedOutNamespace = children?.find((child) => getNamespaceName(child) === 'namespace-timeout');
+            expect(timedOutNamespace).toBeDefined();
+            expect(getCollapsibleState(timedOutNamespace)).toBe(1);
+
+            const retryChildren = await timedOutNamespace!.getChildren!();
+            expect(retryChildren).toHaveLength(1);
+            expect((retryChildren![0] as { contextValue?: string }).contextValue).toBe('error');
+
+            const workingNamespace = children?.find((child) => getNamespaceName(child) === 'namespace-working');
+            expect(workingNamespace).toBeDefined();
+        });
+
         it('should show informational child when no namespaces exist', async () => {
             mockListNamespaces.mockResolvedValue([]);
 
@@ -426,6 +465,32 @@ describe('KubernetesContextItem', () => {
             expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
                 expect.stringContaining('Failed to connect'),
                 expect.objectContaining({ modal: true }),
+            );
+        });
+
+        it('should identify a namespace-list timeout and retain the retry action', async () => {
+            (vscode.window.showErrorMessage as jest.Mock).mockClear();
+            const timeoutError = new Error('localized deadline message');
+            timeoutError.name = 'KubernetesApiTimeoutError';
+            mockListNamespaces.mockRejectedValue(timeoutError);
+
+            const item = new KubernetesContextItem('parent', 'default', baseContextInfo, 'corr-1');
+            const children = await item.getChildren();
+
+            expect(children).toHaveLength(1);
+            expect((children![0] as { contextValue?: string }).contextValue).toBe('error');
+            expect(item.hasRetryNode(children)).toBe(true);
+            expect(vscode.window.showErrorMessage).toHaveBeenCalledWith(
+                expect.stringContaining('Failed to connect'),
+                expect.objectContaining({
+                    modal: true,
+                    detail: expect.stringContaining('Connection timed out'),
+                }),
+            );
+            expect(mockOutputChannelError).toHaveBeenCalledWith(expect.stringContaining('localized deadline message'));
+            expect(telemetryContextMock.telemetry.properties).toHaveProperty(
+                'namespaceFetchErrorType',
+                'KubernetesApiTimeoutError',
             );
         });
 
