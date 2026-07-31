@@ -1323,7 +1323,6 @@ export const CreateIndexDrawer = ({
                                                           )
                                                         : undefined
                                                 }
-                                                hint={l10n.t('For example, metadata creates metadata.$**.')}
                                             >
                                                 <div className="fieldRow">
                                                     <FieldNameCombobox
