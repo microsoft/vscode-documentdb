@@ -19,6 +19,10 @@ Branch: `dev/tnaum/atlas-discovery-review-iteration` (cut from `feature/atlas-di
 Iteration date: 2026-07-31. Each work item is one commit; each finding below carries an inline
 `✅ RESOLVED` note at the end of its section pointing at the fix and tests.
 
+Implementation PR: https://github.com/microsoft/vscode-documentdb/pull/834 (targets
+`feature/atlas-discovery`). This document lives under `docs/ai-and-plans/PRs/834-atlas-discovery-review/`
+because it now belongs to that implementation PR, not the original review-target PR #765.
+
 **PR checklist (all green):** `npm run l10n` → `npm run prettier-fix` → `npm run lint` →
 `npx jest --no-coverage` (180 suites, **2941 tests pass**, up from 2905) → `npm run build`.
 
@@ -39,8 +43,10 @@ Iteration date: 2026-07-31. Each work item is one commit; each finding below car
 
 ### Skipped / not implemented (with reasons)
 
-- **NEW-1** (footer experiment): accepted per the FINAL DECISION — it is intended for a preview
-  release. No change. Removal checklist for the preview exit remains recorded in the finding.
+- **NEW-1** (footer experiment): the experiment itself is kept per the FINAL DECISION (intended for
+  a preview release), but the experimental adaptive footer position now defaults to **off**
+  (`adaptiveFooterEnabled = false`) so it is opt-in via the preview switch rather than the default
+  behaviour. Removal checklist for the preview exit remains recorded in the finding.
 - **NEW-9** (`config.ts` module-load `l10n.t()`): accepted per the FINAL DECISION — left consistent
   with the two Azure plugins; tracked extension-wide instead of fixing one plugin in isolation.
 - **NEW-10 – NEW-13** (dead code, recursive prompt, token-shape check, unrelated-bundling): marked
