@@ -343,7 +343,7 @@ export class AtlasApiClient {
                 throw new AtlasApiError(
                     detail
                         ? vscode.l10n.t('Access denied: {0}', detail)
-                        : vscode.l10n.t('Access denied. Verify your API key has the required permissions.'),
+                        : vscode.l10n.t('Access denied. Verify this credential has the required permissions.'),
                     response.status,
                     detail,
                     body.errorCode,

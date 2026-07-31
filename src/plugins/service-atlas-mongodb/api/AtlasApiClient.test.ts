@@ -188,6 +188,19 @@ describe('AtlasApiClient pagination', () => {
         await expect(new AtlasApiClient(session).listProjects()).rejects.toBeInstanceOf(AtlasApiError);
     });
 
+    it('uses a credential-neutral message for a 403 with no detail body', async () => {
+        // The shared client serves both API Keys and Service Accounts, so a fallback that names an
+        // "API key" would be wrong for one of them.
+        fetchMock.mockResolvedValueOnce(jsonResponse({}, 403));
+
+        const error = await new AtlasApiClient(session).listProjects().catch((e: unknown) => e);
+
+        expect(error).toBeInstanceOf(AtlasApiError);
+        expect((error as AtlasApiError).message).toBe(
+            'Access denied. Verify this credential has the required permissions.',
+        );
+    });
+
     it('refreshes the session once and retries when the token is rejected', async () => {
         fetchMock
             .mockResolvedValueOnce(jsonResponse({ detail: 'token expired' }, 401))

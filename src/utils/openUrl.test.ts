@@ -3,7 +3,13 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { formatUrlForLogging, isSupportedExternalUrl } from './openUrl';
+import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from './openUrl';
+import * as vscode from 'vscode';
+
+jest.mock('vscode', () => ({
+    env: { openExternal: jest.fn() },
+    Uri: { parse: (value: string): { toString: () => string } => ({ toString: () => value }) },
+}));
 
 describe('isSupportedExternalUrl', () => {
     it.each(['https://example.com', 'http://localhost:3000/path'])('accepts %s', (value) => {
@@ -12,6 +18,22 @@ describe('isSupportedExternalUrl', () => {
 
     it.each(['example.com', 'not a URL', 'ftp://example.com', 'javascript:alert(1)'])('rejects %s', (value) => {
         expect(isSupportedExternalUrl(value)).toBe(false);
+    });
+});
+
+describe('openUrl', () => {
+    const openExternal = vscode.env.openExternal as jest.Mock;
+
+    beforeEach(() => openExternal.mockReset());
+
+    it('returns true when VS Code opens the URL', async () => {
+        openExternal.mockResolvedValue(true);
+        await expect(openUrl('https://example.com')).resolves.toBe(true);
+    });
+
+    it('surfaces a refused open as false rather than reporting success', async () => {
+        openExternal.mockResolvedValue(false);
+        await expect(openUrl('https://example.com')).resolves.toBe(false);
     });
 });
 

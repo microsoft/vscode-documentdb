@@ -21,7 +21,9 @@ export function formatUrlForLogging(value: string): string {
     return `${url.origin}${url.pathname}${redactedQuery ? `?${redactedQuery}` : ''}${url.hash ? '#<redacted>' : ''}`;
 }
 
-export async function openUrl(url: string): Promise<void> {
+export async function openUrl(url: string): Promise<boolean> {
     // Using this functionality is blocked by https://github.com/Microsoft/vscode/issues/85930
-    await vscode.env.openExternal(vscode.Uri.parse(url));
+    // Returns `false` when VS Code refuses to open the URL, which callers surface rather than
+    // treating as success.
+    return vscode.env.openExternal(vscode.Uri.parse(url));
 }

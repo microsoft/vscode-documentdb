@@ -218,8 +218,21 @@ const commonRouter = router({
             }),
         )
         .mutation(async ({ input }) => {
+            // The trace call constructs `new URL(input.url)` unguarded, so it must stay after the
+            // zod `isSupportedExternalUrl` refine has validated the input.
             ext.outputChannel.trace(`[openUrl] Opening external URL: ${formatUrlForLogging(input.url)}`);
-            await openUrl(input.url);
+            try {
+                const opened = await openUrl(input.url);
+                if (!opened) {
+                    void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open this link."));
+                }
+                return opened;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.error(`[openUrl] Failed to open ${formatUrlForLogging(input.url)}: ${message}`);
+                void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open this link."));
+                return false;
+            }
         }),
 });
 

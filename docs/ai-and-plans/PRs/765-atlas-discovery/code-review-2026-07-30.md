@@ -1154,6 +1154,19 @@ rejection handler. One implementation detail worth pinning in the router: keep
 The current ordering is correct; the new `try`/`catch` must not move the trace line above the
 validation.
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — host-owned handling.** `openUrl()` now
+> returns the `boolean` from `vscode.env.openExternal()`. The `common.openUrl` mutation catches
+> exceptions, shows one localized "We couldn't open this link." notification when the result is
+> `false` or the call throws, and returns the boolean; the trace/`formatUrlForLogging` line stays
+> after the zod refine. No webview changes.
+> Fix: [openUrl.ts](../../../../src/utils/openUrl.ts),
+> [appRouter.ts](../../../../src/webviews/_integration/appRouter.ts).
+> Tests: `openUrl` true/false in [openUrl.test.ts](../../../../src/utils/openUrl.test.ts).
+> **Deviation:** the requested router-level notification tests were not added — there is no existing
+> `appRouter` caller test harness and `appRouter` transitively imports the full webview router graph,
+> so a bespoke harness was disproportionate for a Low finding. The util boolean contract plus type
+> checking cover the substantive change; the router branch is trivial (try/catch + notification).
+
 ### LOW-2: The generic 403 fallback tells Service Account users to fix an API key
 
 Source: Copilot reviewer, verified.
@@ -1213,6 +1226,13 @@ non-JSON body — every populated response takes the `Access denied: {0}` branch
 narrow trigger, which is why Low is right, but it is also why Proposal A is clearly the correct
 choice: branching on session type to improve a message almost nobody sees is not worth the extra
 translation combinations.
+
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — Proposal A.** The no-detail `403`
+> fallback in `handleErrorResponse` now reads "Access denied. Verify this credential has the required
+> permissions." (credential-neutral).
+> Fix: [AtlasApiClient.ts](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.ts).
+> Test: no-detail `403` neutral-message assertion in
+> [AtlasApiClient.test.ts](../../../../src/plugins/service-atlas-mongodb/api/AtlasApiClient.test.ts).
 
 ### LOW-3: The cluster tooltip's labels and successful-connection sentence bypass localization
 
