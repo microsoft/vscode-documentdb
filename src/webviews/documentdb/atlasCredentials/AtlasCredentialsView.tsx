@@ -49,7 +49,6 @@ import {
     bundleIcon,
     CheckmarkCircleFilled,
     CircleHintFilled,
-    CircleRegular,
     CloudRegular,
     ErrorCircleFilled,
     EyeOffRegular,
@@ -230,7 +229,7 @@ const StageRow = ({ label, status }: StageRowProps): JSX.Element => {
         icon = <WarningRegular aria-hidden className={styles.stageWarning} />;
         statusText = l10n.t('warning');
     } else {
-        icon = <CircleRegular aria-hidden className={styles.stagePending} />;
+        icon = <CircleHintFilled aria-hidden className={styles.stagePending} />;
         statusText = l10n.t('pending');
     }
 
