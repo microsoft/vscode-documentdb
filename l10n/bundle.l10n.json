@@ -208,7 +208,7 @@
   "Access denied (403 Forbidden)": "Access denied (403 Forbidden)",
   "Access denied listing services (403 Forbidden)": "Access denied listing services (403 Forbidden)",
   "Access denied: {0}": "Access denied: {0}",
-  "Access denied. Verify this credential has the required permissions.": "Access denied. Verify this credential has the required permissions.",
+  "Access denied. Verify you have the required permissions.": "Access denied. Verify you have the required permissions.",
   "Account information is incomplete.": "Account information is incomplete.",
   "Account Management Completed": "Account Management Completed",
   "Action completed successfully": "Action completed successfully",

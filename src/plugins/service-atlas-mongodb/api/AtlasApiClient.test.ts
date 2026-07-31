@@ -196,9 +196,7 @@ describe('AtlasApiClient pagination', () => {
         const error = await new AtlasApiClient(session).listProjects().catch((e: unknown) => e);
 
         expect(error).toBeInstanceOf(AtlasApiError);
-        expect((error as AtlasApiError).message).toBe(
-            'Access denied. Verify this credential has the required permissions.',
-        );
+        expect((error as AtlasApiError).message).toBe('Access denied. Verify you have the required permissions.');
     });
 
     it('refreshes the session once and retries when the token is rejected', async () => {
