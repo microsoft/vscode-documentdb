@@ -29,7 +29,18 @@ const mockGetClusters = jest.fn();
 const mockGetUsers = jest.fn();
 const mockGetCurrentContext = jest.fn();
 const mockSetCurrentContext = jest.fn();
-const mockMakeApiClient = jest.fn();
+const mockGetCurrentCluster = jest.fn();
+const mockCreateConfiguration = jest.fn((configuration: unknown) => configuration);
+const mockServerConfiguration = jest.fn().mockImplementation((server: string, variables: Record<string, string>) => ({
+    server,
+    variables,
+}));
+const mockCoreV1ApiClient = {};
+const mockCoreV1ApiConstructor = jest.fn().mockImplementation(() => mockCoreV1ApiClient);
+let mockCustomObjectsApiClient: Record<string, jest.Mock> = {
+    listNamespacedCustomObject: jest.fn().mockResolvedValue({ items: [] }),
+};
+const mockCustomObjectsApiConstructor = jest.fn().mockImplementation(() => mockCustomObjectsApiClient);
 
 const mockLoadFromDefault = jest.fn();
 const mockGetSource = jest.fn<KubeconfigSourceRecord | undefined, [string]>();
@@ -51,10 +62,12 @@ jest.mock('@kubernetes/client-node', () => ({
         getUsers: mockGetUsers,
         getCurrentContext: mockGetCurrentContext,
         setCurrentContext: mockSetCurrentContext,
-        makeApiClient: mockMakeApiClient,
+        getCurrentCluster: mockGetCurrentCluster,
     })),
-    CoreV1Api: jest.fn(),
-    CustomObjectsApi: jest.fn(),
+    CoreV1Api: mockCoreV1ApiConstructor,
+    CustomObjectsApi: mockCustomObjectsApiConstructor,
+    createConfiguration: mockCreateConfiguration,
+    ServerConfiguration: mockServerConfiguration,
     ActionOnInvalid: { THROW: 'throw', FILTER: 'filter' },
 }));
 
@@ -78,6 +91,19 @@ function createApiExceptionLike(statusCode: number, message: string): Error & { 
     return error;
 }
 
+function createAbortError(): Error {
+    const error = new Error('The user aborted a request.');
+    error.name = 'AbortError';
+    return error;
+}
+
+function createMockKubeConfig(customApiMock: Record<string, jest.Mock>): { getCurrentCluster: jest.Mock } {
+    mockCustomObjectsApiClient = customApiMock;
+    return {
+        getCurrentCluster: jest.fn().mockReturnValue({ server: 'https://cluster.example.com' }),
+    };
+}
+
 describe('kubernetesClient', () => {
     beforeEach(() => {
         jest.clearAllMocks();
@@ -87,6 +113,10 @@ describe('kubernetesClient', () => {
         mockGetClusters.mockReturnValue([{ name: 'cluster', server: 'https://cluster.example.com' }]);
         mockGetUsers.mockReturnValue([{ name: 'user' }]);
         mockGetCurrentContext.mockReturnValue('ctx');
+        mockGetCurrentCluster.mockReturnValue({ server: 'https://cluster.example.com' });
+        mockCustomObjectsApiClient = {
+            listNamespacedCustomObject: jest.fn().mockResolvedValue({ items: [] }),
+        };
     });
 
     describe('config', () => {
@@ -336,6 +366,59 @@ describe('kubernetesClient', () => {
         });
     });
 
+    describe('createCoreApi', () => {
+        // eslint-disable-next-line @typescript-eslint/no-require-imports
+        const { createCoreApi } = require('./kubernetesClient');
+
+        it('constructs the generated client with a fresh 30-second timeout signal for every request', async () => {
+            const kubeConfig = {
+                setCurrentContext: jest.fn(),
+                getCurrentCluster: jest.fn().mockReturnValue({ server: 'https://cluster.example.com' }),
+            };
+            const firstSignal = new AbortController().signal;
+            const secondSignal = new AbortController().signal;
+            const timeoutSpy = jest
+                .spyOn(AbortSignal, 'timeout')
+                .mockReturnValueOnce(firstSignal)
+                .mockReturnValueOnce(secondSignal);
+
+            try {
+                const client = await createCoreApi(kubeConfig, 'context-a');
+
+                expect(client).toBe(mockCoreV1ApiClient);
+                expect(kubeConfig.setCurrentContext).toHaveBeenCalledWith('context-a');
+                expect(mockServerConfiguration).toHaveBeenCalledWith('https://cluster.example.com', {});
+
+                const configurationParameters = mockCreateConfiguration.mock.calls[0][0] as {
+                    readonly authMethods?: { readonly default?: unknown };
+                    readonly promiseMiddleware?: Array<{
+                        pre(context: { setSignal(signal: AbortSignal): void }): Promise<unknown>;
+                        post(context: unknown): Promise<unknown>;
+                    }>;
+                };
+                expect(configurationParameters.authMethods?.default).toBe(kubeConfig);
+
+                const middleware = configurationParameters.promiseMiddleware?.[0];
+                expect(middleware).toBeDefined();
+
+                const firstRequest = { setSignal: jest.fn() };
+                const secondRequest = { setSignal: jest.fn() };
+                await middleware!.pre(firstRequest);
+                await middleware!.pre(secondRequest);
+
+                expect(timeoutSpy).toHaveBeenNthCalledWith(1, 30_000);
+                expect(timeoutSpy).toHaveBeenNthCalledWith(2, 30_000);
+                expect(firstRequest.setSignal).toHaveBeenCalledWith(firstSignal);
+                expect(secondRequest.setSignal).toHaveBeenCalledWith(secondSignal);
+
+                const response = {};
+                await expect(middleware!.post(response)).resolves.toBe(response);
+            } finally {
+                timeoutSpy.mockRestore();
+            }
+        });
+    });
+
     describe('listDocumentDBServices', () => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { listDocumentDBServices } = require('./kubernetesClient');
@@ -372,22 +455,20 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockResolvedValue({
-                        items: [
-                            {
-                                metadata: { name: 'mydb' },
-                                spec: {},
-                                status: {
-                                    status: 'Cluster in healthy state',
-                                    tls: { ready: true },
-                                },
+            const mockKubeConfig = createMockKubeConfig({
+                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                    items: [
+                        {
+                            metadata: { name: 'mydb' },
+                            spec: {},
+                            status: {
+                                status: 'Cluster in healthy state',
+                                tls: { ready: true },
                             },
-                        ],
-                    }),
+                        },
+                    ],
                 }),
-            };
+            });
 
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig);
 
@@ -402,12 +483,20 @@ describe('kubernetesClient', () => {
                 externalAddress: 'mydb.example.com',
                 connectionParams: expect.stringContaining('tlsAllowInvalidCertificates=true'),
             });
+            expect(services[0].connectionParams).toContain('directConnection=true');
+            expect(services[0].connectionParams).not.toContain('replicaSet');
             expect(services[1]).toMatchObject({
                 sourceKind: 'generic',
                 name: 'manual-documentdb',
                 serviceName: 'manual-documentdb',
                 clusterIP: '10.0.0.2',
             });
+            expect(services[1].connectionParams).toContain('directConnection=true');
+            expect(services[1].connectionParams).not.toContain('replicaSet');
+            expect(mockCustomObjectsApiConstructor).toHaveBeenCalledTimes(1);
+            expect(mockCreateConfiguration).toHaveBeenCalledWith(
+                expect.objectContaining({ promiseMiddleware: expect.any(Array) }),
+            );
         });
 
         it('should fall back to generic DocumentDB discovery when the DKO CRD is unavailable', async () => {
@@ -429,11 +518,9 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockRejectedValue(createApiExceptionLike(404, 'Not Found')),
-                }),
-            };
+            const mockKubeConfig = createMockKubeConfig({
+                listNamespacedCustomObject: jest.fn().mockRejectedValue(createApiExceptionLike(404, 'Not Found')),
+            });
 
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig);
             expect(services).toHaveLength(1);
@@ -456,11 +543,9 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockRejectedValue(createApiExceptionLike(403, 'Forbidden')),
-                }),
-            };
+            const mockKubeConfig = createMockKubeConfig({
+                listNamespacedCustomObject: jest.fn().mockRejectedValue(createApiExceptionLike(403, 'Forbidden')),
+            });
 
             await expect(listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig)).rejects.toThrow(
                 /Failed to list DKO resources.*Forbidden/,
@@ -481,15 +566,29 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockRejectedValue(new Error('ECONNRESET')),
-                }),
-            };
+            const mockKubeConfig = createMockKubeConfig({
+                listNamespacedCustomObject: jest.fn().mockRejectedValue(new Error('ECONNRESET')),
+            });
 
             await expect(listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig)).rejects.toThrow(
                 /Failed to list DKO resources.*ECONNRESET/,
             );
+        });
+
+        it('should surface DKO request timeouts with a distinct timeout error type', async () => {
+            const mockCoreApi = {
+                listNamespacedService: jest.fn().mockResolvedValue({ items: [] }),
+            };
+            const mockKubeConfig = createMockKubeConfig({
+                listNamespacedCustomObject: jest.fn().mockRejectedValue(createAbortError()),
+            });
+
+            await expect(listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig)).rejects.toMatchObject({
+                name: 'KubernetesApiTimeoutError',
+                message: expect.stringMatching(
+                    /Failed to list services.*Failed to list DKO resources.*Operation timed out after 30 seconds\./,
+                ),
+            });
         });
 
         it('should throw on RBAC error', async () => {
@@ -698,6 +797,26 @@ describe('kubernetesClient', () => {
                 expect(endpoint.reason).toContain('node address');
             }
         });
+
+        it('should propagate a NodePort node-list timeout instead of reporting the target as unreachable', async () => {
+            const service = createServiceInfo({
+                name: 'mongo-np-timeout',
+                displayName: 'mongo-np-timeout',
+                serviceName: 'mongo-np-timeout',
+                namespace: 'default',
+                type: 'NodePort',
+                port: 27017,
+                nodePort: 30017,
+            });
+            const mockCoreApi = {
+                listNode: jest.fn().mockRejectedValue(createAbortError()),
+            };
+
+            await expect(resolveServiceEndpoint(service, mockCoreApi)).rejects.toMatchObject({
+                name: 'KubernetesApiTimeoutError',
+                message: 'Operation timed out after 30 seconds.',
+            });
+        });
     });
 
     describe('listNamespaces', () => {
@@ -725,6 +844,17 @@ describe('kubernetesClient', () => {
             };
 
             await expect(listNamespaces(mockCoreApi)).rejects.toThrow(/Failed to list namespaces/);
+        });
+
+        it('should classify an aborted request as a 30-second Kubernetes API timeout', async () => {
+            const mockCoreApi = {
+                listNamespace: jest.fn().mockRejectedValue(createAbortError()),
+            };
+
+            await expect(listNamespaces(mockCoreApi)).rejects.toMatchObject({
+                name: 'KubernetesApiTimeoutError',
+                message: expect.stringMatching(/Failed to list namespaces: Operation timed out after 30 seconds\./),
+            });
         });
     });
 
@@ -903,10 +1033,6 @@ describe('kubernetesClient', () => {
         // eslint-disable-next-line @typescript-eslint/no-require-imports
         const { resolveDocumentDBCredentials } = require('./kubernetesClient');
 
-        const createMockKubeConfig = (customApiMock: Record<string, jest.Mock>) => ({
-            makeApiClient: jest.fn().mockReturnValue(customApiMock),
-        });
-
         it('should return credentials when matching CR and secret are found', async () => {
             const mockCustomApi = {
                 listNamespacedCustomObject: jest.fn().mockResolvedValue({
@@ -939,6 +1065,7 @@ describe('kubernetesClient', () => {
             expect(result!.username).toBe('admin');
             expect(result!.password).toBe('s3cret!');
             expect(result!.connectionParams).toContain('directConnection=true');
+            expect(result!.connectionParams).not.toContain('replicaSet');
             expect(mockCoreApi.readNamespacedSecret).toHaveBeenCalledWith({
                 name: 'my-secret',
                 namespace: 'default',
@@ -1481,13 +1608,11 @@ describe('kubernetesClient', () => {
                     ],
                 }),
             };
-            const mockKubeConfig = {
-                makeApiClient: jest.fn().mockReturnValue({
-                    listNamespacedCustomObject: jest.fn().mockResolvedValue({
-                        items: [{ metadata: { name: 'mydb' }, spec: {}, status: {} }],
-                    }),
+            const mockKubeConfig = createMockKubeConfig({
+                listNamespacedCustomObject: jest.fn().mockResolvedValue({
+                    items: [{ metadata: { name: 'mydb' }, spec: {}, status: {} }],
                 }),
-            };
+            });
             const services: KubeServiceInfo[] = await listDocumentDBServices(mockCoreApi, 'default', mockKubeConfig);
             expect(services).toHaveLength(1);
             expect(services[0].sourceKind).toBe('dko');
