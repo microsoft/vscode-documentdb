@@ -1383,6 +1383,18 @@ so the terminology sweep is complete; the comment can say "the MongoDB API wire 
 implemented by Atlas" or simply describe the behaviour ("where dropping the last collection also
 removes the database").
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — LOW-3 Proposal B + LOW-4 Proposal A.**
+> `AtlasClusterItem.buildTooltip()` now renders one localized field list (`State`, `Type`,
+> `Server version`, `Tier`, `Provider`, `Region`, `Project`), and the "Connection string available…"
+> sentence is wrapped in `l10n.t()`. The `MongoDB: v…` line became `Server version: v…`, removing the
+> standalone "MongoDB" product label while keeping the API-shaped `mongoDBVersion` property.
+> `CreateDatabaseWizardContext.requiresInitialCollection`'s comment no longer says "standard MongoDB
+> (Atlas)". `npm run l10n` runs at the final checklist step.
+> Fix: [AtlasClusterItem.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts),
+> [CreateDatabaseWizardContext.ts](../../../../src/commands/createDatabase/CreateDatabaseWizardContext.ts).
+> Tests: "Server version" / no-"MongoDB:" and localized-label assertions in
+> [AtlasClusterItem.test.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.test.ts).
+
 ### INFO-1: The cluster model drops the existing cluster-type union
 
 Source: Copilot reviewer, partially fixed and still applicable.

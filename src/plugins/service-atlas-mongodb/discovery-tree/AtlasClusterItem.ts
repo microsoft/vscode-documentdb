@@ -391,21 +391,25 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
         md.isTrusted = false;
 
         md.appendMarkdown(`**${escapeMarkdown(this.cluster.name)}**\n\n`);
-        md.appendMarkdown(`- **State:** ${escapeMarkdown(this.cluster.stateName)}\n`);
-        md.appendMarkdown(`- **Type:** ${escapeMarkdown(this.cluster.clusterType)}\n`);
-        md.appendMarkdown(`- **MongoDB:** v${escapeMarkdown(this.cluster.mongoDBVersion)}\n`);
 
-        if (this.cluster.instanceSizeName) {
-            md.appendMarkdown(`- **Tier:** ${escapeMarkdown(this.cluster.instanceSizeName)}\n`);
-        }
-        if (this.cluster.providerName) {
-            md.appendMarkdown(`- **Provider:** ${escapeMarkdown(this.cluster.providerName)}\n`);
-        }
-        if (this.cluster.regionName) {
-            md.appendMarkdown(`- **Region:** ${escapeMarkdown(this.formatRegion(this.cluster.regionName))}\n`);
-        }
+        // One localized field list so every label defaults to being translated. "Server version"
+        // (not "MongoDB") both localizes the label and avoids using "MongoDB" as a standalone
+        // product name, per the repository terminology policy.
+        const fields: Array<[string, string | undefined]> = [
+            [l10n.t('State'), this.cluster.stateName],
+            [l10n.t('Type'), this.cluster.clusterType],
+            [l10n.t('Server version'), this.cluster.mongoDBVersion ? `v${this.cluster.mongoDBVersion}` : undefined],
+            [l10n.t('Tier'), this.cluster.instanceSizeName],
+            [l10n.t('Provider'), this.cluster.providerName],
+            [l10n.t('Region'), this.cluster.regionName ? this.formatRegion(this.cluster.regionName) : undefined],
+            [l10n.t('Project'), this.cluster.projectName],
+        ];
 
-        md.appendMarkdown(`- **Project:** ${escapeMarkdown(this.cluster.projectName)}\n`);
+        for (const [label, value] of fields) {
+            if (value) {
+                md.appendMarkdown(`- **${label}:** ${escapeMarkdown(value)}\n`);
+            }
+        }
 
         const stateExplanation = this.getStateExplanation();
         if (stateExplanation) {
@@ -416,7 +420,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
         if (this.cluster.connectionString) {
             md.appendMarkdown(`\n---\n`);
-            md.appendMarkdown(`Connection string available — expand to connect and browse databases.`);
+            md.appendMarkdown(l10n.t('Connection string available — expand to connect and browse databases.'));
         }
 
         return md;

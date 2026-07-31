@@ -148,3 +148,22 @@ describe('AtlasClusterItem icon', () => {
         expect(JSON.stringify(iconPath)).not.toContain('vscode-documentdb');
     });
 });
+
+describe('AtlasClusterItem tooltip', () => {
+    it('labels the server version without using "MongoDB" as a standalone product name', () => {
+        const tooltip = String(new AtlasClusterItem('', createTreeCluster()).getTreeItem().tooltip);
+
+        expect(tooltip).toContain('**Server version:**');
+        expect(tooltip).toContain('v7');
+        expect(tooltip).not.toContain('**MongoDB:**');
+    });
+
+    it('renders every field label through the localizer', () => {
+        const tooltip = String(new AtlasClusterItem('', createTreeCluster()).getTreeItem().tooltip);
+
+        for (const label of ['State', 'Type', 'Tier', 'Provider', 'Region', 'Project']) {
+            expect(tooltip).toContain(`**${label}:**`);
+        }
+        expect(tooltip).toContain('Connection string available');
+    });
+});
