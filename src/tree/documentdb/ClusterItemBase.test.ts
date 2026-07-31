@@ -85,15 +85,20 @@ jest.mock('./DatabaseItem', () => ({
 
 /** Minimal concrete subclass so we can exercise the abstract base's getChildren(). */
 class TestClusterItem extends ClusterItemBase {
-    public constructor(
-        cluster: TreeCluster<BaseClusterModel>,
-        private readonly client: ClustersClient | null,
-    ) {
+    public readonly authenticateAndConnectMock: jest.Mock<Promise<ClustersClient | null>, []>;
+    public readonly beforeCachedClientConnectMock = jest.fn<Promise<void>, []>().mockResolvedValue(undefined);
+
+    public constructor(cluster: TreeCluster<BaseClusterModel>, client: ClustersClient | null) {
         super(cluster);
+        this.authenticateAndConnectMock = jest.fn().mockResolvedValue(client);
     }
 
     protected authenticateAndConnect(): Promise<ClustersClient | null> {
-        return Promise.resolve(this.client);
+        return this.authenticateAndConnectMock();
+    }
+
+    protected override beforeCachedClientConnect(): Promise<void> {
+        return this.beforeCachedClientConnectMock();
     }
 
     public getCredentials(): Promise<EphemeralClusterCredentials | undefined> {
@@ -113,6 +118,45 @@ function makeCluster(): TreeCluster<BaseClusterModel> {
 function makeClient(listDatabases: jest.Mock): ClustersClient {
     return { listDatabases } as unknown as ClustersClient;
 }
+
+describe('ClusterItemBase.ensureConnectionReady', () => {
+    beforeEach(() => {
+        jest.clearAllMocks();
+        mockHasCredentials.mockReturnValue(false);
+    });
+
+    it('uses the normal authentication flow when credentials are not cached', async () => {
+        const item = new TestClusterItem(makeCluster(), makeClient(jest.fn()));
+
+        await expect(item.ensureConnectionReady()).resolves.toBe(true);
+        expect(item.authenticateAndConnectMock).toHaveBeenCalledTimes(1);
+        expect(item.beforeCachedClientConnectMock).not.toHaveBeenCalled();
+    });
+
+    it('returns false when authentication is cancelled or fails', async () => {
+        const item = new TestClusterItem(makeCluster(), null);
+
+        await expect(item.ensureConnectionReady()).resolves.toBe(false);
+        expect(item.authenticateAndConnectMock).toHaveBeenCalledTimes(1);
+    });
+
+    it('restores source-specific reachability when credentials are cached', async () => {
+        mockHasCredentials.mockReturnValue(true);
+        const item = new TestClusterItem(makeCluster(), makeClient(jest.fn()));
+
+        await expect(item.ensureConnectionReady()).resolves.toBe(true);
+        expect(item.beforeCachedClientConnectMock).toHaveBeenCalledTimes(1);
+        expect(item.authenticateAndConnectMock).not.toHaveBeenCalled();
+    });
+
+    it('propagates reachability failures to the invoking command', async () => {
+        mockHasCredentials.mockReturnValue(true);
+        const item = new TestClusterItem(makeCluster(), makeClient(jest.fn()));
+        item.beforeCachedClientConnectMock.mockRejectedValue(new Error('tunnel failed'));
+
+        await expect(item.ensureConnectionReady()).rejects.toThrow('tunnel failed');
+    });
+});
 
 describe('ClusterItemBase.getChildren — listDatabases failure handling', () => {
     beforeEach(() => {
