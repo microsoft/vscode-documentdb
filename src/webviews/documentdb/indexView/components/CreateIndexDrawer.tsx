@@ -1312,7 +1312,7 @@ export const CreateIndexDrawer = ({
                                             })}
                                         </div>
 
-                                        {wildcardScope === 'path' && (
+                                        <Collapse visible={wildcardScope === 'path'} unmountOnExit>
                                             <Field
                                                 label={l10n.t('Parent path')}
                                                 validationState={wildcardPath.includes('$**') ? 'error' : 'none'}
@@ -1352,7 +1352,7 @@ export const CreateIndexDrawer = ({
                                                     </Tooltip>
                                                 </div>
                                             </Field>
-                                        )}
+                                        </Collapse>
                                     </div>
                                 </DrawerSection>
 
@@ -1360,7 +1360,7 @@ export const CreateIndexDrawer = ({
                                  * Projection is a dedicated scope choice: it uses the all-fields
                                  * `$**` key and reveals the include/exclude controls directly.
                                  */}
-                                {wildcardScope === 'projection' && (
+                                <Collapse visible={wildcardScope === 'projection'} unmountOnExit>
                                     <DrawerSection
                                         title={l10n.t('Projection mode')}
                                         hint={l10n.t(
@@ -1465,7 +1465,7 @@ export const CreateIndexDrawer = ({
                                             </div>
                                         </div>
                                     </DrawerSection>
-                                )}
+                                </Collapse>
 
                                 <DrawerSection
                                     title={l10n.t('Options')}
