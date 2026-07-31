@@ -204,6 +204,7 @@
   "Actions": "Actions",
   "Add a connection in the DocumentDB panel first": "Add a connection in the DocumentDB panel first",
   "Add at least one index field to create the index.": "Add at least one index field to create the index.",
+  "Add at least one projection field to create the index.": "Add at least one projection field to create the index.",
   "Add field": "Add field",
   "Add field (compound)": "Add field (compound)",
   "Add Kubeconfig…": "Add Kubeconfig…",

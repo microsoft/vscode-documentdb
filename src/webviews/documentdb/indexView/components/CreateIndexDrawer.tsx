@@ -552,6 +552,7 @@ export const CreateIndexDrawer = ({
         [indexKind, wildcardScope, wildcardProjectionMode, wildcardProjectionFields],
     );
     const hasWildcardProjection = wildcardProjectionObject !== undefined;
+    const wildcardProjectionValid = wildcardScope !== 'projection' || hasWildcardProjection;
 
     // Sparse and a partial filter are mutually exclusive on the server.
     const sparseDisabled = hasPartialFilter;
@@ -673,7 +674,7 @@ export const CreateIndexDrawer = ({
         (indexKind === 'standard'
             ? completedRows.length > 0 && ttlNumberValid
             : indexKind === 'wildcard'
-              ? wildcardPathValid
+              ? wildcardPathValid && wildcardProjectionValid
               : vectorValid);
 
     // A live, plain-language explanation of what still blocks creation, shown
@@ -689,7 +690,9 @@ export const CreateIndexDrawer = ({
             : indexKind === 'wildcard'
               ? !wildcardPathValid
                   ? l10n.t('Remove $** from the parent path — it is added automatically.')
-                  : ''
+                  : !wildcardProjectionValid
+                    ? l10n.t('Add at least one projection field to create the index.')
+                    : ''
               : vectorFieldValue === ''
                 ? l10n.t('Enter a vector field to create the index.')
                 : parsedDimensions === undefined
