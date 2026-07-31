@@ -27,10 +27,12 @@ import { type BaseRouterContext as FrameworkBaseRouterContext } from '@microsoft
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import { type API } from '../../DocumentDBExperiences';
+import { ext } from '../../extensionVariables';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
-import { openUrl } from '../../utils/openUrl';
+import { formatUrlForLogging, isSupportedExternalUrl, openUrl } from '../../utils/openUrl';
 import { openSurvey, promptAfterActionEventually } from '../../utils/survey';
 import { UsageImpact } from '../../utils/surveyTypes';
+import { atlasCredentialsRouter } from '../documentdb/atlasCredentials/atlasCredentialsRouter';
 import { collectionsViewRouter as collectionViewRouter } from '../documentdb/collectionView/collectionViewRouter';
 import { documentsViewRouter as documentViewRouter } from '../documentdb/documentView/documentsViewRouter';
 import { indexViewRouter } from '../documentdb/indexView/indexViewRouter';
@@ -210,16 +212,33 @@ const commonRouter = router({
     openUrl: publicProcedure
         .input(
             z.object({
-                url: z.string(), // URL string to open in default browser
+                url: z.string().refine(isSupportedExternalUrl, {
+                    message: vscode.l10n.t('Only HTTP(S) URLs are supported.'),
+                }),
             }),
         )
         .mutation(async ({ input }) => {
-            await openUrl(input.url);
+            // The trace call constructs `new URL(input.url)` unguarded, so it must stay after the
+            // zod `isSupportedExternalUrl` refine has validated the input.
+            ext.outputChannel.trace(`[openUrl] Opening external URL: ${formatUrlForLogging(input.url)}`);
+            try {
+                const opened = await openUrl(input.url);
+                if (!opened) {
+                    void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open this link."));
+                }
+                return opened;
+            } catch (error) {
+                const message = error instanceof Error ? error.message : String(error);
+                ext.outputChannel.error(`[openUrl] Failed to open ${formatUrlForLogging(input.url)}: ${message}`);
+                void vscode.window.showErrorMessage(vscode.l10n.t("We couldn't open this link."));
+                return false;
+            }
         }),
 });
 
 export const appRouter = router({
     common: commonRouter,
+    atlasCredentials: atlasCredentialsRouter,
     mongoClusters: {
         documentView: documentViewRouter,
         collectionView: collectionViewRouter,
