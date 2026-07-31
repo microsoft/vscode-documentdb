@@ -21,7 +21,6 @@ import {
     type KubeServiceInfo,
 } from '../kubernetesClient';
 import { KubernetesResourceItem } from './documentdb/KubernetesResourceItem';
-import { classifyKubernetesConnectionError } from './kubernetesConnectionError';
 
 export class KubernetesNamespaceItem implements TreeElement, TreeElementWithContextValue {
     public readonly id: string;
@@ -70,7 +69,7 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
                         error instanceof Error ? error.name : 'UnknownError';
                     return createServiceErrorChildren(
                         this.id,
-                        error,
+                        errorMessage,
                         this,
                         `${this.contextInfo.name}/${this.namespace}`,
                     );
@@ -157,26 +156,25 @@ export class KubernetesNamespaceItem implements TreeElement, TreeElementWithCont
  */
 function createServiceErrorChildren(
     parentId: string,
-    error: unknown,
+    errorMessage: string,
     retryTarget: TreeElement,
     namespaceLabel: string,
 ): TreeElement[] {
-    const errorMessage = error instanceof Error ? error.message : String(error);
+    const lower = errorMessage.toLowerCase();
 
-    const { summary, hint } = classifyKubernetesConnectionError(error, {
-        unauthorized: {
-            summary: vscode.l10n.t('Authentication failed listing services (401)'),
-            hint: vscode.l10n.t('Credentials may have expired. Re-authenticate with your cluster.'),
-        },
-        forbidden: {
-            summary: vscode.l10n.t('Access denied listing services (403 Forbidden)'),
-            hint: vscode.l10n.t('Your account lacks permission to list services in this namespace.'),
-        },
-        unknown: {
-            summary: vscode.l10n.t('Failed to list services'),
-            hint: vscode.l10n.t('Check the output channel for details.'),
-        },
-    });
+    let summary: string;
+    let hint: string;
+
+    if (lower.includes('403') || lower.includes('forbidden')) {
+        summary = vscode.l10n.t('Access denied listing services (403 Forbidden)');
+        hint = vscode.l10n.t('Your account lacks permission to list services in this namespace.');
+    } else if (lower.includes('401') || lower.includes('unauthorized')) {
+        summary = vscode.l10n.t('Authentication failed listing services (401)');
+        hint = vscode.l10n.t('Credentials may have expired. Re-authenticate with your cluster.');
+    } else {
+        summary = vscode.l10n.t('Failed to list services');
+        hint = vscode.l10n.t('Check the output channel for details.');
+    }
 
     void vscode.window.showErrorMessage(vscode.l10n.t('Failed to list services in "{0}"', namespaceLabel), {
         modal: true,
