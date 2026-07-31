@@ -13,7 +13,7 @@ import { type FieldIndexType, type VectorAlgorithmKind, type VectorSimilarity } 
  */
 export type IndexKind = 'standard' | 'wildcard' | 'vector';
 
-export type WildcardScope = 'all' | 'path';
+export type WildcardScope = 'all' | 'projection' | 'path';
 
 /** Whether the wildcard projection lists fields to include or to exclude. */
 export type WildcardProjectionMode = 'include' | 'exclude';
@@ -56,8 +56,6 @@ export interface CreateIndexFormState {
     wildcardCollationText: string;
     wildcardScope: WildcardScope;
     wildcardPath: string;
-    /** Whether the wildcard projection is configured (fields list below applies). */
-    wildcardProjectionEnabled: boolean;
     /** Include-vs-exclude semantics for the listed projection fields. */
     wildcardProjectionMode: WildcardProjectionMode;
     /** Field paths the projection includes or excludes. */
@@ -126,19 +124,18 @@ export function createInitialIndexFormState(createFieldId: FieldIdFactory = make
         wildcardCollationText: '{  }',
         wildcardScope: 'all',
         wildcardPath: '',
-        wildcardProjectionEnabled: false,
         wildcardProjectionMode: 'include',
         wildcardProjectionFields: [blankProjectionField(createFieldId)],
-        // Vector defaults: HNSW is the balanced general-purpose algorithm and its
-        // documented service defaults (m 16, efConstruction 64) are the starting
-        // point. Dimensions have no sensible default — they come from the
-        // embedding model — so the field starts empty and is required.
+        // Vector defaults: DiskANN is the recommended scalable algorithm and is
+        // shown first/preselected. Dimensions have no sensible default — they
+        // come from the embedding model — so the field starts empty and is
+        // required.
         vectorField: '',
         vectorNameEnabled: false,
         vectorName: '',
         vectorDimensions: '',
         vectorSimilarity: 'COS',
-        vectorAlgorithm: 'vector-hnsw',
+        vectorAlgorithm: 'vector-diskann',
         vectorNumLists: '10',
         vectorM: '16',
         vectorEfConstruction: '64',
@@ -176,13 +173,18 @@ export function isWildcardParentPathValid(path: string): boolean {
     return !path.includes('$**');
 }
 
+/** Validate the parent-path draft only when the path scope consumes it. */
+export function isWildcardPathInputValid(scope: WildcardScope, path: string): boolean {
+    return scope !== 'path' || isWildcardParentPathValid(path);
+}
+
 /**
- * Produce the generated ascending wildcard key. An empty (or whitespace-only)
- * parent path collapses to the all-fields `$**` key, so a blank path behaves
- * exactly like selecting "All fields".
+ * Produce the generated ascending wildcard key. All-fields and projection
+ * scopes use `$**` and ignore the parent-path draft. In the path scope, an empty
+ * (or whitespace-only) parent path also collapses to `$**`.
  */
 export function buildWildcardKey(scope: WildcardScope, path: string): string {
-    if (scope === 'all') {
+    if (scope !== 'path') {
         return '$**';
     }
     const normalized = normalizeWildcardParentPath(path);

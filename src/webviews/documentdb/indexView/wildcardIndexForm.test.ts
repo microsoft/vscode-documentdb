@@ -9,6 +9,7 @@ import {
     createInitialIndexFormState,
     isBlankIndexOption,
     isWildcardParentPathValid,
+    isWildcardPathInputValid,
     normalizeWildcardParentPath,
 } from './wildcardIndexForm';
 
@@ -32,7 +33,6 @@ describe('create index form state', () => {
             wildcardCollationText: '{  }',
             wildcardScope: 'all',
             wildcardPath: '',
-            wildcardProjectionEnabled: false,
             wildcardProjectionMode: 'include',
         });
         expect(state.fields).toEqual([{ id: 'test-field', field: '', type: 'asc' }]);
@@ -83,11 +83,25 @@ describe('wildcard parent path', () => {
     it('rejects a path that already contains the wildcard token', () => {
         expect(isWildcardParentPathValid('metadata.$**')).toBe(false);
     });
+
+    it('ignores a stale invalid parent path outside the path scope', () => {
+        expect(isWildcardPathInputValid('all', 'metadata.$**')).toBe(true);
+        expect(isWildcardPathInputValid('projection', 'metadata.$**')).toBe(true);
+    });
+
+    it('validates the parent path in the path scope', () => {
+        expect(isWildcardPathInputValid('path', 'metadata')).toBe(true);
+        expect(isWildcardPathInputValid('path', 'metadata.$**')).toBe(false);
+    });
 });
 
 describe('wildcard key generation', () => {
     it('uses $** for the all-fields scope', () => {
         expect(buildWildcardKey('all', 'ignored')).toBe('$**');
+    });
+
+    it('uses $** for the projection scope', () => {
+        expect(buildWildcardKey('projection', 'stale.parent.path')).toBe('$**');
     });
 
     it('appends $** to a normalized scoped path', () => {
