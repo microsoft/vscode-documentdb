@@ -192,6 +192,13 @@ const useStyles = makeStyles({
         borderRadius: tokens.borderRadiusMedium,
     },
     stageRow: { display: 'flex', alignItems: 'center', gap: '10px', minHeight: '20px' },
+    stageIcon: {
+        width: '18px',
+        height: '18px',
+        flexShrink: 0,
+        display: 'grid',
+        placeItems: 'center',
+    },
     stageDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '18px', flexShrink: 0 },
     stageError: { color: tokens.colorPaletteRedForeground1, fontSize: '18px', flexShrink: 0 },
     stageWarning: { color: tokens.colorStatusWarningForeground1, fontSize: '18px', flexShrink: 0 },
@@ -220,7 +227,7 @@ const StageRow = ({ label, status }: StageRowProps): JSX.Element => {
         icon = <CheckmarkCircleFilled aria-hidden className={styles.stageDone} />;
         statusText = l10n.t('done');
     } else if (status === 'active') {
-        icon = <Spinner size="tiny" aria-hidden />;
+        icon = <Spinner size="extra-tiny" aria-hidden />;
         statusText = l10n.t('in progress');
     } else if (status === 'error') {
         icon = <ErrorCircleFilled aria-hidden className={styles.stageError} />;
@@ -235,7 +242,7 @@ const StageRow = ({ label, status }: StageRowProps): JSX.Element => {
 
     return (
         <div className={styles.stageRow} role="listitem" aria-label={`${label}, ${statusText}`}>
-            {icon}
+            <span className={styles.stageIcon}>{icon}</span>
             <Text aria-hidden className={status === 'pending' ? styles.muted : undefined}>
                 {label}
             </Text>
