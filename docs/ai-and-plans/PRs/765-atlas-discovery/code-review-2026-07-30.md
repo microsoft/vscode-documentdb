@@ -619,6 +619,22 @@ Tests to add:
   forced result wins.
 - A timed-out pass: assert every credential is reported as `kind: 'network'`, not `'other'`.
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — Proposal B.** `listAll()` now queues
+> passes instead of racing them: a `readUsableSnapshot()` helper is evaluated before queuing and
+> again after the predecessor commits, and the pass chains off `this.inflight` with an
+> identity-checked `finally`. All four required companion changes landed: `invalidate()` no longer
+> clears `inflight`; `buildSnapshot()` wraps the caller's signal with `AbortSignal.any([signal,
+> AbortSignal.timeout(DISCOVERY_TIMEOUT_MS)])`; `classifyAtlasError()` maps `DOMException`
+> `TimeoutError`/`AbortError` to `network`; and `buildSnapshot()` returns without committing when the
+> caller's `signal` aborted (a timeout still commits as network errors). All required explanatory
+> comments were kept.
+> Fix: [src/plugins/service-atlas-mongodb/discovery/AtlasDiscoveryService.ts](../../../../src/plugins/service-atlas-mongodb/discovery/AtlasDiscoveryService.ts).
+> Tests in [AtlasDiscoveryService.test.ts](../../../../src/plugins/service-atlas-mongodb/discovery/AtlasDiscoveryService.test.ts):
+> clusters-inclusive caller not answered by a projects-only pass; forced refresh commits last;
+> `maxActive === 1` under overlap; timed-out pass reported as `network`; a caller-cancelled pass is
+> not cached; plus a direct `classifyAtlasError` abort/timeout assertion. The optional
+> `retryCredential()` fourth-writer hardening was intentionally left out per the FINAL DECISION.
+
 ### MEDIUM-3: Transient Service Account token failures are reported as rejected credentials
 
 Source: Independent follow-up review.

@@ -372,7 +372,13 @@ describe('AtlasDiscoveryService.listAll', () => {
         const controller = new AbortController();
         await newService().listAll({ signal: controller.signal });
 
-        expect(mockListProjects).toHaveBeenCalledWith(expect.anything(), controller.signal);
+        // The signal handed to the client is a composite of the caller's signal and the per-pass
+        // timeout, so it is not the same object - but it aborts when the caller aborts.
+        const forwardedSignal = mockListProjects.mock.calls[0][1] as AbortSignal;
+        expect(forwardedSignal).toBeInstanceOf(AbortSignal);
+        expect(forwardedSignal.aborted).toBe(false);
+        controller.abort();
+        expect(forwardedSignal.aborted).toBe(true);
     });
 
     it('caches the organization name on the credential for later attribution', async () => {
@@ -437,5 +443,101 @@ describe('classifyAtlasError', () => {
 
     it('maps a fetch failure to a network error', () => {
         expect(classifyAtlasError(new TypeError('fetch failed')).kind).toBe('network');
+    });
+
+    it('maps an abort or timeout to a network error, never a credential problem', () => {
+        // A disposed webview / collapsed tree node rejects with AbortError, and the per-pass
+        // deadline rejects with TimeoutError. Neither is an Atlas response, so neither may be
+        // reported as `other` (which would render a credential-blaming recovery row).
+        expect(classifyAtlasError(new DOMException('aborted', 'AbortError')).kind).toBe('network');
+        expect(classifyAtlasError(new DOMException('timed out', 'TimeoutError')).kind).toBe('network');
+    });
+});
+
+describe('AtlasDiscoveryService.listAll serialization (MEDIUM-2)', () => {
+    it('does not answer a clusters-inclusive caller with a projects-only pass', async () => {
+        await addApiKeyCredential('aaaaaaaa');
+        mockListOrganizations.mockResolvedValue([{ id: 'org-1', name: 'Acme' }]);
+        mockListProjects.mockResolvedValue([project('p1', 'Payments', 'org-1')]);
+        mockListClusters.mockResolvedValue([cluster('prod', 'p1')]);
+
+        const service = newService();
+        // Two overlapping calls: the second must not join the projects-only pass and render empty.
+        const [projectsOnly, withClusters] = await Promise.all([
+            service.listAll({ includeClusters: false }),
+            service.listAll({ includeClusters: true }),
+        ]);
+
+        expect(projectsOnly.clustersIncluded).toBe(false);
+        expect(withClusters.clustersIncluded).toBe(true);
+        expect(withClusters.clusters).toHaveLength(1);
+        expect(mockListClusters).toHaveBeenCalledTimes(1);
+    });
+
+    it('lets a forced refresh queued behind a running pass commit last', async () => {
+        await addApiKeyCredential('aaaaaaaa');
+        mockListOrganizations.mockResolvedValue([{ id: 'org-1', name: 'Acme' }]);
+
+        let call = 0;
+        mockListProjects.mockImplementation(() => {
+            call += 1;
+            return Promise.resolve([project(`p${String(call)}`, `Project ${String(call)}`, 'org-1')]);
+        });
+
+        const service = newService();
+        const [, forced] = await Promise.all([service.listAll(), service.listAll({ forceRefresh: true })]);
+
+        // The forced pass runs second and is the last writer, regardless of completion order.
+        expect(forced.projects[0].project.name).toBe('Project 2');
+        const current = await service.listAll();
+        expect(current.projects[0].project.name).toBe('Project 2');
+    });
+
+    it('serializes overlapping passes so only one runs at a time', async () => {
+        await addApiKeyCredential('aaaaaaaa');
+        mockListOrganizations.mockResolvedValue([{ id: 'org-1', name: 'Acme' }]);
+
+        let active = 0;
+        let maxActive = 0;
+        mockListProjects.mockImplementation(async () => {
+            active += 1;
+            maxActive = Math.max(maxActive, active);
+            await new Promise((resolve) => setTimeout(resolve, 5));
+            active -= 1;
+            return [project('p1', 'Payments', 'org-1')];
+        });
+
+        const service = newService();
+        await Promise.all([service.listAll(), service.listAll({ forceRefresh: true })]);
+
+        expect(maxActive).toBe(1);
+    });
+
+    it('reports a timed-out pass as a network failure for every credential, not "other"', async () => {
+        await addApiKeyCredential('aaaaaaaa');
+        mockListOrganizations.mockRejectedValue(new DOMException('The operation timed out', 'TimeoutError'));
+        mockListProjects.mockRejectedValue(new DOMException('The operation timed out', 'TimeoutError'));
+
+        const snapshot = await newService().listAll();
+
+        expect(snapshot.credentialErrors).toHaveLength(1);
+        expect(snapshot.credentialErrors[0].kind).toBe('network');
+    });
+
+    it('does not cache a snapshot produced by a caller-cancelled pass', async () => {
+        await addApiKeyCredential('aaaaaaaa');
+        mockListOrganizations.mockResolvedValue([{ id: 'org-1', name: 'Acme' }]);
+        mockListProjects.mockResolvedValue([project('p1', 'Payments', 'org-1')]);
+
+        const controller = new AbortController();
+        const service = newService();
+        // Abort before the pass commits; its result must not become the cached snapshot.
+        controller.abort();
+        await service.listAll({ signal: controller.signal });
+
+        // A follow-up pass must re-query rather than serve the cancelled result from cache.
+        mockListProjects.mockClear();
+        await service.listAll();
+        expect(mockListProjects).toHaveBeenCalled();
     });
 });

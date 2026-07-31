@@ -135,6 +135,15 @@ const PROJECT_CONCURRENCY = 5;
 const SNAPSHOT_TTL_MS = 30_000;
 
 /**
+ * A single discovery pass may not outlive this. Passes are serialized (queued behind each other),
+ * so a request with no deadline would stall every later expansion for the rest of the session -
+ * `fetch` has no default timeout and `AtlasServiceRootItem.getChildren()` calls `listAll()` with no
+ * signal. Uses `AbortSignal.timeout`, which already has in-repo precedent in
+ * `SelectAtlasDatabaseUserStep`.
+ */
+const DISCOVERY_TIMEOUT_MS = 30_000;
+
+/**
  * Resolves the user-facing label for a credential: an explicit user label wins, then the cached
  * organization name, then a non-secret identity hint, then the record ID.
  */
@@ -171,6 +180,14 @@ export function classifyAtlasError(error: unknown): {
     message: string;
     errorCode?: string;
 } {
+    // `AbortSignal.timeout()` rejects with a TimeoutError and a disposed webview / collapsed tree
+    // node with an AbortError. Neither is an Atlas response, so neither may be reported as a
+    // credential problem (which would render a "revisit credentials" recovery row for work the
+    // extension itself cancelled or timed out).
+    if (error instanceof DOMException && (error.name === 'TimeoutError' || error.name === 'AbortError')) {
+        return { kind: 'network', message: error.message };
+    }
+
     if (error instanceof AtlasApiError) {
         const errorCode = error.errorCode;
         switch (error.statusCode) {
@@ -223,6 +240,23 @@ export class AtlasDiscoveryService {
     }
 
     /**
+     * Returns the cached snapshot when it is still fresh and rich enough for this caller.
+     *
+     * Split out of {@link listAll} because the serialized path has to ask twice: once before
+     * queuing, and again after the pass ahead of it committed, which may have already produced the
+     * answer this caller needs.
+     */
+    private readUsableSnapshot(needsClusters: boolean, forceRefresh: boolean): AtlasDiscoverySnapshot | undefined {
+        if (forceRefresh || !this.snapshot) {
+            return undefined;
+        }
+        if (needsClusters && !this.snapshot.clustersIncluded) {
+            return undefined;
+        }
+        return monotonicNow() - this.snapshotTakenAt < SNAPSHOT_TTL_MS ? this.snapshot : undefined;
+    }
+
+    /**
      * Returns everything visible across every stored credential. Never rejects because of a
      * single credential; per-credential failures come back in `credentialErrors`.
      *
@@ -232,29 +266,51 @@ export class AtlasDiscoveryService {
      */
     public async listAll(options: ListAllOptions = {}): Promise<AtlasDiscoverySnapshot> {
         const needsClusters = options.includeClusters === true;
+        const forceRefresh = options.forceRefresh === true;
 
-        if (!options.forceRefresh && this.snapshot && (!needsClusters || this.snapshot.clustersIncluded)) {
-            const age = monotonicNow() - this.snapshotTakenAt;
-            if (age < SNAPSHOT_TTL_MS) {
-                atlasTrace(
-                    `listAll: serving the cached snapshot, ${String(age)}ms old (${String(this.snapshot.organizations.length)} org(s), ${String(this.snapshot.projects.length)} project(s), ${String(this.snapshot.credentialErrors.length)} credential error(s))`,
-                );
-                return this.snapshot;
-            }
-
-            atlasTrace(`listAll: the cached snapshot is ${String(age)}ms old and has expired, re-querying`);
+        const cached = this.readUsableSnapshot(needsClusters, forceRefresh);
+        if (cached) {
+            atlasTrace(
+                `listAll: serving the cached snapshot, ${String(monotonicNow() - this.snapshotTakenAt)}ms old (${String(cached.organizations.length)} org(s), ${String(cached.projects.length)} project(s), ${String(cached.credentialErrors.length)} credential error(s))`,
+            );
+            return cached;
         }
 
-        if (this.inflight && !options.forceRefresh) {
-            atlasTrace('listAll: joining the in-flight discovery pass');
-            return this.inflight;
+        if (!forceRefresh && this.snapshot && (!needsClusters || this.snapshot.clustersIncluded)) {
+            atlasTrace(
+                `listAll: the cached snapshot is ${String(monotonicNow() - this.snapshotTakenAt)}ms old and has expired, re-querying`,
+            );
         }
 
-        const work = this.buildSnapshot(needsClusters, options.signal, options.forceFreshSessions === true).finally(
-            () => {
-                this.inflight = undefined;
-            },
-        );
+        // Discovery passes are queued, never raced. Joining an arbitrary in-flight pass was wrong in
+        // both directions: a projects-only pass would answer a clusters-inclusive caller (List mode
+        // rendered empty when the view was toggled mid-fetch), and two overlapping passes both wrote
+        // `this.snapshot`, so a slow old pass could replace a newer forced refresh for the whole TTL.
+        // Waiting and then re-checking the cache gives the fast path back for free: a caller whose
+        // needs the predecessor already satisfied returns that snapshot without a second API pass.
+        const previous = this.inflight;
+        if (previous) {
+            atlasTrace('listAll: waiting for the discovery pass ahead of this one');
+        }
+        const work = (previous ?? Promise.resolve())
+            // The predecessor's failure is its own caller's problem; it must not fail this pass.
+            .catch(() => undefined)
+            .then(() => {
+                const fresh = this.readUsableSnapshot(needsClusters, forceRefresh);
+                if (fresh) {
+                    atlasTrace('listAll: the pass ahead of this one already produced a usable snapshot');
+                    return fresh;
+                }
+                return this.buildSnapshot(needsClusters, options.signal, options.forceFreshSessions === true);
+            })
+            .finally(() => {
+                // Only the tail of the queue may clear the slot; an earlier pass finishing late must
+                // not detach a successor that other callers are already chained behind.
+                if (this.inflight === work) {
+                    this.inflight = undefined;
+                }
+            });
+
         this.inflight = work;
         return work;
     }
@@ -288,7 +344,10 @@ export class AtlasDiscoveryService {
         this.snapshot = undefined;
         this.snapshotTakenAt = 0;
         this.lastResults = undefined;
-        this.inflight = undefined;
+        // `inflight` is deliberately NOT cleared: it is the tail of the serialized pass queue, not
+        // cached data. `refreshAll()` calls `invalidate()` and then `listAll({ forceRefresh: true })`,
+        // so clearing it would detach the forced pass from the running one and reintroduce exactly
+        // the two-writer race the serialized queue removes.
     }
 
     /**
@@ -345,6 +404,13 @@ export class AtlasDiscoveryService {
         const limit = createConcurrencyLimiter({ concurrency: CREDENTIAL_CONCURRENCY });
         const startedAt = monotonicNow();
 
+        // Serialized passes queue behind each other, so a request with no deadline would stall every
+        // later expansion for the rest of the session. Give each pass its own timeout, combined with
+        // the caller's signal so either can abort the fan-out. A timeout rejects the credential
+        // requests with a TimeoutError, which `classifyAtlasError` maps to `network`.
+        const deadline = AbortSignal.timeout(DISCOVERY_TIMEOUT_MS);
+        const effectiveSignal = signal ? AbortSignal.any([signal, deadline]) : deadline;
+
         atlasTrace(
             `listAll: querying ${String(credentials.length)} credential(s), clusters ${includeClusters ? 'included' : 'deferred to project expand'}${forceFreshSessions ? ', forcing fresh sessions' : ''}`,
         );
@@ -352,7 +418,7 @@ export class AtlasDiscoveryService {
         // `allSettled`, not `all`: a rejected credential must not discard its healthy peers.
         const settled = await Promise.allSettled(
             credentials.map((record) =>
-                limit(() => this.queryCredential(record, includeClusters, signal, forceFreshSessions)),
+                limit(() => this.queryCredential(record, includeClusters, effectiveSignal, forceFreshSessions)),
             ),
         );
 
@@ -386,6 +452,17 @@ export class AtlasDiscoveryService {
         }
 
         const snapshot = mergeResults(results, includeClusters);
+
+        // A caller-cancelled pass (webview disposed, tree node collapsed) must not become the cached
+        // snapshot: it would replace fresher data - or a healthy snapshot - with cancellation errors
+        // for the whole TTL. A *timeout* is different: `deadline` aborts `effectiveSignal` but not
+        // the caller's `signal`, so a timed-out pass still commits as network errors like any other
+        // fleet-wide failure.
+        if (signal?.aborted) {
+            atlasTrace('listAll: pass was cancelled by the caller; returning without committing to the cache');
+            return snapshot;
+        }
+
         this.snapshot = snapshot;
         this.snapshotTakenAt = monotonicNow();
         this.lastResults = results;
