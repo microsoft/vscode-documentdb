@@ -9,6 +9,7 @@ import {
     createInitialIndexFormState,
     isBlankIndexOption,
     isWildcardParentPathValid,
+    isWildcardPathInputValid,
     normalizeWildcardParentPath,
 } from './wildcardIndexForm';
 
@@ -81,6 +82,16 @@ describe('wildcard parent path', () => {
 
     it('rejects a path that already contains the wildcard token', () => {
         expect(isWildcardParentPathValid('metadata.$**')).toBe(false);
+    });
+
+    it('ignores a stale invalid parent path outside the path scope', () => {
+        expect(isWildcardPathInputValid('all', 'metadata.$**')).toBe(true);
+        expect(isWildcardPathInputValid('projection', 'metadata.$**')).toBe(true);
+    });
+
+    it('validates the parent path in the path scope', () => {
+        expect(isWildcardPathInputValid('path', 'metadata')).toBe(true);
+        expect(isWildcardPathInputValid('path', 'metadata.$**')).toBe(false);
     });
 });
 

@@ -57,7 +57,7 @@ import {
     buildWildcardProjectionObject,
     createInitialIndexFormState,
     isBlankIndexOption,
-    isWildcardParentPathValid,
+    isWildcardPathInputValid,
     makeProjectionFieldId,
     type IndexKind,
     type VectorCompressionChoice,
@@ -560,9 +560,9 @@ export const CreateIndexDrawer = ({
     const trimmedTtlSeconds = ttlSeconds.trim();
     const parsedTtlSeconds = Number.parseInt(trimmedTtlSeconds, 10);
     const ttlNumberValid = !ttlActive || (parsedTtlSeconds > 0 && String(parsedTtlSeconds) === trimmedTtlSeconds);
-    // Empty path is fine (treated as all fields); only a path carrying the
-    // wildcard token itself is rejected. Errors are otherwise deferred to submit.
-    const wildcardPathValid = indexKind !== 'wildcard' || isWildcardParentPathValid(wildcardPath);
+    // Validate the parent-path draft only while its scope consumes it. Empty is
+    // allowed (treated as all fields); a path carrying `$**` is rejected.
+    const wildcardPathValid = indexKind !== 'wildcard' || isWildcardPathInputValid(wildcardScope, wildcardPath);
     const interactionDisabled = submitting;
 
     // --- Vector form --------------------------------------------------------

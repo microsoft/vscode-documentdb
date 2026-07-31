@@ -173,10 +173,15 @@ export function isWildcardParentPathValid(path: string): boolean {
     return !path.includes('$**');
 }
 
+/** Validate the parent-path draft only when the path scope consumes it. */
+export function isWildcardPathInputValid(scope: WildcardScope, path: string): boolean {
+    return scope !== 'path' || isWildcardParentPathValid(path);
+}
+
 /**
- * Produce the generated ascending wildcard key. An empty (or whitespace-only)
- * parent path collapses to the all-fields `$**` key, so a blank path behaves
- * exactly like selecting "All fields".
+ * Produce the generated ascending wildcard key. All-fields and projection
+ * scopes use `$**` and ignore the parent-path draft. In the path scope, an empty
+ * (or whitespace-only) parent path also collapses to `$**`.
  */
 export function buildWildcardKey(scope: WildcardScope, path: string): string {
     if (scope !== 'path') {
