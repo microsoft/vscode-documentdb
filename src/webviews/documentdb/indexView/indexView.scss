@@ -396,12 +396,13 @@
 
     // The body scrolls vertically when the form grows taller than the drawer.
     // A column flex context lets the Preview page's editor fill the free space.
-    // The gap above the footer is provided by DrawerFooter's own top padding, so
-    // the body needs no extra bottom padding of its own.
+    // DrawerBody only gets Fluent's default bottom padding when it is the last
+    // child, so restore a content gap here because DrawerFooter follows it.
     .createIndexDrawerBody {
         display: flex;
         flex-direction: column;
         overflow-y: auto;
+        padding-bottom: var(--spacingVerticalL);
     }
 
     // Main-page footer: an optional "what's still required" line stacked above
@@ -564,6 +565,24 @@
         row-gap: 0;
     }
 
+    // The switch plus its info icon, kept on one line and vertically centered.
+    .optionSwitchRow {
+        display: flex;
+        align-items: center;
+        column-gap: 4px;
+    }
+
+    // Small, focusable info icon revealing the option's explanation on hover/focus.
+    .optionInfoIcon {
+        font-size: 14px;
+        opacity: 0.6;
+
+        &:hover,
+        &:focus-visible {
+            opacity: 1;
+        }
+    }
+
     // Restore the default label font-size on the small switch. Only the font
     // size is overridden (not line-height) so the compact small line box — and
     // thus the label's vertical alignment with the toggle — is preserved. The
@@ -671,35 +690,6 @@
         color: var(--colorNeutralForeground3);
         font-size: var(--fontSizeBase200);
         line-height: var(--lineHeightBase200);
-    }
-
-    // The scoped "Parent path" is a sub-setting of the "Fields below a path"
-    // radio, so indent it to start where the radio *labels* start: past the
-    // 16px indicator, its two horizontal-S margins, and the label's own
-    // horizontal-XS left padding.
-    .wildcardScopedPath {
-        padding-inline-start: calc(16px + 2 * var(--spacingHorizontalS) + var(--spacingHorizontalXS));
-    }
-
-    // Live "Index key preview" chip: a short label plus the generated key in
-    // monospace, sitting on one baseline so it reads as a single hint. Indented
-    // by one horizontal-S so the label lines up with the left edge of the radio
-    // buttons above it (the indicator's own left margin).
-    .wildcardKeyPreview {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        padding-inline-start: var(--spacingHorizontalS);
-
-        .wildcardKeyPreviewLabel {
-            color: var(--colorNeutralForeground3);
-            font-size: var(--fontSizeBase200);
-        }
-
-        code {
-            font-family: var(--fontFamilyMonospace);
-            font-size: var(--fontSizeBase300);
-        }
     }
 
     // Structured wildcard projection: mode radios plus a stacked list of
