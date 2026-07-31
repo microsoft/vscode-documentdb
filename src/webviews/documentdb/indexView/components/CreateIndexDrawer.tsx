@@ -1793,7 +1793,7 @@ export const CreateIndexDrawer = ({
                                     )}
                                 </RadioGroup>
 
-                                {effectiveCompression === 'pq' && (
+                                <Collapse visible={effectiveCompression === 'pq'} unmountOnExit>
                                     <div className="vectorDualField">
                                         <Field
                                             label={l10n.t('Compressed dimensions (optional)')}
@@ -1838,7 +1838,7 @@ export const CreateIndexDrawer = ({
                                             />
                                         </Field>
                                     </div>
-                                )}
+                                </Collapse>
                             </DrawerSection>
                         </div>
                     ) : (
