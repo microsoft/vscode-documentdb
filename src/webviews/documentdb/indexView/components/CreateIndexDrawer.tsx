@@ -40,6 +40,7 @@ import {
     SettingsRegular,
     WindowConsoleRegular,
 } from '@fluentui/react-icons';
+import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useEffect, useMemo, useRef, useState, type JSX, type ReactNode } from 'react';
 import { LARGE_COLLECTION_THRESHOLD_DOCS } from '../constants';
@@ -194,8 +195,7 @@ function DrawerSection({
  * One index-level option: a compact switch with a short label, an optional
  * info icon that reveals a longer explanation on hover/focus, plus an
  * optional reason shown when the option is disabled and any revealed input.
- * The detail container is rendered only when there is something to show, and
- * lives in a single `.optionDetail` block so its layout is tuned in one place.
+ * Details remain mounted through their exit motion so they collapse smoothly.
  */
 function OptionRow({
     label,
@@ -216,7 +216,6 @@ function OptionRow({
     children?: ReactNode;
 }): JSX.Element {
     const reason = disabled && disabledReason !== undefined ? disabledReason : undefined;
-    const hasDetail = reason !== undefined || Boolean(children);
     return (
         <div className="optionItem">
             <div className="optionSwitchRow">
@@ -236,12 +235,14 @@ function OptionRow({
                     </Tooltip>
                 )}
             </div>
-            {hasDetail && (
+            <Collapse visible={reason !== undefined} unmountOnExit>
                 <div className="optionDetail">
                     {reason !== undefined && <div className="optionDescription">{reason}</div>}
-                    {children}
                 </div>
-            )}
+            </Collapse>
+            <Collapse visible={checked && children !== undefined} unmountOnExit>
+                <div className="optionDetail">{children}</div>
+            </Collapse>
         </div>
     );
 }
@@ -918,21 +919,19 @@ export const CreateIndexDrawer = ({
                 )
             }
         >
-            {fieldNameEnabled && (
-                <Field label={l10n.t('Index name')}>
-                    <Input
-                        value={fieldName}
-                        disabled={interactionDisabled}
-                        onChange={(e) =>
-                            setForm((prev) =>
-                                indexKind === 'wildcard'
-                                    ? { ...prev, wildcardName: e.target.value }
-                                    : { ...prev, name: e.target.value },
-                            )
-                        }
-                    />
-                </Field>
-            )}
+            <Field label={l10n.t('Index name')}>
+                <Input
+                    value={fieldName}
+                    disabled={interactionDisabled}
+                    onChange={(e) =>
+                        setForm((prev) =>
+                            indexKind === 'wildcard'
+                                ? { ...prev, wildcardName: e.target.value }
+                                : { ...prev, name: e.target.value },
+                        )
+                    }
+                />
+            </Field>
         </OptionRow>
     );
 
@@ -946,16 +945,14 @@ export const CreateIndexDrawer = ({
             disabled={interactionDisabled}
             onToggle={(checked) => setForm((prev) => ({ ...prev, vectorNameEnabled: checked }))}
         >
-            {vectorNameEnabled && (
-                <Field label={l10n.t('Index name')}>
-                    <Input
-                        value={vectorName}
-                        disabled={interactionDisabled}
-                        placeholder={vectorFieldValue !== '' ? `${vectorFieldValue}_cosmosSearch` : undefined}
-                        onChange={(e) => setForm((prev) => ({ ...prev, vectorName: e.target.value }))}
-                    />
-                </Field>
-            )}
+            <Field label={l10n.t('Index name')}>
+                <Input
+                    value={vectorName}
+                    disabled={interactionDisabled}
+                    placeholder={vectorFieldValue !== '' ? `${vectorFieldValue}_cosmosSearch` : undefined}
+                    onChange={(e) => setForm((prev) => ({ ...prev, vectorName: e.target.value }))}
+                />
+            </Field>
         </OptionRow>
     );
 
@@ -1223,32 +1220,30 @@ export const CreateIndexDrawer = ({
                                                 setForm((prev) => ({ ...prev, ttlEnabled: checked }))
                                             }
                                         >
-                                            {ttlActive && (
-                                                <Field
-                                                    label={l10n.t('Expire after (seconds)')}
-                                                    required
-                                                    validationState={ttlNumberValid ? 'none' : 'error'}
-                                                    validationMessage={
-                                                        ttlNumberValid
-                                                            ? undefined
-                                                            : l10n.t('Enter a positive whole number using digits only.')
+                                            <Field
+                                                label={l10n.t('Expire after (seconds)')}
+                                                required
+                                                validationState={ttlNumberValid ? 'none' : 'error'}
+                                                validationMessage={
+                                                    ttlNumberValid
+                                                        ? undefined
+                                                        : l10n.t('Enter a positive whole number using digits only.')
+                                                }
+                                            >
+                                                <Input
+                                                    type="number"
+                                                    min={1}
+                                                    value={ttlSeconds}
+                                                    disabled={interactionDisabled}
+                                                    onChange={(e) =>
+                                                        setForm((prev) => ({
+                                                            ...prev,
+                                                            ttlSeconds: e.target.value,
+                                                            ttlConfigured: true,
+                                                        }))
                                                     }
-                                                >
-                                                    <Input
-                                                        type="number"
-                                                        min={1}
-                                                        value={ttlSeconds}
-                                                        disabled={interactionDisabled}
-                                                        onChange={(e) =>
-                                                            setForm((prev) => ({
-                                                                ...prev,
-                                                                ttlSeconds: e.target.value,
-                                                                ttlConfigured: true,
-                                                            }))
-                                                        }
-                                                    />
-                                                </Field>
-                                            )}
+                                                />
+                                            </Field>
                                         </OptionRow>
                                         {nameOption}
                                     </div>
