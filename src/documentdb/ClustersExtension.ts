@@ -57,6 +57,13 @@ import {
     viewQuickStartLogs,
 } from '../commands/localQuickStart/localQuickStartCommands';
 import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickStart';
+// EXPERIMENT (dev/tnaum/quickstart-brainstorm): Quick Start layout prototypes.
+import {
+    openQuickStartPrototypeExpress,
+    openQuickStartPrototypeGuided,
+    openQuickStartPrototypeWizard,
+    pickQuickStartPrototype,
+} from '../commands/localQuickStart/quickStartPrototypeCommands';
 import { newConnection } from '../commands/newConnection/newConnection';
 import { newLocalConnection } from '../commands/newLocalConnection/newLocalConnection';
 import { openCollectionView, openCollectionViewInternal } from '../commands/openCollectionView/openCollectionView';
@@ -681,6 +688,24 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(
                     'vscode-documentdb.command.localQuickStart.viewLogs',
                     withCommandCorrelation(viewQuickStartLogs),
+                );
+
+                // EXPERIMENT (dev/tnaum/quickstart-brainstorm): layout prototypes for review.
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.prototypes',
+                    withCommandCorrelation(pickQuickStartPrototype),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.prototype.express',
+                    withCommandCorrelation(openQuickStartPrototypeExpress),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.prototype.wizard',
+                    withCommandCorrelation(openQuickStartPrototypeWizard),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.prototype.guided',
+                    withCommandCorrelation(openQuickStartPrototypeGuided),
                 );
 
                 registerCommand(

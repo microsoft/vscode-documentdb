@@ -7,6 +7,9 @@ import { AtlasCredentialsView } from '../documentdb/atlasCredentials/AtlasCreden
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
 import { LocalQuickStart } from '../documentdb/localQuickStart/LocalQuickStart';
+import { QuickStartExpress } from '../documentdb/localQuickStart/prototypes/QuickStartExpress';
+import { QuickStartGuided } from '../documentdb/localQuickStart/prototypes/QuickStartGuided';
+import { QuickStartWizard } from '../documentdb/localQuickStart/prototypes/QuickStartWizard';
 
 /**
  * Maps each webview name to the React component mounted for it.
@@ -41,6 +44,13 @@ export const WebviewRegistry = {
     documentView: DocumentView,
     localQuickStart: LocalQuickStart,
     atlasCredentials: AtlasCredentialsView,
+    // EXPERIMENT (dev/tnaum/quickstart-brainstorm): Local Quick Start layout prototypes.
+    // All three drive the same `localQuickStart` router and differ only in presentation.
+    // Remove these three entries (and `documentdb/localQuickStart/prototypes/`) once a
+    // layout is chosen and folded into `LocalQuickStart`.
+    localQuickStartExpress: QuickStartExpress,
+    localQuickStartWizard: QuickStartWizard,
+    localQuickStartGuided: QuickStartGuided,
 } as const;
 
 /**

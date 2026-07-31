@@ -414,6 +414,34 @@
         "icon": "$(output)"
       },
       {
+        "//": "[EXPERIMENT dev/tnaum/quickstart-brainstorm] Pick a Quick Start layout prototype",
+        "category": "DocumentDB Prototypes",
+        "command": "vscode-documentdb.command.localQuickStart.prototypes",
+        "title": "Local Quick Start: Compare Layouts…",
+        "icon": "$(beaker)"
+      },
+      {
+        "//": "[EXPERIMENT dev/tnaum/quickstart-brainstorm] Layout A",
+        "category": "DocumentDB Prototypes",
+        "command": "vscode-documentdb.command.localQuickStart.prototype.express",
+        "title": "Local Quick Start: Layout A (Express)",
+        "icon": "$(beaker)"
+      },
+      {
+        "//": "[EXPERIMENT dev/tnaum/quickstart-brainstorm] Layout B",
+        "category": "DocumentDB Prototypes",
+        "command": "vscode-documentdb.command.localQuickStart.prototype.wizard",
+        "title": "Local Quick Start: Layout B (Wizard)",
+        "icon": "$(beaker)"
+      },
+      {
+        "//": "[EXPERIMENT dev/tnaum/quickstart-brainstorm] Layout C",
+        "category": "DocumentDB Prototypes",
+        "command": "vscode-documentdb.command.localQuickStart.prototype.guided",
+        "title": "Local Quick Start: Layout C (Guided)",
+        "icon": "$(beaker)"
+      },
+      {
         "//": "[ConnectionsView] Delete Connection",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.connectionsView.removeConnection",
@@ -788,6 +816,12 @@
     ],
     "menus": {
       "view/title": [
+        {
+          "//": "[EXPERIMENT dev/tnaum/quickstart-brainstorm] Quick Start layout prototypes",
+          "command": "vscode-documentdb.command.localQuickStart.prototypes",
+          "when": "view == connectionsView",
+          "group": "navigation@1"
+        },
         {
           "command": "vscode-documentdb.command.connectionsView.refresh",
           "when": "view == connectionsView",
