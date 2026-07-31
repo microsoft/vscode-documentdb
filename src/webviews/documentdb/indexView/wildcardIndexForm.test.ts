@@ -32,7 +32,6 @@ describe('create index form state', () => {
             wildcardCollationText: '{  }',
             wildcardScope: 'all',
             wildcardPath: '',
-            wildcardProjectionEnabled: false,
             wildcardProjectionMode: 'include',
         });
         expect(state.fields).toEqual([{ id: 'test-field', field: '', type: 'asc' }]);
@@ -88,6 +87,10 @@ describe('wildcard parent path', () => {
 describe('wildcard key generation', () => {
     it('uses $** for the all-fields scope', () => {
         expect(buildWildcardKey('all', 'ignored')).toBe('$**');
+    });
+
+    it('uses $** for the projection scope', () => {
+        expect(buildWildcardKey('projection', 'stale.parent.path')).toBe('$**');
     });
 
     it('appends $** to a normalized scoped path', () => {

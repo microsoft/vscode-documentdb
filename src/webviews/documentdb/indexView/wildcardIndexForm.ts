@@ -13,7 +13,7 @@ import { type FieldIndexType, type VectorAlgorithmKind, type VectorSimilarity } 
  */
 export type IndexKind = 'standard' | 'wildcard' | 'vector';
 
-export type WildcardScope = 'all' | 'path';
+export type WildcardScope = 'all' | 'projection' | 'path';
 
 /** Whether the wildcard projection lists fields to include or to exclude. */
 export type WildcardProjectionMode = 'include' | 'exclude';
@@ -56,8 +56,6 @@ export interface CreateIndexFormState {
     wildcardCollationText: string;
     wildcardScope: WildcardScope;
     wildcardPath: string;
-    /** Whether the wildcard projection is configured (fields list below applies). */
-    wildcardProjectionEnabled: boolean;
     /** Include-vs-exclude semantics for the listed projection fields. */
     wildcardProjectionMode: WildcardProjectionMode;
     /** Field paths the projection includes or excludes. */
@@ -126,7 +124,6 @@ export function createInitialIndexFormState(createFieldId: FieldIdFactory = make
         wildcardCollationText: '{  }',
         wildcardScope: 'all',
         wildcardPath: '',
-        wildcardProjectionEnabled: false,
         wildcardProjectionMode: 'include',
         wildcardProjectionFields: [blankProjectionField(createFieldId)],
         // Vector defaults: DiskANN is the recommended scalable algorithm and is
@@ -182,7 +179,7 @@ export function isWildcardParentPathValid(path: string): boolean {
  * exactly like selecting "All fields".
  */
 export function buildWildcardKey(scope: WildcardScope, path: string): string {
-    if (scope === 'all') {
+    if (scope !== 'path') {
         return '$**';
     }
     const normalized = normalizeWildcardParentPath(path);

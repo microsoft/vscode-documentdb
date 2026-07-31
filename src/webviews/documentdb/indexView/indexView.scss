@@ -692,35 +692,6 @@
         line-height: var(--lineHeightBase200);
     }
 
-    // The scoped "Parent path" is a sub-setting of the "Fields below a path"
-    // radio, so indent it to start where the radio *labels* start: past the
-    // 16px indicator, its two horizontal-S margins, and the label's own
-    // horizontal-XS left padding.
-    .wildcardScopedPath {
-        padding-inline-start: calc(16px + 2 * var(--spacingHorizontalS) + var(--spacingHorizontalXS));
-    }
-
-    // Live "Index key preview" chip: a short label plus the generated key in
-    // monospace, sitting on one baseline so it reads as a single hint. Indented
-    // by one horizontal-S so the label lines up with the left edge of the radio
-    // buttons above it (the indicator's own left margin).
-    .wildcardKeyPreview {
-        display: flex;
-        align-items: baseline;
-        gap: 8px;
-        padding-inline-start: var(--spacingHorizontalS);
-
-        .wildcardKeyPreviewLabel {
-            color: var(--colorNeutralForeground3);
-            font-size: var(--fontSizeBase200);
-        }
-
-        code {
-            font-family: var(--fontFamilyMonospace);
-            font-size: var(--fontSizeBase300);
-        }
-    }
-
     // Structured wildcard projection: mode radios plus a stacked list of
     // field-name rows, each [combobox] [remove], mirroring the index field list.
     .wildcardProjectionBody {

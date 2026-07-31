@@ -100,8 +100,29 @@ function buildVectorAlgorithmOptions(): ReadonlyArray<{
             label: l10n.t('DiskANN'),
             hint: l10n.t('Scalable graph recommended for large collections.'),
         },
-        { value: 'vector-ivf', label: l10n.t('IVF'), hint: l10n.t('Fast, light build for smaller collections.') },
         { value: 'vector-hnsw', label: l10n.t('HNSW'), hint: l10n.t('Balanced speed and recall for most workloads.') },
+        { value: 'vector-ivf', label: l10n.t('IVF'), hint: l10n.t('Fast, light build for smaller collections.') },
+    ];
+}
+
+/** Wildcard scope choices and the controls each choice reveals. */
+function buildWildcardScopeOptions(): ReadonlyArray<{ value: WildcardScope; label: string; hint: string }> {
+    return [
+        {
+            value: 'all',
+            label: l10n.t('All fields'),
+            hint: l10n.t('Index every field in each document with a single wildcard key.'),
+        },
+        {
+            value: 'projection',
+            label: l10n.t('Projection'),
+            hint: l10n.t('Include only selected fields, or exclude selected fields while indexing all others.'),
+        },
+        {
+            value: 'path',
+            label: l10n.t('Fields below a path'),
+            hint: l10n.t('Index fields nested below one parent path.'),
+        },
     ];
 }
 
@@ -337,7 +358,6 @@ export const CreateIndexDrawer = ({
         wildcardCollationText,
         wildcardScope,
         wildcardPath,
-        wildcardProjectionEnabled,
         wildcardProjectionMode,
         wildcardProjectionFields,
         vectorField,
@@ -357,12 +377,18 @@ export const CreateIndexDrawer = ({
     } = form;
 
     const typeLabels = useMemo(() => buildTypeLabels(), []);
+    const wildcardScopeOptions = useMemo(() => buildWildcardScopeOptions(), []);
     const vectorAlgorithmOptions = useMemo(() => buildVectorAlgorithmOptions(), []);
     const vectorSimilarityOptions = useMemo(() => buildVectorSimilarityOptions(), []);
 
     // Roving-focus targets for the algorithm radio-card group, so arrow keys can
     // move focus to the newly selected card.
     const algorithmCardRefs = useRef<Record<string, HTMLButtonElement | null>>({});
+    const wildcardScopeCardRefs = useRef<Record<WildcardScope, HTMLButtonElement | null>>({
+        all: null,
+        projection: null,
+        path: null,
+    });
     const advancedEntryRef = useRef<HTMLButtonElement>(null);
     const previewEntryRef = useRef<HTMLButtonElement>(null);
     const pageTitleRef = useRef<HTMLSpanElement>(null);
@@ -515,25 +541,16 @@ export const CreateIndexDrawer = ({
 
     // The structured projection editor collapses to a plain object; `undefined`
     // means "nothing meaningful configured" so it is treated like an omitted
-    // option everywhere. A projection is only valid on the all-fields `$**` key,
-    // so it is ignored for the scoped-path scope.
+    // option everywhere. The dedicated projection scope uses the all-fields
+    // `$**` key and adds the configured projection object.
     const wildcardProjectionObject = useMemo(
         () =>
-            indexKind === 'wildcard' && wildcardScope === 'all' && wildcardProjectionEnabled
+            indexKind === 'wildcard' && wildcardScope === 'projection'
                 ? buildWildcardProjectionObject(wildcardProjectionMode, wildcardProjectionFields)
                 : undefined,
-        [indexKind, wildcardScope, wildcardProjectionEnabled, wildcardProjectionMode, wildcardProjectionFields],
+        [indexKind, wildcardScope, wildcardProjectionMode, wildcardProjectionFields],
     );
     const hasWildcardProjection = wildcardProjectionObject !== undefined;
-
-    // Live preview of the generated wildcard key, e.g. `$**` or `metadata.$**`.
-    // An empty parent path collapses to `$**` (all fields), so the preview is
-    // shown for empty input too; it is only suppressed when the path is invalid
-    // (contains the `$**` token itself).
-    const wildcardKeyPreview =
-        indexKind === 'wildcard' && isWildcardParentPathValid(wildcardPath)
-            ? buildWildcardKey(wildcardScope, wildcardPath)
-            : '';
 
     // Sparse and a partial filter are mutually exclusive on the server.
     const sparseDisabled = hasPartialFilter;
@@ -600,6 +617,14 @@ export const CreateIndexDrawer = ({
         pqSampleSizeValid;
 
     const vectorAlgorithmLabel = vectorAlgorithmOptions.find((o) => o.value === vectorAlgorithm)?.label ?? '';
+
+    const moveWildcardScopeSelection = (offset: number): void => {
+        const values = wildcardScopeOptions.map((option) => option.value);
+        const currentIndex = values.indexOf(wildcardScope);
+        const next = values[(currentIndex + offset + values.length) % values.length];
+        setForm((prev) => ({ ...prev, wildcardScope: next }));
+        wildcardScopeCardRefs.current[next]?.focus();
+    };
 
     // Select the algorithm `offset` positions from the current one (wrapping) and
     // move focus to its card, so the radio-card group is keyboard navigable.
@@ -1237,226 +1262,212 @@ export const CreateIndexDrawer = ({
                             <>
                                 <DrawerSection
                                     title={l10n.t('Scope')}
-                                    hint={l10n.t(
-                                        'Create one ascending wildcard key for all fields or for fields below a parent path.',
-                                    )}
+                                    hint={l10n.t('Choose which fields the wildcard index covers.')}
                                 >
                                     <div className="wildcardSettings">
-                                        <RadioGroup
-                                            value={wildcardScope}
-                                            disabled={interactionDisabled}
+                                        <div
+                                            className="vectorAlgorithmCards"
+                                            role="radiogroup"
                                             aria-label={l10n.t('Wildcard index scope')}
-                                            onChange={(_, data) => {
-                                                const scope = data.value;
-                                                if (scope === 'all' || scope === 'path') {
-                                                    setForm((prev) => ({
-                                                        ...prev,
-                                                        wildcardScope: scope as WildcardScope,
-                                                    }));
-                                                }
-                                            }}
                                         >
-                                            <Radio value="all" label={l10n.t('All fields')} />
-                                            <Radio value="path" label={l10n.t('Fields below a path')} />
-                                        </RadioGroup>
-
-                                        {/*
-                                         * The parent path stays mounted for both scopes — it is only
-                                         * disabled for "All fields" — so switching scope never shifts
-                                         * the layout. Validation applies only while the path scope is
-                                         * active.
-                                         */}
-                                        <Field
-                                            className="wildcardScopedPath"
-                                            label={l10n.t('Parent path')}
-                                            validationState={
-                                                wildcardScope === 'path' && wildcardPath.includes('$**')
-                                                    ? 'error'
-                                                    : 'none'
-                                            }
-                                            validationMessage={
-                                                wildcardScope === 'path' && wildcardPath.includes('$**')
-                                                    ? l10n.t(
-                                                          'Enter a parent path without $**. It is added automatically.',
-                                                      )
-                                                    : undefined
-                                            }
-                                            hint={l10n.t(
-                                                'For example, metadata creates metadata.$**. Leave empty to index all fields.',
-                                            )}
-                                        >
-                                            <div className="fieldRow">
-                                                <FieldNameCombobox
-                                                    value={wildcardPath}
-                                                    suggestions={fieldSuggestions}
-                                                    disabled={wildcardScope !== 'path' || interactionDisabled}
-                                                    onChange={(value) =>
-                                                        setForm((prev) => ({ ...prev, wildcardPath: value }))
-                                                    }
-                                                />
-                                                <Tooltip
-                                                    content={l10n.t('Clear parent path')}
-                                                    relationship="description"
-                                                    withArrow
-                                                >
-                                                    <Button
-                                                        appearance="subtle"
-                                                        size="small"
-                                                        icon={<ArrowResetRegular />}
-                                                        aria-label={l10n.t('Clear parent path')}
-                                                        disabled={wildcardScope !== 'path' || interactionDisabled}
+                                            {wildcardScopeOptions.map((option) => {
+                                                const selected = wildcardScope === option.value;
+                                                return (
+                                                    <button
+                                                        key={option.value}
+                                                        ref={(node) => {
+                                                            wildcardScopeCardRefs.current[option.value] = node;
+                                                        }}
+                                                        type="button"
+                                                        role="radio"
+                                                        aria-checked={selected}
+                                                        tabIndex={selected ? 0 : -1}
+                                                        className={
+                                                            selected
+                                                                ? 'vectorAlgoCard vectorAlgoCardSelected'
+                                                                : 'vectorAlgoCard'
+                                                        }
+                                                        disabled={interactionDisabled}
                                                         onClick={() =>
-                                                            setForm((prev) => ({ ...prev, wildcardPath: '' }))
+                                                            setForm((prev) => ({
+                                                                ...prev,
+                                                                wildcardScope: option.value,
+                                                            }))
+                                                        }
+                                                        onKeyDown={(event) => {
+                                                            if (
+                                                                event.key === 'ArrowRight' ||
+                                                                event.key === 'ArrowDown'
+                                                            ) {
+                                                                event.preventDefault();
+                                                                moveWildcardScopeSelection(1);
+                                                            } else if (
+                                                                event.key === 'ArrowLeft' ||
+                                                                event.key === 'ArrowUp'
+                                                            ) {
+                                                                event.preventDefault();
+                                                                moveWildcardScopeSelection(-1);
+                                                            }
+                                                        }}
+                                                    >
+                                                        <span className="vectorAlgoCardTitle">{option.label}</span>
+                                                        <span className="vectorAlgoCardHint">{option.hint}</span>
+                                                    </button>
+                                                );
+                                            })}
+                                        </div>
+
+                                        {wildcardScope === 'path' && (
+                                            <Field
+                                                label={l10n.t('Parent path')}
+                                                validationState={wildcardPath.includes('$**') ? 'error' : 'none'}
+                                                validationMessage={
+                                                    wildcardPath.includes('$**')
+                                                        ? l10n.t(
+                                                              'Enter a parent path without $**. It is added automatically.',
+                                                          )
+                                                        : undefined
+                                                }
+                                                hint={l10n.t('For example, metadata creates metadata.$**.')}
+                                            >
+                                                <div className="fieldRow">
+                                                    <FieldNameCombobox
+                                                        value={wildcardPath}
+                                                        suggestions={fieldSuggestions}
+                                                        disabled={interactionDisabled}
+                                                        onChange={(value) =>
+                                                            setForm((prev) => ({ ...prev, wildcardPath: value }))
                                                         }
                                                     />
-                                                </Tooltip>
-                                            </div>
-                                        </Field>
-
-                                        {wildcardKeyPreview !== '' && (
-                                            <div className="wildcardKeyPreview">
-                                                <span className="wildcardKeyPreviewLabel">
-                                                    {l10n.t('Index key preview')}
-                                                </span>
-                                                <code className="drawerSectionExample">{wildcardKeyPreview}</code>
-                                            </div>
+                                                    <Tooltip
+                                                        content={l10n.t('Clear parent path')}
+                                                        relationship="description"
+                                                        withArrow
+                                                    >
+                                                        <Button
+                                                            appearance="subtle"
+                                                            size="small"
+                                                            icon={<ArrowResetRegular />}
+                                                            aria-label={l10n.t('Clear parent path')}
+                                                            disabled={interactionDisabled}
+                                                            onClick={() =>
+                                                                setForm((prev) => ({ ...prev, wildcardPath: '' }))
+                                                            }
+                                                        />
+                                                    </Tooltip>
+                                                </div>
+                                            </Field>
                                         )}
                                     </div>
                                 </DrawerSection>
 
                                 {/*
-                                 * A wildcard projection is only accepted on the all-fields `$**`
-                                 * key. A scoped `path.$**` key already narrows the index, so the
-                                 * projection controls are only offered for the "All fields" scope.
+                                 * Projection is a dedicated scope choice: it uses the all-fields
+                                 * `$**` key and reveals the include/exclude controls directly.
                                  */}
-                                {wildcardScope === 'all' && (
+                                {wildcardScope === 'projection' && (
                                     <DrawerSection
-                                        title={l10n.t('Projection')}
+                                        title={l10n.t('Projection mode')}
                                         hint={l10n.t(
-                                            'Optionally limit which fields the wildcard index covers by including or excluding specific field paths.',
+                                            'Choose whether the listed fields are the only fields indexed or the fields omitted from the index.',
                                         )}
                                     >
-                                        <div className="typeOptions">
-                                            <OptionRow
-                                                label={l10n.t('Include or exclude specific fields')}
-                                                checked={wildcardProjectionEnabled}
-                                                disabled={interactionDisabled}
-                                                onToggle={(checked) =>
-                                                    setForm((prev) => ({ ...prev, wildcardProjectionEnabled: checked }))
+                                        <div className="wildcardProjectionBody">
+                                            <Field
+                                                hint={
+                                                    wildcardProjectionMode === 'include'
+                                                        ? l10n.t(
+                                                              'Only the selected paths, and every field nested under them, are indexed. All other fields are excluded.',
+                                                          )
+                                                        : l10n.t(
+                                                              'The selected paths, and every field nested under them, are excluded. All other fields are indexed.',
+                                                          )
                                                 }
                                             >
-                                                {wildcardProjectionEnabled && (
-                                                    <div className="wildcardProjectionBody">
-                                                        <Field
-                                                            label={l10n.t('Projection mode')}
-                                                            hint={
-                                                                wildcardProjectionMode === 'include'
-                                                                    ? l10n.t(
-                                                                          'Only the selected paths, and every field nested under them, are indexed. All other fields are excluded.',
-                                                                      )
-                                                                    : l10n.t(
-                                                                          'The selected paths, and every field nested under them, are excluded. All other fields are indexed.',
-                                                                      )
-                                                            }
-                                                        >
-                                                            <RadioGroup
-                                                                value={wildcardProjectionMode}
-                                                                disabled={interactionDisabled}
-                                                                aria-label={l10n.t('Wildcard projection mode')}
-                                                                onChange={(_, data) => {
-                                                                    const mode = data.value;
-                                                                    if (mode === 'include' || mode === 'exclude') {
-                                                                        setForm((prev) => ({
-                                                                            ...prev,
-                                                                            wildcardProjectionMode:
-                                                                                mode as WildcardProjectionMode,
-                                                                        }));
-                                                                    }
-                                                                }}
-                                                            >
-                                                                <Radio
-                                                                    value="include"
-                                                                    label={l10n.t('Include selected fields')}
-                                                                />
-                                                                <Radio
-                                                                    value="exclude"
-                                                                    label={l10n.t('Exclude selected fields')}
-                                                                />
-                                                            </RadioGroup>
-                                                        </Field>
+                                                <RadioGroup
+                                                    value={wildcardProjectionMode}
+                                                    disabled={interactionDisabled}
+                                                    aria-label={l10n.t('Wildcard projection mode')}
+                                                    onChange={(_, data) => {
+                                                        const mode = data.value;
+                                                        if (mode === 'include' || mode === 'exclude') {
+                                                            setForm((prev) => ({
+                                                                ...prev,
+                                                                wildcardProjectionMode: mode as WildcardProjectionMode,
+                                                            }));
+                                                        }
+                                                    }}
+                                                >
+                                                    <Radio value="include" label={l10n.t('Include selected fields')} />
+                                                    <Radio value="exclude" label={l10n.t('Exclude selected fields')} />
+                                                </RadioGroup>
+                                            </Field>
 
-                                                        <Field label={l10n.t('Fields')}>
-                                                            <div className="projectionFieldsList">
-                                                                {wildcardProjectionFields.map((draft) => (
-                                                                    <div key={draft.id} className="projectionFieldRow">
-                                                                        <FieldNameCombobox
-                                                                            value={draft.field}
-                                                                            suggestions={fieldSuggestions}
-                                                                            disabled={interactionDisabled}
-                                                                            onChange={(value) =>
-                                                                                updateProjectionField(draft.id, value)
-                                                                            }
-                                                                        />
-                                                                        {/*
-                                                                         * With a single projection field there is
-                                                                         * nothing to delete, so offer a "clear"
-                                                                         * affordance to reset that lone row instead
-                                                                         * of a disabled delete button — matching the
-                                                                         * standard index field list.
-                                                                         */}
-                                                                        {wildcardProjectionFields.length <= 1 ? (
-                                                                            <Tooltip
-                                                                                content={l10n.t('Clear field')}
-                                                                                relationship="description"
-                                                                                withArrow
-                                                                            >
-                                                                                <Button
-                                                                                    appearance="subtle"
-                                                                                    size="small"
-                                                                                    icon={<ArrowResetRegular />}
-                                                                                    aria-label={l10n.t('Clear field')}
-                                                                                    disabled={interactionDisabled}
-                                                                                    onClick={() =>
-                                                                                        clearProjectionField(draft.id)
-                                                                                    }
-                                                                                />
-                                                                            </Tooltip>
-                                                                        ) : (
-                                                                            <Tooltip
-                                                                                content={l10n.t('Remove field')}
-                                                                                relationship="description"
-                                                                                withArrow
-                                                                            >
-                                                                                <Button
-                                                                                    appearance="subtle"
-                                                                                    size="small"
-                                                                                    icon={<DeleteRegular />}
-                                                                                    aria-label={l10n.t('Remove field')}
-                                                                                    disabled={interactionDisabled}
-                                                                                    onClick={() =>
-                                                                                        removeProjectionField(draft.id)
-                                                                                    }
-                                                                                />
-                                                                            </Tooltip>
-                                                                        )}
-                                                                    </div>
-                                                                ))}
-                                                            </div>
-                                                        </Field>
-                                                        <div>
-                                                            <Button
-                                                                appearance="subtle"
-                                                                size="small"
-                                                                icon={<AddRegular />}
+                                            <Field label={l10n.t('Fields')}>
+                                                <div className="projectionFieldsList">
+                                                    {wildcardProjectionFields.map((draft) => (
+                                                        <div key={draft.id} className="projectionFieldRow">
+                                                            <FieldNameCombobox
+                                                                value={draft.field}
+                                                                suggestions={fieldSuggestions}
                                                                 disabled={interactionDisabled}
-                                                                onClick={addProjectionField}
-                                                            >
-                                                                {l10n.t('Add field')}
-                                                            </Button>
+                                                                onChange={(value) =>
+                                                                    updateProjectionField(draft.id, value)
+                                                                }
+                                                            />
+                                                            {/*
+                                                             * With a single projection field there is
+                                                             * nothing to delete, so offer a "clear"
+                                                             * affordance to reset that lone row instead
+                                                             * of a disabled delete button — matching the
+                                                             * standard index field list.
+                                                             */}
+                                                            {wildcardProjectionFields.length <= 1 ? (
+                                                                <Tooltip
+                                                                    content={l10n.t('Clear field')}
+                                                                    relationship="description"
+                                                                    withArrow
+                                                                >
+                                                                    <Button
+                                                                        appearance="subtle"
+                                                                        size="small"
+                                                                        icon={<ArrowResetRegular />}
+                                                                        aria-label={l10n.t('Clear field')}
+                                                                        disabled={interactionDisabled}
+                                                                        onClick={() => clearProjectionField(draft.id)}
+                                                                    />
+                                                                </Tooltip>
+                                                            ) : (
+                                                                <Tooltip
+                                                                    content={l10n.t('Remove field')}
+                                                                    relationship="description"
+                                                                    withArrow
+                                                                >
+                                                                    <Button
+                                                                        appearance="subtle"
+                                                                        size="small"
+                                                                        icon={<DeleteRegular />}
+                                                                        aria-label={l10n.t('Remove field')}
+                                                                        disabled={interactionDisabled}
+                                                                        onClick={() => removeProjectionField(draft.id)}
+                                                                    />
+                                                                </Tooltip>
+                                                            )}
                                                         </div>
-                                                    </div>
-                                                )}
-                                            </OptionRow>
+                                                    ))}
+                                                </div>
+                                            </Field>
+                                            <div>
+                                                <Button
+                                                    appearance="subtle"
+                                                    size="small"
+                                                    icon={<AddRegular />}
+                                                    disabled={interactionDisabled}
+                                                    onClick={addProjectionField}
+                                                >
+                                                    {l10n.t('Add field')}
+                                                </Button>
+                                            </div>
                                         </div>
                                     </DrawerSection>
                                 )}
