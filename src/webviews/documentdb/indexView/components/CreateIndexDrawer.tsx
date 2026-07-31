@@ -1273,18 +1273,7 @@ export const CreateIndexDrawer = ({
                                                             }
                                                         }}
                                                         floatingAction={
-                                                            <Radio
-                                                                checked={selected}
-                                                                disabled={interactionDisabled}
-                                                                value={option.value}
-                                                                aria-label={option.label}
-                                                                onChange={() =>
-                                                                    setForm((prev) => ({
-                                                                        ...prev,
-                                                                        wildcardScope: option.value,
-                                                                    }))
-                                                                }
-                                                            />
+                                                            <Radio value={option.value} aria-label={option.label} />
                                                         }
                                                     >
                                                         <CardHeader
@@ -1539,18 +1528,7 @@ export const CreateIndexDrawer = ({
                                                         }
                                                     }}
                                                     floatingAction={
-                                                        <Radio
-                                                            checked={selected}
-                                                            disabled={interactionDisabled}
-                                                            value={option.value}
-                                                            aria-label={option.label}
-                                                            onChange={() =>
-                                                                setForm((prev) => ({
-                                                                    ...prev,
-                                                                    vectorAlgorithm: option.value,
-                                                                }))
-                                                            }
-                                                        />
+                                                        <Radio value={option.value} aria-label={option.label} />
                                                     }
                                                 >
                                                     <CardHeader
