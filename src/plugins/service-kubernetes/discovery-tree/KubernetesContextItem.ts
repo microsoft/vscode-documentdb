@@ -28,7 +28,6 @@ import {
 import { KubernetesNamespaceItem } from './KubernetesNamespaceItem';
 import { KubernetesOtherNamespacesItem } from './KubernetesOtherNamespacesItem';
 import { KubernetesResourceItem } from './documentdb/KubernetesResourceItem';
-import { classifyKubernetesConnectionError } from './kubernetesConnectionError';
 
 interface NamespaceDiscoveryResult {
     readonly namespace: string;
@@ -107,7 +106,12 @@ export class KubernetesContextItem implements TreeElement, TreeElementWithContex
                     context.telemetry.properties.namespaceFetchErrorType =
                         error instanceof Error ? error.name : 'UnknownError';
 
-                    return createConnectionErrorChildren(this.id, error, this, this.alias ?? this.contextInfo.name);
+                    return createConnectionErrorChildren(
+                        this.id,
+                        errorMessage,
+                        this,
+                        this.alias ?? this.contextInfo.name,
+                    );
                 }
 
                 context.telemetry.measurements.clusterConnectMs = Date.now() - clusterConnectStart;
@@ -337,31 +341,74 @@ async function mapWithBoundedConcurrency<T>(
  * Classifies a Kubernetes API error message into a user-friendly summary
  * and an actionable hint so tree error nodes are immediately useful.
  */
-function classifyConnectionError(error: unknown): { summary: string; hint: string } {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    // Truncate long generic messages
-    const truncated = errorMessage.length > 120 ? errorMessage.slice(0, 117) + '...' : errorMessage;
+function classifyConnectionError(errorMessage: string): { summary: string; hint: string } {
+    const lower = errorMessage.toLowerCase();
 
-    return classifyKubernetesConnectionError(error, {
-        unauthorized: {
+    if (lower.includes('401') || lower.includes('unauthorized')) {
+        return {
             summary: vscode.l10n.t('Authentication failed (401 Unauthorized)'),
             hint: vscode.l10n.t(
                 'Credentials may have expired. Re-authenticate with your cluster or update the kubeconfig.',
             ),
-        },
-        forbidden: {
+        };
+    }
+    if (lower.includes('403') || lower.includes('forbidden')) {
+        return {
             summary: vscode.l10n.t('Access denied (403 Forbidden)'),
             hint: vscode.l10n.t(
                 'Your account lacks the required RBAC permissions. Contact your cluster administrator.',
             ),
-        },
-        unknown: {
-            summary: vscode.l10n.t('Connection failed: {0}', truncated),
+        };
+    }
+    if (lower.includes('econnrefused') || lower.includes('connection refused')) {
+        return {
+            summary: vscode.l10n.t('Connection refused'),
             hint: vscode.l10n.t(
-                'Check the output channel for details. The cluster may be unreachable or your credentials may need updating.',
+                'The cluster may be stopped or unreachable. Verify the cluster is running and the server URL is correct.',
             ),
-        },
-    });
+        };
+    }
+    if (lower.includes('enotfound') || lower.includes('getaddrinfo')) {
+        return {
+            summary: vscode.l10n.t('Cluster not found (DNS resolution failed)'),
+            hint: vscode.l10n.t(
+                'The server hostname could not be resolved. The cluster may have been deleted or the URL may be incorrect.',
+            ),
+        };
+    }
+    if (lower.includes('etimedout') || lower.includes('timeout') || lower.includes('timed out')) {
+        return {
+            summary: vscode.l10n.t('Connection timed out'),
+            hint: vscode.l10n.t(
+                'The cluster did not respond in time. Check your network connection and firewall settings.',
+            ),
+        };
+    }
+    if (lower.includes('certificate') || lower.includes('cert') || lower.includes('ssl') || lower.includes('tls')) {
+        return {
+            summary: vscode.l10n.t('Certificate error'),
+            hint: vscode.l10n.t(
+                'The cluster certificate may have changed or expired. Update your kubeconfig with fresh credentials.',
+            ),
+        };
+    }
+    if (lower.includes('not found') || lower.includes('404')) {
+        return {
+            summary: vscode.l10n.t('Resource not found'),
+            hint: vscode.l10n.t(
+                'The cluster or API endpoint may have been deleted. Verify your kubeconfig is up to date.',
+            ),
+        };
+    }
+
+    // Truncate long generic messages
+    const truncated = errorMessage.length > 120 ? errorMessage.slice(0, 117) + '...' : errorMessage;
+    return {
+        summary: vscode.l10n.t('Connection failed: {0}', truncated),
+        hint: vscode.l10n.t(
+            'Check the output channel for details. The cluster may be unreachable or your credentials may need updating.',
+        ),
+    };
 }
 
 /**
@@ -380,12 +427,11 @@ function classifyConnectionError(error: unknown): { summary: string; hint: strin
  */
 function createConnectionErrorChildren(
     parentId: string,
-    error: unknown,
+    errorMessage: string,
     retryTarget: TreeElement,
     connectionLabel: string,
 ): TreeElement[] {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    const { summary, hint } = classifyConnectionError(error);
+    const { summary, hint } = classifyConnectionError(errorMessage);
 
     void vscode.window.showErrorMessage(vscode.l10n.t('Failed to connect to "{0}"', connectionLabel), {
         modal: true,

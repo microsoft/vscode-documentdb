@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { AtlasCredentialsView } from '../documentdb/atlasCredentials/AtlasCredentialsView';
 import { CollectionView } from '../documentdb/collectionView/CollectionView';
 import { DocumentView } from '../documentdb/documentView/documentView';
 import { LocalQuickStart } from '../documentdb/localQuickStart/LocalQuickStart';
@@ -39,6 +40,7 @@ export const WebviewRegistry = {
     collectionView: CollectionView,
     documentView: DocumentView,
     localQuickStart: LocalQuickStart,
+    atlasCredentials: AtlasCredentialsView,
 } as const;
 
 /**

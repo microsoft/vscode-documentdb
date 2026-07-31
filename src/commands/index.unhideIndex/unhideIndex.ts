@@ -5,11 +5,13 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
 import { type IndexItem } from '../../tree/documentdb/IndexItem';
-import { getConfirmationWithClick } from '../../utils/dialogs/getConfirmation';
+import { confirmIndexAction } from '../../utils/dialogs/confirmIndexAction';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
+import { getIndexConfirmationStats } from '../index.shared/getIndexConfirmationStats';
 
 export async function unhideIndex(context: IActionContext, node: IndexItem): Promise<void> {
     if (!node) {
@@ -27,12 +29,13 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
     const indexName = node.indexInfo.name;
     const collectionName = node.collectionInfo.name;
 
-    const confirmed = await getConfirmationWithClick(
-        l10n.t('Unhide index?'),
-        l10n.t('Unhide index "{indexName}" from collection "{collectionName}"?', { indexName, collectionName }) +
-            '\n' +
-            l10n.t('This will allow the query planner to use this index again.'),
-    );
+    const { sizeText, usageText } = await getIndexConfirmationStats(node);
+    const confirmed = await confirmIndexAction('unhide', {
+        indexName,
+        collectionName,
+        sizeText,
+        usageText,
+    });
 
     if (!confirmed) {
         return;
@@ -62,6 +65,16 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
         if (success) {
             showConfirmationAsInSettings(l10n.t('Index "{indexName}" has been unhidden.', { indexName }));
         }
+    } catch (error) {
+        // Failed user action -> modal (matches the webview matrix); suppress
+        // azext's default non-modal error and rethrow for telemetry.
+        const detail = error instanceof Error ? error.message : String(error);
+        context.errorHandling.suppressDisplay = true;
+        void vscode.window.showErrorMessage(l10n.t('Failed to unhide index "{indexName}".', { indexName }), {
+            modal: true,
+            detail,
+        });
+        throw error;
     } finally {
         // Refresh parent (collection's indexes folder)
         const lastSlashIndex = node.id.lastIndexOf('/');
