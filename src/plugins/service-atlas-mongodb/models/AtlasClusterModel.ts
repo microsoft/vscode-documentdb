@@ -5,7 +5,7 @@
 
 import { type Experience } from '../../../DocumentDBExperiences';
 import { type BaseClusterModel } from '../../../tree/models/BaseClusterModel';
-import { type AtlasClusterState } from './AtlasProjectModel';
+import { ATLAS_CLUSTER_STATES, type AtlasClusterState, type AtlasClusterType } from './AtlasProjectModel';
 
 /**
  * Cluster model for MongoDB Atlas clusters discovered via the Atlas Admin API.
@@ -22,7 +22,7 @@ export interface AtlasClusterModel extends BaseClusterModel {
     readonly stateName: AtlasClusterState;
 
     /** Cluster type (REPLICASET, SHARDED, GEOSHARDED) */
-    readonly clusterType: string;
+    readonly clusterType: AtlasClusterType;
 
     /** Cloud provider name (AWS, GCP, AZURE) */
     readonly providerName: string;
@@ -47,9 +47,9 @@ export function createAtlasClusterModel(
         id: string;
         name: string;
         mongoDBVersion: string;
-        connectionStrings: { standardSrv?: string; standard?: string };
+        connectionStrings?: { standardSrv?: string; standard?: string };
         stateName: AtlasClusterState;
-        clusterType: string;
+        clusterType: AtlasClusterType;
         providerSettings?: { providerName: string; regionName: string; instanceSizeName: string };
         replicationSpecs?: {
             regionConfigs?: {
@@ -81,12 +81,15 @@ export function createAtlasClusterModel(
 
     return {
         name: cluster.name,
-        connectionString: cluster.connectionStrings.standardSrv ?? cluster.connectionStrings.standard,
+        // Atlas is a live API and this model is built from a cast, not a validated payload. These
+        // guards cover the fields a missing value would actually throw on; see the tracked issue
+        // (NEW-7 Proposal A) for validating the whole boundary.
+        connectionString: cluster.connectionStrings?.standardSrv ?? cluster.connectionStrings?.standard,
         dbExperience,
         clusterId,
         projectId,
         projectName,
-        stateName: cluster.stateName,
+        stateName: ATLAS_CLUSTER_STATES.includes(cluster.stateName) ? cluster.stateName : 'UNKNOWN',
         clusterType: cluster.clusterType,
         providerName: provider.providerName,
         regionName: provider.regionName,

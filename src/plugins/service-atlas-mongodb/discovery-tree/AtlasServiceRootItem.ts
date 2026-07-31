@@ -4,6 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { createContextValue, type IActionContext } from '@microsoft/vscode-azext-utils';
+import { randomUUID } from 'crypto';
 import * as vscode from 'vscode';
 import { Views } from '../../../documentdb/Views';
 import { AtlasExperience } from '../../../DocumentDBExperiences';
@@ -51,6 +52,13 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
      */
     public contextValue: string =
         'enableRefreshCommand;enableManageCredentialsCommand;enableLearnMoreCommand;discoveryAtlasServiceRootItem';
+
+    /**
+     * Correlates a single discovery journey (root expansion → connect) across telemetry events,
+     * matching the other discovery providers. Threaded down to every cluster item so a connection
+     * can be attributed back to the expansion that surfaced it.
+     */
+    private readonly journeyCorrelationId = randomUUID();
 
     constructor(
         private readonly discoveryService: AtlasDiscoveryService,
@@ -126,6 +134,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
                     entry.organization,
                     this.discoveryService,
                     degradedOrgIds.has(entry.organization.id),
+                    this.journeyCorrelationId,
                 ),
         );
     }
@@ -145,7 +154,7 @@ export class AtlasServiceRootItem implements TreeElement, TreeElementWithContext
             };
             const orgName = orgNames.get(entry.orgId);
             const context = orgName ? `${orgName} · ${entry.projectName}` : entry.projectName;
-            return new AtlasClusterItem('', treeCluster, context, {
+            return new AtlasClusterItem(this.journeyCorrelationId, treeCluster, context, {
                 service: this.discoveryService,
                 ownerCredentialId: entry.ownerCredentialId,
             });

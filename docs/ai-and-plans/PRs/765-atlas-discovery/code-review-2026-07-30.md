@@ -1466,6 +1466,12 @@ version of this concern is a separate, larger issue: the union is never enforced
 payload either, which is covered by
 [NEW-7](#new-7-atlas-api-payloads-are-cast-never-validated).
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — Proposal A, folded into NEW-7.** Since
+> NEW-7 already reopened these model files, `AtlasClusterModel.clusterType` and the
+> `createAtlasClusterModel` factory input now use the `AtlasClusterType` union instead of `string`,
+> as the reviewer suggested doing "whenever the touched model is next updated".
+> Fix: [AtlasClusterModel.ts](../../../../src/plugins/service-atlas-mongodb/models/AtlasClusterModel.ts).
+
 ## Second-Pass Findings
 
 Everything below was found in the second pass and was not reported in pass 1. Each item names the
@@ -1910,6 +1916,17 @@ cluster as `TreeItemCollapsibleState.None` and reuse `getStateExplanation()` in 
 **Recommendation: Proposal A.** The wizard already made this decision for the same data; the tree
 should not disagree with it.
 
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — Proposal A.** `AtlasClusterItem` now
+> renders a non-IDLE or connection-string-less cluster as `TreeItemCollapsibleState.None` via an
+> `isConnectable()` helper, and the tooltip explains why (`getStateExplanation()` for a non-IDLE
+> state, or a "does not expose a connection string yet" message for the connection-string-less case).
+> `authenticateAndConnect()` and `getCredentials()` guard on `isConnectable()` and show a localized
+> warning instead of tripping the internal `nonNullValue` assertion. The related unguarded
+> `connectionStrings` dereferences are covered by NEW-7.
+> Fix: [AtlasClusterItem.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.ts).
+> Tests: collapsibleState `Collapsed`/`None` cases in
+> [AtlasClusterItem.test.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasClusterItem.test.ts).
+
 ### NEW-6: The Atlas plugin is the only discovery provider without a journey correlation ID
 
 **Severity: Low.** A telemetry blind spot rather than a user-visible defect, but it silently breaks
@@ -1948,6 +1965,15 @@ other source can.
 
 **Recommendation: Proposal A.** This is prior art that already exists four times in the repository;
 diverging from it is not a design choice here, it is an omission.
+
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — Proposal A.** `AtlasServiceRootItem`
+> mints a `journeyCorrelationId` (`randomUUID()`) and threads it through `AtlasOrganizationItem` and
+> `AtlasProjectItem` to every `AtlasClusterItem`, plus the List-mode direct construction. Both the
+> Tree and List paths now pass the ID instead of `''`, so Atlas connections correlate across the
+> discovery funnel like the other providers.
+> Fix: [AtlasServiceRootItem.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasServiceRootItem.ts),
+> [AtlasOrganizationItem.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasOrganizationItem.ts),
+> [AtlasProjectItem.ts](../../../../src/plugins/service-atlas-mongodb/discovery-tree/AtlasProjectItem.ts).
 
 ### NEW-7: Atlas API payloads are cast, never validated
 
@@ -2017,6 +2043,21 @@ stateName: ATLAS_CLUSTER_STATES.includes(cluster.stateName) ? cluster.stateName 
 
 **Then file the issue** — see [ISSUE-1](#issue-1-validate-atlas-admin-api-payloads-at-the-boundary)
 in "Follow-up Issues to File". Do not attempt the `zod` boundary in this PR.
+
+> ✅ **RESOLVED (dev/tnaum/atlas-discovery-review-iteration) — Proposal B; INFO-1 folded in.**
+> `AtlasCluster.connectionStrings` is now optional, turning the two unguarded dereferences
+> (`createAtlasClusterModel`, `SelectAtlasSteps.getClusterItems`) into guarded `?.` accesses. A new
+> exported `ATLAS_CLUSTER_STATES` array normalizes an unrecognized `stateName` to `'UNKNOWN'` at the
+> model boundary, and the three `mergeResults` `localeCompare` comparators use `?? ''`. INFO-1 was
+> folded in while the model was open: `AtlasClusterModel.clusterType` and the factory input now use
+> the `AtlasClusterType` union instead of `string`. The `zod` boundary (Proposal A / ISSUE-1) was
+> not attempted; it is noted in the executive summary as a follow-up.
+> Fix: [AtlasProjectModel.ts](../../../../src/plugins/service-atlas-mongodb/models/AtlasProjectModel.ts),
+> [AtlasClusterModel.ts](../../../../src/plugins/service-atlas-mongodb/models/AtlasClusterModel.ts),
+> [AtlasDiscoveryService.ts](../../../../src/plugins/service-atlas-mongodb/discovery/AtlasDiscoveryService.ts),
+> [SelectAtlasSteps.ts](../../../../src/plugins/service-atlas-mongodb/discovery-wizard/SelectAtlasSteps.ts).
+> Tests: missing-connectionStrings and unrecognized-state cases in
+> [AtlasClusterModel.test.ts](../../../../src/plugins/service-atlas-mongodb/models/AtlasClusterModel.test.ts).
 
 ### NEW-8: Terminal and shell titles lose their existing translations
 

@@ -119,6 +119,13 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
                 context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
             }
 
+            // "Save to Connections" is offered even for a non-IDLE / connection-string-less cluster.
+            // Explain why it cannot be saved instead of tripping the internal `nonNullValue` assert.
+            if (!this.isConnectable()) {
+                void vscode.window.showWarningMessage(this.describeUnavailable());
+                return undefined;
+            }
+
             return {
                 connectionString: nonNullValue(
                     this.cluster.connectionString,
@@ -151,6 +158,13 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
             context.telemetry.properties.resourceType = RESOURCE_TYPE;
             if (this.journeyCorrelationId) {
                 context.telemetry.properties.journeyCorrelationId = this.journeyCorrelationId;
+            }
+
+            // Defense in depth: the tree marks a non-connectable cluster as a leaf, but if this is
+            // reached anyway, explain why rather than tripping the internal connection-string assert.
+            if (!this.isConnectable()) {
+                void vscode.window.showWarningMessage(this.describeUnavailable());
+                return null;
             }
 
             ext.outputChannel.appendLine(
@@ -320,8 +334,29 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
             description: this.buildDescription(),
             tooltip: this.buildTooltip(),
             iconPath: new vscode.ThemeIcon('server-environment'),
-            collapsibleState: vscode.TreeItemCollapsibleState.Collapsed,
+            // A non-IDLE cluster, or one Atlas has not published a connection string for yet, cannot
+            // be connected to. Mark it as a leaf so expanding it does not reach an internal
+            // assertion; the tooltip explains why. This mirrors the wizard's guard in
+            // `SelectAtlasClusterStep`, so the two surfaces agree.
+            collapsibleState: this.isConnectable()
+                ? vscode.TreeItemCollapsibleState.Collapsed
+                : vscode.TreeItemCollapsibleState.None,
         };
+    }
+
+    /** IDLE with a known connection string is the only state a cluster can be opened from. */
+    private isConnectable(): boolean {
+        return this.cluster.stateName === 'IDLE' && !!this.cluster.connectionString;
+    }
+
+    /** Localized reason a non-connectable cluster cannot be opened, for tooltips and guards. */
+    private describeUnavailable(): string {
+        return (
+            this.getStateExplanation() ??
+            l10n.t(
+                'This cluster does not expose a connection string yet. Try refreshing once it finishes provisioning.',
+            )
+        );
     }
 
     /**
@@ -418,10 +453,12 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
             return md;
         }
 
-        if (this.cluster.connectionString) {
-            md.appendMarkdown(`\n---\n`);
-            md.appendMarkdown(l10n.t('Connection string available — expand to connect and browse databases.'));
-        }
+        md.appendMarkdown(`\n---\n`);
+        md.appendMarkdown(
+            this.cluster.connectionString
+                ? l10n.t('Connection string available — expand to connect and browse databases.')
+                : escapeMarkdown(this.describeUnavailable()),
+        );
 
         return md;
     }

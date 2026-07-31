@@ -726,10 +726,10 @@ export function mergeResults(results: readonly CredentialResult[], clustersInclu
                 credentialIds,
                 ownerCredentialId: credentialIds[0],
             }))
-            .sort((a, b) => a.organization.name.localeCompare(b.organization.name, undefined, { numeric: true })),
+            .sort((a, b) => (a.organization.name ?? '').localeCompare(b.organization.name ?? '', undefined, { numeric: true })),
         projects: [...projects.values()]
             .map(({ project, credentialIds }) => ({ project, credentialIds, ownerCredentialId: credentialIds[0] }))
-            .sort((a, b) => a.project.name.localeCompare(b.project.name, undefined, { numeric: true })),
+            .sort((a, b) => (a.project.name ?? '').localeCompare(b.project.name ?? '', undefined, { numeric: true })),
         clusters: [...clusters.values()]
             .map(({ cluster, project, credentialIds, orgId }) => ({
                 cluster,
@@ -739,7 +739,7 @@ export function mergeResults(results: readonly CredentialResult[], clustersInclu
                 credentialIds,
                 ownerCredentialId: credentialIds[0],
             }))
-            .sort((a, b) => a.cluster.name.localeCompare(b.cluster.name, undefined, { numeric: true })),
+            .sort((a, b) => (a.cluster.name ?? '').localeCompare(b.cluster.name ?? '', undefined, { numeric: true })),
         credentialErrors,
         projectErrors,
         credentialsQueried: results.length,

@@ -52,6 +52,8 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
         private readonly discoveryService: AtlasDiscoveryService,
         private readonly ownerCredentialId: string,
         private readonly orgName?: string,
+        /** Correlates the discovery journey down to each cluster; empty when not threaded. */
+        private readonly journeyCorrelationId: string = '',
     ) {
         this.id = `${parentId}/${project.id}`;
     }
@@ -99,7 +101,7 @@ export class AtlasProjectItem implements TreeElement, TreeElementWithContextValu
                         treeId: `${this.id}/${cluster.name.replaceAll('/', '_')}`,
                         viewId: Views.DiscoveryView,
                     };
-                    return new AtlasClusterItem('', treeCluster, undefined, {
+                    return new AtlasClusterItem(this.journeyCorrelationId, treeCluster, undefined, {
                         service: this.discoveryService,
                         ownerCredentialId: this.ownerCredentialId,
                     });

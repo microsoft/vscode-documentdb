@@ -228,7 +228,7 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             }
 
             const connectionString =
-                selected.cluster.connectionStrings.standardSrv ?? selected.cluster.connectionStrings.standard;
+                selected.cluster.connectionStrings?.standardSrv ?? selected.cluster.connectionStrings?.standard;
             if (!connectionString) {
                 throw new UserCancelledError(vscode.l10n.t('No Atlas cluster connection string available.'));
             }
@@ -291,7 +291,7 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
                     description: stateLabel ? `${providerDescription} · ${stateLabel}` : providerDescription,
                     detail:
                         c.stateName === 'IDLE'
-                            ? (c.connectionStrings.standardSrv ?? c.connectionStrings.standard)
+                            ? (c.connectionStrings?.standardSrv ?? c.connectionStrings?.standard)
                             : vscode.l10n.t(
                                   'Visible in the tree, but not connectable until the cluster returns to IDLE.',
                               ),
