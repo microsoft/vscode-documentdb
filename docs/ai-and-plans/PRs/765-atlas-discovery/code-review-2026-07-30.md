@@ -13,6 +13,57 @@ Base: `release/0.10.0`
 > "Owner decision" or "Recommendation" paragraph inside the same finding, which is retained only so
 > the reasoning trail stays readable. Requested code comments are part of the deliverable.
 
+## Implementation Iteration — Executive Summary
+
+Branch: `dev/tnaum/atlas-discovery-review-iteration` (cut from `feature/atlas-discovery`).
+Iteration date: 2026-07-31. Each work item is one commit; each finding below carries an inline
+`✅ RESOLVED` note at the end of its section pointing at the fix and tests.
+
+**PR checklist (all green):** `npm run l10n` → `npm run prettier-fix` → `npm run lint` →
+`npx jest --no-coverage` (180 suites, **2941 tests pass**, up from 2905) → `npm run build`.
+
+### Implemented (one commit each)
+
+| Finding(s)                         | What was done                                                                                                                                                                                                |
+| ---------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **MEDIUM-1**                       | `signal?.throwIfAborted()` before `persistCredential()` in both auth methods.                                                                                                                                |
+| **WITHDRAWN-1 + NEW-4**            | Sign the full Digest request-target; cache the challenge and reuse with an incrementing `nc`.                                                                                                                |
+| **NEW-2**                          | Added `mongoDBAtlas` to the four remaining `treeitem_index` `when` clauses.                                                                                                                                  |
+| **MEDIUM-2**                       | Serialized `listAll()` passes; `invalidate()` keeps `inflight`; per-pass timeout; abort/timeout classifier.                                                                                                  |
+| **MEDIUM-3 + NEW-3**               | Typed `AtlasTokenError`; rethrow transient token failures; classifier-driven tree modal + refresh-vs-expand rule.                                                                                            |
+| **NEW-8**                          | Reverted per-source shell terminal labelling; restored the four original DocumentDB message IDs.                                                                                                             |
+| **MEDIUM-4**                       | `updateAtlasCredentialMetadata` no longer rewrites secrets; per-credential generation guard on `storeSession`.                                                                                               |
+| **LOW-1 + LOW-2**                  | `openUrl()` returns the open result; router notifies on failure; credential-neutral `403` fallback.                                                                                                          |
+| **LOW-3 + LOW-4**                  | One localized tooltip field list using "Server version"; `requiresInitialCollection` comment terminology.                                                                                                    |
+| **NEW-5 + NEW-6 + NEW-7 + INFO-1** | Tree/wizard parity for non-connectable clusters; journey correlation ID threaded from root; payload guards (`connectionStrings?`, `UNKNOWN` state, `?? ''` comparators); `AtlasClusterType` union folded in. |
+
+### Skipped / not implemented (with reasons)
+
+- **NEW-1** (footer experiment): accepted per the FINAL DECISION — it is intended for a preview
+  release. No change. Removal checklist for the preview exit remains recorded in the finding.
+- **NEW-9** (`config.ts` module-load `l10n.t()`): accepted per the FINAL DECISION — left consistent
+  with the two Azure plugins; tracked extension-wide instead of fixing one plugin in isolation.
+- **NEW-10 – NEW-13** (dead code, recursive prompt, token-shape check, unrelated-bundling): marked
+  non-blocking / accepted in the work order. Not addressed to keep scope to the disposition. NEW-13's
+  `requiresInitialCollection`-once-saved sub-point is left for an explicit product decision.
+- **Deferred issues (ISSUE-1 zod boundary, ISSUE-2 platform-aware shell, ISSUE-3 extension-wide
+  `l10n.t()`):** the disposition says "file these, do not implement". They are **not** implemented.
+  They were also **not auto-filed as GitHub issues** — creating public issues is a shared-system
+  action left for the operator; the ready-to-paste bodies remain in "Follow-up Issues to File".
+
+### Deviations from the plan (confidence-based)
+
+- **WITHDRAWN-1 Digest URL parsing:** the proposal snippet used `new URL(path, ATLAS_API_BASE_URL)`,
+  which would drop the base's `/api/atlas/v2` path prefix because request paths start with `/`. The
+  concatenated string is parsed directly instead — same "one parsed URL" intent, correct for the
+  path-prefixed base. (Confidence > 80%; documented in the finding.)
+- **LOW-1 tests:** the requested router-level notification tests were not added — there is no
+  existing `appRouter` caller test harness and `appRouter` transitively imports the full webview
+  router graph, so a bespoke harness was disproportionate for a Low finding. The `openUrl` util
+  boolean contract is tested; the router branch is trivial and type-checked. (Documented in LOW-1.)
+- **INFO-1** (non-blocking) was folded into NEW-7 because that finding already reopened the same
+  model files, matching the reviewer's "whenever the touched model is next updated" guidance.
+
 ## Severity Summary
 
 Counts reflect the state **after the owner decisions of 2026-07-31**. Movement is tracked in the
@@ -326,7 +377,6 @@ callback runs.
 > `onCredentialPersisted` runs, in
 > [atlasCredentialsRouter.test.ts](../../../../src/webviews/documentdb/atlasCredentials/atlasCredentialsRouter.test.ts).
 
-
 ### MEDIUM-2: Incompatible discovery passes can coalesce or overwrite each other
 
 Source: Independent review.
@@ -624,7 +674,7 @@ Tests to add:
 > again after the predecessor commits, and the pass chains off `this.inflight` with an
 > identity-checked `finally`. All four required companion changes landed: `invalidate()` no longer
 > clears `inflight`; `buildSnapshot()` wraps the caller's signal with `AbortSignal.any([signal,
-> AbortSignal.timeout(DISCOVERY_TIMEOUT_MS)])`; `classifyAtlasError()` maps `DOMException`
+AbortSignal.timeout(DISCOVERY_TIMEOUT_MS)])`; `classifyAtlasError()` maps `DOMException`
 > `TimeoutError`/`AbortError` to `network`; and `buildSnapshot()` returns without committing when the
 > caller's `signal` aborted (a timeout still commits as network errors). All required explanatory
 > comments were kept.
@@ -2159,7 +2209,6 @@ prefix. Not in this PR.
 > Fix: [openInteractiveShell.ts](../../../../src/commands/openInteractiveShell/openInteractiveShell.ts),
 > [DocumentDBShellPty.ts](../../../../src/documentdb/shell/DocumentDBShellPty.ts),
 > [ShellSessionManager.ts](../../../../src/documentdb/shell/ShellSessionManager.ts).
-
 
 ### NEW-9: `config.ts` evaluates `l10n.t()` at module load, against in-repo precedent
 
