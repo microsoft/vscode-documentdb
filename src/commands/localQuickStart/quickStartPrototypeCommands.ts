@@ -35,6 +35,10 @@ export function openQuickStartPrototypeGuided(_context: IActionContext): void {
     open('guided');
 }
 
+export function openQuickStartPrototypeRecommended(_context: IActionContext): void {
+    open('recommended');
+}
+
 interface PrototypePick extends vscode.QuickPickItem {
     readonly prototype?: QuickStartPrototype;
 }
@@ -42,6 +46,12 @@ interface PrototypePick extends vscode.QuickPickItem {
 /** One entry point that offers all layouts side by side, for a review session. */
 export async function pickQuickStartPrototype(context: IActionContext): Promise<void> {
     const items: PrototypePick[] = [
+        {
+            label: `$(star-full) ${vscode.l10n.t('Recommended — 2nd iteration')}`,
+            description: vscode.l10n.t('One page with Atlas verification patterns'),
+            detail: vscode.l10n.t('Pinned actions, visible setup stages, and recovery beside the failed stage.'),
+            prototype: 'recommended',
+        },
         {
             label: `$(rocket) ${vscode.l10n.t('A — Express')}`,
             description: vscode.l10n.t('One page, no navigation'),

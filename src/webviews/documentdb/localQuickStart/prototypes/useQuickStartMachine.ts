@@ -274,6 +274,7 @@ export function useQuickStartMachine(): QuickStartMachine {
             }
             setErrorMessage(undefined);
             setSuccessMessage(undefined);
+            setBoundPort(undefined);
             setTimedOut(false);
             setElapsedMs(0);
             setPhase('provisioning');

@@ -61,6 +61,7 @@ import { openLocalQuickStart } from '../commands/localQuickStart/openLocalQuickS
 import {
     openQuickStartPrototypeExpress,
     openQuickStartPrototypeGuided,
+    openQuickStartPrototypeRecommended,
     openQuickStartPrototypeWizard,
     pickQuickStartPrototype,
 } from '../commands/localQuickStart/quickStartPrototypeCommands';
@@ -706,6 +707,10 @@ export class ClustersExtension implements vscode.Disposable {
                 registerCommand(
                     'vscode-documentdb.command.localQuickStart.prototype.guided',
                     withCommandCorrelation(openQuickStartPrototypeGuided),
+                );
+                registerCommand(
+                    'vscode-documentdb.command.localQuickStart.prototype.recommended',
+                    withCommandCorrelation(openQuickStartPrototypeRecommended),
                 );
 
                 registerCommand(

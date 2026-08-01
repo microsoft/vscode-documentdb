@@ -9,6 +9,7 @@ import { DocumentView } from '../documentdb/documentView/documentView';
 import { LocalQuickStart } from '../documentdb/localQuickStart/LocalQuickStart';
 import { QuickStartExpress } from '../documentdb/localQuickStart/prototypes/QuickStartExpress';
 import { QuickStartGuided } from '../documentdb/localQuickStart/prototypes/QuickStartGuided';
+import { QuickStartRecommended } from '../documentdb/localQuickStart/prototypes/QuickStartRecommended';
 import { QuickStartWizard } from '../documentdb/localQuickStart/prototypes/QuickStartWizard';
 
 /**
@@ -44,10 +45,11 @@ export const WebviewRegistry = {
     documentView: DocumentView,
     localQuickStart: LocalQuickStart,
     atlasCredentials: AtlasCredentialsView,
-    // EXPERIMENT (dev/tnaum/quickstart-brainstorm): Local Quick Start layout prototypes.
-    // All three drive the same `localQuickStart` router and differ only in presentation.
-    // Remove these three entries (and `documentdb/localQuickStart/prototypes/`) once a
+    // EXPERIMENT: Local Quick Start layout prototypes.
+    // All four drive the same `localQuickStart` router and differ only in presentation.
+    // Remove these entries (and `documentdb/localQuickStart/prototypes/`) once a
     // layout is chosen and folded into `LocalQuickStart`.
+    localQuickStartRecommended: QuickStartRecommended,
     localQuickStartExpress: QuickStartExpress,
     localQuickStartWizard: QuickStartWizard,
     localQuickStartGuided: QuickStartGuided,

@@ -421,6 +421,13 @@
         "icon": "$(beaker)"
       },
       {
+        "//": "[EXPERIMENT dev/tnaum/quickstart-brainstorm-2nd] Recommended second iteration",
+        "category": "DocumentDB Prototypes",
+        "command": "vscode-documentdb.command.localQuickStart.prototype.recommended",
+        "title": "Local Quick Start: Recommended (2nd Iteration)",
+        "icon": "$(star-full)"
+      },
+      {
         "//": "[EXPERIMENT dev/tnaum/quickstart-brainstorm] Layout A",
         "category": "DocumentDB Prototypes",
         "command": "vscode-documentdb.command.localQuickStart.prototype.express",

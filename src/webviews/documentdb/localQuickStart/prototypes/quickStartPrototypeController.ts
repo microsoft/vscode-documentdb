@@ -21,9 +21,13 @@ import { type WebviewName } from '../../../_integration/WebviewRegistry';
 import { type LocalQuickStartConfigurationType } from '../localQuickStartController';
 import { type RouterContext } from '../localQuickStartRouter';
 
-export type QuickStartPrototype = 'express' | 'wizard' | 'guided';
+export type QuickStartPrototype = 'recommended' | 'express' | 'wizard' | 'guided';
 
 const PROTOTYPES: Record<QuickStartPrototype, { readonly webviewName: WebviewName; readonly title: string }> = {
+    recommended: {
+        webviewName: 'localQuickStartRecommended',
+        title: vscode.l10n.t('Quick Start (Recommended: 2nd iteration)'),
+    },
     express: { webviewName: 'localQuickStartExpress', title: vscode.l10n.t('Quick Start (A: Express)') },
     wizard: { webviewName: 'localQuickStartWizard', title: vscode.l10n.t('Quick Start (B: Wizard)') },
     guided: { webviewName: 'localQuickStartGuided', title: vscode.l10n.t('Quick Start (C: Guided)') },
