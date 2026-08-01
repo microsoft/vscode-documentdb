@@ -255,7 +255,7 @@ export const QuickStartWizard = (): JSX.Element => {
         </section>
     );
 
-    const port = machine.boundPort ?? QUICK_START_PORT;
+    const displayPort = machine.boundPort ?? Number(machine.effectivePort);
     const doneContent = (
         <section className={shared.section} aria-labelledby="qs-done-heading">
             <div className={shared.sectionHeader}>
@@ -266,7 +266,7 @@ export const QuickStartWizard = (): JSX.Element => {
             </div>
             <StageChecklist stageStatus={machine.stageStatus} />
             <Text className={styles.connString} size={200}>
-                {l10n.t('localhost:{0}', String(port))}
+                {l10n.t('localhost:{0}', String(displayPort))}
             </Text>
             <MessageBar intent="success">
                 <MessageBarBody>
@@ -274,7 +274,7 @@ export const QuickStartWizard = (): JSX.Element => {
                     {l10n.t('The connection was saved and is ready to use.')}
                 </MessageBarBody>
             </MessageBar>
-            <NextSteps port={port} />
+            <NextSteps port={displayPort} />
         </section>
     );
 

@@ -47,7 +47,6 @@ import {
     type ProvisionStage,
     QUICK_START_IMAGE,
     QUICK_START_IMAGE_REPOSITORY,
-    QUICK_START_PORT,
 } from '../../../../services/localQuickStart/quickStartTypes';
 import { Announcer } from '../../../components/accessibility/Announcer';
 import { WizardShell } from '../../../components/wizard/WizardShell';
@@ -178,7 +177,7 @@ export const QuickStartGuided = (): JSX.Element => {
         );
     }
 
-    const port = machine.boundPort ?? QUICK_START_PORT;
+    const displayPort = machine.boundPort ?? Number(machine.effectivePort);
     const effectiveImage =
         !machine.isRecreate && advanced.tag.trim()
             ? `${QUICK_START_IMAGE_REPOSITORY}:${advanced.tag.trim()}`
@@ -190,7 +189,7 @@ export const QuickStartGuided = (): JSX.Element => {
                 <Text size={200} className={shared.muted}>
                     {l10n.t('Address')}
                 </Text>
-                <Text weight="semibold">{l10n.t('localhost:{0}', machine.effectivePort)}</Text>
+                <Text weight="semibold">{l10n.t('localhost:{0}', String(displayPort))}</Text>
             </div>
             <div className={styles.fact}>
                 <Text size={200} className={shared.muted}>
@@ -290,7 +289,7 @@ export const QuickStartGuided = (): JSX.Element => {
                     {l10n.t('DocumentDB Local is running')}
                 </Text>
                 <Text className={styles.connString} size={200}>
-                    {l10n.t('localhost:{0}', String(port))}
+                    {l10n.t('localhost:{0}', String(displayPort))}
                 </Text>
                 <MessageBar intent="success">
                     <MessageBarBody>
@@ -298,7 +297,7 @@ export const QuickStartGuided = (): JSX.Element => {
                         {l10n.t('The connection was saved and is ready to use.')}
                     </MessageBarBody>
                 </MessageBar>
-                <NextSteps port={port} />
+                <NextSteps port={displayPort} />
                 {detailDisclosure}
             </section>
         );

@@ -24,9 +24,9 @@ import { type RouterContext } from '../localQuickStartRouter';
 export type QuickStartPrototype = 'express' | 'wizard' | 'guided';
 
 const PROTOTYPES: Record<QuickStartPrototype, { readonly webviewName: WebviewName; readonly title: string }> = {
-    express: { webviewName: 'localQuickStartExpress', title: 'Quick Start (A: Express)' },
-    wizard: { webviewName: 'localQuickStartWizard', title: 'Quick Start (B: Wizard)' },
-    guided: { webviewName: 'localQuickStartGuided', title: 'Quick Start (C: Guided)' },
+    express: { webviewName: 'localQuickStartExpress', title: vscode.l10n.t('Quick Start (A: Express)') },
+    wizard: { webviewName: 'localQuickStartWizard', title: vscode.l10n.t('Quick Start (B: Wizard)') },
+    guided: { webviewName: 'localQuickStartGuided', title: vscode.l10n.t('Quick Start (C: Guided)') },
 };
 
 export function openQuickStartPrototypeWebview(

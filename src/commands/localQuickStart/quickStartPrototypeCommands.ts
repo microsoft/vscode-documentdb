@@ -43,25 +43,25 @@ interface PrototypePick extends vscode.QuickPickItem {
 export async function pickQuickStartPrototype(context: IActionContext): Promise<void> {
     const items: PrototypePick[] = [
         {
-            label: '$(rocket) A — Express',
+            label: `$(rocket) ${vscode.l10n.t('A — Express')}`,
             description: vscode.l10n.t('One page, no navigation'),
             detail: vscode.l10n.t('A single action slot swaps between ready, running, and done. Zero decisions.'),
             prototype: 'express',
         },
         {
-            label: '$(list-ordered) B — Wizard',
+            label: `$(list-ordered) ${vscode.l10n.t('B — Wizard')}`,
             description: vscode.l10n.t('MongoDB Atlas style'),
             detail: vscode.l10n.t('Step breadcrumb plus a pinned footer: Check Docker → Configure → Set up → Done.'),
             prototype: 'wizard',
         },
         {
-            label: '$(layout) C — Guided',
+            label: `$(layout) ${vscode.l10n.t('C — Guided')}`,
             description: vscode.l10n.t('One page, wizard chrome'),
             detail: vscode.l10n.t('A non-clickable progress rail and a pinned action bar, but no step navigation.'),
             prototype: 'guided',
         },
         {
-            label: '$(circle-outline) Current',
+            label: `$(circle-outline) ${vscode.l10n.t('Current')}`,
             description: vscode.l10n.t('Shipping layout'),
             detail: vscode.l10n.t('The Quick Start view as it exists today, for comparison.'),
         },

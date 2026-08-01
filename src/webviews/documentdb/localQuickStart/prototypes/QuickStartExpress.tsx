@@ -99,10 +99,16 @@ export const QuickStartExpress = (): JSX.Element => {
     // Focus follows the slot: whatever the primary action becomes after a state
     // swap is what the keyboard user lands on (the button they pressed is gone).
     const primaryRef = useRef<HTMLButtonElement>(null);
+    const hasCompletedInitialLoadRef = useRef(false);
     useEffect(() => {
-        if (phase === 'success' || phase === 'failed' || phase === 'provisioning') {
-            primaryRef.current?.focus();
+        if (phase === 'loading') {
+            return;
         }
+        if (!hasCompletedInitialLoadRef.current) {
+            hasCompletedInitialLoadRef.current = true;
+            return;
+        }
+        primaryRef.current?.focus();
     }, [phase]);
 
     if (phase === 'loading') {
@@ -113,7 +119,7 @@ export const QuickStartExpress = (): JSX.Element => {
         );
     }
 
-    const port = machine.boundPort ?? Number(machine.effectivePort);
+    const displayPort = machine.boundPort ?? Number(machine.effectivePort);
 
     const facts = (
         <div className={styles.facts}>
@@ -124,7 +130,7 @@ export const QuickStartExpress = (): JSX.Element => {
             <Text size={200} className={styles.factSeparator}>
                 ·
             </Text>
-            <Text size={200}>{l10n.t('localhost:{0}', machine.effectivePort)}</Text>
+            <Text size={200}>{l10n.t('localhost:{0}', String(displayPort))}</Text>
             <Text size={200} className={styles.factSeparator}>
                 ·
             </Text>
@@ -148,6 +154,7 @@ export const QuickStartExpress = (): JSX.Element => {
                 size="large"
                 className={styles.cta}
                 icon={<RocketRegular />}
+                ref={primaryRef}
                 disabled={!!advanced.validation}
                 onClick={machine.start}
             >
@@ -188,7 +195,7 @@ export const QuickStartExpress = (): JSX.Element => {
                 <Text weight="semibold">{machine.successMessage ?? l10n.t('DocumentDB Local is running.')}</Text>
             </div>
             <Text className={styles.connString} size={200}>
-                {l10n.t('localhost:{0}', String(port))}
+                {l10n.t('localhost:{0}', String(displayPort))}
             </Text>
             <div className={styles.actions}>
                 <Button appearance="primary" ref={primaryRef} onClick={machine.openConnection}>
@@ -201,7 +208,7 @@ export const QuickStartExpress = (): JSX.Element => {
                     {l10n.t('Close')}
                 </Button>
             </div>
-            <NextSteps port={port} />
+            <NextSteps port={displayPort} />
         </Card>
     );
 

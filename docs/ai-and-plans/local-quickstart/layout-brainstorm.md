@@ -1,11 +1,10 @@
 # Local Quick Start — layout brainstorm
 
-> Experimental branch `dev/tnaum/quickstart-brainstorm`. Three runnable layouts, one
+> Experimental branch `dev/tnaum/quickstart-brainstorm-sol`. Three runnable layouts, one
 > shared state machine. Nothing here is a decision; it exists to be clicked through.
 >
 > Open them with **DocumentDB Prototypes: Local Quick Start: Compare Layouts…** in the
-> command palette, or the **Compare layouts (prototype)** row under the
-> _DocumentDB Local - Quick Start_ tree node.
+> command palette, or the beaker button in the Connections view title.
 
 ---
 
