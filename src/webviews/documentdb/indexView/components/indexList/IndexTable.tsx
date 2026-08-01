@@ -253,9 +253,24 @@ export const IndexTable = ({
                     // actions that operate on a live index are disabled.
                     const isPending = idx.state === 'creating';
                     const isExpanded = expanded.has(idx.name);
-                    // Compute zebra parity from the data index (not the DOM
-                    // position) so an inserted detail row never breaks the
-                    // alternating pattern.
+                    /*
+                     * Fluent Table does not provide zebra striping by default.
+                     * We implement it with rowEven/rowOdd classes whose colors
+                     * are painted on each <td>, rather than on the <tr>, so an
+                     * expanded detail row can inherit its parent index's shade.
+                     *
+                     * That cell-level background covers Fluent's normal hover
+                     * and pressed backgrounds, which Fluent paints on the <tr>.
+                     * The matching selectors in indexView.scss therefore also
+                     * paint list hover/pressed colors on the cells. If this
+                     * striping pattern is reused for another Fluent table, both
+                     * the parity classes and those cell-level interaction rules
+                     * must be carried over; otherwise hover/pressed feedback will
+                     * be hidden or visible only on alternating rows.
+                     *
+                     * Compute parity from the data index (not the DOM position)
+                     * so an inserted detail row never breaks the pattern.
+                     */
                     const rowClass = rowIdx % 2 === 0 ? 'rowEven' : 'rowOdd';
                     // A delete / hide / unhide in flight shows a spinner in the
                     // status column (in place of the ready check) for this row.
