@@ -14,10 +14,11 @@ import { type IndexTypeBadge } from '../../types';
  * (inaccessible) way to encode a category, and the previous per-type mapping
  * assigned alarming palette tokens with no real meaning — e.g. Wildcard →
  * `severe` (orange) and Hashed → `danger` (red) — which wrongly implied those
- * indexes were problematic. Every type now uses one neutral, legible tint; the
- * type is communicated by the badge's text label (and the card's icon).
+ * indexes were problematic. Every type now uses one shared tint generated from
+ * VS Code's active brand color; the type is communicated by the badge's text
+ * label (and the card's icon), not by assigning a different color per type.
  */
-const BADGE_COLOR: BadgeProps['color'] = 'informative';
+const BADGE_COLOR: BadgeProps['color'] = 'brand';
 
 export interface IndexTypeBadgeViewProps {
     type: IndexTypeBadge;

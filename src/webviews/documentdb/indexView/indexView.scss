@@ -194,6 +194,15 @@
         }
 
         /*
+         * Fluent gives the inner sortable-header button `background: inherit`.
+         * With translucent VS Code hover colors that repaints the same fill over
+         * the hovered <th>, producing a darker text-width band. Keep one layer.
+         */
+        .fui-TableHeaderCell__button {
+            background-color: transparent;
+        }
+
+        /*
          * Alternating row backgrounds — mirrors the VS Code tree-view
          * convention used in the Results tab. Parity is computed in the
          * component (rowEven / rowOdd) from the data index so that the
@@ -204,6 +213,24 @@
         }
         .rowOdd > td {
             background-color: var(--colorNeutralBackground2);
+        }
+
+        /*
+         * Fluent applies table-row hover to the <tr>, but the zebra colors
+         * above are painted on each <td> and hide it. Paint the adaptive
+         * VS Code list hover color on the cells so every data row responds
+         * evenly without changing the global action-token semantics.
+         */
+        .rowEven:not(.fieldsDetailRow):hover > td,
+        .rowOdd:not(.fieldsDetailRow):hover > td {
+            background-color: var(--vscode-list-hoverBackground, var(--colorSubtleBackgroundHover));
+        }
+
+        /* The same cell layer hid Fluent's <tr>:active fill; mirror the now
+            * theme-aware list selection color here and place it after hover. */
+        .rowEven:not(.fieldsDetailRow):active > td,
+        .rowOdd:not(.fieldsDetailRow):active > td {
+            background-color: var(--vscode-list-activeSelectionBackground, var(--colorSubtleBackgroundPressed));
         }
 
         /*

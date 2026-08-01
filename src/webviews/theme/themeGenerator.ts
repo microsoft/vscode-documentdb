@@ -73,7 +73,7 @@ export function getBrandTokensFromPalette(keyColor: string, options: Options = {
  *   - colorNeutralBackground3           (markdown cards, feedback dialog, query-plan blocks)
  *   - colorNeutralForeground3 / Foreground4
  *   - colorNeutralStroke1 / Stroke3 / StrokeAccessible
- *   - colorSubtleBackground* (toolbar/button hover fills)
+ *   - colorSubtleBackgroundSelected
  *   - High-contrast theme kinds bypass this generator entirely and fall back to
  *     the static Teams themes (see getFluentUiTheme in state/ThemeContext.tsx),
  *     so none of the VS Code mappings apply there yet.
@@ -96,6 +96,14 @@ const adaptiveNeutralSurfaces = {
         'var(--vscode-disabledForeground, var(--vscode-descriptionForeground, var(--vscode-foreground)))',
     colorNeutralStrokeDisabled:
         'var(--vscode-disabledForeground, var(--vscode-widget-border, var(--vscode-panel-border)))',
+    // Fluent uses these subtle aliases across buttons, cards, tables, tabs,
+    // tags and trees. VS Code's toolbar tokens are the corresponding general
+    // action colors; list-specific surfaces can use list.* tokens locally.
+    // Falling back to list colors also covers themes that omit toolbar colors.
+    colorSubtleBackgroundHover:
+        'var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background)))',
+    colorSubtleBackgroundPressed:
+        'var(--vscode-toolbar-activeBackground, var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground)))',
     // Secondary neutral surface: tab band + odd alternating rows. Prefer VS
     // Code's own alternating table-row color, then the side bar / editor-widget
     // backgrounds.
