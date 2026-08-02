@@ -1,0 +1,28 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * VS Code adaptations for Fluent UI components.
+ *
+ * Keep component-scoped overrides here because Fluent reuses neutral aliases
+ * across controls with different semantics. For example, field stroke tokens
+ * also drive Switch indicators and Tab hover bars when changed globally.
+ */
+
+@use './fluentAliases';
+
+:where(.fui-Input, .fui-SearchBox, .fui-Combobox, .fui-Dropdown, .fui-Select, .fui-SpinButton, .fui-Textarea) {
+    --colorNeutralForeground3: var(--vscode-descriptionForeground, var(--vscode-foreground));
+    --colorNeutralForeground4: var(
+        --vscode-input-placeholderForeground,
+        var(--vscode-descriptionForeground, var(--vscode-foreground))
+    );
+    --colorNeutralStroke1: var(--documentdb-colorInputStroke);
+    --colorNeutralStroke1Hover: var(--documentdb-colorInputStrokeHover);
+    --colorNeutralStroke1Pressed: var(--documentdb-colorInputStrokeHover);
+    --colorNeutralStrokeAccessible: var(--documentdb-colorInputStroke);
+    --colorNeutralStrokeAccessibleHover: var(--documentdb-colorInputStrokeHover);
+    --colorNeutralStrokeAccessiblePressed: var(--documentdb-colorInputStrokeHover);
+}

@@ -1,0 +1,20 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/*
+ * DocumentDB semantic aliases for styling custom controls like Fluent UI.
+ *
+ * Use these variables when a custom component needs the same visual role as a
+ * Fluent component but cannot consume a Fluent recipe directly. Global Fluent
+ * token mappings belong in themeGenerator.ts; component recipe exceptions
+ * belong in fluentOverrides.scss.
+ */
+:root {
+    --documentdb-colorInputStroke: var(
+        --vscode-checkbox-border,
+        var(--vscode-input-border, color-mix(in srgb, var(--vscode-foreground) 55%, transparent))
+    );
+    --documentdb-colorInputStrokeHover: color-mix(in srgb, var(--vscode-foreground) 75%, transparent);
+}
