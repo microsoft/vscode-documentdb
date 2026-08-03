@@ -766,6 +766,20 @@ Eighty-seven focused mapper, polling, and orchestrator tests passed. Targeted ES
 - Test Review-screen execution-target copy for local, WSL, SSH, dev-container, and Codespaces environments.
 - Test that normalized daemon architecture, not `process.arch`, drives the Platform card.
 
+#### Slice B implementation checkpoint (completed 2026-08-03)
+
+Completed and pushed in [commit `8e0c0483`](https://github.com/microsoft/vscode-documentdb/commit/8e0c048339c16e10eb3b171f243cea8346d6edf0). A new integration-focused service suite combines the boundaries that isolated unit tests could not: a native WSL unix-socket permission failure remains `permissionDenied` with no Desktop action even when the Windows Desktop executable is visible, and an SSH extension host on an arm64 client reports its reachable remote daemon as normalized `amd64` with the `ssh` execution target.
+
+Additional regressions now prove that caller cancellation rejects instead of becoming a timeout category, probe runner options omit `stdInPipe`, cancellation during an active poll query drops the late result, remembered evidence selects `providerRecordedAtMs` instead of the current probe time, and live evidence selects `checkedAtMs`. Existing tests already covered rejected stdout/stderr capture, zero-exit `ServerErrors`, every provider-memory discard rule, forced Refresh, launch selection/revalidation, single flight, memo TTL, every presentation state, Continue anyway gating, and polling success/deadline/non-overlap.
+
+The complete Local Quick Start test set passed all 15 suites and 227 tests. Targeted ESLint, editor diagnostics, and the full root TypeScript build passed.
+
+**Testability choice:** The command-runner options used by `runDockerProbe()` are now built by an exported pure helper so the stdin omission can be asserted without spawning an SSH process or monkey-patching processutils. The relative-time source selection was similarly extracted from JSX into a pure selector. Both production call sites use the helpers, so the tests cover the exact behavior rather than parallel test-only logic.
+
+**Corrections before commit:** The first cancellation assertion depended on `vscode.CancellationError`, which `jest-mock-vscode` does not implement, and the first stdin test tried to spy on a non-configurable processutils barrel export. The cancellation test now asserts rejection plus cancellation of both probes without relying on the missing mock class, and the stdin test inspects the production runner-options helper. No committed history was reset or rewritten.
+
+**WI-8 boundary:** Daemon disappearance during pull/run and the dev-container published-port explanation are not counted as WI-7 coverage. They require provisioning-path behavior that did not yet exist and remain explicitly assigned to WI-8.
+
 ### WI-8: Reuse the classifier on the provisioning path
 
 The readiness gate is a snapshot, and the daemon can disappear between the gate and the first `docker pull`. A Docker Desktop auto-update three seconds after the check produces `error during connect: … The system cannot find the file specified`, which today lands in the failure card as a raw string with none of the recovery UI this plan builds.
