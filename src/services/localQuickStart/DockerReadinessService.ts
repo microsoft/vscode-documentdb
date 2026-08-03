@@ -444,6 +444,7 @@ export class DockerReadinessService {
             }
 
             const cliVersion = isSuccessfulProbe(versionProbe) ? versionProbe.stdout.trim() : undefined;
+            const cliInstalled = isSuccessfulProbe(versionProbe) || infoProbe.spawnErrorCode !== 'ENOENT';
             if (infoProbe.spawnErrorCode === 'ENOENT') {
                 return {
                     outcome: 'diagnosed',
@@ -625,7 +626,7 @@ export class DockerReadinessService {
                     serviceManager,
                 ),
                 checkedAtMs: this.dependencies.now(),
-                cliInstalled: classification.failureKind !== 'cliMissing',
+                cliInstalled,
                 cliVersion,
                 daemonArchitecture: infoFacts?.architecture
                     ? normalizeDaemonArchitecture(infoFacts.architecture)

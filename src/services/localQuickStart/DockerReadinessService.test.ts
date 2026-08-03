@@ -379,6 +379,31 @@ describe('DockerReadinessService', () => {
         expect(probeEndpoint).not.toHaveBeenCalled();
     });
 
+    it('reports the CLI as installed when the info process spawned after a failed version probe', async () => {
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'cliVersion') {
+                return evidence('cliVersion', { exitCode: 1 });
+            }
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            return evidence('contexts', { stdout: '[]' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            cliInstalled: true,
+            cliVersion: undefined,
+        });
+    });
+
     it('classifies an explicitly selected context that is absent', async () => {
         const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
         const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
