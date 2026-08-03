@@ -50,6 +50,7 @@ import {
     type DockerRecoveryNoteKey,
     type DockerStartLabelKey,
     getDockerExecutionTargetKey,
+    getDockerLastCheckedAtMs,
     getDockerReadinessPresentation,
 } from './dockerReadinessPresentation';
 import { pollDockerReadiness } from './dockerReadinessPolling';
@@ -810,9 +811,7 @@ export const LocalQuickStart = (): JSX.Element => {
         <div className={styles.readinessFooter}>
             <Text size={200} className={styles.muted} role="status" aria-live="polite">
                 {formatLastChecked(
-                    docker?.readiness.providerEvidence === 'rememberedProvider'
-                        ? docker.readiness.providerRecordedAtMs
-                        : docker?.readiness.checkedAtMs,
+                    docker ? getDockerLastCheckedAtMs(docker.readiness) : undefined,
                     relativeTimeNow,
                 )}
             </Text>

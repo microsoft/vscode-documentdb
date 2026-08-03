@@ -5,7 +5,7 @@
 
 import { type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash } from '@microsoft/vscode-processutils';
-import { type CancellationToken } from 'vscode';
+import type * as vscode from 'vscode';
 import {
     detectDockerHostEnvironment,
     DockerReadinessService,
@@ -240,7 +240,7 @@ describe('DockerReadinessService', () => {
     });
 
     it('cancels both probes under one deadline and returns an indeterminate timeout', async () => {
-        const tokens: CancellationToken[] = [];
+        const tokens: vscode.CancellationToken[] = [];
         const runProbe = jest.fn(
             (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
                 new Promise((resolve) => {
@@ -275,6 +275,42 @@ describe('DockerReadinessService', () => {
             failureKind: 'probeTimedOut',
             canContinueAnyway: true,
         });
+    });
+
+    it('propagates caller cancellation instead of classifying it as a deadline failure', async () => {
+        let cancelCaller: (() => void) | undefined;
+        let callerCancelled = false;
+        const callerToken = {
+            get isCancellationRequested(): boolean {
+                return callerCancelled;
+            },
+            onCancellationRequested(listener: () => void): vscode.Disposable {
+                cancelCaller = listener;
+                return { dispose: () => undefined };
+            },
+        } as vscode.CancellationToken;
+        const runProbe = jest.fn(
+            (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> =>
+                new Promise((resolve) => {
+                    options.cancellationToken?.onCancellationRequested(() => {
+                        resolve(evidence(options.probe, { endedBy: 'cancellation' }));
+                    });
+                }),
+        );
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+        });
+
+        const readiness = service.getReadiness({ cancellationToken: callerToken });
+        callerCancelled = true;
+        cancelCaller?.();
+
+        await expect(readiness).rejects.toBeDefined();
+        expect(runProbe).toHaveBeenCalledTimes(2);
     });
 
     it('uses a memoized result unless force refresh is requested', async () => {

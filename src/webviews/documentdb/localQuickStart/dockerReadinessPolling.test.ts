@@ -88,6 +88,24 @@ describe('pollDockerReadiness', () => {
         expect(query).not.toHaveBeenCalled();
     });
 
+    it('drops a result when cancellation occurs during an active query', async () => {
+        const controller = new AbortController();
+        const onResult = jest.fn();
+
+        await expect(
+            pollDockerReadiness({
+                signal: controller.signal,
+                query: async () => {
+                    controller.abort();
+                    return status(readyReadiness());
+                },
+                onResult,
+                wait: async () => undefined,
+            }),
+        ).resolves.toBe('cancelled');
+        expect(onResult).not.toHaveBeenCalled();
+    });
+
     it('stops polling when a diagnosed non-transient failure appears', async () => {
         const permissionDenied: DockerReadiness = {
             ...waitingReadiness(),

@@ -8,6 +8,7 @@ import {
     ShellStreamCommandRunnerFactory,
     type CommandResponseBase,
     type Like,
+    type ShellStreamCommandRunnerOptions,
 } from '@microsoft/vscode-container-client';
 import { isChildProcessError, type Shell } from '@microsoft/vscode-processutils';
 import * as fs from 'fs';
@@ -129,6 +130,21 @@ async function finishCapture(stream: CapturingTeeWritable): Promise<void> {
     await finished(stream);
 }
 
+export function getDockerProbeRunnerOptions(
+    options: RunDockerProbeOptions,
+    stdOutPipe: Writable,
+    stdErrPipe: Writable,
+): ShellStreamCommandRunnerOptions {
+    return {
+        strict: false,
+        shellProvider: options.shellProvider,
+        cancellationToken: options.cancellationToken,
+        onCommand: options.onCommand,
+        stdOutPipe,
+        stdErrPipe,
+    };
+}
+
 export async function runDockerProbe(options: RunDockerProbeOptions): Promise<DockerProbeEvidence> {
     const now = options.now ?? Date.now;
     const startedAt = now();
@@ -138,14 +154,9 @@ export async function runDockerProbe(options: RunDockerProbeOptions): Promise<Do
     const execute: DockerProbeExecutor =
         options.execute ??
         (async (commandToRun, stdOutPipe, stdErrPipe): Promise<void> => {
-            const factory = new ShellStreamCommandRunnerFactory({
-                strict: false,
-                shellProvider: options.shellProvider,
-                cancellationToken: options.cancellationToken,
-                onCommand: options.onCommand,
-                stdOutPipe,
-                stdErrPipe,
-            });
+            const factory = new ShellStreamCommandRunnerFactory(
+                getDockerProbeRunnerOptions(options, stdOutPipe, stdErrPipe),
+            );
             await factory.getCommandRunner()(commandToRun);
         });
 

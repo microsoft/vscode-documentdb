@@ -276,6 +276,13 @@ export function getDockerExecutionTargetKey(target: DockerExecutionTarget): Dock
     }
 }
 
+export function getDockerLastCheckedAtMs(readiness: DockerReadiness): number {
+    if (readiness.providerEvidence === 'rememberedProvider' && readiness.providerRecordedAtMs !== undefined) {
+        return readiness.providerRecordedAtMs;
+    }
+    return readiness.checkedAtMs;
+}
+
 function getRecoveryNote(readiness: DockerReadiness): DockerRecoveryNoteKey | undefined {
     switch (readiness.recoveryCommand?.id) {
         case 'linuxDockerGroup':

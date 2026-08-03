@@ -9,7 +9,11 @@ import {
     type DockerReadiness,
     type DockerReadyReadiness,
 } from '../../../services/localQuickStart/quickStartTypes';
-import { getDockerExecutionTargetKey, getDockerReadinessPresentation } from './dockerReadinessPresentation';
+import {
+    getDockerExecutionTargetKey,
+    getDockerLastCheckedAtMs,
+    getDockerReadinessPresentation,
+} from './dockerReadinessPresentation';
 
 type DockerReadinessOverrides =
     | (Partial<DockerDiagnosedReadiness> & { readonly outcome?: 'diagnosed' })
@@ -268,4 +272,24 @@ describe('getDockerExecutionTargetKey', () => {
             expect(getDockerExecutionTargetKey(target)).toBe(target);
         },
     );
+});
+
+describe('getDockerLastCheckedAtMs', () => {
+    it('uses the provider record time for remembered evidence', () => {
+        expect(
+            getDockerLastCheckedAtMs(
+                readiness({
+                    checkedAtMs: 2_000,
+                    providerEvidence: 'rememberedProvider',
+                    providerRecordedAtMs: 500,
+                }),
+            ),
+        ).toBe(500);
+    });
+
+    it('uses the current check time for live evidence', () => {
+        expect(getDockerLastCheckedAtMs(readiness({ checkedAtMs: 2_000, providerEvidence: 'liveDaemon' }))).toBe(
+            2_000,
+        );
+    });
 });

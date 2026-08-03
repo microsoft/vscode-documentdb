@@ -4,9 +4,10 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Bash, ChildProcessError } from '@microsoft/vscode-processutils';
-import { type Writable } from 'stream';
+import { Writable } from 'stream';
 import {
     detectDockerServiceManager,
+    getDockerProbeRunnerOptions,
     normalizeDaemonArchitecture,
     parseDockerInfoFacts,
     probeDockerEndpoint,
@@ -60,6 +61,24 @@ describe('runDockerProbe', () => {
 
         expect(result.spawnErrorCode).toBe('ENOENT');
         expect(result.exitCode).toBeUndefined();
+    });
+
+    it('keeps stdin ignored so an SSH endpoint cannot prompt for a passphrase', async () => {
+        const stdOutPipe = new Writable({ write: (_chunk, _encoding, callback) => callback() });
+        const stdErrPipe = new Writable({ write: (_chunk, _encoding, callback) => callback() });
+
+        const runnerOptions = getDockerProbeRunnerOptions(
+            {
+            probe: 'info',
+            command,
+            shellProvider: new Bash(),
+            },
+            stdOutPipe,
+            stdErrPipe,
+        );
+
+        expect(runnerOptions).not.toHaveProperty('stdInPipe');
+        expect(runnerOptions).toMatchObject({ stdOutPipe, stdErrPipe });
     });
 });
 
