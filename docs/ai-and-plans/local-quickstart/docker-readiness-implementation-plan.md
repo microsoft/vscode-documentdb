@@ -1,7 +1,7 @@
 # Local Quick Start Docker Readiness - Implementation Plan
 
 **Date:** 2026-08-02
-**Status:** Slice A complete; Slice B pending
+**Status:** Slice A complete with pending-session refinement; Slice B pending
 **Related design:** [local-quickstart-v2.md](local-quickstart-v2.md)
 
 > **User-facing language:** Use **Docker** as the default term in cards, summaries, and general status messages. This keeps the primary experience simple and avoids exposing implementation details that most users do not need. Use **Docker CLI**, **Docker daemon**, **Docker Engine**, or **Docker Desktop** only when the distinction explains a specific failure or names the exact action being offered, such as `Start Docker Desktop`. The implementation must still detect and model these components separately; this simplification applies only to presentation.
@@ -436,22 +436,23 @@ The net effect is that remembered evidence can only ever shorten the path to a c
 
 Keep the card label `Docker daemon`. Change its value, guidance, link, and primary action from the typed result.
 
-| State                               | Card value                   | Guidance                                                                                           | Primary action                                                                                | Also offered                                 |
-| ----------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------- |
-| Ready                               | `Reachable`                  | None                                                                                               | None                                                                                          | None                                         |
-| Desktop identified and unavailable  | `Docker Desktop not running` | `Start Docker Desktop and wait until it is ready.`                                                 | `Start Docker Desktop`                                                                        | Retry, View Docker output                    |
-| Docker starting                     | `Starting…`                  | `Waiting for Docker to start. This can take a minute.`                                             | None; keep polling with a visible elapsed time and a `Stop waiting` control                   | View Docker output                           |
-| Native daemon unavailable           | `Not running`                | `Start the Docker service, then check again.`                                                      | `Start Docker` only for positively identified rootless Engine; otherwise platform setup guide | `Copy command`, Retry, View Docker output    |
-| Unix socket permission failure      | `Access denied`              | `Your user cannot access the Docker socket. Update Docker permissions, then restart your session.` | `Copy command`                                                                                | Linux setup guide, Retry, View Docker output |
-| WSL Desktop integration unavailable | `Not accessible from WSL`    | `Enable Docker Desktop integration for this WSL distribution, then check again.`                   | WSL integration guide                                                                         | Retry, View Docker output                    |
-| Remote daemon unavailable           | `Not accessible`             | `Docker must be available in the remote environment where this extension is running.`              | Remote Docker guide                                                                           | Retry, View Docker output                    |
-| Remote endpoint unreachable         | `Endpoint unreachable`       | `The configured Docker endpoint did not respond.`                                                  | `Show details`, which names the endpoint source                                               | Retry, View Docker output                    |
-| Invalid context                     | `Context unavailable`        | `The active Docker context is unavailable. Select or repair a valid context, then check again.`    | Docker context guide                                                                          | Retry, View Docker output                    |
-| Probe timed out                     | `Check timed out`            | `Docker did not respond before the readiness check timed out.`                                     | `Retry`                                                                                       | `Continue anyway`, View Docker output        |
-| Unsupported extension host          | `Unsupported`                | `Local Quick Start is supported when the extension runs on Windows, macOS, or Linux.`              | Learn more                                                                                    | None                                         |
-| Windows-container mode              | `Linux containers required`  | `Switch Docker to Linux containers, then check again.`                                             | Setup guide                                                                                   | Retry, View Docker output                    |
-| Unknown daemon failure              | `Not accessible`             | `The extension could not connect to the Docker daemon.`                                            | `Show details`                                                                                | `Continue anyway`, Retry, View Docker output |
-| CLI missing                         | CLI card: `Not found`        | `Install Docker Engine or Docker Desktop, then reopen Quick Start.`                                | Platform-appropriate install guide                                                            | Retry                                        |
+| State                                           | Card value                   | Guidance                                                                                                             | Primary action                                                                                | Also offered                                                                          |
+| ----------------------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------------------------------------- | --------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------- |
+| Ready                                           | `Reachable`                  | None                                                                                                                 | None                                                                                          | None                                                                                  |
+| Desktop identified and unavailable              | `Docker Desktop not running` | `Start Docker Desktop and wait until it is ready.`                                                                   | `Start Docker Desktop`                                                                        | Retry, View Docker output                                                             |
+| Docker starting                                 | `Starting…`                  | `Waiting for Docker to start. This can take a minute.`                                                               | None; keep polling with a visible elapsed time and a `Stop waiting` control                   | View Docker output                                                                    |
+| Native daemon unavailable                       | `Not running`                | `Start the Docker service, then check again.`                                                                        | `Start Docker` only for positively identified rootless Engine; otherwise platform setup guide | `Copy command`, Retry, View Docker output                                             |
+| Unix socket permission, group fix needed        | `Access denied`              | Environment-aware instructions to run the group command and start the required new login or WSL session.             | `Copy command`                                                                                | Recovery note, Linux setup guide, Retry, View Docker output                           |
+| Unix socket permission, session restart pending | `Access denied`              | Explain that group membership is already configured and name the exact Linux, WSL, SSH, or container session action. | `Copy command` only for WSL shutdown                                                          | Recovery note when a command is present, Linux setup guide, Retry, View Docker output |
+| WSL Desktop integration unavailable             | `Not accessible from WSL`    | `Enable Docker Desktop integration for this WSL distribution, then check again.`                                     | WSL integration guide                                                                         | Retry, View Docker output                                                             |
+| Remote daemon unavailable                       | `Not accessible`             | `Docker must be available in the remote environment where this extension is running.`                                | Remote Docker guide                                                                           | Retry, View Docker output                                                             |
+| Remote endpoint unreachable                     | `Endpoint unreachable`       | `The configured Docker endpoint did not respond.`                                                                    | `Show details`, which names the endpoint source                                               | Retry, View Docker output                                                             |
+| Invalid context                                 | `Context unavailable`        | `The active Docker context is unavailable. Select or repair a valid context, then check again.`                      | Docker context guide                                                                          | Retry, View Docker output                                                             |
+| Probe timed out                                 | `Check timed out`            | `Docker did not respond before the readiness check timed out.`                                                       | `Retry`                                                                                       | `Continue anyway`, View Docker output                                                 |
+| Unsupported extension host                      | `Unsupported`                | `Local Quick Start is supported when the extension runs on Windows, macOS, or Linux.`                                | Learn more                                                                                    | None                                                                                  |
+| Windows-container mode                          | `Linux containers required`  | `Switch Docker to Linux containers, then check again.`                                                               | Setup guide                                                                                   | Retry, View Docker output                                                             |
+| Unknown daemon failure                          | `Not accessible`             | `The extension could not connect to the Docker daemon.`                                                              | `Show details`                                                                                | `Continue anyway`, Retry, View Docker output                                          |
+| CLI missing                                     | CLI card: `Not found`        | `Install Docker Engine or Docker Desktop, then reopen Quick Start.`                                                  | Platform-appropriate install guide                                                            | Retry                                                                                 |
 
 ### Continue Anyway
 
@@ -465,11 +466,14 @@ This exists because the diagnosis is a heuristic and the feature is not. Conside
 
 For the failures listed below, render the documented fix as read-only, non-editable text with a `Copy command` button next to it. The extension never executes it, never opens a terminal for it, and never elevates.
 
-| Failure and environment                          | Command offered                     | Note shown with it                                     |
-| ------------------------------------------------ | ----------------------------------- | ------------------------------------------------------ |
-| `permissionDenied` on Linux or WSL, unix socket  | `sudo usermod -aG docker $USER`     | Sign out and back in, or start a new WSL session.      |
-| `daemonUnavailable` on root-managed Linux Engine | `sudo systemctl start docker`       | Runs the system Docker service.                        |
-| `permissionDenied` on WSL after a group change   | `wsl --shutdown` (run from Windows) | Restarts the distribution so group membership applies. |
+| Command ID                 | Failure, environment, and refinement selector                                                  | Command offered                 | Note shown with it                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
+| `linuxDockerGroup`         | `permissionDenied`, Linux or WSL unix socket, `notInGroup` or `unknown`                        | `sudo usermod -aG docker $USER` | `Group membership applies to new login sessions only.`                |
+| `linuxStartService`        | `daemonUnavailable`, native Linux, or WSL with positively detected active systemd              | `sudo systemctl start docker`   | `Runs the system Docker service.`                                     |
+| `wslStartServiceNoSystemd` | `daemonUnavailable`, WSL without active systemd and with a positively detected service wrapper | `sudo service docker start`     | `Runs the system Docker service.`                                     |
+| `wslRestartFromWindows`    | `permissionDenied`, WSL unix socket, `pendingSessionRestart`                                   | `wsl --shutdown`                | `This restarts the distribution so the new group membership applies.` |
+
+Native Linux with `pendingSessionRestart` intentionally receives no command. The user must sign out of the desktop session and sign back in; reloading the VS Code window does not refresh process groups. SSH users must kill the remote VS Code server and reconnect. Dev-container and Codespaces users must rebuild the container.
 
 Rules:
 
@@ -549,7 +553,7 @@ The first executable behavior check was the fixture-backed Ubuntu `EACCES` case 
 
 **Implementation-order deviation:** This partial WI-2 checkpoint was completed before WI-0, even though WI-0 is the runtime prerequisite for classification. Two options were considered: finish probe capture first, or write and execute the specified permission-denied classifier test before WI-0 was complete. The second option was selected because the plan explicitly requires that test to be the first executable behavior check. This does not expose the classifier in production yet; WI-0 and WI-3 still have to deliver the endpoint errno to it.
 
-**Fixture provenance limitation:** The recorded report identifies Ubuntu and Docker Engine but does not preserve exact Ubuntu or Docker versions. The fixture states those fields as `not recorded` instead of inventing them. WI-9 remains responsible for replacing or supplementing it with fully versioned captures during the manual verification pass.
+**Fixture provenance gap, now closed:** The original report did not preserve exact versions, so the first checkpoint correctly recorded them as unknown. Follow-up testing confirmed WSL2, Ubuntu-20.04, Docker Engine 28.1.1, socket GID 998, and permissions `srw-rw----`. Commit [`4f363411`](https://github.com/microsoft/vscode-documentdb/commit/4f36341104b21c83fe9f83f9418ee4acd68f10d2) updates the fixture header with those facts rather than inventing provenance.
 
 **Minimal contract dependency:** The probe, endpoint, failure, and outcome contracts needed to compile this checkpoint were added with the classifier. This is the minimum Slice A subset of WI-1, not completion of WI-1; the broader environment, provider, launch, recovery, and provider-memory contracts remain in Slice B.
 
@@ -568,6 +572,8 @@ The first executable behavior check was the fixture-backed Ubuntu `EACCES` case 
 - Preserve masked OutputChannel command logging, but suppress command echo for poll probes.
 - Return early for CLI failures and use one explicit branch for daemon success/failure.
 - Keep a compatibility delegate on `IContainerRuntime` only if needed to avoid unrelated service churn.
+- After a unix-socket `permissionDenied` diagnosis, collect socket ownership, process-group, and best-effort local group-membership facts and resolve `permissionDetail` without changing classifier precedence.
+- For WSL daemon-unavailable recovery, detect active systemd or an available service wrapper through injected filesystem facts before selecting a command.
 
 #### Slice A implementation checkpoint (completed 2026-08-03)
 
@@ -630,6 +636,8 @@ Forty-nine focused probe, resolver, orchestration, and recovery-selection tests 
 - Localize all added or changed user-facing strings, but never the command lines themselves.
 - Use no em dashes (U+2014) and no en dashes (U+2013) in any added or changed string.
 - Preserve accessible announcements for status changes and launch failures, and announce a successful copy.
+- Return environment-aware guidance keys from the pure mapper, including the pending-session restart state; React only localizes and renders those keys.
+- Render the mapper-selected recovery note beneath every copyable command.
 
 #### Slice A implementation checkpoint (completed 2026-08-03)
 
@@ -648,6 +656,14 @@ Twelve pure presentation tests cover state/action mapping, including the Continu
 **Deliberately deferred WI-6 scope:** Provider-specific presentation beyond the Slice A local Desktop compatibility action, execution-target-aware Review copy, remote-session notices, remembered-provider labels, provider-start polling/backoff, and the Docker-starting state remain in Slice B. The `Last checked` label is computed when the readiness result renders; periodic relative-time updates are deferred with the remembered-provider UI because Slice A results are live or at most two seconds memoized.
 
 **Corrections before commit:** The first combined host patch failed to match a test insertion context and applied no changes; it was split into smaller service and router edits. The initial punctuation scan command used unavailable `rg`, so the installed `grep` fallback was used. Added-line scans then found two pre-existing em dashes in comments whose surrounding blocks had been rewritten; both comments were changed to punctuation that also keeps the complete Slice A diff clean. No committed implementation was reset or rewritten.
+
+#### Pending-session presentation checkpoint (completed 2026-08-03)
+
+Implemented in [commit `4f363411`](https://github.com/microsoft/vscode-documentdb/commit/4f36341104b21c83fe9f83f9418ee4acd68f10d2). The pure mapper now returns `accessDeniedPendingRestart`, an environment-aware guidance key, and an optional recovery-note key. React contains no environment switch; it localizes those semantic keys through fixed lookup tables and renders the note beneath the command. Exact guidance now distinguishes native Linux sign-out, WSL shutdown from Windows, remote SSH server restart, and dev-container or Codespaces rebuild.
+
+The WSL reporter state renders `Access denied`, explains that the group change is already configured but the session is stale, offers `wsl --shutdown`, and notes that the command restarts the distribution so membership applies. Unknown membership remains conservative: it retains the usermod command and environment-specific first-time guidance. Telemetry records only `permissionDetail`; no GID, group name, username, or path is emitted.
+
+The focused end-to-end run passed 83 tests across probes, recovery selection, orchestration, presentation, and the unchanged classifier. Targeted ESLint and the root TypeScript build passed, localization added nine keys, and the added-line punctuation scan found no U+2014 or U+2013 characters. The first consolidated JSX patch applied only its usage hunks and left the old switch plus one duplicated line; inspection caught this before validation, and a follow-up working-tree edit completed the lookup declarations and removed the duplicate before the work-item commit. No committed history was rewritten.
 
 ### WI-7: Add integration-focused tests
 
@@ -699,39 +715,43 @@ Every test above feeds the classifier text that the implementer wrote, which val
 
 ## Required Test Matrix
 
-| Scenario                                                               | Expected failure/provider                         | Expected action                                               |
-| ---------------------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------------- |
-| CLI absent on Linux                                                    | `cliMissing` / `unknown`                          | Linux install guide                                           |
-| Native Ubuntu daemon reachable                                         | Ready / `dockerEngine`                            | None                                                          |
-| Native Ubuntu socket returns `EACCES`                                  | `permissionDenied` / `dockerEngine` or `unknown`  | `Copy command` for the group fix, plus Linux setup guide      |
-| Native Ubuntu daemon stopped                                           | `daemonUnavailable` / `dockerEngine` or `unknown` | Service guide and copyable service command, no auto start     |
-| Native rootless Ubuntu user service stopped                            | `daemonUnavailable` / `dockerEngine`              | Start Docker                                                  |
-| WSL native socket permission denied while Windows Desktop is installed | `permissionDenied` / native endpoint              | Linux/WSL setup guide, no Desktop button                      |
-| WSL Desktop integration endpoint unavailable                           | `daemonUnavailable` / `dockerDesktop`             | Start Desktop on Windows or WSL integration guide             |
-| Local Windows Desktop stopped                                          | `daemonUnavailable` / `dockerDesktop`             | Start Docker Desktop                                          |
-| Local Windows Desktop stopped on the `default` npipe context           | `daemonUnavailable` / `dockerDesktop`             | Start Docker Desktop from the installed-application bar       |
-| Local macOS Desktop stopped                                            | `daemonUnavailable` / `dockerDesktop`             | Start Docker Desktop                                          |
-| Linux Docker Desktop user service stopped                              | `daemonUnavailable` / `dockerDesktop`             | Start Docker Desktop                                          |
-| Invalid Docker context                                                 | `contextUnavailable`                              | Context guide                                                 |
-| Windows daemon reports Windows containers                              | `windowsContainers`                               | Linux-container guidance                                      |
-| SSH remote with no daemon                                              | `daemonUnavailable` / `unknown`                   | Remote Docker guide, no local launch                          |
-| Unknown nonzero `docker info` error                                    | `unknown`, `indeterminate`                        | Show details, Retry, Continue anyway                          |
-| `docker info` never responds                                           | `probeTimedOut`, `indeterminate`                  | View Docker output, Retry, Continue anyway                    |
-| Deadline expires while a Desktop launch is in flight                   | `daemonStarting`                                  | Keep waiting with elapsed time and a Stop waiting control     |
-| `DOCKER_HOST=tcp://<unreachable>:2375`                                 | `endpointUnreachable`                             | Show details naming the `DOCKER_HOST` source                  |
-| `DOCKER_HOST=ssh://<host>` prompting for a passphrase                  | Probe fails fast, never hangs                     | Show details naming the `DOCKER_HOST` source                  |
-| `docker info` exits zero but the body carries `ServerErrors`           | Classified as a daemon failure, not ready         | Matching recovery card                                        |
-| Readiness query is canceled                                            | Cancellation, not a failure category              | Stop probes and render no stale error                         |
-| Two callers request readiness at once                                  | One probe set runs                                | Both receive the same result                                  |
-| Remembered Desktop record, Desktop since uninstalled                   | Launch reports `notAvailable`, record discarded   | Next check is provider-neutral, not a repeated Desktop claim  |
-| Remembered record older than the maximum age                           | Record ignored                                    | Provider-neutral guidance plus `Last checked` label           |
-| Remembered record whose context no longer exists                       | Record discarded                                  | Provider-neutral guidance                                     |
-| User presses `Refresh` in any state                                    | Memo and remembered record cleared                | All checks rerun and the `Last checked` label updates         |
-| Unsupported Node extension-host platform                               | `unsupportedHost` / `unknown`                     | Learn more, no Docker launch                                  |
-| SSH extension host with reachable remote amd64 daemon on arm64 client  | Ready / daemon architecture `amd64`               | Show remote target, daemon architecture, remote-endpoint note |
-| WSL extension host with reachable native daemon                        | Ready / `dockerEngine`                            | Show WSL execution-target notice                              |
-| Daemon disappears between the gate and `docker pull`                   | Same daemon-class failure as readiness            | Same recovery card, not a raw error string                    |
-| Dev container: run succeeds, readiness probe times out                 | Readiness timeout plus published-port explanation | Existing timeout recovery actions                             |
+| Scenario                                                                     | Expected failure/provider                         | Expected action                                                               |
+| ---------------------------------------------------------------------------- | ------------------------------------------------- | ----------------------------------------------------------------------------- |
+| CLI absent on Linux                                                          | `cliMissing` / `unknown`                          | Linux install guide                                                           |
+| Native Ubuntu daemon reachable                                               | Ready / `dockerEngine`                            | None                                                                          |
+| Native Ubuntu socket returns `EACCES`                                        | `permissionDenied` / `dockerEngine` or `unknown`  | `Copy command` for the group fix, plus Linux setup guide                      |
+| Native Linux user is configured in the socket group but the process is stale | `permissionDenied`, `pendingSessionRestart`       | Sign out of the desktop session and sign back in; never suggest Reload Window |
+| WSL user is configured in the socket group but the process is stale          | `permissionDenied`, `pendingSessionRestart`       | Copy `wsl --shutdown` for Windows, then reopen the folder                     |
+| Socket-group membership cannot be established                                | `permissionDenied`, `unknown`                     | Conservative usermod command and environment-specific login guidance          |
+| WSL daemon stopped, systemd absent, service wrapper present                  | `daemonUnavailable`                               | Copy `sudo service docker start`                                              |
+| Native Ubuntu daemon stopped                                                 | `daemonUnavailable` / `dockerEngine` or `unknown` | Service guide and copyable service command, no auto start                     |
+| Native rootless Ubuntu user service stopped                                  | `daemonUnavailable` / `dockerEngine`              | Start Docker                                                                  |
+| WSL native socket permission denied while Windows Desktop is installed       | `permissionDenied` / native endpoint              | Linux/WSL setup guide, no Desktop button                                      |
+| WSL Desktop integration endpoint unavailable                                 | `daemonUnavailable` / `dockerDesktop`             | Start Desktop on Windows or WSL integration guide                             |
+| Local Windows Desktop stopped                                                | `daemonUnavailable` / `dockerDesktop`             | Start Docker Desktop                                                          |
+| Local Windows Desktop stopped on the `default` npipe context                 | `daemonUnavailable` / `dockerDesktop`             | Start Docker Desktop from the installed-application bar                       |
+| Local macOS Desktop stopped                                                  | `daemonUnavailable` / `dockerDesktop`             | Start Docker Desktop                                                          |
+| Linux Docker Desktop user service stopped                                    | `daemonUnavailable` / `dockerDesktop`             | Start Docker Desktop                                                          |
+| Invalid Docker context                                                       | `contextUnavailable`                              | Context guide                                                                 |
+| Windows daemon reports Windows containers                                    | `windowsContainers`                               | Linux-container guidance                                                      |
+| SSH remote with no daemon                                                    | `daemonUnavailable` / `unknown`                   | Remote Docker guide, no local launch                                          |
+| Unknown nonzero `docker info` error                                          | `unknown`, `indeterminate`                        | Show details, Retry, Continue anyway                                          |
+| `docker info` never responds                                                 | `probeTimedOut`, `indeterminate`                  | View Docker output, Retry, Continue anyway                                    |
+| Deadline expires while a Desktop launch is in flight                         | `daemonStarting`                                  | Keep waiting with elapsed time and a Stop waiting control                     |
+| `DOCKER_HOST=tcp://<unreachable>:2375`                                       | `endpointUnreachable`                             | Show details naming the `DOCKER_HOST` source                                  |
+| `DOCKER_HOST=ssh://<host>` prompting for a passphrase                        | Probe fails fast, never hangs                     | Show details naming the `DOCKER_HOST` source                                  |
+| `docker info` exits zero but the body carries `ServerErrors`                 | Classified as a daemon failure, not ready         | Matching recovery card                                                        |
+| Readiness query is canceled                                                  | Cancellation, not a failure category              | Stop probes and render no stale error                                         |
+| Two callers request readiness at once                                        | One probe set runs                                | Both receive the same result                                                  |
+| Remembered Desktop record, Desktop since uninstalled                         | Launch reports `notAvailable`, record discarded   | Next check is provider-neutral, not a repeated Desktop claim                  |
+| Remembered record older than the maximum age                                 | Record ignored                                    | Provider-neutral guidance plus `Last checked` label                           |
+| Remembered record whose context no longer exists                             | Record discarded                                  | Provider-neutral guidance                                                     |
+| User presses `Refresh` in any state                                          | Memo and remembered record cleared                | All checks rerun and the `Last checked` label updates                         |
+| Unsupported Node extension-host platform                                     | `unsupportedHost` / `unknown`                     | Learn more, no Docker launch                                                  |
+| SSH extension host with reachable remote amd64 daemon on arm64 client        | Ready / daemon architecture `amd64`               | Show remote target, daemon architecture, remote-endpoint note                 |
+| WSL extension host with reachable native daemon                              | Ready / `dockerEngine`                            | Show WSL execution-target notice                                              |
+| Daemon disappears between the gate and `docker pull`                         | Same daemon-class failure as readiness            | Same recovery card, not a raw error string                                    |
+| Dev container: run succeeds, readiness probe times out                       | Readiness timeout plus published-port explanation | Existing timeout recovery actions                                             |
 
 ## Maintainability Requirements
 
@@ -804,7 +824,8 @@ These names are illustrative, but the final code should preserve this visible ex
 22. Classifier tests are driven by captured real-world fixtures, and unclassified failures emit a redacted fingerprint.
 23. Added classification and launch-selection branches have focused tests.
 24. All changed user-facing strings are localized and contain no U+2014 or U+2013 characters.
-25. The repository completion checks pass in order:
+25. A user who runs the offered group command and returns to the panel is told the exact next session action for Linux, WSL, SSH, or a container; Linux is never told that Reload Window is sufficient.
+26. The repository completion checks pass in order:
     - `npm run l10n`
     - `npm run prettier-fix`
     - `npm run lint`
@@ -824,6 +845,8 @@ This resolves the Ubuntu and WSL report end to end while leaving the existing Wi
 #### Slice A executive summary (completed 2026-08-03)
 
 Slice A is implemented and pushed. Probe evidence capture is in [`d832ebc1`](https://github.com/microsoft/vscode-documentdb/commit/d832ebc149a060152b517ff4a15c965448f6f0f3), pure failure classification is in [`8d0cb52d`](https://github.com/microsoft/vscode-documentdb/commit/8d0cb52da7ce5ab53b44732136a6fb8de083eb6c), bounded readiness orchestration is in [`e076243a`](https://github.com/microsoft/vscode-documentdb/commit/e076243a72c6585b21ccf3a80dff90c145084d2f), and the actionable webview/recovery flow is in [`e0f3251a`](https://github.com/microsoft/vscode-documentdb/commit/e0f3251a490671d1c6f7d9a5beb585cd23eb572b). Repository-wide formatting corrections are intentionally preserved as the follow-up commit [`4265d8f3`](https://github.com/microsoft/vscode-documentdb/commit/4265d8f3b732d0e0e963e3e495c57812c2c2cf75).
+
+The pending-session refinement is in [`8a7780c3`](https://github.com/microsoft/vscode-documentdb/commit/8a7780c341fa271e7d3ec39e1494c93f4cdf073c) for host facts and recovery selection, and [`4f363411`](https://github.com/microsoft/vscode-documentdb/commit/4f36341104b21c83fe9f83f9418ee4acd68f10d2) for environment-aware presentation, telemetry, localization, and confirmed fixture provenance. It resolves the post-usermod Retry loop without adding a failure kind or changing classifier precedence.
 
 The reported Ubuntu and WSL socket-permission failure now reaches the UI as `Access denied` from endpoint `EACCES` evidence. Rejected Docker probes retain stdout and stderr, structured `ServerErrors` are honored, and readiness is bounded by one cancellation deadline with single-flight and short memoization. The UI offers the fixed group-membership command as copy-only text, never executes it, exposes masked Docker output for every failure, and keeps forced Retry/Refresh controls. Unknown and timed-out results are indeterminate and alone may use `Continue anyway`; provisioning revalidates that invariant on the extension host.
 
