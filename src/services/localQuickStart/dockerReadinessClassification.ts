@@ -151,7 +151,7 @@ function isDockerDesktopEndpoint(endpoint: string | undefined): boolean {
     return endpoint !== undefined && DOCKER_DESKTOP_ENDPOINT_SIGNATURES.some((signature) => signature.test(endpoint));
 }
 
-function isRootlessDockerEndpoint(endpoint: string | undefined): boolean {
+export function isRootlessDockerEndpoint(endpoint: string | undefined): boolean {
     return endpoint !== undefined && ROOTLESS_DOCKER_ENDPOINT_SIGNATURE.test(endpoint);
 }
 

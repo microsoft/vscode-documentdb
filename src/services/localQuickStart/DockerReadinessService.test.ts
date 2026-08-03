@@ -499,6 +499,10 @@ describe('DockerReadinessService', () => {
             runProbe,
             probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
             readProviderMemory: () => memory,
+            getStartCapability: async (input) => ({
+                provider: input.provider,
+                providerEvidence: input.providerEvidence,
+            }),
         });
 
         await expect(service.getReadiness()).resolves.toMatchObject({
@@ -506,6 +510,48 @@ describe('DockerReadinessService', () => {
             provider: 'dockerDesktop',
             providerEvidence: 'rememberedProvider',
         });
+    });
+
+    it('returns the provider capability selected from host launch evidence', async () => {
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
+        });
+        const getStartCapability = jest.fn().mockResolvedValue({
+            provider: 'dockerDesktop',
+            providerEvidence: 'installedApplication',
+            startAction: 'startDockerDesktopWindows',
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'win32',
+            environmentVariables: { DOCKER_HOST: 'npipe:////./pipe/docker_engine' },
+            runProbe,
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'ENOENT',
+            }),
+            getStartCapability,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            failureKind: 'daemonUnavailable',
+            provider: 'dockerDesktop',
+            providerEvidence: 'installedApplication',
+            startAction: 'startDockerDesktopWindows',
+        });
+        expect(getStartCapability).toHaveBeenCalledWith(
+            expect.objectContaining({
+                environment: 'windows',
+                provider: 'unknown',
+                providerEvidence: 'none',
+                endpointAddress: '\\\\.\\pipe\\docker_engine',
+            }),
+        );
     });
 
     it.each([

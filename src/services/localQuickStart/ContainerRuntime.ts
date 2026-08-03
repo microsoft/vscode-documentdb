@@ -27,16 +27,15 @@ import {
     ShellStreamCommandRunnerFactory,
 } from '@microsoft/vscode-container-client';
 import { Bash, Cmd, type Shell, type ShellQuotedString, ShellQuoting } from '@microsoft/vscode-processutils';
-import { spawn } from 'child_process';
-import * as fs from 'fs';
 import * as net from 'net';
-import * as path from 'path';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
 import { DockerReadinessService } from './DockerReadinessService';
+import { startDockerProvider as launchDockerProvider } from './DockerProviderLauncher';
 import { MaskingLineBuffer, maskSecrets } from './outputMasking';
 import {
     type DockerReadiness,
+    type DockerLaunchResult,
     type DockerReadinessRequest,
     QUICK_START_PORT,
     QUICK_START_PORT_BAND_END,
@@ -173,6 +172,16 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     /** CLI-on-PATH + daemon-reachable check (design §9 prereq cards). */
     public isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness> {
         return this.readinessService.getReadiness(request);
+    }
+
+    public async startAvailableDockerProvider(): Promise<DockerLaunchResult> {
+        const readiness = await this.readinessService.getReadiness({ forceRefresh: true });
+        if (!readiness.startAction) {
+            return 'notAvailable';
+        }
+        const result = await launchDockerProvider(readiness.startAction);
+        await this.readinessService.recordLaunchResult(result);
+        return result;
     }
 
     /** True if the TCP port can be bound on loopback right now (pre-check, design §8.3). */
@@ -395,36 +404,18 @@ export function isRunning(item: InspectContainersItem | undefined): boolean {
 }
 
 /** Singleton Docker-backed runtime; the default injected into {@link QuickStartService} (WI-0). */
-export const ContainerRuntime: IContainerRuntime = new ContainerRuntimeImpl();
+const containerRuntime = new ContainerRuntimeImpl();
+export const ContainerRuntime: IContainerRuntime = containerRuntime;
 
 /**
- * Best-effort launch of Docker Desktop (design §5.3 / §13.2 "Start Docker Desktop").
- * Returns true when a launch was attempted. The user still clicks Retry afterwards —
- * we never block waiting for the daemon. We never install Docker (cross-cutting rule 1).
+ * Recompute provider capability and revalidate the selected action immediately before launch.
  */
+export async function startAvailableDockerProvider(): Promise<DockerLaunchResult> {
+    return containerRuntime.startAvailableDockerProvider();
+}
+
+/** Temporary boolean adapter for the WI-5 router rename. */
 export async function startDockerDesktop(): Promise<boolean> {
-    try {
-        if (process.platform === 'win32') {
-            const roots = [process.env['ProgramFiles'], process.env['ProgramW6432'], 'C:\\Program Files'].filter(
-                (r): r is string => !!r,
-            );
-            const exe = roots
-                .map((root) => path.join(root, 'Docker', 'Docker', 'Docker Desktop.exe'))
-                .find((candidate) => fs.existsSync(candidate));
-            if (!exe) {
-                return false;
-            }
-            spawn(exe, [], { detached: true, stdio: 'ignore' }).unref();
-            return true;
-        }
-        if (process.platform === 'darwin') {
-            spawn('open', ['-a', 'Docker'], { detached: true, stdio: 'ignore' }).unref();
-            return true;
-        }
-        // Linux: Docker Desktop launch varies; try the common user service, best-effort.
-        spawn('systemctl', ['--user', 'start', 'docker-desktop'], { detached: true, stdio: 'ignore' }).unref();
-        return true;
-    } catch {
-        return false;
-    }
+    const result = await startAvailableDockerProvider();
+    return result === 'started' || result === 'launchAttempted';
 }

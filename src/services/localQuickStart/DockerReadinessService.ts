@@ -19,6 +19,7 @@ import {
     type RunDockerProbeOptions,
 } from './dockerProbes';
 import { classifyDockerFailure, classifyDockerProvider } from './dockerReadinessClassification';
+import { getDockerStartCapability } from './DockerProviderLauncher';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
     type DockerEndpointKind,
@@ -64,6 +65,7 @@ export interface DockerReadinessServiceDependencies {
     readonly probeEndpoint?: typeof probeDockerEndpoint;
     readonly probeSocketGroup?: typeof probeDockerSocketGroup;
     readonly detectServiceManager?: typeof detectDockerServiceManager;
+    readonly getStartCapability?: typeof getDockerStartCapability;
     readonly readProviderMemory?: () => DockerProviderMemory | undefined;
     readonly writeProviderMemory?: (memory: DockerProviderMemory | undefined) => Promise<void>;
     readonly createProbeOutput?: () => DockerProbeOutput;
@@ -83,6 +85,7 @@ interface ResolvedDependencies {
     readonly probeEndpoint: typeof probeDockerEndpoint;
     readonly probeSocketGroup: typeof probeDockerSocketGroup;
     readonly detectServiceManager: typeof detectDockerServiceManager;
+    readonly getStartCapability: typeof getDockerStartCapability;
     readonly readProviderMemory: () => DockerProviderMemory | undefined;
     readonly writeProviderMemory: (memory: DockerProviderMemory | undefined) => Promise<void>;
     readonly createProbeOutput?: () => DockerProbeOutput;
@@ -236,6 +239,7 @@ export class DockerReadinessService {
             probeEndpoint: dependencies.probeEndpoint ?? probeDockerEndpoint,
             probeSocketGroup: dependencies.probeSocketGroup ?? probeDockerSocketGroup,
             detectServiceManager: dependencies.detectServiceManager ?? detectDockerServiceManager,
+            getStartCapability: dependencies.getStartCapability ?? getDockerStartCapability,
             readProviderMemory: dependencies.readProviderMemory ?? readDefaultProviderMemory,
             writeProviderMemory: dependencies.writeProviderMemory ?? writeDefaultProviderMemory,
             createProbeOutput: dependencies.createProbeOutput,
@@ -576,6 +580,12 @@ export class DockerReadinessService {
                 providerMayBeStarting:
                     provider.provider === 'dockerDesktop' && provider.providerEvidence === 'rememberedProvider',
             });
+            const startCapability = await this.dependencies.getStartCapability({
+                environment,
+                ...provider,
+                endpointAddress: endpoint.address,
+                cancellationToken,
+            });
             let permissionDetail: DockerPermissionDetail | undefined;
             if (classification.failureKind === 'permissionDenied' && endpoint.kind === 'unixSocket') {
                 const groupFacts = await this.dependencies.probeSocketGroup(endpoint.address);
@@ -590,7 +600,7 @@ export class DockerReadinessService {
             const failureResult = {
                 environment,
                 endpointKind: endpoint.kind,
-                ...provider,
+                ...startCapability,
                 executionTarget: getDockerExecutionTarget(environment),
                 permissionDetail,
                 recoveryCommand: getDockerRecoveryCommand(
