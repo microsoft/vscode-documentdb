@@ -201,6 +201,11 @@ describe('classifyDockerProvider', () => {
             expected: { provider: 'dockerEngine', providerEvidence: 'liveDaemon' },
         },
         {
+            name: 'live daemon without provider metadata',
+            evidence: { environment: 'linux', daemonReachable: true },
+            expected: { provider: 'unknown', providerEvidence: 'liveDaemon' },
+        },
+        {
             name: 'Desktop context',
             evidence: {
                 environment: 'windows',

@@ -14,7 +14,7 @@ import {
     type DockerReadinessServiceDependencies,
 } from './DockerReadinessService';
 import { type RunDockerProbeOptions } from './dockerProbes';
-import { type DockerProbeEvidence } from './quickStartTypes';
+import { type DockerProbeEvidence, type DockerProviderMemory } from './quickStartTypes';
 
 function commandResponse<T>(args: string[], parse: (output: string) => T): PromiseCommandResponse<T> {
     return {
@@ -300,6 +300,390 @@ describe('DockerReadinessService', () => {
 
         await service.getReadiness({ forceRefresh: true });
         expect(runProbe).toHaveBeenCalledTimes(4);
+    });
+
+    it('returns unsupportedHost without spawning Docker on an unsupported host', async () => {
+        const runProbe = jest.fn();
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'aix',
+            environmentVariables: {},
+            runProbe,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            outcome: 'diagnosed',
+            failureKind: 'unsupportedHost',
+            environment: 'unsupported',
+        });
+        expect(runProbe).not.toHaveBeenCalled();
+    });
+
+    it('returns cliMissing without resolving contexts or probing an endpoint', async () => {
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', { spawnErrorCode: 'ENOENT' });
+            }
+            return evidence(options.probe, { spawnErrorCode: 'ENOENT' });
+        });
+        const probeEndpoint = jest.fn();
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            probeEndpoint,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({ failureKind: 'cliMissing' });
+        expect(runProbe).toHaveBeenCalledTimes(2);
+        expect(probeEndpoint).not.toHaveBeenCalled();
+    });
+
+    it('classifies an explicitly selected context that is absent', async () => {
+        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            if (options.probe === 'contexts') {
+                return evidence('contexts', { stdout: '[]' });
+            }
+            return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: { DOCKER_CONTEXT: 'missing' },
+            runProbe,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            readProviderMemory: () => ({
+                provider: 'dockerDesktop',
+                endpointKind: 'unknown',
+                hostEnvironment: 'linux',
+                recordedAtMs: Date.now(),
+            }),
+            writeProviderMemory,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            failureKind: 'contextUnavailable',
+            endpointKind: 'unknown',
+        });
+        expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
+    });
+
+    it('does not claim a selected context is absent when the context probe failed', async () => {
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info' || options.probe === 'contexts') {
+                return evidence(options.probe, { exitCode: 1 });
+            }
+            return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: { DOCKER_CONTEXT: 'unresolved' },
+            runProbe,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            failureKind: 'unknown',
+            outcome: 'indeterminate',
+        });
+    });
+
+    it('persists live Docker Desktop facts after a successful info probe', async () => {
+        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', {
+                    stdout: JSON.stringify({
+                        OSType: 'linux',
+                        OperatingSystem: 'Docker Desktop',
+                        Architecture: 'x86_64',
+                        ServerErrors: [],
+                    }),
+                });
+            }
+            return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'darwin',
+            environmentVariables: {},
+            now: () => 1_000,
+            runProbe,
+            writeProviderMemory,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            outcome: 'ready',
+            provider: 'dockerDesktop',
+            providerEvidence: 'liveDaemon',
+            daemonArchitecture: 'amd64',
+        });
+        expect(writeProviderMemory).toHaveBeenCalledWith({
+            provider: 'dockerDesktop',
+            endpointKind: 'unknown',
+            hostEnvironment: 'macos',
+            daemonArchitecture: 'amd64',
+            osType: 'linux',
+            recordedAtMs: 1_000,
+        });
+    });
+
+    it('diagnoses a reachable Windows-container daemon', async () => {
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', {
+                    stdout: JSON.stringify({
+                        OSType: 'windows',
+                        OperatingSystem: 'Docker Desktop',
+                        ServerErrors: [],
+                    }),
+                });
+            }
+            return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'win32',
+            environmentVariables: {},
+            runProbe,
+            writeProviderMemory: async () => undefined,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            outcome: 'diagnosed',
+            failureKind: 'windowsContainers',
+            daemonReachable: true,
+            osType: 'windows',
+            provider: 'dockerDesktop',
+        });
+    });
+
+    it('uses current remembered Desktop evidence while a provider may be starting', async () => {
+        const memory: DockerProviderMemory = {
+            provider: 'dockerDesktop',
+            endpointKind: 'unixSocket',
+            hostEnvironment: 'linux',
+            recordedAtMs: 500,
+        };
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            if (options.probe === 'contexts') {
+                return evidence('contexts', {
+                    stdout: JSON.stringify([
+                        { name: 'default', current: true, containerEndpoint: 'unix:///var/run/docker.sock' },
+                    ]),
+                });
+            }
+            return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            now: () => 1_000,
+            runProbe,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            readProviderMemory: () => memory,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            failureKind: 'daemonStarting',
+            provider: 'dockerDesktop',
+            providerEvidence: 'rememberedProvider',
+        });
+    });
+
+    it.each([
+        {
+            name: 'expired',
+            memory: {
+                provider: 'dockerDesktop',
+                endpointKind: 'unixSocket',
+                hostEnvironment: 'linux',
+                recordedAtMs: 0,
+            },
+            now: 7 * 24 * 60 * 60 * 1_000 + 1,
+            platform: 'linux',
+            remoteName: undefined,
+            endpoint: 'unix:///var/run/docker.sock',
+        },
+        {
+            name: 'different environment',
+            memory: {
+                provider: 'dockerDesktop',
+                endpointKind: 'unixSocket',
+                hostEnvironment: 'linux',
+                recordedAtMs: 500,
+            },
+            now: 1_000,
+            platform: 'linux',
+            remoteName: 'wsl',
+            endpoint: 'unix:///var/run/docker.sock',
+        },
+        {
+            name: 'different endpoint kind',
+            memory: {
+                provider: 'dockerDesktop',
+                endpointKind: 'namedPipe',
+                hostEnvironment: 'linux',
+                recordedAtMs: 500,
+            },
+            now: 1_000,
+            platform: 'linux',
+            remoteName: undefined,
+            endpoint: 'unix:///var/run/docker.sock',
+        },
+    ] as const)('discards $name provider memory', async ({ memory, now, platform, remoteName, endpoint }) => {
+        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            if (options.probe === 'contexts') {
+                return evidence('contexts', {
+                    stdout: JSON.stringify([{ name: 'default', current: true, containerEndpoint: endpoint }]),
+                });
+            }
+            return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform,
+            remoteName,
+            environmentVariables: {},
+            now: () => now,
+            runProbe,
+            probeEndpoint: async (resolvedEndpoint) => ({
+                kind: resolvedEndpoint.kind,
+                source: resolvedEndpoint.source,
+            }),
+            readProviderMemory: () => memory,
+            writeProviderMemory,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            provider: 'unknown',
+            providerEvidence: 'none',
+        });
+        expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
+    });
+
+    it('clears remembered state before a forced refresh', async () => {
+        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', {
+                    stdout: JSON.stringify({ OSType: 'linux', OperatingSystem: 'Ubuntu', ServerErrors: [] }),
+                });
+            }
+            return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            writeProviderMemory,
+        });
+
+        await service.getReadiness({ forceRefresh: true });
+
+        expect(writeProviderMemory.mock.calls[0]).toEqual([undefined]);
+        expect(writeProviderMemory.mock.calls[1]?.[0]).toMatchObject({ provider: 'dockerEngine' });
+    });
+
+    it('deduplicates concurrent forced refreshes behind an existing check', async () => {
+        const initialResolvers: Array<(value: DockerProbeEvidence) => void> = [];
+        const runProbe = jest.fn((options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (runProbe.mock.calls.length <= 2) {
+                return new Promise((resolve) => initialResolvers.push(resolve));
+            }
+            if (options.probe === 'info') {
+                return Promise.resolve(
+                    evidence('info', {
+                        stdout: JSON.stringify({ OSType: 'linux', OperatingSystem: 'Ubuntu', ServerErrors: [] }),
+                    }),
+                );
+            }
+            return Promise.resolve(evidence(options.probe, { stdout: 'Docker version 28.1.1' }));
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            writeProviderMemory: async () => undefined,
+        });
+
+        const initial = service.getReadiness();
+        const firstRefresh = service.getReadiness({ forceRefresh: true });
+        const secondRefresh = service.getReadiness({ forceRefresh: true });
+        initialResolvers[0]?.(evidence('cliVersion', { stdout: 'Docker version 28.1.1' }));
+        initialResolvers[1]?.(
+            evidence('info', {
+                stdout: JSON.stringify({ OSType: 'linux', OperatingSystem: 'Ubuntu', ServerErrors: [] }),
+            }),
+        );
+
+        await expect(initial).resolves.toMatchObject({ outcome: 'ready' });
+        await expect(firstRefresh).resolves.toMatchObject({ outcome: 'ready' });
+        await expect(secondRefresh).resolves.toMatchObject({ outcome: 'ready' });
+        expect(runProbe).toHaveBeenCalledTimes(4);
+    });
+
+    it.each(['notAvailable', 'failed'] as const)('clears remembered state after a %s launch', async (result) => {
+        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
+        const service = new DockerReadinessService({ writeProviderMemory });
+
+        await service.recordLaunchResult(result);
+
+        expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
+    });
+
+    it('suppresses successful poll command echoes and retains a failing probe echo', async () => {
+        const onCommand = jest.fn();
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            options.onCommand?.(`docker ${options.probe}`);
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1 });
+            }
+            if (options.probe === 'contexts') {
+                return evidence('contexts', { stdout: '[]' });
+            }
+            return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe,
+            probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            createProbeOutput: () => ({ onCommand }),
+        });
+
+        await service.getReadiness({ suppressCommandEcho: true });
+
+        expect(onCommand).toHaveBeenCalledTimes(1);
+        expect(onCommand).toHaveBeenCalledWith('docker info');
     });
 });
 

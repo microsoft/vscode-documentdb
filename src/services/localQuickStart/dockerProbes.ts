@@ -62,6 +62,7 @@ export interface DockerServiceManagerProbeDependencies {
 
 export interface DockerInfoFacts {
     readonly osType?: string;
+    readonly operatingSystem?: string;
     readonly architecture?: string;
     readonly serverVersion?: string;
     readonly serverErrors: ReadonlyArray<string>;
@@ -71,6 +72,7 @@ type DockerProbeExecutor = (command: CommandResponseBase, stdOutPipe: Writable, 
 
 const DockerInfoSchema = z.object({
     OSType: z.string().optional(),
+    OperatingSystem: z.string().optional(),
     Architecture: z.string().optional(),
     ServerVersion: z.string().optional(),
     ServerErrors: z.array(z.string()).nullish(),
@@ -180,6 +182,7 @@ export function parseDockerInfoFacts(output: string): DockerInfoFacts | undefine
         }
         return {
             osType: result.data.OSType,
+            operatingSystem: result.data.OperatingSystem,
             architecture: result.data.Architecture,
             serverVersion: result.data.ServerVersion,
             serverErrors: result.data.ServerErrors ?? [],

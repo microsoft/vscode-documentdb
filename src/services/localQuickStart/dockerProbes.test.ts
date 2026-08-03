@@ -69,6 +69,7 @@ describe('parseDockerInfoFacts', () => {
             parseDockerInfoFacts(
                 JSON.stringify({
                     OSType: 'linux',
+                    OperatingSystem: 'Docker Desktop',
                     Architecture: 'x86_64',
                     ServerVersion: '27.5.1',
                     ServerErrors: ['permission denied'],
@@ -77,6 +78,7 @@ describe('parseDockerInfoFacts', () => {
             ),
         ).toEqual({
             osType: 'linux',
+            operatingSystem: 'Docker Desktop',
             architecture: 'x86_64',
             serverVersion: '27.5.1',
             serverErrors: ['permission denied'],

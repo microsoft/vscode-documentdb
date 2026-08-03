@@ -167,6 +167,9 @@ export function classifyDockerProvider(
     evidence: DockerProviderClassificationEvidence,
 ): DockerProviderClassification {
     if (evidence.daemonReachable) {
+        if (!evidence.daemonOperatingSystem) {
+            return { provider: 'unknown', providerEvidence: 'liveDaemon' };
+        }
         return {
             provider: isDockerDesktopOperatingSystem(evidence.daemonOperatingSystem)
                 ? 'dockerDesktop'
