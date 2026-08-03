@@ -841,6 +841,16 @@ The permission classifier, raw info parser, architecture normalizer, and live En
 - Document Linux group/session restart and WSL integration guidance.
 - Keep multi-step setup procedures in linked documentation. The card carries at most the single copyable command from the recovery-command table; it never becomes a shell tutorial.
 
+#### Slice B implementation checkpoint (completed 2026-08-03)
+
+Completed and pushed in [commit `6117a83a`](https://github.com/microsoft/vscode-documentdb/commit/6117a83a0cf74e7e35c2a6337ff31f1a17557e44). The new [DocumentDB Local Quick Start user guide](../../../user-manual/local-quick-start.md) documents Docker Engine and Docker Desktop as supported provider choices, the extension-host execution target, the no-install/no-silent-start/no-elevation rules, starting Quick Start, readiness cards, Refresh, masked output, Linux/WSL group recovery, native service recovery, rootless launch limits, WSL Desktop integration, context/remote endpoint recovery, Linux-container mode, provisioning-time Docker recovery, and dev-container published-port behavior.
+
+The local-connection overview, DocumentDB Local manual page, user-manual index, and repository README now link to the guide and distinguish container management from connecting to an already-running instance. The v2 design reference has a prominent supersession note and its normative prerequisite table, Docker-not-ready mockup, and cross-cutting launch rule are provider-neutral rather than Desktop-only.
+
+All six documentation surfaces pass Prettier and whitespace checks. New local documentation links were checked for existing targets. The new guide contains no standalone product use of `MongoDB`, no U+2014/U+2013 characters, and no speculative proxy/registry prerequisite advice.
+
+**Historical-design choice:** Two options were considered for old Desktop-only design material: rewrite every historical iteration and readiness-gap record as if it had always described the final behavior, or preserve history while correcting the authoritative v2 rules and adding an explicit supersession link. The second option was selected because the earlier documents explain past implementation decisions and Slice A boundaries; erasing those statements would make the repository's design history misleading. The user manual and current implementation plan are the authoritative operational guidance.
+
 ## Required Test Matrix
 
 | Scenario                                                                     | Expected failure/provider                         | Expected action                                                               |
