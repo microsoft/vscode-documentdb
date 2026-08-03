@@ -74,7 +74,6 @@ export interface DockerReadinessPresentation {
     readonly showCopyCommand: boolean;
     readonly showContinueAnyway: boolean;
     readonly showRetry: boolean;
-    readonly showRefresh: true;
     readonly showViewOutput: boolean;
 }
 
@@ -316,7 +315,6 @@ export function getDockerReadinessPresentation(readiness: DockerReadiness): Dock
             showCopyCommand: false,
             showContinueAnyway: false,
             showRetry: false,
-            showRefresh: true,
             showViewOutput: false,
         };
     }
@@ -339,7 +337,6 @@ export function getDockerReadinessPresentation(readiness: DockerReadiness): Dock
         showCopyCommand: readiness.recoveryCommand !== undefined,
         showContinueAnyway: readiness.outcome === 'indeterminate' && readiness.canContinueAnyway,
         showRetry: readiness.failureKind !== 'unsupportedHost',
-        showRefresh: true,
         showViewOutput: true,
     };
 }

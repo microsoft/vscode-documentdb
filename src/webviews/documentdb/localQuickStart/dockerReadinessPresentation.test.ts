@@ -78,10 +78,19 @@ describe('getDockerReadinessPresentation', () => {
     ])('maps %s to %s', (_name, overrides, expectedState) => {
         expect(getDockerReadinessPresentation(readiness(overrides))).toMatchObject({
             state: expectedState,
-            showRefresh: true,
             showRetry: true,
             showViewOutput: true,
         });
+    });
+
+    it('offers the install action only when the Docker CLI is missing', () => {
+        expect(
+            getDockerReadinessPresentation(readiness({ failureKind: 'cliMissing', cliInstalled: false })),
+        ).toMatchObject({
+            showInstall: true,
+            guide: 'install',
+        });
+        expect(getDockerReadinessPresentation(readiness({ failureKind: 'daemonUnavailable' })).showInstall).toBe(false);
     });
 
     it('offers Continue anyway only for an indeterminate result', () => {
@@ -226,10 +235,9 @@ describe('getDockerReadinessPresentation', () => {
         });
     });
 
-    it('keeps Refresh but omits Retry on an unsupported host', () => {
+    it('omits Retry on an unsupported host', () => {
         expect(getDockerReadinessPresentation(readiness({ failureKind: 'unsupportedHost' }))).toMatchObject({
             state: 'unsupported',
-            showRefresh: true,
             showRetry: false,
         });
     });
@@ -241,7 +249,7 @@ describe('getDockerReadinessPresentation', () => {
         expect(getDockerReadinessPresentation(readiness(overrides))).toMatchObject({ state });
     });
 
-    it('returns refresh as the only readiness action when ready', () => {
+    it('returns no failure actions when ready', () => {
         expect(getDockerReadinessPresentation(readiness({ outcome: 'ready' }))).toEqual({
             state: 'ready',
             guidance: undefined,
@@ -253,7 +261,6 @@ describe('getDockerReadinessPresentation', () => {
             showCopyCommand: false,
             showContinueAnyway: false,
             showRetry: false,
-            showRefresh: true,
             showViewOutput: false,
         });
     });

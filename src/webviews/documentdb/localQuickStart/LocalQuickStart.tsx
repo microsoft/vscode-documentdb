@@ -819,6 +819,10 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
     }, [trpcClient]);
 
+    const handleInstallDocker = useCallback((): void => {
+        void trpcClient.common.openUrl.mutate({ url: DOCKER_GUIDES.install.href }).catch(() => undefined);
+    }, [trpcClient]);
+
     const handleCopyRecoveryCommand = useCallback((): void => {
         const recoveryCommand = docker?.readiness.recoveryCommand;
         if (!recoveryCommand) return;
@@ -1210,7 +1214,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         </details>
                     )}
                     <div className={styles.actions}>
-                        {presentation && (
+                        {presentation && !presentation.showInstall && (
                             <Link href={DOCKER_GUIDES[presentation.guide].href}>
                                 {DOCKER_GUIDES[presentation.guide].label}
                             </Link>
@@ -1218,6 +1222,11 @@ export const LocalQuickStart = (): JSX.Element => {
                     </div>
                 </Card>
                 <div className={styles.actions}>
+                    {presentation?.showInstall && (
+                        <Button appearance="primary" onClick={handleInstallDocker}>
+                            {l10n.t('Install Docker')}
+                        </Button>
+                    )}
                     {presentation?.showViewOutput && (
                         <Button appearance="secondary" onClick={handleViewOutput}>
                             {l10n.t('View Docker output')}
