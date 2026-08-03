@@ -1,7 +1,7 @@
 # Local Quick Start Docker Readiness - Implementation Plan
 
 **Date:** 2026-08-02
-**Status:** Slice A complete with pending-session refinement; Slice B pending
+**Status:** Slice A and Slice B implementation complete; cross-platform manual verification handoff remains
 **Related design:** [local-quickstart-v2.md](local-quickstart-v2.md)
 
 > **User-facing language:** Use **Docker** as the default term in cards, summaries, and general status messages. This keeps the primary experience simple and avoids exposing implementation details that most users do not need. Use **Docker CLI**, **Docker daemon**, **Docker Engine**, or **Docker Desktop** only when the distinction explains a specific failure or names the exact action being offered, such as `Start Docker Desktop`. The implementation must still detect and model these components separately; this simplification applies only to presentation.
@@ -581,6 +581,8 @@ Twenty-two focused classifier tests passed. They cover the new failure categorie
 
 **Implementation boundary:** Provider classification is exported but not consumed by the service in this commit. Two options were considered: wire the first provider branches immediately, or keep the pure work item independently testable until WI-3 can apply provider memory, endpoint resolution, and discard rules together. The second option was selected because exposing provider facts without those orchestration rules would create the partially classified UI state prohibited by the delivery plan.
 
+**Follow-up formatting correction:** The required repository-wide Prettier pass normalized the Slice B classifier and test layout in [commit `478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687). This commit is mechanical only and preserves the original WI-2 commit.
+
 ### WI-3: Add the readiness orchestrator
 
 - Move prerequisite command sequencing out of `ContainerRuntimeImpl`.
@@ -637,6 +639,8 @@ The broadened Local Quick Start check passed 131 probe, classifier, orchestratio
 
 **Corrections before commit:** The initial implementation treated every empty context list as positive absence evidence; it was corrected to carry whether the context probe and parse succeeded. The first forced-refresh implementation also returned an existing in-flight result before clearing memory; it was replaced with a dedicated forced-refresh single flight that queues behind the old check and runs once. No committed history was reset or rewritten.
 
+**Follow-up formatting correction:** The required repository-wide Prettier pass normalized the readiness service layout in [commit `478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687). This commit is mechanical only and preserves the original WI-3 commit.
+
 ### WI-4: Replace the launcher
 
 - Move process launching out of `ContainerRuntime.ts`.
@@ -655,6 +659,8 @@ Availability is rechecked immediately before launch. Windows and WSL GUI launche
 Failure readiness now carries the capability selected by the launcher owner. The exported coordinator force-refreshes readiness, launches only the returned typed action, and passes `notAvailable`/`failed` back to the readiness service so remembered provider state is invalidated. Fifty-nine focused launcher and orchestrator tests passed, including the installed-application asymmetry, native WSL negative case, rootless versus root-managed Linux, remote refusal, launch revalidation, and typed result mapping. Targeted ESLint and the full root TypeScript build passed with no warnings.
 
 **Temporary compatibility boundary:** The old `startDockerDesktop(): Promise<boolean>` export remains for the unchanged WI-5 router name, but it no longer selects by `process.platform` or launches anything directly. It delegates to the typed force-refresh coordinator and maps only `started`/`launchAttempted` to `true`. Two options were considered: change the router in the WI-4 commit, mixing work-item history, or retain a behavior-safe adapter for one commit. The adapter was selected so WI-4 stays independently buildable and WI-5 can record the public procedure rename and telemetry changes in its own commit. WI-5 must remove this adapter.
+
+**Follow-up formatting correction:** The required repository-wide Prettier pass normalized the launcher, launcher tests, and runtime imports in [commit `478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687). This commit is mechanical only and preserves the original WI-4 commit.
 
 ### WI-5: Update router and telemetry
 
@@ -680,6 +686,8 @@ Twenty-eight focused fingerprint, telemetry-projection, and direct tRPC caller t
 **Contract-boundary choice:** The React call site was changed from `startDockerDesktop` to `startDockerProvider` in this work item, while its fixed five-second delay and presentation behavior remain for WI-6. Two options were considered: leave the client temporarily uncompilable until WI-6, or include the minimal generated-contract consumer rename with WI-5. The latter was selected because each work-item commit must build independently; no WI-6 presentation or polling behavior was pulled forward.
 
 **Correction before commit:** The first direct router-test compile used a string literal for `dbExperience`; it was replaced with the repository's `API.DocumentDB` enum before commit. No committed history was reset or rewritten.
+
+**Follow-up formatting correction:** The required repository-wide Prettier pass normalized the router, telemetry projection, classifier fingerprint, and associated tests in [commit `478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687). This commit is mechanical only and preserves the original WI-5 commit.
 
 ### WI-6: Update the webview
 
@@ -743,6 +751,8 @@ Eighty-seven focused mapper, polling, and orchestrator tests passed. Targeted ES
 
 **Manual verification boundary:** This checkpoint validates behavior through focused tests, TypeScript, lint, localization, and webpack. Platform-specific visual and workflow verification is intentionally recorded under WI-9 rather than claimed here.
 
+**Follow-up formatting correction:** The required repository-wide Prettier pass normalized the React, mapper, polling, and test layout in [commit `478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687). This commit is mechanical only and preserves the original WI-6 commit.
+
 ### WI-7: Add integration-focused tests
 
 - Test service sequencing with mocked command results.
@@ -780,6 +790,8 @@ The complete Local Quick Start test set passed all 15 suites and 227 tests. Targ
 
 **WI-8 boundary:** Daemon disappearance during pull/run and the dev-container published-port explanation are not counted as WI-7 coverage. They require provisioning-path behavior that did not yet exist and remain explicitly assigned to WI-8.
 
+**Follow-up formatting correction:** The required repository-wide Prettier pass normalized the integration, polling, presentation, and probe test layout in [commit `478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687). This commit is mechanical only and preserves the original WI-7 commit.
+
 ### WI-8: Reuse the classifier on the provisioning path
 
 The readiness gate is a snapshot, and the daemon can disappear between the gate and the first `docker pull`. A Docker Desktop auto-update three seconds after the check produces `error during connect: … The system cannot find the file specified`, which today lands in the failure card as a raw string with none of the recovery UI this plan builds.
@@ -802,6 +814,8 @@ Focused tests cover daemon disappearance during both pull and run, preservation 
 **Classification-path implementation choice:** Two options were considered: retrofit pull/run execution to tee and classify each operation's rejected stderr directly, or re-run the established bounded readiness probes after an operation failure. The second option was selected with greater than 80% confidence. It keeps one evidence collector and one classifier owner, obtains endpoint errno and structured `ServerErrors` rather than relying on operation text, distinguishes a daemon that recovered from a real image error, honors single-flight/deadline behavior, and keeps raw pull/run output in the masked OutputChannel. The tradeoff is one extra bounded probe set after a failed pull or run.
 
 **Corrections before commit:** The first full build found an unused `DockerReadiness` import after event narrowing made an explicit cast unnecessary; the import was removed before commit. No committed history was reset or rewritten.
+
+**Follow-up formatting correction:** The required repository-wide Prettier pass normalized the provisioning service and React event-consumer layout in [commit `478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687). This commit is mechanical only and preserves the original WI-8 commit.
 
 ### WI-9: Build a fixture corpus and manual verification pass
 
@@ -833,6 +847,8 @@ The permission classifier, raw info parser, architecture normalizer, and live En
 **Corpus-scope deviation:** The plan asks for real fixtures across operating systems and failure modes, but this workspace provides only WSL2 with native Docker Engine plus the historical WSL permission capture. Three options were considered: invent representative outputs, copy unattributed text from documentation, or commit only verified captures and leave an explicit acquisition checklist. The third option was selected with greater than 80% confidence because classifier fixtures are evidence, and fabricated provenance would make the test suite less trustworthy. New Windows, macOS, native Ubuntu stopped-service, and WSL Desktop captures must be added as new files when those environments are available.
 
 **Manual-pass safety deviation:** The agent did not stop the active Docker service, remove group access, run `sudo`, launch/stop Docker Desktop on the operator's machine, or execute `wsl --shutdown`. Those actions would disrupt the current session, require elevation, or need unavailable platforms. The safe alternatives were automated injected-dependency tests plus command-level inspection of the existing host. The unrun rows above are the operator handoff and are not claimed as acceptance successes.
+
+**Follow-up formatting correction:** The required repository-wide Prettier pass normalized the real-fixture consumer tests in [commit `478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687). This commit is mechanical only and preserves the original WI-9 commit and fixture contents.
 
 ### WI-10: Update documentation
 
@@ -1015,3 +1031,19 @@ Provider classification and provider memory, the evidence bar and launch matrix 
 Keep each work item independently testable, and do not expose partially classified states in the UI.
 
 The first executable behavior check should be the Linux/WSL permission-denied classifier test, driven by a real captured fixture. It directly reproduces the reported failure and will disconfirm the implementation if it still falls through to `daemonUnavailable` or Docker Desktop guidance. Write it before WI-0 is complete: with today's code it fails because the evidence is missing, which is the point.
+
+#### Slice B executive summary (completed 2026-08-03)
+
+Slice B is implemented and pushed. Typed readiness contracts are in [`d6254c1c`](https://github.com/microsoft/vscode-documentdb/commit/d6254c1cd1f30b099b817addee3a36b0f4657140), with the reachable-diagnosed-daemon correction preserved separately in [`0720fbe4`](https://github.com/microsoft/vscode-documentdb/commit/0720fbe4eebd3deee9b008cce4c4c2fd3dd57fb3). Pure failure/provider classification is in [`54e13d9d`](https://github.com/microsoft/vscode-documentdb/commit/54e13d9dfb1d6bd818d200c16262a2d494b01ee6), provider memory and orchestration are in [`d79aa505`](https://github.com/microsoft/vscode-documentdb/commit/d79aa505fda4809b0ebb8180701cfda2fb97ed07), and the provider-aware launcher is in [`eb3c6828`](https://github.com/microsoft/vscode-documentdb/commit/eb3c6828b68d662998f2f3209e22fd6112fdfd79).
+
+The typed tRPC launch contract and categorized/redacted telemetry are in [`149025d5`](https://github.com/microsoft/vscode-documentdb/commit/149025d5129e3064422530abd70599ee49640bb6). The complete webview state model, provider-start polling, remembered timestamps, execution-target copy, remote notices, and accessibility updates are in [`aea5b048`](https://github.com/microsoft/vscode-documentdb/commit/aea5b048a7c924e1c78a6193d0f0ef55b084d2e9). Integration-focused coverage is in [`8e0c0483`](https://github.com/microsoft/vscode-documentdb/commit/8e0c048339c16e10eb3b171f243cea8346d6edf0), provisioning-time readiness reuse is in [`77c4bfed`](https://github.com/microsoft/vscode-documentdb/commit/77c4bfede508af9bd20719030f9beb2b6a6f3d6d), verified fixtures are in [`c1876d20`](https://github.com/microsoft/vscode-documentdb/commit/c1876d20b6de95ca826f86061cbccb85876d9532), and user documentation is in [`6117a83a`](https://github.com/microsoft/vscode-documentdb/commit/6117a83a0cf74e7e35c2a6337ff31f1a17557e44). The required final repository-wide formatting correction is intentionally preserved in [`478cb836`](https://github.com/microsoft/vscode-documentdb/commit/478cb83625cac5bf7678b4899a7a89e65478d687), not folded back into any work-item commit.
+
+The completed flow now distinguishes CLI absence, endpoint permission, native daemon availability, context failure, remote endpoint reachability, provider startup, timeout, unsupported hosts, Windows-container mode, and unknown failures. Docker Desktop is named as a cause only from positive live, context, or remembered evidence; the lower installed-application evidence bar can name only the launch button on local Windows/macOS. Native Engine, rootless Engine, WSL, and remote launch behavior follow the documented evidence matrix. Provider memory is time-limited, visibly dated, contradicted aggressively, and cleared by Refresh or failed launch.
+
+The webview renders every semantic recovery state, fixed copy-only commands, masked output access, indeterminate-only Continue anyway, and an always-present Refresh. Provider startup uses cancelable sequential backoff without overlapping probes. Review and success copy distinguish local, WSL, SSH, dev-container, Codespaces, and other remote extension hosts, and daemon architecture is never inferred from `process.arch`. Pull/run daemon failures return to the same readiness recovery UI, while ready-daemon image failures stay on the provisioning path.
+
+The principal Slice B deviations are deliberate and documented inline: provider memory does not persist context names, so an implicitly deleted same-kind context cannot be identified until another contradiction, expiry, or Refresh; installed-application and service-path evidence lives in the launcher rather than the orchestrator; provisioning re-runs the bounded readiness probes after pull/run failure instead of classifying raw operation text; and the fixture corpus contains only verified WSL captures rather than fabricated Windows/macOS/native-Linux outputs. The Slice A cancellation adapter and stricter WSL service-wrapper evidence remain unchanged.
+
+The required completion sequence passed in order after the formatting correction: localization generation, repository-wide Prettier, repository-wide ESLint, all 199 Jest suites (3,267 tests and 4 snapshots), and the root TypeScript build. ESLint emitted only the existing flat-config migration warning for `webpack.config.views.js`. Jest passed all tests but reported one worker that required forced exit after completion; this residual teardown warning is not specific to a failing suite.
+
+**Manual verification handoff:** The live WSL2 Ubuntu 20.04 native-Engine setup was command-verified with Docker Engine 28.1.1, a reachable `amd64` daemon, active systemd service, socket-group membership, and a coexisting Windows Docker Desktop installation. Windows Desktop stopped, macOS Desktop stopped, native Ubuntu group/service failures, WSL Desktop integration, interactive panel inspection, and the destructive `wsl --shutdown` reconnect remain explicitly unverified. WI-9 records the prerequisites and expected outcomes for each operator-run scenario; none is claimed as passed.
