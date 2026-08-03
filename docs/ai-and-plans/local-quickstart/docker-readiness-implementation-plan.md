@@ -1,7 +1,7 @@
 # Local Quick Start Docker Readiness - Implementation Plan
 
 **Date:** 2026-08-02
-**Status:** Draft
+**Status:** Slice A complete; Slice B pending
 **Related design:** [local-quickstart-v2.md](local-quickstart-v2.md)
 
 > **User-facing language:** Use **Docker** as the default term in cards, summaries, and general status messages. This keeps the primary experience simple and avoids exposing implementation details that most users do not need. Use **Docker CLI**, **Docker daemon**, **Docker Engine**, or **Docker Desktop** only when the distinction explains a specific failure or names the exact action being offered, such as `Start Docker Desktop`. The implementation must still detect and model these components separately; this simplification applies only to presentation.
@@ -523,6 +523,8 @@ Nine focused tests passed, covering rejected stdout/stderr capture, spawn `ENOEN
 
 **Corrections before commit:** The first focused run found that the test shell double returned the broader `CommandLineArgs` type rather than the required `string[]`; it was replaced with the real `Bash` implementation. Targeted ESLint then required the repository's inline type-import form for `Writable`; that import was corrected before the work-item commit. No committed implementation was rewritten or reset.
 
+**Follow-up correction:** The required repository-wide Prettier pass found formatting drift in this module after the work-item commit. The mechanical-only correction is preserved in [commit `4265d8f3`](https://github.com/microsoft/vscode-documentdb/commit/4265d8f3b732d0e0e963e3e495c57812c2c2cf75) rather than rewriting the WI-0 commit.
+
 ### WI-1: Add typed readiness contracts
 
 - Add outcome, environment, provider, provider-evidence, failure, start-action, launch-result, recovery-command, and provider-memory types.
@@ -551,6 +553,8 @@ The first executable behavior check was the fixture-backed Ubuntu `EACCES` case 
 
 **Minimal contract dependency:** The probe, endpoint, failure, and outcome contracts needed to compile this checkpoint were added with the classifier. This is the minimum Slice A subset of WI-1, not completion of WI-1; the broader environment, provider, launch, recovery, and provider-memory contracts remain in Slice B.
 
+**Follow-up correction:** The required repository-wide Prettier pass found formatting drift in the classifier and its tests after the work-item commit. The mechanical-only correction is preserved in [commit `4265d8f3`](https://github.com/microsoft/vscode-documentdb/commit/4265d8f3b732d0e0e963e3e495c57812c2c2cf75) rather than rewriting the WI-2 commit.
+
 ### WI-3: Add the readiness orchestrator
 
 - Move prerequisite command sequencing out of `ContainerRuntimeImpl`.
@@ -578,6 +582,8 @@ Eighteen focused orchestrator tests cover the reported Linux `EACCES` path, copy
 **Deliberately deferred WI-3 scope:** Provider memory and all of its discard rules remain in Slice B. Poll-specific OutputChannel echo suppression remains deferred because Slice A does not start provider polling. Unsupported-host early return and context-unavailable/remote-endpoint diagnoses remain deferred with the corresponding Slice B presentation states. On a ready result, `endpointKind` is populated from `DOCKER_HOST` when explicit and otherwise remains `unknown`; querying contexts on the happy path was rejected because it would violate the plan's two-process happy-path requirement. Failure results always resolve and report the active endpoint through the full precedence chain.
 
 **Corrections before commit:** The first service run needed an explicit test-only `CancellationToken` type import. The next exposed that the VS Code Jest host leaves `vscode.env` undefined, so the default remote-name lookup was made host-safe. The deadline test then exposed the unimplemented VS Code cancellation source and led to the adapter decision above. Targeted ESLint also required replacing a dynamic VS Code type annotation with the repository's inline type-import style. No committed implementation was reset or rewritten. ESLint continues to report the pre-existing warning that the unchanged `startDockerDesktop()` function is `async` without `await`; replacing that launcher belongs to WI-4 in Slice B.
+
+**Follow-up correction:** The required repository-wide Prettier pass found formatting drift in the orchestrator and its tests after the work-item commit. The mechanical-only correction is preserved in [commit `4265d8f3`](https://github.com/microsoft/vscode-documentdb/commit/4265d8f3b732d0e0e963e3e495c57812c2c2cf75) rather than rewriting the WI-3 commit.
 
 ### WI-4: Replace the launcher
 
@@ -804,6 +810,18 @@ Split this into two shippable slices. The work with the highest user value is no
 WI-0, the permission and daemon-unavailable half of WI-2, the parts of WI-3 needed to run bounded probes and resolve the endpoint, the `Access denied` and indeterminate states from WI-6, the copyable recovery command, `Continue anyway`, the always-present `Refresh` control, and `View Docker output` from every failure.
 
 This resolves the Ubuntu and WSL report end to end while leaving the existing Windows and macOS launch behavior untouched, so its regression surface on unverified platforms is close to zero.
+
+#### Slice A executive summary (completed 2026-08-03)
+
+Slice A is implemented and pushed. Probe evidence capture is in [`d832ebc1`](https://github.com/microsoft/vscode-documentdb/commit/d832ebc149a060152b517ff4a15c965448f6f0f3), pure failure classification is in [`8d0cb52d`](https://github.com/microsoft/vscode-documentdb/commit/8d0cb52da7ce5ab53b44732136a6fb8de083eb6c), bounded readiness orchestration is in [`e076243a`](https://github.com/microsoft/vscode-documentdb/commit/e076243a72c6585b21ccf3a80dff90c145084d2f), and the actionable webview/recovery flow is in [`e0f3251a`](https://github.com/microsoft/vscode-documentdb/commit/e0f3251a490671d1c6f7d9a5beb585cd23eb572b). Repository-wide formatting corrections are intentionally preserved as the follow-up commit [`4265d8f3`](https://github.com/microsoft/vscode-documentdb/commit/4265d8f3b732d0e0e963e3e495c57812c2c2cf75).
+
+The reported Ubuntu and WSL socket-permission failure now reaches the UI as `Access denied` from endpoint `EACCES` evidence. Rejected Docker probes retain stdout and stderr, structured `ServerErrors` are honored, and readiness is bounded by one cancellation deadline with single-flight and short memoization. The UI offers the fixed group-membership command as copy-only text, never executes it, exposes masked Docker output for every failure, and keeps forced Retry/Refresh controls. Unknown and timed-out results are indeterminate and alone may use `Continue anyway`; provisioning revalidates that invariant on the extension host.
+
+Linux, WSL, and remote environments no longer receive the unconditional Docker Desktop start action. Existing local Windows/macOS launch behavior is deliberately retained until Slice B replaces it with provider-aware launch selection. The Platform card now reports normalized daemon architecture when known and otherwise says it is unknown until Docker is reachable. All added or changed user-facing strings are localized, and the final added-line scan contains no U+2014 or U+2013 characters.
+
+The main deviation is the shared-deadline cancellation implementation: it uses `AbortController` plus processutils' `CancellationTokenLike.fromAbortSignal()` instead of `vscode.CancellationTokenSource`. The alternatives and rationale are documented in WI-3. The initial Ubuntu fixture also lacks exact OS and Docker versions because the report did not retain them; WI-9 should supplement it with versioned real-world captures. No correction rewrote an existing commit.
+
+The required completion sequence passed in order: localization generation, repository-wide Prettier, repository-wide ESLint, all 193 Jest suites (3,144 tests and 4 snapshots), and the root TypeScript build. ESLint emitted only the existing flat-config migration warning for `webpack.config.views.js`.
 
 ### Slice B: complete the model
 
