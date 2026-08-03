@@ -490,13 +490,15 @@ export const LocalQuickStart = (): JSX.Element => {
     }, []);
 
     const loadDockerStatus = useCallback(
-        (forceRefresh = false): void => {
+        (forceRefresh = false, resetProviderMemory = false): void => {
             readinessAbortRef.current?.abort();
             const abortController = new AbortController();
             readinessAbortRef.current = abortController;
             setPhase('loading');
             void trpcClient.localQuickStart.getDockerStatus
-                .query(forceRefresh ? { forceRefresh: true } : undefined, { signal: abortController.signal })
+                .query(forceRefresh ? { forceRefresh: true, resetProviderMemory } : undefined, {
+                    signal: abortController.signal,
+                })
                 .then((result) => {
                     if (abortController.signal.aborted) return;
                     applyDockerStatus(result);
@@ -813,7 +815,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 appearance="subtle"
                 size="small"
                 icon={<ArrowClockwiseRegular />}
-                onClick={() => loadDockerStatus(true)}
+                onClick={() => loadDockerStatus(true, true)}
             >
                 {l10n.t('Refresh')}
             </Button>

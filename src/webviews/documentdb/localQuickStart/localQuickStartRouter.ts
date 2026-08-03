@@ -114,12 +114,19 @@ export const localQuickStartRouter = router({
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
     getDockerStatus: publicProcedureWithTelemetry
         .input(
-            z.object({ forceRefresh: z.boolean().optional(), suppressCommandEcho: z.boolean().optional() }).optional(),
+            z
+                .object({
+                    forceRefresh: z.boolean().optional(),
+                    resetProviderMemory: z.boolean().optional(),
+                    suppressCommandEcho: z.boolean().optional(),
+                })
+                .optional(),
         )
         .query(async ({ ctx, input }): Promise<DockerStatusResult> => {
             const cancellationToken = ctx.signal ? CancellationTokenLike.fromAbortSignal(ctx.signal) : undefined;
             const readiness = await ContainerRuntime.isDockerReady({
                 forceRefresh: input?.forceRefresh,
+                resetProviderMemory: input?.resetProviderMemory,
                 suppressCommandEcho: input?.suppressCommandEcho,
                 cancellationToken,
             });

@@ -280,6 +280,7 @@ export interface DockerProviderMemory {
 
 export interface DockerReadinessRequest {
     readonly forceRefresh?: boolean;
+    readonly resetProviderMemory?: boolean;
     readonly suppressCommandEcho?: boolean;
     readonly cancellationToken?: CancellationToken;
 }

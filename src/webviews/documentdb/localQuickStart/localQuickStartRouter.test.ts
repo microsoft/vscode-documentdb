@@ -7,6 +7,10 @@ import { type initWebviewTrpc as InitWebviewTrpc } from '@microsoft/vscode-ext-w
 import { API } from '../../../DocumentDBExperiences';
 
 const mockStartDockerProvider = jest.fn();
+const mockIsDockerReady = jest.fn();
+const mockGetStatus = jest.fn();
+const mockRefreshLiveState = jest.fn();
+const mockWillReuseExistingInstance = jest.fn();
 
 jest.mock('vscode', () => ({
     commands: { executeCommand: jest.fn() },
@@ -14,7 +18,7 @@ jest.mock('vscode', () => ({
 }));
 
 jest.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
-    ContainerRuntime: { isDockerReady: jest.fn() },
+    ContainerRuntime: { isDockerReady: mockIsDockerReady },
     getQuickStartOutputChannel: () => ({ show: jest.fn() }),
     startDockerProvider: () => mockStartDockerProvider() as unknown,
 }));
@@ -22,11 +26,11 @@ jest.mock('../../../services/localQuickStart/ContainerRuntime', () => ({
 jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
     QuickStartService: {
         discardTimedOutInstance: jest.fn(),
-        getStatus: jest.fn(),
+        getStatus: mockGetStatus,
         isBusy: false,
         provision: jest.fn(),
-        refreshLiveState: jest.fn(),
-        willReuseExistingInstance: jest.fn(),
+        refreshLiveState: mockRefreshLiveState,
+        willReuseExistingInstance: mockWillReuseExistingInstance,
     },
 }));
 
@@ -62,6 +66,30 @@ function createContext(): RouterContext & {
 }
 
 describe('localQuickStartRouter', () => {
+    it('forwards an explicit provider-memory reset to Docker readiness', async () => {
+        mockIsDockerReady.mockResolvedValue({
+            outcome: 'ready',
+            environment: 'local',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'infoOperatingSystem',
+            executionTarget: 'localHost',
+            checkedAtMs: 1,
+            cliInstalled: true,
+            canContinueAnyway: false,
+            daemonReachable: true,
+        });
+        mockGetStatus.mockReturnValue({ state: 'Stopped' });
+        mockWillReuseExistingInstance.mockResolvedValue(false);
+        const caller = createCallerFactory(localQuickStartRouter)(createContext());
+
+        await caller.getDockerStatus({ forceRefresh: true, resetProviderMemory: true });
+
+        expect(mockIsDockerReady).toHaveBeenCalledWith(
+            expect.objectContaining({ forceRefresh: true, resetProviderMemory: true }),
+        );
+    });
+
     it('returns and records the typed provider launch result', async () => {
         mockStartDockerProvider.mockResolvedValue('failed');
         const context = createContext();

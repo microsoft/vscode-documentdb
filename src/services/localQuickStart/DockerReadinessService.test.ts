@@ -667,7 +667,23 @@ describe('DockerReadinessService', () => {
         expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
     });
 
-    it('clears remembered state before a forced refresh', async () => {
+    it('preserves remembered state during a forced refresh', async () => {
+        const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: {},
+            runProbe: async (options): Promise<DockerProbeEvidence> => evidence(options.probe, { exitCode: 1 }),
+            writeProviderMemory,
+        });
+
+        await service.getReadiness({ forceRefresh: true });
+
+        expect(writeProviderMemory).not.toHaveBeenCalled();
+    });
+
+    it('clears remembered state before an explicitly reset forced refresh', async () => {
         const writeProviderMemory = jest.fn().mockResolvedValue(undefined);
         const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             if (options.probe === 'info') {
@@ -686,7 +702,7 @@ describe('DockerReadinessService', () => {
             writeProviderMemory,
         });
 
-        await service.getReadiness({ forceRefresh: true });
+        await service.getReadiness({ forceRefresh: true, resetProviderMemory: true });
 
         expect(writeProviderMemory.mock.calls[0]).toEqual([undefined]);
         expect(writeProviderMemory.mock.calls[1]?.[0]).toMatchObject({ provider: 'dockerEngine' });

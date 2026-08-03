@@ -287,7 +287,9 @@ export class DockerReadinessService {
             }
         }
         this.memoized = undefined;
-        await this.dependencies.writeProviderMemory(undefined);
+        if (request.resetProviderMemory) {
+            await this.dependencies.writeProviderMemory(undefined);
+        }
         return this.runAndMemoize(request);
     }
 
