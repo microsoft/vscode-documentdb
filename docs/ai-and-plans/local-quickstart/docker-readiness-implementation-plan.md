@@ -537,6 +537,16 @@ Nine focused tests passed, covering rejected stdout/stderr capture, spawn `ENOEN
 - Add compile-time exhaustive checks for all semantic switches.
 - Encode the invariant that `probeTimedOut` and `unknown` occur only with an `indeterminate` outcome.
 
+#### Slice B implementation checkpoint (completed 2026-08-03)
+
+Implemented and pushed in [commit `d6254c1c`](https://github.com/microsoft/vscode-documentdb/commit/d6254c1cd1f30b099b817addee3a36b0f4657140). The shared contract now includes provider, provider-evidence, start-action, launch-result, execution-target, and provider-memory types, and the failure union includes every Slice B category. `DockerReadiness` is now a discriminated union: ready results require a reachable daemon and forbid a failure kind, diagnosed results exclude `probeTimedOut` and `unknown`, and indeterminate results allow only those two kinds and require `canContinueAnyway: true`.
+
+Current readiness construction populates neutral `unknown`/`none` provider facts and a typed execution target, so this checkpoint does not change provisioning or launch decisions before WI-2 through WI-4 implement the evidence. Docker `OSType` is normalized before entering the narrower serialized contract. The classifier result was also changed to a correlated diagnosed/indeterminate union, and presentation switches remain compile-time exhaustive. Newly declared Slice B failures temporarily use the existing provider-neutral fallback presentation; their distinct states are deliberately deferred to WI-6 so partially classified behavior is not exposed.
+
+The focused verification passed 77 readiness, presentation, and provisioning tests. The repository test script also completed its workspace pre-build, targeted ESLint passed, and editor diagnostics were clear for all six changed files.
+
+**Corrections before commit:** The first compile exposed two test fixtures that omitted the new provider facts, a raw string `OSType`, and a classifier return whose outcome and failure kind were not correlated. Those were corrected by constructing only legal union members, normalizing the OS fact, and returning a correlated classifier union. Later checks exposed literal widening in a shared failure result and a TypeScript narrowing issue in the presentation's exhaustive default; the result now preserves literals and the switch narrows a local failure-kind value. No committed history was reset or rewritten.
+
 ### WI-2: Extract and test pure classification
 
 - Add predicates for permission, context, unavailable-daemon, and unknown failures, all subordinate to the errno evidence captured in WI-0.
