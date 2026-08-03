@@ -201,9 +201,39 @@ export type DockerHostEnvironment =
     | 'otherRemote'
     | 'unsupported';
 
-export type DockerFailureKind = 'cliMissing' | 'permissionDenied' | 'daemonUnavailable' | 'probeTimedOut' | 'unknown';
+export type DockerProvider = 'dockerDesktop' | 'dockerEngine' | 'unknown';
+
+export type DockerProviderEvidence =
+    | 'liveDaemon'
+    | 'activeContext'
+    | 'installedApplication'
+    | 'rememberedProvider'
+    | 'none';
+
+export type DockerFailureKind =
+    | 'cliMissing'
+    | 'permissionDenied'
+    | 'daemonUnavailable'
+    | 'daemonStarting'
+    | 'contextUnavailable'
+    | 'endpointUnreachable'
+    | 'probeTimedOut'
+    | 'unsupportedHost'
+    | 'windowsContainers'
+    | 'unknown';
 
 export type DockerEndpointKind = 'unixSocket' | 'namedPipe' | 'tcp' | 'ssh' | 'unknown';
+
+export type DockerStartAction =
+    | 'startDockerDesktopWindows'
+    | 'startDockerDesktopMacOS'
+    | 'startDockerDesktopLinux'
+    | 'startDockerDesktopWindowsFromWsl'
+    | 'startRootlessDockerEngineLinux';
+
+export type DockerLaunchResult = 'started' | 'launchAttempted' | 'notAvailable' | 'failed';
+
+export type DockerExecutionTarget = 'local' | 'wsl' | 'ssh' | 'devContainer' | 'codespaces' | 'otherRemote';
 
 export type DockerPermissionDetail = 'notInGroup' | 'pendingSessionRestart' | 'unknown';
 
@@ -237,24 +267,33 @@ export interface DockerRecoveryCommand {
     readonly requiresElevation: boolean;
 }
 
+export interface DockerProviderMemory {
+    readonly provider: DockerProvider;
+    readonly endpointKind: DockerEndpointKind;
+    readonly hostEnvironment: DockerHostEnvironment;
+    readonly daemonArchitecture?: string;
+    readonly osType?: 'linux' | 'windows';
+    readonly recordedAtMs: number;
+}
+
 export interface DockerReadinessRequest {
     readonly forceRefresh?: boolean;
     readonly cancellationToken?: CancellationToken;
 }
 
-/** Result of the Docker readiness pre-check (design §9, prereq cards). */
-export interface DockerReadiness {
-    readonly outcome: DockerReadinessOutcome;
+interface DockerReadinessBase {
     readonly environment: DockerHostEnvironment;
     readonly endpointKind: DockerEndpointKind;
-    readonly failureKind?: DockerFailureKind;
+    readonly provider: DockerProvider;
+    readonly providerEvidence: DockerProviderEvidence;
+    readonly executionTarget: DockerExecutionTarget;
+    readonly startAction?: DockerStartAction;
     readonly permissionDetail?: DockerPermissionDetail;
     readonly recoveryCommand?: DockerRecoveryCommand;
-    readonly canContinueAnyway: boolean;
     readonly checkedAtMs: number;
     readonly cliInstalled: boolean;
     readonly cliVersion?: string;
-    readonly daemonReachable: boolean;
+    readonly osType?: 'linux' | 'windows';
     readonly daemonArchitecture?: string;
     readonly diagnosticSummary?: string;
     /** Host CPU architecture (e.g. `x64`, `arm64`) and whether it is supported (§9). */
@@ -262,6 +301,30 @@ export interface DockerReadiness {
     readonly platformSupported?: boolean;
     readonly error?: string;
 }
+
+export interface DockerReadyReadiness extends DockerReadinessBase {
+    readonly outcome: 'ready';
+    readonly failureKind?: never;
+    readonly canContinueAnyway: false;
+    readonly daemonReachable: true;
+}
+
+export interface DockerDiagnosedReadiness extends DockerReadinessBase {
+    readonly outcome: 'diagnosed';
+    readonly failureKind: Exclude<DockerFailureKind, 'probeTimedOut' | 'unknown'>;
+    readonly canContinueAnyway: false;
+    readonly daemonReachable: false;
+}
+
+export interface DockerIndeterminateReadiness extends DockerReadinessBase {
+    readonly outcome: 'indeterminate';
+    readonly failureKind: Extract<DockerFailureKind, 'probeTimedOut' | 'unknown'>;
+    readonly canContinueAnyway: true;
+    readonly daemonReachable: false;
+}
+
+/** Result of the Docker readiness pre-check (design §9, prereq cards). */
+export type DockerReadiness = DockerReadyReadiness | DockerDiagnosedReadiness | DockerIndeterminateReadiness;
 
 /** Snapshot of the managed instance for the webview / tree. */
 export interface QuickStartStatus {

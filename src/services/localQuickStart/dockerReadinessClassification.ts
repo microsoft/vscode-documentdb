@@ -10,10 +10,15 @@ import {
     type DockerReadinessOutcome,
 } from './quickStartTypes';
 
-export interface DockerFailureClassification {
-    readonly failureKind: DockerFailureKind;
-    readonly outcome: Exclude<DockerReadinessOutcome, 'ready'>;
-}
+export type DockerFailureClassification =
+    | {
+          readonly failureKind: Exclude<DockerFailureKind, 'probeTimedOut' | 'unknown'>;
+          readonly outcome: Extract<DockerReadinessOutcome, 'diagnosed'>;
+      }
+    | {
+          readonly failureKind: Extract<DockerFailureKind, 'probeTimedOut' | 'unknown'>;
+          readonly outcome: Extract<DockerReadinessOutcome, 'indeterminate'>;
+      };
 
 export interface DockerFailureEvidence {
     readonly infoProbe: DockerProbeEvidence;

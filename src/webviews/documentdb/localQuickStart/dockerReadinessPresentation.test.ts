@@ -3,20 +3,56 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DockerReadiness } from '../../../services/localQuickStart/quickStartTypes';
+import {
+    type DockerDiagnosedReadiness,
+    type DockerIndeterminateReadiness,
+    type DockerReadiness,
+    type DockerReadyReadiness,
+} from '../../../services/localQuickStart/quickStartTypes';
 import { getDockerReadinessPresentation } from './dockerReadinessPresentation';
 
-function readiness(overrides: Partial<DockerReadiness> = {}): DockerReadiness {
-    return {
-        outcome: 'diagnosed',
+type DockerReadinessOverrides =
+    | (Partial<DockerDiagnosedReadiness> & { readonly outcome?: 'diagnosed' })
+    | (Partial<DockerIndeterminateReadiness> & { readonly outcome: 'indeterminate' })
+    | (Partial<DockerReadyReadiness> & { readonly outcome: 'ready' });
+
+function readiness(overrides: DockerReadinessOverrides = {}): DockerReadiness {
+    const base = {
         environment: 'linux',
         endpointKind: 'unixSocket',
-        failureKind: 'daemonUnavailable',
-        canContinueAnyway: false,
+        provider: 'unknown',
+        providerEvidence: 'none',
+        executionTarget: 'local',
         checkedAtMs: 1,
         cliInstalled: true,
-        daemonReachable: false,
+    } as const;
+    if (overrides.outcome === 'ready') {
+        return {
+            ...base,
+            ...overrides,
+            outcome: 'ready',
+            failureKind: undefined,
+            canContinueAnyway: false,
+            daemonReachable: true,
+        };
+    }
+    if (overrides.outcome === 'indeterminate') {
+        return {
+            ...base,
+            ...overrides,
+            outcome: 'indeterminate',
+            failureKind: overrides.failureKind ?? 'unknown',
+            canContinueAnyway: true,
+            daemonReachable: false,
+        };
+    }
+    return {
+        ...base,
         ...overrides,
+        outcome: 'diagnosed',
+        failureKind: overrides.failureKind ?? 'daemonUnavailable',
+        canContinueAnyway: false,
+        daemonReachable: false,
     };
 }
 
@@ -26,12 +62,12 @@ describe('getDockerReadinessPresentation', () => {
         ['daemon unavailable', { failureKind: 'daemonUnavailable' as const }, 'notRunning'],
         [
             'probe timeout',
-            { outcome: 'indeterminate' as const, failureKind: 'probeTimedOut' as const, canContinueAnyway: true },
+            { outcome: 'indeterminate' as const, failureKind: 'probeTimedOut' as const },
             'checkTimedOut',
         ],
         [
             'unknown failure',
-            { outcome: 'indeterminate' as const, failureKind: 'unknown' as const, canContinueAnyway: true },
+            { outcome: 'indeterminate' as const, failureKind: 'unknown' as const },
             'notAccessible',
         ],
     ])('maps %s to %s', (_name, overrides, expectedState) => {
@@ -51,7 +87,7 @@ describe('getDockerReadinessPresentation', () => {
         ).toBe(true);
         expect(
             getDockerReadinessPresentation(
-                readiness({ outcome: 'diagnosed', failureKind: 'permissionDenied', canContinueAnyway: true }),
+                readiness({ outcome: 'diagnosed', failureKind: 'permissionDenied' }),
             ).showContinueAnyway,
         ).toBe(false);
     });
@@ -162,7 +198,7 @@ describe('getDockerReadinessPresentation', () => {
     it('returns refresh as the only readiness action when ready', () => {
         expect(
             getDockerReadinessPresentation(
-                readiness({ outcome: 'ready', failureKind: undefined, daemonReachable: true }),
+                readiness({ outcome: 'ready' }),
             ),
         ).toEqual({
             state: 'ready',

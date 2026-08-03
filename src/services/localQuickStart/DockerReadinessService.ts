@@ -21,6 +21,7 @@ import { classifyDockerFailure } from './dockerReadinessClassification';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
     type DockerEndpointKind,
+    type DockerExecutionTarget,
     type DockerHostEnvironment,
     type DockerPermissionDetail,
     type DockerProbeEvidence,
@@ -165,6 +166,17 @@ function isSuccessfulProbe(evidence: DockerProbeEvidence): boolean {
     return evidence.endedBy === 'exit' && evidence.exitCode === undefined && evidence.spawnErrorCode === undefined;
 }
 
+function normalizeDockerOsType(osType: string | undefined): 'linux' | 'windows' | undefined {
+    switch (osType?.toLowerCase()) {
+        case 'linux':
+            return 'linux';
+        case 'windows':
+            return 'windows';
+        default:
+            return undefined;
+    }
+}
+
 export class DockerReadinessService {
     private readonly dependencies: ResolvedDependencies;
     private inFlight: Promise<DockerReadiness> | undefined;
@@ -301,11 +313,15 @@ export class DockerReadinessService {
                     outcome: 'ready',
                     environment,
                     endpointKind,
+                    provider: 'unknown',
+                    providerEvidence: 'none',
+                    executionTarget: getDockerExecutionTarget(environment),
                     canContinueAnyway: false,
                     checkedAtMs: this.dependencies.now(),
                     cliInstalled: true,
                     cliVersion,
                     daemonReachable: true,
+                    osType: normalizeDockerOsType(infoFacts.osType),
                     daemonArchitecture: infoFacts.architecture
                         ? normalizeDaemonArchitecture(infoFacts.architecture)
                         : undefined,
@@ -348,11 +364,12 @@ export class DockerReadinessService {
                 environment === 'wsl'
                     ? await this.dependencies.detectServiceManager()
                     : 'unknown';
-            return {
-                outcome: classification.outcome,
+            const failureResult = {
                 environment,
                 endpointKind: endpoint.kind,
-                failureKind: classification.failureKind,
+                provider: 'unknown',
+                providerEvidence: 'none',
+                executionTarget: getDockerExecutionTarget(environment),
                 permissionDetail,
                 recoveryCommand: getDockerRecoveryCommand(
                     classification.failureKind,
@@ -361,22 +378,54 @@ export class DockerReadinessService {
                     permissionDetail,
                     serviceManager,
                 ),
-                canContinueAnyway: classification.outcome === 'indeterminate',
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled: classification.failureKind !== 'cliMissing',
                 cliVersion,
-                daemonReachable: false,
                 daemonArchitecture: infoFacts?.architecture
                     ? normalizeDaemonArchitecture(infoFacts.architecture)
                     : undefined,
                 diagnosticSummary: `${classification.failureKind}; endpoint source ${endpoint.source}`,
                 arch: this.dependencies.arch,
                 platformSupported,
+            } as const;
+            if (classification.outcome === 'diagnosed') {
+                return {
+                    ...failureResult,
+                    ...classification,
+                    canContinueAnyway: false,
+                    daemonReachable: false,
+                };
+            }
+            return {
+                ...failureResult,
+                ...classification,
+                canContinueAnyway: true,
+                daemonReachable: false,
             };
         } finally {
             clearTimeout(deadline);
             callerCancellation?.dispose();
         }
+    }
+}
+
+export function getDockerExecutionTarget(environment: DockerHostEnvironment): DockerExecutionTarget {
+    switch (environment) {
+        case 'windows':
+        case 'macos':
+        case 'linux':
+        case 'unsupported':
+            return 'local';
+        case 'wsl':
+            return 'wsl';
+        case 'ssh':
+            return 'ssh';
+        case 'devContainer':
+            return 'devContainer';
+        case 'codespaces':
+            return 'codespaces';
+        case 'otherRemote':
+            return 'otherRemote';
     }
 }
 

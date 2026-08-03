@@ -56,6 +56,11 @@ function getPresentationState(failureKind: DockerFailureKind | undefined): Docke
             return 'notRunning';
         case 'probeTimedOut':
             return 'checkTimedOut';
+        case 'daemonStarting':
+        case 'contextUnavailable':
+        case 'endpointUnreachable':
+        case 'unsupportedHost':
+        case 'windowsContainers':
         case 'unknown':
         case undefined:
             return 'notAccessible';
@@ -101,7 +106,8 @@ function getPermissionGuidance(readiness: DockerReadiness): DockerGuidanceKey {
 }
 
 function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
-    switch (readiness.failureKind) {
+    const failureKind = readiness.failureKind;
+    switch (failureKind) {
         case 'cliMissing':
             return 'installDocker';
         case 'permissionDenied':
@@ -110,11 +116,16 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
             return 'daemonNotRunning';
         case 'probeTimedOut':
             return 'checkTimedOut';
+        case 'daemonStarting':
+        case 'contextUnavailable':
+        case 'endpointUnreachable':
+        case 'unsupportedHost':
+        case 'windowsContainers':
         case 'unknown':
         case undefined:
             return 'notAccessible';
         default:
-            return assertNever(readiness.failureKind);
+            return assertNever(failureKind);
     }
 }
 
