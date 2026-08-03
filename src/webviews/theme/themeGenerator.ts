@@ -71,12 +71,15 @@ export function getBrandTokensFromPalette(keyColor: string, options: Options = {
  * NOTE — neutral tokens still on the fixed Fluent ramp (candidates for a future
  * pass; see the "theme color coverage" tracking issue):
  *   - colorNeutralBackground3           (markdown cards, feedback dialog, query-plan blocks)
- *   - colorNeutralForeground3 / Foreground4
- *   - colorNeutralStroke1 / Stroke3 / StrokeAccessible
+ *   - colorNeutralForeground3 / Foreground4 / colorNeutralStroke1 / StrokeAccessible
+ *     — globally, that is; fluentOverrides.scss remaps them inside field controls only,
+ *     because these aliases also drive Switch indicators and Tab hover bars
+ *   - colorNeutralStroke3
  *   - colorSubtleBackgroundSelected
  *   - High-contrast theme kinds bypass this generator entirely and fall back to
  *     the static Teams themes (see getFluentUiTheme in state/ThemeContext.tsx),
- *     so none of the VS Code mappings apply there yet.
+ *     so none of these token mappings apply there. The CSS in fluentOverrides.scss
+ *     is not theme-kind aware and does apply — pending a visual pass.
  */
 const adaptiveNeutralSurfaces = {
     // Fluent's Card interaction recipe and the Card/Button disabled recipes use
