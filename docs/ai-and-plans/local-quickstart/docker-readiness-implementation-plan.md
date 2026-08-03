@@ -511,6 +511,18 @@ This is the prerequisite for every classification work item. Without it the clas
 - Add the daemon architecture normalization function with tests.
 - Add the endpoint reachability probe over injected `fs`/`net` dependencies.
 
+#### Slice A implementation checkpoint (completed 2026-08-03)
+
+Implemented in [commit `d832ebc1`](https://github.com/microsoft/vscode-documentdb/commit/d832ebc149a060152b517ff4a15c965448f6f0f3). `runDockerProbe()` normalizes the existing Docker client command descriptor, runs its executable and argument array through `ShellStreamCommandRunnerFactory`, and deliberately omits the client parser so raw output remains available on both successful and rejected commands. Capturing tee writables retain stdout and stderr while forwarding the same chunks to caller-provided masked OutputChannel writables. The returned evidence distinguishes numeric process exit codes from string spawn errno values and records whether completion came from process exit, the shared deadline, or caller cancellation.
+
+The module also adds a local Zod schema for `OSType`, `Architecture`, `ServerVersion`, and `ServerErrors`; architecture normalization for `x86_64`/`aarch64`; and an endpoint probe that checks unix-socket read/write access before attempting a connection. Filesystem and network operations are injected for deterministic tests. Non-local endpoint probing remains for Slice B.
+
+Nine focused tests passed, covering rejected stdout/stderr capture, spawn `ENOENT`, raw info parsing (including `ServerErrors`), invalid JSON, architecture normalization, endpoint `EACCES`, and endpoint `ECONNREFUSED`. Targeted ESLint and the repository TypeScript build also passed.
+
+**Implementation choice:** The helper strips the Docker client response parser and runs the normalized command base through the same runner rather than attempting to recover the runner's destroyed accumulator. Two options were considered: modify or wrap the third-party parser path, or capture the raw streams at the command boundary and parse the retained info body locally. The latter was selected because it preserves the existing runner's quoting, masking, cancellation, and stdin behavior while making failed output available without changing a dependency.
+
+**Corrections before commit:** The first focused run found that the test shell double returned the broader `CommandLineArgs` type rather than the required `string[]`; it was replaced with the real `Bash` implementation. Targeted ESLint then required the repository's inline type-import form for `Writable`; that import was corrected before the work-item commit. No committed implementation was rewritten or reset.
+
 ### WI-1: Add typed readiness contracts
 
 - Add outcome, environment, provider, provider-evidence, failure, start-action, launch-result, recovery-command, and provider-memory types.
