@@ -615,6 +615,24 @@ Eighteen focused orchestrator tests cover the reported Linux `EACCES` path, copy
 - Use no em dashes (U+2014) and no en dashes (U+2013) in any added or changed string.
 - Preserve accessible announcements for status changes and launch failures, and announce a successful copy.
 
+#### Slice A implementation checkpoint (completed 2026-08-03)
+
+Implemented the Slice A subset in [commit `e0f3251a`](https://github.com/microsoft/vscode-documentdb/commit/e0f3251a490671d1c6f7d9a5beb585cd23eb572b). A pure `getDockerReadinessPresentation()` mapper now owns semantic readiness states and action visibility. The not-ready view renders `Access denied`, `Not running`, `Check timed out`, or provider-neutral `Not accessible` instead of collapsing every failure to `Stopped`. It no longer selects behavior from `process.platform`, raw errors, or Docker error strings.
+
+Every Slice A failure now exposes masked `View Docker output`, forced `Retry`, forced `Refresh`, and a `Last checked` label. Indeterminate outcomes alone expose `Continue anyway`; the provisioning service revalidates that the current result is still indeterminate, so a crafted webview request cannot bypass a diagnosed permission or daemon-unavailable failure. Fixed recovery commands are rendered as read-only code and copied through a host mutation that accepts only a typed command ID; the command line is never accepted from the webview, localized, or executed. Copy success and launch failure are announced accessibly.
+
+The Docker Platform card now uses normalized `daemonArchitecture` and shows `Unknown until Docker is reachable` instead of substituting `process.arch`. The speculative registry/proxy advice was removed. Docker install and troubleshooting guidance is provider-neutral, with the Linux post-install guide selected for permission failures. The ready Review state also includes the always-present Refresh control.
+
+The readiness query now accepts `forceRefresh`, links the tRPC abort signal into the host probe token, and records categorized failure telemetry. The webview cancels superseded readiness queries and aborts an outstanding query on unmount. Recovery-command telemetry records only the fixed command ID, and provisioning telemetry records only whether Continue anyway was requested.
+
+Twelve pure presentation tests cover state/action mapping, including the Continue anyway and copy-command invariants. Two provisioning tests prove that explicit continuation bypasses only an indeterminate result and never a diagnosed result. The final focused run passed 55 presentation, orchestration, and provisioning tests; targeted ESLint and the TypeScript build passed. `npm run l10n` regenerated the localization bundle, and the added-line scan found no U+2014 or U+2013 characters after comment cleanup.
+
+**Intentional Slice A launcher boundary:** The existing `startDockerDesktop` mutation and five-second post-launch delay remain only for local Windows and macOS, selected by the pure mapper. Linux, WSL, SSH, dev-container, and Codespaces states no longer receive that action. Two options were considered: remove the start action everywhere until WI-4, or preserve the existing behavior on the two local platforms that Slice A explicitly promises not to regress. Preserving it on Windows/macOS was selected because the Slice A delivery definition says those launch paths remain untouched. The provider-aware launcher, typed launch result, bounded polling, Docker-starting state, and Stop waiting control remain WI-4/WI-6 work for Slice B.
+
+**Deliberately deferred WI-6 scope:** Provider-specific presentation beyond the Slice A local Desktop compatibility action, execution-target-aware Review copy, remote-session notices, remembered-provider labels, provider-start polling/backoff, and the Docker-starting state remain in Slice B. The `Last checked` label is computed when the readiness result renders; periodic relative-time updates are deferred with the remembered-provider UI because Slice A results are live or at most two seconds memoized.
+
+**Corrections before commit:** The first combined host patch failed to match a test insertion context and applied no changes; it was split into smaller service and router edits. The initial punctuation scan command used unavailable `rg`, so the installed `grep` fallback was used. Added-line scans then found two pre-existing em dashes in comments whose surrounding blocks had been rewritten; both comments were changed to punctuation that also keeps the complete Slice A diff clean. No committed implementation was reset or rewritten.
+
 ### WI-7: Add integration-focused tests
 
 - Test service sequencing with mocked command results.
