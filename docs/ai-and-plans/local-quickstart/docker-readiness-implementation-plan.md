@@ -569,6 +569,16 @@ The first executable behavior check was the fixture-backed Ubuntu `EACCES` case 
 
 **Follow-up correction:** The required repository-wide Prettier pass found formatting drift in the classifier and its tests after the work-item commit. The mechanical-only correction is preserved in [commit `4265d8f3`](https://github.com/microsoft/vscode-documentdb/commit/4265d8f3b732d0e0e963e3e495c57812c2c2cf75) rather than rewriting the WI-2 commit.
 
+#### Slice B implementation checkpoint (completed 2026-08-03)
+
+Completed and pushed in [commit `54e13d9d`](https://github.com/microsoft/vscode-documentdb/commit/54e13d9dfb1d6bd818d200c16262a2d494b01ee6). The failure classifier now covers unavailable contexts, remote TCP/SSH endpoints, and provider-start-in-progress while preserving the documented precedence: local errno and structured permission evidence still win over provider state, remote classification, timeout, and the unknown fallback. The classifier remains total and returns `unknown`/`indeterminate` if unexpected evidence throws.
+
+The same pure module now classifies providers from live daemon metadata, active Desktop context/endpoint signatures, rootless Engine endpoint evidence, a valid remembered provider, or an installed Desktop application. Live evidence wins over remembered evidence. Installed-application evidence is accepted only for local Windows and macOS; WSL and remote extension hosts remain provider-neutral, so a Windows Desktop installation cannot override a native WSL socket diagnosis.
+
+Twenty-two focused classifier tests passed. They cover the new failure categories, precedence, total fallback, representative live Desktop and Engine metadata, Desktop contexts, rootless Engine endpoints, remembered facts, local installed-application evidence, and the WSL/remote negative cases. Targeted ESLint passed and editor diagnostics were clear.
+
+**Implementation boundary:** Provider classification is exported but not consumed by the service in this commit. Two options were considered: wire the first provider branches immediately, or keep the pure work item independently testable until WI-3 can apply provider memory, endpoint resolution, and discard rules together. The second option was selected because exposing provider facts without those orchestration rules would create the partially classified UI state prohibited by the delivery plan.
+
 ### WI-3: Add the readiness orchestrator
 
 - Move prerequisite command sequencing out of `ContainerRuntimeImpl`.
