@@ -1,2 +1,2 @@
-# Provenance: Ubuntu (version not recorded); Docker version not recorded; Docker Engine.
+# Provenance: WSL2, Ubuntu-20.04; Docker Engine 28.1.1; socket gid 998; permissions srw-rw----.
 permission denied while trying to connect to the Docker daemon socket at unix:///var/run/docker.sock: Get "http://%2Fvar%2Frun%2Fdocker.sock/v1.47/info": dial unix /var/run/docker.sock: connect: permission denied

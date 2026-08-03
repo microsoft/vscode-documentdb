@@ -126,6 +126,7 @@ export const localQuickStartRouter = router({
             const tctx = ctx as WithTelemetry<RouterContext>;
             // Design §14 quickstart.docker_readiness never includes names, ports, or credentials.
             tctx.actionContext.telemetry.properties.dockerReadiness = readiness.failureKind ?? 'ok';
+            tctx.actionContext.telemetry.properties.dockerPermissionDetail = readiness.permissionDetail ?? 'none';
             tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
             const willReuse = await QuickStartService.willReuseExistingInstance();
             return {

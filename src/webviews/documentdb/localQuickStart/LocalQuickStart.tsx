@@ -43,7 +43,12 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
-import { type DockerReadinessPresentationState, getDockerReadinessPresentation } from './dockerReadinessPresentation';
+import {
+    type DockerGuidanceKey,
+    type DockerReadinessPresentationState,
+    type DockerRecoveryNoteKey,
+    getDockerReadinessPresentation,
+} from './dockerReadinessPresentation';
 
 type Phase = 'loading' | 'review' | 'dockerNotReady' | 'provisioning' | 'success' | 'failed';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
@@ -103,6 +108,7 @@ const useStyles = makeStyles({
         backgroundColor: tokens.colorNeutralBackground3,
         borderRadius: tokens.borderRadiusSmall,
     },
+    recoveryCommandText: { display: 'flex', flexDirection: 'column', gap: '4px' },
     // Visually hidden but exposed to assistive tech (WCAG 4.1.3 status text).
     srOnly: {
         position: 'absolute',
@@ -126,44 +132,49 @@ const STAGE_LABELS: Record<ProvisionStage, string> = {
     error: l10n.t('Error'),
 };
 
-interface DockerFailureCopy {
-    readonly daemonValue: string;
-    readonly guidance: string;
-}
+const DOCKER_DAEMON_VALUES: Readonly<Record<DockerReadinessPresentationState, string>> = {
+    ready: l10n.t('Reachable'),
+    cliMissing: l10n.t('Unknown'),
+    accessDenied: l10n.t('Access denied'),
+    accessDeniedPendingRestart: l10n.t('Access denied'),
+    notRunning: l10n.t('Not running'),
+    checkTimedOut: l10n.t('Check timed out'),
+    notAccessible: l10n.t('Not accessible'),
+};
 
-function getDockerFailureCopy(state: DockerReadinessPresentationState): DockerFailureCopy {
-    switch (state) {
-        case 'ready':
-            return { daemonValue: l10n.t('Reachable'), guidance: '' };
-        case 'cliMissing':
-            return {
-                daemonValue: l10n.t('Unknown'),
-                guidance: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
-            };
-        case 'accessDenied':
-            return {
-                daemonValue: l10n.t('Access denied'),
-                guidance: l10n.t(
-                    'Your user cannot access the Docker socket. Update Docker permissions, then restart your session.',
-                ),
-            };
-        case 'notRunning':
-            return {
-                daemonValue: l10n.t('Not running'),
-                guidance: l10n.t('Start the Docker service, then check again.'),
-            };
-        case 'checkTimedOut':
-            return {
-                daemonValue: l10n.t('Check timed out'),
-                guidance: l10n.t('Docker did not respond before the readiness check timed out.'),
-            };
-        case 'notAccessible':
-            return {
-                daemonValue: l10n.t('Not accessible'),
-                guidance: l10n.t('The extension could not connect to the Docker daemon.'),
-            };
-    }
-}
+const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
+    installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
+    accessDeniedLinux: l10n.t(
+        'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
+    ),
+    accessDeniedWsl: l10n.t(
+        'Your user cannot access the Docker socket. Run this command, then restart the WSL session.',
+    ),
+    accessDeniedRemote: l10n.t(
+        'Your user cannot access the Docker socket on the machine where this extension is running.',
+    ),
+    pendingRestartLinux: l10n.t(
+        'You are in the Docker group, but this session started before that change. Sign out of your desktop session and sign back in. Reloading the window is not enough.',
+    ),
+    pendingRestartWsl: l10n.t(
+        'You are in the Docker group, but this session started before that change. Run this command in Windows, then reopen this folder.',
+    ),
+    pendingRestartSsh: l10n.t(
+        'You are in the Docker group on the remote host, but the VS Code server started before that change. Run "Remote-SSH: Kill VS Code Server on Host", then reconnect.',
+    ),
+    pendingRestartContainer: l10n.t(
+        'You are in the Docker group, but this container started before that change. Rebuild the container.',
+    ),
+    daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
+    checkTimedOut: l10n.t('Docker did not respond before the readiness check timed out.'),
+    notAccessible: l10n.t('The extension could not connect to the Docker daemon.'),
+};
+
+const DOCKER_RECOVERY_NOTES: Readonly<Record<DockerRecoveryNoteKey, string>> = {
+    groupMembershipNewSession: l10n.t('Group membership applies to new login sessions only.'),
+    restartWslDistribution: l10n.t('This restarts the distribution so the new group membership applies.'),
+    runsDockerService: l10n.t('Runs the system Docker service.'),
+};
 
 function formatLastChecked(checkedAtMs: number | undefined): string {
     if (checkedAtMs === undefined) {
@@ -877,7 +888,8 @@ export const LocalQuickStart = (): JSX.Element => {
         const cliOk = !!r?.cliInstalled;
         const presentation = r ? getDockerReadinessPresentation(r) : undefined;
         const presentationState = presentation?.state ?? 'notAccessible';
-        const failureCopy = getDockerFailureCopy(presentationState);
+        const guidance = DOCKER_GUIDANCE[presentation?.guidance ?? 'notAccessible'];
+        const recoveryNote = presentation?.recoveryNote ? DOCKER_RECOVERY_NOTES[presentation.recoveryNote] : undefined;
         const platformKnown = r?.daemonArchitecture !== undefined;
         const statusBadge = (ok: boolean, notOkColor: 'danger' | 'warning'): JSX.Element => (
             <Badge appearance="filled" color={ok ? 'success' : notOkColor} size="small">
@@ -888,7 +900,7 @@ export const LocalQuickStart = (): JSX.Element => {
             <div className={styles.root}>
                 <Announcer
                     when={phase === 'dockerNotReady'}
-                    message={l10n.t('Docker is not ready. {0}', failureCopy.guidance)}
+                    message={l10n.t('Docker is not ready. {0}', guidance)}
                     politeness="assertive"
                 />
                 <Announcer
@@ -916,7 +928,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     />
                     <MetricCard
                         label={l10n.t('Docker daemon')}
-                        value={failureCopy.daemonValue}
+                        value={DOCKER_DAEMON_VALUES[presentationState]}
                         badge={statusBadge(false, 'danger')}
                     />
                     <MetricCard
@@ -928,10 +940,17 @@ export const LocalQuickStart = (): JSX.Element => {
                 <Card className={styles.summaryCard}>
                     <Text weight="semibold">{l10n.t('How to fix')}</Text>
                     <Divider />
-                    <Text size={200}>{failureCopy.guidance}</Text>
+                    <Text size={200}>{guidance}</Text>
                     {r?.recoveryCommand && (
                         <div className={styles.recoveryCommand}>
-                            <code>{r.recoveryCommand.commandLine}</code>
+                            <div className={styles.recoveryCommandText}>
+                                <code>{r.recoveryCommand.commandLine}</code>
+                                {recoveryNote && (
+                                    <Text size={200} className={styles.muted}>
+                                        {recoveryNote}
+                                    </Text>
+                                )}
+                            </div>
                             <Button size="small" onClick={handleCopyRecoveryCommand}>
                                 {l10n.t('Copy command')}
                             </Button>
@@ -947,7 +966,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         {presentation?.showInstall && (
                             <Link href="https://docs.docker.com/engine/install/">{l10n.t('Install Docker')}</Link>
                         )}
-                        {presentationState === 'accessDenied' ? (
+                        {presentationState === 'accessDenied' || presentationState === 'accessDeniedPendingRestart' ? (
                             <Link href="https://docs.docker.com/engine/install/linux-postinstall/">
                                 {l10n.t('Linux setup guide')}
                             </Link>

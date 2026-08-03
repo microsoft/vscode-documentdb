@@ -72,6 +72,84 @@ describe('getDockerReadinessPresentation', () => {
     });
 
     it.each([
+        ['linux access denied', 'linux', 'unknown', 'accessDenied', 'accessDeniedLinux'],
+        ['WSL access denied', 'wsl', 'unknown', 'accessDenied', 'accessDeniedWsl'],
+        ['SSH access denied', 'ssh', 'unknown', 'accessDenied', 'accessDeniedRemote'],
+        ['dev container access denied', 'devContainer', 'unknown', 'accessDenied', 'accessDeniedRemote'],
+        ['Codespaces access denied', 'codespaces', 'unknown', 'accessDenied', 'accessDeniedRemote'],
+        [
+            'linux pending restart',
+            'linux',
+            'pendingSessionRestart',
+            'accessDeniedPendingRestart',
+            'pendingRestartLinux',
+        ],
+        ['WSL pending restart', 'wsl', 'pendingSessionRestart', 'accessDeniedPendingRestart', 'pendingRestartWsl'],
+        ['SSH pending restart', 'ssh', 'pendingSessionRestart', 'accessDeniedPendingRestart', 'pendingRestartSsh'],
+        [
+            'dev container pending restart',
+            'devContainer',
+            'pendingSessionRestart',
+            'accessDeniedPendingRestart',
+            'pendingRestartContainer',
+        ],
+        [
+            'Codespaces pending restart',
+            'codespaces',
+            'pendingSessionRestart',
+            'accessDeniedPendingRestart',
+            'pendingRestartContainer',
+        ],
+    ] as const)('maps $name to its semantic copy keys', (_name, environment, permissionDetail, state, guidance) => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({ failureKind: 'permissionDenied', environment, permissionDetail }),
+            ),
+        ).toMatchObject({ state, guidance });
+    });
+
+    it.each([
+        ['linuxDockerGroup', 'groupMembershipNewSession'],
+        ['wslRestartFromWindows', 'restartWslDistribution'],
+        ['linuxStartService', 'runsDockerService'],
+        ['wslStartServiceNoSystemd', 'runsDockerService'],
+    ] as const)('maps %s to the %s recovery note', (id, recoveryNote) => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({
+                    recoveryCommand: {
+                        id,
+                        commandLine: 'fixed command',
+                        requiresElevation: true,
+                    },
+                }),
+            ).recoveryNote,
+        ).toBe(recoveryNote);
+    });
+
+    it('preserves the conservative usermod path for unknown membership', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({
+                    failureKind: 'permissionDenied',
+                    environment: 'wsl',
+                    permissionDetail: 'unknown',
+                    recoveryCommand: {
+                        id: 'linuxDockerGroup',
+                        commandLine: 'sudo usermod -aG docker $USER',
+                        requiresElevation: true,
+                    },
+                }),
+            ),
+        ).toMatchObject({
+            state: 'accessDenied',
+            guidance: 'accessDeniedWsl',
+            recoveryNote: 'groupMembershipNewSession',
+            showCopyCommand: true,
+        });
+    });
+
+    it.each([
         ['windows', true],
         ['macos', true],
         ['linux', false],
@@ -88,6 +166,8 @@ describe('getDockerReadinessPresentation', () => {
             ),
         ).toEqual({
             state: 'ready',
+            guidance: undefined,
+            recoveryNote: undefined,
             showInstall: false,
             showStartDockerDesktop: false,
             showCopyCommand: false,
