@@ -509,6 +509,7 @@ describe('DockerReadinessService', () => {
             failureKind: 'daemonStarting',
             provider: 'dockerDesktop',
             providerEvidence: 'rememberedProvider',
+            providerRecordedAtMs: 500,
         });
     });
 

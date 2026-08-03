@@ -45,10 +45,14 @@ import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
 import {
     type DockerGuidanceKey,
+    type DockerGuideKey,
     type DockerReadinessPresentationState,
     type DockerRecoveryNoteKey,
+    type DockerStartLabelKey,
+    getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
 } from './dockerReadinessPresentation';
+import { pollDockerReadiness } from './dockerReadinessPolling';
 
 type Phase = 'loading' | 'review' | 'dockerNotReady' | 'provisioning' | 'success' | 'failed';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
@@ -109,6 +113,12 @@ const useStyles = makeStyles({
         borderRadius: tokens.borderRadiusSmall,
     },
     recoveryCommandText: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    targetNotice: {
+        padding: '10px',
+        backgroundColor: tokens.colorNeutralBackground3,
+        borderRadius: tokens.borderRadiusSmall,
+    },
+    waitingStatus: { display: 'flex', alignItems: 'center', gap: '8px' },
     // Visually hidden but exposed to assistive tech (WCAG 4.1.3 status text).
     srOnly: {
         position: 'absolute',
@@ -137,8 +147,15 @@ const DOCKER_DAEMON_VALUES: Readonly<Record<DockerReadinessPresentationState, st
     cliMissing: l10n.t('Unknown'),
     accessDenied: l10n.t('Access denied'),
     accessDeniedPendingRestart: l10n.t('Access denied'),
+    dockerDesktopNotRunning: l10n.t('Docker Desktop not running'),
     notRunning: l10n.t('Not running'),
+    starting: l10n.t('Starting…'),
+    notAccessibleFromWsl: l10n.t('Not accessible from WSL'),
+    endpointUnreachable: l10n.t('Endpoint unreachable'),
+    contextUnavailable: l10n.t('Context unavailable'),
     checkTimedOut: l10n.t('Check timed out'),
+    unsupported: l10n.t('Unsupported'),
+    windowsContainers: l10n.t('Linux containers required'),
     notAccessible: l10n.t('Not accessible'),
 };
 
@@ -165,9 +182,84 @@ const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
     pendingRestartContainer: l10n.t(
         'You are in the Docker group, but this container started before that change. Rebuild the container.',
     ),
+    dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
     daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
+    daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
+    wslIntegrationUnavailable: l10n.t(
+        'Enable Docker Desktop integration for this WSL distribution, then check again.',
+    ),
+    remoteDockerUnavailable: l10n.t(
+        'Docker must be available in the remote environment where this extension is running.',
+    ),
+    endpointUnreachable: l10n.t('The configured Docker endpoint did not respond.'),
+    contextUnavailable: l10n.t(
+        'The active Docker context is unavailable. Select or repair a valid context, then check again.',
+    ),
     checkTimedOut: l10n.t('Docker did not respond before the readiness check timed out.'),
+    unsupportedHost: l10n.t(
+        'Local Quick Start is supported when the extension runs on Windows, macOS, or Linux.',
+    ),
+    windowsContainers: l10n.t('Switch Docker to Linux containers, then check again.'),
     notAccessible: l10n.t('The extension could not connect to the Docker daemon.'),
+};
+
+const DOCKER_GUIDES: Readonly<Record<DockerGuideKey, { readonly label: string; readonly href: string }>> = {
+    install: { label: l10n.t('Install Docker'), href: 'https://docs.docker.com/engine/install/' },
+    linuxPostInstall: {
+        label: l10n.t('Linux setup guide'),
+        href: 'https://docs.docker.com/engine/install/linux-postinstall/',
+    },
+    dockerTroubleshooting: {
+        label: l10n.t('Docker troubleshooting'),
+        href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
+    },
+    dockerContexts: {
+        label: l10n.t('Docker context guide'),
+        href: 'https://docs.docker.com/engine/manage-resources/contexts/',
+    },
+    wslIntegration: {
+        label: l10n.t('WSL integration guide'),
+        href: 'https://docs.docker.com/desktop/features/wsl/',
+    },
+    remoteDocker: {
+        label: l10n.t('Remote Docker guide'),
+        href: 'https://docs.docker.com/engine/security/protect-access/',
+    },
+    linuxContainers: {
+        label: l10n.t('Linux containers guide'),
+        href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+    },
+    learnMore: { label: l10n.t('Learn more'), href: 'https://docs.docker.com/engine/install/' },
+};
+
+const DOCKER_START_LABELS: Readonly<Record<DockerStartLabelKey, string>> = {
+    startDockerDesktop: l10n.t('Start Docker Desktop'),
+    startDocker: l10n.t('Start Docker'),
+};
+
+const EXECUTION_TARGET_VALUES: Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> = {
+    local: l10n.t('This machine (Docker)'),
+    wsl: l10n.t('This WSL environment (Docker)'),
+    ssh: l10n.t('Remote SSH host (Docker)'),
+    devContainer: l10n.t('This dev container environment (Docker)'),
+    codespaces: l10n.t('This Codespaces environment (Docker)'),
+    otherRemote: l10n.t('This remote extension host (Docker)'),
+};
+
+const EXECUTION_TARGET_NOTICES: Readonly<Partial<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>>> = {
+    wsl: l10n.t('Docker and DocumentDB Local will run in WSL, where this extension is running.'),
+    ssh: l10n.t(
+        'Docker and DocumentDB Local will run on the remote SSH host. localhost refers to that remote host.',
+    ),
+    devContainer: l10n.t(
+        'Docker and DocumentDB Local will run in the dev-container environment. localhost refers to the extension host.',
+    ),
+    codespaces: l10n.t(
+        'Docker and DocumentDB Local will run in Codespaces. localhost refers to the Codespaces extension host.',
+    ),
+    otherRemote: l10n.t(
+        'Docker and DocumentDB Local will run on the remote extension host. localhost refers to that host.',
+    ),
 };
 
 const DOCKER_RECOVERY_NOTES: Readonly<Record<DockerRecoveryNoteKey, string>> = {
@@ -178,11 +270,11 @@ const DOCKER_RECOVERY_NOTES: Readonly<Record<DockerRecoveryNoteKey, string>> = {
     runsDockerService: l10n.t('Runs the system Docker service.'),
 };
 
-function formatLastChecked(checkedAtMs: number | undefined): string {
+function formatLastChecked(checkedAtMs: number | undefined, now: number): string {
     if (checkedAtMs === undefined) {
         return l10n.t('Last check did not complete');
     }
-    const elapsedMinutes = Math.max(0, Math.floor((Date.now() - checkedAtMs) / 60_000));
+    const elapsedMinutes = Math.max(0, Math.floor((now - checkedAtMs) / 60_000));
     if (elapsedMinutes === 0) {
         return l10n.t('Last checked just now');
     }
@@ -196,7 +288,21 @@ function formatLastChecked(checkedAtMs: number | undefined): string {
     if (elapsedHours === 1) {
         return l10n.t('Last checked 1 hour ago');
     }
-    return l10n.t('Last checked {0} hours ago', String(elapsedHours));
+    if (elapsedHours < 24) {
+        return l10n.t('Last checked {0} hours ago', String(elapsedHours));
+    }
+    const elapsedDays = Math.floor(elapsedHours / 24);
+    if (elapsedDays === 1) {
+        return l10n.t('Last checked 1 day ago');
+    }
+    return l10n.t('Last checked {0} days ago', String(elapsedDays));
+}
+
+function formatElapsed(elapsedMs: number): string {
+    const totalSeconds = Math.floor(elapsedMs / 1_000);
+    const minutes = String(Math.floor(totalSeconds / 60)).padStart(2, '0');
+    const seconds = String(totalSeconds % 60).padStart(2, '0');
+    return `${minutes}:${seconds}`;
 }
 
 function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
@@ -238,6 +344,8 @@ export const LocalQuickStart = (): JSX.Element => {
     const [boundPort, setBoundPort] = useState<number | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
     const [startingDocker, setStartingDocker] = useState(false);
+    const [dockerWaitElapsedMs, setDockerWaitElapsedMs] = useState(0);
+    const [relativeTimeNow, setRelativeTimeNow] = useState(0);
     const [dockerActionMessage, setDockerActionMessage] = useState<string | undefined>(undefined);
     const [copyAnnouncementKey, setCopyAnnouncementKey] = useState(0);
     // True when the terminal failure was a readiness timeout (the container was left running),
@@ -260,6 +368,8 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const readinessAbortRef = useRef<AbortController | null>(null);
+    const dockerPollAbortRef = useRef<AbortController | null>(null);
+    const dockerWaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     // Current Advanced options, synced from the fields below so handleStart (and Retry)
     // always read the latest without re-binding the provisioning subscription.
@@ -363,6 +473,27 @@ export const LocalQuickStart = (): JSX.Element => {
     const anyStageErrored = PROVISION_STAGES.some((s) => stageStatus[s] === 'error');
     const provisioningStatusMessage = activeStage && !anyStageErrored ? l10n.t('{0}…', STAGE_LABELS[activeStage]) : '';
 
+    const applyDockerStatus = useCallback((result: DockerStatusResult): void => {
+        setDocker(result);
+        setRelativeTimeNow(Date.now());
+        const ready = result.readiness.outcome === 'ready';
+        if (ready && result.status.canResumeReadiness) {
+            setStageStatus({
+                checking: 'done',
+                pulling: 'done',
+                creating: 'done',
+                starting: 'done',
+                waiting: 'error',
+                done: 'pending',
+                error: 'pending',
+            });
+            setTimedOut(true);
+            setPhase('failed');
+            return;
+        }
+        setPhase(ready ? 'review' : 'dockerNotReady');
+    }, []);
+
     const loadDockerStatus = useCallback(
         (forceRefresh = false): void => {
             readinessAbortRef.current?.abort();
@@ -373,27 +504,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 .query(forceRefresh ? { forceRefresh: true } : undefined, { signal: abortController.signal })
                 .then((result) => {
                     if (abortController.signal.aborted) return;
-                    setDocker(result);
-                    const ready = result.readiness.cliInstalled && result.readiness.daemonReachable;
-                    if (ready && result.status.canResumeReadiness) {
-                        // A container from a prior readiness timeout is still running and resumable.
-                        // rehydrate the timed-out actions (Wait longer / Start over) instead of dropping
-                        // to the fresh setup form, which would strand that container (§9.1). Seed the
-                        // checklist to reflect that everything up to readiness completed.
-                        setStageStatus({
-                            checking: 'done',
-                            pulling: 'done',
-                            creating: 'done',
-                            starting: 'done',
-                            waiting: 'error',
-                            done: 'pending',
-                            error: 'pending',
-                        });
-                        setTimedOut(true);
-                        setPhase('failed');
-                    } else {
-                        setPhase(ready ? 'review' : 'dockerNotReady');
-                    }
+                    applyDockerStatus(result);
                 })
                 .catch((error: unknown) => {
                     if (abortController.signal.aborted) return;
@@ -406,7 +517,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     }
                 });
         },
-        [trpcClient],
+        [applyDockerStatus, trpcClient],
     );
 
     const stopTimer = useCallback((): void => {
@@ -416,38 +527,87 @@ export const LocalQuickStart = (): JSX.Element => {
         }
     }, []);
 
+    const stopDockerWait = useCallback((): void => {
+        dockerPollAbortRef.current?.abort();
+        dockerPollAbortRef.current = null;
+        if (dockerWaitTimerRef.current) {
+            clearInterval(dockerWaitTimerRef.current);
+            dockerWaitTimerRef.current = null;
+        }
+        setStartingDocker(false);
+    }, []);
+
+    const handleStopWaiting = useCallback((): void => {
+        stopDockerWait();
+        setDockerActionMessage(l10n.t('Stopped waiting for Docker.'));
+    }, [stopDockerWait]);
+
     const handleStartDocker = useCallback((): void => {
+        stopDockerWait();
         setDockerActionMessage(undefined);
         setStartingDocker(true);
+        setDockerWaitElapsedMs(0);
+        const abortController = new AbortController();
+        dockerPollAbortRef.current = abortController;
         void trpcClient.localQuickStart.startDockerProvider
-            .mutate()
-            .then((launchResult) => {
+            .mutate(undefined, { signal: abortController.signal })
+            .then(async (launchResult) => {
+                if (abortController.signal.aborted) return;
                 if (launchResult === 'notAvailable' || launchResult === 'failed') {
-                    setStartingDocker(false);
-                    setDockerActionMessage(l10n.t('Docker Desktop could not be started.'));
+                    stopDockerWait();
+                    setDockerActionMessage(l10n.t('Docker could not be started.'));
                     return;
                 }
-                // Give Docker Desktop a few seconds to come up, then re-check.
-                setTimeout(() => {
-                    setStartingDocker(false);
-                    loadDockerStatus(true);
-                }, 5000);
+                const startedAt = Date.now();
+                dockerWaitTimerRef.current = setInterval(
+                    () => setDockerWaitElapsedMs(Date.now() - startedAt),
+                    250,
+                );
+                let latestResult: DockerStatusResult | undefined;
+                const outcome = await pollDockerReadiness({
+                    signal: abortController.signal,
+                    query: (suppressCommandEcho) =>
+                        trpcClient.localQuickStart.getDockerStatus.query(
+                            { forceRefresh: true, suppressCommandEcho },
+                            { signal: abortController.signal },
+                        ),
+                    onResult: (result) => {
+                        latestResult = result;
+                        setDocker(result);
+                        setRelativeTimeNow(Date.now());
+                    },
+                });
+                if (abortController.signal.aborted) return;
+                stopDockerWait();
+                if (outcome === 'ready' && latestResult) {
+                    applyDockerStatus(latestResult);
+                } else if (outcome === 'deadline') {
+                    setDockerActionMessage(l10n.t('Docker did not become ready before the wait timed out.'));
+                }
             })
             .catch(() => {
-                setStartingDocker(false);
-                setDockerActionMessage(l10n.t('Docker Desktop could not be started.'));
+                if (abortController.signal.aborted) return;
+                stopDockerWait();
+                setDockerActionMessage(l10n.t('The Docker readiness check failed.'));
             });
-    }, [trpcClient, loadDockerStatus]);
+    }, [applyDockerStatus, stopDockerWait, trpcClient]);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load sets the 'loading' phase before the async docker query
+        // eslint-disable-next-line react-hooks/set-state-in-effect -- initial async readiness load owns the loading phase
         loadDockerStatus();
         return () => {
             readinessAbortRef.current?.abort();
+            dockerPollAbortRef.current?.abort();
             subscriptionRef.current?.unsubscribe();
             if (timerRef.current) clearInterval(timerRef.current);
+            if (dockerWaitTimerRef.current) clearInterval(dockerWaitTimerRef.current);
         };
     }, [loadDockerStatus]);
+
+    useEffect(() => {
+        const relativeTimeTimer = setInterval(() => setRelativeTimeNow(Date.now()), 30_000);
+        return () => clearInterval(relativeTimeTimer);
+    }, []);
 
     const runStream = useCallback(
         (
@@ -649,7 +809,12 @@ export const LocalQuickStart = (): JSX.Element => {
     const renderReadinessFooter = (): JSX.Element => (
         <div className={styles.readinessFooter}>
             <Text size={200} className={styles.muted} role="status" aria-live="polite">
-                {formatLastChecked(docker?.readiness.checkedAtMs)}
+                {formatLastChecked(
+                    docker?.readiness.providerEvidence === 'rememberedProvider'
+                        ? docker.readiness.providerRecordedAtMs
+                        : docker?.readiness.checkedAtMs,
+                    relativeTimeNow,
+                )}
             </Text>
             <Button
                 appearance="subtle"
@@ -663,7 +828,7 @@ export const LocalQuickStart = (): JSX.Element => {
     );
 
     const renderReviewCards = (): JSX.Element => {
-        const ready = !!docker && docker.readiness.cliInstalled && docker.readiness.daemonReachable;
+        const ready = docker?.readiness.outcome === 'ready';
         const effectivePort = advPort.trim() && !advError ? advPort.trim() : String(QUICK_START_PORT);
         return (
             <div className={styles.cardGrid}>
@@ -692,6 +857,8 @@ export const LocalQuickStart = (): JSX.Element => {
             !isRecreate && advTag.trim() ? `${QUICK_START_IMAGE_REPOSITORY}:${advTag.trim()}` : QUICK_START_IMAGE;
         const customCreds = !isRecreate && advUser.trim().length > 0 && advPass.trim().length > 0;
         const customPort = advPort.trim().length > 0 && !advError;
+        const targetKey = getDockerExecutionTargetKey(docker?.readiness.executionTarget ?? 'local');
+        const targetNotice = EXECUTION_TARGET_NOTICES[targetKey];
         return (
             <Card className={styles.summaryCard}>
                 <Text weight="semibold">{l10n.t("What we'll do")}</Text>
@@ -706,7 +873,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 </div>
                 <div className={styles.summaryRow}>
                     <Text className={styles.muted}>{l10n.t('Runs on')}</Text>
-                    <Text>{l10n.t('This machine (Docker)')}</Text>
+                    <Text>{EXECUTION_TARGET_VALUES[targetKey]}</Text>
                 </div>
                 <div className={styles.summaryRow}>
                     <Text className={styles.muted}>{l10n.t('Credentials')}</Text>
@@ -722,6 +889,11 @@ export const LocalQuickStart = (): JSX.Element => {
                     <Text className={styles.muted}>{l10n.t('Lifetime')}</Text>
                     <Text>{l10n.t('Keeps running after VS Code closes')}</Text>
                 </div>
+                {targetNotice && (
+                    <Text size={200} className={styles.targetNotice}>
+                        {targetNotice}
+                    </Text>
+                )}
             </Card>
         );
     };
@@ -889,8 +1061,8 @@ export const LocalQuickStart = (): JSX.Element => {
         const r = docker?.readiness;
         const cliOk = !!r?.cliInstalled;
         const presentation = r ? getDockerReadinessPresentation(r) : undefined;
-        const presentationState = presentation?.state ?? 'notAccessible';
-        const guidance = DOCKER_GUIDANCE[presentation?.guidance ?? 'notAccessible'];
+        const presentationState = startingDocker ? 'starting' : (presentation?.state ?? 'notAccessible');
+        const guidance = DOCKER_GUIDANCE[startingDocker ? 'daemonStarting' : (presentation?.guidance ?? 'notAccessible')];
         const recoveryNote = presentation?.recoveryNote ? DOCKER_RECOVERY_NOTES[presentation.recoveryNote] : undefined;
         const platformKnown = r?.daemonArchitecture !== undefined;
         const statusBadge = (ok: boolean, notOkColor: 'danger' | 'warning'): JSX.Element => (
@@ -904,6 +1076,11 @@ export const LocalQuickStart = (): JSX.Element => {
                     when={phase === 'dockerNotReady'}
                     message={l10n.t('Docker is not ready. {0}', guidance)}
                     politeness="assertive"
+                />
+                <Announcer
+                    when={startingDocker}
+                    message={l10n.t('Waiting for Docker to start.')}
+                    politeness="polite"
                 />
                 <Announcer
                     key={copyAnnouncementKey}
@@ -931,7 +1108,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     <MetricCard
                         label={l10n.t('Docker daemon')}
                         value={DOCKER_DAEMON_VALUES[presentationState]}
-                        badge={statusBadge(false, 'danger')}
+                        badge={statusBadge(false, startingDocker ? 'warning' : 'danger')}
                     />
                     <MetricCard
                         label={l10n.t('Platform')}
@@ -943,7 +1120,13 @@ export const LocalQuickStart = (): JSX.Element => {
                     <Text weight="semibold">{l10n.t('How to fix')}</Text>
                     <Divider />
                     <Text size={200}>{guidance}</Text>
-                    {r?.recoveryCommand && (
+                    {startingDocker && (
+                        <div className={styles.waitingStatus}>
+                            <Spinner size="tiny" aria-hidden />
+                            <Text size={200}>{l10n.t('Waiting {0}', formatElapsed(dockerWaitElapsedMs))}</Text>
+                        </div>
+                    )}
+                    {presentation?.showCopyCommand && r?.recoveryCommand && (
                         <div className={styles.recoveryCommand}>
                             <div className={styles.recoveryCommandText}>
                                 <code>{r.recoveryCommand.commandLine}</code>
@@ -965,22 +1148,15 @@ export const LocalQuickStart = (): JSX.Element => {
                         </details>
                     )}
                     <div className={styles.actions}>
-                        {presentation?.showInstall && (
-                            <Link href="https://docs.docker.com/engine/install/">{l10n.t('Install Docker')}</Link>
-                        )}
-                        {presentationState === 'accessDenied' || presentationState === 'accessDeniedPendingRestart' ? (
-                            <Link href="https://docs.docker.com/engine/install/linux-postinstall/">
-                                {l10n.t('Linux setup guide')}
-                            </Link>
-                        ) : (
-                            <Link href="https://docs.docker.com/engine/daemon/troubleshoot/">
-                                {l10n.t('Docker troubleshooting')}
+                        {presentation && (
+                            <Link href={DOCKER_GUIDES[presentation.guide].href}>
+                                {DOCKER_GUIDES[presentation.guide].label}
                             </Link>
                         )}
                     </div>
                 </Card>
                 <div className={styles.actions}>
-                    {presentation?.showViewOutput !== false && (
+                    {presentation?.showViewOutput && (
                         <Button appearance="secondary" onClick={handleViewOutput}>
                             {l10n.t('View Docker output')}
                         </Button>
@@ -990,18 +1166,24 @@ export const LocalQuickStart = (): JSX.Element => {
                             {l10n.t('Continue anyway')}
                         </Button>
                     )}
-                    {presentation?.showStartDockerDesktop && (
-                        <Button appearance="primary" disabled={startingDocker} onClick={handleStartDocker}>
-                            {startingDocker ? l10n.t('Starting Docker Desktop…') : l10n.t('Start Docker Desktop')}
+                    {startingDocker ? (
+                        <Button appearance="secondary" onClick={handleStopWaiting}>
+                            {l10n.t('Stop waiting')}
+                        </Button>
+                    ) : presentation?.showStartDockerProvider && presentation.startLabel ? (
+                        <Button appearance="primary" onClick={handleStartDocker}>
+                            {DOCKER_START_LABELS[presentation.startLabel]}
+                        </Button>
+                    ) : null}
+                    {!startingDocker && presentation?.showRetry && (
+                        <Button
+                            appearance="primary"
+                            icon={<ArrowClockwiseRegular />}
+                            onClick={() => loadDockerStatus(true)}
+                        >
+                            {l10n.t('Retry')}
                         </Button>
                     )}
-                    <Button
-                        appearance="primary"
-                        icon={<ArrowClockwiseRegular />}
-                        onClick={() => loadDockerStatus(true)}
-                    >
-                        {l10n.t('Retry')}
-                    </Button>
                 </div>
                 {renderReadinessFooter()}
             </div>
@@ -1046,10 +1228,15 @@ export const LocalQuickStart = (): JSX.Element => {
                                 )}
                             </Text>
                             <Text size={200}>
-                                {l10n.t(
-                                    '• Copy Connection String: use it from a Query Playground, your app, or mongosh (localhost:{0}).',
-                                    String(boundPort ?? QUICK_START_PORT),
-                                )}
+                                {docker?.readiness.executionTarget === 'local'
+                                    ? l10n.t(
+                                          '• Copy Connection String: use it from a Query Playground, your app, or mongosh (localhost:{0}).',
+                                          String(boundPort ?? QUICK_START_PORT),
+                                      )
+                                    : l10n.t(
+                                          '• Copy Connection String: localhost:{0} is reachable from tools running on the extension host.',
+                                          String(boundPort ?? QUICK_START_PORT),
+                                      )}
                             </Text>
                             <Text size={200}>
                                 {l10n.t(

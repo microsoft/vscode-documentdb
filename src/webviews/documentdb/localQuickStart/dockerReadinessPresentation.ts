@@ -3,15 +3,27 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { type DockerFailureKind, type DockerReadiness } from '../../../services/localQuickStart/quickStartTypes';
+import {
+    type DockerExecutionTarget,
+    type DockerFailureKind,
+    type DockerReadiness,
+    type DockerStartAction,
+} from '../../../services/localQuickStart/quickStartTypes';
 
 export type DockerReadinessPresentationState =
     | 'ready'
     | 'cliMissing'
     | 'accessDenied'
     | 'accessDeniedPendingRestart'
+    | 'dockerDesktopNotRunning'
     | 'notRunning'
+    | 'starting'
+    | 'notAccessibleFromWsl'
+    | 'endpointUnreachable'
+    | 'contextUnavailable'
     | 'checkTimedOut'
+    | 'unsupported'
+    | 'windowsContainers'
     | 'notAccessible';
 
 export type DockerGuidanceKey =
@@ -23,18 +35,48 @@ export type DockerGuidanceKey =
     | 'pendingRestartWsl'
     | 'pendingRestartSsh'
     | 'pendingRestartContainer'
+    | 'dockerDesktopNotRunning'
     | 'daemonNotRunning'
+    | 'daemonStarting'
+    | 'wslIntegrationUnavailable'
+    | 'remoteDockerUnavailable'
+    | 'endpointUnreachable'
+    | 'contextUnavailable'
     | 'checkTimedOut'
+    | 'unsupportedHost'
+    | 'windowsContainers'
     | 'notAccessible';
 
 export type DockerRecoveryNoteKey = 'groupMembershipNewSession' | 'restartWslDistribution' | 'runsDockerService';
+
+export type DockerGuideKey =
+    | 'install'
+    | 'linuxPostInstall'
+    | 'dockerTroubleshooting'
+    | 'dockerContexts'
+    | 'wslIntegration'
+    | 'remoteDocker'
+    | 'linuxContainers'
+    | 'learnMore';
+
+export type DockerStartLabelKey = 'startDockerDesktop' | 'startDocker';
+
+export type DockerExecutionTargetKey =
+    | 'local'
+    | 'wsl'
+    | 'ssh'
+    | 'devContainer'
+    | 'codespaces'
+    | 'otherRemote';
 
 export interface DockerReadinessPresentation {
     readonly state: DockerReadinessPresentationState;
     readonly guidance?: DockerGuidanceKey;
     readonly recoveryNote?: DockerRecoveryNoteKey;
+    readonly guide: DockerGuideKey;
+    readonly startLabel?: DockerStartLabelKey;
     readonly showInstall: boolean;
-    readonly showStartDockerDesktop: boolean;
+    readonly showStartDockerProvider: boolean;
     readonly showCopyCommand: boolean;
     readonly showContinueAnyway: boolean;
     readonly showRetry: boolean;
@@ -54,19 +96,49 @@ function getPresentationState(failureKind: DockerFailureKind | undefined): Docke
             return 'accessDenied';
         case 'daemonUnavailable':
             return 'notRunning';
+        case 'daemonStarting':
+            return 'starting';
+        case 'contextUnavailable':
+            return 'contextUnavailable';
+        case 'endpointUnreachable':
+            return 'endpointUnreachable';
         case 'probeTimedOut':
             return 'checkTimedOut';
-        case 'daemonStarting':
-        case 'contextUnavailable':
-        case 'endpointUnreachable':
         case 'unsupportedHost':
+            return 'unsupported';
         case 'windowsContainers':
+            return 'windowsContainers';
         case 'unknown':
         case undefined:
             return 'notAccessible';
         default:
             return assertNever(failureKind);
     }
+}
+
+function isRemoteEnvironment(readiness: DockerReadiness): boolean {
+    return (
+        readiness.environment === 'ssh' ||
+        readiness.environment === 'devContainer' ||
+        readiness.environment === 'codespaces' ||
+        readiness.environment === 'otherRemote'
+    );
+}
+
+function refineUnavailableState(
+    state: DockerReadinessPresentationState,
+    readiness: DockerReadiness,
+): DockerReadinessPresentationState {
+    if (state !== 'notRunning') {
+        return state;
+    }
+    if (readiness.environment === 'wsl' && readiness.provider === 'dockerDesktop' && !readiness.startAction) {
+        return 'notAccessibleFromWsl';
+    }
+    if (readiness.provider === 'dockerDesktop' && readiness.providerEvidence !== 'installedApplication') {
+        return 'dockerDesktopNotRunning';
+    }
+    return state;
 }
 
 function getPermissionGuidance(readiness: DockerReadiness): DockerGuidanceKey {
@@ -113,19 +185,94 @@ function getGuidance(readiness: DockerReadiness): DockerGuidanceKey {
         case 'permissionDenied':
             return getPermissionGuidance(readiness);
         case 'daemonUnavailable':
+            if (readiness.environment === 'wsl' && readiness.provider === 'dockerDesktop' && !readiness.startAction) {
+                return 'wslIntegrationUnavailable';
+            }
+            if (isRemoteEnvironment(readiness)) {
+                return 'remoteDockerUnavailable';
+            }
+            if (readiness.provider === 'dockerDesktop' && readiness.providerEvidence !== 'installedApplication') {
+                return 'dockerDesktopNotRunning';
+            }
             return 'daemonNotRunning';
+        case 'daemonStarting':
+            return 'daemonStarting';
+        case 'contextUnavailable':
+            return 'contextUnavailable';
+        case 'endpointUnreachable':
+            return 'endpointUnreachable';
         case 'probeTimedOut':
             return 'checkTimedOut';
-        case 'daemonStarting':
-        case 'contextUnavailable':
-        case 'endpointUnreachable':
         case 'unsupportedHost':
+            return 'unsupportedHost';
         case 'windowsContainers':
+            return 'windowsContainers';
         case 'unknown':
         case undefined:
             return 'notAccessible';
         default:
             return assertNever(failureKind);
+    }
+}
+
+function getGuide(readiness: DockerReadiness): DockerGuideKey {
+    const failureKind = readiness.failureKind;
+    switch (failureKind) {
+        case 'cliMissing':
+            return 'install';
+        case 'permissionDenied':
+            return 'linuxPostInstall';
+        case 'contextUnavailable':
+            return 'dockerContexts';
+        case 'endpointUnreachable':
+            return 'dockerTroubleshooting';
+        case 'daemonUnavailable':
+            if (readiness.environment === 'wsl' && readiness.provider === 'dockerDesktop' && !readiness.startAction) {
+                return 'wslIntegration';
+            }
+            return isRemoteEnvironment(readiness) ? 'remoteDocker' : 'dockerTroubleshooting';
+        case 'windowsContainers':
+            return 'linuxContainers';
+        case 'unsupportedHost':
+            return 'learnMore';
+        case 'daemonStarting':
+        case 'probeTimedOut':
+        case 'unknown':
+        case undefined:
+            return 'dockerTroubleshooting';
+        default:
+            return assertNever(failureKind);
+    }
+}
+
+function getStartLabel(startAction: DockerStartAction | undefined): DockerStartLabelKey | undefined {
+    switch (startAction) {
+        case 'startRootlessDockerEngineLinux':
+            return 'startDocker';
+        case 'startDockerDesktopWindows':
+        case 'startDockerDesktopMacOS':
+        case 'startDockerDesktopLinux':
+        case 'startDockerDesktopWindowsFromWsl':
+            return 'startDockerDesktop';
+        case undefined:
+            return undefined;
+    }
+}
+
+export function getDockerExecutionTargetKey(target: DockerExecutionTarget): DockerExecutionTargetKey {
+    switch (target) {
+        case 'local':
+            return 'local';
+        case 'wsl':
+            return 'wsl';
+        case 'ssh':
+            return 'ssh';
+        case 'devContainer':
+            return 'devContainer';
+        case 'codespaces':
+            return 'codespaces';
+        case 'otherRemote':
+            return 'otherRemote';
     }
 }
 
@@ -150,8 +297,10 @@ export function getDockerReadinessPresentation(readiness: DockerReadiness): Dock
             state: 'ready',
             guidance: undefined,
             recoveryNote: undefined,
+            guide: 'dockerTroubleshooting',
+            startLabel: undefined,
             showInstall: false,
-            showStartDockerDesktop: false,
+            showStartDockerProvider: false,
             showCopyCommand: false,
             showContinueAnyway: false,
             showRetry: false,
@@ -161,20 +310,23 @@ export function getDockerReadinessPresentation(readiness: DockerReadiness): Dock
     }
 
     const baseState = getPresentationState(readiness.failureKind);
-    const state =
+    const permissionState =
         baseState === 'accessDenied' && readiness.permissionDetail === 'pendingSessionRestart'
             ? 'accessDeniedPendingRestart'
             : baseState;
-    const isLocalDesktopHost = readiness.environment === 'windows' || readiness.environment === 'macos';
+    const state = refineUnavailableState(permissionState, readiness);
+    const startLabel = getStartLabel(readiness.startAction);
     return {
         state,
         guidance: getGuidance(readiness),
         recoveryNote: getRecoveryNote(readiness),
+        guide: getGuide(readiness),
+        startLabel,
         showInstall: state === 'cliMissing',
-        showStartDockerDesktop: readiness.cliInstalled && isLocalDesktopHost,
+        showStartDockerProvider: startLabel !== undefined,
         showCopyCommand: readiness.recoveryCommand !== undefined,
         showContinueAnyway: readiness.outcome === 'indeterminate' && readiness.canContinueAnyway,
-        showRetry: true,
+        showRetry: readiness.failureKind !== 'unsupportedHost',
         showRefresh: true,
         showViewOutput: true,
     };

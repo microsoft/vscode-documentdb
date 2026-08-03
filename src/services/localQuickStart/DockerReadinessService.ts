@@ -605,6 +605,10 @@ export class DockerReadinessService {
                 environment,
                 endpointKind: endpoint.kind,
                 ...startCapability,
+                providerRecordedAtMs:
+                    startCapability.providerEvidence === 'rememberedProvider'
+                        ? rememberedProvider?.recordedAtMs
+                        : undefined,
                 executionTarget: getDockerExecutionTarget(environment),
                 permissionDetail,
                 recoveryCommand: getDockerRecoveryCommand(

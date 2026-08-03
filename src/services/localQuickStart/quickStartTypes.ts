@@ -287,6 +287,7 @@ interface DockerReadinessBase {
     readonly endpointKind: DockerEndpointKind;
     readonly provider: DockerProvider;
     readonly providerEvidence: DockerProviderEvidence;
+    readonly providerRecordedAtMs?: number;
     readonly executionTarget: DockerExecutionTarget;
     readonly startAction?: DockerStartAction;
     readonly permissionDetail?: DockerPermissionDetail;

@@ -9,7 +9,7 @@ import {
     type DockerReadiness,
     type DockerReadyReadiness,
 } from '../../../services/localQuickStart/quickStartTypes';
-import { getDockerReadinessPresentation } from './dockerReadinessPresentation';
+import { getDockerExecutionTargetKey, getDockerReadinessPresentation } from './dockerReadinessPresentation';
 
 type DockerReadinessOverrides =
     | (Partial<DockerDiagnosedReadiness> & { readonly outcome?: 'diagnosed' })
@@ -60,11 +60,15 @@ describe('getDockerReadinessPresentation', () => {
     it.each([
         ['permission denied', { failureKind: 'permissionDenied' as const }, 'accessDenied'],
         ['daemon unavailable', { failureKind: 'daemonUnavailable' as const }, 'notRunning'],
+        ['daemon starting', { failureKind: 'daemonStarting' as const }, 'starting'],
+        ['missing context', { failureKind: 'contextUnavailable' as const }, 'contextUnavailable'],
+        ['remote endpoint', { failureKind: 'endpointUnreachable' as const }, 'endpointUnreachable'],
         [
             'probe timeout',
             { outcome: 'indeterminate' as const, failureKind: 'probeTimedOut' as const },
             'checkTimedOut',
         ],
+        ['Windows containers', { failureKind: 'windowsContainers' as const }, 'windowsContainers'],
         [
             'unknown failure',
             { outcome: 'indeterminate' as const, failureKind: 'unknown' as const },
@@ -186,13 +190,53 @@ describe('getDockerReadinessPresentation', () => {
     });
 
     it.each([
-        ['windows', true],
-        ['macos', true],
-        ['linux', false],
-        ['wsl', false],
-        ['ssh', false],
-    ] as const)('sets the legacy Desktop action for %s to %s', (environment, expected) => {
-        expect(getDockerReadinessPresentation(readiness({ environment })).showStartDockerDesktop).toBe(expected);
+        ['startDockerDesktopWindows', 'startDockerDesktop'],
+        ['startDockerDesktopMacOS', 'startDockerDesktop'],
+        ['startDockerDesktopLinux', 'startDockerDesktop'],
+        ['startDockerDesktopWindowsFromWsl', 'startDockerDesktop'],
+        ['startRootlessDockerEngineLinux', 'startDocker'],
+    ] as const)('maps %s to the %s action', (startAction, startLabel) => {
+        expect(getDockerReadinessPresentation(readiness({ startAction }))).toMatchObject({
+            showStartDockerProvider: true,
+            startLabel,
+        });
+    });
+
+    it('does not infer a start action from the host environment', () => {
+        expect(getDockerReadinessPresentation(readiness({ environment: 'windows' }))).toMatchObject({
+            showStartDockerProvider: false,
+            startLabel: undefined,
+        });
+    });
+
+    it('keeps installed-application wording provider-neutral while naming the action', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({
+                    environment: 'windows',
+                    provider: 'dockerDesktop',
+                    providerEvidence: 'installedApplication',
+                    startAction: 'startDockerDesktopWindows',
+                }),
+            ),
+        ).toMatchObject({
+            state: 'notRunning',
+            guidance: 'daemonNotRunning',
+            startLabel: 'startDockerDesktop',
+        });
+    });
+
+    it('keeps Refresh but omits Retry on an unsupported host', () => {
+        expect(
+            getDockerReadinessPresentation(readiness({ failureKind: 'unsupportedHost' })),
+        ).toMatchObject({ state: 'unsupported', showRefresh: true, showRetry: false });
+    });
+
+    it.each([
+        ['WSL Desktop integration', { environment: 'wsl', provider: 'dockerDesktop' as const }, 'notAccessibleFromWsl'],
+        ['identified Desktop', { provider: 'dockerDesktop' as const }, 'dockerDesktopNotRunning'],
+    ] as const)('refines %s daemon unavailability', (_name, overrides, state) => {
+        expect(getDockerReadinessPresentation(readiness(overrides))).toMatchObject({ state });
     });
 
     it('returns refresh as the only readiness action when ready', () => {
@@ -204,8 +248,10 @@ describe('getDockerReadinessPresentation', () => {
             state: 'ready',
             guidance: undefined,
             recoveryNote: undefined,
+            guide: 'dockerTroubleshooting',
+            startLabel: undefined,
             showInstall: false,
-            showStartDockerDesktop: false,
+            showStartDockerProvider: false,
             showCopyCommand: false,
             showContinueAnyway: false,
             showRetry: false,
@@ -213,4 +259,13 @@ describe('getDockerReadinessPresentation', () => {
             showViewOutput: false,
         });
     });
+});
+
+describe('getDockerExecutionTargetKey', () => {
+    it.each(['local', 'wsl', 'ssh', 'devContainer', 'codespaces', 'otherRemote'] as const)(
+        'maps %s without host inference',
+        (target) => {
+            expect(getDockerExecutionTargetKey(target)).toBe(target);
+        },
+    );
 });
