@@ -73,11 +73,7 @@ describe('getDockerReadinessPresentation', () => {
             'checkTimedOut',
         ],
         ['Windows containers', { failureKind: 'windowsContainers' as const }, 'windowsContainers'],
-        [
-            'unknown failure',
-            { outcome: 'indeterminate' as const, failureKind: 'unknown' as const },
-            'notAccessible',
-        ],
+        ['unknown failure', { outcome: 'indeterminate' as const, failureKind: 'unknown' as const }, 'notAccessible'],
     ])('maps %s to %s', (_name, overrides, expectedState) => {
         expect(getDockerReadinessPresentation(readiness(overrides))).toMatchObject({
             state: expectedState,
@@ -94,9 +90,8 @@ describe('getDockerReadinessPresentation', () => {
             ).showContinueAnyway,
         ).toBe(true);
         expect(
-            getDockerReadinessPresentation(
-                readiness({ outcome: 'diagnosed', failureKind: 'permissionDenied' }),
-            ).showContinueAnyway,
+            getDockerReadinessPresentation(readiness({ outcome: 'diagnosed', failureKind: 'permissionDenied' }))
+                .showContinueAnyway,
         ).toBe(false);
     });
 
@@ -231,9 +226,11 @@ describe('getDockerReadinessPresentation', () => {
     });
 
     it('keeps Refresh but omits Retry on an unsupported host', () => {
-        expect(
-            getDockerReadinessPresentation(readiness({ failureKind: 'unsupportedHost' })),
-        ).toMatchObject({ state: 'unsupported', showRefresh: true, showRetry: false });
+        expect(getDockerReadinessPresentation(readiness({ failureKind: 'unsupportedHost' }))).toMatchObject({
+            state: 'unsupported',
+            showRefresh: true,
+            showRetry: false,
+        });
     });
 
     it.each([
@@ -244,11 +241,7 @@ describe('getDockerReadinessPresentation', () => {
     });
 
     it('returns refresh as the only readiness action when ready', () => {
-        expect(
-            getDockerReadinessPresentation(
-                readiness({ outcome: 'ready' }),
-            ),
-        ).toEqual({
+        expect(getDockerReadinessPresentation(readiness({ outcome: 'ready' }))).toEqual({
             state: 'ready',
             guidance: undefined,
             recoveryNote: undefined,
@@ -288,8 +281,6 @@ describe('getDockerLastCheckedAtMs', () => {
     });
 
     it('uses the current check time for live evidence', () => {
-        expect(getDockerLastCheckedAtMs(readiness({ checkedAtMs: 2_000, providerEvidence: 'liveDaemon' }))).toBe(
-            2_000,
-        );
+        expect(getDockerLastCheckedAtMs(readiness({ checkedAtMs: 2_000, providerEvidence: 'liveDaemon' }))).toBe(2_000);
     });
 });

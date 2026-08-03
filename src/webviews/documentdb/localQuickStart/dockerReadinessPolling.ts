@@ -3,10 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    type DockerFailureKind,
-    type DockerStatusResult,
-} from '../../../services/localQuickStart/quickStartTypes';
+import { type DockerFailureKind, type DockerStatusResult } from '../../../services/localQuickStart/quickStartTypes';
 
 export const DOCKER_START_WAIT_DEADLINE_MS = 90_000;
 const POLL_BACKOFF_MS: ReadonlyArray<number> = [1_000, 2_000, 3_000, 5_000];
@@ -56,9 +53,7 @@ function shouldContinuePolling(failureKind: DockerFailureKind | undefined): bool
     }
 }
 
-export async function pollDockerReadiness(
-    options: DockerReadinessPollingOptions,
-): Promise<DockerPollingOutcome> {
+export async function pollDockerReadiness(options: DockerReadinessPollingOptions): Promise<DockerPollingOutcome> {
     const now = options.now ?? Date.now;
     const wait = options.wait ?? waitFor;
     const deadlineMs = options.deadlineMs ?? DOCKER_START_WAIT_DEADLINE_MS;

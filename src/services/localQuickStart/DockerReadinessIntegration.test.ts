@@ -5,8 +5,8 @@
 
 import { type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash } from '@microsoft/vscode-processutils';
-import { DockerReadinessService, type DockerReadinessServiceDependencies } from './DockerReadinessService';
 import { getDockerStartCapability } from './DockerProviderLauncher';
+import { DockerReadinessService, type DockerReadinessServiceDependencies } from './DockerReadinessService';
 import { type RunDockerProbeOptions } from './dockerProbes';
 import { type DockerProbeEvidence } from './quickStartTypes';
 

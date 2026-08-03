@@ -5,17 +5,13 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { parseDockerInfoFacts } from './dockerProbes';
 import {
     classifyDockerFailure,
     classifyDockerProvider,
     getDockerDiagnosticFingerprint,
 } from './dockerReadinessClassification';
-import { parseDockerInfoFacts } from './dockerProbes';
-import {
-    type DockerEndpointProbe,
-    type DockerHostEnvironment,
-    type DockerProbeEvidence,
-} from './quickStartTypes';
+import { type DockerEndpointProbe, type DockerHostEnvironment, type DockerProbeEvidence } from './quickStartTypes';
 
 function readFixture(name: string): string {
     return fs.readFileSync(path.join(__dirname, '__fixtures__', 'docker', name), 'utf8');

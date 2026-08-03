@@ -112,7 +112,9 @@ function launchDetachedProcess(executable: string, args: ReadonlyArray<string>):
 function resolveDependencies(dependencies: DockerProviderLauncherDependencies): ResolvedLauncherDependencies {
     return {
         environmentVariables: dependencies.environmentVariables ?? process.env,
-        pathExists: dependencies.pathExists ?? ((candidate: string): Promise<boolean> => Promise.resolve(fs.existsSync(candidate))),
+        pathExists:
+            dependencies.pathExists ??
+            ((candidate: string): Promise<boolean> => Promise.resolve(fs.existsSync(candidate))),
         runProcess: dependencies.runProcess ?? runBoundedProcess,
         launchDetached: dependencies.launchDetached ?? launchDetachedProcess,
     };
@@ -174,8 +176,7 @@ export async function getDockerStartCapability(
             }
             return {
                 provider: 'dockerDesktop',
-                providerEvidence:
-                    input.provider === 'dockerDesktop' ? input.providerEvidence : 'installedApplication',
+                providerEvidence: input.provider === 'dockerDesktop' ? input.providerEvidence : 'installedApplication',
                 startAction: 'startDockerDesktopWindows',
             };
         }
@@ -185,8 +186,7 @@ export async function getDockerStartCapability(
             }
             return {
                 provider: 'dockerDesktop',
-                providerEvidence:
-                    input.provider === 'dockerDesktop' ? input.providerEvidence : 'installedApplication',
+                providerEvidence: input.provider === 'dockerDesktop' ? input.providerEvidence : 'installedApplication',
                 startAction: 'startDockerDesktopMacOS',
             };
         }
@@ -194,11 +194,7 @@ export async function getDockerStartCapability(
             if (
                 input.provider === 'dockerDesktop' &&
                 input.providerEvidence !== 'installedApplication' &&
-                (await isUserServiceAvailable(
-                    DOCKER_DESKTOP_USER_SERVICE,
-                    dependencies,
-                    input.cancellationToken,
-                ))
+                (await isUserServiceAvailable(DOCKER_DESKTOP_USER_SERVICE, dependencies, input.cancellationToken))
             ) {
                 return { ...unchangedCapability(input), startAction: 'startDockerDesktopLinux' };
             }

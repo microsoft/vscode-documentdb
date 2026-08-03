@@ -80,9 +80,9 @@ describe('runDockerProbe', () => {
 
         const runnerOptions = getDockerProbeRunnerOptions(
             {
-            probe: 'info',
-            command,
-            shellProvider: new Bash(),
+                probe: 'info',
+                command,
+                shellProvider: new Bash(),
             },
             stdOutPipe,
             stdErrPipe,
@@ -95,9 +95,7 @@ describe('runDockerProbe', () => {
 
 describe('parseDockerInfoFacts', () => {
     it('reads raw daemon facts and server errors', () => {
-        expect(
-            parseDockerInfoFacts(readFixtureBody('wsl2-ubuntu20.04-docker28.1.1-ready-info.txt')),
-        ).toEqual({
+        expect(parseDockerInfoFacts(readFixtureBody('wsl2-ubuntu20.04-docker28.1.1-ready-info.txt'))).toEqual({
             osType: 'linux',
             operatingSystem: 'Ubuntu 20.04.6 LTS',
             architecture: 'x86_64',

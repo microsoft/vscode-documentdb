@@ -30,12 +30,12 @@ import { Bash, Cmd, type Shell, type ShellQuotedString, ShellQuoting } from '@mi
 import * as net from 'net';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
-import { DockerReadinessService } from './DockerReadinessService';
 import { startDockerProvider as launchDockerProvider } from './DockerProviderLauncher';
+import { DockerReadinessService } from './DockerReadinessService';
 import { MaskingLineBuffer, maskSecrets } from './outputMasking';
 import {
-    type DockerReadiness,
     type DockerLaunchResult,
+    type DockerReadiness,
     type DockerReadinessRequest,
     QUICK_START_PORT,
     QUICK_START_PORT_BAND_END,

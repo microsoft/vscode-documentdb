@@ -10,9 +10,7 @@ import {
 } from './DockerProviderLauncher';
 import { type DockerHostEnvironment } from './quickStartTypes';
 
-function dependencies(
-    overrides: DockerProviderLauncherDependencies = {},
-): DockerProviderLauncherDependencies {
+function dependencies(overrides: DockerProviderLauncherDependencies = {}): DockerProviderLauncherDependencies {
     return {
         environmentVariables: { ProgramFiles: 'C:\\Program Files' },
         pathExists: async () => false,
@@ -195,18 +193,15 @@ describe('startDockerProvider', () => {
             .mockResolvedValueOnce({ exitCode: 0, stdout: 'loaded\n' })
             .mockResolvedValueOnce({ exitCode, stdout: '' });
 
-        await expect(
-            startDockerProvider('startDockerDesktopLinux', dependencies({ runProcess })),
-        ).resolves.toBe(expected);
-        expect(runProcess).toHaveBeenLastCalledWith(
-            'systemctl',
-            ['--user', 'start', 'docker-desktop.service'],
+        await expect(startDockerProvider('startDockerDesktopLinux', dependencies({ runProcess }))).resolves.toBe(
+            expected,
         );
+        expect(runProcess).toHaveBeenLastCalledWith('systemctl', ['--user', 'start', 'docker-desktop.service']);
     });
 
     it('returns notAvailable when the selected user service disappeared', async () => {
-        await expect(
-            startDockerProvider('startRootlessDockerEngineLinux', dependencies()),
-        ).resolves.toBe('notAvailable');
+        await expect(startDockerProvider('startRootlessDockerEngineLinux', dependencies())).resolves.toBe(
+            'notAvailable',
+        );
     });
 });

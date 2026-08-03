@@ -114,9 +114,7 @@ export const localQuickStartRouter = router({
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
     getDockerStatus: publicProcedureWithTelemetry
         .input(
-            z
-                .object({ forceRefresh: z.boolean().optional(), suppressCommandEcho: z.boolean().optional() })
-                .optional(),
+            z.object({ forceRefresh: z.boolean().optional(), suppressCommandEcho: z.boolean().optional() }).optional(),
         )
         .query(async ({ ctx, input }): Promise<DockerStatusResult> => {
             const cancellationToken = ctx.signal ? CancellationTokenLike.fromAbortSignal(ctx.signal) : undefined;
@@ -131,10 +129,7 @@ export const localQuickStartRouter = router({
             await QuickStartService.refreshLiveState();
             const tctx = ctx as WithTelemetry<RouterContext>;
             // Design §14 quickstart.docker_readiness never includes names, ports, or credentials.
-            Object.assign(
-                tctx.actionContext.telemetry.properties,
-                getDockerReadinessTelemetryProperties(readiness),
-            );
+            Object.assign(tctx.actionContext.telemetry.properties, getDockerReadinessTelemetryProperties(readiness));
             tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
             const willReuse = await QuickStartService.willReuseExistingInstance();
             return {

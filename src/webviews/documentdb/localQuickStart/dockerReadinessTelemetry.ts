@@ -5,9 +5,7 @@
 
 import { type DockerReadiness } from '../../../services/localQuickStart/quickStartTypes';
 
-export function getDockerReadinessTelemetryProperties(
-    readiness: DockerReadiness,
-): Readonly<Record<string, string>> {
+export function getDockerReadinessTelemetryProperties(readiness: DockerReadiness): Readonly<Record<string, string>> {
     const properties: Record<string, string> = {
         dockerReadinessOutcome: readiness.outcome,
         dockerHostEnvironment: readiness.environment,

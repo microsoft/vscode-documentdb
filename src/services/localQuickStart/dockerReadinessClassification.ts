@@ -3,6 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
+import { createHash } from 'crypto';
 import {
     type DockerEndpointKind,
     type DockerEndpointProbe,
@@ -14,7 +15,6 @@ import {
     type DockerProviderMemory,
     type DockerReadinessOutcome,
 } from './quickStartTypes';
-import { createHash } from 'crypto';
 
 export type DockerFailureClassification =
     | {
@@ -164,17 +164,13 @@ function canUseInstalledDesktopEvidence(environment: DockerHostEnvironment): boo
     return environment === 'windows' || environment === 'macos';
 }
 
-export function classifyDockerProvider(
-    evidence: DockerProviderClassificationEvidence,
-): DockerProviderClassification {
+export function classifyDockerProvider(evidence: DockerProviderClassificationEvidence): DockerProviderClassification {
     if (evidence.daemonReachable) {
         if (!evidence.daemonOperatingSystem) {
             return { provider: 'unknown', providerEvidence: 'liveDaemon' };
         }
         return {
-            provider: isDockerDesktopOperatingSystem(evidence.daemonOperatingSystem)
-                ? 'dockerDesktop'
-                : 'dockerEngine',
+            provider: isDockerDesktopOperatingSystem(evidence.daemonOperatingSystem) ? 'dockerDesktop' : 'dockerEngine',
             providerEvidence: 'liveDaemon',
         };
     }

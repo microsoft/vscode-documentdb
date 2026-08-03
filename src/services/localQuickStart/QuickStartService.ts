@@ -196,10 +196,7 @@ function stageEvent(
     return { stage, status, message, error, boundPort, timedOut, dockerReadiness };
 }
 
-export function getReadinessTimeoutMessage(
-    message: string,
-    environment: DockerHostEnvironment | undefined,
-): string {
+export function getReadinessTimeoutMessage(message: string, environment: DockerHostEnvironment | undefined): string {
     if (environment !== 'devContainer') {
         return message;
     }

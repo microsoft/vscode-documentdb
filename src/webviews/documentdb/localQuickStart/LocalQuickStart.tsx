@@ -43,6 +43,7 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
+import { pollDockerReadiness } from './dockerReadinessPolling';
 import {
     type DockerGuidanceKey,
     type DockerGuideKey,
@@ -53,7 +54,6 @@ import {
     getDockerLastCheckedAtMs,
     getDockerReadinessPresentation,
 } from './dockerReadinessPresentation';
-import { pollDockerReadiness } from './dockerReadinessPolling';
 
 type Phase = 'loading' | 'review' | 'dockerNotReady' | 'provisioning' | 'success' | 'failed';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
@@ -186,9 +186,7 @@ const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
     dockerDesktopNotRunning: l10n.t('Start Docker Desktop and wait until it is ready.'),
     daemonNotRunning: l10n.t('Start the Docker service, then check again.'),
     daemonStarting: l10n.t('Waiting for Docker to start. This can take a minute.'),
-    wslIntegrationUnavailable: l10n.t(
-        'Enable Docker Desktop integration for this WSL distribution, then check again.',
-    ),
+    wslIntegrationUnavailable: l10n.t('Enable Docker Desktop integration for this WSL distribution, then check again.'),
     remoteDockerUnavailable: l10n.t(
         'Docker must be available in the remote environment where this extension is running.',
     ),
@@ -197,9 +195,7 @@ const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
         'The active Docker context is unavailable. Select or repair a valid context, then check again.',
     ),
     checkTimedOut: l10n.t('Docker did not respond before the readiness check timed out.'),
-    unsupportedHost: l10n.t(
-        'Local Quick Start is supported when the extension runs on Windows, macOS, or Linux.',
-    ),
+    unsupportedHost: l10n.t('Local Quick Start is supported when the extension runs on Windows, macOS, or Linux.'),
     windowsContainers: l10n.t('Switch Docker to Linux containers, then check again.'),
     notAccessible: l10n.t('The extension could not connect to the Docker daemon.'),
 };
@@ -249,9 +245,7 @@ const EXECUTION_TARGET_VALUES: Readonly<Record<ReturnType<typeof getDockerExecut
 
 const EXECUTION_TARGET_NOTICES: Readonly<Partial<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>>> = {
     wsl: l10n.t('Docker and DocumentDB Local will run in WSL, where this extension is running.'),
-    ssh: l10n.t(
-        'Docker and DocumentDB Local will run on the remote SSH host. localhost refers to that remote host.',
-    ),
+    ssh: l10n.t('Docker and DocumentDB Local will run on the remote SSH host. localhost refers to that remote host.'),
     devContainer: l10n.t(
         'Docker and DocumentDB Local will run in the dev-container environment. localhost refers to the extension host.',
     ),
@@ -560,10 +554,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     return;
                 }
                 const startedAt = Date.now();
-                dockerWaitTimerRef.current = setInterval(
-                    () => setDockerWaitElapsedMs(Date.now() - startedAt),
-                    250,
-                );
+                dockerWaitTimerRef.current = setInterval(() => setDockerWaitElapsedMs(Date.now() - startedAt), 250);
                 let latestResult: DockerStatusResult | undefined;
                 const outcome = await pollDockerReadiness({
                     signal: abortController.signal,
@@ -667,9 +658,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         setTimedOut(event.timedOut === true);
                         const dockerReadiness = event.dockerReadiness;
                         if (dockerReadiness) {
-                            setDocker((current) =>
-                                current ? { ...current, readiness: dockerReadiness } : current,
-                            );
+                            setDocker((current) => (current ? { ...current, readiness: dockerReadiness } : current));
                             setPhase('dockerNotReady');
                             return;
                         }
@@ -818,10 +807,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const renderReadinessFooter = (): JSX.Element => (
         <div className={styles.readinessFooter}>
             <Text size={200} className={styles.muted} role="status" aria-live="polite">
-                {formatLastChecked(
-                    docker ? getDockerLastCheckedAtMs(docker.readiness) : undefined,
-                    relativeTimeNow,
-                )}
+                {formatLastChecked(docker ? getDockerLastCheckedAtMs(docker.readiness) : undefined, relativeTimeNow)}
             </Text>
             <Button
                 appearance="subtle"
@@ -1069,7 +1055,8 @@ export const LocalQuickStart = (): JSX.Element => {
         const cliOk = !!r?.cliInstalled;
         const presentation = r ? getDockerReadinessPresentation(r) : undefined;
         const presentationState = startingDocker ? 'starting' : (presentation?.state ?? 'notAccessible');
-        const guidance = DOCKER_GUIDANCE[startingDocker ? 'daemonStarting' : (presentation?.guidance ?? 'notAccessible')];
+        const guidance =
+            DOCKER_GUIDANCE[startingDocker ? 'daemonStarting' : (presentation?.guidance ?? 'notAccessible')];
         const recoveryNote = presentation?.recoveryNote ? DOCKER_RECOVERY_NOTES[presentation.recoveryNote] : undefined;
         const platformKnown = r?.daemonArchitecture !== undefined;
         const statusBadge = (ok: boolean, notOkColor: 'danger' | 'warning'): JSX.Element => (
@@ -1084,11 +1071,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     message={l10n.t('Docker is not ready. {0}', guidance)}
                     politeness="assertive"
                 />
-                <Announcer
-                    when={startingDocker}
-                    message={l10n.t('Waiting for Docker to start.')}
-                    politeness="polite"
-                />
+                <Announcer when={startingDocker} message={l10n.t('Waiting for Docker to start.')} politeness="polite" />
                 <Announcer
                     key={copyAnnouncementKey}
                     when={copyAnnouncementKey > 0}
@@ -1208,8 +1191,8 @@ export const LocalQuickStart = (): JSX.Element => {
                     when={phase === 'failed'}
                     message={
                         timedOut
-                                                        ? (errorMessage ??
-                                                            l10n.t('DocumentDB is still initializing. Keep waiting, view the logs, or start over.'))
+                            ? (errorMessage ??
+                              l10n.t('DocumentDB is still initializing. Keep waiting, view the logs, or start over.'))
                             : l10n.t('Setup failed. {0}', errorMessage ?? l10n.t('See the details below.'))
                     }
                     politeness="polite"

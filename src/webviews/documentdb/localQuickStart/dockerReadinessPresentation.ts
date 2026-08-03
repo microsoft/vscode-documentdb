@@ -61,13 +61,7 @@ export type DockerGuideKey =
 
 export type DockerStartLabelKey = 'startDockerDesktop' | 'startDocker';
 
-export type DockerExecutionTargetKey =
-    | 'local'
-    | 'wsl'
-    | 'ssh'
-    | 'devContainer'
-    | 'codespaces'
-    | 'otherRemote';
+export type DockerExecutionTargetKey = 'local' | 'wsl' | 'ssh' | 'devContainer' | 'codespaces' | 'otherRemote';
 
 export interface DockerReadinessPresentation {
     readonly state: DockerReadinessPresentationState;

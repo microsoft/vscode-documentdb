@@ -18,21 +18,21 @@ import {
     type ResolvedDockerEndpoint,
     type RunDockerProbeOptions,
 } from './dockerProbes';
+import { getDockerStartCapability } from './DockerProviderLauncher';
 import {
     classifyDockerFailure,
     classifyDockerProvider,
     getDockerDiagnosticFingerprint,
 } from './dockerReadinessClassification';
-import { getDockerStartCapability } from './DockerProviderLauncher';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
     type DockerEndpointKind,
     type DockerExecutionTarget,
     type DockerHostEnvironment,
+    type DockerLaunchResult,
     type DockerPermissionDetail,
     type DockerProbeEvidence,
     type DockerProviderMemory,
-    type DockerLaunchResult,
     type DockerReadiness,
     type DockerReadinessRequest,
     type DockerSocketGroupFacts,
@@ -314,27 +314,29 @@ export class DockerReadinessService {
     ): Promise<DockerProbeEvidence> {
         const output = this.dependencies.createProbeOutput?.();
         let commandText: string | undefined;
-        return this.dependencies.runProbe({
-            probe,
-            command,
-            shellProvider: this.dependencies.shellProvider,
-            cancellationToken,
-            didDeadlineExpire,
-            onCommand: (command: string): void => {
-                commandText = command;
-                if (!suppressCommandEcho) {
-                    output?.onCommand?.(command);
+        return this.dependencies
+            .runProbe({
+                probe,
+                command,
+                shellProvider: this.dependencies.shellProvider,
+                cancellationToken,
+                didDeadlineExpire,
+                onCommand: (command: string): void => {
+                    commandText = command;
+                    if (!suppressCommandEcho) {
+                        output?.onCommand?.(command);
+                    }
+                },
+                stdOutPipe: output?.stdOutPipe,
+                stdErrPipe: output?.stdErrPipe,
+                now: this.dependencies.now,
+            })
+            .then((evidence) => {
+                if (suppressCommandEcho && !isSuccessfulProbe(evidence) && commandText) {
+                    output?.onCommand?.(commandText);
                 }
-            },
-            stdOutPipe: output?.stdOutPipe,
-            stdErrPipe: output?.stdErrPipe,
-            now: this.dependencies.now,
-        }).then((evidence) => {
-            if (suppressCommandEcho && !isSuccessfulProbe(evidence) && commandText) {
-                output?.onCommand?.(commandText);
-            }
-            return evidence;
-        });
+                return evidence;
+            });
     }
 
     private async readContexts(
@@ -552,12 +554,7 @@ export class DockerReadinessService {
             }
             if (
                 rememberedProvider &&
-                !isProviderMemoryCurrent(
-                    rememberedProvider,
-                    environment,
-                    endpoint.kind,
-                    this.dependencies.now(),
-                )
+                !isProviderMemoryCurrent(rememberedProvider, environment, endpoint.kind, this.dependencies.now())
             ) {
                 rememberedProvider = undefined;
                 await this.dependencies.writeProviderMemory(undefined);
