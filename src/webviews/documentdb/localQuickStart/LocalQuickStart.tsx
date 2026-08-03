@@ -157,7 +157,7 @@ const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
         'You are in the Docker group, but this session started before that change. Sign out of your desktop session and sign back in. Reloading the window is not enough.',
     ),
     pendingRestartWsl: l10n.t(
-        'You are in the Docker group, but this session started before that change. Run this command in Windows, then reopen this folder.',
+        'You are in the Docker group, but this WSL session started before that change. Run this command in a Windows terminal. VS Code will disconnect. Reopen this folder in WSL to continue.',
     ),
     pendingRestartSsh: l10n.t(
         'You are in the Docker group on the remote host, but the VS Code server started before that change. Run "Remote-SSH: Kill VS Code Server on Host", then reconnect.',
@@ -172,7 +172,9 @@ const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
 
 const DOCKER_RECOVERY_NOTES: Readonly<Record<DockerRecoveryNoteKey, string>> = {
     groupMembershipNewSession: l10n.t('Group membership applies to new login sessions only.'),
-    restartWslDistribution: l10n.t('This restarts the distribution so the new group membership applies.'),
+    restartWslDistribution: l10n.t(
+        'This stops all running WSL distributions so the new group membership applies when WSL starts again.',
+    ),
     runsDockerService: l10n.t('Runs the system Docker service.'),
 };
 
