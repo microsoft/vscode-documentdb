@@ -6,6 +6,14 @@
 
 > **User-facing language:** Use **Docker** as the default term in cards, summaries, and general status messages. This keeps the primary experience simple and avoids exposing implementation details that most users do not need. Use **Docker CLI**, **Docker daemon**, **Docker Engine**, or **Docker Desktop** only when the distinction explains a specific failure or names the exact action being offered, such as `Start Docker Desktop`. The implementation must still detect and model these components separately; this simplification applies only to presentation.
 
+> **User-facing punctuation:** No em dashes (U+2014) and no en dashes (U+2013) in any user-facing string, message, notification, card value, button label, tooltip, or accessible announcement. Use a comma, a colon, a semicolon, parentheses, or two sentences instead. A hyphen inside a compound word such as `Docker-not-ready` is fine; only those two characters are banned. This applies to every string passed to `vscode.l10n.t()`, to the generated `l10n/bundle.l10n.json`, and to any literal rendered in the webview. Before review, search the diff for U+2014 and U+2013.
+>
+> | Written with a banned dash                                  | Write instead                                       |
+> | ----------------------------------------------------------- | --------------------------------------------------- |
+> | `Docker is starting [U+2014] this can take a minute.`       | `Docker is starting. This can take a minute.`       |
+> | `Access denied [U+2013] your user cannot reach the socket.` | `Access denied. Your user cannot reach the socket.` |
+> | `Last checked 5 minutes ago [U+2014] Refresh`               | `Last checked 5 minutes ago. Refresh`               |
+
 ## Objective
 
 Make Local Quick Start describe and recover from Docker readiness failures accurately across Windows, macOS, Linux, WSL, and remote VS Code environments. The Review screen must also state where Docker and DocumentDB Local will actually run.
@@ -61,25 +69,25 @@ These facts were confirmed by reading the current code and its dependencies. The
 
 The earlier design documents contain useful requirements that were intentionally deferred from v1 or simplified during implementation. This plan records an explicit decision for each one so they are not lost again.
 
-| Earlier requirement or observation                                                                  | Source                                                                        | Current implementation                                            | Decision for this plan                                                                                                                                                                                                          |
-| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Linux user not in the `docker` group receives platform-specific guidance                            | `local-quickstart.md` sections 7.1 and 10                                     | Every `docker info` failure is shown as `Stopped`                 | **Include.** This is the reported Ubuntu/WSL failure and the first classifier acceptance test.                                                                                                                                  |
-| WSL2, SSH, and dev-container sessions explain where `local` runs                                    | `local-quickstart.md` section 4.3; `local-quickstart-v2.md` v1.2 scope        | Review always says `This machine (Docker)`                        | **Include.** Environment detection must drive both failure guidance and a happy-path execution-target notice.                                                                                                                   |
-| Daemon socket, Windows-container mode, WSL setup, and remote daemon failures have distinct guidance | `local-quickstart.md` section 7.1                                             | All daemon failures share Desktop wording                         | **Include.** Implement typed failure categories, with conservative fallback for uncertain cases.                                                                                                                                |
-| Apple Silicon/image architecture is evaluated, with explicit consent before x86 emulation           | `local-quickstart.md` sections 7.1 and 10; `local-quickstart-v2.md` section 9 | `process.arch` alone marks `x64` and `arm64` supported            | **Correct the model now.** Report Docker daemon architecture when available; do not claim image compatibility from extension-host architecture. Handle missing image manifests or emulation consent during pull as a follow-up. |
-| Docker CLI missing offers install help and an `Already installed?` path                             | `local-quickstart.md` section 7.1                                             | Only Docker Desktop install/troubleshooting links are shown       | **Include provider-neutral help.** Offer details/restart guidance for PATH mismatches. Do not add an `Open settings` button unless a real extension setting exists.                                                             |
-| Detailed Docker output is available from readiness and progress failures                            | `local-quickstart.md` sections 7.2 and 17.4                                   | OutputChannel exists, but Docker-not-ready UI does not expose it  | **Include.** Reuse the masked OutputChannel and expose `View Docker output` for every readiness failure.                                                                                                                        |
-| Docker probes cannot leave the readiness UI spinning forever                                        | Later readiness review in `v1-readiness-gaps.md`                              | `docker info` has no explicit timeout                             | **Include.** Every prerequisite probe must be cancelable and bounded.                                                                                                                                                           |
-| Registry/proxy reachability has its own diagnosis                                                   | `local-quickstart.md` section 7.1; `local-quickstart-v2.md` section 9         | UI shows proxy advice without performing a registry check         | **Do not run it as a Docker prerequisite.** Remove speculative advice here and classify actual pull/registry failures in a separate provisioning follow-up.                                                                     |
-| Disk below 2 GB is a non-blocking warning                                                           | `local-quickstart.md` sections 7.1 and 10                                     | No disk check                                                     | **Follow-up.** Add only after defining which filesystem to measure and validating a supported threshold for the image and data volume.                                                                                          |
-| Docker Desktop resource limits too low link to Desktop resources                                    | `local-quickstart.md` section 7.1                                             | No resource check                                                 | **Follow-up.** Surface only from a concrete memory/resource failure and only when Desktop is positively identified.                                                                                                             |
-| Windows Home/WSL2 missing links to WSL setup                                                        | `local-quickstart.md` section 7.1                                             | No Windows/WSL prerequisite classification                        | **Conditional follow-up.** Use only when Desktop is identified and there is positive evidence of a missing WSL2 prerequisite; otherwise show generic Desktop diagnostics.                                                       |
-| Docker commands run as terminal tasks                                                               | `local-quickstart-v2.md` sections 5.4 and 16; POC deviation notes             | Commands stream to a masked OutputChannel                         | **Separate product decision.** Keep the existing masked OutputChannel in this work; do not mix a terminal-execution rewrite into readiness classification.                                                                      |
-| `Start Docker Desktop` or generic `Start Docker` may be offered without privilege escalation        | `local-quickstart.md` sections 1 and 13                                       | Linux always attempts the Desktop user service                    | **Include narrowly.** A positively identified rootless Docker Engine user service may get `Start Docker`; root-managed Engine remains documentation-only and never invokes `sudo`.                                              |
-| Unsupported extension-host OS is rejected explicitly                                                | `local-quickstart.md` section 10                                              | Non-Windows/non-macOS hosts fall through to Linux launch behavior | **Include.** Return an unsupported-host result instead of assuming every other platform is Linux.                                                                                                                               |
-| A permission failure names the exact fix instead of only linking to documentation                   | This review                                                                   | No guidance at all; the failure reads `Stopped`                   | **Include as a copyable command.** Show the documented fix as read-only text with a `Copy command` button. The extension never runs it. See [Copyable Recovery Commands](#copyable-recovery-commands).                          |
-| A wrong or inconclusive diagnosis must not block a user whose Docker actually works                 | This review                                                                   | Any non-ready readiness result hard-gates the Set up button       | **Include.** Indeterminate results keep a `Continue anyway` path that lets the real `docker pull`/`run` produce the authoritative error.                                                                                        |
-| Provider facts learned while Docker worked are reused when Docker is down                           | This review                                                                   | Nothing is remembered between sessions                            | **Include.** Persist a small last-known-good provider record and treat it as positive evidence, so a returning user gets a correct diagnosis for a stopped daemon.                                                              |
+| Earlier requirement or observation                                                                  | Source                                                                        | Current implementation                                            | Decision for this plan                                                                                                                                                                                                                         |
+| --------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------- | ----------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Linux user not in the `docker` group receives platform-specific guidance                            | `local-quickstart.md` sections 7.1 and 10                                     | Every `docker info` failure is shown as `Stopped`                 | **Include.** This is the reported Ubuntu/WSL failure and the first classifier acceptance test.                                                                                                                                                 |
+| WSL2, SSH, and dev-container sessions explain where `local` runs                                    | `local-quickstart.md` section 4.3; `local-quickstart-v2.md` v1.2 scope        | Review always says `This machine (Docker)`                        | **Include.** Environment detection must drive both failure guidance and a happy-path execution-target notice.                                                                                                                                  |
+| Daemon socket, Windows-container mode, WSL setup, and remote daemon failures have distinct guidance | `local-quickstart.md` section 7.1                                             | All daemon failures share Desktop wording                         | **Include.** Implement typed failure categories, with conservative fallback for uncertain cases.                                                                                                                                               |
+| Apple Silicon/image architecture is evaluated, with explicit consent before x86 emulation           | `local-quickstart.md` sections 7.1 and 10; `local-quickstart-v2.md` section 9 | `process.arch` alone marks `x64` and `arm64` supported            | **Correct the model now.** Report Docker daemon architecture when available; do not claim image compatibility from extension-host architecture. Handle missing image manifests or emulation consent during pull as a follow-up.                |
+| Docker CLI missing offers install help and an `Already installed?` path                             | `local-quickstart.md` section 7.1                                             | Only Docker Desktop install/troubleshooting links are shown       | **Include provider-neutral help.** Offer details/restart guidance for PATH mismatches. Do not add an `Open settings` button unless a real extension setting exists.                                                                            |
+| Detailed Docker output is available from readiness and progress failures                            | `local-quickstart.md` sections 7.2 and 17.4                                   | OutputChannel exists, but Docker-not-ready UI does not expose it  | **Include.** Reuse the masked OutputChannel and expose `View Docker output` for every readiness failure.                                                                                                                                       |
+| Docker probes cannot leave the readiness UI spinning forever                                        | Later readiness review in `v1-readiness-gaps.md`                              | `docker info` has no explicit timeout                             | **Include.** Every prerequisite probe must be cancelable and bounded.                                                                                                                                                                          |
+| Registry/proxy reachability has its own diagnosis                                                   | `local-quickstart.md` section 7.1; `local-quickstart-v2.md` section 9         | UI shows proxy advice without performing a registry check         | **Do not run it as a Docker prerequisite.** Remove speculative advice here and classify actual pull/registry failures in a separate provisioning follow-up.                                                                                    |
+| Disk below 2 GB is a non-blocking warning                                                           | `local-quickstart.md` sections 7.1 and 10                                     | No disk check                                                     | **Follow-up.** Add only after defining which filesystem to measure and validating a supported threshold for the image and data volume.                                                                                                         |
+| Docker Desktop resource limits too low link to Desktop resources                                    | `local-quickstart.md` section 7.1                                             | No resource check                                                 | **Follow-up.** Surface only from a concrete memory/resource failure and only when Desktop is positively identified.                                                                                                                            |
+| Windows Home/WSL2 missing links to WSL setup                                                        | `local-quickstart.md` section 7.1                                             | No Windows/WSL prerequisite classification                        | **Conditional follow-up.** Use only when Desktop is identified and there is positive evidence of a missing WSL2 prerequisite; otherwise show generic Desktop diagnostics.                                                                      |
+| Docker commands run as terminal tasks                                                               | `local-quickstart-v2.md` sections 5.4 and 16; POC deviation notes             | Commands stream to a masked OutputChannel                         | **Separate product decision.** Keep the existing masked OutputChannel in this work; do not mix a terminal-execution rewrite into readiness classification.                                                                                     |
+| `Start Docker Desktop` or generic `Start Docker` may be offered without privilege escalation        | `local-quickstart.md` sections 1 and 13                                       | Linux always attempts the Desktop user service                    | **Include narrowly.** A positively identified rootless Docker Engine user service may get `Start Docker`; root-managed Engine remains documentation-only and never invokes `sudo`.                                                             |
+| Unsupported extension-host OS is rejected explicitly                                                | `local-quickstart.md` section 10                                              | Non-Windows/non-macOS hosts fall through to Linux launch behavior | **Include.** Return an unsupported-host result instead of assuming every other platform is Linux.                                                                                                                                              |
+| A permission failure names the exact fix instead of only linking to documentation                   | This review                                                                   | No guidance at all; the failure reads `Stopped`                   | **Include as a copyable command.** Show the documented fix as read-only text with a `Copy command` button. The extension never runs it. See [Copyable Recovery Commands](#copyable-recovery-commands).                                         |
+| A wrong or inconclusive diagnosis must not block a user whose Docker actually works                 | This review                                                                   | Any non-ready readiness result hard-gates the Set up button       | **Include.** Indeterminate results keep a `Continue anyway` path that lets the real `docker pull`/`run` produce the authoritative error.                                                                                                       |
+| Provider facts learned while Docker worked are reused when Docker is down                           | This review                                                                   | Nothing is remembered between sessions                            | **Include, with an expiry and an exit.** Persist a small last-known-good provider record and treat it as positive evidence, but label it with its check time and keep a `Refresh` that discards it, so a changed setup cannot strand the user. |
 
 The original documents moved categorized Docker readiness and the remote-session banner to v1.1/v1.2 to protect the initial delivery. This plan intentionally takes on that deferred slice; it does not treat the v1 simplification as evidence that those requirements were invalid.
 
@@ -257,6 +265,7 @@ Extend `DockerReadiness` with:
 - `startAction`, present only when the extension can perform that exact action without elevation
 - `recoveryCommand`, present only for the failures listed in [Copyable Recovery Commands](#copyable-recovery-commands)
 - `canContinueAnyway`, true only when `outcome` is `indeterminate`
+- `checkedAtMs`, when this result was produced, so the UI can label a memoized or remembered answer as old
 - `osType`, when returned by a reachable daemon
 - `daemonArchitecture`, normalized, when returned by a reachable daemon
 - an execution-target category suitable for localized Review-screen copy
@@ -379,7 +388,7 @@ The presence of `/mnt/c/Program Files/Docker/Docker/Docker Desktop.exe` alone is
 
 ### Evidence Bar Per Environment
 
-A single strict evidence bar creates a regression on the most common first-run failure. When the daemon is down, `docker info` — the main provider oracle — is exactly the probe that failed. A local Windows user with Docker Desktop installed, stopped, and running on the `default` npipe context rather than `desktop-linux` would produce no provider evidence at all, so a strict rule removes the Start button they get today and leaves them at a dead end.
+A single strict evidence bar creates a regression on the most common first-run failure. When the daemon is down, the main provider oracle is `docker info`, which is exactly the probe that failed. A local Windows user with Docker Desktop installed, stopped, and running on the `default` npipe context rather than `desktop-linux` would produce no provider evidence at all, so a strict rule removes the Start button they get today and leaves them at a dead end.
 
 Weigh the two error costs per environment. A wrong user-clicked launch on local Windows or macOS is a harmless no-op; a missing one is a dead end. On Linux and WSL the asymmetry reverses, because starting the wrong daemon is genuinely confusing and can contradict the user's setup.
 
@@ -396,7 +405,32 @@ When a launch is offered from the lower bar, the failure wording stays provider-
 
 On every successful `docker info`, persist a `DockerProviderMemory` record in `globalState`. When the daemon is later unreachable, treat that record as positive evidence.
 
-This is a small change with a large effect on real sessions: a user who provisions successfully on Monday teaches the extension "Docker Desktop, npipe endpoint, amd64". On Tuesday, with Docker stopped, the extension can state the correct cause and offer the correct button instead of falling back to `unknown`. Record only the fields listed in the type; never a path, hostname, or context name. Ignore a record whose `hostEnvironment` differs from the current one, so a laptop that moves between local and remote sessions cannot inherit the wrong provider.
+This is a small change with a large effect on real sessions: a user who provisions successfully on Monday teaches the extension "Docker Desktop, npipe endpoint, amd64". On Tuesday, with Docker stopped, the extension can state the correct cause and offer the correct button instead of falling back to `unknown`. Record only the fields listed in the type; never a path, hostname, or context name.
+
+#### Remembered facts go stale, so they must be visible and disposable
+
+People change their Docker setup. They uninstall Docker Desktop and install Engine, delete the context the record was learned from, switch a WSL distribution off Desktop integration, or move a laptop between local and remote work. A remembered record that silently outlives the configuration it describes turns a helpful shortcut into a trap: the card keeps insisting on Docker Desktop, the Start button keeps launching something that is no longer installed, and nothing the user does in the panel changes the verdict.
+
+Three rules keep that from happening.
+
+**1. Always show when the facts were established.** Any card value or action derived from remembered evidence carries a quiet secondary label naming the time of the last successful check, for example `Last checked 3 days ago`. Remembered evidence is never presented as if it were observed just now.
+
+**2. Always offer a full re-check.** A `Refresh` control sits at the bottom of the readiness form in **every** state, including `ready`, including `unsupportedHost`, and including any state that already has a primary action. It is also available as an inline link next to the `Last checked` label. `Refresh` discards the memoized readiness result, discards the remembered provider record, and reruns every check from scratch. This is the guaranteed exit from any wrong verdict, so it must never be conditional on the current failure kind.
+
+**3. Expire and contradict aggressively.** Discard the record when any of the following holds, and fall back to provider-neutral behavior rather than guessing:
+
+| Condition                                                                        | Reason                                                                    |
+| -------------------------------------------------------------------------------- | ------------------------------------------------------------------------- |
+| `hostEnvironment` differs from the current environment                           | A laptop that moves between local and remote sessions must not inherit it |
+| Older than `PROVIDER_MEMORY_MAX_AGE_MS`                                          | Bounded trust; a stale record is worse than no record                     |
+| The endpoint now resolves to a different kind than the remembered `endpointKind` | The user changed their configuration                                      |
+| The context the record describes is absent from `listContexts()`                 | The context was deleted or renamed                                        |
+| The launch action derived from it returned `notAvailable` or `failed`            | The application is gone; do not offer it again on the next check          |
+| The user pressed `Refresh`                                                       | Explicit intent beats remembered state                                    |
+
+A record is also overwritten, not merged, on every successful `docker info`, so a live observation always wins over a remembered one.
+
+The net effect is that remembered evidence can only ever shorten the path to a correct answer. It can never become the reason a user is stuck, because the label tells them the answer is old and the `Refresh` control is one click away in every state.
 
 ## UI Plan
 
@@ -446,6 +480,8 @@ Rules:
 
 Additional UI changes:
 
+- Add a `Refresh` control at the bottom of the readiness form in every state, next to a `Last checked <relative time>` label. It discards the memoized result and the remembered provider record and reruns every check. It is present even when Docker is ready and even when the state already has a primary action, because it is the guaranteed way out of a wrong or outdated verdict.
+- When a card value or action was derived from remembered rather than live evidence, say so with the same `Last checked` label instead of presenting it as a fresh observation.
 - Rename the router mutation and handler from `startDockerDesktop` to `startDockerProvider`.
 - The server must recompute or validate the start action instead of trusting an action supplied by the webview.
 - Return a typed `DockerLaunchResult` rather than a boolean. For `open -a Docker` and `systemctl --user start …`, await the exit code under a short bound and map a non-zero exit to `failed`; only a detached GUI launch may report `launchAttempted`. Today `systemctl --user start docker-desktop` printing `Unit docker-desktop.service not found` still returns `true`, and the user is later told the check timed out while the extension already held the real answer.
@@ -497,9 +533,10 @@ This is the prerequisite for every classification work item. Without it the clas
 - Add environment detection and the documented endpoint-resolution precedence, recording the winning source.
 - Run the version and info probes concurrently under one shared deadline, and resolve the endpoint lazily in the failure branch only.
 - Implement the deadline as a `CancellationTokenSource` plus a timer so the child process is killed, and track which source fired to distinguish expiry from user cancellation.
-- Add single-flight plus a short TTL memo, with a forced-refresh path for `Retry`.
+- Add single-flight plus a short TTL memo, with a forced-refresh path for `Retry` and `Refresh`.
 - Read daemon architecture from the raw info body rather than treating `process.arch` as image compatibility.
-- Persist and read the provider-memory record.
+- Persist and read the provider-memory record, and apply every discard rule in [Remembered Provider](#remembered-provider): environment mismatch, maximum age, endpoint-kind change, a context that no longer exists, a launch action that reported `notAvailable` or `failed`, and an explicit refresh.
+- Stamp `checkedAtMs` on every returned result so the UI can label an old answer.
 - Preserve masked OutputChannel command logging, but suppress command echo for poll probes.
 - Return early for CLI failures and use one explicit branch for daemon success/failure.
 - Keep a compatibility delegate on `IContainerRuntime` only if needed to avoid unrelated service churn.
@@ -516,6 +553,7 @@ This is the prerequisite for every classification work item. Without it the clas
 ### WI-5: Update router and telemetry
 
 - Return the enriched readiness result.
+- Accept a `forceRefresh` input on the readiness query that bypasses the memo and clears the remembered provider record.
 - Replace `startDockerDesktop` with `startDockerProvider`.
 - Revalidate start capability on the extension host immediately before launch.
 - Add a `continueAnyway` path that skips the gate for `indeterminate` outcomes only, and tag the resulting provision telemetry with that fact.
@@ -531,10 +569,12 @@ This is the prerequisite for every classification work item. Without it the clas
 - Replace the fixed five-second wait with cancelable, non-overlapping polling with backoff.
 - Add the `Docker starting` state with visible elapsed time and a `Stop waiting` control.
 - Add `Continue anyway` for indeterminate outcomes and `Copy command` for recovery commands.
+- Add the always-present `Refresh` control and the `Last checked` label, and make the relative time announce politely when it changes after a refresh.
 - Add execution-target-aware Review copy and a remote-session notice for ready Docker environments.
 - Expose the existing masked Docker output from every readiness failure.
 - Render daemon architecture without claiming unverified image compatibility.
 - Localize all added or changed user-facing strings, but never the command lines themselves.
+- Use no em dashes (U+2014) and no en dashes (U+2013) in any added or changed string.
 - Preserve accessible announcements for status changes and launch failures, and announce a successful copy.
 
 ### WI-7: Add integration-focused tests
@@ -547,6 +587,9 @@ This is the prerequisite for every classification work item. Without it the clas
 - Test that only positively identified rootless Linux Engine receives `Start Docker`; root-managed Engine never does.
 - Test that a local Windows Desktop installation still yields a launch action when the daemon is down and no context evidence exists.
 - Test that the provider-memory record produces a Desktop diagnosis on a later unreachable daemon, and that a record from a different host environment is ignored.
+- Test every provider-memory discard rule: age, environment mismatch, endpoint-kind change, missing context, and a failed launch action.
+- Test that `Refresh` clears the memo and the remembered record and reruns all checks, and that it is rendered in every readiness state including `ready` and `unsupportedHost`.
+- Test that a result derived from remembered evidence is labeled with its check time rather than presented as fresh.
 - Test that remote environments never launch a local desktop application.
 - Test each presentation state and its exact semantic action.
 - Test polling cleanup on success, deadline expiry, and unmount, and that polls never overlap.
@@ -608,6 +651,10 @@ Every test above feeds the classifier text that the implementer wrote, which val
 | `docker info` exits zero but the body carries `ServerErrors`           | Classified as a daemon failure, not ready         | Matching recovery card                                        |
 | Readiness query is canceled                                            | Cancellation, not a failure category              | Stop probes and render no stale error                         |
 | Two callers request readiness at once                                  | One probe set runs                                | Both receive the same result                                  |
+| Remembered Desktop record, Desktop since uninstalled                   | Launch reports `notAvailable`, record discarded   | Next check is provider-neutral, not a repeated Desktop claim  |
+| Remembered record older than the maximum age                           | Record ignored                                    | Provider-neutral guidance plus `Last checked` label           |
+| Remembered record whose context no longer exists                       | Record discarded                                  | Provider-neutral guidance                                     |
+| User presses `Refresh` in any state                                    | Memo and remembered record cleared                | All checks rerun and the `Last checked` label updates         |
 | Unsupported Node extension-host platform                               | `unsupportedHost` / `unknown`                     | Learn more, no Docker launch                                  |
 | SSH extension host with reachable remote amd64 daemon on arm64 client  | Ready / daemon architecture `amd64`               | Show remote target, daemon architecture, remote-endpoint note |
 | WSL extension host with reachable native daemon                        | Ready / `dockerEngine`                            | Show WSL execution-target notice                              |
@@ -628,6 +675,9 @@ The implementation is not complete unless these structural constraints hold:
 - No executable/service paths appear outside the launcher or named platform constants.
 - No recovery command line is built anywhere except the recovery-command constant table.
 - No recovery command is executed, and none is passed to a shell, a terminal, or a task.
+- No user-facing string contains U+2014 or U+2013.
+- No readiness state renders without a `Refresh` control.
+- No remembered fact is presented without its check time.
 - No nested ternary is used for readiness, provider, failure, or action selection.
 - No shell command is assembled as a single interpolated string.
 - No command output is parsed with ad hoc line splitting when JSON is available.
@@ -663,24 +713,26 @@ These names are illustrative, but the final code should preserve this visible ex
 3. Installing Docker Desktop on the Windows host does not override a native WSL permission diagnosis.
 4. `Docker Desktop` is named as a cause only when Desktop is positively identified, and a launch action is offered under the documented per-environment evidence bar.
 5. A local Windows or macOS user with Docker Desktop installed but stopped still gets a working start action, including on the `default` context.
-6. Native Linux Docker Engine users never receive a `Start Docker Desktop` action.
-7. Root-managed Linux Docker Engine never triggers a privileged start; rootless Engine receives `Start Docker` only from positive evidence.
-8. Remote extension hosts never launch a Docker application on the user's local machine.
-9. Unknown and timed-out failures are reported as indeterminate, use provider-neutral language, and retain Retry, details, and `Continue anyway`.
-10. `Continue anyway` never appears for a diagnosed failure.
-11. The copyable recovery command is shown for the documented failures, is never executed by the extension, and is never localized.
-12. WSL and other remote users are told where the container will run before provisioning, and remote users are told the endpoint is remote after it succeeds.
-13. A hung Docker probe is killed at the shared deadline and cannot leave the webview spinning indefinitely.
-14. A Docker that is merely slow to start is reported as starting, not as timed out.
-15. Concurrent readiness callers and post-launch polling never run overlapping probe sets.
-16. The Platform card reports normalized daemon architecture when known and does not claim image support from `process.arch`.
-17. Masked Docker output is reachable from every readiness failure and is not flooded by polling.
-18. A daemon-class failure during provisioning renders the same recovery card as the readiness gate.
-19. Existing ready-Docker provisioning behavior is unchanged.
-20. Classifier tests are driven by captured real-world fixtures, and unclassified failures emit a redacted fingerprint.
-21. Added classification and launch-selection branches have focused tests.
-22. All changed user-facing strings are localized.
-23. The repository completion checks pass in order:
+6. Remembered provider facts are labeled with the time of the last successful check, are discarded by every documented rule, and are never the reason a user cannot reach a correct answer.
+7. A `Refresh` control that reruns every check and clears remembered state is available in every readiness state, including `ready`.
+8. Native Linux Docker Engine users never receive a `Start Docker Desktop` action.
+9. Root-managed Linux Docker Engine never triggers a privileged start; rootless Engine receives `Start Docker` only from positive evidence.
+10. Remote extension hosts never launch a Docker application on the user's local machine.
+11. Unknown and timed-out failures are reported as indeterminate, use provider-neutral language, and retain Retry, details, and `Continue anyway`.
+12. `Continue anyway` never appears for a diagnosed failure.
+13. The copyable recovery command is shown for the documented failures, is never executed by the extension, and is never localized.
+14. WSL and other remote users are told where the container will run before provisioning, and remote users are told the endpoint is remote after it succeeds.
+15. A hung Docker probe is killed at the shared deadline and cannot leave the webview spinning indefinitely.
+16. A Docker that is merely slow to start is reported as starting, not as timed out.
+17. Concurrent readiness callers and post-launch polling never run overlapping probe sets.
+18. The Platform card reports normalized daemon architecture when known and does not claim image support from `process.arch`.
+19. Masked Docker output is reachable from every readiness failure and is not flooded by polling.
+20. A daemon-class failure during provisioning renders the same recovery card as the readiness gate.
+21. Existing ready-Docker provisioning behavior is unchanged.
+22. Classifier tests are driven by captured real-world fixtures, and unclassified failures emit a redacted fingerprint.
+23. Added classification and launch-selection branches have focused tests.
+24. All changed user-facing strings are localized and contain no U+2014 or U+2013 characters.
+25. The repository completion checks pass in order:
     - `npm run l10n`
     - `npm run prettier-fix`
     - `npm run lint`
@@ -693,7 +745,7 @@ Split this into two shippable slices. The work with the highest user value is no
 
 ### Slice A: fix the reported failure
 
-WI-0, the permission and daemon-unavailable half of WI-2, the parts of WI-3 needed to run bounded probes and resolve the endpoint, the `Access denied` and indeterminate states from WI-6, the copyable recovery command, `Continue anyway`, and `View Docker output` from every failure.
+WI-0, the permission and daemon-unavailable half of WI-2, the parts of WI-3 needed to run bounded probes and resolve the endpoint, the `Access denied` and indeterminate states from WI-6, the copyable recovery command, `Continue anyway`, the always-present `Refresh` control, and `View Docker output` from every failure.
 
 This resolves the Ubuntu and WSL report end to end while leaving the existing Windows and macOS launch behavior untouched, so its regression surface on unverified platforms is close to zero.
 
