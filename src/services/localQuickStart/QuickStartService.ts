@@ -606,7 +606,7 @@ export class QuickStartServiceImpl {
                 this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
                 if (!aborted) {
                     if (dockerReadiness) {
-                        message = l10n.t('Docker became unavailable during setup.');
+                        message = l10n.t('Docker became unavailable during setup: {0}', message);
                     }
                     this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                 }
@@ -688,7 +688,7 @@ export class QuickStartServiceImpl {
     private async getProvisioningDockerReadiness(): Promise<DockerReadiness | undefined> {
         try {
             const readiness = await this.runtime.isDockerReady({ forceRefresh: true });
-            return readiness.outcome === 'ready' ? undefined : readiness;
+            return readiness.outcome === 'diagnosed' ? readiness : undefined;
         } catch {
             return undefined;
         }

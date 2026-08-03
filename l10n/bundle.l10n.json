@@ -626,7 +626,7 @@
   "Docker and DocumentDB Local will run in WSL, where this extension is running.": "Docker and DocumentDB Local will run in WSL, where this extension is running.",
   "Docker and DocumentDB Local will run on the remote extension host. localhost refers to that host.": "Docker and DocumentDB Local will run on the remote extension host. localhost refers to that host.",
   "Docker and DocumentDB Local will run on the remote SSH host. localhost refers to that remote host.": "Docker and DocumentDB Local will run on the remote SSH host. localhost refers to that remote host.",
-  "Docker became unavailable during setup.": "Docker became unavailable during setup.",
+  "Docker became unavailable during setup: {0}": "Docker became unavailable during setup: {0}",
   "Docker CLI": "Docker CLI",
   "Docker context guide": "Docker context guide",
   "Docker could not be started.": "Docker could not be started.",

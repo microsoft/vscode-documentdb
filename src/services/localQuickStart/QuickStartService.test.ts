@@ -944,7 +944,9 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             expect(events.at(-1)).toMatchObject({
                 stage: 'error',
                 status: 'error',
-                message: 'Docker became unavailable during setup.',
+                message: `Docker became unavailable during setup: daemon disappeared during ${
+                    failingStage === 'pulling' ? 'pull' : 'run'
+                }`,
                 dockerReadiness: unavailable,
             });
             expect(isDockerReady).toHaveBeenLastCalledWith({ forceRefresh: true });
@@ -968,6 +970,52 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         };
         const runtime = mockRuntime({
             isDockerReady: jest.fn().mockResolvedValue(ready),
+            listByLabel: jest.fn().mockResolvedValue([]),
+            removeVolume: jest.fn().mockResolvedValue(undefined),
+            findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+            pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        const events: StageEvent[] = [];
+
+        for await (const event of service.provision(new AbortController().signal)) {
+            events.push(event);
+        }
+
+        expect(events.at(-1)).toMatchObject({ stage: 'error', error: 'manifest unknown' });
+        expect(events.at(-1)?.dockerReadiness).toBeUndefined();
+    });
+
+    it('keeps the original provisioning error when the follow-up Docker result is indeterminate', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const ready: DockerReadiness = {
+            outcome: 'ready',
+            environment: 'linux',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'liveDaemon',
+            executionTarget: 'local',
+            canContinueAnyway: false,
+            checkedAtMs: 1,
+            cliInstalled: true,
+            daemonReachable: true,
+        };
+        const indeterminate: DockerReadiness = {
+            outcome: 'indeterminate',
+            environment: 'linux',
+            endpointKind: 'unknown',
+            provider: 'unknown',
+            providerEvidence: 'none',
+            executionTarget: 'local',
+            failureKind: 'probeTimedOut',
+            canContinueAnyway: true,
+            checkedAtMs: 2,
+            cliInstalled: true,
+            daemonReachable: false,
+        };
+        const runtime = mockRuntime({
+            isDockerReady: jest.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(indeterminate),
             listByLabel: jest.fn().mockResolvedValue([]),
             removeVolume: jest.fn().mockResolvedValue(undefined),
             findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
