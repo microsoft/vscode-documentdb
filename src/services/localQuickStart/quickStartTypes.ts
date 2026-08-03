@@ -313,7 +313,7 @@ export interface DockerDiagnosedReadiness extends DockerReadinessBase {
     readonly outcome: 'diagnosed';
     readonly failureKind: Exclude<DockerFailureKind, 'probeTimedOut' | 'unknown'>;
     readonly canContinueAnyway: false;
-    readonly daemonReachable: false;
+    readonly daemonReachable: boolean;
 }
 
 export interface DockerIndeterminateReadiness extends DockerReadinessBase {
