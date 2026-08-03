@@ -725,6 +725,24 @@ The WSL reporter state renders `Access denied`, explains that the group change i
 
 The focused end-to-end run passed 83 tests across probes, recovery selection, orchestration, presentation, and the unchanged classifier. Targeted ESLint and the root TypeScript build passed, localization added nine keys, and the added-line punctuation scan found no U+2014 or U+2013 characters. The first consolidated JSX patch applied only its usage hunks and left the old switch plus one duplicated line; inspection caught this before validation, and a follow-up working-tree edit completed the lookup declarations and removed the duplicate before the work-item commit. No committed history was rewritten.
 
+#### Slice B implementation checkpoint (completed 2026-08-03)
+
+Completed and pushed in [commit `aea5b048`](https://github.com/microsoft/vscode-documentdb/commit/aea5b048a7c924e1c78a6193d0f0ef55b084d2e9). The pure mapper now covers every Slice B state: identified Desktop unavailable, native daemon unavailable, starting, WSL integration unavailable, remote Docker unavailable, remote endpoint unreachable, invalid context, timeout, unsupported host, Windows-container mode, and the unknown fallback. It owns guide selection and maps only host-returned start actions to `Start Docker Desktop` or `Start Docker`; React no longer infers an action from environment. Installed-application evidence deliberately keeps provider-neutral failure wording while naming the application only on the button.
+
+The fixed five-second delay was replaced with sequential, abortable polling under a 90-second launch deadline and 1/2/3/5-second backoff. Polls never overlap, the first command is echoed, later successful poll echoes are suppressed, and a failing probe remains visible in the masked output. Polling stops on readiness, non-transient diagnosis, deadline, Stop waiting, superseding action, or unmount. The starting state shows visible elapsed time and one polite state announcement; elapsed quarter-second updates are intentionally not live-region announcements.
+
+Review copy now reports the typed execution target for local, WSL, SSH, dev-container, Codespaces, and other remote hosts. WSL and remote targets receive a visible pre-provisioning notice. Success copy no longer implies that a remote `localhost` endpoint is reachable from the user's local machine; it says the connection string is for tools running on the extension host. The daemon architecture card continues to use only normalized daemon facts.
+
+Remembered provider evidence now carries `providerRecordedAtMs` separately from the current probe's `checkedAtMs`, so the relative Last checked label names when the provider fact was actually established. The label updates periodically and remains a polite status. Refresh remains present in every state, including ready and unsupported. Copy success, launch failure, Docker-starting, provisioning, and terminal outcomes retain accessible announcements.
+
+Eighty-seven focused mapper, polling, and orchestrator tests passed. Targeted ESLint, editor diagnostics, the full TypeScript build, localization generation, and the development webview webpack build passed. The source and generated localization added-line scan found no U+2014 or U+2013 characters.
+
+**Implementation choice:** Polling was extracted into a small injected helper rather than embedded entirely in the component. Two options were considered: manage timers and query overlap directly in JSX callbacks, or put deadline/backoff/cancellation sequencing behind a pure async boundary. The helper was selected because tests can prove one in-flight query, cancellation during backoff, transient versus terminal failures, echo suppression after the first poll, and deadline exit without mounting a VS Code webview.
+
+**Corrections before commit:** The first mapper test table widened the WSL literal to `string`, and two exhaustive switches narrowed the whole readiness object to `never`; the tuple was frozen and the switches now narrow local discriminants. The first polling test spread a readiness union into an illegal fixture and was replaced with exact ready/diagnosed variants. React lint then caught `Date.now()` in a state initializer; the clock now initializes to zero and is set when readiness arrives. No committed history was reset or rewritten.
+
+**Manual verification boundary:** This checkpoint validates behavior through focused tests, TypeScript, lint, localization, and webpack. Platform-specific visual and workflow verification is intentionally recorded under WI-9 rather than claimed here.
+
 ### WI-7: Add integration-focused tests
 
 - Test service sequencing with mocked command results.
