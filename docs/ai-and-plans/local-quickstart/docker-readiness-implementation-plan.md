@@ -238,7 +238,7 @@ interface DockerEndpointProbe {
 
 /** A documented fix shown as read-only text with a Copy button. The extension NEVER runs it. */
 interface DockerRecoveryCommand {
-  readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslRestartFromWindows';
+  readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslStartServiceNoSystemd' | 'wslRestartFromWindows';
   readonly commandLine: string;
   readonly requiresElevation: boolean;
 }
@@ -466,12 +466,12 @@ This exists because the diagnosis is a heuristic and the feature is not. Conside
 
 For the failures listed below, render the documented fix as read-only, non-editable text with a `Copy command` button next to it. The extension never executes it, never opens a terminal for it, and never elevates.
 
-| Command ID                 | Failure, environment, and refinement selector                                                  | Command offered                 | Note shown with it                                                    |
-| -------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------- |
-| `linuxDockerGroup`         | `permissionDenied`, Linux or WSL unix socket, `notInGroup` or `unknown`                        | `sudo usermod -aG docker $USER` | `Group membership applies to new login sessions only.`                |
-| `linuxStartService`        | `daemonUnavailable`, native Linux, or WSL with positively detected active systemd              | `sudo systemctl start docker`   | `Runs the system Docker service.`                                     |
-| `wslStartServiceNoSystemd` | `daemonUnavailable`, WSL without active systemd and with a positively detected service wrapper | `sudo service docker start`     | `Runs the system Docker service.`                                     |
-| `wslRestartFromWindows`    | `permissionDenied`, WSL unix socket, `pendingSessionRestart`                                   | `wsl --shutdown`                | `This restarts the distribution so the new group membership applies.` |
+| Command ID                 | Failure, environment, and refinement selector                                                  | Command offered                 | Note shown with it                                                                                    |
+| -------------------------- | ---------------------------------------------------------------------------------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `linuxDockerGroup`         | `permissionDenied`, Linux or WSL unix socket, `notInGroup` or `unknown`                        | `sudo usermod -aG docker $USER` | `Group membership applies to new login sessions only.`                                                |
+| `linuxStartService`        | `daemonUnavailable`, native Linux, or WSL with positively detected active systemd              | `sudo systemctl start docker`   | `Runs the system Docker service.`                                                                     |
+| `wslStartServiceNoSystemd` | `daemonUnavailable`, WSL without active systemd and with a positively detected service wrapper | `sudo service docker start`     | `Runs the system Docker service.`                                                                     |
+| `wslRestartFromWindows`    | `permissionDenied`, WSL unix socket, `pendingSessionRestart`                                   | `wsl --shutdown`                | `This stops all running WSL distributions so the new group membership applies when WSL starts again.` |
 
 Native Linux with `pendingSessionRestart` intentionally receives no command. The user must sign out of the desktop session and sign back in; reloading the VS Code window does not refresh process groups. SSH users must kill the remote VS Code server and reconnect. Dev-container and Codespaces users must rebuild the container.
 
@@ -865,6 +865,8 @@ This add-on was completed after Slice A testing exposed a Retry loop for users w
 The add-on keeps `permissionDenied` as the failure kind and adds `permissionDetail` as refining evidence. A unix-socket permission failure now distinguishes a user who still needs the group fix from a user whose configured membership is waiting on a new process session. The latter receives the exact action for the extension-host environment: desktop sign-out and sign-in on native Linux, `wsl --shutdown` from Windows for WSL, killing the remote VS Code server for SSH, or rebuilding a dev container or Codespaces container. Reload Window is never presented as sufficient for a stale native-Linux session.
 
 Recovery commands remain fixed, copy-only, and never executed. WSL daemon recovery uses `sudo systemctl start docker` only with active systemd and `sudo service docker start` only when the service wrapper is positively detected. This is intentionally stricter than selecting the service command from systemd absence alone. The add-on passed the full completion sequence with 194 Jest suites and 3,181 tests; the destructive WSL shutdown verification remains pending for an operator session that again satisfies the captured pending-restart precondition.
+
+Testing produced one wording correction in [`08832118`](https://github.com/microsoft/vscode-documentdb/commit/08832118dfa39b056bcb4c01b4ee642a0d457522). The WSL pending-restart guidance now says to run `wsl --shutdown` in a Windows terminal, warns that the current VS Code WSL window will disconnect, and instructs the user to reopen the folder in WSL. Restarting the local VS Code application is not required. The recovery note also accurately says that the command stops all running WSL distributions; WSL starts again when the user reconnects.
 
 ### Slice B: complete the model
 
