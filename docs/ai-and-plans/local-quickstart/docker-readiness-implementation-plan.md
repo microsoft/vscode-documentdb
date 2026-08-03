@@ -646,6 +646,16 @@ The broadened Local Quick Start check passed 131 probe, classifier, orchestratio
 - Inject filesystem/process dependencies for unit tests.
 - Refuse unavailable, stale, remote, or privilege-requiring actions.
 
+#### Slice B implementation checkpoint (completed 2026-08-03)
+
+Implemented and pushed in [commit `eb3c6828`](https://github.com/microsoft/vscode-documentdb/commit/eb3c6828b68d662998f2f3209e22fd6112fdfd79). `DockerProviderLauncher.ts` now owns every executable, application, and user-service path plus both capability selection and process launch. Local Windows and macOS may offer Desktop from the installed-application evidence bar unless positive Engine evidence contradicts it. Linux Desktop requires positive provider evidence and a loaded `docker-desktop.service`; rootless Engine requires a rootless endpoint and loaded `docker.service`. WSL requires positive Desktop evidence plus the mounted Windows executable. SSH, dev-container, Codespaces, other-remote, unsupported, root-managed Engine, and privilege-requiring cases receive no action.
+
+Availability is rechecked immediately before launch. Windows and WSL GUI launches return `launchAttempted` only after the detached process emits `spawn`. macOS `open -a Docker` and Linux `systemctl --user start ...` are bounded, awaited, and map nonzero exits to `failed`; disappeared applications or services return `notAvailable`. No launcher uses a shell, invokes `sudo`, or starts a root-managed service.
+
+Failure readiness now carries the capability selected by the launcher owner. The exported coordinator force-refreshes readiness, launches only the returned typed action, and passes `notAvailable`/`failed` back to the readiness service so remembered provider state is invalidated. Fifty-nine focused launcher and orchestrator tests passed, including the installed-application asymmetry, native WSL negative case, rootless versus root-managed Linux, remote refusal, launch revalidation, and typed result mapping. Targeted ESLint and the full root TypeScript build passed with no warnings.
+
+**Temporary compatibility boundary:** The old `startDockerDesktop(): Promise<boolean>` export remains for the unchanged WI-5 router name, but it no longer selects by `process.platform` or launches anything directly. It delegates to the typed force-refresh coordinator and maps only `started`/`launchAttempted` to `true`. Two options were considered: change the router in the WI-4 commit, mixing work-item history, or retain a behavior-safe adapter for one commit. The adapter was selected so WI-4 stays independently buildable and WI-5 can record the public procedure rename and telemetry changes in its own commit. WI-5 must remove this adapter.
+
 ### WI-5: Update router and telemetry
 
 - Return the enriched readiness result.
