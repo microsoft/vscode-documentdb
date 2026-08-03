@@ -858,7 +858,15 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         removeVolume?: jest.Mock;
     }): IContainerRuntime {
         return mockRuntime({
-            isDockerReady: jest.fn().mockResolvedValue({ cliInstalled: true, daemonReachable: true }),
+            isDockerReady: jest.fn().mockResolvedValue({
+                outcome: 'ready',
+                environment: 'linux',
+                endpointKind: 'unknown',
+                canContinueAnyway: false,
+                checkedAtMs: Date.now(),
+                cliInstalled: true,
+                daemonReachable: true,
+            }),
             listByLabel: jest.fn().mockResolvedValue(
                 (opts.containers ?? []).map((container) => ({
                     id: container.id,

@@ -33,9 +33,11 @@ import * as net from 'net';
 import * as path from 'path';
 import { Writable } from 'stream';
 import * as vscode from 'vscode';
+import { DockerReadinessService } from './DockerReadinessService';
 import { MaskingLineBuffer, maskSecrets } from './outputMasking';
 import {
     type DockerReadiness,
+    type DockerReadinessRequest,
     QUICK_START_PORT,
     QUICK_START_PORT_BAND_END,
     QUICK_START_PORT_FALLBACK_ATTEMPTS,
@@ -48,10 +50,6 @@ import {
  * `--format {{json .}}` arguments on the space and breaks info/inspect/list.
  */
 const SHELL_PROVIDER: Shell = process.platform === 'win32' ? new Cmd() : new Bash();
-
-function errMessage(error: unknown): string {
-    return error instanceof Error ? error.message : String(error);
-}
 
 let outputChannel: vscode.OutputChannel | undefined;
 
@@ -113,7 +111,7 @@ export interface CreateContainerOptions {
  * of this contract, which stays an IO-only surface.
  */
 export interface IContainerRuntime {
-    isDockerReady(): Promise<DockerReadiness>;
+    isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness>;
     isPortFree(port?: number): Promise<boolean>;
     findAvailablePort(preferred?: number, bandEnd?: number, attempts?: number): Promise<number | undefined>;
     pullImage(imageRef: string, token?: vscode.CancellationToken): Promise<void>;
@@ -144,6 +142,18 @@ export interface IContainerRuntime {
  */
 class ContainerRuntimeImpl implements IContainerRuntime {
     private readonly client = new DockerClient();
+    private readonly readinessService = new DockerReadinessService({
+        client: this.client,
+        shellProvider: SHELL_PROVIDER,
+        createProbeOutput: () => {
+            const channel = getQuickStartOutputChannel();
+            return {
+                onCommand: (command: string) => channel.appendLine('$ ' + maskSecrets(command, [])),
+                stdOutPipe: new MaskedChannelWritable(channel, []),
+                stdErrPipe: new MaskedChannelWritable(channel, []),
+            };
+        },
+    });
 
     private makeRunner(secrets: ReadonlyArray<string>, token?: vscode.CancellationToken) {
         const channel = getQuickStartOutputChannel();
@@ -161,35 +171,8 @@ class ContainerRuntimeImpl implements IContainerRuntime {
     }
 
     /** CLI-on-PATH + daemon-reachable check (design §9 prereq cards). */
-    public async isDockerReady(): Promise<DockerReadiness> {
-        // Host CPU architecture check (design §9): x64/arm64 are supported; arm64 may
-        // run the amd64 image under emulation. Independent of the Docker checks.
-        const arch = process.arch;
-        const platformSupported = arch === 'x64' || arch === 'arm64';
-
-        let cliVersion: string | undefined;
-        try {
-            const runner = this.makeRunner([]);
-            cliVersion = (await runner(this.client.checkInstall({}))).trim();
-        } catch (error) {
-            return { cliInstalled: false, daemonReachable: false, arch, platformSupported, error: errMessage(error) };
-        }
-
-        try {
-            const runner = this.makeRunner([]);
-            await runner(this.client.info({}));
-        } catch (error) {
-            return {
-                cliInstalled: true,
-                cliVersion,
-                daemonReachable: false,
-                arch,
-                platformSupported,
-                error: errMessage(error),
-            };
-        }
-
-        return { cliInstalled: true, cliVersion, daemonReachable: true, arch, platformSupported };
+    public isDockerReady(request?: DockerReadinessRequest): Promise<DockerReadiness> {
+        return this.readinessService.getReadiness(request);
     }
 
     /** True if the TCP port can be bound on loopback right now (pre-check, design §8.3). */

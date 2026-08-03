@@ -10,6 +10,8 @@
  * Terminology: "DocumentDB" is the service; the wire protocol is the MongoDB/DocumentDB API.
  */
 
+import { type CancellationToken } from 'vscode';
+
 /** Official DocumentDB local image (github.com/microsoft/documentdb README). */
 export const QUICK_START_IMAGE_REPOSITORY = 'ghcr.io/documentdb/documentdb/documentdb-local';
 export const QUICK_START_DEFAULT_TAG = 'latest';
@@ -186,6 +188,17 @@ export interface InstanceMetadata {
 
 export type DockerReadinessOutcome = 'ready' | 'diagnosed' | 'indeterminate';
 
+export type DockerHostEnvironment =
+    | 'windows'
+    | 'macos'
+    | 'linux'
+    | 'wsl'
+    | 'ssh'
+    | 'devContainer'
+    | 'codespaces'
+    | 'otherRemote'
+    | 'unsupported';
+
 export type DockerFailureKind =
     | 'cliMissing'
     | 'permissionDenied'
@@ -211,11 +224,31 @@ export interface DockerEndpointProbe {
     readonly source: 'dockerHostEnv' | 'dockerContextEnv' | 'currentContext' | 'platformDefault';
 }
 
+export interface DockerRecoveryCommand {
+    readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslRestartFromWindows';
+    readonly commandLine: string;
+    readonly requiresElevation: boolean;
+}
+
+export interface DockerReadinessRequest {
+    readonly forceRefresh?: boolean;
+    readonly cancellationToken?: CancellationToken;
+}
+
 /** Result of the Docker readiness pre-check (design §9, prereq cards). */
 export interface DockerReadiness {
+    readonly outcome: DockerReadinessOutcome;
+    readonly environment: DockerHostEnvironment;
+    readonly endpointKind: DockerEndpointKind;
+    readonly failureKind?: DockerFailureKind;
+    readonly recoveryCommand?: DockerRecoveryCommand;
+    readonly canContinueAnyway: boolean;
+    readonly checkedAtMs: number;
     readonly cliInstalled: boolean;
     readonly cliVersion?: string;
     readonly daemonReachable: boolean;
+    readonly daemonArchitecture?: string;
+    readonly diagnosticSummary?: string;
     /** Host CPU architecture (e.g. `x64`, `arm64`) and whether it is supported (§9). */
     readonly arch?: string;
     readonly platformSupported?: boolean;
