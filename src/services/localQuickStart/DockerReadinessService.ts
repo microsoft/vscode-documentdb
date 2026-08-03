@@ -3,15 +3,10 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import {
-    DockerClient,
-    type ListContextItem,
-    type PromiseCommandResponse,
-} from '@microsoft/vscode-container-client';
+import { DockerClient, type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash, CancellationTokenLike, Cmd, type Shell } from '@microsoft/vscode-processutils';
 import { type Writable } from 'stream';
 import * as vscode from 'vscode';
-import { classifyDockerFailure } from './dockerReadinessClassification';
 import {
     normalizeDaemonArchitecture,
     parseDockerInfoFacts,
@@ -20,6 +15,7 @@ import {
     type ResolvedDockerEndpoint,
     type RunDockerProbeOptions,
 } from './dockerProbes';
+import { classifyDockerFailure } from './dockerReadinessClassification';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
     type DockerEndpointKind,
@@ -114,10 +110,7 @@ export function detectDockerHostEnvironment(
     }
 }
 
-function endpointFromValue(
-    value: string,
-    source: ResolvedDockerEndpoint['source'],
-): ResolvedDockerEndpoint {
+function endpointFromValue(value: string, source: ResolvedDockerEndpoint['source']): ResolvedDockerEndpoint {
     if (value.startsWith('unix://')) {
         return { kind: 'unixSocket', address: value.slice('unix://'.length), source };
     }
@@ -161,9 +154,7 @@ export function resolveDockerEndpoint(
 }
 
 function isSuccessfulProbe(evidence: DockerProbeEvidence): boolean {
-    return (
-        evidence.endedBy === 'exit' && evidence.exitCode === undefined && evidence.spawnErrorCode === undefined
-    );
+    return evidence.endedBy === 'exit' && evidence.exitCode === undefined && evidence.spawnErrorCode === undefined;
 }
 
 export class DockerReadinessService {
@@ -280,12 +271,7 @@ export class DockerReadinessService {
                     cancellationToken,
                     didDeadlineExpire,
                 ),
-                this.runProbe(
-                    'info',
-                    this.dependencies.client.info({}),
-                    cancellationToken,
-                    didDeadlineExpire,
-                ),
+                this.runProbe('info', this.dependencies.client.info({}), cancellationToken, didDeadlineExpire),
             ]);
 
             if (callerCancelled) {
@@ -346,11 +332,7 @@ export class DockerReadinessService {
                 environment,
                 endpointKind: endpoint.kind,
                 failureKind: classification.failureKind,
-                recoveryCommand: getDockerRecoveryCommand(
-                    classification.failureKind,
-                    environment,
-                    endpoint.kind,
-                ),
+                recoveryCommand: getDockerRecoveryCommand(classification.failureKind, environment, endpoint.kind),
                 canContinueAnyway: classification.outcome === 'indeterminate',
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled: classification.failureKind !== 'cliMissing',

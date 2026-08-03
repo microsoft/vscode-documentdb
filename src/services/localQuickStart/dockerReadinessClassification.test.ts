@@ -68,12 +68,12 @@ describe('classifyDockerFailure', () => {
             durationMs: 10,
         };
 
-        expect(classifyDockerFailure({ infoProbe, serverErrors: ['permission denied opening Docker endpoint'] })).toEqual(
-            {
-                failureKind: 'permissionDenied',
-                outcome: 'diagnosed',
-            },
-        );
+        expect(
+            classifyDockerFailure({ infoProbe, serverErrors: ['permission denied opening Docker endpoint'] }),
+        ).toEqual({
+            failureKind: 'permissionDenied',
+            outcome: 'diagnosed',
+        });
     });
 
     it.each([

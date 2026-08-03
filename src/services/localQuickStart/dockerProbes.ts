@@ -49,11 +49,7 @@ export interface DockerInfoFacts {
     readonly serverErrors: ReadonlyArray<string>;
 }
 
-type DockerProbeExecutor = (
-    command: CommandResponseBase,
-    stdOutPipe: Writable,
-    stdErrPipe: Writable,
-) => Promise<void>;
+type DockerProbeExecutor = (command: CommandResponseBase, stdOutPipe: Writable, stdErrPipe: Writable) => Promise<void>;
 
 const DockerInfoSchema = z.object({
     OSType: z.string().optional(),

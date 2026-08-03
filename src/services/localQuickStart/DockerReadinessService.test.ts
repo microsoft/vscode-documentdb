@@ -248,7 +248,11 @@ describe('resolveDockerEndpoint', () => {
 
     it('prefers DOCKER_HOST over every context', () => {
         expect(
-            resolveDockerEndpoint('linux', { DOCKER_HOST: 'tcp://configured-host:2375', DOCKER_CONTEXT: 'selected' }, contexts),
+            resolveDockerEndpoint(
+                'linux',
+                { DOCKER_HOST: 'tcp://configured-host:2375', DOCKER_CONTEXT: 'selected' },
+                contexts,
+            ),
         ).toEqual({ kind: 'tcp', address: 'tcp://configured-host:2375', source: 'dockerHostEnv' });
     });
 
