@@ -547,6 +547,8 @@ The focused verification passed 77 readiness, presentation, and provisioning tes
 
 **Corrections before commit:** The first compile exposed two test fixtures that omitted the new provider facts, a raw string `OSType`, and a classifier return whose outcome and failure kind were not correlated. Those were corrected by constructing only legal union members, normalizing the OS fact, and returning a correlated classifier union. Later checks exposed literal widening in a shared failure result and a TypeScript narrowing issue in the presentation's exhaustive default; the result now preserves literals and the switch narrows a local failure-kind value. No committed history was reset or rewritten.
 
+**Follow-up correction:** WI-3 analysis exposed that the diagnosed variant was too strict: a daemon reporting Windows-container mode is reachable even though Local Quick Start must diagnose `windowsContainers` and block provisioning. [Commit `0720fbe4`](https://github.com/microsoft/vscode-documentdb/commit/0720fbe4eebd3deee9b008cce4c4c2fd3dd57fb3) changes diagnosed `daemonReachable` from the literal `false` to `boolean`; ready and indeterminate invariants remain unchanged. This correction passed 52 focused readiness and presentation tests and is preserved as a separate commit rather than rewriting WI-1.
+
 ### WI-2: Extract and test pure classification
 
 - Add predicates for permission, context, unavailable-daemon, and unknown failures, all subordinate to the errno evidence captured in WI-0.
