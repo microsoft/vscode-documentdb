@@ -297,6 +297,7 @@ interface DockerReadinessBase {
     readonly osType?: 'linux' | 'windows';
     readonly daemonArchitecture?: string;
     readonly diagnosticSummary?: string;
+    readonly diagnosticFingerprint?: string;
     /** Host CPU architecture (e.g. `x64`, `arm64`) and whether it is supported (§9). */
     readonly arch?: string;
     readonly platformSupported?: boolean;

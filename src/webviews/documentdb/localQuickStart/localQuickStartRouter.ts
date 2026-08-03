@@ -24,7 +24,7 @@ import { z } from 'zod';
 import {
     ContainerRuntime,
     getQuickStartOutputChannel,
-    startDockerDesktop,
+    startDockerProvider,
 } from '../../../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
 import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/dockerRecoveryCommands';
@@ -36,6 +36,7 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
 
 /**
  * Advanced provisioning overrides (P1-4). All optional; the webview only sends the
@@ -112,11 +113,16 @@ function toWebviewStatus(status: QuickStartStatus): QuickStartStatus {
 export const localQuickStartRouter = router({
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
     getDockerStatus: publicProcedureWithTelemetry
-        .input(z.object({ forceRefresh: z.boolean().optional() }).optional())
+        .input(
+            z
+                .object({ forceRefresh: z.boolean().optional(), suppressCommandEcho: z.boolean().optional() })
+                .optional(),
+        )
         .query(async ({ ctx, input }): Promise<DockerStatusResult> => {
             const cancellationToken = ctx.signal ? CancellationTokenLike.fromAbortSignal(ctx.signal) : undefined;
             const readiness = await ContainerRuntime.isDockerReady({
                 forceRefresh: input?.forceRefresh,
+                suppressCommandEcho: input?.suppressCommandEcho,
                 cancellationToken,
             });
             // Refresh the live container state so the panel opens with an accurate badge
@@ -125,8 +131,10 @@ export const localQuickStartRouter = router({
             await QuickStartService.refreshLiveState();
             const tctx = ctx as WithTelemetry<RouterContext>;
             // Design §14 quickstart.docker_readiness never includes names, ports, or credentials.
-            tctx.actionContext.telemetry.properties.dockerReadiness = readiness.failureKind ?? 'ok';
-            tctx.actionContext.telemetry.properties.dockerPermissionDetail = readiness.permissionDetail ?? 'none';
+            Object.assign(
+                tctx.actionContext.telemetry.properties,
+                getDockerReadinessTelemetryProperties(readiness),
+            );
             tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
             const willReuse = await QuickStartService.willReuseExistingInstance();
             return {
@@ -160,8 +168,13 @@ export const localQuickStartRouter = router({
             tctx.actionContext.telemetry.properties.recoveryCommandId = command.id;
         }),
 
-    /** Best-effort launch of Docker Desktop (design §5.3). Returns true if attempted. */
-    startDockerDesktop: publicProcedure.mutation((): Promise<boolean> => startDockerDesktop()),
+    /** Revalidate and launch the provider action selected by the extension host. */
+    startDockerProvider: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
+        const result = await startDockerProvider();
+        const tctx = ctx as WithTelemetry<RouterContext>;
+        tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
+        return result;
+    }),
 
     /** Success hand-off (§5.5): focus the Connections view where the instance now lives. */
     openConnection: publicProcedure.mutation(async () => {

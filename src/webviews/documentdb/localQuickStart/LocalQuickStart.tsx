@@ -419,10 +419,10 @@ export const LocalQuickStart = (): JSX.Element => {
     const handleStartDocker = useCallback((): void => {
         setDockerActionMessage(undefined);
         setStartingDocker(true);
-        void trpcClient.localQuickStart.startDockerDesktop
+        void trpcClient.localQuickStart.startDockerProvider
             .mutate()
-            .then((launchAttempted) => {
-                if (!launchAttempted) {
+            .then((launchResult) => {
+                if (launchResult === 'notAvailable' || launchResult === 'failed') {
                     setStartingDocker(false);
                     setDockerActionMessage(l10n.t('Docker Desktop could not be started.'));
                     return;

@@ -410,12 +410,6 @@ export const ContainerRuntime: IContainerRuntime = containerRuntime;
 /**
  * Recompute provider capability and revalidate the selected action immediately before launch.
  */
-export async function startAvailableDockerProvider(): Promise<DockerLaunchResult> {
+export async function startDockerProvider(): Promise<DockerLaunchResult> {
     return containerRuntime.startAvailableDockerProvider();
-}
-
-/** Temporary boolean adapter for the WI-5 router rename. */
-export async function startDockerDesktop(): Promise<boolean> {
-    const result = await startAvailableDockerProvider();
-    return result === 'started' || result === 'launchAttempted';
 }

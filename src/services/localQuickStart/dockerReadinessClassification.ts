@@ -14,6 +14,7 @@ import {
     type DockerProviderMemory,
     type DockerReadinessOutcome,
 } from './quickStartTypes';
+import { createHash } from 'crypto';
 
 export type DockerFailureClassification =
     | {
@@ -209,4 +210,29 @@ export function classifyDockerProvider(
     }
 
     return { provider: 'unknown', providerEvidence: 'none' };
+}
+
+function redactDockerDiagnostic(value: string): string {
+    return value
+        .toLowerCase()
+        .replace(/context\s+["'][^"']+["']/g, 'context <name>')
+        .replace(/\b(?:tcp|ssh|unix|npipe):\/\/\S+/g, '<endpoint>')
+        .replace(/\b[a-z]:[\\/][^\s"']+/g, '<path>')
+        .replace(/(^|\s)\/[^\s"']+/g, '$1<path>')
+        .replace(/\b(?:lookup|host|hostname|dial)\s+[^\s"']+/g, '<host>')
+        .replace(/\b(?:\d{1,3}\.){3}\d{1,3}\b/g, '<host>')
+        .replace(/\b[a-z0-9-]+(?:\.[a-z0-9-]+)+\b/g, '<host>')
+        .replace(/\b[0-9a-f]{8,}\b/g, '<hex>')
+        .replace(/\d+/g, '<n>')
+        .replace(/\s+/g, ' ')
+        .trim()
+        .slice(0, 512);
+}
+
+export function getDockerDiagnosticFingerprint(values: ReadonlyArray<string>): string | undefined {
+    const redacted = redactDockerDiagnostic(values.filter((value) => value.trim().length > 0).join('\n'));
+    if (!redacted) {
+        return undefined;
+    }
+    return createHash('sha256').update(redacted).digest('hex').slice(0, 16);
 }

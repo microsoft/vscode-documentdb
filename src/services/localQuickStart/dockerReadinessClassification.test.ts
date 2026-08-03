@@ -5,7 +5,11 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { classifyDockerFailure, classifyDockerProvider } from './dockerReadinessClassification';
+import {
+    classifyDockerFailure,
+    classifyDockerProvider,
+    getDockerDiagnosticFingerprint,
+} from './dockerReadinessClassification';
 import {
     type DockerEndpointProbe,
     type DockerHostEnvironment,
@@ -280,5 +284,24 @@ describe('classifyDockerProvider', () => {
                 },
             }),
         ).toEqual({ provider: 'dockerEngine', providerEvidence: 'liveDaemon' });
+    });
+});
+
+describe('getDockerDiagnosticFingerprint', () => {
+    it('removes endpoint, path, context, host, hex, and numeric differences before hashing', () => {
+        const first = getDockerDiagnosticFingerprint([
+            'Context "private-one" failed at tcp://secret.example.com:2375 /home/alice/.docker/config id deadbeef1234 code 42',
+        ]);
+        const second = getDockerDiagnosticFingerprint([
+            'Context "private-two" failed at tcp://other.internal.net:9922 /users/bob/.docker/config id abcdef987654 code 99',
+        ]);
+
+        expect(first).toBeDefined();
+        expect(first).toBe(second);
+        expect(first).not.toContain('secret');
+    });
+
+    it('returns undefined when no diagnostic text exists', () => {
+        expect(getDockerDiagnosticFingerprint(['', '   '])).toBeUndefined();
     });
 });

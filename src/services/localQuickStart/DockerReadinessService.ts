@@ -18,7 +18,11 @@ import {
     type ResolvedDockerEndpoint,
     type RunDockerProbeOptions,
 } from './dockerProbes';
-import { classifyDockerFailure, classifyDockerProvider } from './dockerReadinessClassification';
+import {
+    classifyDockerFailure,
+    classifyDockerProvider,
+    getDockerDiagnosticFingerprint,
+} from './dockerReadinessClassification';
 import { getDockerStartCapability } from './DockerProviderLauncher';
 import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
@@ -617,6 +621,10 @@ export class DockerReadinessService {
                     ? normalizeDaemonArchitecture(infoFacts.architecture)
                     : undefined,
                 diagnosticSummary: `${classification.failureKind}; endpoint source ${endpoint.source}`,
+                diagnosticFingerprint:
+                    classification.failureKind === 'unknown'
+                        ? getDockerDiagnosticFingerprint([...(infoFacts?.serverErrors ?? []), infoProbe.stderr])
+                        : undefined,
                 arch: this.dependencies.arch,
                 platformSupported,
             } as const;
