@@ -326,8 +326,8 @@ export const indexViewRouter = router({
         .input(
             z.object({
                 indexName: z.string().min(1),
-                sizeText: z.string().optional(),
-                usageText: z.string().optional(),
+                sizeBytes: z.number().optional(),
+                usageOps: z.number().optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
@@ -344,8 +344,8 @@ export const indexViewRouter = router({
             const confirmed = await confirmIndexAction('delete', {
                 indexName: input.indexName,
                 collectionName: myCtx.collectionName,
-                sizeText: input.sizeText,
-                usageText: input.usageText,
+                sizeBytes: input.sizeBytes,
+                usageOps: input.usageOps,
             });
             if (!confirmed) {
                 return { ok: true, cancelled: true };
@@ -406,8 +406,8 @@ export const indexViewRouter = router({
         .input(
             z.object({
                 indexName: z.string().min(1),
-                sizeText: z.string().optional(),
-                usageText: z.string().optional(),
+                sizeBytes: z.number().optional(),
+                usageOps: z.number().optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
@@ -418,8 +418,8 @@ export const indexViewRouter = router({
             const confirmed = await confirmIndexAction('hide', {
                 indexName: input.indexName,
                 collectionName: myCtx.collectionName,
-                sizeText: input.sizeText,
-                usageText: input.usageText,
+                sizeBytes: input.sizeBytes,
+                usageOps: input.usageOps,
             });
             if (!confirmed) {
                 return { ok: true, cancelled: true };
@@ -437,8 +437,8 @@ export const indexViewRouter = router({
         .input(
             z.object({
                 indexName: z.string().min(1),
-                sizeText: z.string().optional(),
-                usageText: z.string().optional(),
+                sizeBytes: z.number().optional(),
+                usageOps: z.number().optional(),
             }),
         )
         .mutation(async ({ input, ctx }) => {
@@ -449,8 +449,8 @@ export const indexViewRouter = router({
             const confirmed = await confirmIndexAction('unhide', {
                 indexName: input.indexName,
                 collectionName: myCtx.collectionName,
-                sizeText: input.sizeText,
-                usageText: input.usageText,
+                sizeBytes: input.sizeBytes,
+                usageOps: input.usageOps,
             });
             if (!confirmed) {
                 return { ok: true, cancelled: true };
