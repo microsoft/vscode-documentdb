@@ -789,6 +789,20 @@ The readiness gate is a snapshot, and the daemon can disappear between the gate 
 - Keep registry- and image-specific classification out of scope; only daemon-class failures are in this work item.
 - When a readiness timeout follows a successful `docker run` in a dev-container session, add the published-port explanation: the daemon may be the host's, so the container's published port is not necessarily reachable from inside the dev container.
 
+#### Slice B implementation checkpoint (completed 2026-08-03)
+
+Completed and pushed in [commit `77c4bfed`](https://github.com/microsoft/vscode-documentdb/commit/77c4bfede508af9bd20719030f9beb2b6a6f3d6d). Provisioning now tracks only the active `docker pull` and `docker run` stages. If either operation fails, it performs one forced, bounded readiness check through the existing `DockerReadinessService`. A non-ready result is attached to the terminal `StageEvent` and React returns to the same readiness recovery screen, preserving provider start, copyable recovery command, Retry/Refresh, Continue anyway when indeterminate, details, and masked Docker output. The raw operation error is replaced with localized provider-neutral copy in this branch.
+
+If the forced recheck says Docker is ready, the event carries no readiness result and the original provisioning error remains visible. This keeps manifest, registry, proxy, image, and other non-daemon failures out of readiness classification. Provision telemetry records only the categorized Docker failure kind or `none`.
+
+A dev-container readiness timeout after a successful run now appends a localized explanation that Docker may be on the dev-container host, so the published localhost port might not be reachable from inside the dev container. The existing timed-out event carries that message, and the failed view renders it instead of replacing it with generic timeout copy.
+
+Focused tests cover daemon disappearance during both pull and run, preservation of a manifest error when Docker remains ready, and environment-selective dev-container timeout guidance. The complete Local Quick Start set passed all 15 suites and 231 tests. Targeted ESLint, editor diagnostics, localization generation, the source/localization punctuation scan, and the full root TypeScript build passed.
+
+**Classification-path implementation choice:** Two options were considered: retrofit pull/run execution to tee and classify each operation's rejected stderr directly, or re-run the established bounded readiness probes after an operation failure. The second option was selected with greater than 80% confidence. It keeps one evidence collector and one classifier owner, obtains endpoint errno and structured `ServerErrors` rather than relying on operation text, distinguishes a daemon that recovered from a real image error, honors single-flight/deadline behavior, and keeps raw pull/run output in the masked OutputChannel. The tradeoff is one extra bounded probe set after a failed pull or run.
+
+**Corrections before commit:** The first full build found an unused `DockerReadiness` import after event narrowing made an explicit cast unnecessary; the import was removed before commit. No committed history was reset or rewritten.
+
 ### WI-9: Build a fixture corpus and manual verification pass
 
 Every test above feeds the classifier text that the implementer wrote, which validates the classifier against its own assumptions. The fragile input is real CLI output, and the readiness gap notes record that macOS and Linux were never verified at all.
