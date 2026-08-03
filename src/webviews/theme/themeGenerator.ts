@@ -90,7 +90,7 @@ const adaptiveNeutralSurfaces = {
     colorNeutralBackground1Hover:
         'var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background, var(--vscode-editor-background)))',
     colorNeutralBackground1Pressed:
-        'var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background)))',
+        'var(--vscode-toolbar-activeBackground, var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background)))',
     colorNeutralBackground1Selected:
         'var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background)))',
     colorNeutralBackgroundDisabled:
@@ -115,7 +115,7 @@ const adaptiveNeutralSurfaces = {
     colorNeutralBackground2Hover:
         'var(--vscode-list-hoverBackground, var(--vscode-sideBar-background, var(--vscode-editorWidget-background)))',
     colorNeutralBackground2Pressed:
-        'var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
+        'var(--vscode-toolbar-activeBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
     colorNeutralBackground2Selected:
         'var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
     // Subtle separators: tab-band bottom border, section rules.
@@ -161,7 +161,10 @@ export const generateAdaptiveLightTheme = (): Theme => {
             colorNeutralForeground1: 'var(--vscode-editor-foreground)',
             colorNeutralForeground1Hover: 'var(--vscode-editor-foreground)',
             colorNeutralForeground1Pressed: 'var(--vscode-editor-foreground)',
-            colorNeutralForeground1Selected: 'var(--vscode-editor-foreground)',
+            colorNeutralForeground1Selected:
+                'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
+            colorNeutralForeground2Selected:
+                'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
 
             colorNeutralBackground1: 'var(--vscode-editor-background)',
 
@@ -190,11 +193,13 @@ export const generateAdaptiveDarkTheme = (): Theme => {
             colorNeutralForeground1: 'var(--vscode-editor-foreground)',
             colorNeutralForeground1Hover: 'var(--vscode-editor-foreground)',
             colorNeutralForeground1Pressed: 'var(--vscode-editor-foreground)',
-            colorNeutralForeground1Selected: 'var(--vscode-editor-foreground)',
+            colorNeutralForeground1Selected:
+                'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
             colorNeutralForeground2: 'var(--vscode-foreground)',
             colorNeutralForeground2Hover: 'var(--vscode-foreground)',
             colorNeutralForeground2Pressed: 'var(--vscode-foreground)',
-            colorNeutralForeground2Selected: 'var(--vscode-foreground)',
+            colorNeutralForeground2Selected:
+                'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
 
             colorNeutralBackground1: 'var(--vscode-editor-background)',
 
