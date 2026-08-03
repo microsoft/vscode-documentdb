@@ -305,7 +305,6 @@ interface DockerReadinessBase {
     /** Host CPU architecture (e.g. `x64`, `arm64`) and whether it is supported (§9). */
     readonly arch?: string;
     readonly platformSupported?: boolean;
-    readonly error?: string;
 }
 
 export interface DockerReadyReadiness extends DockerReadinessBase {
