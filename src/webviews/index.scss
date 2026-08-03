@@ -3,9 +3,12 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-@use './theme/fluentOverrides';
-
 /* Define standard variables and values for this extension to be shared with all webviews */
+
+/*
+ * The --documentdb-* aliases used below live in theme/fluentAliases.scss, pulled in by
+ * theme/fluentOverrides.scss, which DynamicThemeProvider imports for every webview.
+ */
 
 .selectionDisabled {
     user-select: none;

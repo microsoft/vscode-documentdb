@@ -9,6 +9,8 @@
  * Keep component-scoped overrides here because Fluent reuses neutral aliases
  * across controls with different semantics. For example, field stroke tokens
  * also drive Switch indicators and Tab hover bars when changed globally.
+ *
+ * Imported by DynamicThemeProvider, which every webview renders through.
  */
 
 @use './fluentAliases';
