@@ -4,16 +4,16 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { describe, expect, test } from '@jest/globals';
-import { readFileSync } from 'node:fs';
-import path from 'node:path';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 const fluentProgressEntry = require.resolve('@fluentui/react-progress');
 const fluentProgressStylesPath = path.join(
     path.dirname(path.dirname(fluentProgressEntry)),
     'lib/components/ProgressBar/useProgressBarStyles.styles.raw.js',
 );
-const fluentProgressStyles = readFileSync(fluentProgressStylesPath, 'utf8');
-const fluentOverrides = readFileSync(path.join(__dirname, 'fluentOverrides.scss'), 'utf8');
+const fluentProgressStyles = fs.readFileSync(fluentProgressStylesPath, 'utf8');
+const fluentOverrides = fs.readFileSync(path.join(__dirname, 'fluentOverrides.scss'), 'utf8');
 
 function compactWhitespace(value: string): string {
     return value.replace(/\s+/g, ' ').trim();
