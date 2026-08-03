@@ -26,3 +26,25 @@
     --colorNeutralStrokeAccessibleHover: var(--documentdb-colorInputStrokeHover);
     --colorNeutralStrokeAccessiblePressed: var(--documentdb-colorInputStrokeHover);
 }
+
+.fui-ProgressBar {
+    --colorCompoundBrandBackground: var(--vscode-progressBar-background, var(--colorBrandStroke1));
+}
+
+.fui-ProgressBar:not([aria-valuenow]) {
+    // Fluent's indeterminate recipe overlays fixed-neutral edges on a solid
+    // brand segment. VS Code defines only the active progress color, so replace
+    // those two layers with one progress-colored segment that fades at its
+    // edges. Determinate bars retain Fluent's normal track and fill recipe.
+    --colorNeutralBackground6: transparent;
+    --colorCompoundBrandBackground: transparent;
+
+    .fui-ProgressBar__bar {
+        background-image: linear-gradient(
+            to right,
+            transparent 0%,
+            var(--vscode-progressBar-background, var(--colorBrandStroke1)) 50%,
+            transparent 100%
+        );
+    }
+}
