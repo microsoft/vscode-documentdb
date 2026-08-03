@@ -184,6 +184,33 @@ export interface InstanceMetadata {
     readonly imageRef?: string;
 }
 
+export type DockerReadinessOutcome = 'ready' | 'diagnosed' | 'indeterminate';
+
+export type DockerFailureKind =
+    | 'cliMissing'
+    | 'permissionDenied'
+    | 'daemonUnavailable'
+    | 'probeTimedOut'
+    | 'unknown';
+
+export type DockerEndpointKind = 'unixSocket' | 'namedPipe' | 'tcp' | 'ssh' | 'unknown';
+
+export interface DockerProbeEvidence {
+    readonly probe: 'cliVersion' | 'info' | 'contexts';
+    readonly exitCode?: number;
+    readonly spawnErrorCode?: string;
+    readonly stdout: string;
+    readonly stderr: string;
+    readonly endedBy: 'exit' | 'deadline' | 'cancellation';
+    readonly durationMs: number;
+}
+
+export interface DockerEndpointProbe {
+    readonly kind: DockerEndpointKind;
+    readonly accessErrorCode?: string;
+    readonly source: 'dockerHostEnv' | 'dockerContextEnv' | 'currentContext' | 'platformDefault';
+}
+
 /** Result of the Docker readiness pre-check (design §9, prereq cards). */
 export interface DockerReadiness {
     readonly cliInstalled: boolean;
