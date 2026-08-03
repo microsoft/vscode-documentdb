@@ -4,6 +4,8 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { Bash, ChildProcessError } from '@microsoft/vscode-processutils';
+import * as fs from 'fs';
+import * as path from 'path';
 import { Writable } from 'stream';
 import {
     detectDockerServiceManager,
@@ -18,6 +20,15 @@ import {
 } from './dockerProbes';
 
 const command = { command: 'docker', args: ['info'] };
+
+function readFixtureBody(name: string): string {
+    return fs
+        .readFileSync(path.join(__dirname, '__fixtures__', 'docker', name), 'utf8')
+        .split('\n')
+        .filter((line) => !line.startsWith('#'))
+        .join('\n')
+        .trim();
+}
 
 describe('runDockerProbe', () => {
     it('captures stdout and stderr when Docker exits nonzero', async () => {
@@ -85,22 +96,13 @@ describe('runDockerProbe', () => {
 describe('parseDockerInfoFacts', () => {
     it('reads raw daemon facts and server errors', () => {
         expect(
-            parseDockerInfoFacts(
-                JSON.stringify({
-                    OSType: 'linux',
-                    OperatingSystem: 'Docker Desktop',
-                    Architecture: 'x86_64',
-                    ServerVersion: '27.5.1',
-                    ServerErrors: ['permission denied'],
-                    IgnoredByLocalSchema: true,
-                }),
-            ),
+            parseDockerInfoFacts(readFixtureBody('wsl2-ubuntu20.04-docker28.1.1-ready-info.txt')),
         ).toEqual({
             osType: 'linux',
-            operatingSystem: 'Docker Desktop',
+            operatingSystem: 'Ubuntu 20.04.6 LTS',
             architecture: 'x86_64',
-            serverVersion: '27.5.1',
-            serverErrors: ['permission denied'],
+            serverVersion: '28.1.1',
+            serverErrors: [],
         });
     });
 

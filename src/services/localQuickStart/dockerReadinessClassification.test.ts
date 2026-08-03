@@ -10,6 +10,7 @@ import {
     classifyDockerProvider,
     getDockerDiagnosticFingerprint,
 } from './dockerReadinessClassification';
+import { parseDockerInfoFacts } from './dockerProbes';
 import {
     type DockerEndpointProbe,
     type DockerHostEnvironment,
@@ -26,7 +27,7 @@ describe('classifyDockerFailure', () => {
             probe: 'info',
             exitCode: 1,
             stdout: '',
-            stderr: readFixture('ubuntu-version-unknown-permission-denied.txt'),
+            stderr: readFixture('wsl2-ubuntu20.04-docker28.1.1-permission-denied.txt'),
             endedBy: 'exit',
             durationMs: 12,
         };
@@ -193,6 +194,24 @@ describe('classifyDockerFailure', () => {
 });
 
 describe('classifyDockerProvider', () => {
+    it('classifies the captured WSL Engine ready fixture from live daemon metadata', () => {
+        const fixture = readFixture('wsl2-ubuntu20.04-docker28.1.1-ready-info.txt');
+        const body = fixture
+            .split('\n')
+            .filter((line) => !line.startsWith('#'))
+            .join('\n')
+            .trim();
+        const facts = parseDockerInfoFacts(body);
+
+        expect(
+            classifyDockerProvider({
+                environment: 'wsl',
+                daemonReachable: true,
+                daemonOperatingSystem: facts?.operatingSystem,
+            }),
+        ).toEqual({ provider: 'dockerEngine', providerEvidence: 'liveDaemon' });
+    });
+
     it.each([
         {
             name: 'live Docker Desktop daemon',
