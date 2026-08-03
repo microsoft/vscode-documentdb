@@ -71,15 +71,42 @@ export function getBrandTokensFromPalette(keyColor: string, options: Options = {
  * NOTE — neutral tokens still on the fixed Fluent ramp (candidates for a future
  * pass; see the "theme color coverage" tracking issue):
  *   - colorNeutralBackground3           (markdown cards, feedback dialog, query-plan blocks)
- *   - colorNeutralBackground1Hover/Pressed/Selected
- *   - colorNeutralForeground3 / Foreground4 / ForegroundDisabled
- *   - colorNeutralStroke1 / Stroke3 / StrokeAccessible
- *   - colorSubtleBackground* (toolbar/button hover fills)
+ *   - colorNeutralForeground3 / Foreground4 / colorNeutralStroke1 / StrokeAccessible
+ *     — globally, that is; fluentOverrides.scss remaps them inside field controls only,
+ *     because these aliases also drive Switch indicators and Tab hover bars
+ *   - colorNeutralStroke3
+ *   - colorSubtleBackgroundSelected
  *   - High-contrast theme kinds bypass this generator entirely and fall back to
  *     the static Teams themes (see getFluentUiTheme in state/ThemeContext.tsx),
- *     so none of the VS Code mappings apply there yet.
+ *     so none of these token mappings apply there. The CSS in fluentOverrides.scss
+ *     is not theme-kind aware and does apply — pending a visual pass.
  */
 const adaptiveNeutralSurfaces = {
+    // Fluent's Card interaction recipe and the Card/Button disabled recipes use
+    // these Background1/Disabled aliases. The initial adaptive pass missed them,
+    // so Solarized, Red and other tinted themes fell back to Fluent's fixed gray
+    // ramps. Map them to VS Code interaction colors so those states now follow
+    // the active workbench theme as well.
+    colorNeutralBackground1Hover:
+        'var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background, var(--vscode-editor-background)))',
+    colorNeutralBackground1Pressed:
+        'var(--vscode-toolbar-activeBackground, var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background)))',
+    colorNeutralBackground1Selected:
+        'var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background)))',
+    colorNeutralBackgroundDisabled:
+        'var(--vscode-input-background, var(--vscode-editorWidget-background, var(--vscode-editor-background)))',
+    colorNeutralForegroundDisabled:
+        'var(--vscode-disabledForeground, var(--vscode-descriptionForeground, var(--vscode-foreground)))',
+    colorNeutralStrokeDisabled:
+        'var(--vscode-disabledForeground, var(--vscode-widget-border, var(--vscode-panel-border)))',
+    // Fluent uses these subtle aliases across buttons, cards, tables, tabs,
+    // tags and trees. VS Code's toolbar tokens are the corresponding general
+    // action colors; list-specific surfaces can use list.* tokens locally.
+    // Falling back to list colors also covers themes that omit toolbar colors.
+    colorSubtleBackgroundHover:
+        'var(--vscode-toolbar-hoverBackground, var(--vscode-list-hoverBackground, var(--vscode-editorWidget-background)))',
+    colorSubtleBackgroundPressed:
+        'var(--vscode-toolbar-activeBackground, var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground)))',
     // Secondary neutral surface: tab band + odd alternating rows. Prefer VS
     // Code's own alternating table-row color, then the side bar / editor-widget
     // backgrounds.
@@ -88,7 +115,7 @@ const adaptiveNeutralSurfaces = {
     colorNeutralBackground2Hover:
         'var(--vscode-list-hoverBackground, var(--vscode-sideBar-background, var(--vscode-editorWidget-background)))',
     colorNeutralBackground2Pressed:
-        'var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
+        'var(--vscode-toolbar-activeBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
     colorNeutralBackground2Selected:
         'var(--vscode-list-inactiveSelectionBackground, var(--vscode-list-hoverBackground, var(--vscode-sideBar-background)))',
     // Subtle separators: tab-band bottom border, section rules.
@@ -134,7 +161,10 @@ export const generateAdaptiveLightTheme = (): Theme => {
             colorNeutralForeground1: 'var(--vscode-editor-foreground)',
             colorNeutralForeground1Hover: 'var(--vscode-editor-foreground)',
             colorNeutralForeground1Pressed: 'var(--vscode-editor-foreground)',
-            colorNeutralForeground1Selected: 'var(--vscode-editor-foreground)',
+            colorNeutralForeground1Selected:
+                'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
+            colorNeutralForeground2Selected:
+                'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
 
             colorNeutralBackground1: 'var(--vscode-editor-background)',
 
@@ -163,11 +193,13 @@ export const generateAdaptiveDarkTheme = (): Theme => {
             colorNeutralForeground1: 'var(--vscode-editor-foreground)',
             colorNeutralForeground1Hover: 'var(--vscode-editor-foreground)',
             colorNeutralForeground1Pressed: 'var(--vscode-editor-foreground)',
-            colorNeutralForeground1Selected: 'var(--vscode-editor-foreground)',
+            colorNeutralForeground1Selected:
+                'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
             colorNeutralForeground2: 'var(--vscode-foreground)',
             colorNeutralForeground2Hover: 'var(--vscode-foreground)',
             colorNeutralForeground2Pressed: 'var(--vscode-foreground)',
-            colorNeutralForeground2Selected: 'var(--vscode-foreground)',
+            colorNeutralForeground2Selected:
+                'var(--vscode-list-inactiveSelectionForeground, var(--vscode-editor-foreground))',
 
             colorNeutralBackground1: 'var(--vscode-editor-background)',
 

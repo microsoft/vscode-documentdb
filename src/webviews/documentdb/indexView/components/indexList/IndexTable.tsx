@@ -253,9 +253,11 @@ export const IndexTable = ({
                     // actions that operate on a live index are disabled.
                     const isPending = idx.state === 'creating';
                     const isExpanded = expanded.has(idx.name);
-                    // Compute zebra parity from the data index (not the DOM
-                    // position) so an inserted detail row never breaks the
-                    // alternating pattern.
+                    /*
+                     * Zebra parity comes from the data index, not the DOM position, so an
+                     * inserted detail row never breaks the alternating pattern. The colors
+                     * (and the matching hover/pressed rules) live in indexView.scss.
+                     */
                     const rowClass = rowIdx % 2 === 0 ? 'rowEven' : 'rowOdd';
                     // A delete / hide / unhide in flight shows a spinner in the
                     // status column (in place of the ready check) for this row.
