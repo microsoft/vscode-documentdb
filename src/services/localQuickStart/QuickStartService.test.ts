@@ -7,9 +7,10 @@ import * as vscode from 'vscode';
 import { ext } from '../../extensionVariables';
 import { disposeQuickStartOutputChannel, type IContainerRuntime } from './ContainerRuntime';
 import { PROVISIONING_LEASE_TTL_MS, readRegistry, upsertInstanceRecord } from './quickStartRegistry';
-import { QuickStartServiceImpl } from './QuickStartService';
+import { getReadinessTimeoutMessage, QuickStartServiceImpl } from './QuickStartService';
 import {
     DEFAULT_ALIAS,
+    type DockerReadiness,
     imageRefKey,
     InstanceState,
     LEGACY_IMAGE_REF_KEY,
@@ -18,6 +19,7 @@ import {
     QUICK_START_LABEL_KEY,
     QUICK_START_PORT,
     secretKey,
+    type StageEvent,
 } from './quickStartTypes';
 
 // The R1 belt-and-suspenders safety path (WI-1): before the activation migration copies the legacy
@@ -856,9 +858,20 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         findAvailablePort?: number;
         removeContainer?: jest.Mock;
         removeVolume?: jest.Mock;
+        readiness?: DockerReadiness;
     }): IContainerRuntime {
         return mockRuntime({
-            isDockerReady: jest.fn().mockResolvedValue({ cliInstalled: true, daemonReachable: true }),
+            isDockerReady: jest.fn().mockResolvedValue(
+                opts.readiness ?? {
+                    outcome: 'ready',
+                    environment: 'linux',
+                    endpointKind: 'unknown',
+                    canContinueAnyway: false,
+                    checkedAtMs: Date.now(),
+                    cliInstalled: true,
+                    daemonReachable: true,
+                },
+            ),
             listByLabel: jest.fn().mockResolvedValue(
                 (opts.containers ?? []).map((container) => ({
                     id: container.id,
@@ -876,6 +889,157 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
             void event; // consume the stage events
         }
     }
+
+    it.each(['pulling', 'creating'] as const)(
+        'routes a Docker daemon failure during %s through typed readiness recovery',
+        async (failingStage) => {
+            ext.secretStorage = fakeSecretStorage({});
+            ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+            const ready: DockerReadiness = {
+                outcome: 'ready',
+                environment: 'linux',
+                endpointKind: 'unixSocket',
+                provider: 'dockerEngine',
+                providerEvidence: 'liveDaemon',
+                executionTarget: 'local',
+                canContinueAnyway: false,
+                checkedAtMs: 1,
+                cliInstalled: true,
+                daemonReachable: true,
+            };
+            const unavailable: DockerReadiness = {
+                outcome: 'diagnosed',
+                environment: 'linux',
+                endpointKind: 'unixSocket',
+                provider: 'dockerDesktop',
+                providerEvidence: 'rememberedProvider',
+                providerRecordedAtMs: 1,
+                executionTarget: 'local',
+                failureKind: 'daemonUnavailable',
+                startAction: 'startDockerDesktopLinux',
+                canContinueAnyway: false,
+                checkedAtMs: 2,
+                cliInstalled: true,
+                daemonReachable: false,
+            };
+            const isDockerReady = jest.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(unavailable);
+            const runtime = mockRuntime({
+                isDockerReady,
+                listByLabel: jest.fn().mockResolvedValue([]),
+                removeVolume: jest.fn().mockResolvedValue(undefined),
+                findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+                pullImage:
+                    failingStage === 'pulling'
+                        ? jest.fn().mockRejectedValue(new Error('daemon disappeared during pull'))
+                        : jest.fn().mockResolvedValue(undefined),
+                createAndRunContainer: jest.fn().mockRejectedValue(new Error('daemon disappeared during run')),
+            });
+            const service = new QuickStartServiceImpl(runtime);
+            const events: StageEvent[] = [];
+
+            for await (const event of service.provision(new AbortController().signal)) {
+                events.push(event);
+            }
+
+            expect(events.at(-1)).toMatchObject({
+                stage: 'error',
+                status: 'error',
+                message: `Docker became unavailable during setup: daemon disappeared during ${
+                    failingStage === 'pulling' ? 'pull' : 'run'
+                }`,
+                dockerReadiness: unavailable,
+            });
+            expect(isDockerReady).toHaveBeenLastCalledWith({ forceRefresh: true });
+        },
+    );
+
+    it('keeps an image failure on the provisioning path when Docker remains ready', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const ready: DockerReadiness = {
+            outcome: 'ready',
+            environment: 'linux',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'liveDaemon',
+            executionTarget: 'local',
+            canContinueAnyway: false,
+            checkedAtMs: 1,
+            cliInstalled: true,
+            daemonReachable: true,
+        };
+        const runtime = mockRuntime({
+            isDockerReady: jest.fn().mockResolvedValue(ready),
+            listByLabel: jest.fn().mockResolvedValue([]),
+            removeVolume: jest.fn().mockResolvedValue(undefined),
+            findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+            pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        const events: StageEvent[] = [];
+
+        for await (const event of service.provision(new AbortController().signal)) {
+            events.push(event);
+        }
+
+        expect(events.at(-1)).toMatchObject({ stage: 'error', error: 'manifest unknown' });
+        expect(events.at(-1)?.dockerReadiness).toBeUndefined();
+    });
+
+    it('keeps the original provisioning error when the follow-up Docker result is indeterminate', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const ready: DockerReadiness = {
+            outcome: 'ready',
+            environment: 'linux',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'liveDaemon',
+            executionTarget: 'local',
+            canContinueAnyway: false,
+            checkedAtMs: 1,
+            cliInstalled: true,
+            daemonReachable: true,
+        };
+        const indeterminate: DockerReadiness = {
+            outcome: 'indeterminate',
+            environment: 'linux',
+            endpointKind: 'unknown',
+            provider: 'unknown',
+            providerEvidence: 'none',
+            executionTarget: 'local',
+            failureKind: 'probeTimedOut',
+            canContinueAnyway: true,
+            checkedAtMs: 2,
+            cliInstalled: true,
+            daemonReachable: false,
+        };
+        const runtime = mockRuntime({
+            isDockerReady: jest.fn().mockResolvedValueOnce(ready).mockResolvedValueOnce(indeterminate),
+            listByLabel: jest.fn().mockResolvedValue([]),
+            removeVolume: jest.fn().mockResolvedValue(undefined),
+            findAvailablePort: jest.fn().mockResolvedValue(QUICK_START_PORT),
+            pullImage: jest.fn().mockRejectedValue(new Error('manifest unknown')),
+        });
+        const service = new QuickStartServiceImpl(runtime);
+        const events: StageEvent[] = [];
+
+        for await (const event of service.provision(new AbortController().signal)) {
+            events.push(event);
+        }
+
+        expect(events.at(-1)).toMatchObject({ stage: 'error', error: 'manifest unknown' });
+        expect(events.at(-1)?.dockerReadiness).toBeUndefined();
+    });
+
+    it('adds the published-port explanation only for dev-container readiness timeouts', () => {
+        expect(getReadinessTimeoutMessage('devContainer')).toContain(
+            'published localhost port might not be reachable from inside the dev container',
+        );
+        expect(getReadinessTimeoutMessage('linux')).toBe(
+            'DocumentDB did not accept connections in time. It may still be initializing.',
+        );
+    });
 
     it('aborts (never removes/wipes) when a managed container exists but no secret is recoverable', async () => {
         ext.secretStorage = fakeSecretStorage({});
@@ -924,5 +1088,66 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         await drain(service.provision(new AbortController().signal));
 
         expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues past an indeterminate readiness result only when explicitly requested', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({
+                containers: [],
+                findAvailablePort: undefined,
+                removeVolume,
+                readiness: {
+                    outcome: 'indeterminate',
+                    environment: 'linux',
+                    endpointKind: 'unixSocket',
+                    provider: 'unknown',
+                    providerEvidence: 'none',
+                    executionTarget: 'local',
+                    failureKind: 'unknown',
+                    canContinueAnyway: true,
+                    checkedAtMs: Date.now(),
+                    cliInstalled: true,
+                    daemonReachable: false,
+                },
+            }),
+        );
+
+        await drain(service.provision(new AbortController().signal, { continueAnyway: true }));
+
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not bypass a diagnosed readiness failure', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({
+                containers: [],
+                findAvailablePort: undefined,
+                removeVolume,
+                readiness: {
+                    outcome: 'diagnosed',
+                    environment: 'linux',
+                    endpointKind: 'unixSocket',
+                    provider: 'unknown',
+                    providerEvidence: 'none',
+                    executionTarget: 'local',
+                    failureKind: 'permissionDenied',
+                    canContinueAnyway: false,
+                    checkedAtMs: Date.now(),
+                    cliInstalled: true,
+                    daemonReachable: false,
+                },
+            }),
+        );
+
+        await drain(service.provision(new AbortController().signal, { continueAnyway: true }));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.Error);
     });
 });

@@ -18,14 +18,16 @@
  * `../../_integration/trpc`, never from `appRouter.ts`.
  */
 
+import { CancellationTokenLike } from '@microsoft/vscode-processutils';
 import * as vscode from 'vscode';
 import { z } from 'zod';
 import {
     ContainerRuntime,
     getQuickStartOutputChannel,
-    startDockerDesktop,
+    startDockerProvider,
 } from '../../../services/localQuickStart/ContainerRuntime';
 import { QuickStartService } from '../../../services/localQuickStart/QuickStartService';
+import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/dockerRecoveryCommands';
 import {
     type AdvancedQuickStartOptions,
     type DockerStatusResult,
@@ -34,6 +36,7 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { type BaseRouterContext } from '../../_integration/appRouter';
 import { publicProcedure, publicProcedureWithTelemetry, router, type WithTelemetry } from '../../_integration/trpc';
+import { getDockerReadinessTelemetryProperties } from './dockerReadinessTelemetry';
 
 /**
  * Advanced provisioning overrides (P1-4). All optional; the webview only sends the
@@ -75,6 +78,7 @@ const advancedOptionsSchema = z
             .regex(/^[\w][\w.-]*$/, 'Invalid image tag')
             .optional(),
         loadSampleData: z.boolean().optional(),
+        continueAnyway: z.boolean().optional(),
     })
     // Mirror the webview's both-or-neither rule server-side: a username without a password
     // (or vice versa) is rejected rather than silently auto-generating, so a direct tRPC
@@ -108,28 +112,44 @@ function toWebviewStatus(status: QuickStartStatus): QuickStartStatus {
 
 export const localQuickStartRouter = router({
     /** Readiness pre-check + current managed-instance status (powers the review cards). */
-    getDockerStatus: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<DockerStatusResult> => {
-        const readiness = await ContainerRuntime.isDockerReady();
-        // Refresh the live container state so the panel opens with an accurate badge
-        // (e.g. Missing when the container was removed in another window), which drives
-        // whether the Advanced credential/image fields are shown (§12).
-        await QuickStartService.refreshLiveState();
-        const tctx = ctx as WithTelemetry<RouterContext>;
-        // Design §14 quickstart.docker_readiness — never includes names/ports/creds.
-        tctx.actionContext.telemetry.properties.dockerReadiness = !readiness.cliInstalled
-            ? 'cliMissing'
-            : !readiness.daemonReachable
-              ? 'daemonStopped'
-              : 'ok';
-        tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
-        const willReuse = await QuickStartService.willReuseExistingInstance();
-        return {
-            readiness,
-            status: toWebviewStatus(QuickStartService.getStatus()),
-            busy: QuickStartService.isBusy,
-            willReuse,
-        };
-    }),
+    getDockerStatus: publicProcedureWithTelemetry
+        .input(
+            z
+                .object({
+                    forceRefresh: z.boolean().optional(),
+                    polled: z.boolean().optional(),
+                    resetProviderMemory: z.boolean().optional(),
+                    suppressCommandEcho: z.boolean().optional(),
+                })
+                .optional(),
+        )
+        .query(async ({ ctx, input }): Promise<DockerStatusResult> => {
+            const tctx = ctx as WithTelemetry<RouterContext>;
+            if (input?.polled) {
+                tctx.actionContext.telemetry.suppressAll = true;
+            }
+            const cancellationToken = ctx.signal ? CancellationTokenLike.fromAbortSignal(ctx.signal) : undefined;
+            const readiness = await ContainerRuntime.isDockerReady({
+                forceRefresh: input?.forceRefresh,
+                resetProviderMemory: input?.resetProviderMemory,
+                suppressCommandEcho: input?.suppressCommandEcho,
+                cancellationToken,
+            });
+            // Refresh the live container state so the panel opens with an accurate badge
+            // (e.g. Missing when the container was removed in another window), which drives
+            // whether the Advanced credential/image fields are shown (§12).
+            await QuickStartService.refreshLiveState();
+            // Design §14 quickstart.docker_readiness never includes names, ports, or credentials.
+            Object.assign(tctx.actionContext.telemetry.properties, getDockerReadinessTelemetryProperties(readiness));
+            tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
+            const willReuse = await QuickStartService.willReuseExistingInstance();
+            return {
+                readiness,
+                status: toWebviewStatus(QuickStartService.getStatus()),
+                busy: QuickStartService.isBusy,
+                willReuse,
+            };
+        }),
 
     /** Lightweight status poll (no docker call). */
     getStatus: publicProcedure.query((): QuickStartStatus => toWebviewStatus(QuickStartService.getStatus())),
@@ -139,13 +159,28 @@ export const localQuickStartRouter = router({
         (ctx as RouterContext).closePanel();
     }),
 
-    /** Reveal the OutputChannel with the (masked) docker command output. */
+    /** Reveal the OutputChannel with the captured Docker command output. */
     showOutput: publicProcedure.mutation(() => {
         getQuickStartOutputChannel().show(true);
     }),
 
-    /** Best-effort launch of Docker Desktop (design §5.3). Returns true if attempted. */
-    startDockerDesktop: publicProcedure.mutation((): Promise<boolean> => startDockerDesktop()),
+    /** Copy one fixed, never-executed recovery command selected by the extension host. */
+    copyRecoveryCommand: publicProcedureWithTelemetry
+        .input(z.enum(['linuxDockerGroup', 'linuxStartService', 'wslStartServiceNoSystemd', 'wslRestartFromWindows']))
+        .mutation(async ({ input, ctx }): Promise<void> => {
+            const command = getDockerRecoveryCommandById(input);
+            await vscode.env.clipboard.writeText(command.commandLine);
+            const tctx = ctx as WithTelemetry<RouterContext>;
+            tctx.actionContext.telemetry.properties.recoveryCommandId = command.id;
+        }),
+
+    /** Revalidate and launch the provider action selected by the extension host. */
+    startDockerProvider: publicProcedureWithTelemetry.mutation(async ({ ctx }) => {
+        const result = await startDockerProvider();
+        const tctx = ctx as WithTelemetry<RouterContext>;
+        tctx.actionContext.telemetry.properties.dockerLaunchResult = result;
+        return result;
+    }),
 
     /** Success hand-off (§5.5): focus the Connections view where the instance now lives. */
     openConnection: publicProcedure.mutation(async () => {
@@ -177,7 +212,7 @@ export const localQuickStartRouter = router({
         ctx,
         input,
     }): AsyncGenerator<StageEvent, void, void> {
-        const myCtx = ctx as BaseRouterContext;
+        const myCtx = ctx as WithTelemetry<RouterContext>;
 
         // Mirror the subscription's abort signal so cancelling the subscription
         // (Cancel button / panel close) cancels the in-flight provisioning and
@@ -192,6 +227,7 @@ export const localQuickStartRouter = router({
 
         try {
             const advanced: AdvancedQuickStartOptions | undefined = input ?? undefined;
+            myCtx.actionContext.telemetry.properties.continueAnyway = String(advanced?.continueAnyway === true);
             for await (const event of QuickStartService.provision(abortController.signal, advanced)) {
                 yield event;
             }

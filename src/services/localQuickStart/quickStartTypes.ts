@@ -10,6 +10,8 @@
  * Terminology: "DocumentDB" is the service; the wire protocol is the MongoDB/DocumentDB API.
  */
 
+import { type CancellationToken } from 'vscode';
+
 /** Official DocumentDB local image (github.com/microsoft/documentdb README). */
 export const QUICK_START_IMAGE_REPOSITORY = 'ghcr.io/documentdb/documentdb/documentdb-local';
 export const QUICK_START_DEFAULT_TAG = 'latest';
@@ -45,6 +47,8 @@ export interface AdvancedQuickStartOptions {
     imageTag?: string;
     /** Seed the image's built-in sample data (default `true`). */
     loadSampleData?: boolean;
+    /** Bypass only an indeterminate readiness diagnosis; the service revalidates this condition. */
+    continueAnyway?: boolean;
 }
 
 /** Fixed container name for the single managed instance (POC). */
@@ -163,6 +167,8 @@ export interface StageEvent {
      * webview offers "Wait longer" / "View logs" / "Start over" instead of a hard failure.
      */
     readonly timedOut?: boolean;
+    /** Typed recovery result when Docker became unavailable during pull or run. */
+    readonly dockerReadiness?: DockerReadiness;
 }
 
 /** Metadata describing the currently-managed instance. */
@@ -184,16 +190,146 @@ export interface InstanceMetadata {
     readonly imageRef?: string;
 }
 
-/** Result of the Docker readiness pre-check (design §9, prereq cards). */
-export interface DockerReadiness {
+export type DockerReadinessOutcome = 'ready' | 'diagnosed' | 'indeterminate';
+
+export type DockerHostEnvironment =
+    | 'windows'
+    | 'macos'
+    | 'linux'
+    | 'wsl'
+    | 'ssh'
+    | 'devContainer'
+    | 'codespaces'
+    | 'otherRemote'
+    | 'unsupported';
+
+export type DockerProvider = 'dockerDesktop' | 'dockerEngine' | 'unknown';
+
+export type DockerProviderEvidence =
+    | 'liveDaemon'
+    | 'activeContext'
+    | 'installedApplication'
+    | 'rememberedProvider'
+    | 'none';
+
+export type DockerFailureKind =
+    | 'cliMissing'
+    | 'permissionDenied'
+    | 'daemonUnavailable'
+    | 'daemonStarting'
+    | 'contextUnavailable'
+    | 'endpointUnreachable'
+    | 'probeTimedOut'
+    | 'unsupportedHost'
+    | 'windowsContainers'
+    | 'unknown';
+
+export type DockerEndpointKind = 'unixSocket' | 'namedPipe' | 'tcp' | 'ssh' | 'unknown';
+
+export type DockerStartAction =
+    | 'startDockerDesktopWindows'
+    | 'startDockerDesktopMacOS'
+    | 'startDockerDesktopLinux'
+    | 'startDockerDesktopWindowsFromWsl'
+    | 'startRootlessDockerEngineLinux';
+
+export type DockerLaunchResult = 'started' | 'launchAttempted' | 'notAvailable' | 'failed';
+
+export type DockerExecutionTarget = 'local' | 'wsl' | 'ssh' | 'devContainer' | 'codespaces' | 'otherRemote';
+
+export type DockerPermissionDetail = 'notInGroup' | 'pendingSessionRestart' | 'unknown';
+
+export type DockerServiceManager = 'systemd' | 'service' | 'unknown';
+
+export interface DockerProbeEvidence {
+    readonly probe: 'cliVersion' | 'info' | 'contexts';
+    readonly exitCode?: number;
+    readonly spawnErrorCode?: string;
+    readonly stdout: string;
+    readonly stderr: string;
+    readonly endedBy: 'exit' | 'deadline' | 'cancellation';
+    readonly durationMs: number;
+}
+
+export interface DockerEndpointProbe {
+    readonly kind: DockerEndpointKind;
+    readonly accessErrorCode?: string;
+    readonly source: 'dockerHostEnv' | 'dockerContextEnv' | 'currentContext' | 'platformDefault';
+}
+
+export interface DockerSocketGroupFacts {
+    readonly socketGid?: number;
+    readonly processHasSocketGroup?: boolean;
+    readonly userIsGroupMember?: boolean;
+}
+
+export interface DockerRecoveryCommand {
+    readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslStartServiceNoSystemd' | 'wslRestartFromWindows';
+    readonly commandLine: string;
+    readonly requiresElevation: boolean;
+}
+
+export interface DockerProviderMemory {
+    readonly provider: DockerProvider;
+    readonly endpointKind: DockerEndpointKind;
+    readonly hostEnvironment: DockerHostEnvironment;
+    readonly daemonArchitecture?: string;
+    readonly osType?: 'linux' | 'windows';
+    readonly recordedAtMs: number;
+}
+
+export interface DockerReadinessRequest {
+    readonly forceRefresh?: boolean;
+    readonly resetProviderMemory?: boolean;
+    readonly suppressCommandEcho?: boolean;
+    readonly cancellationToken?: CancellationToken;
+}
+
+interface DockerReadinessBase {
+    readonly environment: DockerHostEnvironment;
+    readonly endpointKind: DockerEndpointKind;
+    readonly endpointSource?: DockerEndpointProbe['source'];
+    readonly provider: DockerProvider;
+    readonly providerEvidence: DockerProviderEvidence;
+    readonly providerRecordedAtMs?: number;
+    readonly executionTarget: DockerExecutionTarget;
+    readonly startAction?: DockerStartAction;
+    readonly permissionDetail?: DockerPermissionDetail;
+    readonly recoveryCommand?: DockerRecoveryCommand;
+    readonly checkedAtMs: number;
     readonly cliInstalled: boolean;
     readonly cliVersion?: string;
-    readonly daemonReachable: boolean;
+    readonly osType?: 'linux' | 'windows';
+    readonly daemonArchitecture?: string;
+    readonly diagnosticFingerprint?: string;
     /** Host CPU architecture (e.g. `x64`, `arm64`) and whether it is supported (§9). */
     readonly arch?: string;
     readonly platformSupported?: boolean;
-    readonly error?: string;
 }
+
+export interface DockerReadyReadiness extends DockerReadinessBase {
+    readonly outcome: 'ready';
+    readonly failureKind?: never;
+    readonly canContinueAnyway: false;
+    readonly daemonReachable: true;
+}
+
+export interface DockerDiagnosedReadiness extends DockerReadinessBase {
+    readonly outcome: 'diagnosed';
+    readonly failureKind: Exclude<DockerFailureKind, 'probeTimedOut' | 'unknown'>;
+    readonly canContinueAnyway: false;
+    readonly daemonReachable: boolean;
+}
+
+export interface DockerIndeterminateReadiness extends DockerReadinessBase {
+    readonly outcome: 'indeterminate';
+    readonly failureKind: Extract<DockerFailureKind, 'probeTimedOut' | 'unknown'>;
+    readonly canContinueAnyway: true;
+    readonly daemonReachable: false;
+}
+
+/** Result of the Docker readiness pre-check (design §9, prereq cards). */
+export type DockerReadiness = DockerReadyReadiness | DockerDiagnosedReadiness | DockerIndeterminateReadiness;
 
 /** Snapshot of the managed instance for the webview / tree. */
 export interface QuickStartStatus {

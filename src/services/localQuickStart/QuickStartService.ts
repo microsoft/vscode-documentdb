@@ -54,6 +54,8 @@ import {
     clusterId,
     containerName,
     DEFAULT_ALIAS,
+    type DockerHostEnvironment,
+    type DockerReadiness,
     imageRefKey,
     type InstanceMetadata,
     InstanceState,
@@ -189,8 +191,18 @@ function stageEvent(
     error?: string,
     boundPort?: number,
     timedOut?: boolean,
+    dockerReadiness?: DockerReadiness,
 ): StageEvent {
-    return { stage, status, message, error, boundPort, timedOut };
+    return { stage, status, message, error, boundPort, timedOut, dockerReadiness };
+}
+
+export function getReadinessTimeoutMessage(environment: DockerHostEnvironment | undefined): string {
+    if (environment === 'devContainer') {
+        return l10n.t(
+            'DocumentDB did not accept connections in time. Docker may be running on the dev container host, so the published localhost port might not be reachable from inside the dev container.',
+        );
+    }
+    return l10n.t('DocumentDB did not accept connections in time. It may still be initializing.');
 }
 
 /** Cancellable delay that rejects if the signal aborts. */
@@ -384,6 +396,9 @@ export class QuickStartServiceImpl {
         let success = false;
         let portFallback = false;
         let readinessTimedOut = false;
+        let readinessEnvironment: DockerHostEnvironment | undefined;
+        let activeDockerStage: Extract<ProvisionStage, 'pulling' | 'creating'> | undefined;
+        let provisioningDockerFailureKind: string | undefined;
         // The terminal StageEvent (timeout OR hard error) is buffered and yielded AFTER `finally`
         // runs, so by the time the webview shows "Wait longer" / "Retry" the service flags
         // (provisioning/lifecycleBusy) are already clean — otherwise a fast click could hit the
@@ -397,8 +412,11 @@ export class QuickStartServiceImpl {
             // --- checking ---
             yield stageEvent('checking', 'active', 'Checking Docker…');
             const readiness = await this.runtime.isDockerReady();
+            readinessEnvironment = readiness.environment;
             this.throwIfAborted(signal);
-            if (!readiness.cliInstalled || !readiness.daemonReachable) {
+            const continueAfterIndeterminateReadiness =
+                options?.continueAnyway === true && readiness.outcome === 'indeterminate';
+            if ((!readiness.cliInstalled || !readiness.daemonReachable) && !continueAfterIndeterminateReadiness) {
                 const message = !readiness.cliInstalled
                     ? 'Docker CLI was not found on your PATH. Install Docker and retry.'
                     : 'Docker is installed but the daemon is not reachable. Start Docker and retry.';
@@ -480,7 +498,9 @@ export class QuickStartServiceImpl {
 
             // --- pulling ---
             yield stageEvent('pulling', 'active', 'Pulling the official image…');
+            activeDockerStage = 'pulling';
             await this.runtime.pullImage(imageRef, cts.token);
+            activeDockerStage = undefined;
             this.throwIfAborted(signal);
             yield stageEvent('pulling', 'done');
 
@@ -491,6 +511,7 @@ export class QuickStartServiceImpl {
             // appear on the docker CLI / host process list (design §8.2). The image
             // reads USERNAME/PASSWORD from the environment.
             envFilePath = await this.writeEnvFile(credentials.username, credentials.password);
+            activeDockerStage = 'creating';
             containerId = await this.runtime.createAndRunContainer(
                 {
                     imageRef: imageRef,
@@ -510,6 +531,7 @@ export class QuickStartServiceImpl {
                 secrets,
                 cts.token,
             );
+            activeDockerStage = undefined;
             containerCreated = true;
             if (!containerId) {
                 const item = await this.runtime.inspectContainer(containerName(alias));
@@ -563,7 +585,10 @@ export class QuickStartServiceImpl {
             );
         } catch (error) {
             const aborted = signal.aborted;
-            const message = aborted ? 'Setup was cancelled.' : errMessage(error);
+            const dockerReadiness =
+                !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
+            provisioningDockerFailureKind = dockerReadiness?.failureKind;
+            let message = aborted ? 'Setup was cancelled.' : errMessage(error);
             if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
                 // The container is running but the database did not accept connections within the
                 // window — it may still be initializing. KEEP it running (finally skips teardown)
@@ -571,6 +596,8 @@ export class QuickStartServiceImpl {
                 // "Wait longer" resume finish adoption. The instance sits in Error until then. The
                 // event is buffered and emitted after `finally` (see below) so the flags are clean.
                 readinessTimedOut = true;
+                channel.appendLine(`[readiness-timeout] ${message}`);
+                message = getReadinessTimeoutMessage(readinessEnvironment);
                 this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('waiting', 'error', message, message, undefined, /* timedOut */ true);
             } else {
@@ -578,12 +605,23 @@ export class QuickStartServiceImpl {
                 // stale timeout can't offer "Wait longer" against a container we're about to remove.
                 this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
                 if (!aborted) {
+                    if (dockerReadiness) {
+                        message = l10n.t('Docker became unavailable during setup: {0}', message);
+                    }
                     this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                 }
                 // Buffered and emitted after `finally` (like the timeout event) so a Retry click
                 // driven by this event can't race the still-set `provisioning` guard either
                 // (opus-4.7). On unsubscribe/return() the post-finally yield is simply skipped.
-                terminalEvent = stageEvent('error', 'error', message, aborted ? undefined : message);
+                terminalEvent = stageEvent(
+                    'error',
+                    'error',
+                    message,
+                    aborted ? undefined : message,
+                    undefined,
+                    undefined,
+                    dockerReadiness,
+                );
             }
         } finally {
             // Stop the followLogs stream (started with cts.token). Disposing alone
@@ -635,6 +673,7 @@ export class QuickStartServiceImpl {
                 telemetryContext.telemetry.properties.customCreds = String(usedCustomCreds);
                 telemetryContext.telemetry.properties.customImage = String(usedCustomImage);
                 telemetryContext.telemetry.properties.sampleData = String(sampleDataRequested);
+                telemetryContext.telemetry.properties.dockerFailureKind = provisioningDockerFailureKind ?? 'none';
                 telemetryContext.telemetry.measurements.provisionMs = Date.now() - provisionStartedAt;
             });
             this.stateFor(DEFAULT_ALIAS).provisioning = false;
@@ -643,6 +682,15 @@ export class QuickStartServiceImpl {
         // over" / "Retry" click triggered by this event never races the still-running guard.
         if (terminalEvent) {
             yield terminalEvent;
+        }
+    }
+
+    private async getProvisioningDockerReadiness(): Promise<DockerReadiness | undefined> {
+        try {
+            const readiness = await this.runtime.isDockerReady({ forceRefresh: true });
+            return readiness.outcome === 'diagnosed' ? readiness : undefined;
+        } catch {
+            return undefined;
         }
     }
 
