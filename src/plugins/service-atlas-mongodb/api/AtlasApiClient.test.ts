@@ -174,6 +174,40 @@ describe('AtlasApiClient pagination', () => {
         expect(requestedUrls()[0]).toContain('/groups/group%2F1/clusters?itemsPerPage=500&pageNum=1');
     });
 
+    it('traces secret-free diagnostics for every discovered cluster', async () => {
+        fetchMock.mockResolvedValueOnce(
+            jsonResponse({
+                results: [
+                    {
+                        id: 'c1',
+                        name: 'PausedCluster',
+                        groupId: 'g1',
+                        mongoDBVersion: '8.0.0',
+                        paused: true,
+                        stateName: 'IDLE',
+                        clusterType: 'REPLICASET',
+                        providerSettings: {
+                            providerName: 'AWS',
+                            regionName: 'US_EAST_1',
+                            instanceSizeName: 'M10',
+                        },
+                        connectionStrings: { standardSrv: 'mongodb+srv://must-not-appear.example.invalid' },
+                    },
+                ],
+                totalCount: 1,
+            }),
+        );
+
+        const clusters = await new AtlasApiClient(session).listClusters('g1');
+
+        expect(clusters[0].paused).toBe(true);
+        const traced = (ext.outputChannel.trace as jest.Mock).mock.calls.map((call) => String(call[0])).join('\n');
+        expect(traced).toContain(
+            'cluster "PausedCluster": state=IDLE, paused=true, type=REPLICASET, provider=AWS, region=US_EAST_1, tier=M10, connectionString=available',
+        );
+        expect(traced).not.toContain('must-not-appear.example.invalid');
+    });
+
     it('does not paginate single-resource requests', async () => {
         fetchMock.mockResolvedValueOnce(jsonResponse({ id: 'u1', emailAddress: 'a@b.invalid' }));
 

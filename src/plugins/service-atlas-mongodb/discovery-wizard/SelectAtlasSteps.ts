@@ -284,17 +284,20 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
                 const providerDescription = provider
                     ? `${provider.instanceSizeName}, ${provider.providerName}`
                     : c.clusterType;
-                const stateLabel = getClusterStateLabel(c.stateName);
+                const paused = c.paused === true;
+                const isConnectable = !paused && c.stateName === 'IDLE';
+                const stateLabel = paused ? vscode.l10n.t('Paused') : getClusterStateLabel(c.stateName);
                 return {
-                    itemType: c.stateName === 'IDLE' ? ('cluster' as const) : ('unavailableCluster' as const),
+                    itemType: isConnectable ? ('cluster' as const) : ('unavailableCluster' as const),
                     label: c.name,
                     description: stateLabel ? `${providerDescription} · ${stateLabel}` : providerDescription,
-                    detail:
-                        c.stateName === 'IDLE'
-                            ? (c.connectionStrings?.standardSrv ?? c.connectionStrings?.standard)
-                            : vscode.l10n.t(
-                                  'Visible in the tree, but not connectable until the cluster returns to IDLE.',
-                              ),
+                    detail: isConnectable
+                        ? (c.connectionStrings?.standardSrv ?? c.connectionStrings?.standard)
+                        : paused
+                          ? vscode.l10n.t('Resume this cluster in MongoDB Atlas before connecting.')
+                          : vscode.l10n.t(
+                                'Visible in the tree, but not connectable until the cluster returns to IDLE.',
+                            ),
                     cluster: c,
                 };
             })
@@ -326,7 +329,10 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             vscode.l10n.t('Cluster not connectable yet'),
             {
                 modal: true,
-                detail: getClusterStateExplanation(cluster.stateName),
+                detail:
+                    cluster.paused === true
+                        ? vscode.l10n.t('This cluster is paused. Resume it in MongoDB Atlas before connecting.')
+                        : getClusterStateExplanation(cluster.stateName),
             },
             vscode.l10n.t('OK'),
         );

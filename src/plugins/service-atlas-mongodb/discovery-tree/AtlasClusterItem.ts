@@ -346,11 +346,15 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
     /** IDLE with a known connection string is the only state a cluster can be opened from. */
     private isConnectable(): boolean {
-        return this.cluster.stateName === 'IDLE' && !!this.cluster.connectionString;
+        return !this.cluster.paused && this.cluster.stateName === 'IDLE' && !!this.cluster.connectionString;
     }
 
     /** Localized reason a non-connectable cluster cannot be opened, for tooltips and guards. */
     private describeUnavailable(): string {
+        if (this.cluster.paused) {
+            return l10n.t('This cluster is paused. Resume it in MongoDB Atlas before connecting.');
+        }
+
         return (
             this.getStateExplanation() ??
             l10n.t(
@@ -432,6 +436,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
         // product name, per the repository terminology policy.
         const fields: Array<[string, string | undefined]> = [
             [l10n.t('State'), this.cluster.stateName],
+            [l10n.t('Availability'), this.cluster.paused ? l10n.t('Paused') : undefined],
             [l10n.t('Type'), this.cluster.clusterType],
             [l10n.t('Server version'), this.cluster.mongoDBVersion ? `v${this.cluster.mongoDBVersion}` : undefined],
             [l10n.t('Tier'), this.cluster.instanceSizeName],
@@ -468,6 +473,10 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      * normal IDLE state (which needs no annotation). Shown in the tree item description.
      */
     private getStateLabel(): string | undefined {
+        if (this.cluster.paused) {
+            return l10n.t('Paused');
+        }
+
         const labels: Record<AtlasClusterState, string | undefined> = {
             IDLE: undefined,
             CREATING: l10n.t('Creating…'),
@@ -484,6 +493,10 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      * tooltip, or `undefined` when the cluster is IDLE.
      */
     private getStateExplanation(): string | undefined {
+        if (this.cluster.paused) {
+            return l10n.t('This cluster is paused. Resume it in MongoDB Atlas before connecting.');
+        }
+
         switch (this.cluster.stateName) {
             case 'CREATING':
                 return l10n.t(

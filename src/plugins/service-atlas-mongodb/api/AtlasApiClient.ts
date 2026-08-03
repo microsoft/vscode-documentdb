@@ -88,7 +88,23 @@ export class AtlasApiClient {
      * Lists all clusters in a given project.
      */
     async listClusters(projectId: string, signal?: AbortSignal): Promise<AtlasCluster[]> {
-        return this.requestAllPages<AtlasCluster>(`/groups/${encodeURIComponent(projectId)}/clusters`, signal);
+        const clusters = await this.requestAllPages<AtlasCluster>(
+            `/groups/${encodeURIComponent(projectId)}/clusters`,
+            signal,
+        );
+
+        for (const cluster of clusters) {
+            const provider = cluster.providerSettings ?? cluster.replicationSpecs?.[0]?.regionConfigs?.[0];
+            const hasConnectionString = !!(
+                cluster.connectionStrings?.standardSrv ?? cluster.connectionStrings?.standard
+            );
+            const paused = cluster.paused === undefined ? 'missing' : String(cluster.paused);
+            atlasTrace(
+                `${this.describeClient()} cluster "${cluster.name}": state=${cluster.stateName}, paused=${paused}, type=${cluster.clusterType}, provider=${provider?.providerName ?? 'unknown'}, region=${provider?.regionName ?? 'unknown'}, tier=${cluster.providerSettings?.instanceSizeName ?? cluster.replicationSpecs?.[0]?.regionConfigs?.[0]?.electableSpecs?.instanceSize ?? 'unknown'}, connectionString=${hasConnectionString ? 'available' : 'missing'}`,
+            );
+        }
+
+        return clusters;
     }
 
     /**
