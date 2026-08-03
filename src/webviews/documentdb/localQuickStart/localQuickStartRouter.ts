@@ -155,7 +155,7 @@ export const localQuickStartRouter = router({
         (ctx as RouterContext).closePanel();
     }),
 
-    /** Reveal the OutputChannel with the (masked) docker command output. */
+    /** Reveal the OutputChannel with the captured Docker command output. */
     showOutput: publicProcedure.mutation(() => {
         getQuickStartOutputChannel().show(true);
     }),

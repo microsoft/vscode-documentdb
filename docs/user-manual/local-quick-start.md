@@ -24,11 +24,11 @@ The extension host matters. In a local VS Code window, Docker and DocumentDB Loc
 3. Review the Docker, port, platform, data, and security cards.
 4. Select **Start DocumentDB Local**.
 
-The setup view shows pull, create, start, and connection-readiness progress. Docker command output is written to the masked **DocumentDB Local Quick Start** output channel.
+The setup view shows pull, create, start, and connection-readiness progress. Docker command output is written to the **DocumentDB Local Quick Start** output channel.
 
 ## Docker is not ready
 
-The readiness screen separates Docker CLI, daemon, and daemon-platform facts. Use **View Docker output** for masked command details. Use **Refresh** to discard cached and remembered provider facts and run every check again.
+The readiness screen separates Docker CLI, daemon, and daemon-platform facts. Use **View Docker output** for command details. Use **Refresh** to discard cached and remembered provider facts and run every check again.
 
 ### Docker CLI not found
 

@@ -5,6 +5,7 @@
 
 import { type ListContextItem, type PromiseCommandResponse } from '@microsoft/vscode-container-client';
 import { Bash } from '@microsoft/vscode-processutils';
+import { Writable } from 'stream';
 import type * as vscode from 'vscode';
 import {
     detectDockerHostEnvironment,
@@ -757,12 +758,14 @@ describe('DockerReadinessService', () => {
         expect(writeProviderMemory).toHaveBeenCalledWith(undefined);
     });
 
-    it('suppresses successful poll command echoes and retains a failing probe echo', async () => {
+    it('suppresses successful poll transcripts and retains a failing probe transcript', async () => {
         const onCommand = jest.fn();
+        const stdout: string[] = [];
+        const stderr: string[] = [];
         const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
             options.onCommand?.(`docker ${options.probe}`);
             if (options.probe === 'info') {
-                return evidence('info', { exitCode: 1 });
+                return evidence('info', { exitCode: 1, stdout: 'failed stdout', stderr: 'failed stderr' });
             }
             if (options.probe === 'contexts') {
                 return evidence('contexts', { stdout: '[]' });
@@ -776,13 +779,29 @@ describe('DockerReadinessService', () => {
             environmentVariables: {},
             runProbe,
             probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
-            createProbeOutput: () => ({ onCommand }),
+            createProbeOutput: () => ({
+                onCommand,
+                stdOutPipe: new Writable({
+                    write: (chunk, _encoding, callback): void => {
+                        stdout.push(String(chunk));
+                        callback();
+                    },
+                }),
+                stdErrPipe: new Writable({
+                    write: (chunk, _encoding, callback): void => {
+                        stderr.push(String(chunk));
+                        callback();
+                    },
+                }),
+            }),
         });
 
         await service.getReadiness({ suppressCommandEcho: true });
 
         expect(onCommand).toHaveBeenCalledTimes(1);
         expect(onCommand).toHaveBeenCalledWith('docker info');
+        expect(stdout).toEqual(['failed stdout']);
+        expect(stderr).toEqual(['failed stderr']);
     });
 });
 

@@ -136,7 +136,7 @@ export interface IContainerRuntime {
 
 /**
  * Stateless wrapper around a single Docker {@link DockerClient}. Each call
- * builds a fresh runner so its masked stdout/stderr writables don't leak state
+ * builds a fresh runner so its line-buffered stdout/stderr writables don't leak state
  * between commands.
  */
 class ContainerRuntimeImpl implements IContainerRuntime {

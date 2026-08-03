@@ -314,7 +314,7 @@ export class DockerReadinessService {
         didDeadlineExpire: () => boolean,
         suppressCommandEcho: boolean,
     ): Promise<DockerProbeEvidence> {
-        const output = this.dependencies.createProbeOutput?.();
+        const output = suppressCommandEcho ? undefined : this.dependencies.createProbeOutput?.();
         let commandText: string | undefined;
         return this.dependencies
             .runProbe({
@@ -334,8 +334,13 @@ export class DockerReadinessService {
                 now: this.dependencies.now,
             })
             .then((evidence) => {
-                if (suppressCommandEcho && !isSuccessfulProbe(evidence) && commandText) {
-                    output?.onCommand?.(commandText);
+                if (suppressCommandEcho && !isSuccessfulProbe(evidence)) {
+                    const failureOutput = this.dependencies.createProbeOutput?.();
+                    if (commandText) {
+                        failureOutput?.onCommand?.(commandText);
+                    }
+                    failureOutput?.stdOutPipe?.end(evidence.stdout);
+                    failureOutput?.stdErrPipe?.end(evidence.stderr);
                 }
                 return evidence;
             });
