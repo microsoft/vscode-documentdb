@@ -667,6 +667,20 @@ Failure readiness now carries the capability selected by the launcher owner. The
 - Record a redacted fingerprint for `unknown` classifications: lowercase the captured stderr, replace digits, paths, and hex runs with placeholders, truncate, and hash. This is what turns unclassified real-world failures into new rules instead of leaving the classifier frozen at whatever this plan imagined.
 - Never record raw errors, executable paths, socket paths, context names, or environment variable values.
 
+#### Slice B implementation checkpoint (completed 2026-08-03)
+
+Implemented and pushed in [commit `149025d5`](https://github.com/microsoft/vscode-documentdb/commit/149025d5129e3064422530abd70599ee49640bb6). The public mutation is now `startDockerProvider` and returns `DockerLaunchResult`. It calls the WI-4 coordinator, which force-refreshes readiness and revalidates the selected action on the extension host immediately before launch. Launch telemetry records only `started`, `launchAttempted`, `notAvailable`, or `failed`. The temporary WI-4 boolean adapter and old router procedure were removed.
+
+Readiness telemetry is produced by one pure projection containing only outcome, environment, endpoint kind, provider, provider evidence, failure kind, permission detail, start action, daemon OS type, and boolean readiness/continuation categories. The existing copied-command telemetry remains the fixed command ID only, and provisioning telemetry continues to record only whether the host-validated Continue anyway path was requested.
+
+Unknown diagnostics now receive a host-side redacted fingerprint before the readiness result is serialized. The normalizer lowercases and replaces context names, endpoint URIs, Windows and Unix paths, host/lookup/dial values, IP addresses, DNS-like names, long hex runs, and digits; it collapses whitespace, truncates to 512 characters, hashes with SHA-256, and emits only the first 16 hexadecimal characters. Empty diagnostics produce no fingerprint, and diagnosed failures never emit one. Raw errors, paths, endpoint values, context names, and environment variable values are not telemetry properties.
+
+Twenty-eight focused fingerprint, telemetry-projection, and direct tRPC caller tests passed. The caller test proves the renamed mutation returns and records a typed launch result. Targeted ESLint, editor diagnostics, and the full root TypeScript build passed.
+
+**Contract-boundary choice:** The React call site was changed from `startDockerDesktop` to `startDockerProvider` in this work item, while its fixed five-second delay and presentation behavior remain for WI-6. Two options were considered: leave the client temporarily uncompilable until WI-6, or include the minimal generated-contract consumer rename with WI-5. The latter was selected because each work-item commit must build independently; no WI-6 presentation or polling behavior was pulled forward.
+
+**Correction before commit:** The first direct router-test compile used a string literal for `dbExperience`; it was replaced with the repository's `API.DocumentDB` enum before commit. No committed history was reset or rewritten.
+
 ### WI-6: Update the webview
 
 - Add a pure semantic presentation mapper.
