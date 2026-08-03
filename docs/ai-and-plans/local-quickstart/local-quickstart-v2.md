@@ -8,6 +8,12 @@
 > exception handling into the regular connection wizard.
 >
 > **Scope:** UX design and architecture. Not an implementation plan.
+>
+> **Docker readiness update:** The provider-neutral behavior in
+> [docker-readiness-implementation-plan.md](./docker-readiness-implementation-plan.md)
+> supersedes the Docker Desktop-only examples in this historical design. Docker
+> Engine and Docker Desktop are supported providers; the prerequisite is a Docker
+> CLI that can reach a Linux-container daemon from the extension host.
 
 ---
 
@@ -117,12 +123,11 @@ responsive columns, metric cards, and clear action buttons.
 |                                                                      |
 |  ┌────────────────────────────────────────────────────────────────┐  |
 |  │  🚀  Start DocumentDB Local                                   │  |
-|  │                                                                │  |
-|  │  Get a working local DocumentDB instance in one click.        │  |
-|  │  No terminal commands needed.                                  │  |
-|  └────────────────────────────────────────────────────────────────┘  |
 |                                                                      |
-|  ┌──────────────┐ ┌──────────────┐ ┌──────────────┐ ┌────────────┐  |
+|  │  • Start the Docker service or identified provider            │  |
+|  │  • Check the active Docker context or endpoint                 │  |
+|  │                                                                │  |
+|  │  [ Start Docker (when available) ]  [ Troubleshooting ]       │  |
 |  │  Docker      │ │  Port        │ │  Data        │ │  Security  │  |
 |  │  ✅ Ready    │ │  10260       │ │  Persistent  │ │  TLS local │  |
 |  │              │ │              │ │  volume      │ │  self-sign │  |
@@ -556,13 +561,13 @@ they receive credentials through the same `--env-file` the container uses
 Run before showing the Review & Start webview. Results populate the
 metric cards.
 
-| Check                    | Scope | Pass                     | Fail                             |
-| ------------------------ | ----- | ------------------------ | -------------------------------- |
-| Docker CLI on PATH       | v1.0  | ✅ Found (version shown) | ❌ "Install Docker" link         |
-| Docker daemon reachable  | v1.0  | ✅ Ready                 | ❌ "Start Docker Desktop" action |
-| Port available           | v1.0  | ✅ Free                  | ⚠️ Fallback port (see §8.3)      |
-| Platform supported       | v1.0  | ✅ amd64/arm64           | ⚠️ "Use x86_64 emulation?"       |
-| Image registry reachable | v1.2  | ✅ OK                    | ⚠️ "Check proxy settings"        |
+| Check                    | Scope | Pass                     | Fail                        |
+| ------------------------ | ----- | ------------------------ | --------------------------- |
+| Docker CLI on PATH       | v1.0  | ✅ Found (version shown) | ❌ "Install Docker" link    |
+| Docker daemon reachable  | v1.0  | ✅ Ready                 | ❌ Provider-aware recovery  |
+| Port available           | v1.0  | ✅ Free                  | ⚠️ Fallback port (see §8.3) |
+| Platform supported       | v1.0  | ✅ amd64/arm64           | ⚠️ "Use x86_64 emulation?"  |
+| Image registry reachable | v1.2  | ✅ OK                    | ⚠️ "Check proxy settings"   |
 
 v1.0 ships the same minimal readiness the PostgreSQL reference ships (CLI
 present + daemon reachable + a generic troubleshooting link, §15) plus two
@@ -677,7 +682,8 @@ The container is shared machine state. No window "owns" it.
 1. **Opt-in only.** Never install Docker, never start Docker silently,
    never modify containers the extension didn't create.
 2. **Explicit Docker start.** If Docker is stopped, offer a user-clicked
-   `Start Docker Desktop` action where supported.
+   provider action only when the extension has positive launch evidence. Never
+   start a root-managed service or use elevation.
 3. **No background pulls.** Image pulled only inside user-initiated flows.
 4. **No required form fields** in the happy path.
 5. **Canonical port `10260`** for both Quick Start and manual connections.
