@@ -7,7 +7,9 @@ import {
     type DockerEndpointKind,
     type DockerFailureKind,
     type DockerHostEnvironment,
+    type DockerPermissionDetail,
     type DockerRecoveryCommand,
+    type DockerServiceManager,
 } from './quickStartTypes';
 
 const RECOVERY_COMMANDS: Readonly<Record<DockerRecoveryCommand['id'], DockerRecoveryCommand>> = {
@@ -19,6 +21,11 @@ const RECOVERY_COMMANDS: Readonly<Record<DockerRecoveryCommand['id'], DockerReco
     linuxStartService: {
         id: 'linuxStartService',
         commandLine: 'sudo systemctl start docker',
+        requiresElevation: true,
+    },
+    wslStartServiceNoSystemd: {
+        id: 'wslStartServiceNoSystemd',
+        commandLine: 'sudo service docker start',
         requiresElevation: true,
     },
     wslRestartFromWindows: {
@@ -36,17 +43,40 @@ export function getDockerRecoveryCommand(
     failureKind: DockerFailureKind,
     environment: DockerHostEnvironment,
     endpointKind: DockerEndpointKind,
+    permissionDetail: DockerPermissionDetail = 'unknown',
+    serviceManager: DockerServiceManager = 'unknown',
 ): DockerRecoveryCommand | undefined {
     if (
         failureKind === 'permissionDenied' &&
         endpointKind === 'unixSocket' &&
+        (permissionDetail === 'notInGroup' || permissionDetail === 'unknown') &&
         (environment === 'linux' || environment === 'wsl')
     ) {
         return RECOVERY_COMMANDS.linuxDockerGroup;
     }
 
+    if (
+        failureKind === 'permissionDenied' &&
+        endpointKind === 'unixSocket' &&
+        permissionDetail === 'pendingSessionRestart' &&
+        environment === 'wsl'
+    ) {
+        return RECOVERY_COMMANDS.wslRestartFromWindows;
+    }
+
     if (failureKind === 'daemonUnavailable' && endpointKind === 'unixSocket' && environment === 'linux') {
         return RECOVERY_COMMANDS.linuxStartService;
+    }
+
+    if (failureKind === 'daemonUnavailable' && endpointKind === 'unixSocket' && environment === 'wsl') {
+        switch (serviceManager) {
+            case 'systemd':
+                return RECOVERY_COMMANDS.linuxStartService;
+            case 'service':
+                return RECOVERY_COMMANDS.wslStartServiceNoSystemd;
+            case 'unknown':
+                return undefined;
+        }
     }
 
     return undefined;

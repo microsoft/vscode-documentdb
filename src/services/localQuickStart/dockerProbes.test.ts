@@ -6,11 +6,14 @@
 import { Bash, ChildProcessError } from '@microsoft/vscode-processutils';
 import { type Writable } from 'stream';
 import {
+    detectDockerServiceManager,
     normalizeDaemonArchitecture,
     parseDockerInfoFacts,
     probeDockerEndpoint,
+    probeDockerSocketGroup,
     runDockerProbe,
     type DockerEndpointProbeDependencies,
+    type DockerSocketGroupProbeDependencies,
 } from './dockerProbes';
 
 const command = { command: 'docker', args: ['info'] };
@@ -134,5 +137,72 @@ describe('probeDockerEndpoint', () => {
         );
 
         expect(result.accessErrorCode).toBe('ECONNREFUSED');
+    });
+});
+
+describe('probeDockerSocketGroup', () => {
+    const reporterProcessGroups = [1000, 4, 20, 24, 25, 27, 29, 30, 44, 46, 118];
+
+    function dependencies(
+        overrides: Partial<DockerSocketGroupProbeDependencies> = {},
+    ): DockerSocketGroupProbeDependencies {
+        return {
+            stat: async () => ({ gid: 998 }),
+            readGroupFile: async () => 'docker:x:998:tnaum\n',
+            getProcessGroups: () => reporterProcessGroups,
+            getProcessGid: () => 1000,
+            getUsername: () => 'tnaum',
+            ...overrides,
+        };
+    }
+
+    it('detects the reporter membership missing from the current process', async () => {
+        await expect(probeDockerSocketGroup('/var/run/docker.sock', dependencies())).resolves.toEqual({
+            socketGid: 998,
+            processHasSocketGroup: false,
+            userIsGroupMember: true,
+        });
+    });
+
+    it('returns unknown facts when process groups are unavailable', async () => {
+        await expect(
+            probeDockerSocketGroup('/var/run/docker.sock', dependencies({ getProcessGroups: () => undefined })),
+        ).resolves.toEqual({});
+    });
+
+    it('keeps membership unknown when the group database is unreadable', async () => {
+        const facts = await probeDockerSocketGroup(
+            '/var/run/docker.sock',
+            dependencies({
+                readGroupFile: async () => {
+                    throw new Error('unreadable');
+                },
+            }),
+        );
+
+        expect(facts.userIsGroupMember).toBeUndefined();
+    });
+
+    it('compares the socket gid with the effective gid as well as supplementary groups', async () => {
+        const facts = await probeDockerSocketGroup(
+            '/var/run/docker.sock',
+            dependencies({ getProcessGroups: () => [], getProcessGid: () => 998 }),
+        );
+
+        expect(facts.processHasSocketGroup).toBe(true);
+    });
+});
+
+describe('detectDockerServiceManager', () => {
+    it.each([
+        [['/run/systemd/system'], 'systemd'],
+        [['/usr/sbin/service'], 'service'],
+        [[], 'unknown'],
+    ] as const)('detects paths %j as %s', async (existingPaths, expected) => {
+        await expect(
+            detectDockerServiceManager({
+                pathExists: async (candidate) => (existingPaths as ReadonlyArray<string>).includes(candidate),
+            }),
+        ).resolves.toBe(expected);
     });
 });

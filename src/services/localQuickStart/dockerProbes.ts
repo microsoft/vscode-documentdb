@@ -12,11 +12,17 @@ import {
 import { isChildProcessError, type Shell } from '@microsoft/vscode-processutils';
 import * as fs from 'fs';
 import * as net from 'net';
+import * as os from 'os';
 import { Writable } from 'stream';
 import { finished } from 'stream/promises';
 import * as vscode from 'vscode';
 import { z } from 'zod';
-import { type DockerEndpointProbe, type DockerProbeEvidence } from './quickStartTypes';
+import {
+    type DockerEndpointProbe,
+    type DockerProbeEvidence,
+    type DockerServiceManager,
+    type DockerSocketGroupFacts,
+} from './quickStartTypes';
 
 export interface RunDockerProbeOptions {
     readonly probe: DockerProbeEvidence['probe'];
@@ -40,6 +46,18 @@ export interface ResolvedDockerEndpoint {
 export interface DockerEndpointProbeDependencies {
     readonly access: (endpoint: string) => Promise<void>;
     readonly connect: (endpoint: string, token?: vscode.CancellationToken) => Promise<void>;
+}
+
+export interface DockerSocketGroupProbeDependencies {
+    readonly stat: (socketPath: string) => Promise<{ readonly gid: number }>;
+    readonly readGroupFile: () => Promise<string>;
+    readonly getProcessGroups: () => ReadonlyArray<number> | undefined;
+    readonly getProcessGid: () => number | undefined;
+    readonly getUsername: () => string | undefined;
+}
+
+export interface DockerServiceManagerProbeDependencies {
+    readonly pathExists: (path: string) => Promise<boolean>;
 }
 
 export interface DockerInfoFacts {
@@ -180,6 +198,102 @@ export function normalizeDaemonArchitecture(architecture: string): string {
         default:
             return architecture;
     }
+}
+
+function getDefaultSocketGroupProbeDependencies(): DockerSocketGroupProbeDependencies {
+    return {
+        stat: async (socketPath: string): Promise<{ readonly gid: number }> => {
+            const stats = await fs.promises.stat(socketPath);
+            return { gid: stats.gid };
+        },
+        readGroupFile: (): Promise<string> => fs.promises.readFile('/etc/group', 'utf8'),
+        getProcessGroups: (): ReadonlyArray<number> | undefined =>
+            typeof process.getgroups === 'function' ? process.getgroups() : undefined,
+        getProcessGid: (): number | undefined => (typeof process.getgid === 'function' ? process.getgid() : undefined),
+        getUsername: (): string | undefined => {
+            try {
+                return os.userInfo().username;
+            } catch {
+                return undefined;
+            }
+        },
+    };
+}
+
+function parseLocalGroupMembership(groupFile: string, gid: number, username: string): boolean | undefined {
+    for (const line of groupFile.split(/\r?\n/u)) {
+        const fields = line.split(':');
+        if (fields.length !== 4 || Number(fields[2]) !== gid) {
+            continue;
+        }
+        const members = fields[3]
+            .split(',')
+            .map((member) => member.trim())
+            .filter(Boolean);
+        return members.includes(username);
+    }
+    return undefined;
+}
+
+export async function probeDockerSocketGroup(
+    socketPath: string,
+    dependencies: DockerSocketGroupProbeDependencies = getDefaultSocketGroupProbeDependencies(),
+): Promise<DockerSocketGroupFacts> {
+    const processGroups = dependencies.getProcessGroups();
+    if (!processGroups) {
+        return {};
+    }
+
+    let socketGid: number;
+    try {
+        socketGid = (await dependencies.stat(socketPath)).gid;
+    } catch {
+        return {};
+    }
+
+    const processGid = dependencies.getProcessGid();
+    const processHasSocketGroup = processGid === socketGid || processGroups.includes(socketGid);
+    const username = dependencies.getUsername();
+    let userIsGroupMember: boolean | undefined;
+    if (username) {
+        try {
+            userIsGroupMember = parseLocalGroupMembership(await dependencies.readGroupFile(), socketGid, username);
+        } catch {
+            userIsGroupMember = undefined;
+        }
+    }
+
+    return { socketGid, processHasSocketGroup, userIsGroupMember };
+}
+
+const SYSTEMD_RUNTIME_PATH = '/run/systemd/system';
+const SERVICE_COMMAND_PATHS = ['/usr/sbin/service', '/sbin/service'] as const;
+
+function getDefaultServiceManagerProbeDependencies(): DockerServiceManagerProbeDependencies {
+    return {
+        pathExists: async (candidatePath: string): Promise<boolean> => {
+            try {
+                await fs.promises.access(candidatePath, fs.constants.X_OK);
+                return true;
+            } catch {
+                return false;
+            }
+        },
+    };
+}
+
+export async function detectDockerServiceManager(
+    dependencies: DockerServiceManagerProbeDependencies = getDefaultServiceManagerProbeDependencies(),
+): Promise<DockerServiceManager> {
+    if (await dependencies.pathExists(SYSTEMD_RUNTIME_PATH)) {
+        return 'systemd';
+    }
+    for (const servicePath of SERVICE_COMMAND_PATHS) {
+        if (await dependencies.pathExists(servicePath)) {
+            return 'service';
+        }
+    }
+    return 'unknown';
 }
 
 function getDefaultEndpointProbeDependencies(): DockerEndpointProbeDependencies {

@@ -8,9 +8,11 @@ import { Bash, CancellationTokenLike, Cmd, type Shell } from '@microsoft/vscode-
 import { type Writable } from 'stream';
 import * as vscode from 'vscode';
 import {
+    detectDockerServiceManager,
     normalizeDaemonArchitecture,
     parseDockerInfoFacts,
     probeDockerEndpoint,
+    probeDockerSocketGroup,
     runDockerProbe,
     type ResolvedDockerEndpoint,
     type RunDockerProbeOptions,
@@ -20,9 +22,11 @@ import { getDockerRecoveryCommand } from './dockerRecoveryCommands';
 import {
     type DockerEndpointKind,
     type DockerHostEnvironment,
+    type DockerPermissionDetail,
     type DockerProbeEvidence,
     type DockerReadiness,
     type DockerReadinessRequest,
+    type DockerSocketGroupFacts,
 } from './quickStartTypes';
 
 export const READINESS_DEADLINE_MS = 15_000;
@@ -52,6 +56,8 @@ export interface DockerReadinessServiceDependencies {
     readonly now?: () => number;
     readonly runProbe?: (options: RunDockerProbeOptions) => Promise<DockerProbeEvidence>;
     readonly probeEndpoint?: typeof probeDockerEndpoint;
+    readonly probeSocketGroup?: typeof probeDockerSocketGroup;
+    readonly detectServiceManager?: typeof detectDockerServiceManager;
     readonly createProbeOutput?: () => DockerProbeOutput;
 }
 
@@ -67,6 +73,8 @@ interface ResolvedDependencies {
     readonly now: () => number;
     readonly runProbe: (options: RunDockerProbeOptions) => Promise<DockerProbeEvidence>;
     readonly probeEndpoint: typeof probeDockerEndpoint;
+    readonly probeSocketGroup: typeof probeDockerSocketGroup;
+    readonly detectServiceManager: typeof detectDockerServiceManager;
     readonly createProbeOutput?: () => DockerProbeOutput;
 }
 
@@ -176,6 +184,8 @@ export class DockerReadinessService {
             now: dependencies.now ?? Date.now,
             runProbe: dependencies.runProbe ?? runDockerProbe,
             probeEndpoint: dependencies.probeEndpoint ?? probeDockerEndpoint,
+            probeSocketGroup: dependencies.probeSocketGroup ?? probeDockerSocketGroup,
+            detectServiceManager: dependencies.detectServiceManager ?? detectDockerServiceManager,
             createProbeOutput: dependencies.createProbeOutput,
         };
     }
@@ -327,12 +337,30 @@ export class DockerReadinessService {
                 endpointProbe,
                 serverErrors: infoFacts?.serverErrors,
             });
+            let permissionDetail: DockerPermissionDetail | undefined;
+            if (classification.failureKind === 'permissionDenied' && endpoint.kind === 'unixSocket') {
+                const groupFacts = await this.dependencies.probeSocketGroup(endpoint.address);
+                permissionDetail = resolveDockerPermissionDetail(groupFacts);
+            }
+            const serviceManager =
+                classification.failureKind === 'daemonUnavailable' &&
+                endpoint.kind === 'unixSocket' &&
+                environment === 'wsl'
+                    ? await this.dependencies.detectServiceManager()
+                    : 'unknown';
             return {
                 outcome: classification.outcome,
                 environment,
                 endpointKind: endpoint.kind,
                 failureKind: classification.failureKind,
-                recoveryCommand: getDockerRecoveryCommand(classification.failureKind, environment, endpoint.kind),
+                permissionDetail,
+                recoveryCommand: getDockerRecoveryCommand(
+                    classification.failureKind,
+                    environment,
+                    endpoint.kind,
+                    permissionDetail,
+                    serviceManager,
+                ),
                 canContinueAnyway: classification.outcome === 'indeterminate',
                 checkedAtMs: this.dependencies.now(),
                 cliInstalled: classification.failureKind !== 'cliMissing',
@@ -350,4 +378,14 @@ export class DockerReadinessService {
             callerCancellation?.dispose();
         }
     }
+}
+
+export function resolveDockerPermissionDetail(facts: DockerSocketGroupFacts): DockerPermissionDetail {
+    if (facts.userIsGroupMember === true && facts.processHasSocketGroup === false) {
+        return 'pendingSessionRestart';
+    }
+    if (facts.userIsGroupMember === false) {
+        return 'notInGroup';
+    }
+    return 'unknown';
 }

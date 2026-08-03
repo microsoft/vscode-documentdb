@@ -151,7 +151,7 @@ export const localQuickStartRouter = router({
 
     /** Copy one fixed, never-executed recovery command selected by the extension host. */
     copyRecoveryCommand: publicProcedureWithTelemetry
-        .input(z.enum(['linuxDockerGroup', 'linuxStartService', 'wslRestartFromWindows']))
+        .input(z.enum(['linuxDockerGroup', 'linuxStartService', 'wslStartServiceNoSystemd', 'wslRestartFromWindows']))
         .mutation(async ({ input, ctx }): Promise<void> => {
             const command = getDockerRecoveryCommandById(input);
             await vscode.env.clipboard.writeText(command.commandLine);

@@ -10,6 +10,7 @@ import {
     detectDockerHostEnvironment,
     DockerReadinessService,
     resolveDockerEndpoint,
+    resolveDockerPermissionDetail,
     type DockerReadinessServiceDependencies,
 } from './DockerReadinessService';
 import { type RunDockerProbeOptions } from './dockerProbes';
@@ -97,6 +98,81 @@ describe('DockerReadinessService', () => {
                 requiresElevation: true,
             },
         });
+    });
+
+    it('refines only a unix-socket permission failure with socket group facts', async () => {
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            switch (options.probe) {
+                case 'cliVersion':
+                    return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
+                case 'info':
+                    return evidence('info', { exitCode: 1 });
+                case 'contexts':
+                    return evidence('contexts', {
+                        stdout: JSON.stringify([
+                            {
+                                name: 'default',
+                                current: true,
+                                containerEndpoint: 'unix:///var/run/docker.sock',
+                            },
+                        ]),
+                    });
+            }
+        });
+        const probeSocketGroup = jest.fn().mockResolvedValue({
+            socketGid: 998,
+            processHasSocketGroup: false,
+            userIsGroupMember: true,
+        });
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'linux',
+            environmentVariables: { WSL_DISTRO_NAME: 'Ubuntu-20.04' },
+            remoteName: 'wsl',
+            runProbe,
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'EACCES',
+            }),
+            probeSocketGroup,
+        });
+
+        await expect(service.getReadiness()).resolves.toMatchObject({
+            environment: 'wsl',
+            failureKind: 'permissionDenied',
+            permissionDetail: 'pendingSessionRestart',
+            recoveryCommand: { id: 'wslRestartFromWindows', commandLine: 'wsl --shutdown' },
+        });
+        expect(probeSocketGroup).toHaveBeenCalledWith('/var/run/docker.sock');
+    });
+
+    it('does not probe socket groups for a named pipe permission failure', async () => {
+        const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
+            if (options.probe === 'info') {
+                return evidence('info', { exitCode: 1, stderr: 'access denied' });
+            }
+            return evidence(options.probe, { stdout: 'Docker version 28.1.1' });
+        });
+        const probeSocketGroup = jest.fn();
+        const service = new DockerReadinessService({
+            client: createClient(),
+            shellProvider: new Bash(),
+            platform: 'win32',
+            environmentVariables: { DOCKER_HOST: 'npipe:////./pipe/docker_engine' },
+            runProbe,
+            probeEndpoint: async (endpoint) => ({
+                kind: endpoint.kind,
+                source: endpoint.source,
+                accessErrorCode: 'EACCES',
+            }),
+            probeSocketGroup,
+        });
+
+        await service.getReadiness();
+
+        expect(probeSocketGroup).not.toHaveBeenCalled();
     });
 
     it('runs version and info once for concurrent callers', async () => {
@@ -223,6 +299,21 @@ describe('DockerReadinessService', () => {
         await service.getReadiness({ forceRefresh: true });
         expect(runProbe).toHaveBeenCalledTimes(4);
     });
+});
+
+describe('resolveDockerPermissionDetail', () => {
+    it.each([
+        [true, false, 'pendingSessionRestart'],
+        [false, false, 'notInGroup'],
+        [false, true, 'notInGroup'],
+        [undefined, false, 'unknown'],
+        [true, true, 'unknown'],
+    ] as const)(
+        'maps membership %s and process group %s to %s',
+        (userIsGroupMember, processHasSocketGroup, expected) => {
+            expect(resolveDockerPermissionDetail({ userIsGroupMember, processHasSocketGroup })).toBe(expected);
+        },
+    );
 });
 
 describe('detectDockerHostEnvironment', () => {

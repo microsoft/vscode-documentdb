@@ -205,6 +205,10 @@ export type DockerFailureKind = 'cliMissing' | 'permissionDenied' | 'daemonUnava
 
 export type DockerEndpointKind = 'unixSocket' | 'namedPipe' | 'tcp' | 'ssh' | 'unknown';
 
+export type DockerPermissionDetail = 'notInGroup' | 'pendingSessionRestart' | 'unknown';
+
+export type DockerServiceManager = 'systemd' | 'service' | 'unknown';
+
 export interface DockerProbeEvidence {
     readonly probe: 'cliVersion' | 'info' | 'contexts';
     readonly exitCode?: number;
@@ -221,8 +225,14 @@ export interface DockerEndpointProbe {
     readonly source: 'dockerHostEnv' | 'dockerContextEnv' | 'currentContext' | 'platformDefault';
 }
 
+export interface DockerSocketGroupFacts {
+    readonly socketGid?: number;
+    readonly processHasSocketGroup?: boolean;
+    readonly userIsGroupMember?: boolean;
+}
+
 export interface DockerRecoveryCommand {
-    readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslRestartFromWindows';
+    readonly id: 'linuxDockerGroup' | 'linuxStartService' | 'wslStartServiceNoSystemd' | 'wslRestartFromWindows';
     readonly commandLine: string;
     readonly requiresElevation: boolean;
 }
@@ -238,6 +248,7 @@ export interface DockerReadiness {
     readonly environment: DockerHostEnvironment;
     readonly endpointKind: DockerEndpointKind;
     readonly failureKind?: DockerFailureKind;
+    readonly permissionDetail?: DockerPermissionDetail;
     readonly recoveryCommand?: DockerRecoveryCommand;
     readonly canContinueAnyway: boolean;
     readonly checkedAtMs: number;
