@@ -585,6 +585,16 @@ Eighteen focused orchestrator tests cover the reported Linux `EACCES` path, copy
 
 **Follow-up correction:** The required repository-wide Prettier pass found formatting drift in the orchestrator and its tests after the work-item commit. The mechanical-only correction is preserved in [commit `4265d8f3`](https://github.com/microsoft/vscode-documentdb/commit/4265d8f3b732d0e0e963e3e495c57812c2c2cf75) rather than rewriting the WI-3 commit.
 
+#### Pending-session refinement checkpoint (completed 2026-08-03)
+
+Implemented the host-side refinement in [commit `8a7780c3`](https://github.com/microsoft/vscode-documentdb/commit/8a7780c341fa271e7d3ec39e1494c93f4cdf073c). After the existing classifier has returned `permissionDenied` for a unix socket, `probeDockerSocketGroup()` reads the socket owner GID, compares it with both the extension host's effective and supplementary GIDs, and performs a best-effort lookup of the current user in the matching local group entry. `resolveDockerPermissionDetail()` implements the four-row refinement table and records `pendingSessionRestart`, `notInGroup`, or `unknown` without changing `DockerFailureKind` or `dockerReadinessClassification.ts`.
+
+The reporter's captured state is covered directly: socket GID 998, process groups `1000 4 20 24 25 27 29 30 44 46 118`, and local `docker:x:998:tnaum` membership resolve to `pendingSessionRestart`. The service calls this probe only after a unix-socket permission diagnosis; named pipes and every non-permission result skip it. The result selects the fixed `wsl --shutdown` command for WSL pending-restart state, while native Linux pending restart deliberately carries no command.
+
+The recovery table now also contains `wslStartServiceNoSystemd` with the fixed `sudo service docker start` command. **Evidence-safety deviation:** the proposed design selected that command whenever `/run/systemd/system` was absent. Two options were considered: treat systemd absence as sufficient, or positively verify that a standard `service` executable is available. The latter was selected with greater than 80% confidence because systemd absence proves only which command will fail; it does not prove another service manager exists. `detectDockerServiceManager()` therefore returns `systemd`, `service`, or `unknown`, and WSL receives no service command when neither mechanism is positively detected. This keeps the recovery action aligned with the plan's positive-evidence rule.
+
+Forty-nine focused probe, resolver, orchestration, and recovery-selection tests passed. Targeted ESLint and the root TypeScript build passed. The first focused run exposed only a heterogeneous `it.each` tuple inferring the empty path list as `never[]`; the test fixture was widened before commit. The root build later caught the new fixed command ID missing from the router clipboard enum; the typed enum was updated in the same work-item commit. No committed history was rewritten.
+
 ### WI-4: Replace the launcher
 
 - Move process launching out of `ContainerRuntime.ts`.
