@@ -20,7 +20,8 @@ $media-breakpoint-query-control-area: 1024px;
  * for consistency across custom components like MonacoAutoHeight.
  *
  * Uses Fluent UI design tokens:
- * - Border: --colorNeutralStroke1, --borderRadiusMedium
+ * - Border: --documentdb-colorInputStroke, --borderRadiusMedium
+ * - Border (hover): --documentdb-colorInputStrokeHover
  * - Background: --colorNeutralBackground1
  * - Spacing: --spacingVerticalS, --spacingHorizontalS
  * - Animation: --durationFast, --curveEasyEase
