@@ -94,13 +94,15 @@ export class AtlasApiClient {
         );
 
         for (const cluster of clusters) {
-            const provider = cluster.providerSettings ?? cluster.replicationSpecs?.[0]?.regionConfigs?.[0];
+            const regionConfig = cluster.replicationSpecs?.[0]?.regionConfigs?.[0];
+            const provider = cluster.providerSettings ?? regionConfig;
+            const tier = cluster.providerSettings?.instanceSizeName ?? regionConfig?.electableSpecs?.instanceSize;
             const hasConnectionString = !!(
                 cluster.connectionStrings?.standardSrv ?? cluster.connectionStrings?.standard
             );
             const paused = cluster.paused === undefined ? 'missing' : String(cluster.paused);
             atlasTrace(
-                `${this.describeClient()} cluster "${cluster.name}": state=${cluster.stateName}, paused=${paused}, type=${cluster.clusterType}, provider=${provider?.providerName ?? 'unknown'}, region=${provider?.regionName ?? 'unknown'}, tier=${cluster.providerSettings?.instanceSizeName ?? cluster.replicationSpecs?.[0]?.regionConfigs?.[0]?.electableSpecs?.instanceSize ?? 'unknown'}, connectionString=${hasConnectionString ? 'available' : 'missing'}`,
+                `${this.describeClient()} cluster "${cluster.name}": state=${cluster.stateName}, paused=${paused}, type=${cluster.clusterType}, provider=${provider?.providerName ?? 'unknown'}, region=${provider?.regionName ?? 'unknown'}, tier=${tier ?? 'unknown'}, connectionString=${hasConnectionString ? 'available' : 'missing'}`,
             );
         }
 

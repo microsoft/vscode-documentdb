@@ -351,10 +351,6 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
     /** Localized reason a non-connectable cluster cannot be opened, for tooltips and guards. */
     private describeUnavailable(): string {
-        if (this.cluster.paused) {
-            return l10n.t('This cluster is paused. Resume it in MongoDB Atlas before connecting.');
-        }
-
         return (
             this.getStateExplanation() ??
             l10n.t(
