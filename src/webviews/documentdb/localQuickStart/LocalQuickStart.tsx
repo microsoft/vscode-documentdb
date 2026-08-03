@@ -665,6 +665,14 @@ export const LocalQuickStart = (): JSX.Element => {
                         });
                         setErrorMessage(event.error ?? event.message ?? l10n.t('Setup failed.'));
                         setTimedOut(event.timedOut === true);
+                        const dockerReadiness = event.dockerReadiness;
+                        if (dockerReadiness) {
+                            setDocker((current) =>
+                                current ? { ...current, readiness: dockerReadiness } : current,
+                            );
+                            setPhase('dockerNotReady');
+                            return;
+                        }
                         setPhase('failed');
                     } else {
                         setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
@@ -1200,7 +1208,8 @@ export const LocalQuickStart = (): JSX.Element => {
                     when={phase === 'failed'}
                     message={
                         timedOut
-                            ? l10n.t('DocumentDB is still initializing. Keep waiting, view the logs, or start over.')
+                                                        ? (errorMessage ??
+                                                            l10n.t('DocumentDB is still initializing. Keep waiting, view the logs, or start over.'))
                             : l10n.t('Setup failed. {0}', errorMessage ?? l10n.t('See the details below.'))
                     }
                     politeness="polite"
@@ -1254,9 +1263,10 @@ export const LocalQuickStart = (): JSX.Element => {
                     <div className={styles.errorBox}>
                         {timedOut ? (
                             <Text>
-                                {l10n.t(
-                                    'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing. Keep waiting, view the logs, or start over.',
-                                )}
+                                {errorMessage ??
+                                    l10n.t(
+                                        'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing. Keep waiting, view the logs, or start over.',
+                                    )}
                             </Text>
                         ) : (
                             <Text>{errorMessage ?? l10n.t('Setup failed.')}</Text>

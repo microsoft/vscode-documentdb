@@ -167,6 +167,8 @@ export interface StageEvent {
      * webview offers "Wait longer" / "View logs" / "Start over" instead of a hard failure.
      */
     readonly timedOut?: boolean;
+    /** Typed recovery result when Docker became unavailable during pull or run. */
+    readonly dockerReadiness?: DockerReadiness;
 }
 
 /** Metadata describing the currently-managed instance. */
