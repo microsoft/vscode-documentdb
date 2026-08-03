@@ -150,6 +150,7 @@ class ContainerRuntimeImpl implements IContainerRuntime {
                 onCommand: (command: string) => channel.appendLine('$ ' + maskSecrets(command, [])),
                 stdOutPipe: new MaskedChannelWritable(channel, []),
                 stdErrPipe: new MaskedChannelWritable(channel, []),
+                appendDiagnostic: (line: string) => channel.appendLine(line),
             };
         },
     });

@@ -53,6 +53,7 @@ export interface DockerProbeOutput {
     readonly onCommand?: (command: string) => void;
     readonly stdOutPipe?: Writable;
     readonly stdErrPipe?: Writable;
+    readonly appendDiagnostic?: (line: string) => void;
 }
 
 export interface DockerReadinessServiceDependencies {
@@ -608,6 +609,7 @@ export class DockerReadinessService {
             const failureResult = {
                 environment,
                 endpointKind: endpoint.kind,
+                endpointSource: endpoint.source,
                 ...startCapability,
                 providerRecordedAtMs:
                     startCapability.providerEvidence === 'rememberedProvider'
@@ -628,7 +630,6 @@ export class DockerReadinessService {
                 daemonArchitecture: infoFacts?.architecture
                     ? normalizeDaemonArchitecture(infoFacts.architecture)
                     : undefined,
-                diagnosticSummary: `${classification.failureKind}; endpoint source ${endpoint.source}`,
                 diagnosticFingerprint:
                     classification.failureKind === 'unknown'
                         ? getDockerDiagnosticFingerprint([...(infoFacts?.serverErrors ?? []), infoProbe.stderr])
@@ -636,6 +637,19 @@ export class DockerReadinessService {
                 arch: this.dependencies.arch,
                 platformSupported,
             } as const;
+            const diagnosticOutput = this.dependencies.createProbeOutput?.();
+            diagnosticOutput?.appendDiagnostic?.(
+                `[readiness] failureKind=${classification.failureKind} outcome=${classification.outcome}`,
+            );
+            diagnosticOutput?.appendDiagnostic?.(
+                `[readiness] environment=${environment} endpoint=${endpoint.kind} source=${endpoint.source}`,
+            );
+            diagnosticOutput?.appendDiagnostic?.(
+                `[readiness] provider=${startCapability.provider} evidence=${startCapability.providerEvidence}`,
+            );
+            if (infoProbe.stderr.trim()) {
+                diagnosticOutput?.appendDiagnostic?.(`[readiness] stderr: ${infoProbe.stderr.trim()}`);
+            }
             if (classification.outcome === 'diagnosed') {
                 return {
                     ...failureResult,

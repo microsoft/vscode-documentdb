@@ -19,7 +19,7 @@ function unknownReadiness(): DockerReadiness {
         checkedAtMs: 1,
         cliInstalled: true,
         daemonReachable: false,
-        diagnosticSummary: 'unknown; endpoint source dockerHostEnv',
+        endpointSource: 'dockerHostEnv',
         diagnosticFingerprint: '0123456789abcdef',
     };
 }
@@ -42,18 +42,16 @@ describe('getDockerReadinessTelemetryProperties', () => {
         });
     });
 
-    it('does not emit diagnostics or fingerprints for a diagnosed failure', () => {
+    it('does not emit fingerprints for a diagnosed failure', () => {
         const readiness: DockerReadiness = {
             ...unknownReadiness(),
             outcome: 'diagnosed',
             failureKind: 'permissionDenied',
             canContinueAnyway: false,
-            diagnosticSummary: 'private raw text must not be emitted',
         };
 
         const properties = getDockerReadinessTelemetryProperties(readiness);
 
         expect(properties.dockerDiagnosticFingerprint).toBeUndefined();
-        expect(Object.values(properties)).not.toContain(readiness.diagnosticSummary);
     });
 });

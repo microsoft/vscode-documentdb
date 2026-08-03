@@ -414,8 +414,12 @@ describe('DockerReadinessService', () => {
     });
 
     it('does not claim a selected context is absent when the context probe failed', async () => {
+        const appendDiagnostic = jest.fn();
         const runProbe = jest.fn(async (options: RunDockerProbeOptions): Promise<DockerProbeEvidence> => {
-            if (options.probe === 'info' || options.probe === 'contexts') {
+            if (options.probe === 'info') {
+                return evidence(options.probe, { exitCode: 1, stderr: 'raw daemon error' });
+            }
+            if (options.probe === 'contexts') {
                 return evidence(options.probe, { exitCode: 1 });
             }
             return evidence('cliVersion', { stdout: 'Docker version 28.1.1' });
@@ -427,12 +431,24 @@ describe('DockerReadinessService', () => {
             environmentVariables: { DOCKER_CONTEXT: 'unresolved' },
             runProbe,
             probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            getStartCapability: async (input) => ({
+                provider: input.provider,
+                providerEvidence: input.providerEvidence,
+            }),
+            createProbeOutput: () => ({ appendDiagnostic }),
         });
 
         await expect(service.getReadiness()).resolves.toMatchObject({
             failureKind: 'unknown',
             outcome: 'indeterminate',
+            endpointSource: 'dockerContextEnv',
         });
+        expect(appendDiagnostic.mock.calls).toEqual([
+            ['[readiness] failureKind=unknown outcome=indeterminate'],
+            ['[readiness] environment=linux endpoint=unknown source=dockerContextEnv'],
+            ['[readiness] provider=unknown evidence=none'],
+            ['[readiness] stderr: raw daemon error'],
+        ]);
     });
 
     it('persists live Docker Desktop facts after a successful info probe', async () => {

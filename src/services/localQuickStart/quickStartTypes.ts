@@ -288,6 +288,7 @@ export interface DockerReadinessRequest {
 interface DockerReadinessBase {
     readonly environment: DockerHostEnvironment;
     readonly endpointKind: DockerEndpointKind;
+    readonly endpointSource?: DockerEndpointProbe['source'];
     readonly provider: DockerProvider;
     readonly providerEvidence: DockerProviderEvidence;
     readonly providerRecordedAtMs?: number;
@@ -300,7 +301,6 @@ interface DockerReadinessBase {
     readonly cliVersion?: string;
     readonly osType?: 'linux' | 'windows';
     readonly daemonArchitecture?: string;
-    readonly diagnosticSummary?: string;
     readonly diagnosticFingerprint?: string;
     /** Host CPU architecture (e.g. `x64`, `arm64`) and whether it is supported (§9). */
     readonly arch?: string;

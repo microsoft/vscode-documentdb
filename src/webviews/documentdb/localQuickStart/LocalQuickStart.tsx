@@ -32,6 +32,9 @@ import * as l10n from '@vscode/l10n';
 import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
 import {
     type AdvancedQuickStartOptions,
+    type DockerEndpointProbe,
+    type DockerFailureKind,
+    type DockerProvider,
     type DockerStatusResult,
     PROVISION_STAGES,
     type ProvisionStage,
@@ -121,6 +124,8 @@ const useStyles = makeStyles({
         borderRadius: tokens.borderRadiusSmall,
     },
     waitingStatus: { display: 'flex', alignItems: 'center', gap: '8px' },
+    diagnosticList: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 12px', margin: '8px 0' },
+    diagnosticValue: { margin: 0 },
     // Visually hidden but exposed to assistive tech (WCAG 4.1.3 status text).
     srOnly: {
         position: 'absolute',
@@ -159,6 +164,32 @@ const DOCKER_DAEMON_VALUES: Readonly<Record<DockerReadinessPresentationState, st
     unsupported: l10n.t('Unsupported'),
     windowsContainers: l10n.t('Linux containers required'),
     notAccessible: l10n.t('Not accessible'),
+};
+
+const DOCKER_FAILURE_LABELS: Readonly<Record<DockerFailureKind, string>> = {
+    cliMissing: l10n.t('Docker CLI not found'),
+    permissionDenied: l10n.t('Docker access denied'),
+    daemonUnavailable: l10n.t('Docker daemon unavailable'),
+    daemonStarting: l10n.t('Docker daemon starting'),
+    contextUnavailable: l10n.t('Docker context unavailable'),
+    endpointUnreachable: l10n.t('Docker endpoint unreachable'),
+    probeTimedOut: l10n.t('Docker check timed out'),
+    unsupportedHost: l10n.t('Unsupported host'),
+    windowsContainers: l10n.t('Windows containers enabled'),
+    unknown: l10n.t('Unknown Docker problem'),
+};
+
+const DOCKER_ENDPOINT_SOURCE_LABELS: Readonly<Record<DockerEndpointProbe['source'], string>> = {
+    dockerHostEnv: l10n.t('DOCKER_HOST environment variable'),
+    dockerContextEnv: l10n.t('DOCKER_CONTEXT environment variable'),
+    currentContext: l10n.t('Current Docker context'),
+    platformDefault: l10n.t('Platform default'),
+};
+
+const DOCKER_PROVIDER_LABELS: Readonly<Record<DockerProvider, string>> = {
+    dockerDesktop: l10n.t('Docker Desktop'),
+    dockerEngine: l10n.t('Docker Engine'),
+    unknown: l10n.t('Unknown'),
 };
 
 const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
@@ -1153,10 +1184,24 @@ export const LocalQuickStart = (): JSX.Element => {
                             </Button>
                         </div>
                     )}
-                    {r?.diagnosticSummary && (
+                    {r?.failureKind && (
                         <details>
                             <summary>{l10n.t('Show details')}</summary>
-                            <Text size={200}>{r.diagnosticSummary}</Text>
+                            <dl className={styles.diagnosticList}>
+                                <dt>{l10n.t('Detected problem')}</dt>
+                                <dd className={styles.diagnosticValue}>{DOCKER_FAILURE_LABELS[r.failureKind]}</dd>
+                                <dt>{l10n.t('Docker endpoint')}</dt>
+                                <dd className={styles.diagnosticValue}>
+                                    {r.endpointSource
+                                        ? DOCKER_ENDPOINT_SOURCE_LABELS[r.endpointSource]
+                                        : l10n.t('Unknown')}
+                                </dd>
+                                <dt>{l10n.t('Provider')}</dt>
+                                <dd className={styles.diagnosticValue}>{DOCKER_PROVIDER_LABELS[r.provider]}</dd>
+                            </dl>
+                            <Button appearance="transparent" size="small" onClick={handleViewOutput}>
+                                {l10n.t('View Docker output')}
+                            </Button>
                         </details>
                     )}
                     <div className={styles.actions}>
