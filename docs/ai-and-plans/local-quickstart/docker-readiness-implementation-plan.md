@@ -858,6 +858,14 @@ The required completion sequence after the pending-session refinement passed in 
 
 **Manual verification status:** The current machine no longer satisfies the captured pending-restart precondition. At final verification, both `id -G` and `id -G "$USER"` omitted socket GID 998, and both `getent group 998` and `/etc/group` showed `docker:x:998:` with no members. The live machine is therefore the `notInGroup` case, which the implementation handles with the usermod command. The WSL pending-restart path is covered by the captured GID/group fixture and focused service/presentation tests, but the destructive `wsl --shutdown` and reopen sequence was not run or claimed as manually verified because it would terminate this workspace and the required membership precondition was absent.
 
+#### Post-Slice A add-on: better session reset and restart guidance
+
+This add-on was completed after Slice A testing exposed a Retry loop for users who had already run the group-membership fix. Host evidence and recovery selection are implemented in [`8a7780c3`](https://github.com/microsoft/vscode-documentdb/commit/8a7780c341fa271e7d3ec39e1494c93f4cdf073c); environment-aware presentation, telemetry, localization, and fixture provenance are implemented in [`4f363411`](https://github.com/microsoft/vscode-documentdb/commit/4f36341104b21c83fe9f83f9418ee4acd68f10d2). The detailed work-item records are in the WI-3 and WI-6 pending-session checkpoints above.
+
+The add-on keeps `permissionDenied` as the failure kind and adds `permissionDetail` as refining evidence. A unix-socket permission failure now distinguishes a user who still needs the group fix from a user whose configured membership is waiting on a new process session. The latter receives the exact action for the extension-host environment: desktop sign-out and sign-in on native Linux, `wsl --shutdown` from Windows for WSL, killing the remote VS Code server for SSH, or rebuilding a dev container or Codespaces container. Reload Window is never presented as sufficient for a stale native-Linux session.
+
+Recovery commands remain fixed, copy-only, and never executed. WSL daemon recovery uses `sudo systemctl start docker` only with active systemd and `sudo service docker start` only when the service wrapper is positively detected. This is intentionally stricter than selecting the service command from systemd absence alone. The add-on passed the full completion sequence with 194 Jest suites and 3,181 tests; the destructive WSL shutdown verification remains pending for an operator session that again satisfies the captured pending-restart precondition.
+
 ### Slice B: complete the model
 
 Provider classification and provider memory, the evidence bar and launch matrix (WI-4), router and telemetry (WI-5), the remaining presentation states and execution-target copy (WI-6), the full integration test set (WI-7), provisioning reuse (WI-8), fixtures and manual verification (WI-9), and documentation (WI-10).
