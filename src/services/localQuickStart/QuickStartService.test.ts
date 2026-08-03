@@ -1033,12 +1033,12 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
     });
 
     it('adds the published-port explanation only for dev-container readiness timeouts', () => {
-        const message = 'Timed out waiting for DocumentDB.';
-
-        expect(getReadinessTimeoutMessage(message, 'devContainer')).toContain(
+        expect(getReadinessTimeoutMessage('devContainer')).toContain(
             'published localhost port might not be reachable from inside the dev container',
         );
-        expect(getReadinessTimeoutMessage(message, 'linux')).toBe(message);
+        expect(getReadinessTimeoutMessage('linux')).toBe(
+            'DocumentDB did not accept connections in time. It may still be initializing.',
+        );
     });
 
     it('aborts (never removes/wipes) when a managed container exists but no secret is recoverable', async () => {

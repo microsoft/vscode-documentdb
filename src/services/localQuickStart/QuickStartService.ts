@@ -196,14 +196,13 @@ function stageEvent(
     return { stage, status, message, error, boundPort, timedOut, dockerReadiness };
 }
 
-export function getReadinessTimeoutMessage(message: string, environment: DockerHostEnvironment | undefined): string {
-    if (environment !== 'devContainer') {
-        return message;
+export function getReadinessTimeoutMessage(environment: DockerHostEnvironment | undefined): string {
+    if (environment === 'devContainer') {
+        return l10n.t(
+            'DocumentDB did not accept connections in time. Docker may be running on the dev container host, so the published localhost port might not be reachable from inside the dev container.',
+        );
     }
-    return l10n.t(
-        '{0} Docker may be running on the dev container host, so the published localhost port might not be reachable from inside the dev container.',
-        message,
-    );
+    return l10n.t('DocumentDB did not accept connections in time. It may still be initializing.');
 }
 
 /** Cancellable delay that rejects if the signal aborts. */
@@ -597,7 +596,8 @@ export class QuickStartServiceImpl {
                 // "Wait longer" resume finish adoption. The instance sits in Error until then. The
                 // event is buffered and emitted after `finally` (see below) so the flags are clean.
                 readinessTimedOut = true;
-                message = getReadinessTimeoutMessage(message, readinessEnvironment);
+                channel.appendLine(`[readiness-timeout] ${message}`);
+                message = getReadinessTimeoutMessage(readinessEnvironment);
                 this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                 terminalEvent = stageEvent('waiting', 'error', message, message, undefined, /* timedOut */ true);
             } else {
