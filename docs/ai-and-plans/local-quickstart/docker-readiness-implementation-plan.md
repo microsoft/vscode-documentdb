@@ -527,6 +527,18 @@ This is the prerequisite for every classification work item. Without it the clas
 - Add provider classification from structured daemon facts, context facts, endpoint facts, installed applications, and the remembered record, reporting which evidence won.
 - Add table-driven unit tests for representative Linux, WSL, Windows, macOS, and remote errors.
 
+#### Slice A implementation checkpoint (completed 2026-08-03)
+
+Implemented the Slice A half of this work item in [commit `8d0cb52d`](https://github.com/microsoft/vscode-documentdb/commit/8d0cb52da7ce5ab53b44732136a6fb8de083eb6c). The new pure classifier applies the required evidence precedence for a missing CLI, local endpoint permission denial, structured or textual permission evidence, missing or refused local endpoints, deadline expiry, and the indeterminate fallback. The classifier is total and returns `unknown`/`indeterminate` if its internal classification path throws. Provider, context-unavailable, remote-endpoint, and platform-specific classification remain intentionally unimplemented for Slice B.
+
+The first executable behavior check was the fixture-backed Ubuntu `EACCES` case required by the delivery plan. It was run red first and returned `unknown`/`indeterminate`; after implementing the classifier, the focused suite passed all seven cases. The changed files also passed targeted ESLint and the repository TypeScript build.
+
+**Implementation-order deviation:** This partial WI-2 checkpoint was completed before WI-0, even though WI-0 is the runtime prerequisite for classification. Two options were considered: finish probe capture first, or write and execute the specified permission-denied classifier test before WI-0 was complete. The second option was selected because the plan explicitly requires that test to be the first executable behavior check. This does not expose the classifier in production yet; WI-0 and WI-3 still have to deliver the endpoint errno to it.
+
+**Fixture provenance limitation:** The recorded report identifies Ubuntu and Docker Engine but does not preserve exact Ubuntu or Docker versions. The fixture states those fields as `not recorded` instead of inventing them. WI-9 remains responsible for replacing or supplementing it with fully versioned captures during the manual verification pass.
+
+**Minimal contract dependency:** The probe, endpoint, failure, and outcome contracts needed to compile this checkpoint were added with the classifier. This is the minimum Slice A subset of WI-1, not completion of WI-1; the broader environment, provider, launch, recovery, and provider-memory contracts remain in Slice B.
+
 ### WI-3: Add the readiness orchestrator
 
 - Move prerequisite command sequencing out of `ContainerRuntimeImpl`.
