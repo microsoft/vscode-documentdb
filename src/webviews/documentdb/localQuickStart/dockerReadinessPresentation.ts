@@ -119,6 +119,17 @@ function isRemoteEnvironment(readiness: DockerReadiness): boolean {
     );
 }
 
+export function isDockerArchitectureCompatible(readiness: DockerReadiness): boolean {
+    if (readiness.platformSupported === false) {
+        return false;
+    }
+    if (!readiness.arch || !readiness.daemonArchitecture) {
+        return true;
+    }
+    const hostArchitecture = readiness.arch === 'x64' ? 'amd64' : readiness.arch;
+    return hostArchitecture === readiness.daemonArchitecture;
+}
+
 function refineUnavailableState(
     state: DockerReadinessPresentationState,
     readiness: DockerReadiness,

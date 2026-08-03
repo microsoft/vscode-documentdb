@@ -53,6 +53,7 @@ import {
     getDockerExecutionTargetKey,
     getDockerLastCheckedAtMs,
     getDockerReadinessPresentation,
+    isDockerArchitectureCompatible,
 } from './dockerReadinessPresentation';
 
 type Phase = 'loading' | 'review' | 'dockerNotReady' | 'provisioning' | 'success' | 'failed';
@@ -824,26 +825,39 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const renderReviewCards = (): JSX.Element => {
         const ready = docker?.readiness.outcome === 'ready';
+        const platformCompatible = docker ? isDockerArchitectureCompatible(docker.readiness) : false;
         const effectivePort = advPort.trim() && !advError ? advPort.trim() : String(QUICK_START_PORT);
         return (
-            <div className={styles.cardGrid}>
-                <MetricCard
-                    label={l10n.t('Docker')}
-                    value={ready ? l10n.t('Ready') : l10n.t('Not ready')}
-                    badge={
-                        <Badge appearance="filled" color={ready ? 'success' : 'danger'} size="small">
-                            {ready ? '✓' : '!'}
-                        </Badge>
-                    }
-                />
-                <MetricCard label={l10n.t('Port')} value={effectivePort} />
-                <MetricCard
-                    label={l10n.t('Platform')}
-                    value={docker?.readiness.daemonArchitecture ?? l10n.t('Unknown until Docker is reachable')}
-                />
-                <MetricCard label={l10n.t('Data')} value={l10n.t('Persistent volume')} />
-                <MetricCard label={l10n.t('Security')} value={l10n.t('TLS · self-signed')} />
-            </div>
+            <>
+                <div className={styles.cardGrid}>
+                    <MetricCard
+                        label={l10n.t('Docker')}
+                        value={ready ? l10n.t('Ready') : l10n.t('Not ready')}
+                        badge={
+                            <Badge appearance="filled" color={ready ? 'success' : 'danger'} size="small">
+                                {ready ? '✓' : '!'}
+                            </Badge>
+                        }
+                    />
+                    <MetricCard label={l10n.t('Port')} value={effectivePort} />
+                    <MetricCard
+                        label={l10n.t('Platform')}
+                        value={docker?.readiness.daemonArchitecture ?? l10n.t('Unknown until Docker is reachable')}
+                        badge={
+                            <Badge appearance="filled" color={platformCompatible ? 'success' : 'warning'} size="small">
+                                {platformCompatible ? '✓' : '!'}
+                            </Badge>
+                        }
+                    />
+                    <MetricCard label={l10n.t('Data')} value={l10n.t('Persistent volume')} />
+                    <MetricCard label={l10n.t('Security')} value={l10n.t('TLS · self-signed')} />
+                </div>
+                {docker?.readiness.platformSupported === false && (
+                    <Text size={200} className={styles.muted}>
+                        {l10n.t('DocumentDB Local images are published for x64 and arm64 only.')}
+                    </Text>
+                )}
+            </>
         );
     };
 
@@ -1061,6 +1075,7 @@ export const LocalQuickStart = (): JSX.Element => {
             DOCKER_GUIDANCE[startingDocker ? 'daemonStarting' : (presentation?.guidance ?? 'notAccessible')];
         const recoveryNote = presentation?.recoveryNote ? DOCKER_RECOVERY_NOTES[presentation.recoveryNote] : undefined;
         const platformKnown = r?.daemonArchitecture !== undefined;
+        const platformCompatible = r ? isDockerArchitectureCompatible(r) : false;
         const statusBadge = (ok: boolean, notOkColor: 'danger' | 'warning'): JSX.Element => (
             <Badge appearance="filled" color={ok ? 'success' : notOkColor} size="small">
                 {ok ? '✓' : '!'}
@@ -1105,9 +1120,14 @@ export const LocalQuickStart = (): JSX.Element => {
                     <MetricCard
                         label={l10n.t('Platform')}
                         value={r?.daemonArchitecture ?? l10n.t('Unknown until Docker is reachable')}
-                        badge={statusBadge(platformKnown, 'warning')}
+                        badge={statusBadge(platformKnown && platformCompatible, 'warning')}
                     />
                 </div>
+                {r?.platformSupported === false && (
+                    <Text size={200} className={styles.muted}>
+                        {l10n.t('DocumentDB Local images are published for x64 and arm64 only.')}
+                    </Text>
+                )}
                 <Card className={styles.summaryCard}>
                     <Text weight="semibold">{l10n.t('How to fix')}</Text>
                     <Divider />

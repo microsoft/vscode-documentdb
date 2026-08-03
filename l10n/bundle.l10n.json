@@ -654,6 +654,7 @@
   "DocumentDB Local - Quick Start": "DocumentDB Local - Quick Start",
   "DocumentDB Local container deleted.": "DocumentDB Local container deleted.",
   "DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use \"Delete Container\" to remove it and start fresh (this erases the data).": "DocumentDB Local has data on disk but its saved credentials are missing, so it cannot be opened. Use \"Delete Container\" to remove it and start fresh (this erases the data).",
+  "DocumentDB Local images are published for x64 and arm64 only.": "DocumentDB Local images are published for x64 and arm64 only.",
   "DocumentDB Local is ready. Next steps are shown below.": "DocumentDB Local is ready. Next steps are shown below.",
   "DocumentDB Local is running.": "DocumentDB Local is running.",
   "DocumentDB Shell: {0}": "DocumentDB Shell: {0}",

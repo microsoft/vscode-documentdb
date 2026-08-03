@@ -13,6 +13,7 @@ import {
     getDockerExecutionTargetKey,
     getDockerLastCheckedAtMs,
     getDockerReadinessPresentation,
+    isDockerArchitectureCompatible,
 } from './dockerReadinessPresentation';
 
 type DockerReadinessOverrides =
@@ -282,5 +283,17 @@ describe('getDockerLastCheckedAtMs', () => {
 
     it('uses the current check time for live evidence', () => {
         expect(getDockerLastCheckedAtMs(readiness({ checkedAtMs: 2_000, providerEvidence: 'liveDaemon' }))).toBe(2_000);
+    });
+});
+
+describe('isDockerArchitectureCompatible', () => {
+    it.each([
+        ['supported x64 host and amd64 daemon', { arch: 'x64', daemonArchitecture: 'amd64' }, true],
+        ['supported arm64 host and arm64 daemon', { arch: 'arm64', daemonArchitecture: 'arm64' }, true],
+        ['known host and daemon mismatch', { arch: 'arm64', daemonArchitecture: 'amd64' }, false],
+        ['unsupported host', { arch: 'ppc64', daemonArchitecture: 'ppc64', platformSupported: false }, false],
+        ['daemon architecture not yet known', { arch: 'x64' }, true],
+    ] as const)('%s', (_name, overrides, expected) => {
+        expect(isDockerArchitectureCompatible(readiness(overrides))).toBe(expected);
     });
 });

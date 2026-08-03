@@ -12,6 +12,7 @@ Quick Start requires:
 
 - A Docker CLI available to the VS Code extension host.
 - Access from that CLI to a Docker daemon running Linux containers.
+- An x64 or arm64 extension host. DocumentDB Local images are published for those architectures.
 
 Both Docker Engine and Docker Desktop are supported. Docker Desktop is not required when Docker Engine is already available. The extension never installs Docker, silently starts a provider, runs `sudo`, changes group membership, or switches Docker contexts.
 
