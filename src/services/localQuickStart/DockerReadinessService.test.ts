@@ -80,6 +80,7 @@ describe('DockerReadinessService', () => {
                 source: endpoint.source,
                 accessErrorCode: 'EACCES',
             }),
+            probeSocketGroup: async () => ({}),
         });
 
         const result = await service.getReadiness();
@@ -228,6 +229,7 @@ describe('DockerReadinessService', () => {
             environmentVariables: {},
             runProbe,
             probeEndpoint: async (endpoint) => ({ kind: endpoint.kind, source: endpoint.source }),
+            probeSocketGroup: async () => ({}),
         });
 
         await expect(service.getReadiness()).resolves.toMatchObject({
