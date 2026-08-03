@@ -52,7 +52,11 @@ import { localQuickStartRouter, type RouterContext } from './localQuickStartRout
 
 function createContext(): RouterContext & {
     actionContext: {
-        telemetry: { properties: Record<string, string>; measurements: Record<string, number> };
+        telemetry: {
+            properties: Record<string, string>;
+            measurements: Record<string, number>;
+            suppressAll?: boolean;
+        };
     };
 } {
     return {
@@ -66,6 +70,29 @@ function createContext(): RouterContext & {
 }
 
 describe('localQuickStartRouter', () => {
+    it('suppresses telemetry for polled Docker readiness queries', async () => {
+        mockIsDockerReady.mockResolvedValue({
+            outcome: 'ready',
+            environment: 'local',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'infoOperatingSystem',
+            executionTarget: 'localHost',
+            checkedAtMs: 1,
+            cliInstalled: true,
+            canContinueAnyway: false,
+            daemonReachable: true,
+        });
+        mockGetStatus.mockReturnValue({ state: 'Stopped' });
+        mockWillReuseExistingInstance.mockResolvedValue(false);
+        const context = createContext();
+        const caller = createCallerFactory(localQuickStartRouter)(context);
+
+        await caller.getDockerStatus({ polled: true });
+
+        expect(context.actionContext.telemetry.suppressAll).toBe(true);
+    });
+
     it('forwards an explicit provider-memory reset to Docker readiness', async () => {
         mockIsDockerReady.mockResolvedValue({
             outcome: 'ready',

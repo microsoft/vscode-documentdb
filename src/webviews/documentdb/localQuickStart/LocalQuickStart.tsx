@@ -562,7 +562,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     signal: abortController.signal,
                     query: (suppressCommandEcho) =>
                         trpcClient.localQuickStart.getDockerStatus.query(
-                            { forceRefresh: true, suppressCommandEcho },
+                            { forceRefresh: true, polled: true, suppressCommandEcho },
                             { signal: abortController.signal },
                         ),
                     onResult: (result) => {

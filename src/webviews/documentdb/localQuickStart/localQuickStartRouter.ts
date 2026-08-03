@@ -117,12 +117,17 @@ export const localQuickStartRouter = router({
             z
                 .object({
                     forceRefresh: z.boolean().optional(),
+                    polled: z.boolean().optional(),
                     resetProviderMemory: z.boolean().optional(),
                     suppressCommandEcho: z.boolean().optional(),
                 })
                 .optional(),
         )
         .query(async ({ ctx, input }): Promise<DockerStatusResult> => {
+            const tctx = ctx as WithTelemetry<RouterContext>;
+            if (input?.polled) {
+                tctx.actionContext.telemetry.suppressAll = true;
+            }
             const cancellationToken = ctx.signal ? CancellationTokenLike.fromAbortSignal(ctx.signal) : undefined;
             const readiness = await ContainerRuntime.isDockerReady({
                 forceRefresh: input?.forceRefresh,
@@ -134,7 +139,6 @@ export const localQuickStartRouter = router({
             // (e.g. Missing when the container was removed in another window), which drives
             // whether the Advanced credential/image fields are shown (§12).
             await QuickStartService.refreshLiveState();
-            const tctx = ctx as WithTelemetry<RouterContext>;
             // Design §14 quickstart.docker_readiness never includes names, ports, or credentials.
             Object.assign(tctx.actionContext.telemetry.properties, getDockerReadinessTelemetryProperties(readiness));
             tctx.actionContext.telemetry.properties.platformSupported = String(readiness.platformSupported !== false);
