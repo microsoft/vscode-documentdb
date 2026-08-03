@@ -5,8 +5,12 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { classifyDockerFailure } from './dockerReadinessClassification';
-import { type DockerEndpointProbe, type DockerProbeEvidence } from './quickStartTypes';
+import { classifyDockerFailure, classifyDockerProvider } from './dockerReadinessClassification';
+import {
+    type DockerEndpointProbe,
+    type DockerHostEnvironment,
+    type DockerProbeEvidence,
+} from './quickStartTypes';
 
 function readFixture(name: string): string {
     return fs.readFileSync(path.join(__dirname, '__fixtures__', 'docker', name), 'utf8');
@@ -103,5 +107,173 @@ describe('classifyDockerFailure', () => {
         };
 
         expect(classifyDockerFailure({ infoProbe })).toEqual(expected);
+    });
+
+    it.each([
+        {
+            name: 'missing named context',
+            evidence: { contextUnavailable: true },
+            expected: { failureKind: 'contextUnavailable', outcome: 'diagnosed' },
+        },
+        {
+            name: 'remote TCP endpoint',
+            evidence: {
+                endpointProbe: { kind: 'tcp', source: 'dockerHostEnv' },
+            },
+            expected: { failureKind: 'endpointUnreachable', outcome: 'diagnosed' },
+        },
+        {
+            name: 'remote SSH endpoint',
+            evidence: {
+                endpointProbe: { kind: 'ssh', source: 'currentContext' },
+            },
+            expected: { failureKind: 'endpointUnreachable', outcome: 'diagnosed' },
+        },
+        {
+            name: 'provider launch in progress',
+            evidence: {
+                providerMayBeStarting: true,
+                endpointProbe: { kind: 'tcp', source: 'dockerHostEnv' },
+            },
+            expected: { failureKind: 'daemonStarting', outcome: 'diagnosed' },
+        },
+    ] as const)('classifies $name', ({ evidence: additionalEvidence, expected }) => {
+        const infoProbe: DockerProbeEvidence = {
+            probe: 'info',
+            exitCode: 1,
+            stdout: '',
+            stderr: '',
+            endedBy: 'exit',
+            durationMs: 5,
+        };
+
+        expect(classifyDockerFailure({ infoProbe, ...additionalEvidence })).toEqual(expected);
+    });
+
+    it('preserves local permission evidence over provider-start evidence', () => {
+        const infoProbe: DockerProbeEvidence = {
+            probe: 'info',
+            exitCode: 1,
+            stdout: '',
+            stderr: '',
+            endedBy: 'exit',
+            durationMs: 5,
+        };
+
+        expect(
+            classifyDockerFailure({
+                infoProbe,
+                endpointProbe: { kind: 'unixSocket', source: 'platformDefault', accessErrorCode: 'EACCES' },
+                providerMayBeStarting: true,
+            }),
+        ).toEqual({ failureKind: 'permissionDenied', outcome: 'diagnosed' });
+    });
+
+    it('returns the total unknown fallback if unexpected evidence throws', () => {
+        const infoProbe: DockerProbeEvidence = {
+            probe: 'info',
+            exitCode: 1,
+            stdout: '',
+            stderr: '',
+            endedBy: 'exit',
+            durationMs: 5,
+        };
+
+        expect(
+            classifyDockerFailure({
+                infoProbe,
+                serverErrors: null as unknown as ReadonlyArray<string>,
+            }),
+        ).toEqual({ failureKind: 'unknown', outcome: 'indeterminate' });
+    });
+});
+
+describe('classifyDockerProvider', () => {
+    it.each([
+        {
+            name: 'live Docker Desktop daemon',
+            evidence: { environment: 'macos', daemonReachable: true, daemonOperatingSystem: 'Docker Desktop' },
+            expected: { provider: 'dockerDesktop', providerEvidence: 'liveDaemon' },
+        },
+        {
+            name: 'live native Linux daemon',
+            evidence: { environment: 'linux', daemonReachable: true, daemonOperatingSystem: 'Ubuntu 24.04' },
+            expected: { provider: 'dockerEngine', providerEvidence: 'liveDaemon' },
+        },
+        {
+            name: 'Desktop context',
+            evidence: {
+                environment: 'windows',
+                daemonReachable: false,
+                contexts: [{ name: 'desktop-linux', current: true }],
+            },
+            expected: { provider: 'dockerDesktop', providerEvidence: 'activeContext' },
+        },
+        {
+            name: 'rootless Engine endpoint',
+            evidence: {
+                environment: 'linux',
+                daemonReachable: false,
+                activeEndpoint: { kind: 'unixSocket', address: 'unix:///run/user/1000/docker.sock' },
+            },
+            expected: { provider: 'dockerEngine', providerEvidence: 'activeContext' },
+        },
+        {
+            name: 'remembered Desktop',
+            evidence: {
+                environment: 'windows',
+                daemonReachable: false,
+                rememberedProvider: {
+                    provider: 'dockerDesktop',
+                    endpointKind: 'namedPipe',
+                    hostEnvironment: 'windows',
+                    recordedAtMs: 1,
+                },
+            },
+            expected: { provider: 'dockerDesktop', providerEvidence: 'rememberedProvider' },
+        },
+        {
+            name: 'installed Desktop on local Windows',
+            evidence: { environment: 'windows', daemonReachable: false, dockerDesktopInstalled: true },
+            expected: { provider: 'dockerDesktop', providerEvidence: 'installedApplication' },
+        },
+        {
+            name: 'installed Desktop beside native WSL socket',
+            evidence: {
+                environment: 'wsl',
+                daemonReachable: false,
+                dockerDesktopInstalled: true,
+                activeEndpoint: { kind: 'unixSocket', address: 'unix:///var/run/docker.sock' },
+            },
+            expected: { provider: 'unknown', providerEvidence: 'none' },
+        },
+        {
+            name: 'installed Desktop in remote extension host',
+            evidence: { environment: 'ssh', daemonReachable: false, dockerDesktopInstalled: true },
+            expected: { provider: 'unknown', providerEvidence: 'none' },
+        },
+    ] as const)('classifies $name', ({ evidence, expected }) => {
+        expect(
+            classifyDockerProvider({
+                ...evidence,
+                environment: evidence.environment as DockerHostEnvironment,
+            }),
+        ).toEqual(expected);
+    });
+
+    it('prefers live daemon evidence over remembered provider evidence', () => {
+        expect(
+            classifyDockerProvider({
+                environment: 'linux',
+                daemonReachable: true,
+                daemonOperatingSystem: 'Ubuntu 24.04',
+                rememberedProvider: {
+                    provider: 'dockerDesktop',
+                    endpointKind: 'unixSocket',
+                    hostEnvironment: 'linux',
+                    recordedAtMs: 1,
+                },
+            }),
+        ).toEqual({ provider: 'dockerEngine', providerEvidence: 'liveDaemon' });
     });
 });
