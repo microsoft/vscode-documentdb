@@ -71,3 +71,8 @@ export function buildAtlasAccessUrl(record: AtlasCredentialRecord, clientId?: st
 export function buildAtlasNetworkAccessUrl(projectId: string): string {
     return `${ATLAS_CLOUD_ROOT}/v2/${encodeURIComponent(projectId)}#/security/network/accessList`;
 }
+
+/** Builds the Atlas cluster overview URL for a discovered cluster. */
+export function buildAtlasClusterUrl(projectId: string, clusterName: string): string {
+    return `${ATLAS_CLOUD_ROOT}/v2/${encodeURIComponent(projectId)}#/clusters/detail/${encodeURIComponent(clusterName)}`;
+}

@@ -149,6 +149,20 @@ describe('AtlasClusterItem icon', () => {
     });
 });
 
+describe('AtlasClusterItem console URL', () => {
+    it('links directly to the cluster overview in its Atlas project', () => {
+        const item = new AtlasClusterItem('', {
+            ...createTreeCluster(),
+            projectId: '6a4385d0c24161dbcd3bd66f',
+            name: 'Experimental 1/West',
+        });
+
+        expect(item.getAtlasConsoleUrl()).toBe(
+            'https://cloud.mongodb.com/v2/6a4385d0c24161dbcd3bd66f#/clusters/detail/Experimental%201%2FWest',
+        );
+    });
+});
+
 describe('AtlasClusterItem tooltip', () => {
     const tooltipText = (item: AtlasClusterItem): string =>
         (item.getTreeItem().tooltip as unknown as { toString(): string }).toString();

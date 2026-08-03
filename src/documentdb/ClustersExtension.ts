@@ -79,6 +79,10 @@ import { doubleClickDebounceDelay } from '../constants';
 import { isVCoreAndRURolloutEnabled } from '../extension';
 import { ext } from '../extensionVariables';
 import { AtlasDiscoveryProvider } from '../plugins/service-atlas-mongodb/AtlasDiscoveryProvider';
+import {
+    OPEN_ATLAS_CLUSTER_COMMAND_ID,
+    openAtlasCluster,
+} from '../plugins/service-atlas-mongodb/commands/openAtlasCluster';
 import { ADD_ATLAS_CREDENTIAL_COMMAND_ID } from '../plugins/service-atlas-mongodb/credentialsManagement/addAtlasCredential';
 import { AzureMongoRUDiscoveryProvider } from '../plugins/service-azure-mongo-ru/AzureMongoRUDiscoveryProvider';
 import { AzureDiscoveryProvider } from '../plugins/service-azure-mongo-vcore/AzureDiscoveryProvider';
@@ -645,6 +649,11 @@ export class ClustersExtension implements vscode.Disposable {
                     withTreeNodeCommandCorrelation((context, node: TreeElement) =>
                         this.atlasDiscoveryProvider.addCredential(context, node),
                     ),
+                );
+
+                registerCommandWithTreeNodeUnwrapping(
+                    OPEN_ATLAS_CLUSTER_COMMAND_ID,
+                    withTreeNodeCommandCorrelation(openAtlasCluster),
                 );
 
                 registerCommandWithTreeNodeUnwrapping(

@@ -27,7 +27,7 @@ import { nonNullValue } from '../../../utils/nonNull';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { AtlasApiClient } from '../api/AtlasApiClient';
 import { isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
-import { buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
+import { buildAtlasClusterUrl, buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
 import { atlasTrace, monotonicNow } from '../atlasTrace';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { toAtlasDatabaseUserCandidates, type AtlasDatabaseUserCandidate } from '../connect/atlasDatabaseUsers';
@@ -75,7 +75,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      * Returns the Atlas console URL for this cluster.
      */
     public getAtlasConsoleUrl(): string {
-        return `https://cloud.mongodb.com/v2/${this.cluster.projectId}#/clusters/detail/${this.cluster.name}`;
+        return buildAtlasClusterUrl(this.cluster.projectId, this.cluster.name);
     }
 
     /**
