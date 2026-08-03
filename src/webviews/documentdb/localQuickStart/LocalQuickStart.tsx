@@ -865,7 +865,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         label={l10n.t('Docker')}
                         value={ready ? l10n.t('Ready') : l10n.t('Not ready')}
                         badge={
-                            <Badge appearance="filled" color={ready ? 'success' : 'danger'} size="small">
+                            <Badge appearance="filled" color={ready ? 'success' : 'danger'} size="small" aria-hidden>
                                 {ready ? '✓' : '!'}
                             </Badge>
                         }
@@ -875,7 +875,12 @@ export const LocalQuickStart = (): JSX.Element => {
                         label={l10n.t('Platform')}
                         value={docker?.readiness.daemonArchitecture ?? l10n.t('Unknown until Docker is reachable')}
                         badge={
-                            <Badge appearance="filled" color={platformCompatible ? 'success' : 'warning'} size="small">
+                            <Badge
+                                appearance="filled"
+                                color={platformCompatible ? 'success' : 'warning'}
+                                size="small"
+                                aria-hidden
+                            >
                                 {platformCompatible ? '✓' : '!'}
                             </Badge>
                         }
@@ -1108,7 +1113,7 @@ export const LocalQuickStart = (): JSX.Element => {
         const platformKnown = r?.daemonArchitecture !== undefined;
         const platformCompatible = r ? isDockerArchitectureCompatible(r) : false;
         const statusBadge = (ok: boolean, notOkColor: 'danger' | 'warning'): JSX.Element => (
-            <Badge appearance="filled" color={ok ? 'success' : notOkColor} size="small">
+            <Badge appearance="filled" color={ok ? 'success' : notOkColor} size="small" aria-hidden>
                 {ok ? '✓' : '!'}
             </Badge>
         );
