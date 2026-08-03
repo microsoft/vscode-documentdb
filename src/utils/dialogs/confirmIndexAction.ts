@@ -64,7 +64,7 @@ export async function confirmIndexAction(
     kind: IndexActionKind,
     details: IndexActionConfirmationDetails,
 ): Promise<boolean> {
-    const dash = l10n.t('—');
+    const unavailable = l10n.t('Not available');
     const { title, actionLabel, effect } = copyFor(kind);
 
     const lines = [l10n.t('Index: {0}', details.indexName)];
@@ -72,8 +72,8 @@ export async function confirmIndexAction(
         lines.push(l10n.t('Collection: {0}', details.collectionName));
     }
     lines.push(
-        l10n.t('Size: {0}', details.sizeText && details.sizeText.trim() !== '' ? details.sizeText : dash),
-        l10n.t('Usage: {0}', details.usageText && details.usageText.trim() !== '' ? details.usageText : dash),
+        l10n.t('Size: {0}', details.sizeText && details.sizeText.trim() !== '' ? details.sizeText : unavailable),
+        l10n.t('Usage: {0}', details.usageText && details.usageText.trim() !== '' ? details.usageText : unavailable),
         '',
         effect,
     );

@@ -58,7 +58,7 @@ export const IndexMetricsRow = ({ indexes }: IndexMetricsRowProps): JSX.Element 
                 label={l10n.t('Unused Indexes')}
                 value={unusedCount}
                 tooltipExplanation={l10n.t(
-                    'Non-default indexes with zero recorded usage since the server started tracking. Consider reviewing them — unused indexes consume storage and slow writes.',
+                    'Non-default indexes with zero recorded usage since the server started tracking. Consider reviewing them. Unused indexes consume storage and slow writes.',
                 )}
             />
         </MetricsRow>

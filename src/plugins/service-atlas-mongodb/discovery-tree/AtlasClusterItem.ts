@@ -456,7 +456,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
         md.appendMarkdown(`\n---\n`);
         md.appendMarkdown(
             this.cluster.connectionString
-                ? l10n.t('Connection string available — expand to connect and browse databases.')
+                ? l10n.t('Connection string available. Expand to connect and browse databases.')
                 : escapeMarkdown(this.describeUnavailable()),
         );
 
