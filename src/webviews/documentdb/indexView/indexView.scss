@@ -207,6 +207,12 @@
          * convention used in the Results tab. Parity is computed in the
          * component (rowEven / rowOdd) from the data index so that the
          * expanded detail row inherits the same shade as its parent.
+         *
+         * Painting on <td> rather than <tr> is what lets the detail row match
+         * its parent, but it also covers the hover and pressed fills Fluent
+         * paints on the <tr>. The two rules below restore them at the same
+         * cell level; reuse of this striping pattern must carry them along or
+         * rows lose their interaction feedback.
          */
         .rowEven > td {
             background-color: var(--colorNeutralBackground1);
@@ -215,19 +221,13 @@
             background-color: var(--colorNeutralBackground2);
         }
 
-        /*
-         * Fluent applies table-row hover to the <tr>, but the zebra colors
-         * above are painted on each <td> and hide it. Paint the adaptive
-         * VS Code list hover color on the cells so every data row responds
-         * evenly without changing the global action-token semantics.
-         */
+        /* Adaptive list hover, on the cells so every data row responds evenly. */
         .rowEven:not(.fieldsDetailRow):hover > td,
         .rowOdd:not(.fieldsDetailRow):hover > td {
             background-color: var(--vscode-list-hoverBackground, var(--colorSubtleBackgroundHover));
         }
 
-        /* The same cell layer hid Fluent's <tr>:active fill; mirror the now
-            * theme-aware list selection color here and place it after hover. */
+        /* Pressed fill; must stay after hover, both selectors have equal specificity. */
         .rowEven:not(.fieldsDetailRow):active > td,
         .rowOdd:not(.fieldsDetailRow):active > td {
             background-color: var(--vscode-list-activeSelectionBackground, var(--colorSubtleBackgroundPressed));
