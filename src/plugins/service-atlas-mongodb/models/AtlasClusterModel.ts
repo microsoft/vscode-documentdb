@@ -18,6 +18,9 @@ export interface AtlasClusterModel extends BaseClusterModel {
     /** Atlas project name */
     readonly projectName: string;
 
+    /** Whether Atlas has paused the cluster, including automatic inactivity pauses. */
+    readonly paused: boolean;
+
     /** Cluster state (IDLE, CREATING, UPDATING, etc.) */
     readonly stateName: AtlasClusterState;
 
@@ -47,6 +50,7 @@ export function createAtlasClusterModel(
         id: string;
         name: string;
         mongoDBVersion: string;
+        paused?: boolean;
         connectionStrings?: { standardSrv?: string; standard?: string };
         stateName: AtlasClusterState;
         clusterType: AtlasClusterType;
@@ -89,6 +93,7 @@ export function createAtlasClusterModel(
         clusterId,
         projectId,
         projectName,
+        paused: cluster.paused === true,
         stateName: ATLAS_CLUSTER_STATES.includes(cluster.stateName) ? cluster.stateName : 'UNKNOWN',
         clusterType: cluster.clusterType,
         providerName: provider.providerName,

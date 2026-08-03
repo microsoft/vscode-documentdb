@@ -6,20 +6,22 @@
 import { UserCancelledError } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
+import { formatBytes, formatOps } from '../../webviews/documentdb/indexView/utils/format';
 import { getConfirmationAsInSettings } from './getConfirmation';
 
 /** Which index operation is being confirmed. */
 export type IndexActionKind = 'delete' | 'hide' | 'unhide';
 
-/** Details rendered in the confirmation dialog body. Size / usage are optional
- * because not every caller (e.g. the tree view) has statistics on hand. */
+/** Details rendered in the confirmation dialog body. Size / usage are raw numbers
+ * because both come from optional server commands that some cluster tiers do not
+ * support; formatting happens here so every caller words a missing value the same. */
 export interface IndexActionConfirmationDetails {
     indexName: string;
     collectionName?: string;
-    /** Pre-formatted index size, e.g. "1.2 MB". Shown as a dash when omitted. */
-    sizeText?: string;
-    /** Pre-formatted usage, e.g. "42 ops". Shown as a dash when omitted. */
-    usageText?: string;
+    /** Index size in bytes. Shown as "Not available" when omitted. */
+    sizeBytes?: number;
+    /** Usage operations counter. Shown as "Not available" when omitted. */
+    usageOps?: number;
 }
 
 /** Title / action-button label / effect note for each supported action. */
@@ -47,6 +49,14 @@ function copyFor(kind: IndexActionKind): { title: string; actionLabel: string; e
 }
 
 /**
+ * Formats one statistic for the dialog body. The grid renders a missing value as an
+ * em dash, which reads as nothing in a sentence, so prose spells it out instead.
+ */
+function describeStat(value: number | undefined, format: (value: number) => string): string {
+    return value === undefined || Number.isNaN(value) ? l10n.t('Not available') : format(value);
+}
+
+/**
  * Confirm a delete / hide / unhide of an index. The body lists the index name
  * (and collection when provided), its size and usage — one per line — followed
  * by a short note describing the effect. Shared by the Index Management webview
@@ -64,7 +74,6 @@ export async function confirmIndexAction(
     kind: IndexActionKind,
     details: IndexActionConfirmationDetails,
 ): Promise<boolean> {
-    const dash = l10n.t('—');
     const { title, actionLabel, effect } = copyFor(kind);
 
     const lines = [l10n.t('Index: {0}', details.indexName)];
@@ -72,8 +81,8 @@ export async function confirmIndexAction(
         lines.push(l10n.t('Collection: {0}', details.collectionName));
     }
     lines.push(
-        l10n.t('Size: {0}', details.sizeText && details.sizeText.trim() !== '' ? details.sizeText : dash),
-        l10n.t('Usage: {0}', details.usageText && details.usageText.trim() !== '' ? details.usageText : dash),
+        l10n.t('Size: {0}', describeStat(details.sizeBytes, formatBytes)),
+        l10n.t('Usage: {0}', describeStat(details.usageOps, formatOps)),
         '',
         effect,
     );

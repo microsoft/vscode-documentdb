@@ -122,6 +122,7 @@ function createTreeCluster(): TreeCluster<AtlasClusterModel> {
         viewId: Views.DiscoveryView,
         projectId: '507f1f77bcf86cd799439011',
         projectName: 'Project 0',
+        paused: false,
         stateName: 'IDLE',
         clusterType: 'REPLICASET',
         providerName: 'AWS',
@@ -146,6 +147,20 @@ describe('AtlasClusterItem icon', () => {
         const iconPath = new AtlasClusterItem('', createTreeCluster()).getTreeItem().iconPath;
 
         expect(JSON.stringify(iconPath)).not.toContain('vscode-documentdb');
+    });
+});
+
+describe('AtlasClusterItem console URL', () => {
+    it('links directly to the cluster overview in its Atlas project', () => {
+        const item = new AtlasClusterItem('', {
+            ...createTreeCluster(),
+            projectId: '6a4385d0c24161dbcd3bd66f',
+            name: 'Experimental 1/West',
+        });
+
+        expect(item.getAtlasConsoleUrl()).toBe(
+            'https://cloud.mongodb.com/v2/6a4385d0c24161dbcd3bd66f#/clusters/detail/Experimental%201%2FWest',
+        );
     });
 });
 
@@ -190,5 +205,13 @@ describe('AtlasClusterItem connectability (NEW-5)', () => {
         const item = new AtlasClusterItem('', { ...createTreeCluster(), connectionString: undefined });
         expect(item.getTreeItem().collapsibleState).toBe(0); // None
         expect(tooltipText(item)).toContain('does not expose a connection string');
+    });
+
+    it('is a leaf and explains how to recover when Atlas reports it paused', () => {
+        const item = new AtlasClusterItem('', { ...createTreeCluster(), paused: true });
+
+        expect(item.getTreeItem().collapsibleState).toBe(0); // None
+        expect(item.getTreeItem().description).toContain('Paused');
+        expect(tooltipText(item)).toContain('Resume it in MongoDB Atlas before connecting');
     });
 });

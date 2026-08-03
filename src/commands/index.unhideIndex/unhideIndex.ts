@@ -29,12 +29,12 @@ export async function unhideIndex(context: IActionContext, node: IndexItem): Pro
     const indexName = node.indexInfo.name;
     const collectionName = node.collectionInfo.name;
 
-    const { sizeText, usageText } = await getIndexConfirmationStats(node);
+    const { sizeBytes, usageOps } = await getIndexConfirmationStats(node);
     const confirmed = await confirmIndexAction('unhide', {
         indexName,
         collectionName,
-        sizeText,
-        usageText,
+        sizeBytes,
+        usageOps,
     });
 
     if (!confirmed) {

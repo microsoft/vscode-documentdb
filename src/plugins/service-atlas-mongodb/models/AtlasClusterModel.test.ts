@@ -54,4 +54,16 @@ describe('createAtlasClusterModel (NEW-7 boundary guards)', () => {
 
         expect(model.stateName).toBe('IDLE');
     });
+
+    it('preserves paused independently of the control-plane state', () => {
+        const model = createAtlasClusterModel(
+            'p1',
+            'Project 0',
+            baseCluster({ paused: true, stateName: 'IDLE' }),
+            DocumentDBExperience,
+        );
+
+        expect(model.paused).toBe(true);
+        expect(model.stateName).toBe('IDLE');
+    });
 });

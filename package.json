@@ -440,6 +440,13 @@
         "icon": "$(save)"
       },
       {
+        "//": "[DiscoveryView] Open a discovered MongoDB Atlas cluster in the Atlas web UI",
+        "category": "DocumentDB",
+        "command": "vscode-documentdb.command.discoveryView.atlas.openCluster",
+        "title": "Open in MongoDB Atlas",
+        "icon": "$(link-external)"
+      },
+      {
         "//": "[DiscoveryView] Content Provider: Manage Credentials",
         "category": "DocumentDB",
         "command": "vscode-documentdb.command.discoveryView.manageCredentials",
@@ -822,6 +829,11 @@
           "group": "0@1"
         },
         {
+          "command": "vscode-documentdb.command.discoveryView.atlas.openCluster",
+          "when": "view == discoveryView && viewItem =~ /\\btreeitem_documentdbcluster\\b/i && viewItem =~ /\\bexperience_mongoDBAtlas\\b/i && !listMultiSelection",
+          "group": "0@2"
+        },
+        {
           "command": "vscode-documentdb.command.discoveryView.removeRegistry",
           "when": "view == discoveryView && viewItem =~ /\\brootItem\\b/i",
           "group": "2@1"
@@ -1168,6 +1180,10 @@
         },
         {
           "command": "vscode-documentdb.command.discoveryView.addConnectionToConnectionsView",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.discoveryView.atlas.openCluster",
           "when": "never"
         },
         {

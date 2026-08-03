@@ -7,6 +7,12 @@ import { AzureWizardPromptStep, UserCancelledError } from '@microsoft/vscode-aze
 import * as vscode from 'vscode';
 import { type NewConnectionWizardContext } from '../../../commands/newConnection/NewConnectionWizardContext';
 import { AtlasApiClient } from '../api/AtlasApiClient';
+import {
+    getAtlasClusterStateLabel,
+    getAtlasPausedExplanation,
+    isAtlasClusterConnectable,
+    isAtlasClusterPaused,
+} from '../atlasClusterAvailability';
 import { configureAtlasCredentials } from '../credentialsManagement/configureAtlasCredentials';
 import { snapshotHasFailures, type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasCluster, type AtlasClusterState, type AtlasProject } from '../models/AtlasProjectModel';
@@ -284,17 +290,22 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
                 const providerDescription = provider
                     ? `${provider.instanceSizeName}, ${provider.providerName}`
                     : c.clusterType;
-                const stateLabel = getClusterStateLabel(c.stateName);
+                const connectionString = c.connectionStrings?.standardSrv ?? c.connectionStrings?.standard;
+                const availability = { paused: c.paused, stateName: c.stateName, connectionString };
+                const stateLabel = getAtlasClusterStateLabel(availability);
                 return {
-                    itemType: c.stateName === 'IDLE' ? ('cluster' as const) : ('unavailableCluster' as const),
+                    itemType: isAtlasClusterConnectable(availability)
+                        ? ('cluster' as const)
+                        : ('unavailableCluster' as const),
                     label: c.name,
                     description: stateLabel ? `${providerDescription} · ${stateLabel}` : providerDescription,
-                    detail:
-                        c.stateName === 'IDLE'
-                            ? (c.connectionStrings?.standardSrv ?? c.connectionStrings?.standard)
-                            : vscode.l10n.t(
-                                  'Visible in the tree, but not connectable until the cluster returns to IDLE.',
-                              ),
+                    detail: isAtlasClusterConnectable(availability)
+                        ? connectionString
+                        : isAtlasClusterPaused(availability)
+                          ? vscode.l10n.t('Resume this cluster in MongoDB Atlas before connecting.')
+                          : vscode.l10n.t(
+                                'Visible in the tree, but not connectable until the cluster returns to IDLE.',
+                            ),
                     cluster: c,
                 };
             })
@@ -326,24 +337,13 @@ export class SelectAtlasClusterStep extends AzureWizardPromptStep<NewConnectionW
             vscode.l10n.t('Cluster not connectable yet'),
             {
                 modal: true,
-                detail: getClusterStateExplanation(cluster.stateName),
+                detail: isAtlasClusterPaused(cluster)
+                    ? getAtlasPausedExplanation()
+                    : getClusterStateExplanation(cluster.stateName),
             },
             vscode.l10n.t('OK'),
         );
     }
-}
-
-function getClusterStateLabel(state: AtlasClusterState): string | undefined {
-    const labels: Record<AtlasClusterState, string | undefined> = {
-        IDLE: undefined,
-        CREATING: vscode.l10n.t('Creating…'),
-        UPDATING: vscode.l10n.t('Updating…'),
-        REPAIRING: vscode.l10n.t('Repairing…'),
-        DELETING: vscode.l10n.t('Deleting…'),
-        UNKNOWN: vscode.l10n.t('Unknown state'),
-    };
-
-    return labels[state];
 }
 
 function getClusterStateExplanation(state: AtlasClusterState): string {
