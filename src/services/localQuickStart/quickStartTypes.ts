@@ -47,6 +47,8 @@ export interface AdvancedQuickStartOptions {
     imageTag?: string;
     /** Seed the image's built-in sample data (default `true`). */
     loadSampleData?: boolean;
+    /** Bypass only an indeterminate readiness diagnosis; the service revalidates this condition. */
+    continueAnyway?: boolean;
 }
 
 /** Fixed container name for the single managed instance (POC). */
@@ -199,12 +201,7 @@ export type DockerHostEnvironment =
     | 'otherRemote'
     | 'unsupported';
 
-export type DockerFailureKind =
-    | 'cliMissing'
-    | 'permissionDenied'
-    | 'daemonUnavailable'
-    | 'probeTimedOut'
-    | 'unknown';
+export type DockerFailureKind = 'cliMissing' | 'permissionDenied' | 'daemonUnavailable' | 'probeTimedOut' | 'unknown';
 
 export type DockerEndpointKind = 'unixSocket' | 'namedPipe' | 'tcp' | 'ssh' | 'unknown';
 

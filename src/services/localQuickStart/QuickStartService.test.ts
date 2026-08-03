@@ -10,6 +10,7 @@ import { PROVISIONING_LEASE_TTL_MS, readRegistry, upsertInstanceRecord } from '.
 import { QuickStartServiceImpl } from './QuickStartService';
 import {
     DEFAULT_ALIAS,
+    type DockerReadiness,
     imageRefKey,
     InstanceState,
     LEGACY_IMAGE_REF_KEY,
@@ -856,17 +857,20 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         findAvailablePort?: number;
         removeContainer?: jest.Mock;
         removeVolume?: jest.Mock;
+        readiness?: DockerReadiness;
     }): IContainerRuntime {
         return mockRuntime({
-            isDockerReady: jest.fn().mockResolvedValue({
-                outcome: 'ready',
-                environment: 'linux',
-                endpointKind: 'unknown',
-                canContinueAnyway: false,
-                checkedAtMs: Date.now(),
-                cliInstalled: true,
-                daemonReachable: true,
-            }),
+            isDockerReady: jest.fn().mockResolvedValue(
+                opts.readiness ?? {
+                    outcome: 'ready',
+                    environment: 'linux',
+                    endpointKind: 'unknown',
+                    canContinueAnyway: false,
+                    checkedAtMs: Date.now(),
+                    cliInstalled: true,
+                    daemonReachable: true,
+                },
+            ),
             listByLabel: jest.fn().mockResolvedValue(
                 (opts.containers ?? []).map((container) => ({
                     id: container.id,
@@ -932,5 +936,60 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         await drain(service.provision(new AbortController().signal));
 
         expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+
+    it('continues past an indeterminate readiness result only when explicitly requested', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({
+                containers: [],
+                findAvailablePort: undefined,
+                removeVolume,
+                readiness: {
+                    outcome: 'indeterminate',
+                    environment: 'linux',
+                    endpointKind: 'unixSocket',
+                    failureKind: 'unknown',
+                    canContinueAnyway: true,
+                    checkedAtMs: Date.now(),
+                    cliInstalled: true,
+                    daemonReachable: false,
+                },
+            }),
+        );
+
+        await drain(service.provision(new AbortController().signal, { continueAnyway: true }));
+
+        expect(removeVolume).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not bypass a diagnosed readiness failure', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const removeVolume = jest.fn().mockResolvedValue(undefined);
+        const service = new QuickStartServiceImpl(
+            provisionRuntime({
+                containers: [],
+                findAvailablePort: undefined,
+                removeVolume,
+                readiness: {
+                    outcome: 'diagnosed',
+                    environment: 'linux',
+                    endpointKind: 'unixSocket',
+                    failureKind: 'permissionDenied',
+                    canContinueAnyway: false,
+                    checkedAtMs: Date.now(),
+                    cliInstalled: true,
+                    daemonReachable: false,
+                },
+            }),
+        );
+
+        await drain(service.provision(new AbortController().signal, { continueAnyway: true }));
+
+        expect(removeVolume).not.toHaveBeenCalled();
+        expect(service.getStatus().state).toBe(InstanceState.Error);
     });
 });

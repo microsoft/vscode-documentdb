@@ -398,7 +398,9 @@ export class QuickStartServiceImpl {
             yield stageEvent('checking', 'active', 'Checking Docker…');
             const readiness = await this.runtime.isDockerReady();
             this.throwIfAborted(signal);
-            if (!readiness.cliInstalled || !readiness.daemonReachable) {
+            const continueAfterIndeterminateReadiness =
+                options?.continueAnyway === true && readiness.outcome === 'indeterminate';
+            if ((!readiness.cliInstalled || !readiness.daemonReachable) && !continueAfterIndeterminateReadiness) {
                 const message = !readiness.cliInstalled
                     ? 'Docker CLI was not found on your PATH. Install Docker and retry.'
                     : 'Docker is installed but the daemon is not reachable. Start Docker and retry.';

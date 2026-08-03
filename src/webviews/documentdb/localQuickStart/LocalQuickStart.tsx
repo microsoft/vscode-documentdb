@@ -43,6 +43,7 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
+import { type DockerReadinessPresentationState, getDockerReadinessPresentation } from './dockerReadinessPresentation';
 
 type Phase = 'loading' | 'review' | 'dockerNotReady' | 'provisioning' | 'success' | 'failed';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
@@ -85,6 +86,23 @@ const useStyles = makeStyles({
     advancedPanel: { display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' },
     advancedGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' },
     muted: { color: tokens.colorNeutralForeground3 },
+    readinessFooter: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '8px',
+    },
+    recoveryCommand: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '8px',
+        padding: '8px',
+        backgroundColor: tokens.colorNeutralBackground3,
+        borderRadius: tokens.borderRadiusSmall,
+    },
     // Visually hidden but exposed to assistive tech (WCAG 4.1.3 status text).
     srOnly: {
         position: 'absolute',
@@ -107,6 +125,66 @@ const STAGE_LABELS: Record<ProvisionStage, string> = {
     done: l10n.t('Done'),
     error: l10n.t('Error'),
 };
+
+interface DockerFailureCopy {
+    readonly daemonValue: string;
+    readonly guidance: string;
+}
+
+function getDockerFailureCopy(state: DockerReadinessPresentationState): DockerFailureCopy {
+    switch (state) {
+        case 'ready':
+            return { daemonValue: l10n.t('Reachable'), guidance: '' };
+        case 'cliMissing':
+            return {
+                daemonValue: l10n.t('Unknown'),
+                guidance: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
+            };
+        case 'accessDenied':
+            return {
+                daemonValue: l10n.t('Access denied'),
+                guidance: l10n.t(
+                    'Your user cannot access the Docker socket. Update Docker permissions, then restart your session.',
+                ),
+            };
+        case 'notRunning':
+            return {
+                daemonValue: l10n.t('Not running'),
+                guidance: l10n.t('Start the Docker service, then check again.'),
+            };
+        case 'checkTimedOut':
+            return {
+                daemonValue: l10n.t('Check timed out'),
+                guidance: l10n.t('Docker did not respond before the readiness check timed out.'),
+            };
+        case 'notAccessible':
+            return {
+                daemonValue: l10n.t('Not accessible'),
+                guidance: l10n.t('The extension could not connect to the Docker daemon.'),
+            };
+    }
+}
+
+function formatLastChecked(checkedAtMs: number | undefined): string {
+    if (checkedAtMs === undefined) {
+        return l10n.t('Last check did not complete');
+    }
+    const elapsedMinutes = Math.max(0, Math.floor((Date.now() - checkedAtMs) / 60_000));
+    if (elapsedMinutes === 0) {
+        return l10n.t('Last checked just now');
+    }
+    if (elapsedMinutes === 1) {
+        return l10n.t('Last checked 1 minute ago');
+    }
+    if (elapsedMinutes < 60) {
+        return l10n.t('Last checked {0} minutes ago', String(elapsedMinutes));
+    }
+    const elapsedHours = Math.floor(elapsedMinutes / 60);
+    if (elapsedHours === 1) {
+        return l10n.t('Last checked 1 hour ago');
+    }
+    return l10n.t('Last checked {0} hours ago', String(elapsedHours));
+}
 
 function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
     return {
@@ -147,6 +225,8 @@ export const LocalQuickStart = (): JSX.Element => {
     const [boundPort, setBoundPort] = useState<number | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
     const [startingDocker, setStartingDocker] = useState(false);
+    const [dockerActionMessage, setDockerActionMessage] = useState<string | undefined>(undefined);
+    const [copyAnnouncementKey, setCopyAnnouncementKey] = useState(0);
     // True when the terminal failure was a readiness timeout (the container was left running),
     // so the failed view offers Wait longer / View logs / Start over instead of just Retry (§9.1).
     const [timedOut, setTimedOut] = useState(false);
@@ -166,6 +246,7 @@ export const LocalQuickStart = (): JSX.Element => {
     const isRecreate = docker?.willReuse === true;
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
+    const readinessAbortRef = useRef<AbortController | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     // Current Advanced options, synced from the fields below so handleStart (and Retry)
     // always read the latest without re-binding the provisioning subscription.
@@ -269,38 +350,51 @@ export const LocalQuickStart = (): JSX.Element => {
     const anyStageErrored = PROVISION_STAGES.some((s) => stageStatus[s] === 'error');
     const provisioningStatusMessage = activeStage && !anyStageErrored ? l10n.t('{0}…', STAGE_LABELS[activeStage]) : '';
 
-    const loadDockerStatus = useCallback((): void => {
-        setPhase('loading');
-        void trpcClient.localQuickStart.getDockerStatus
-            .query()
-            .then((result) => {
-                setDocker(result);
-                const ready = result.readiness.cliInstalled && result.readiness.daemonReachable;
-                if (ready && result.status.canResumeReadiness) {
-                    // A container from a prior readiness timeout is still running and resumable —
-                    // rehydrate the timed-out actions (Wait longer / Start over) instead of dropping
-                    // to the fresh setup form, which would strand that container (§9.1). Seed the
-                    // checklist to reflect that everything up to readiness completed.
-                    setStageStatus({
-                        checking: 'done',
-                        pulling: 'done',
-                        creating: 'done',
-                        starting: 'done',
-                        waiting: 'error',
-                        done: 'pending',
-                        error: 'pending',
-                    });
-                    setTimedOut(true);
-                    setPhase('failed');
-                } else {
-                    setPhase(ready ? 'review' : 'dockerNotReady');
-                }
-            })
-            .catch((error: unknown) => {
-                setErrorMessage(error instanceof Error ? error.message : String(error));
-                setPhase('dockerNotReady');
-            });
-    }, [trpcClient]);
+    const loadDockerStatus = useCallback(
+        (forceRefresh = false): void => {
+            readinessAbortRef.current?.abort();
+            const abortController = new AbortController();
+            readinessAbortRef.current = abortController;
+            setPhase('loading');
+            void trpcClient.localQuickStart.getDockerStatus
+                .query(forceRefresh ? { forceRefresh: true } : undefined, { signal: abortController.signal })
+                .then((result) => {
+                    if (abortController.signal.aborted) return;
+                    setDocker(result);
+                    const ready = result.readiness.cliInstalled && result.readiness.daemonReachable;
+                    if (ready && result.status.canResumeReadiness) {
+                        // A container from a prior readiness timeout is still running and resumable.
+                        // rehydrate the timed-out actions (Wait longer / Start over) instead of dropping
+                        // to the fresh setup form, which would strand that container (§9.1). Seed the
+                        // checklist to reflect that everything up to readiness completed.
+                        setStageStatus({
+                            checking: 'done',
+                            pulling: 'done',
+                            creating: 'done',
+                            starting: 'done',
+                            waiting: 'error',
+                            done: 'pending',
+                            error: 'pending',
+                        });
+                        setTimedOut(true);
+                        setPhase('failed');
+                    } else {
+                        setPhase(ready ? 'review' : 'dockerNotReady');
+                    }
+                })
+                .catch((error: unknown) => {
+                    if (abortController.signal.aborted) return;
+                    setErrorMessage(error instanceof Error ? error.message : String(error));
+                    setPhase('dockerNotReady');
+                })
+                .finally(() => {
+                    if (readinessAbortRef.current === abortController) {
+                        readinessAbortRef.current = null;
+                    }
+                });
+        },
+        [trpcClient],
+    );
 
     const stopTimer = useCallback((): void => {
         if (timerRef.current) {
@@ -310,16 +404,25 @@ export const LocalQuickStart = (): JSX.Element => {
     }, []);
 
     const handleStartDocker = useCallback((): void => {
+        setDockerActionMessage(undefined);
         setStartingDocker(true);
         void trpcClient.localQuickStart.startDockerDesktop
             .mutate()
-            .catch(() => false)
-            .then(() => {
+            .then((launchAttempted) => {
+                if (!launchAttempted) {
+                    setStartingDocker(false);
+                    setDockerActionMessage(l10n.t('Docker Desktop could not be started.'));
+                    return;
+                }
                 // Give Docker Desktop a few seconds to come up, then re-check.
                 setTimeout(() => {
                     setStartingDocker(false);
-                    loadDockerStatus();
+                    loadDockerStatus(true);
                 }, 5000);
+            })
+            .catch(() => {
+                setStartingDocker(false);
+                setDockerActionMessage(l10n.t('Docker Desktop could not be started.'));
             });
     }, [trpcClient, loadDockerStatus]);
 
@@ -327,6 +430,7 @@ export const LocalQuickStart = (): JSX.Element => {
         // eslint-disable-next-line react-hooks/set-state-in-effect -- initial load sets the 'loading' phase before the async docker query
         loadDockerStatus();
         return () => {
+            readinessAbortRef.current?.abort();
             subscriptionRef.current?.unsubscribe();
             if (timerRef.current) clearInterval(timerRef.current);
         };
@@ -422,10 +526,20 @@ export const LocalQuickStart = (): JSX.Element => {
         [stopTimer],
     );
 
-    const handleStart = useCallback((): void => {
-        isWaitLongerRef.current = false;
-        runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(advancedRef.current, handlers));
-    }, [trpcClient, runStream]);
+    const startProvisioning = useCallback(
+        (continueAnyway: boolean): void => {
+            isWaitLongerRef.current = false;
+            const options = continueAnyway
+                ? { ...(advancedRef.current ?? {}), continueAnyway: true }
+                : advancedRef.current;
+            runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(options, handlers));
+        },
+        [trpcClient, runStream],
+    );
+
+    const handleStart = useCallback((): void => startProvisioning(false), [startProvisioning]);
+
+    const handleContinueAnyway = useCallback((): void => startProvisioning(true), [startProvisioning]);
 
     // "Wait longer" (§9.1): re-probe the container the service kept running after a readiness
     // timeout, keeping the already-completed stages visible. Optimistically flip the waiting row
@@ -500,6 +614,15 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
     }, [trpcClient]);
 
+    const handleCopyRecoveryCommand = useCallback((): void => {
+        const recoveryCommand = docker?.readiness.recoveryCommand;
+        if (!recoveryCommand) return;
+        void trpcClient.localQuickStart.copyRecoveryCommand
+            .mutate(recoveryCommand.id)
+            .then(() => setCopyAnnouncementKey((current) => current + 1))
+            .catch(() => undefined);
+    }, [docker, trpcClient]);
+
     const handleOpenConnection = useCallback((): void => {
         // Reveal the connection in the Connections view but KEEP this panel open —
         // only the explicit Close button dismisses the page (user feedback).
@@ -509,6 +632,22 @@ export const LocalQuickStart = (): JSX.Element => {
     const handleCopyConnString = useCallback((): void => {
         void trpcClient.localQuickStart.copyConnectionString.mutate().catch(() => undefined);
     }, [trpcClient]);
+
+    const renderReadinessFooter = (): JSX.Element => (
+        <div className={styles.readinessFooter}>
+            <Text size={200} className={styles.muted} role="status" aria-live="polite">
+                {formatLastChecked(docker?.readiness.checkedAtMs)}
+            </Text>
+            <Button
+                appearance="subtle"
+                size="small"
+                icon={<ArrowClockwiseRegular />}
+                onClick={() => loadDockerStatus(true)}
+            >
+                {l10n.t('Refresh')}
+            </Button>
+        </div>
+    );
 
     const renderReviewCards = (): JSX.Element => {
         const ready = !!docker && docker.readiness.cliInstalled && docker.readiness.daemonReachable;
@@ -525,6 +664,10 @@ export const LocalQuickStart = (): JSX.Element => {
                     }
                 />
                 <MetricCard label={l10n.t('Port')} value={effectivePort} />
+                <MetricCard
+                    label={l10n.t('Platform')}
+                    value={docker?.readiness.daemonArchitecture ?? l10n.t('Unknown until Docker is reachable')}
+                />
                 <MetricCard label={l10n.t('Data')} value={l10n.t('Persistent volume')} />
                 <MetricCard label={l10n.t('Security')} value={l10n.t('TLS · self-signed')} />
             </div>
@@ -732,8 +875,10 @@ export const LocalQuickStart = (): JSX.Element => {
     if (phase === 'dockerNotReady') {
         const r = docker?.readiness;
         const cliOk = !!r?.cliInstalled;
-        const daemonOk = !!r?.daemonReachable;
-        const platformOk = r?.platformSupported !== false;
+        const presentation = r ? getDockerReadinessPresentation(r) : undefined;
+        const presentationState = presentation?.state ?? 'notAccessible';
+        const failureCopy = getDockerFailureCopy(presentationState);
+        const platformKnown = r?.daemonArchitecture !== undefined;
         const statusBadge = (ok: boolean, notOkColor: 'danger' | 'warning'): JSX.Element => (
             <Badge appearance="filled" color={ok ? 'success' : notOkColor} size="small">
                 {ok ? '✓' : '!'}
@@ -743,7 +888,18 @@ export const LocalQuickStart = (): JSX.Element => {
             <div className={styles.root}>
                 <Announcer
                     when={phase === 'dockerNotReady'}
-                    message={l10n.t('Docker is required and is not ready. Review the checks below.')}
+                    message={l10n.t('Docker is not ready. {0}', failureCopy.guidance)}
+                    politeness="assertive"
+                />
+                <Announcer
+                    key={copyAnnouncementKey}
+                    when={copyAnnouncementKey > 0}
+                    message={l10n.t('Recovery command copied.')}
+                    politeness="polite"
+                />
+                <Announcer
+                    when={dockerActionMessage !== undefined}
+                    message={dockerActionMessage ?? ''}
                     politeness="assertive"
                 />
                 {hero(
@@ -760,49 +916,73 @@ export const LocalQuickStart = (): JSX.Element => {
                     />
                     <MetricCard
                         label={l10n.t('Docker daemon')}
-                        value={daemonOk ? l10n.t('Reachable') : l10n.t('Stopped')}
-                        badge={statusBadge(daemonOk, 'danger')}
+                        value={failureCopy.daemonValue}
+                        badge={statusBadge(false, 'danger')}
                     />
                     <MetricCard
                         label={l10n.t('Platform')}
-                        value={r?.arch ?? l10n.t('unknown')}
-                        badge={statusBadge(platformOk, 'warning')}
+                        value={r?.daemonArchitecture ?? l10n.t('Unknown until Docker is reachable')}
+                        badge={statusBadge(platformKnown, 'warning')}
                     />
                 </div>
                 <Card className={styles.summaryCard}>
                     <Text weight="semibold">{l10n.t('How to fix')}</Text>
                     <Divider />
-                    <Text size={200}>
-                        {cliOk
-                            ? l10n.t('• Start Docker Desktop and wait for it to report “running”.')
-                            : l10n.t('• Install Docker Desktop, then reopen Quick Start.')}
-                    </Text>
-                    <Text size={200}>{l10n.t('• If you use a corporate proxy, check that ghcr.io is reachable.')}</Text>
+                    <Text size={200}>{failureCopy.guidance}</Text>
+                    {r?.recoveryCommand && (
+                        <div className={styles.recoveryCommand}>
+                            <code>{r.recoveryCommand.commandLine}</code>
+                            <Button size="small" onClick={handleCopyRecoveryCommand}>
+                                {l10n.t('Copy command')}
+                            </Button>
+                        </div>
+                    )}
+                    {r?.diagnosticSummary && (
+                        <details>
+                            <summary>{l10n.t('Show details')}</summary>
+                            <Text size={200}>{r.diagnosticSummary}</Text>
+                        </details>
+                    )}
                     <div className={styles.actions}>
-                        {!cliOk && (
-                            <Link href="https://www.docker.com/products/docker-desktop/">
-                                {l10n.t('Install Docker')}
+                        {presentation?.showInstall && (
+                            <Link href="https://docs.docker.com/engine/install/">{l10n.t('Install Docker')}</Link>
+                        )}
+                        {presentationState === 'accessDenied' ? (
+                            <Link href="https://docs.docker.com/engine/install/linux-postinstall/">
+                                {l10n.t('Linux setup guide')}
+                            </Link>
+                        ) : (
+                            <Link href="https://docs.docker.com/engine/daemon/troubleshoot/">
+                                {l10n.t('Docker troubleshooting')}
                             </Link>
                         )}
-                        <Link href="https://docs.docker.com/desktop/troubleshoot-and-support/troubleshoot/">
-                            {l10n.t('Troubleshooting')}
-                        </Link>
                     </div>
                 </Card>
                 <div className={styles.actions}>
-                    {cliOk && !daemonOk && (
+                    {presentation?.showViewOutput !== false && (
+                        <Button appearance="secondary" onClick={handleViewOutput}>
+                            {l10n.t('View Docker output')}
+                        </Button>
+                    )}
+                    {presentation?.showContinueAnyway && (
+                        <Button appearance="secondary" onClick={handleContinueAnyway}>
+                            {l10n.t('Continue anyway')}
+                        </Button>
+                    )}
+                    {presentation?.showStartDockerDesktop && (
                         <Button appearance="primary" disabled={startingDocker} onClick={handleStartDocker}>
                             {startingDocker ? l10n.t('Starting Docker Desktop…') : l10n.t('Start Docker Desktop')}
                         </Button>
                     )}
                     <Button
-                        appearance={cliOk && !daemonOk ? 'secondary' : 'primary'}
+                        appearance="primary"
                         icon={<ArrowClockwiseRegular />}
-                        onClick={loadDockerStatus}
+                        onClick={() => loadDockerStatus(true)}
                     >
                         {l10n.t('Retry')}
                     </Button>
                 </div>
+                {renderReadinessFooter()}
             </div>
         );
     }
@@ -945,6 +1125,7 @@ export const LocalQuickStart = (): JSX.Element => {
             {renderReviewCards()}
             {renderSummary()}
             {renderAdvanced()}
+            {renderReadinessFooter()}
             <div className={styles.actions}>
                 <Button appearance="secondary" onClick={handleClose}>
                     {l10n.t('Cancel')}

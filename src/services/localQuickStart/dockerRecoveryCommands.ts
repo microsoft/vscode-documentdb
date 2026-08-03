@@ -28,6 +28,10 @@ const RECOVERY_COMMANDS: Readonly<Record<DockerRecoveryCommand['id'], DockerReco
     },
 };
 
+export function getDockerRecoveryCommandById(id: DockerRecoveryCommand['id']): DockerRecoveryCommand {
+    return RECOVERY_COMMANDS[id];
+}
+
 export function getDockerRecoveryCommand(
     failureKind: DockerFailureKind,
     environment: DockerHostEnvironment,
