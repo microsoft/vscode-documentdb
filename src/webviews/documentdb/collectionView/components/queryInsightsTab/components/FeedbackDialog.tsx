@@ -32,9 +32,34 @@ export interface FeedbackDialogProps {
 
     /** Callback when feedback is submitted */
     onSubmit: (feedback: { sentiment: 'positive' | 'negative'; selectedReasons: string[] }) => Promise<void>;
+
+    /**
+     * Copy overrides for a view other than Query Insights. Each defaults to the Query
+     * Insights wording, so existing call sites keep their exact strings — and their exact
+     * localization keys — untouched.
+     *
+     * Passed as whole sentences rather than a feature name spliced into a template: a
+     * placeholder would have re-keyed the shipped strings, and the two prompts do not read
+     * the same in every language once the subject changes.
+     */
+    promptPositive?: string;
+    promptNegative?: string;
+
+    /** Checkbox options offered for each sentiment. */
+    positiveReasons?: string[];
+    negativeReasons?: string[];
 }
 
-export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackDialogProps): JSX.Element => {
+export const FeedbackDialog = ({
+    open,
+    onClose,
+    sentiment,
+    onSubmit,
+    promptPositive,
+    promptNegative,
+    positiveReasons: positiveReasonsOverride,
+    negativeReasons: negativeReasonsOverride,
+}: FeedbackDialogProps): JSX.Element => {
     const [selectedReasons, setSelectedReasons] = useState<Set<string>>(new Set());
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [consentChecked, setConsentChecked] = useState(false);
@@ -45,14 +70,14 @@ export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackD
         setConsentChecked(false);
     }, [sentiment, open]);
 
-    const positiveReasons = [
+    const positiveReasons = positiveReasonsOverride ?? [
         l10n.t('Data shown was correct'),
         l10n.t('Helped me understand the query execution'),
         l10n.t('Recommendations were actionable'),
         l10n.t('Improved my query performance'),
     ];
 
-    const negativeReasons = [
+    const negativeReasons = negativeReasonsOverride ?? [
         l10n.t('Data shown was incorrect'),
         l10n.t('Information was confusing'),
         l10n.t('Recommendations were not helpful'),
@@ -118,12 +143,14 @@ export const FeedbackDialog = ({ open, onClose, sentiment, onSubmit }: FeedbackD
                         <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
                             <Text>
                                 {sentiment === 'positive'
-                                    ? l10n.t(
+                                    ? (promptPositive ??
+                                      l10n.t(
                                           'Your positive feedback helps us understand what works well in Query Insights. Tell us more:',
-                                      )
-                                    : l10n.t(
+                                      ))
+                                    : (promptNegative ??
+                                      l10n.t(
                                           'Your feedback helps us improve Query Insights. Tell us what could be better:',
-                                      )}
+                                      ))}
                             </Text>
 
                             {/* Checkbox reasons */}
