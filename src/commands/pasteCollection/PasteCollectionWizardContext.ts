@@ -20,6 +20,7 @@ export interface PasteCollectionWizardContext extends IActionContext {
     sourceConnectionId: string;
     sourceConnectionName: string;
     sourceCollectionSize?: number;
+    sourceIndexCount?: number;
 
     // Target details
     targetNode: CollectionItem | DatabaseItem;
@@ -37,5 +38,5 @@ export interface PasteCollectionWizardContext extends IActionContext {
     // User selections from wizard steps
     newCollectionName?: string;
     conflictResolutionStrategy?: ConflictResolutionStrategy;
-    copyIndexes?: boolean;
+    copyIndexes: boolean;
 }

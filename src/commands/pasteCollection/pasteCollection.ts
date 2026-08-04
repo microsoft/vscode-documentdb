@@ -16,6 +16,7 @@ import { ExecuteStep } from './ExecuteStep';
 import { LargeCollectionWarningStep } from './LargeCollectionWarningStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptConflictResolutionStep } from './PromptConflictResolutionStep';
+import { PromptIndexConfigurationStep } from './PromptIndexConfigurationStep';
 import { PromptNewCollectionNameStep } from './PromptNewCollectionNameStep';
 
 export async function pasteCollection(
@@ -92,9 +93,11 @@ export async function pasteCollection(
 
     let sourceCollectionSize: number | undefined = undefined;
     try {
-        sourceCollectionSize = await (
-            await ClustersClient.getClient(sourceNode.cluster.clusterId)
-        ).estimateDocumentCount(sourceNode.databaseInfo.name, sourceNode.collectionInfo.name);
+        const sourceClient = await ClustersClient.getClient(sourceNode.cluster.clusterId);
+        sourceCollectionSize = await sourceClient.estimateDocumentCount(
+            sourceNode.databaseInfo.name,
+            sourceNode.collectionInfo.name,
+        );
         context.telemetry.measurements.sourceCollectionSize = sourceCollectionSize;
     } catch (error) {
         context.telemetry.properties.sourceCollectionSizeError = String(error);
@@ -114,6 +117,7 @@ export async function pasteCollection(
         targetDatabaseName: targetNode.databaseInfo.name,
         targetCollectionName,
         isTargetExistingCollection,
+        copyIndexes: false,
     };
 
     // Check for circular dependency when pasting into the same collection
@@ -171,9 +175,7 @@ export async function pasteCollection(
         wizardContext.conflictResolutionStrategy = ConflictResolutionStrategy.Abort;
     }
 
-    // TODO: We don't support copying indexes yet, so skip this step for now,
-    // but keep this here to speed up development once we get to that point
-    // --> promptSteps.push(new PromptIndexConfigurationStep());
+    promptSteps.push(new PromptIndexConfigurationStep());
 
     promptSteps.push(new ConfirmOperationStep());
 

@@ -28,6 +28,10 @@ The copy-and-paste process is designed to be efficient for smaller collections b
 3.  **Bulk Write Operation**: Once the buffer is full, the extension performs a bulk write operation to the target collection. This is more efficient than writing documents one at a time.
 4.  **Continuous Cycle**: This process repeats - refilling the buffer from the source and writing to the target - until all documents from the source collection have been copied.
 
+Optionally, the extension can also copy secondary indexes. Indexes are created before document streaming begins. Equivalent indexes already on the target are skipped, while a source index whose name is already used by a different definition receives a suffix. The built-in `_id` index is not copied.
+
+The extension reads the source index count only after you choose to copy indexes. If that read fails, the paste operation stops. Document-only copies do not read source indexes. Cancelling during index creation stops before the next index; indexes already created remain on the target.
+
 This method avoids loading the entire collection into memory at once, making it suitable for collections that are moderately sized.
 
 ## Important Considerations
@@ -67,7 +71,11 @@ If the source collection contains a large number of documents, a warning dialog 
 
 You will be prompted to provide a name for the new collection.
 
-#### Step 3: Confirmation
+#### Step 3: Choose Whether to Copy Indexes
+
+Choose whether to copy the source collection's secondary indexes. If selected, the wizard reads and displays how many indexes are available to copy.
+
+#### Step 4: Confirmation
 
 A final summary is displayed, showing the source and target details, including the new collection name. You must confirm to start the operation.
 
@@ -176,7 +184,11 @@ You will be prompted to choose one of four strategies:
   ```
   The original document in the target remains untouched.
 
-#### Step 3: Confirmation
+#### Step 3: Choose Whether to Copy Indexes
+
+Choose whether to copy the source collection's secondary indexes. If selected, the wizard reads and displays how many indexes are available to copy. Existing equivalent index definitions are not recreated.
+
+#### Step 4: Confirmation
 
 A final summary is displayed, showing the source, the target, and the chosen conflict resolution strategy. You must confirm to start the operation.
 

@@ -7,6 +7,7 @@ import { AzureWizardExecuteStep } from '@microsoft/vscode-azext-utils';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
+import { DocumentDbIndexService } from '../../services/taskService/data-api/indexes/DocumentDbIndexService';
 import { DocumentDbDocumentReader } from '../../services/taskService/data-api/readers/DocumentDbDocumentReader';
 import { DocumentDbStreamingWriter } from '../../services/taskService/data-api/writers/DocumentDbStreamingWriter';
 import { CopyPasteCollectionTask } from '../../services/taskService/tasks/copy-and-paste/CopyPasteCollectionTask';
@@ -60,15 +61,20 @@ export class ExecuteStep extends AzureWizardExecuteStep<PasteCollectionWizardCon
                 collectionName: finalTargetCollectionName,
             },
             onConflict: conflictResolutionStrategy,
+            copyIndexes: context.copyIndexes,
         };
 
         // Create the document reader and writer instances
         const reader = new DocumentDbDocumentReader(sourceConnectionId, sourceDatabaseName, sourceCollectionName);
+        const sourceClient = await ClustersClient.getClient(sourceConnectionId);
         const targetClient = await ClustersClient.getClient(targetConnectionId);
         const writer = new DocumentDbStreamingWriter(targetClient, targetDatabaseName, finalTargetCollectionName);
 
         // Create the copy-paste task
-        const task = new CopyPasteCollectionTask(config, reader, writer);
+        const task = new CopyPasteCollectionTask(config, reader, writer, {
+            source: new DocumentDbIndexService(sourceClient, sourceDatabaseName, sourceCollectionName),
+            target: new DocumentDbIndexService(targetClient, targetDatabaseName, finalTargetCollectionName),
+        });
 
         // Register task with the task service
         TaskService.registerTask(task);

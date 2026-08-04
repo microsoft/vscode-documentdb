@@ -36,6 +36,11 @@ export interface CopyPasteConfig {
     onConflict: ConflictResolutionStrategy;
 
     /**
+     * Whether secondary indexes should be copied before documents.
+     */
+    copyIndexes: boolean;
+
+    /**
      * Optional reference to a connection manager or client object.
      * For now, this is typed as `unknown` to allow flexibility.
      * Specific task implementations (e.g., for DocumentDB) will cast this to their
