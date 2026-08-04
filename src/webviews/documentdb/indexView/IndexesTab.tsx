@@ -20,7 +20,6 @@ import {
     type IndexRow,
     type VectorIndexOptions,
 } from './types';
-import { formatBytes, formatOps } from './utils/format';
 
 /** How often to re-poll while at least one index is building or being created. */
 const BUILD_POLL_INTERVAL_MS = 5000;
@@ -488,8 +487,8 @@ export const IndexesTab = (): JSX.Element => {
             try {
                 const result = await trpcClient.mongoClusters.indexView.dropIndex.mutate({
                     indexName,
-                    sizeText: formatBytes(index.sizeBytes),
-                    usageText: formatOps(index.usageOps),
+                    sizeBytes: index.sizeBytes,
+                    usageOps: index.usageOps,
                 });
                 if (result.cancelled) {
                     return;
@@ -509,7 +508,7 @@ export const IndexesTab = (): JSX.Element => {
     /** Hide / unhide toggle. Confirmation happens on the extension host (modal). */
     const handleToggleHidden = useCallback(
         async (index: IndexRow): Promise<void> => {
-            const details = { sizeText: formatBytes(index.sizeBytes), usageText: formatOps(index.usageOps) };
+            const details = { sizeBytes: index.sizeBytes, usageOps: index.usageOps };
             // Processing visual first (covers the real operation); keep it for a
             // short tail on success so a quick toggle is still perceptible. See
             // handleDelete for the one-request rationale.

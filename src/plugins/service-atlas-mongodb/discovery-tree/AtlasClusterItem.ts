@@ -26,15 +26,20 @@ import { type TreeCluster } from '../../../tree/models/BaseClusterModel';
 import { nonNullValue } from '../../../utils/nonNull';
 import { escapeMarkdown } from '../../../webviews/utils/escapeMarkdown';
 import { AtlasApiClient } from '../api/AtlasApiClient';
+import {
+    getAtlasClusterStateLabel,
+    getAtlasPausedExplanation,
+    isAtlasClusterConnectable,
+    isAtlasClusterPaused,
+} from '../atlasClusterAvailability';
 import { isAtlasTlsHandshakeRejection } from '../atlasConnectionErrors';
-import { buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
+import { buildAtlasClusterUrl, buildAtlasNetworkAccessUrl } from '../atlasDeepLinks';
 import { atlasTrace, monotonicNow } from '../atlasTrace';
 import { DISCOVERY_PROVIDER_ID } from '../config';
 import { toAtlasDatabaseUserCandidates, type AtlasDatabaseUserCandidate } from '../connect/atlasDatabaseUsers';
 import { SelectAtlasDatabaseUserStep } from '../connect/SelectAtlasDatabaseUserStep';
 import { type AtlasDiscoveryService } from '../discovery/AtlasDiscoveryService';
 import { type AtlasClusterModel } from '../models/AtlasClusterModel';
-import { type AtlasClusterState } from '../models/AtlasProjectModel';
 
 /** Resource type identifier for telemetry */
 const RESOURCE_TYPE = 'atlas-mongodb-cluster';
@@ -75,7 +80,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      * Returns the Atlas console URL for this cluster.
      */
     public getAtlasConsoleUrl(): string {
-        return `https://cloud.mongodb.com/v2/${this.cluster.projectId}#/clusters/detail/${this.cluster.name}`;
+        return buildAtlasClusterUrl(this.cluster.projectId, this.cluster.name);
     }
 
     /**
@@ -346,7 +351,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
 
     /** IDLE with a known connection string is the only state a cluster can be opened from. */
     private isConnectable(): boolean {
-        return this.cluster.stateName === 'IDLE' && !!this.cluster.connectionString;
+        return isAtlasClusterConnectable(this.cluster);
     }
 
     /** Localized reason a non-connectable cluster cannot be opened, for tooltips and guards. */
@@ -432,6 +437,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
         // product name, per the repository terminology policy.
         const fields: Array<[string, string | undefined]> = [
             [l10n.t('State'), this.cluster.stateName],
+            [l10n.t('Availability'), this.cluster.paused ? l10n.t('Paused') : undefined],
             [l10n.t('Type'), this.cluster.clusterType],
             [l10n.t('Server version'), this.cluster.mongoDBVersion ? `v${this.cluster.mongoDBVersion}` : undefined],
             [l10n.t('Tier'), this.cluster.instanceSizeName],
@@ -456,7 +462,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
         md.appendMarkdown(`\n---\n`);
         md.appendMarkdown(
             this.cluster.connectionString
-                ? l10n.t('Connection string available — expand to connect and browse databases.')
+                ? l10n.t('Connection string available. Expand to connect and browse databases.')
                 : escapeMarkdown(this.describeUnavailable()),
         );
 
@@ -468,15 +474,7 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      * normal IDLE state (which needs no annotation). Shown in the tree item description.
      */
     private getStateLabel(): string | undefined {
-        const labels: Record<AtlasClusterState, string | undefined> = {
-            IDLE: undefined,
-            CREATING: l10n.t('Creating…'),
-            UPDATING: l10n.t('Updating…'),
-            REPAIRING: l10n.t('Repairing…'),
-            DELETING: l10n.t('Deleting…'),
-            UNKNOWN: l10n.t('Unknown state'),
-        };
-        return labels[this.cluster.stateName];
+        return getAtlasClusterStateLabel(this.cluster);
     }
 
     /**
@@ -484,6 +482,10 @@ export class AtlasClusterItem extends ClusterItemBase<AtlasClusterModel> {
      * tooltip, or `undefined` when the cluster is IDLE.
      */
     private getStateExplanation(): string | undefined {
+        if (isAtlasClusterPaused(this.cluster)) {
+            return getAtlasPausedExplanation();
+        }
+
         switch (this.cluster.stateName) {
             case 'CREATING':
                 return l10n.t(

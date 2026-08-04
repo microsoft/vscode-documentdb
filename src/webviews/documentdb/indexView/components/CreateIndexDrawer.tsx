@@ -667,7 +667,7 @@ export const CreateIndexDrawer = ({
                   : ''
             : indexKind === 'wildcard'
               ? !wildcardPathValid
-                  ? l10n.t('Remove $** from the parent path — it is added automatically.')
+                  ? l10n.t('Remove $** from the parent path. It is added automatically.')
                   : !wildcardProjectionValid
                     ? l10n.t('Add at least one projection field to create the index.')
                     : ''

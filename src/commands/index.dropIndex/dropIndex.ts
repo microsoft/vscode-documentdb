@@ -29,12 +29,12 @@ export async function dropIndex(context: IActionContext, node: IndexItem): Promi
     const indexName = node.indexInfo.name;
     const collectionName = node.collectionInfo.name;
 
-    const { sizeText, usageText } = await getIndexConfirmationStats(node);
+    const { sizeBytes, usageOps } = await getIndexConfirmationStats(node);
     const confirmed = await confirmIndexAction('delete', {
         indexName,
         collectionName,
-        sizeText,
-        usageText,
+        sizeBytes,
+        usageOps,
     });
 
     if (!confirmed) {

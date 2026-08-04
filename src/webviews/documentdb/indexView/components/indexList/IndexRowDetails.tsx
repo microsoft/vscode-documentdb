@@ -127,7 +127,7 @@ export const IndexRowDetails = ({ index }: IndexRowDetailsProps): JSX.Element =>
                                 <Badge
                                     className="keyBadge focusableBadge"
                                     appearance="tint"
-                                    color="informative"
+                                    color="brand"
                                     shape="rounded"
                                     size="medium"
                                     tabIndex={0}

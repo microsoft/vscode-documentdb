@@ -43,6 +43,8 @@ export interface AtlasCluster {
     readonly name: string;
     readonly groupId: string;
     readonly mongoDBVersion: string;
+    /** Independent of stateName, which only describes current control-plane activity. */
+    readonly paused?: boolean;
     // Optional on purpose: this is a cast from a live API payload, and Atlas omits connection
     // strings for a cluster that is still being created. Making it optional forces every
     // dereference to be guarded (see NEW-7). Full boundary validation is tracked as a follow-up.
