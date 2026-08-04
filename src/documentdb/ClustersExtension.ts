@@ -85,6 +85,7 @@ import { AzureVMDiscoveryProvider } from '../plugins/service-azure-vm/AzureVMDis
 import { KubernetesDiscoveryProvider } from '../plugins/service-kubernetes/KubernetesDiscoveryProvider';
 import { KubernetesReachabilityProvider } from '../plugins/service-kubernetes/KubernetesReachabilityProvider';
 import { ConnectionReachabilityService } from '../services/connectionReachabilityService';
+import { removeLegacyActiveDiscoveryProviderIds } from '../services/discoveryProviderVisibility';
 import { DiscoveryService } from '../services/discoveryServices';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
@@ -137,6 +138,9 @@ export class ClustersExtension implements vscode.Disposable {
         DiscoveryService.registerProvider(new AzureMongoRUDiscoveryProvider());
         DiscoveryService.registerProvider(new AzureVMDiscoveryProvider());
         DiscoveryService.registerProvider(new KubernetesDiscoveryProvider());
+
+        // One-time cleanup of the pre-0.9.0 opt-in visibility key; see discoveryProviderVisibility.ts (TODO #831).
+        void removeLegacyActiveDiscoveryProviderIds();
 
         // Connection-reachability providers: source-specific steps that make a saved connection
         // reachable before connecting (e.g. re-establishing a Kubernetes port-forward tunnel).

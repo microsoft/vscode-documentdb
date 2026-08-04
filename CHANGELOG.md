@@ -1,5 +1,28 @@
 # Change Log
 
+## 0.9.2
+
+### Improvements
+
+- **Query Insights Reliability and Precision**: Caps query-plan explain operations at 30 seconds to prevent indefinite waits, and displays non-zero selectivity below 0.1% accurately instead of rounding it to 0%. [#335](https://github.com/microsoft/vscode-documentdb/issues/335), [#762](https://github.com/microsoft/vscode-documentdb/issues/762), [#763](https://github.com/microsoft/vscode-documentdb/pull/763), [#833](https://github.com/microsoft/vscode-documentdb/pull/833)
+- **Kubernetes Discovery Reliability**: Adds bounded API requests, retryable per-namespace errors, reliable ClusterIP shell startup, and correct direct-connection strings without assuming replica set `rs0`. Also adds WSL scripts for local Kubernetes testing. [#735](https://github.com/microsoft/vscode-documentdb/issues/735), [#741](https://github.com/microsoft/vscode-documentdb/issues/741), [#742](https://github.com/microsoft/vscode-documentdb/issues/742), [#752](https://github.com/microsoft/vscode-documentdb/pull/752), [#803](https://github.com/microsoft/vscode-documentdb/pull/803), [#835](https://github.com/microsoft/vscode-documentdb/pull/835)
+- **Reusable Webview Package**: Redesigns and migrates the extension to `@microsoft/vscode-ext-webview`, simplifies its telemetry integration, improves package documentation, and adds validated ESRP build and npm publishing pipelines through package version 0.10.1. [#563](https://github.com/microsoft/vscode-documentdb/pull/563), [#736](https://github.com/microsoft/vscode-documentdb/pull/736), [#766](https://github.com/microsoft/vscode-documentdb/pull/766), [#779](https://github.com/microsoft/vscode-documentdb/pull/779), [#795](https://github.com/microsoft/vscode-documentdb/pull/795), [#828](https://github.com/microsoft/vscode-documentdb/pull/828)
+- **Development Workflow**: Adds a reusable skill and supporting templates for agent-assisted UX pull request reviews. [#800](https://github.com/microsoft/vscode-documentdb/pull/800)
+- **Discovery State Cleanup**: Removes the obsolete `activeDiscoveryProviderIds` state key while preserving the opt-out provider visibility behavior introduced in 0.9.0. [#832](https://github.com/microsoft/vscode-documentdb/pull/832)
+
+### Fixes
+
+- **Service Discovery Activation Crash**: Prevents the `isNullOrUndefined is not a function` runtime failure by resolving conflicting Application Insights dependency versions in the extension bundle. [#830](https://github.com/microsoft/vscode-documentdb/pull/830)
+
+### Security
+
+- **Archive and WebSocket Security**: Updates `@xhmikosr/decompress` from 11.1.2 to 11.1.3 to prevent crafted archives escaping the extraction directory, and `websocket-driver` from 0.7.4 to 0.7.5. [#788](https://github.com/microsoft/vscode-documentdb/pull/788), [#797](https://github.com/microsoft/vscode-documentdb/pull/797)
+- **Request and Link Parsing Security**: Updates `body-parser` from 2.2.2 to 2.3.0 and its legacy path from 1.20.5 to 1.20.6, `shell-quote` from 1.8.4 to 1.10.0, and `linkify-it` from 5.0.0 to 5.0.2. [#805](https://github.com/microsoft/vscode-documentdb/pull/805), [#806](https://github.com/microsoft/vscode-documentdb/pull/806), [#807](https://github.com/microsoft/vscode-documentdb/pull/807)
+- **URI and Collection Security**: Updates `fast-uri` from 3.1.2 to 3.1.4 in both the extension and API package, and `immutable` from 5.1.5 to 5.1.9 to address URI validation, oversized-list, and hash-collision issues. [#808](https://github.com/microsoft/vscode-documentdb/pull/808), [#809](https://github.com/microsoft/vscode-documentdb/pull/809), [#812](https://github.com/microsoft/vscode-documentdb/pull/812)
+- **Development Server Security**: Updates `webpack-dev-server` from 5.2.5 to 5.2.6, including improved request and header handling. [#810](https://github.com/microsoft/vscode-documentdb/pull/810)
+- **GitHub Actions Supply Chain Hardening**: Pins third-party Actions to full commit SHAs and adds a seven-day Dependabot cooldown, reducing exposure to mutable tags and newly compromised releases. [#791](https://github.com/microsoft/vscode-documentdb/pull/791)
+- **GitHub Actions Updates**: Updates `actions/checkout` from 6.0.3 through 7.0.1, `actions/setup-node` from 5.0.0 through 7.0.0, `actions/cache` from 5.1.0 to 6.1.0, `JS-DevTools/npm-publish` from 1.4.3 to 4.1.5, `peter-evans/create-pull-request` from 4.2.4 to 8.1.1, `actions/github-script` from 8.0.0 to 9.0.0, and `actions/upload-artifact` from 6.0.0 to 7.0.1. [#792](https://github.com/microsoft/vscode-documentdb/pull/792), [#801](https://github.com/microsoft/vscode-documentdb/pull/801), [#821](https://github.com/microsoft/vscode-documentdb/pull/821)
+
 ## 0.9.1
 
 ### New Features
@@ -8,6 +31,7 @@
 - **Query Playground: Connect to Database**: Adds a `Connect to Database` command and CodeLens to (re)connect a playground to a cluster and database on demand. Running an unconnected playground opens the picker automatically. Also fixes connections lost on save (untitled-to-file, Save As) and within-session reopen. [#740](https://github.com/microsoft/vscode-documentdb/issues/740), [#758](https://github.com/microsoft/vscode-documentdb/pull/758)
 
 ### Fixes
+
 - **Non-ObjectId `_id` Support**: Documents with string, numeric, UUID, or embedded-document `_id` values can now be deleted, read, and upserted correctly. Previously they threw "Invalid document ID" errors due to a hardcoded `ObjectId` assumption. Community contribution by [@hanhan761](https://github.com/hanhan761). [#217](https://github.com/microsoft/vscode-documentdb/issues/217), [#719](https://github.com/microsoft/vscode-documentdb/pull/719)
 - **Shell Completions in Strings, Regex, and Comments**: Field-name completions now appear correctly when a query contains parentheses inside string literals, regex literals, or line and block comments. Community contribution by [@hanhan761](https://github.com/hanhan761). [#710](https://github.com/microsoft/vscode-documentdb/issues/710), [#712](https://github.com/microsoft/vscode-documentdb/pull/712)
 - **Entra ID OIDC Host Allowlist**: The OIDC `ALLOWED_HOSTS` list for Entra ID authentication is now derived from the connection string hostname rather than hardcoded to `*.azure.com`, removing a restriction that could block token delivery for non-public-cloud Azure endpoints. Community contribution by [@hanhan761](https://github.com/hanhan761). [#639](https://github.com/microsoft/vscode-documentdb/issues/639), [#721](https://github.com/microsoft/vscode-documentdb/pull/721)

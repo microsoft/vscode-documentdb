@@ -208,8 +208,8 @@ export const MyView = () => {
 That is the complete data path: the React component calls
 `trpcClient.hello.query(...)`, the call travels through `vscodeLink` as a
 `postMessage`, the host dispatches it to `appRouter.hello`, the result is
-`postMessage`d back, and the call promise resolves with full type inference for
-`r.greeting`.
+sent back with `postMessage`, and the call promise resolves with full type
+inference for `r.greeting`.
 
 `useTrpcClient<AppRouter>()` returns the client directly. The client (and the
 event channel from `useRpcEvents()`) is shared per webview: every component that
@@ -470,7 +470,7 @@ extensions are working examples of that layout against this package.
 
 ## Status
 
-`0.10.0`. APIs are subject to change while the package is in preview. See
+`0.10.1`. APIs are subject to change while the package is in preview. See
 [ADVANCED.md](./ADVANCED.md) for the full set of primitives and patterns.
 
 ## Contributors

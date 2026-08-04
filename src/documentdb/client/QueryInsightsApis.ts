@@ -10,6 +10,8 @@
 
 import { type Document, type MongoClient } from 'mongodb';
 
+const QUERY_INSIGHTS_TIMEOUT_MS = 30_000;
+
 /**
  * Options for explain operations on find queries
  */
@@ -66,6 +68,7 @@ export class QueryInsightsApis {
         const collection = db.collection(collectionName);
 
         const cursor = collection.find(filter);
+        cursor.maxTimeMS(QUERY_INSIGHTS_TIMEOUT_MS);
 
         if (options.sort) {
             cursor.sort(options.sort);
