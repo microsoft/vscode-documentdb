@@ -5,6 +5,15 @@
 
 @use '../../index';
 
+// =============================================================================
+//  Cluster dashboard — layout regions, top to bottom:
+//    .dashboardHeader     → full-width identity band (icon · name / address · state)
+//    .dashboardToolbar    → full-width cluster actions
+//    .dashboardScrollArea → the one scroll container, holding:
+//        .contentArea     → two columns ≥1000px, stacked below that
+//            .leftColumn  → inventory tiles + the tabbed lists (the work)
+//            .rightColumn → cluster facts + topology (reference material)
+// =============================================================================
 .clusterDashboard {
     display: flex;
     flex-direction: column;
@@ -15,62 +24,245 @@
     box-sizing: border-box;
     overflow: hidden;
 
-    .headerCard {
-        padding: 16px;
-        display: flex;
-        flex-direction: column;
-        gap: 12px;
-    }
+    // ---- Identity band -----------------------------------------------------
 
-    .headerTitleRow {
+    .dashboardHeader {
         display: flex;
         align-items: center;
         gap: 12px;
         min-width: 0;
+        flex-shrink: 0;
     }
 
-    .headerTitle {
+    .dashboardHeaderIcon {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        flex: 0 0 auto;
+        width: 36px;
+        height: 36px;
+        border-radius: var(--borderRadiusMedium);
+        background-color: var(--colorNeutralBackground3);
+        color: var(--colorNeutralForeground2);
+        font-size: 20px;
+    }
+
+    // The only element allowed to consume the leftover width, so a long cluster name
+    // ellipsizes instead of pushing the badges off the panel.
+    .dashboardHeaderText {
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        flex: 1 1 auto;
+    }
+
+    .dashboardHeaderTitle {
         margin: 0;
         font-size: 18px;
-        font-weight: 600;
+        font-weight: var(--fontWeightSemibold);
         line-height: 24px;
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    .headerDetails {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px 24px;
-    }
-
-    .headerDetail {
-        display: flex;
-        flex-direction: column;
-        min-width: 0;
-    }
-
-    .headerDetailLabel {
-        font-size: 11px;
-        font-weight: 600;
-        color: var(--vscode-descriptionForeground);
-        text-transform: uppercase;
-    }
-
-    .headerDetailValue {
-        font-size: 13px;
-        max-width: 320px;
+    .dashboardHeaderSubtitle {
+        font-size: var(--fontSizeBase200);
+        line-height: var(--lineHeightBase200);
+        color: var(--colorNeutralForeground3);
         white-space: nowrap;
         overflow: hidden;
         text-overflow: ellipsis;
     }
 
-    .headerLatency {
-        font-size: 12px;
-        color: var(--vscode-descriptionForeground);
+    .dashboardHeaderBadges {
+        display: flex;
+        align-items: center;
+        flex: 0 0 auto;
+        flex-wrap: wrap;
+        justify-content: flex-end;
+        gap: 8px;
+    }
+
+    .dashboardHeaderLatency {
+        font-size: var(--fontSizeBase200);
+        color: var(--colorNeutralForeground3);
         white-space: nowrap;
     }
+
+    // ---- Cluster action bar ------------------------------------------------
+    //
+    // Mirrors the Collection View's `.primaryActionBar` / `.actionBarToolbar` pair; the
+    // classes are re-declared here because those live scoped inside `.collectionView`.
+
+    .primaryActionBar {
+        box-sizing: border-box;
+        flex-shrink: 0;
+        min-height: 32px; // matches a Fluent control's height
+        text-wrap: nowrap;
+    }
+
+    .actionBarToolbar {
+        column-gap: var(--spacingHorizontalXS); // 4px between buttons
+    }
+
+    .dashboardToolbar {
+        padding-inline: 0;
+        // Only as wide as its buttons, so the toolbar's own hover surface does not read as
+        // a full-width band across the panel.
+        justify-content: flex-start;
+    }
+
+    // ---- Two-column body ---------------------------------------------------
+
+    .dashboardScrollArea {
+        flex: 1 1 auto;
+        min-height: 0;
+        overflow-y: auto;
+        overflow-x: hidden;
+    }
+
+    .contentArea {
+        display: flex;
+        flex-direction: column; // Default: narrow panel, stacked
+        gap: 16px;
+
+        // Wide panel: work on the left, reference on the right.
+        @media (min-width: 1000px) {
+            flex-direction: row;
+            align-items: flex-start; // Prevent the columns from stretching to equal height
+        }
+    }
+
+    .leftColumn {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0; // Without this the tables refuse to shrink and the row overflows
+        flex: 1;
+
+        @media (min-width: 1000px) {
+            flex: 1 1 66%;
+        }
+    }
+
+    .rightColumn {
+        display: flex;
+        flex-direction: column;
+        gap: 12px;
+        min-width: 0;
+        flex: 1;
+
+        @media (min-width: 1000px) {
+            flex: 0 0 33%;
+            max-width: 420px;
+        }
+    }
+
+    // Long facts (host names, engine version lists) must not widen the narrow column —
+    // `SummaryCard`'s grid cells have no intrinsic minimum. They wrap rather than clip: a
+    // truncated host name is unusable and, unlike a table cell, there is no tooltip here to
+    // recover the rest from.
+    .summaryCard {
+        .summaryCell {
+            min-width: 0;
+        }
+
+        .cellValue {
+            display: block;
+            max-width: 100%;
+            white-space: normal;
+            overflow-wrap: anywhere;
+        }
+    }
+
+    // ---- Topology card -----------------------------------------------------
+
+    .topologyCard {
+        display: flex;
+        flex-direction: column;
+        row-gap: 8px;
+    }
+
+    .topologyCardHeader {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+    }
+
+    .topologyCardTitle {
+        display: block;
+    }
+
+    .topologyKind {
+        font-size: var(--fontSizeBase200);
+        color: var(--colorNeutralForeground3);
+    }
+
+    .topologySectionLabel {
+        margin-top: 4px;
+        font-size: var(--fontSizeBase200);
+        font-weight: var(--fontWeightSemibold);
+        color: var(--colorNeutralForeground3);
+    }
+
+    .topologyServers {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+    }
+
+    .topologyServer {
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+        min-width: 0;
+    }
+
+    .topologyServerAddress {
+        font-family: var(--fontFamilyMonospace);
+        font-size: var(--fontSizeBase200);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .topologyServerMeta {
+        display: flex;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 4px;
+        min-width: 0;
+    }
+
+    .topologyServerHost,
+    .topologyServerUptime {
+        font-size: var(--fontSizeBase200);
+        color: var(--colorNeutralForeground3);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .topologyMachine {
+        margin-top: 4px;
+        font-size: var(--fontSizeBase200);
+        color: var(--colorNeutralForeground3);
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+    }
+
+    .topologyEmpty {
+        font-size: var(--fontSizeBase200);
+        color: var(--colorNeutralForeground3);
+    }
+
+    // ---- Inventory tiles ---------------------------------------------------
 
     .statusTile {
         display: flex;
@@ -79,23 +271,60 @@
         gap: 4px;
     }
 
+    // `MetricsRow` picks its column count from *viewport* media queries, which is wrong for
+    // a tile row that now lives in a two-thirds column: at a 1000–1200px panel the viewport
+    // says "four columns" while the column is only wide enough for three, and the last tile
+    // was clipped mid-value. The same 1 → 2 → 4 progression is kept, but measured against
+    // the column the tiles actually sit in.
+    .leftColumn {
+        container-type: inline-size;
+        container-name: dashboardMain;
+    }
+
+    .statusStrip .metricsRow {
+        grid-template-columns: 1fr;
+    }
+
+    @container dashboardMain (min-width: 380px) {
+        .statusStrip .metricsRow {
+            grid-template-columns: repeat(2, 1fr);
+        }
+    }
+
+    // 860px, not the 800px `MetricsRow` uses against the viewport: the widest value here is
+    // a pair (`37 / 62.53 MB`), which needs ~205px of tile including padding. Four of those
+    // plus the gaps do not fit until 860, and below it the fourth tile ellipsised.
+    @container dashboardMain (min-width: 860px) {
+        .statusStrip .metricsRow {
+            grid-template-columns: repeat(4, 1fr);
+        }
+    }
+
+    // The figures themselves are the last line of defence: a long pair like
+    // `37 / 62.53 MB` in a squeezed tile clips with an ellipsis instead of spilling.
+    .statusStrip .metricCard .dataValue {
+        min-width: 0;
+        max-width: 100%;
+        overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        display: block;
+    }
+
     .sparkline {
         display: block;
         width: 100%;
         height: 100%;
     }
 
-    .dashboardContent {
-        flex: 1 1 auto;
-        min-height: 0;
-        overflow-y: auto;
-    }
+    // ---- Tab bodies --------------------------------------------------------
 
     .tabPanel {
         display: flex;
         flex-direction: column;
         gap: 8px;
         padding-top: 8px;
+        min-width: 0;
     }
 
     .tabToolbar {
@@ -104,17 +333,31 @@
         gap: 8px;
     }
 
-    .dashboardToolbar {
-        display: flex;
-        align-items: center;
-        justify-content: flex-end;
+    // The index list's filter row, reproduced: the box is first, fills the width, and the
+    // actions sit at the right end. `flex: 1 1 auto` with `max-width: none` is also what
+    // fixes the reported jump — a Fluent SearchBox sized by its own content grows the moment
+    // it gains focus and renders its dismiss button.
+    .dataToolbar {
+        width: 100%;
+        box-sizing: border-box;
+        padding-inline: 0;
         gap: 8px;
-    }
 
-    // Pushed to the end of the tab toolbar so Refresh stays first in the tab order.
-    .tabFilter {
-        margin-inline-start: auto;
-        max-width: 240px;
+        .dataFilterInput {
+            flex: 1 1 auto;
+            min-width: 0;
+            max-width: none;
+        }
+
+        .dataRefreshButton {
+            flex-shrink: 0;
+        }
+
+        // Fluent buttons default to semibold; the index list keeps its filter-row buttons at
+        // the regular weight for a lighter row.
+        .fui-Button {
+            font-weight: var(--fontWeightRegular);
+        }
     }
 
     .operationHistory {
@@ -249,26 +492,152 @@
         font-weight: 600;
     }
 
-    .storageSizeCell {
-        display: flex;
-        flex-direction: column;
-        gap: 4px;
-        min-width: 120px;
+    // ---- Databases table ---------------------------------------------------
+    //
+    // `table-layout: fixed` + a <colgroup> is what stops a long database name from pushing
+    // the numeric columns out from under their headings and printing over them. The name
+    // column declares no width, so it absorbs the slack and clips first.
+
+    // Sideways scroll for a table narrower than its columns need. Clipping alone would hide
+    // the last columns outright; scrolling keeps every figure reachable at any panel width.
+    .tableScroller {
+        width: 100%;
+        min-width: 0;
+        overflow-x: auto;
     }
 
-    .storageBarTrack {
-        height: 4px;
-        border-radius: 2px;
-        background-color: var(--vscode-editorWidget-border);
+    .databasesTable,
+    .collectionsTable {
+        width: 100%;
+        table-layout: fixed;
+
+        .fui-TableCell,
+        .fui-TableHeaderCell {
+            // A flex item will not shrink below its content width without this, which is
+            // what defeats `text-overflow` inside a Fluent table cell.
+            min-width: 0;
+            overflow: hidden;
+        }
+
+        .colExpand {
+            width: 36px;
+        }
+
+        .colSize {
+            width: 120px;
+        }
+
+        .colNumber {
+            width: 92px;
+        }
+
+        .colNarrow {
+            width: 84px;
+        }
+
+        // Holds a `count / size` pair, so it needs more room than a bare figure.
+        .colIndexes {
+            width: 118px;
+        }
+
+        .colOpen {
+            width: 52px;
+        }
+
+        .expandHeaderCell,
+        .expandCell {
+            padding-inline: 0;
+        }
+    }
+
+    // Numeric columns read as a column of figures only when they share an edge; right
+    // alignment plus truncation keeps that true at every panel width.
+    .numberCell {
+        display: block;
+        width: 100%;
+        text-align: right;
         overflow: hidden;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
     }
 
-    .storageBarFill {
-        height: 100%;
-        background-color: var(--vscode-charts-blue, var(--colorCompoundBrandStroke));
+    .mutedCell {
+        color: var(--colorNeutralForeground3);
+        font-size: var(--fontSizeBase200);
+    }
+
+    // Size figure + relative bar. Copied from the Collection View's index list so both
+    // lists' size columns are the same object: right-aligned figure, short bar, and no
+    // track behind it (a track reads as capacity, which nothing here measures).
+    .relativeSizeCell {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        min-width: 0;
+    }
+
+    .relativeSizeText {
+        flex: 0 0 62px;
+        overflow: hidden;
+        text-align: right;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+        font-variant-numeric: tabular-nums;
+    }
+
+    .relativeSizeTrack {
+        display: inline-flex;
+        flex: 0 0 32px;
+        align-items: center;
+        height: 8px;
+    }
+
+    .relativeSizeBar {
+        display: block;
+        min-width: 0;
+        height: 4px;
+        border-radius: var(--borderRadiusMedium);
+        background-color: var(--vscode-focusBorder);
     }
 
     .storageTotalRow {
-        font-weight: 600;
+        font-weight: var(--fontWeightSemibold);
+    }
+
+    // ---- Expanded collections ----------------------------------------------
+
+    .collectionsDetailRow .collectionsDetailCell {
+        padding: 4px 4px 10px 36px; // indent past the chevron column
+    }
+
+    // Tinted and outlined so the nested table reads as a detail *of* the row above it. Left
+    // flat, the sub-table's headings sat in the same plane as the parent's and the two grids
+    // — which deliberately do not share column edges — looked like one broken table.
+    .collectionsPanel {
+        display: flex;
+        flex-direction: column;
+        row-gap: 8px;
+        width: 100%;
+        box-sizing: border-box;
+        padding: 10px 12px;
+        background-color: var(--colorNeutralBackground3);
+        border: var(--strokeWidthThin) solid var(--colorNeutralStroke2);
+        border-radius: var(--borderRadiusMedium);
+    }
+
+    // Floors below which the fixed columns would start overlapping; the scroller above takes
+    // over from here. 36 + 120 + 92 + 92 + 84 + 92 of declared columns leaves ~130px for the
+    // database name, which is the narrowest that still reads as a name rather than a stub.
+    .databasesTable {
+        min-width: 646px;
+    }
+
+    .collectionsTable {
+        min-width: 520px;
+
+        .colCollectionName {
+            width: auto;
+        }
     }
 }

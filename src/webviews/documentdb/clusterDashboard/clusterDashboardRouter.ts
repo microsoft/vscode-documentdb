@@ -11,8 +11,11 @@ import { z } from 'zod';
 import { openCollectionViewInternal } from '../../../commands/openCollectionView/openCollectionView';
 import { ClustersClient } from '../../../documentdb/ClustersClient';
 import { ShellCommandIds } from '../../../documentdb/shell/constants';
+import { getHostsFromConnectionString } from '../../../documentdb/utils/connectionStringHelpers';
 import {
     getClusterPrivileges,
+    getClusterTopology,
+    getDatabaseCollections,
     getStorageStats,
     killOperation,
     listCurrentOperations,
@@ -20,7 +23,9 @@ import {
     type ClusterHealthSample,
     type ClusterPrivileges,
     type ClusterStorageStats,
+    type ClusterTopology,
     type CurrentOperationsResult,
+    type DatabaseCollectionsResult,
 } from '../../../documentdb/utils/getClusterHealth';
 import { CopilotService } from '../../../services/copilotService';
 import { getConfirmationAsInSettings } from '../../../utils/dialogs/getConfirmation';
@@ -55,6 +60,15 @@ export type RouterContext = BaseRouterContext & {
 export interface ClusterDashboardInfo {
     clusterDisplayName: string;
     metadata: Record<string, string | undefined>;
+    /**
+     * The `host:port` endpoints from the connection string, shown as the header's subtitle.
+     *
+     * A connection is opened against a name, and the display name in the tree is whatever
+     * the user (or a discovery provider) chose to call it — the two routinely disagree, and
+     * only this one identifies which server is on screen. Parsed with
+     * `getHostsFromConnectionString`, so no user, password, or query option travels with it.
+     */
+    hosts: string[];
 }
 
 /**
@@ -97,8 +111,43 @@ export const clusterDashboardRouter = router({
         const client = await ClustersClient.getClient(myCtx.clusterId);
         const metadata = await client.getClusterMetadata();
 
-        return { clusterDisplayName: myCtx.clusterDisplayName, metadata };
+        // Best effort: a connection restored from a session without cached credentials has
+        // no connection string to parse, and the header simply omits the subtitle.
+        let hosts: string[] = [];
+        try {
+            const connectionString = client.getCredentials()?.connectionString;
+            if (connectionString) {
+                hosts = getHostsFromConnectionString(connectionString);
+            }
+        } catch {
+            hosts = [];
+        }
+
+        return { clusterDisplayName: myCtx.clusterDisplayName, metadata, hosts };
     }),
+
+    /**
+     * The servers behind the connection. One-shot: membership changes on the timescale of a
+     * failover, and the tab that renders it is not a monitoring surface.
+     */
+    getTopology: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterTopology> => {
+        const myCtx = ctx as WithTelemetry<RouterContext>;
+
+        const client = await ClustersClient.getClient(myCtx.clusterId);
+
+        return getClusterTopology(client.getMongoClient());
+    }),
+
+    /** Per-collection breakdown for one database, loaded when its row is expanded. */
+    getDatabaseCollections: publicProcedureWithTelemetry
+        .input(z.object({ databaseName: z.string().min(1) }))
+        .query(async ({ input, ctx }): Promise<DatabaseCollectionsResult> => {
+            const myCtx = ctx as WithTelemetry<RouterContext>;
+
+            const client = await ClustersClient.getClient(myCtx.clusterId);
+
+            return getDatabaseCollections(client.getMongoClient(), input.databaseName);
+        }),
 
     /** Live health sample. Polled by the webview, so telemetry is suppressed. */
     getHealthSample: publicProcedureWithTelemetry.query(async ({ ctx }): Promise<ClusterHealthSample> => {
@@ -261,11 +310,12 @@ export const clusterDashboardRouter = router({
             const client = await ClustersClient.getClient(myCtx.clusterId);
             const mongoClient = client.getMongoClient();
 
-            const [metadata, privileges, storage, operations] = await Promise.all([
+            const [metadata, privileges, storage, operations, topology] = await Promise.all([
                 client.getClusterMetadata(),
                 getClusterPrivileges(mongoClient),
                 getStorageStats(mongoClient),
                 listCurrentOperations(mongoClient),
+                getClusterTopology(mongoClient),
             ]);
 
             const diagnostics = {
@@ -273,6 +323,7 @@ export const clusterDashboardRouter = router({
                 cluster: { displayName: myCtx.clusterDisplayName, viewId: myCtx.viewId },
                 metadata,
                 privileges,
+                topology,
                 storage,
                 currentOperations: operations,
                 observedOperations: getObservedOperations(myCtx.clusterId),

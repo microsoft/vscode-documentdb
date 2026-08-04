@@ -3,7 +3,7 @@
  *  Licensed under the MIT License. See License.txt in the project root for license information.
  *--------------------------------------------------------------------------------------------*/
 
-import { Button, Tab, TabList } from '@fluentui/react-components';
+import { Tab, TabList, Toolbar, ToolbarButton, Tooltip } from '@fluentui/react-components';
 import { ArrowDownloadRegular, WindowConsoleRegular } from '@fluentui/react-icons';
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
@@ -13,16 +13,20 @@ import {
     getFailedCommandName,
     type ClusterHealthSample,
     type ClusterStorageStats,
+    type ClusterTopology,
 } from '../../../documentdb/utils/getClusterHealth';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import './clusterDashboard.scss';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
 import { type ClusterDashboardInfo } from './clusterDashboardRouter';
 import { ActivityTab } from './components/ActivityTab';
-import { HeaderCard, type ConnectionState } from './components/HeaderCard';
+import { ClusterFactsCard } from './components/ClusterFactsCard';
+import { DashboardFeedback } from './components/DashboardFeedback';
+import { DashboardHeader, type ConnectionState } from './components/DashboardHeader';
 import { OperationsTab } from './components/OperationsTab';
 import { StatusStrip } from './components/StatusStrip';
 import { StorageTab } from './components/StorageTab';
+import { TopologyCard } from './components/TopologyCard';
 
 type DashboardTab = 'data' | 'operations' | 'activity';
 
@@ -51,6 +55,7 @@ export const ClusterDashboard = (): JSX.Element => {
     const [samples, setSamples] = useState<ClusterHealthSample[]>([]);
     const [consecutiveFailures, setConsecutiveFailures] = useState(0);
     const [storageStats, setStorageStats] = useState<ClusterStorageStats | null>(null);
+    const [topology, setTopology] = useState<ClusterTopology | null>(null);
     const [isRefreshingStorage, setIsRefreshingStorage] = useState(false);
     const [opcountersUnsupported, setOpcountersUnsupported] = useState(false);
     // The inventory is the landing view: the dashboard is a map of the cluster's data
@@ -99,7 +104,7 @@ export const ClusterDashboard = (): JSX.Element => {
         }
     }, [trpcClient]);
 
-    // One-time header + storage load.
+    // One-time header + storage + topology load.
     useEffect(() => {
         disposedRef.current = false;
 
@@ -118,6 +123,20 @@ export const ClusterDashboard = (): JSX.Element => {
                         cause: error instanceof Error ? error.message : String(error),
                     });
                 }
+            });
+
+        // The topology probe is best effort by construction — every command it runs is
+        // refused by at least one supported platform — so a failure leaves the card in its
+        // loading state rather than raising a notification the reader can do nothing about.
+        void trpcClient.clusterDashboard.getTopology
+            .query()
+            .then((result) => {
+                if (!disposedRef.current) {
+                    setTopology(result);
+                }
+            })
+            .catch(() => {
+                // Deliberately silent; see above.
             });
 
         void loadStorageStats();
@@ -232,7 +251,7 @@ export const ClusterDashboard = (): JSX.Element => {
 
     return (
         <div className="clusterDashboard">
-            <HeaderCard
+            <DashboardHeader
                 clusterDisplayName={clusterInfo?.clusterDisplayName ?? configuration.clusterDisplayName}
                 clusterInfo={clusterInfo}
                 latestSample={latestSample}
@@ -240,44 +259,91 @@ export const ClusterDashboard = (): JSX.Element => {
                 azure={configuration.azure}
             />
 
-            <StatusStrip storageStats={storageStats} />
-
-            <div className="dashboardToolbar">
-                <Button appearance="subtle" icon={<WindowConsoleRegular />} onClick={() => void openShell()}>
-                    {l10n.t('Open Shell')}
-                </Button>
-                <Button
-                    appearance="subtle"
-                    icon={<ArrowDownloadRegular />}
-                    disabled={isExporting}
-                    onClick={() => void exportDiagnostics()}
-                >
-                    {l10n.t('Export diagnostics')}
-                </Button>
-            </div>
-
-            <TabList
-                selectedValue={effectiveTab}
-                onTabSelect={(_event, data) => setSelectedTab(data.value as DashboardTab)}
-                aria-label={l10n.t('Cluster dashboard sections')}
+            {/*
+             * Cluster-wide actions live in the top row, alongside the identity they act on —
+             * the same place the Collection View's index tab puts Create Index / Refresh. It
+             * is also the row with space to grow: more tools will land here.
+             */}
+            <Toolbar
+                size="small"
+                className="primaryActionBar actionBarToolbar dashboardToolbar"
+                aria-label={l10n.t('Cluster actions')}
             >
-                <Tab value="data">{l10n.t('Data')}</Tab>
-                <Tab value="operations">{l10n.t('Operations')}</Tab>
-                {activitySupported && <Tab value="activity">{l10n.t('Activity')}</Tab>}
-            </TabList>
+                <Tooltip
+                    content={l10n.t('Open an interactive shell against this cluster')}
+                    relationship="description"
+                    withArrow
+                >
+                    <ToolbarButton icon={<WindowConsoleRegular />} onClick={() => void openShell()}>
+                        {l10n.t('Open Shell')}
+                    </ToolbarButton>
+                </Tooltip>
+                <Tooltip
+                    content={l10n.t('Collect this cluster’s state into a JSON document')}
+                    relationship="description"
+                    withArrow
+                >
+                    <ToolbarButton
+                        icon={<ArrowDownloadRegular />}
+                        disabled={isExporting}
+                        onClick={() => void exportDiagnostics()}
+                    >
+                        {l10n.t('Export diagnostics')}
+                    </ToolbarButton>
+                </Tooltip>
+            </Toolbar>
 
-            <div className="dashboardContent">
-                {effectiveTab === 'data' && (
-                    <StorageTab
-                        storageStats={storageStats}
-                        isRefreshing={isRefreshingStorage}
-                        onRefresh={() => void loadStorageStats()}
-                    />
-                )}
-                {effectiveTab === 'operations' && <OperationsTab refreshIntervalMs={configuration.refreshIntervalMs} />}
-                {effectiveTab === 'activity' && (
-                    <ActivityTab samples={samples} opcountersUnsupported={opcountersUnsupported} />
-                )}
+            {/*
+             * Two columns on a wide panel, one on a narrow one — the Query Insights layout.
+             * The wide left column carries the work (the inventory numbers and the lists the
+             * reader scans and sorts); the narrow right column carries reference material
+             * that is read once. Below 1000px the columns stack, so the tables keep their
+             * full width instead of being squeezed to a third of it.
+             */}
+            <div className="dashboardScrollArea">
+                <div className="contentArea">
+                    <div className="leftColumn">
+                        <StatusStrip storageStats={storageStats} />
+
+                        <TabList
+                            selectedValue={effectiveTab}
+                            onTabSelect={(_event, data) => setSelectedTab(data.value as DashboardTab)}
+                            aria-label={l10n.t('Cluster dashboard sections')}
+                        >
+                            <Tab value="data">{l10n.t('Data')}</Tab>
+                            <Tab value="operations">{l10n.t('Operations')}</Tab>
+                            {activitySupported && <Tab value="activity">{l10n.t('Activity')}</Tab>}
+                        </TabList>
+
+                        {effectiveTab === 'data' && (
+                            <StorageTab
+                                storageStats={storageStats}
+                                isRefreshing={isRefreshingStorage}
+                                onRefresh={() => void loadStorageStats()}
+                            />
+                        )}
+                        {effectiveTab === 'operations' && (
+                            <OperationsTab refreshIntervalMs={configuration.refreshIntervalMs} />
+                        )}
+                        {effectiveTab === 'activity' && (
+                            <ActivityTab samples={samples} opcountersUnsupported={opcountersUnsupported} />
+                        )}
+                    </div>
+
+                    <div className="rightColumn">
+                        <ClusterFactsCard
+                            clusterInfo={clusterInfo}
+                            latestSample={latestSample}
+                            azure={configuration.azure}
+                        />
+                        <TopologyCard topology={topology} />
+                        {/*
+                         * Last in the column, like Query Insights': the reader is asked what
+                         * they think only after everything there is to look at.
+                         */}
+                        {configuration.feedbackSignalsEnabled && <DashboardFeedback />}
+                    </div>
+                </div>
             </div>
         </div>
     );

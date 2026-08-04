@@ -68,6 +68,7 @@ function open(clusterId: string): FakeController {
         clusterDisplayName: clusterId,
         viewId: 'connectionsView',
         refreshIntervalMs: 5_000,
+        feedbackSignalsEnabled: false,
     }) as unknown as FakeController;
 }
 

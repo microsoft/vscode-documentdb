@@ -5,6 +5,7 @@
 
 import { type IActionContext } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
+import * as vscode from 'vscode';
 
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { inferViewIdFromTreeId } from '../../documentdb/Views';
@@ -43,6 +44,24 @@ function extractAzureInfo(node: ClusterItemBase): ClusterDashboardAzureInfo | un
     return Object.values(info).some((value) => value !== undefined) ? info : undefined;
 }
 
+/**
+ * Whether the dashboard may offer its feedback card.
+ *
+ * Gated on VS Code's own telemetry level being `all`, exactly as `openCollectionView` gates
+ * the Query Insights card — a user who has narrowed telemetry has already answered the
+ * question of whether they want to be asked.
+ *
+ * @see https://code.visualstudio.com/docs/setup/enterprise#_configure-telemetry-level
+ */
+function readFeedbackSignalsEnabled(): boolean {
+    try {
+        return vscode.workspace.getConfiguration('telemetry').get<string>('telemetryLevel') === 'all';
+    } catch {
+        // A settings read that fails is not consent.
+        return false;
+    }
+}
+
 export async function openClusterDashboard(context: IActionContext, node: ClusterItemBase): Promise<void> {
     // added manually here as this function can be called bypassing our general command registration
     trackJourneyCorrelationId(context, node);
@@ -76,6 +95,7 @@ export async function openClusterDashboard(context: IActionContext, node: Cluste
         viewId: viewId,
         refreshIntervalMs: DASHBOARD_REFRESH_INTERVAL_MS,
         azure: extractAzureInfo(node),
+        feedbackSignalsEnabled: readFeedbackSignalsEnabled(),
     });
 
     view.revealToForeground();

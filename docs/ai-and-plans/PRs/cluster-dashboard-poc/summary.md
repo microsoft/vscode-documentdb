@@ -236,6 +236,49 @@ the 300 the rows sum to). New coverage was added for what had none: a failing pi
 value the whole connection-state machine keys on), `$match`-before-`$limit` ordering, opid
 type preservation, and the zero-size fallback.
 
+## Review round 2 — layout feedback (applied)
+
+Feedback from Tomasz, in chat, after using the POC. Each item and what was done:
+
+| Feedback | Change |
+|----------|--------|
+| "how about trying this layout from query insights, like 2/3 – 1/3 … the top row full width, an icon/logo and the cluster name as title, and the subtitle the real address" | The panel is now a full-width identity band (icon · name / address · connection state), a full-width action bar, then Query Insights' own two-column `contentArea`: the tiles and the tabbed lists at 66%, the cluster facts and topology at 33%. Below 1000px the columns stack, matching Query Insights' breakpoint exactly. |
+| "the filter databases input box changes size when selected — should be on the left, look at index filtering" | The Data tab's toolbar is now the index list's row verbatim: the box is first and fills the width (`flex: 1 1 auto`, `max-width: none`), Refresh is pinned right. That flex basis is also the fix for the jump — a SearchBox sized by its own content grows the moment focus adds its dismiss button. |
+| "then we can integrate that feedback vehicle as well in there" | The Query Insights feedback pair now sits at the foot of the right column, asking about the dashboard. `FeedbackCard`/`FeedbackDialog` gained optional copy props (defaulting to today's exact strings, so Query Insights' own keys are untouched) rather than being forked — a second copy of the consent flow and privacy notice is the last thing this should grow. Gated on `feedbackSignalsEnabled`, computed in `openClusterDashboard` exactly as `openCollectionView` does it. |
+| "the open shell, export diagnostics can be in the top row, look at the new collection view" | Moved into a `primaryActionBar actionBarToolbar` Fluent `Toolbar` at the top, the same chrome the Indexes tab uses for Create Index / Refresh. Room for the tools that come next. |
+| "for the size bars please copy the ones from the index list … I'm not going for the 'gray' background because that feels like once it's fully blue, the space is used up" | New `RelativeSize`: right-aligned figure, 32px bar, `--vscode-focusBorder`, 20% floor for a non-zero value — the index list's geometry, and **no track**. A track reads as capacity, and nothing here knows the provisioned disk. |
+| "things like this can't happen \[screenshot of a name printing over the size column] — always check with resizing and make them clip, ellipsis etc." | Both tables are `table-layout: fixed` with a `<colgroup>`; only the name column absorbs slack and it truncates with a tooltip. Below the table's minimum the region scrolls sideways instead of clipping. Verified at 520 / 760 / 1080 / 1400px. |
+| "how can we learn more about collections? … if we had collections available, we could have an option of opening the collection view from there" | Database rows expand into a per-collection breakdown (size, documents, indexes/size) with an Open button per row wired to the existing `openNamespace` procedure. Loaded on expand — `collStats` is one round trip per collection. |
+| "let's unify here, if 'databases / collections', then 'Indexes count / size' or similar" | The tile is now **Indexes / Size → `37 / 62.51 MB`**, the same label-names-both-figures shape as Databases / Collections. |
+| "explore whether we can say something about the topology, like list some servers that are behind the scenes, what machines these are — just a dirty draft" | New `getClusterTopology` + a right-column card, marked **Draft** on its face. `hello` gives the address list everywhere; `replSetGetStatus` adds role / health / uptime where it is allowed; `listShards` covers mongos; `hostInfo` gives the machine line. Nothing is invented — a platform that hides its topology gets one row, which is the honest answer. |
+
+One item is **not** done, deliberately: "we'll unify the style like the logo/icon size and
+title/subtitle across tabs." There is nothing to unify against yet — the Collection View's
+header band is its tab strip, with no icon/title/subtitle. This header establishes the
+pattern (36px icon tile, 18px title, `fontSizeBase200` muted subtitle) and uses a Fluent
+glyph as the placeholder for the product mark; unifying the other tabs to it is a separate
+change, and the icon asset should be settled first.
+
+Two things the feedback did not ask for but the layout forced:
+
+- **`MetricsRow` sizes itself from viewport media queries**, which is wrong once the tiles
+  live in a two-thirds column: at a ~1080px panel the viewport says "four columns" while
+  the column fits two, and the last tile clipped mid-value. The dashboard re-states the
+  same 1 → 2 → 4 progression as a **container query** on the left column, with the 4-column
+  step at 860px rather than 800 — the widest value here is a pair (`37 / 62.53 MB`) and
+  needs ~205px of tile.
+- **Facts in the narrow column wrap rather than truncate.** A clipped host name is
+  unusable and, unlike a table cell, `GenericCell` has nowhere to hang a tooltip.
+
+### How the layout was checked
+
+The webview was bundled against fixtures (long database names, a `dbStats` failure, a view,
+an unhealthy replica-set member) and rendered in Chromium inside a width-controlled iframe
+at 520 / 760 / 1080 / 1400px. Exercised there: sort, filter (including the focus-resize the
+feedback reported), expand-to-collections, the tab switch, and the feedback dialog. The
+harness was scratch tooling and is not part of the diff. This is a layout check only — it
+does not replace an F5 run against a live cluster.
+
 ## Corrections to the source plan
 
 The plan's code skeletons were verified against source before use; two were wrong:
