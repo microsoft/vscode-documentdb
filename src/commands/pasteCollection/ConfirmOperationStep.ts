@@ -22,9 +22,16 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
 
         const conflictStrategy = this.formatConflictStrategy(context.conflictResolutionStrategy!);
         const indexesSetting = context.copyIndexes ? l10n.t('Yes') : l10n.t('No');
-        const sourceIndexCount = context.copyIndexes
-            ? nonNullValue(context.sourceIndexCount, 'sourceIndexCount', 'context.sourceIndexCount')
-            : undefined;
+        const indexesSummary = context.copyIndexes
+            ? l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
+                  yesNoValue: indexesSetting,
+                  indexCount: nonNullValue(
+                      context.sourceIndexCount,
+                      'sourceIndexCount',
+                      'context.sourceIndexCount',
+                  ).toLocaleString(),
+              })
+            : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting });
 
         const warningText = context.isTargetExistingCollection
             ? l10n.t(
@@ -59,13 +66,7 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             '',
             l10n.t('Settings:'),
             ' • ' + l10n.t('Conflict Resolution: {strategyName}', { strategyName: conflictStrategy }),
-            ' • ' +
-                (context.copyIndexes
-                    ? l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
-                          yesNoValue: indexesSetting,
-                          indexCount: sourceIndexCount!.toLocaleString(),
-                      })
-                    : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting })),
+            ' • ' + indexesSummary,
             '',
             warningText,
         ].join('\n');
