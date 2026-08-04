@@ -54,6 +54,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
   - [Azure VMs (DocumentDB)](./user-manual/service-discovery-azure-vms)
   - [Kubernetes](./user-manual/service-discovery-kubernetes)
     - [Kubernetes getting started and test lab](./user-manual/service-discovery-kubernetes-getting-started)
+  - [MongoDB Atlas](./user-manual/service-discovery-mongodb-atlas)
   - [Managing Azure Subscriptions](./user-manual/managing-azure-discovery)
 - [Connecting to Local Instances](./user-manual/local-connection)
   - [Azure Cosmos DB for MongoDB (RU) Emulator](./user-manual/local-connection-mongodb-ru)
@@ -61,6 +62,7 @@ The User Manual provides guidance on using DocumentDB for VS Code. It contains d
 
 ### Data Management
 
+- [Manage Indexes in Collection View](./user-manual/collection-view-index-management)
 - [Data Migrations (Experimental)](./user-manual/data-migrations)
 - [Copy and Paste Collections](./user-manual/copy-and-paste.md)
 - [Copy Connection String](./user-manual/copy-connection-string)
