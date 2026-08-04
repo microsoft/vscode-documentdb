@@ -23,6 +23,14 @@ const CURRENT_OP_LIMIT = 100;
 /** Maximum number of databases inspected by {@link getStorageStats}. */
 const DATABASE_STATS_LIMIT = 20;
 
+/**
+ * Maximum number of collections inspected by {@link getDatabaseCollections}.
+ *
+ * Higher than the database cap because this runs only for the one database the user
+ * expanded, but still bounded: `collStats` is one round trip per collection.
+ */
+const COLLECTION_STATS_LIMIT = 100;
+
 /** Maximum length of the serialized command preview attached to a {@link CurrentOpEntry}. */
 const COMMAND_PREVIEW_MAX_LENGTH = 2000;
 
@@ -134,6 +142,99 @@ export interface ClusterStorageStats {
     /** User databases beyond {@link DATABASE_STATS_LIMIT} that were not inspected. */
     omittedDatabaseCount: number;
     /** Names of the commands that failed while collecting these statistics. */
+    errors: string[];
+}
+
+/** Per-collection figures shown when a database row in the Data tab is expanded. */
+export interface ClusterCollectionStorage {
+    name: string;
+    /** `listCollections.type`: `collection`, `view`, or `timeseries`. */
+    type: string;
+    /** `collStats.count`. */
+    documents: number | null;
+    /** `collStats.size` — the uncompressed size of the documents. */
+    dataSizeBytes: number | null;
+    /** `collStats.storageSize`. */
+    storageSizeBytes: number | null;
+    /** `collStats.totalIndexSize`. */
+    indexSizeBytes: number | null;
+    /** `collStats.nindexes`. */
+    indexes: number | null;
+}
+
+/** Result of {@link getDatabaseCollections}. */
+export interface DatabaseCollectionsResult {
+    databaseName: string;
+    collections: ClusterCollectionStorage[];
+    /** Collections beyond {@link COLLECTION_STATS_LIMIT} that were not inspected. */
+    omittedCollectionCount: number;
+    /** Names of the commands that failed while collecting these statistics. */
+    errors: string[];
+}
+
+/**
+ * One server behind the connection, as far as the data plane will describe it.
+ *
+ * Everything except {@link address} is best effort: `replSetGetStatus` is refused on Azure
+ * DocumentDB (vCore) and on any connection lacking the `replSetGetStatus` action, in which
+ * case only the addresses `hello` advertised survive.
+ */
+export interface ClusterServer {
+    /** `host:port`, as the server names itself. */
+    address: string;
+    /** Replica-set role (`PRIMARY`, `SECONDARY`, `ARBITER`, …) or `null` when unreported. */
+    role: string | null;
+    /** `replSetGetStatus.members[].health === 1`. */
+    healthy: boolean | null;
+    /** How long this member reports having been up. */
+    uptimeSeconds: number | null;
+    /** The member this one replicates from, when it reports one. */
+    syncSourceHost: string | null;
+    /** True for the member currently serving this connection (`hello.me`). */
+    isCurrentConnection: boolean;
+}
+
+/** Machine facts for the server serving this connection, from `hostInfo`. */
+export interface ClusterHostFacts {
+    hostname: string | null;
+    /** e.g. `Linux`. */
+    osType: string | null;
+    /** e.g. `Ubuntu`. */
+    osName: string | null;
+    osVersion: string | null;
+    cpuArch: string | null;
+    numCores: number | null;
+    memSizeMB: number | null;
+}
+
+/** A shard of a sharded cluster, from `listShards`. */
+export interface ClusterShard {
+    name: string;
+    /** The shard's connection string as the config server records it. */
+    host: string;
+    state: number | null;
+}
+
+/**
+ * A dirty-draft picture of what sits behind the connection: which servers, what they are,
+ * and — where the server will say — what machines they run on.
+ *
+ * Exploratory by design. Most managed platforms answer only part of this, so every field is
+ * nullable and the failures are reported rather than thrown.
+ */
+export interface ClusterTopology {
+    /** `standalone`, `replicaSet`, `sharded`, or `unknown` when `hello` itself failed. */
+    kind: 'standalone' | 'replicaSet' | 'sharded' | 'unknown';
+    /** `hello.setName`, when the server is a replica-set member. */
+    setName: string | null;
+    /** The member `hello.primary` names, when there is one. */
+    primary: string | null;
+    servers: ClusterServer[];
+    /** Machine facts for the server serving this connection. */
+    host: ClusterHostFacts | null;
+    /** Populated only when connected through a mongos. */
+    shards: ClusterShard[];
+    /** Names of the commands that failed while describing the topology. */
     errors: string[];
 }
 
@@ -729,4 +830,234 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
             : null;
 
     return { databases, totalSizeBytes, omittedDatabaseCount, errors };
+}
+
+/**
+ * Collects the per-collection breakdown of one database.
+ *
+ * Loaded on demand — when the user expands a database row — rather than as part of
+ * {@link getStorageStats}: `collStats` is one round trip per collection, so collecting it
+ * for every database up front would multiply the dashboard's cold-start cost by the number
+ * of collections in the cluster.
+ *
+ * @param client - A connected MongoClient.
+ * @param databaseName - The database to inspect.
+ * @returns The per-collection figures; collections whose `collStats` failed keep `null` fields.
+ */
+export async function getDatabaseCollections(
+    client: MongoClient,
+    databaseName: string,
+): Promise<DatabaseCollectionsResult> {
+    const errors: string[] = [];
+    const db = client.db(databaseName);
+
+    let listed: Document[];
+    try {
+        listed = await db.listCollections().toArray();
+    } catch (error) {
+        return {
+            databaseName,
+            collections: [],
+            omittedCollectionCount: 0,
+            errors: [describeCommandFailure('listCollections', error)],
+        };
+    }
+
+    const named = listed.filter((entry): entry is Document => typeof entry.name === 'string');
+    const entries = named.slice(0, COLLECTION_STATS_LIMIT);
+    const omittedCollectionCount = named.length - entries.length;
+
+    const collections = await Promise.all(
+        entries.map(async (entry): Promise<ClusterCollectionStorage> => {
+            const name = entry.name as string;
+            const collection: ClusterCollectionStorage = {
+                name,
+                type: toStringOrNull(entry.type) ?? 'collection',
+                documents: null,
+                dataSizeBytes: null,
+                storageSizeBytes: null,
+                indexSizeBytes: null,
+                indexes: null,
+            };
+
+            // A view has no storage of its own and `collStats` reports on the underlying
+            // pipeline source, which would attribute another collection's bytes to it.
+            if (collection.type === 'view') {
+                return collection;
+            }
+
+            try {
+                const stats = await db.command({ collStats: name });
+                collection.documents = toNumberOrNull(stats.count);
+                collection.dataSizeBytes = toNumberOrNull(stats.size);
+                collection.storageSizeBytes = toNumberOrNull(stats.storageSize);
+                collection.indexSizeBytes = toNumberOrNull(stats.totalIndexSize);
+                collection.indexes = toNumberOrNull(stats.nindexes);
+            } catch (error) {
+                errors.push(describeCommandFailure(`collStats:${name}`, error));
+            }
+
+            return collection;
+        }),
+    );
+
+    return { databaseName, collections, omittedCollectionCount, errors };
+}
+
+/** Reads `replSetGetStatus.members[]` into the fields {@link ClusterServer} carries. */
+function toReplicaSetMember(entry: Document, self: string | null): ClusterServer {
+    const address = toStringOrNull(entry.name) ?? '';
+
+    return {
+        address,
+        role: toStringOrNull(entry.stateStr),
+        healthy: typeof entry.health === 'number' ? entry.health === 1 : null,
+        uptimeSeconds: toNumberOrNull(entry.uptime),
+        syncSourceHost: toStringOrNull(entry.syncSourceHost),
+        // `self: true` is what the member being *queried* sets; falling back to `hello.me`
+        // keeps the marker when a member omits it.
+        isCurrentConnection: entry.self === true || (self !== null && address === self),
+    };
+}
+
+/** Reads the `hostInfo` reply, which vCore answers with empty `os`/`system` sub-documents. */
+function toHostFacts(hostInfo: Document): ClusterHostFacts | null {
+    const os = (hostInfo.os ?? {}) as Document;
+    const system = (hostInfo.system ?? {}) as Document;
+
+    const facts: ClusterHostFacts = {
+        hostname: toStringOrNull(system.hostname),
+        osType: toStringOrNull(os.type),
+        osName: toStringOrNull(os.name),
+        osVersion: toStringOrNull(os.version),
+        cpuArch: toStringOrNull(system.cpuArch),
+        numCores: toNumberOrNull(system.numCores),
+        memSizeMB: toNumberOrNull(system.memSizeMB),
+    };
+
+    // Every field empty means the server answered the command without describing anything —
+    // reporting that as a machine would put an all-dashes card on screen.
+    return Object.values(facts).every((value) => value === null) ? null : facts;
+}
+
+/**
+ * Describes what sits behind the connection: the servers, their replication roles, and the
+ * machine facts of the one being talked to.
+ *
+ * Deliberately exploratory. `hello` is answered everywhere and provides the address list;
+ * `replSetGetStatus` adds roles and health but is refused by managed platforms; `listShards`
+ * only applies behind a mongos. Whatever a server declines to answer is reported through
+ * `errors` and simply not rendered.
+ *
+ * @param client - A connected MongoClient.
+ * @returns The topology that could be determined; never throws for an unsupported command.
+ */
+export async function getClusterTopology(client: MongoClient): Promise<ClusterTopology> {
+    const errors: string[] = [];
+    const adminDb = client.db().admin();
+
+    const topology: ClusterTopology = {
+        kind: 'unknown',
+        setName: null,
+        primary: null,
+        servers: [],
+        host: null,
+        shards: [],
+        errors,
+    };
+
+    let hello: Document | null = null;
+    try {
+        hello = await adminDb.command({ hello: 1 });
+    } catch (error) {
+        errors.push(describeCommandFailure('hello', error));
+    }
+
+    const self = hello === null ? null : toStringOrNull(hello.me);
+
+    if (hello !== null) {
+        topology.setName = toStringOrNull(hello.setName);
+        topology.primary = toStringOrNull(hello.primary);
+
+        const advertised = Array.isArray(hello.hosts) ? (hello.hosts as unknown[]).filter(isNonEmptyString) : [];
+
+        if (hello.msg === 'isdbgrid') {
+            topology.kind = 'sharded';
+        } else if (topology.setName !== null || advertised.length > 0) {
+            topology.kind = 'replicaSet';
+        } else {
+            topology.kind = 'standalone';
+        }
+
+        // The address list `hello` advertises is the floor: every server answers it, so the
+        // card has rows even where `replSetGetStatus` is refused. Roles are filled in below
+        // when the server allows it.
+        topology.servers = advertised.map((address) => ({
+            address,
+            role: address === topology.primary ? 'PRIMARY' : null,
+            healthy: null,
+            uptimeSeconds: null,
+            syncSourceHost: null,
+            isCurrentConnection: self !== null && address === self,
+        }));
+
+        // A standalone (or a mongos) advertises no `hosts`; name the endpoint we reached so
+        // the card is not empty.
+        if (topology.servers.length === 0 && self !== null) {
+            topology.servers = [
+                {
+                    address: self,
+                    role: null,
+                    healthy: null,
+                    uptimeSeconds: null,
+                    syncSourceHost: null,
+                    isCurrentConnection: true,
+                },
+            ];
+        }
+    }
+
+    if (topology.kind === 'replicaSet' || topology.kind === 'unknown') {
+        try {
+            const status = await adminDb.command({ replSetGetStatus: 1 });
+            const members = Array.isArray(status.members) ? (status.members as Document[]) : [];
+            const detailed = members.map((member) => toReplicaSetMember(member, self)).filter((m) => m.address !== '');
+
+            if (detailed.length > 0) {
+                topology.servers = detailed;
+                topology.kind = 'replicaSet';
+                topology.setName ??= toStringOrNull(status.set);
+            }
+        } catch (error) {
+            errors.push(describeCommandFailure('replSetGetStatus', error));
+        }
+    }
+
+    if (topology.kind === 'sharded') {
+        try {
+            const shardList = await adminDb.command({ listShards: 1 });
+            const shards = Array.isArray(shardList.shards) ? (shardList.shards as Document[]) : [];
+            topology.shards = shards
+                .filter((shard) => typeof shard._id === 'string' && typeof shard.host === 'string')
+                .map((shard) => ({
+                    name: shard._id as string,
+                    host: shard.host as string,
+                    state: toNumberOrNull(shard.state),
+                }));
+        } catch (error) {
+            errors.push(describeCommandFailure('listShards', error));
+        }
+    }
+
+    try {
+        topology.host = toHostFacts(await adminDb.command({ hostInfo: 1 }));
+    } catch (error) {
+        errors.push(describeCommandFailure('hostInfo', error));
+    }
+
+    return topology;
+}
+
+function isNonEmptyString(value: unknown): value is string {
+    return typeof value === 'string' && value.length > 0;
 }

@@ -58,14 +58,18 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
                   collections: totalCollections === null ? '—' : String(totalCollections),
               });
 
+    // Same `a / b` shape as the databases tile beside it: the label names the two figures in
+    // order and the value pairs them off, so neither tile has to be read twice to work out
+    // which number is which.
     const indexSummary =
         storageStats === null
             ? undefined
             : totalIndexes === null
               ? NOT_REPORTED
-              : totalIndexBytes === null
-                ? String(totalIndexes)
-                : l10n.t('{count} · {size}', { count: String(totalIndexes), size: formatBytes(totalIndexBytes) });
+              : l10n.t('{count} / {size}', {
+                    count: String(totalIndexes),
+                    size: formatBytes(totalIndexBytes),
+                });
 
     return (
         <div className="statusStrip">
@@ -101,7 +105,7 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
 
                 <div className="statusTile">
                     <GenericMetric
-                        label={l10n.t('Indexes')}
+                        label={l10n.t('Indexes / Size')}
                         value={indexSummary}
                         tooltipExplanation={l10n.t(
                             'Number of indexes across all user databases, and their total size.',

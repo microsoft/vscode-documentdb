@@ -12,17 +12,21 @@ import {
     Table,
     TableBody,
     TableCell,
+    TableCellLayout,
     TableHeader,
     TableHeaderCell,
     TableRow,
+    Toolbar,
 } from '@fluentui/react-components';
-import { ArrowClockwiseRegular } from '@fluentui/react-icons';
+import { ArrowClockwiseRegular, ChevronDownRegular, ChevronRightRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { useMemo, useState, type JSX } from 'react';
+import { Fragment, useMemo, useState, type JSX } from 'react';
 
 import { type ClusterDatabaseStorage, type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { formatCount } from '../../collectionView/components/queryInsightsTab/components/metricsRow';
 import { formatBytes } from '../formatUtils';
+import { CollectionsPanel } from './CollectionsPanel';
+import { RelativeSize } from './RelativeSize';
 
 export interface StorageTabProps {
     storageStats: ClusterStorageStats | null;
@@ -94,16 +98,19 @@ function SortableHeader({
     label,
     sort,
     onToggle,
+    className,
 }: {
     column: SortColumn;
     label: string;
     sort: SortState;
     onToggle: (column: SortColumn) => void;
+    className?: string;
 }): JSX.Element {
     const isActive = sort.column === column;
 
     return (
         <TableHeaderCell
+            className={className}
             sortable
             sortDirection={isActive ? sort.direction : undefined}
             aria-sort={isActive ? sort.direction : 'none'}
@@ -117,6 +124,12 @@ function SortableHeader({
 export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTabProps): JSX.Element => {
     const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
     const [filterText, setFilterText] = useState('');
+    /**
+     * Names of the databases whose collection list is open. Held here rather than in the row
+     * so a re-sort, a filter change, or a storage refresh cannot collapse what the reader
+     * opened.
+     */
+    const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
 
     const databases = useMemo(() => {
         if (storageStats === null) {
@@ -147,6 +160,15 @@ export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTab
                 : { column, direction: defaultDirectionFor(column) },
         );
 
+    const toggleExpanded = (name: string): void =>
+        setExpanded((current) => {
+            const next = new Set(current);
+            if (!next.delete(name)) {
+                next.add(name);
+            }
+            return next;
+        });
+
     // Scaled against the largest *visible* database so the bars stay meaningful while filtered.
     const largestDatabaseBytes = databases.reduce(
         (largest, database) => Math.max(largest, database.sizeOnDiskBytes ?? 0),
@@ -174,8 +196,21 @@ export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTab
 
     return (
         <div className="tabPanel">
-            <div className="tabToolbar">
+            {/*
+             * Filter first, actions after — the same order the Collection View's index list
+             * uses. The box has a fixed flex basis rather than an intrinsic width so it does
+             * not resize when it gains focus and grows a dismiss button.
+             */}
+            <Toolbar size="small" className="dataToolbar" aria-label={l10n.t('Database list controls')}>
+                <SearchBox
+                    className="dataFilterInput"
+                    value={filterText}
+                    placeholder={l10n.t('Filter databases…')}
+                    aria-label={l10n.t('Filter databases by name')}
+                    onChange={(_event, data) => setFilterText(data.value)}
+                />
                 <Button
+                    className="dataRefreshButton"
                     appearance="subtle"
                     icon={<ArrowClockwiseRegular />}
                     disabled={isRefreshing}
@@ -185,14 +220,7 @@ export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTab
                     {l10n.t('Refresh')}
                 </Button>
                 {isRefreshing && <Spinner size="tiny" aria-label={l10n.t('Refreshing…')} />}
-                <SearchBox
-                    className="tabFilter"
-                    value={filterText}
-                    placeholder={l10n.t('Filter databases')}
-                    aria-label={l10n.t('Filter databases by name')}
-                    onChange={(_event, data) => setFilterText(data.value)}
-                />
-            </div>
+            </Toolbar>
 
             {storageStats.errors.length > 0 && (
                 <MessageBar intent="warning">
@@ -224,89 +252,179 @@ export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTab
                           : l10n.t('No user databases were reported for this cluster.')}
                 </div>
             ) : (
-                <Table size="small" aria-label={l10n.t('Databases in this cluster')}>
-                    <TableHeader>
-                        <TableRow>
-                            <SortableHeader
-                                column="name"
-                                label={l10n.t('Database')}
-                                sort={sort}
-                                onToggle={toggleSort}
-                            />
-                            <SortableHeader
-                                column="sizeOnDiskBytes"
-                                label={l10n.t('Size')}
-                                sort={sort}
-                                onToggle={toggleSort}
-                            />
-                            <SortableHeader
-                                column="dataSizeBytes"
-                                label={l10n.t('Data')}
-                                sort={sort}
-                                onToggle={toggleSort}
-                            />
-                            <SortableHeader
-                                column="indexSizeBytes"
-                                label={l10n.t('Indexes')}
-                                sort={sort}
-                                onToggle={toggleSort}
-                            />
-                            <SortableHeader
-                                column="collections"
-                                label={l10n.t('Collections')}
-                                sort={sort}
-                                onToggle={toggleSort}
-                            />
-                            <SortableHeader
-                                column="objects"
-                                label={l10n.t('Documents')}
-                                sort={sort}
-                                onToggle={toggleSort}
-                            />
-                        </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                        {databases.map((database) => {
-                            const sizePercentage =
-                                largestDatabaseBytes > 0
-                                    ? ((database.sizeOnDiskBytes ?? 0) / largestDatabaseBytes) * 100
-                                    : 0;
+                // Below the table's minimum width the columns would be squeezed into each
+                // other, so the region scrolls sideways instead — the same shape the index
+                // list uses. Nothing is ever hidden by clipping alone.
+                <div className="tableScroller">
+                    <Table size="small" className="databasesTable" aria-label={l10n.t('Databases in this cluster')}>
+                        {/*
+                         * Fixed layout with declared column widths. Without it a long database
+                         * name pushes every following column out from under its heading and the
+                         * values print on top of each other — the name column absorbs the slack
+                         * instead, and clips with an ellipsis when there is none left.
+                         */}
+                        <colgroup>
+                            <col className="colExpand" />
+                            <col className="colDatabaseName" />
+                            <col className="colSize" />
+                            <col className="colNumber" />
+                            <col className="colNumber" />
+                            <col className="colNarrow" />
+                            <col className="colNumber" />
+                        </colgroup>
+                        <TableHeader>
+                            <TableRow>
+                                <TableHeaderCell className="expandHeaderCell" aria-label={l10n.t('Expand row')} />
+                                <SortableHeader
+                                    column="name"
+                                    label={l10n.t('Database')}
+                                    sort={sort}
+                                    onToggle={toggleSort}
+                                />
+                                <SortableHeader
+                                    column="sizeOnDiskBytes"
+                                    label={l10n.t('Size')}
+                                    sort={sort}
+                                    onToggle={toggleSort}
+                                />
+                                <SortableHeader
+                                    column="dataSizeBytes"
+                                    label={l10n.t('Data')}
+                                    sort={sort}
+                                    onToggle={toggleSort}
+                                />
+                                <SortableHeader
+                                    column="indexSizeBytes"
+                                    label={l10n.t('Indexes')}
+                                    sort={sort}
+                                    onToggle={toggleSort}
+                                />
+                                <SortableHeader
+                                    column="collections"
+                                    label={l10n.t('Collections')}
+                                    sort={sort}
+                                    onToggle={toggleSort}
+                                />
+                                <SortableHeader
+                                    column="objects"
+                                    label={l10n.t('Documents')}
+                                    sort={sort}
+                                    onToggle={toggleSort}
+                                />
+                            </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                            {databases.map((database) => {
+                                const isExpanded = expanded.has(database.name);
 
-                            return (
-                                <TableRow key={database.name}>
-                                    <TableCell>{database.name}</TableCell>
-                                    <TableCell>
-                                        <div className="storageSizeCell">
-                                            <span>{formatBytes(database.sizeOnDiskBytes)}</span>
-                                            <div className="storageBarTrack" aria-hidden="true">
-                                                <div
-                                                    className="storageBarFill"
-                                                    style={{ width: `${sizePercentage}%` }}
+                                return (
+                                    <Fragment key={database.name}>
+                                        <TableRow>
+                                            {/*
+                                             * No tooltip on the chevron: it is the same
+                                             * affordance the index list uses bare, and a
+                                             * tooltip anchored in the leftmost column opens
+                                             * across the row it belongs to. The aria-label
+                                             * carries the meaning for assistive tech.
+                                             */}
+                                            <TableCell className="expandCell">
+                                                <Button
+                                                    appearance="subtle"
+                                                    size="small"
+                                                    aria-expanded={isExpanded}
+                                                    aria-label={
+                                                        isExpanded
+                                                            ? l10n.t('Collapse collections for {name}', {
+                                                                  name: database.name,
+                                                              })
+                                                            : l10n.t('Expand collections for {name}', {
+                                                                  name: database.name,
+                                                              })
+                                                    }
+                                                    icon={isExpanded ? <ChevronDownRegular /> : <ChevronRightRegular />}
+                                                    onClick={() => toggleExpanded(database.name)}
                                                 />
-                                            </div>
-                                        </div>
-                                    </TableCell>
-                                    <TableCell>{formatBytes(database.dataSizeBytes)}</TableCell>
-                                    <TableCell>{formatBytes(database.indexSizeBytes)}</TableCell>
-                                    <TableCell>
-                                        {database.collections === null ? '—' : formatCount(database.collections)}
-                                    </TableCell>
-                                    <TableCell>
-                                        {database.objects === null ? '—' : formatCount(database.objects)}
-                                    </TableCell>
-                                </TableRow>
-                            );
-                        })}
-                        <TableRow className="storageTotalRow">
-                            <TableCell>{isFiltered ? l10n.t('Total (filtered)') : l10n.t('Total')}</TableCell>
-                            <TableCell>{formatBytes(sumOf((database) => database.sizeOnDiskBytes))}</TableCell>
-                            <TableCell>{formatBytes(sumOf((database) => database.dataSizeBytes))}</TableCell>
-                            <TableCell>{formatBytes(sumOf((database) => database.indexSizeBytes))}</TableCell>
-                            <TableCell>{formatSum(sumOf((database) => database.collections))}</TableCell>
-                            <TableCell>{formatSum(sumOf((database) => database.objects))}</TableCell>
-                        </TableRow>
-                    </TableBody>
-                </Table>
+                                            </TableCell>
+                                            <TableCell className="databaseNameCell">
+                                                <TableCellLayout truncate title={database.name}>
+                                                    {database.name}
+                                                </TableCellLayout>
+                                            </TableCell>
+                                            <TableCell>
+                                                <RelativeSize
+                                                    value={database.sizeOnDiskBytes}
+                                                    maximum={largestDatabaseBytes}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="numberCell">
+                                                    {formatBytes(database.dataSizeBytes)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="numberCell">
+                                                    {formatBytes(database.indexSizeBytes)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="numberCell">
+                                                    {database.collections === null
+                                                        ? '—'
+                                                        : formatCount(database.collections)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className="numberCell">
+                                                    {database.objects === null ? '—' : formatCount(database.objects)}
+                                                </span>
+                                            </TableCell>
+                                        </TableRow>
+                                        {isExpanded && (
+                                            <TableRow className="collectionsDetailRow">
+                                                <TableCell colSpan={7} className="collectionsDetailCell">
+                                                    <CollectionsPanel databaseName={database.name} />
+                                                </TableCell>
+                                            </TableRow>
+                                        )}
+                                    </Fragment>
+                                );
+                            })}
+                            <TableRow className="storageTotalRow">
+                                <TableCell className="expandCell" />
+                                <TableCell className="databaseNameCell">
+                                    <TableCellLayout truncate>
+                                        {isFiltered ? l10n.t('Total (filtered)') : l10n.t('Total')}
+                                    </TableCellLayout>
+                                </TableCell>
+                                <TableCell>
+                                    <span className="numberCell">
+                                        {formatBytes(sumOf((database) => database.sizeOnDiskBytes))}
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    <span className="numberCell">
+                                        {formatBytes(sumOf((database) => database.dataSizeBytes))}
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    <span className="numberCell">
+                                        {formatBytes(sumOf((database) => database.indexSizeBytes))}
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    <span className="numberCell">
+                                        {formatSum(sumOf((database) => database.collections))}
+                                    </span>
+                                </TableCell>
+                                <TableCell>
+                                    <span className="numberCell">
+                                        {formatSum(sumOf((database) => database.objects))}
+                                    </span>
+                                </TableCell>
+                            </TableRow>
+                        </TableBody>
+                    </Table>
+                </div>
             )}
         </div>
     );

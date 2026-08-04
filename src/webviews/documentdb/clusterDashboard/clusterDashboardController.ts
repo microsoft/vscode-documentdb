@@ -49,6 +49,11 @@ export type ClusterDashboardWebviewConfigurationType = {
     viewId: string;
     /** Polling cadence of the live health tiles, in milliseconds. */
     refreshIntervalMs: number;
+    /**
+     * Whether the thumbs-up / thumbs-down card may be offered, mirroring the Collection
+     * View: true only when VS Code's telemetry level is `all`.
+     */
+    feedbackSignalsEnabled: boolean;
     /** Azure resource facts, when the cluster came from an Azure-backed tree node. */
     azure?: ClusterDashboardAzureInfo;
 };

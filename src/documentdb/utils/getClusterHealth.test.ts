@@ -7,6 +7,8 @@ import { type Document, type MongoClient } from 'mongodb';
 
 import {
     getClusterPrivileges,
+    getClusterTopology,
+    getDatabaseCollections,
     getFailedCommandName,
     getStorageStats,
     killOperation,
@@ -21,6 +23,7 @@ interface FakeClientOptions {
     aggregate?: (pipeline: Document[]) => unknown[];
     listDatabases?: () => unknown;
     dbCommand?: (databaseName: string, command: Record<string, unknown>) => unknown;
+    listCollections?: (databaseName: string) => unknown[];
 }
 
 function createFakeClient(options: FakeClientOptions): {
@@ -76,6 +79,18 @@ function createFakeClient(options: FakeClientOptions): {
                     return Promise.reject(error instanceof Error ? error : new Error(String(error)));
                 }
             },
+            listCollections: () => ({
+                toArray: (): Promise<unknown[]> => {
+                    if (!options.listCollections) {
+                        return Promise.reject(new Error('listCollections not supported'));
+                    }
+                    try {
+                        return Promise.resolve(options.listCollections(databaseName ?? ''));
+                    } catch (error) {
+                        return Promise.reject(error instanceof Error ? error : new Error(String(error)));
+                    }
+                },
+            }),
         }),
     } as unknown as MongoClient;
 
@@ -715,5 +730,208 @@ describe('getStorageStats', () => {
         expect(stats.databases).toEqual([]);
         expect(stats.totalSizeBytes).toBeNull();
         expect(stats.errors.map(getFailedCommandName)).toEqual(['listDatabases']);
+    });
+});
+
+describe('getDatabaseCollections', () => {
+    it('reports per-collection figures and never asks a view for storage', async () => {
+        const collStatsCalls: string[] = [];
+        const { client } = createFakeClient({
+            listCollections: () => [
+                { name: 'orders', type: 'collection' },
+                { name: 'recentOrders', type: 'view' },
+            ],
+            dbCommand: (_databaseName, command) => {
+                if (typeof command.collStats === 'string') {
+                    collStatsCalls.push(command.collStats);
+                    return { count: 42, size: 1024, storageSize: 2048, totalIndexSize: 512, nindexes: 3 };
+                }
+                throw new Error('unexpected command');
+            },
+        });
+
+        const result = await getDatabaseCollections(client, 'shop');
+
+        expect(result.databaseName).toBe('shop');
+        expect(result.errors).toEqual([]);
+        expect(result.collections[0]).toEqual({
+            name: 'orders',
+            type: 'collection',
+            documents: 42,
+            dataSizeBytes: 1024,
+            storageSizeBytes: 2048,
+            indexSizeBytes: 512,
+            indexes: 3,
+        });
+        // `collStats` on a view reports the *source* collection's bytes, which would credit
+        // another collection's storage to the view.
+        expect(collStatsCalls).toEqual(['orders']);
+        expect(result.collections[1].storageSizeBytes).toBeNull();
+    });
+
+    it('keeps the other collections when one collStats fails', async () => {
+        const { client } = createFakeClient({
+            listCollections: () => [{ name: 'ok' }, { name: 'denied' }],
+            dbCommand: (_databaseName, command) => {
+                if (command.collStats === 'denied') {
+                    throw new Error('Unauthorized');
+                }
+                return { count: 1, size: 8, storageSize: 16, totalIndexSize: 4, nindexes: 1 };
+            },
+        });
+
+        const result = await getDatabaseCollections(client, 'shop');
+
+        expect(result.collections).toHaveLength(2);
+        expect(result.collections[0].documents).toBe(1);
+        expect(result.collections[1].documents).toBeNull();
+        expect(result.errors.map(getFailedCommandName)).toEqual(['collStats']);
+    });
+
+    it('returns an error marker when the database will not list its collections', async () => {
+        const { client } = createFakeClient({});
+
+        const result = await getDatabaseCollections(client, 'shop');
+
+        expect(result.collections).toEqual([]);
+        expect(result.errors.map(getFailedCommandName)).toEqual(['listCollections']);
+    });
+});
+
+describe('getClusterTopology', () => {
+    it('describes a replica set from replSetGetStatus', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.hello === 1) {
+                    return {
+                        setName: 'rs0',
+                        hosts: ['node1:27017', 'node2:27017'],
+                        primary: 'node1:27017',
+                        me: 'node2:27017',
+                    };
+                }
+                if (command.replSetGetStatus === 1) {
+                    return {
+                        set: 'rs0',
+                        members: [
+                            { name: 'node1:27017', stateStr: 'PRIMARY', health: 1, uptime: 3600 },
+                            {
+                                name: 'node2:27017',
+                                stateStr: 'SECONDARY',
+                                health: 1,
+                                uptime: 3500,
+                                self: true,
+                                syncSourceHost: 'node1:27017',
+                            },
+                        ],
+                    };
+                }
+                if (command.hostInfo === 1) {
+                    return { os: { type: 'Linux', name: 'Ubuntu', version: '22.04' }, system: { numCores: 8 } };
+                }
+                throw new Error('command not supported');
+            },
+        });
+
+        const topology = await getClusterTopology(client);
+
+        expect(topology.kind).toBe('replicaSet');
+        expect(topology.setName).toBe('rs0');
+        expect(topology.primary).toBe('node1:27017');
+        expect(topology.servers.map((server) => server.role)).toEqual(['PRIMARY', 'SECONDARY']);
+        expect(topology.servers[1].isCurrentConnection).toBe(true);
+        expect(topology.servers[1].syncSourceHost).toBe('node1:27017');
+        expect(topology.host).toEqual({
+            hostname: null,
+            osType: 'Linux',
+            osName: 'Ubuntu',
+            osVersion: '22.04',
+            cpuArch: null,
+            numCores: 8,
+            memSizeMB: null,
+        });
+        expect(topology.errors).toEqual([]);
+    });
+
+    it('falls back to the addresses hello advertised when replSetGetStatus is refused', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.hello === 1) {
+                    return { setName: 'rs0', hosts: ['a:27017', 'b:27017'], primary: 'a:27017', me: 'a:27017' };
+                }
+                throw new Error('Unauthorized');
+            },
+        });
+
+        const topology = await getClusterTopology(client);
+
+        expect(topology.kind).toBe('replicaSet');
+        expect(topology.servers.map((server) => server.address)).toEqual(['a:27017', 'b:27017']);
+        // The one role `hello` does report is which member is primary.
+        expect(topology.servers.map((server) => server.role)).toEqual(['PRIMARY', null]);
+        expect(topology.errors.map(getFailedCommandName)).toEqual(['replSetGetStatus', 'hostInfo']);
+    });
+
+    it('names the endpoint reached for a standalone that advertises no hosts', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.hello === 1) {
+                    return { me: 'localhost:27017' };
+                }
+                throw new Error('command not supported');
+            },
+        });
+
+        const topology = await getClusterTopology(client);
+
+        expect(topology.kind).toBe('standalone');
+        expect(topology.servers).toEqual([
+            {
+                address: 'localhost:27017',
+                role: null,
+                healthy: null,
+                uptimeSeconds: null,
+                syncSourceHost: null,
+                isCurrentConnection: true,
+            },
+        ]);
+    });
+
+    it('lists the shards behind a mongos', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.hello === 1) {
+                    return { msg: 'isdbgrid', me: 'router:27017' };
+                }
+                if (command.listShards === 1) {
+                    return { shards: [{ _id: 'shard0', host: 'shard0/a:27018,b:27018', state: 1 }] };
+                }
+                throw new Error('command not supported');
+            },
+        });
+
+        const topology = await getClusterTopology(client);
+
+        expect(topology.kind).toBe('sharded');
+        expect(topology.shards).toEqual([{ name: 'shard0', host: 'shard0/a:27018,b:27018', state: 1 }]);
+    });
+
+    it('reports an all-empty hostInfo as no machine rather than a row of dashes', async () => {
+        const { client } = createFakeClient({
+            adminCommand: (command) => {
+                if (command.hello === 1) {
+                    return { me: 'vcore.example:10260' };
+                }
+                if (command.hostInfo === 1) {
+                    // The shape Azure DocumentDB (vCore) answers with.
+                    return { os: {}, system: {} };
+                }
+                throw new Error('command not supported');
+            },
+        });
+
+        const topology = await getClusterTopology(client);
+
+        expect(topology.host).toBeNull();
     });
 });
