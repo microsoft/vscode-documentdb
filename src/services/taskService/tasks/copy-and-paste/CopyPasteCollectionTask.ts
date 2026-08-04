@@ -8,6 +8,10 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
+import {
+    DocumentDbIndexService,
+    type IndexCopyResult,
+} from '../../data-api/indexes/DocumentDbIndexService';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
 import { Task } from '../../taskService';
@@ -25,6 +29,12 @@ class SourceValidationError extends Error {
     }
 }
 
+export interface CopyPasteIndexServices {
+    source: DocumentDbIndexService;
+    target: DocumentDbIndexService;
+    presentationDelayMs?: number;
+}
+
 /**
  * Task for copying documents from a source to a target collection.
  *
@@ -39,6 +49,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     private readonly config: CopyPasteConfig;
     private readonly documentReader: DocumentReader;
     private readonly documentWriter: StreamingDocumentWriter;
+    private readonly indexServices?: CopyPasteIndexServices;
     private sourceDocumentCount: number = 0;
     private totalProcessedDocuments: number = 0;
 
@@ -48,6 +59,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
     private static readonly REASSURANCE_INTERVAL_MS = 1000;
     private static readonly REASSURANCE_START_TICKS = 2; // Start showing after 2 seconds
     private static readonly MAX_REASSURANCE_TICKS = 16; // Stop after 16 seconds
+    private static readonly INDEX_PRESENTATION_DELAY_MS = 5000;
 
     /**
      * Creates a new CopyPasteCollectionTask instance.
@@ -56,11 +68,17 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param documentReader Reader implementation for the source database
      * @param documentWriter StreamingDocumentWriter implementation for the target database
      */
-    constructor(config: CopyPasteConfig, documentReader: DocumentReader, documentWriter: StreamingDocumentWriter) {
+    constructor(
+        config: CopyPasteConfig,
+        documentReader: DocumentReader,
+        documentWriter: StreamingDocumentWriter,
+        indexServices?: CopyPasteIndexServices,
+    ) {
         super();
         this.config = config;
         this.documentReader = documentReader;
         this.documentWriter = documentWriter;
+        this.indexServices = indexServices;
 
         // Generate a descriptive name for the task
         this.name = vscode.l10n.t(
@@ -189,6 +207,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
         // Add copy-paste specific telemetry properties
         if (context) {
             context.telemetry.properties.onConflict = this.config.onConflict;
+            context.telemetry.properties.copyIndexes = this.config.copyIndexes ? 'true' : 'false';
             context.telemetry.properties.isCrossConnection =
                 this.config.source.clusterId !== this.config.target.clusterId ? 'true' : 'false';
 
@@ -244,6 +263,14 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
      * @param context Optional telemetry context for tracking task operations
      */
     protected async doWork(signal: AbortSignal, context?: IActionContext): Promise<void> {
+        if (this.config.copyIndexes) {
+            await this.copyIndexes(signal, context);
+        }
+
+        if (signal.aborted) {
+            return;
+        }
+
         // Handle empty source collection
         if (this.sourceDocumentCount === 0) {
             this.updateProgress(100, vscode.l10n.t('Source collection is empty.'));
@@ -251,6 +278,7 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
                 context.telemetry.measurements.totalProcessedDocuments = 0;
                 context.telemetry.measurements.bufferFlushCount = 0;
             }
+
             return;
         }
 
@@ -353,6 +381,83 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             }
             throw error;
         }
+    }
+
+    private async copyIndexes(signal: AbortSignal, context?: IActionContext): Promise<void> {
+        if (!this.indexServices) {
+            throw new Error(vscode.l10n.t('Index copy services were not configured.'));
+        }
+
+        this.updateProgress(0, vscode.l10n.t('Copying indexes before documents...'));
+        ext.outputChannel.trace(vscode.l10n.t('[CopyPasteTask] Starting index copy phase.'));
+
+        let result: IndexCopyResult;
+        try {
+            result = await this.indexServices.source.copyIndexesTo(this.indexServices.target, {
+                signal,
+                onProgress: ({ completed, total, indexName }) => {
+                    this.updateProgress(
+                        0,
+                        vscode.l10n.t(
+                            'Copying indexes: {0}/{1} ({2})',
+                            completed.toString(),
+                            total.toString(),
+                            indexName,
+                        ),
+                    );
+                },
+            });
+        } catch (error) {
+            if (context) {
+                context.telemetry.properties.indexCopyFailed = 'true';
+                context.telemetry.properties.indexCopyError = error instanceof Error ? error.message : String(error);
+            }
+            throw new Error(vscode.l10n.t('Failed to copy indexes before copying documents.'), { cause: error });
+        }
+
+        if (context) {
+            context.telemetry.measurements.sourceIndexCount = result.sourceIndexCount;
+            context.telemetry.measurements.createdIndexCount = result.createdCount;
+            context.telemetry.measurements.skippedIndexCount = result.skippedCount;
+            context.telemetry.measurements.renamedIndexCount = result.renamedCount;
+        }
+
+        ext.outputChannel.trace(
+            vscode.l10n.t(
+                '[CopyPasteTask] Index copy completed: {0} created, {1} skipped, {2} renamed.',
+                result.createdCount.toString(),
+                result.skippedCount.toString(),
+                result.renamedCount.toString(),
+            ),
+        );
+
+        if (result.createdCount > 0 && !signal.aborted) {
+            this.updateProgress(
+                0,
+                vscode.l10n.t(
+                    '{0} indexes copied. Document copy will begin shortly...',
+                    result.createdCount.toString(),
+                ),
+            );
+            await this.waitForPresentationDelay(
+                signal,
+                this.indexServices.presentationDelayMs ?? CopyPasteCollectionTask.INDEX_PRESENTATION_DELAY_MS,
+            );
+        }
+    }
+
+    private async waitForPresentationDelay(signal: AbortSignal, delayMs: number): Promise<void> {
+        await new Promise<void>((resolve) => {
+            const onAbort = (): void => {
+                clearTimeout(timeout);
+                resolve();
+            };
+            const timeout = setTimeout(() => {
+                signal.removeEventListener('abort', onAbort);
+                resolve();
+            }, delayMs);
+            signal.addEventListener('abort', onAbort, { once: true });
+        });
     }
 
     /**

@@ -8,6 +8,7 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
+import { DocumentDbIndexService } from '../../services/taskService/data-api/indexes/DocumentDbIndexService';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -16,6 +17,7 @@ import { ExecuteStep } from './ExecuteStep';
 import { LargeCollectionWarningStep } from './LargeCollectionWarningStep';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 import { PromptConflictResolutionStep } from './PromptConflictResolutionStep';
+import { PromptIndexConfigurationStep } from './PromptIndexConfigurationStep';
 import { PromptNewCollectionNameStep } from './PromptNewCollectionNameStep';
 
 export async function pasteCollection(
@@ -91,13 +93,32 @@ export async function pasteCollection(
         : undefined;
 
     let sourceCollectionSize: number | undefined = undefined;
+    let sourceIndexCount = 0;
     try {
-        sourceCollectionSize = await (
-            await ClustersClient.getClient(sourceNode.cluster.clusterId)
-        ).estimateDocumentCount(sourceNode.databaseInfo.name, sourceNode.collectionInfo.name);
+        const sourceClient = await ClustersClient.getClient(sourceNode.cluster.clusterId);
+        sourceCollectionSize = await sourceClient.estimateDocumentCount(
+            sourceNode.databaseInfo.name,
+            sourceNode.collectionInfo.name,
+        );
         context.telemetry.measurements.sourceCollectionSize = sourceCollectionSize;
     } catch (error) {
         context.telemetry.properties.sourceCollectionSizeError = String(error);
+    }
+
+    try {
+        const sourceClient = await ClustersClient.getClient(sourceNode.cluster.clusterId);
+        sourceIndexCount = await new DocumentDbIndexService(
+            sourceClient,
+            sourceNode.databaseInfo.name,
+            sourceNode.collectionInfo.name,
+        ).countCopyableIndexes();
+        context.telemetry.measurements.sourceIndexCount = sourceIndexCount;
+    } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        context.telemetry.properties.sourceIndexCountError = errorMessage;
+        throw new Error(l10n.t('Failed to read indexes from the source collection: {0}', errorMessage), {
+            cause: error,
+        });
     }
 
     // Create wizard context
@@ -108,12 +129,14 @@ export async function pasteCollection(
         sourceConnectionId: sourceNode.cluster.clusterId,
         sourceConnectionName: sourceNode.cluster.name,
         sourceCollectionSize,
+        sourceIndexCount,
         targetNode,
         targetConnectionId: targetNode.cluster.clusterId,
         targetConnectionName: targetNode.cluster.name,
         targetDatabaseName: targetNode.databaseInfo.name,
         targetCollectionName,
         isTargetExistingCollection,
+        copyIndexes: false,
     };
 
     // Check for circular dependency when pasting into the same collection
@@ -171,9 +194,7 @@ export async function pasteCollection(
         wizardContext.conflictResolutionStrategy = ConflictResolutionStrategy.Abort;
     }
 
-    // TODO: We don't support copying indexes yet, so skip this step for now,
-    // but keep this here to speed up development once we get to that point
-    // --> promptSteps.push(new PromptIndexConfigurationStep());
+    promptSteps.push(new PromptIndexConfigurationStep());
 
     promptSteps.push(new ConfirmOperationStep());
 

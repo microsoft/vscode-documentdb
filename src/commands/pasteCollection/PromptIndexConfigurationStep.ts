@@ -12,8 +12,8 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
         const promptItems = [
             {
                 id: 'copy',
-                label: l10n.t('Yes, copy all indexes'),
-                detail: l10n.t('Copy index definitions from source to target collection.'),
+                label: l10n.t('Yes, copy {0} indexes', context.sourceIndexCount.toLocaleString()),
+                detail: l10n.t('Copy all secondary index definitions from source to target collection.'),
                 alwaysShow: true,
             },
             {
@@ -25,7 +25,7 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
         ];
 
         const selectedItem = await context.ui.showQuickPick(promptItems, {
-            placeHolder: l10n.t('Copy index definitions from source collection?'),
+            placeHolder: l10n.t('Copy {0} indexes from the source collection?', context.sourceIndexCount.toLocaleString()),
             stepName: 'indexConfiguration',
             suppressPersistence: true,
         });
