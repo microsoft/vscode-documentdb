@@ -788,6 +788,47 @@ describe('getDatabaseCollections', () => {
         expect(result.errors.map(getFailedCommandName)).toEqual(['collStats']);
     });
 
+    it('caps how many collStats are in flight at once, and keeps the reported order', async () => {
+        const names = Array.from({ length: 40 }, (_, index) => `collection-${index}`);
+        let inFlight = 0;
+        let peakInFlight = 0;
+
+        const { client } = createFakeClient({
+            listCollections: () => names.map((name) => ({ name })),
+            dbCommand: (_databaseName, command) => {
+                inFlight++;
+                peakInFlight = Math.max(peakInFlight, inFlight);
+                // Resolving on a later turn is what lets the pool actually fill: a promise
+                // that settles synchronously would never overlap with its siblings.
+                return new Promise((resolve) => {
+                    setTimeout(() => {
+                        inFlight--;
+                        resolve({
+                            count: Number((command.collStats as string).split('-')[1]),
+                            size: 8,
+                            storageSize: 16,
+                            totalIndexSize: 4,
+                            nindexes: 1,
+                        });
+                    }, 0);
+                });
+            },
+        });
+
+        const result = await getDatabaseCollections(client, 'shop');
+
+        // A `Promise.all` over every entry would put all 40 on the wire at once, which is a
+        // load spike triggered by a user expanding one row.
+        expect(peakInFlight).toBeLessThanOrEqual(8);
+        expect(peakInFlight).toBeGreaterThan(1);
+        expect(result.collections).toHaveLength(40);
+        // Bounded concurrency must not reorder the list against `listCollections`.
+        expect(result.collections.map((collection) => collection.name)).toEqual(names);
+        expect(result.collections.map((collection) => collection.documents)).toEqual(
+            names.map((_name, index) => index),
+        );
+    });
+
     it('returns an error marker when the database will not list its collections', async () => {
         const { client } = createFakeClient({});
 

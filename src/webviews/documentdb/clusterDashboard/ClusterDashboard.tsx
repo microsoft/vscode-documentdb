@@ -26,7 +26,7 @@ import { DashboardFeedback } from './components/DashboardFeedback';
 import { DashboardHeader, type ConnectionState } from './components/DashboardHeader';
 import { OperationsTab } from './components/OperationsTab';
 import { StatusStrip } from './components/StatusStrip';
-import { DEFAULT_STORAGE_VIEW_STATE, StorageTab, type StorageTabViewState } from './components/StorageTab';
+import { createStorageViewState, StorageTab, type StorageTabViewState } from './components/StorageTab';
 import { TopologyCard } from './components/TopologyCard';
 
 type DashboardTab = 'data' | 'operations' | 'activity';
@@ -69,7 +69,7 @@ export const ClusterDashboard = (): JSX.Element => {
      * silently discarded all three. Glancing at the running operations and coming back
      * should not undo the arrangement the reader built to find something.
      */
-    const [storageViewState, setStorageViewState] = useState<StorageTabViewState>(DEFAULT_STORAGE_VIEW_STATE);
+    const [storageViewState, setStorageViewState] = useState<StorageTabViewState>(createStorageViewState);
 
     /**
      * Guards every asynchronous state write. The polling closures outlive a single render,

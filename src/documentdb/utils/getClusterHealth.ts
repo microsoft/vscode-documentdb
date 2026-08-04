@@ -31,6 +31,44 @@ const DATABASE_STATS_LIMIT = 20;
  */
 const COLLECTION_STATS_LIMIT = 100;
 
+/**
+ * How many per-namespace stat commands may be in flight at once.
+ *
+ * The caps above bound the *amount* of work; this bounds its *burst*. Firing one command per
+ * collection through a single `Promise.all` put up to a hundred simultaneous `collStats` on
+ * the wire the moment a user expanded a row, which the driver services by opening
+ * connections until it hits its pool limit — a visible load spike on the cluster caused by a
+ * disclosure gesture. Eight keeps the wall-clock benefit of overlapping round trips without
+ * the dashboard behaving like a load generator.
+ */
+const STATS_CONCURRENCY = 8;
+
+/**
+ * `Promise.all`-shaped map with a ceiling on how many run at once.
+ *
+ * Results keep the input order (workers write by index), and a rejection propagates exactly
+ * as `Promise.all` would — both call sites catch per item, so a single failure never takes
+ * the batch down.
+ */
+async function mapWithConcurrency<T, R>(
+    items: readonly T[],
+    limit: number,
+    map: (item: T) => Promise<R>,
+): Promise<R[]> {
+    const results = new Array<R>(items.length);
+    let nextIndex = 0;
+
+    const runWorker = async (): Promise<void> => {
+        for (let index = nextIndex++; index < items.length; index = nextIndex++) {
+            results[index] = await map(items[index]);
+        }
+    };
+
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, runWorker));
+
+    return results;
+}
+
 /** Maximum length of the serialized command preview attached to a {@link CurrentOpEntry}. */
 const COMMAND_PREVIEW_MAX_LENGTH = 2000;
 
@@ -789,8 +827,10 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
     const entries = allUserDatabases.slice(0, DATABASE_STATS_LIMIT);
     const omittedDatabaseCount = allUserDatabases.length - entries.length;
 
-    const databases = await Promise.all(
-        entries.map(async (entry): Promise<ClusterDatabaseStorage> => {
+    const databases = await mapWithConcurrency(
+        entries,
+        STATS_CONCURRENCY,
+        async (entry): Promise<ClusterDatabaseStorage> => {
             const name = entry.name as string;
             const database: ClusterDatabaseStorage = {
                 name,
@@ -817,7 +857,7 @@ export async function getStorageStats(client: MongoClient): Promise<ClusterStora
             }
 
             return database;
-        }),
+        },
     );
 
     // Deliberately NOT `listed.totalSize`: that counts admin/local/config and any database
@@ -867,8 +907,10 @@ export async function getDatabaseCollections(
     const entries = named.slice(0, COLLECTION_STATS_LIMIT);
     const omittedCollectionCount = named.length - entries.length;
 
-    const collections = await Promise.all(
-        entries.map(async (entry): Promise<ClusterCollectionStorage> => {
+    const collections = await mapWithConcurrency(
+        entries,
+        STATS_CONCURRENCY,
+        async (entry): Promise<ClusterCollectionStorage> => {
             const name = entry.name as string;
             const collection: ClusterCollectionStorage = {
                 name,
@@ -898,7 +940,7 @@ export async function getDatabaseCollections(
             }
 
             return collection;
-        }),
+        },
     );
 
     return { databaseName, collections, omittedCollectionCount, errors };

@@ -56,7 +56,12 @@ export interface StorageTabProps {
     isRefreshing: boolean;
     onRefresh: () => void;
     viewState: StorageTabViewState;
-    onViewStateChange: (next: StorageTabViewState) => void;
+    /**
+     * Takes an updater rather than a value, so every change rebases on the current state
+     * instead of the snapshot this render closed over. With a plain value, two changes
+     * landing in one React batch would have the second silently discard the first.
+     */
+    onViewStateChange: (update: (current: StorageTabViewState) => StorageTabViewState) => void;
 }
 
 /**
@@ -68,12 +73,16 @@ export interface StorageTabProps {
  */
 const DEFAULT_SORT: SortState = { column: 'sizeOnDiskBytes', direction: 'descending' };
 
-/** The arrangement a freshly-opened dashboard starts from. */
-export const DEFAULT_STORAGE_VIEW_STATE: StorageTabViewState = {
-    sort: DEFAULT_SORT,
-    filterText: '',
-    expanded: new Set<string>(),
-};
+/**
+ * The arrangement a freshly-opened dashboard starts from.
+ *
+ * A factory, not a shared constant: the state holds a `Set`, and one module-level instance
+ * handed to every panel would be a mutation away from leaking one dashboard's expanded rows
+ * into another's.
+ */
+export function createStorageViewState(): StorageTabViewState {
+    return { sort: DEFAULT_SORT, filterText: '', expanded: new Set<string>() };
+}
 
 /** Numeric columns sort largest-first on the first click; the name column sorts A→Z. */
 function defaultDirectionFor(column: SortColumn): SortState['direction'] {
@@ -154,8 +163,8 @@ export const StorageTab = ({
 }: StorageTabProps): JSX.Element => {
     const { sort, filterText, expanded } = viewState;
 
-    const setSort = (next: SortState): void => onViewStateChange({ ...viewState, sort: next });
-    const setFilterText = (next: string): void => onViewStateChange({ ...viewState, filterText: next });
+    const setSort = (next: SortState): void => onViewStateChange((current) => ({ ...current, sort: next }));
+    const setFilterText = (next: string): void => onViewStateChange((current) => ({ ...current, filterText: next }));
 
     const databases = useMemo(() => {
         if (storageStats === null) {
@@ -186,13 +195,14 @@ export const StorageTab = ({
                 : { column, direction: defaultDirectionFor(column) },
         );
 
-    const toggleExpanded = (name: string): void => {
-        const next = new Set(expanded);
-        if (!next.delete(name)) {
-            next.add(name);
-        }
-        onViewStateChange({ ...viewState, expanded: next });
-    };
+    const toggleExpanded = (name: string): void =>
+        onViewStateChange((current) => {
+            const next = new Set(current.expanded);
+            if (!next.delete(name)) {
+                next.add(name);
+            }
+            return { ...current, expanded: next };
+        });
 
     // Scaled against the largest *visible* database so the bars stay meaningful while filtered.
     const largestDatabaseBytes = databases.reduce(
