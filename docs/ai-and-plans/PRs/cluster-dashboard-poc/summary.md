@@ -208,13 +208,24 @@ showed "3 background threads" was wrong: it was 2 threads **+ the self-op**. Cor
 
 ### Deferred (architectural — see [Not production-ready](#not-production-ready))
 
-- **Bypassing `beforeCachedClientConnect()`** (`ClusterItemBase.ts:221`): the router calls
-  `ClustersClient.getClient` directly, so Kubernetes port-forward setup never runs for a
-  dashboard. Confirmed real. Fixing it needs the router to reach tree nodes.
+- **`beforeCachedClientConnect()` on the polling path** — *open path since fixed.* Opening the
+  dashboard now goes through `ClusterItemBase.connect()`, which runs the hook before reusing a
+  cached client, so a Kubernetes ClusterIP tunnel is established when the panel opens even if
+  the node was never expanded. What remains is the **refresh path**: the router resolves its
+  client through `ClustersClient.getClient(clusterId)`, a static map lookup that holds no tree
+  node and therefore cannot re-run the hook. If the tunnel dies while the panel is open — pod
+  restart, host sleep/resume, a network blip — every subsequent poll fails against a dead local
+  port and nothing re-establishes it; the user's only recovery is to close and reopen the panel.
+  Fixing it properly needs transport liveness to be owned by something the router can reach
+  rather than by a tree node (see [#739](https://github.com/microsoft/vscode-documentdb/issues/739),
+  which raises the same seam from the plugin-API side).
 - **No connection-lifecycle invalidation**: `removeConnection` clears credentials but never
   calls `deleteClient`, so a deleted connection keeps polling; `updateCredentials` *does*
-  call it, so the next poll silently re-runs the full handshake. Confirmed real. Fixing it
-  needs a lifecycle event the POC has no plumbing for.
+  call it, so the next poll silently re-runs the full handshake. Confirmed real, and
+  **pre-existing on `main`** rather than introduced here — `removeConnection` is the only
+  lifecycle site that omits the call, which nothing could observe until a surface started
+  polling. The one-line fix belongs next to the existing `deleteCredentials` call in
+  `removeConnection.ts`, not in this PR.
 
 Both are deliberately documented rather than fixed badly.
 

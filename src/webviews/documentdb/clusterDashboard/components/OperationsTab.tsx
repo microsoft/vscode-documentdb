@@ -58,10 +58,24 @@ function isCollectionNamespace(namespace: string): boolean {
 /**
  * A cell whose value is truncated on screen but must stay reachable.
  *
- * The tooltip is anchored on a focusable element carrying the full value as its accessible
- * name: a tooltip on a plain `<span>` renders on hover only, so keyboard and screen-reader
- * users get no route to text the ellipsis has hidden. `tabIndex={0}` puts it in the tab
- * order and makes the Fluent tooltip open on focus as well as hover.
+ * The tooltip is anchored on a focusable element: a tooltip on a plain `<span>` renders on
+ * hover only, so keyboard and screen-reader users get no route to text the ellipsis has
+ * hidden. `tabIndex={0}` puts it in the tab order and makes the Fluent tooltip open on focus
+ * as well as hover.
+ *
+ * The tooltip's `relationship` is chosen from what the tooltip actually carries, because the
+ * two cases need different accessible names:
+ *
+ * - When the tooltip only reveals the value the ellipsis clipped (or the visible text is a
+ *   placeholder), it *is* the cell's name, so `label` is correct.
+ * - When it adds separate information — the Namespace cell anchors the command preview — it
+ *   must not replace the name, or the cell announces the command instead of the namespace.
+ *   `description` keeps the visible text as the accessible name and offers the preview after
+ *   it.
+ *
+ * The element deliberately carries no `role`: it is focusable so the tooltip can be reached,
+ * not actionable, and claiming `button` would promise assistive-technology users an action
+ * that does not exist.
  */
 function TruncatedCell({
     value,
@@ -80,10 +94,15 @@ function TruncatedCell({
     }
 
     const content = tooltip ?? value;
+    const tooltipIsTheName = value === '' || tooltip === undefined || tooltip === value;
 
     return (
-        <Tooltip content={content} relationship="label" withArrow>
-            <span className={className} tabIndex={0} role="button" aria-label={content}>
+        <Tooltip content={content} relationship={tooltipIsTheName ? 'label' : 'description'} withArrow>
+            {/* Focusable so the tooltip is reachable without a pointer, but not actionable, so it
+                carries no role. Matches the Query Insights summary card, which suppresses the same
+                rule for the same reason (`summaryCard/CellBase.tsx`). */}
+            {/* eslint-disable-next-line jsx-a11y/no-noninteractive-tabindex */}
+            <span className={className} tabIndex={0}>
                 {value === '' ? emptyPlaceholder : value}
             </span>
         </Tooltip>

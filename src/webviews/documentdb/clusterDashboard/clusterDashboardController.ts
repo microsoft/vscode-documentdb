@@ -9,6 +9,7 @@ import * as vscode from 'vscode';
 import { API } from '../../../DocumentDBExperiences';
 import { openAppWebview, type AppWebviewController } from '../../_integration/openAppWebview';
 import { type RouterContext } from './clusterDashboardRouter';
+import { clearObservedOperations } from './operationHistory';
 
 /**
  * Azure resource facts for an Azure-backed cluster.
@@ -86,6 +87,14 @@ export function openClusterDashboardWebview(
     controller.onDisposed(() => {
         if (openPanels.get(initialData.clusterId) === controller) {
             openPanels.delete(initialData.clusterId);
+
+            // The operation history is scoped to one dashboard session ("what has run since I
+            // opened this"), but it lives in a host-side store keyed by cluster. Without this,
+            // reopening the panel would present the previous session's operations as if they
+            // had been observed by the new one, and the entries would be retained for the
+            // lifetime of the extension host. Guarded by the identity check above so a panel
+            // that has already been superseded cannot clear the live panel's history.
+            clearObservedOperations(initialData.clusterId);
         }
     });
 

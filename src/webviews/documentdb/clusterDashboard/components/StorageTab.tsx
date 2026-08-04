@@ -159,6 +159,17 @@ export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTab
             return value === null ? total : (total ?? 0) + value;
         }, null);
 
+    /**
+     * Renders a summed count, preserving "not reported" rather than collapsing it to zero.
+     *
+     * `sumOf` returns `null` only when *no* visible database reported the field, which means
+     * the cluster did not answer — not that the cluster holds none. Formatting that as `0`
+     * would state a fact the server never gave us, and would contradict the per-row cells,
+     * which already render the placeholder in exactly this case. `formatBytes` applies the
+     * same rule to the size columns on its own.
+     */
+    const formatSum = (total: number | null): string => (total === null ? '—' : formatCount(total));
+
     const isFiltered = filterText.trim() !== '';
 
     return (
@@ -291,8 +302,8 @@ export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTab
                             <TableCell>{formatBytes(sumOf((database) => database.sizeOnDiskBytes))}</TableCell>
                             <TableCell>{formatBytes(sumOf((database) => database.dataSizeBytes))}</TableCell>
                             <TableCell>{formatBytes(sumOf((database) => database.indexSizeBytes))}</TableCell>
-                            <TableCell>{formatCount(sumOf((database) => database.collections) ?? 0)}</TableCell>
-                            <TableCell>{formatCount(sumOf((database) => database.objects) ?? 0)}</TableCell>
+                            <TableCell>{formatSum(sumOf((database) => database.collections))}</TableCell>
+                            <TableCell>{formatSum(sumOf((database) => database.objects))}</TableCell>
                         </TableRow>
                     </TableBody>
                 </Table>

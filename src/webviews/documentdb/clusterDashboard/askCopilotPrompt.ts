@@ -57,7 +57,7 @@ export function buildAskCopilotPrompt(
     const lines: string[] = [];
 
     lines.push(
-        `I'm looking at the Cluster Dashboard of my DocumentDB/MongoDB cluster "${clusterDisplayName}" ` +
+        `I'm looking at the Cluster Dashboard of my DocumentDB (MongoDB API) cluster "${clusterDisplayName}" ` +
             `in VS Code and want to understand one of its operations.`,
         '',
     );

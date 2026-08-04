@@ -243,12 +243,7 @@ export const ClusterDashboard = (): JSX.Element => {
             <StatusStrip storageStats={storageStats} />
 
             <div className="dashboardToolbar">
-                <Button
-                    appearance="subtle"
-                    icon={<WindowConsoleRegular />}
-                    onClick={() => void openShell()}
-                    aria-label={l10n.t('Open an interactive shell on this cluster')}
-                >
+                <Button appearance="subtle" icon={<WindowConsoleRegular />} onClick={() => void openShell()}>
                     {l10n.t('Open Shell')}
                 </Button>
                 <Button
@@ -256,7 +251,6 @@ export const ClusterDashboard = (): JSX.Element => {
                     icon={<ArrowDownloadRegular />}
                     disabled={isExporting}
                     onClick={() => void exportDiagnostics()}
-                    aria-label={l10n.t('Export a diagnostics snapshot of this cluster')}
                 >
                     {l10n.t('Export diagnostics')}
                 </Button>
