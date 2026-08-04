@@ -7,6 +7,7 @@ import { AzureWizardPromptStep } from '@microsoft/vscode-azext-utils';
 import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
+import { nonNullValue } from '../../utils/nonNull';
 import { type PasteCollectionWizardContext } from './PasteCollectionWizardContext';
 
 export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
@@ -21,6 +22,9 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
 
         const conflictStrategy = this.formatConflictStrategy(context.conflictResolutionStrategy!);
         const indexesSetting = context.copyIndexes ? l10n.t('Yes') : l10n.t('No');
+        const sourceIndexCount = context.copyIndexes
+            ? nonNullValue(context.sourceIndexCount, 'sourceIndexCount', 'context.sourceIndexCount')
+            : undefined;
 
         const warningText = context.isTargetExistingCollection
             ? l10n.t(
@@ -56,10 +60,12 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             l10n.t('Settings:'),
             ' • ' + l10n.t('Conflict Resolution: {strategyName}', { strategyName: conflictStrategy }),
             ' • ' +
-                l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
-                    yesNoValue: indexesSetting,
-                    indexCount: context.sourceIndexCount?.toLocaleString() ?? l10n.t('count unavailable'),
-                }),
+                (context.copyIndexes
+                    ? l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
+                          yesNoValue: indexesSetting,
+                          indexCount: sourceIndexCount!.toLocaleString(),
+                      })
+                    : l10n.t('Copy Indexes: {yesNoValue}', { yesNoValue: indexesSetting })),
             '',
             warningText,
         ].join('\n');

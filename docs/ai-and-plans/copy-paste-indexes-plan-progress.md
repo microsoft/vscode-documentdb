@@ -18,7 +18,7 @@
 - **Done:** Added the index-count choice and confirmation details to the paste wizard.
 - **Done:** Added index copying as the first running task phase, before document streaming.
 - **Done:** Added task failure propagation, output-channel diagnostics, and telemetry counts.
-- **Done:** Preserved document-only paste when the initial index count cannot be read; opting in retries during the task.
+- **Done:** Deferred index counting until index copy is selected; count failures stop the paste flow, while document-only paste does not read indexes.
 - **Done:** Made cancellation reporting explicit when indexes were partially created.
 - **Done:** Added a five-second presentation delay after creating indexes so completion is visible.
 - **Done:** Added focused tests for counts, skips, names, collisions, ordering, and failures.
@@ -50,9 +50,9 @@ An equivalent target definition is skipped regardless of its name. If only the p
 
 Index creation errors are not treated as skips. They fail the copy-and-paste task before document transfer begins and are recorded in the extension output channel and telemetry.
 
-### Keep document-only paste available when counting fails
+### Count indexes only when copying them
 
-The wizard normally displays the secondary-index count. If the initial read fails, it reports that the count is unavailable instead of blocking the established document-copy flow. Choosing index copy retries the read in the task and fails there if it still cannot proceed.
+The wizard asks whether to copy indexes before reading them. Choosing index copy reads the secondary-index count and stops the paste flow if that read fails. Choosing document-only paste avoids the index API entirely.
 
 ### Do not roll back indexes on cancellation
 

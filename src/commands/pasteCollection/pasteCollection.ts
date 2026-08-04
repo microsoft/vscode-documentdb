@@ -8,7 +8,6 @@ import * as l10n from '@vscode/l10n';
 import * as vscode from 'vscode';
 import { ClustersClient } from '../../documentdb/ClustersClient';
 import { ext } from '../../extensionVariables';
-import { DocumentDbIndexService } from '../../services/taskService/data-api/indexes/DocumentDbIndexService';
 import { ConflictResolutionStrategy } from '../../services/taskService/tasks/copy-and-paste/copyPasteConfig';
 import { CollectionItem } from '../../tree/documentdb/CollectionItem';
 import { DatabaseItem } from '../../tree/documentdb/DatabaseItem';
@@ -93,7 +92,6 @@ export async function pasteCollection(
         : undefined;
 
     let sourceCollectionSize: number | undefined = undefined;
-    let sourceIndexCount: number | undefined;
     try {
         const sourceClient = await ClustersClient.getClient(sourceNode.cluster.clusterId);
         sourceCollectionSize = await sourceClient.estimateDocumentCount(
@@ -105,19 +103,6 @@ export async function pasteCollection(
         context.telemetry.properties.sourceCollectionSizeError = String(error);
     }
 
-    try {
-        const sourceClient = await ClustersClient.getClient(sourceNode.cluster.clusterId);
-        sourceIndexCount = await new DocumentDbIndexService(
-            sourceClient,
-            sourceNode.databaseInfo.name,
-            sourceNode.collectionInfo.name,
-        ).countCopyableIndexes();
-        context.telemetry.measurements.sourceIndexCount = sourceIndexCount;
-    } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : String(error);
-        context.telemetry.properties.sourceIndexCountError = errorMessage;
-    }
-
     // Create wizard context
     const wizardContext: PasteCollectionWizardContext = {
         ...context,
@@ -126,7 +111,6 @@ export async function pasteCollection(
         sourceConnectionId: sourceNode.cluster.clusterId,
         sourceConnectionName: sourceNode.cluster.name,
         sourceCollectionSize,
-        sourceIndexCount,
         targetNode,
         targetConnectionId: targetNode.cluster.clusterId,
         targetConnectionName: targetNode.cluster.name,

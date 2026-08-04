@@ -30,7 +30,7 @@ The copy-and-paste process is designed to be efficient for smaller collections b
 
 Optionally, the extension can also copy secondary indexes. Indexes are created before document streaming begins. Equivalent indexes already on the target are skipped, while a source index whose name is already used by a different definition receives a suffix. The built-in `_id` index is not copied.
 
-If the extension cannot read the index count while opening the wizard, it displays the count as unavailable and retries only if you choose to copy indexes. Cancelling during index creation stops before the next index; indexes already created remain on the target.
+The extension reads the source index count only after you choose to copy indexes. If that read fails, the paste operation stops. Document-only copies do not read source indexes. Cancelling during index creation stops before the next index; indexes already created remain on the target.
 
 This method avoids loading the entire collection into memory at once, making it suitable for collections that are moderately sized.
 
@@ -73,7 +73,7 @@ You will be prompted to provide a name for the new collection.
 
 #### Step 3: Choose Whether to Copy Indexes
 
-Choose whether to copy the source collection's secondary indexes. The wizard displays how many indexes are available to copy.
+Choose whether to copy the source collection's secondary indexes. If selected, the wizard reads and displays how many indexes are available to copy.
 
 #### Step 4: Confirmation
 
@@ -186,7 +186,7 @@ You will be prompted to choose one of four strategies:
 
 #### Step 3: Choose Whether to Copy Indexes
 
-Choose whether to copy the source collection's secondary indexes. The wizard displays how many indexes are available to copy. Existing equivalent index definitions are not recreated.
+Choose whether to copy the source collection's secondary indexes. If selected, the wizard reads and displays how many indexes are available to copy. Existing equivalent index definitions are not recreated.
 
 #### Step 4: Confirmation
 
