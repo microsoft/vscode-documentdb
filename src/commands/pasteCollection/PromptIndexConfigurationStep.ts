@@ -9,11 +9,14 @@ import { type PasteCollectionWizardContext } from './PasteCollectionWizardContex
 
 export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCollectionWizardContext> {
     public async prompt(context: PasteCollectionWizardContext): Promise<void> {
+        const indexCount = context.sourceIndexCount?.toLocaleString();
         const promptItems = [
             {
                 id: 'copy',
-                label: l10n.t('Yes, copy {0} indexes', context.sourceIndexCount.toLocaleString()),
-                detail: l10n.t('Copy all secondary index definitions from source to target collection.'),
+                label: indexCount ? l10n.t('Yes, copy {0} indexes', indexCount) : l10n.t('Yes, copy indexes'),
+                detail: indexCount
+                    ? l10n.t('Copy all secondary index definitions from source to target collection.')
+                    : l10n.t('The index count is unavailable. The task will try to read and copy indexes again.'),
                 alwaysShow: true,
             },
             {
@@ -25,7 +28,9 @@ export class PromptIndexConfigurationStep extends AzureWizardPromptStep<PasteCol
         ];
 
         const selectedItem = await context.ui.showQuickPick(promptItems, {
-            placeHolder: l10n.t('Copy {0} indexes from the source collection?', context.sourceIndexCount.toLocaleString()),
+            placeHolder: indexCount
+                ? l10n.t('Copy {0} indexes from the source collection?', indexCount)
+                : l10n.t('Copy indexes from the source collection?'),
             stepName: 'indexConfiguration',
             suppressPersistence: true,
         });

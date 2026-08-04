@@ -72,6 +72,7 @@ describe('DocumentDbIndexService', () => {
             createdCount: 0,
             skippedCount: 1,
             renamedCount: 0,
+            cancelled: false,
         });
         expect(createIndex).not.toHaveBeenCalled();
     });
@@ -93,6 +94,7 @@ describe('DocumentDbIndexService', () => {
             createdCount: 1,
             skippedCount: 0,
             renamedCount: 0,
+            cancelled: false,
         });
     });
 
@@ -135,5 +137,26 @@ describe('DocumentDbIndexService', () => {
 
         await expect(source.copyIndexesTo(target)).rejects.toThrow('creation failed');
         expect(ext.outputChannel.error).toHaveBeenCalled();
+    });
+
+    it('stops after the current index when cancelled', async () => {
+        const controller = new AbortController();
+        const createIndex = jest.fn().mockImplementation(async () => {
+            controller.abort();
+        });
+        const source = new DocumentDbIndexService(
+            createClient([
+                { key: { email: 1 }, name: 'email_1' },
+                { key: { status: 1 }, name: 'status_1' },
+            ]),
+            'sourceDb',
+            'sourceCollection',
+        );
+        const target = new DocumentDbIndexService(createClient([], createIndex), 'targetDb', 'targetCollection');
+
+        const result = await source.copyIndexesTo(target, { signal: controller.signal });
+
+        expect(createIndex).toHaveBeenCalledTimes(1);
+        expect(result).toMatchObject({ createdCount: 1, cancelled: true });
     });
 });

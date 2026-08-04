@@ -18,9 +18,11 @@
 - **Done:** Added the index-count choice and confirmation details to the paste wizard.
 - **Done:** Added index copying as the first running task phase, before document streaming.
 - **Done:** Added task failure propagation, output-channel diagnostics, and telemetry counts.
+- **Done:** Preserved document-only paste when the initial index count cannot be read; opting in retries during the task.
+- **Done:** Made cancellation reporting explicit when indexes were partially created.
 - **Done:** Added a five-second presentation delay after creating indexes so completion is visible.
 - **Done:** Added focused tests for counts, skips, names, collisions, ordering, and failures.
-- **In progress:** Localization generation and the complete repository validation sequence.
+- **Done:** Regenerated localization, formatted the repository, passed lint, passed all Jest tests, and passed the TypeScript build.
 
 ## Decisions
 
@@ -47,6 +49,14 @@ An equivalent target definition is skipped regardless of its name. If only the p
 ### Preserve failures
 
 Index creation errors are not treated as skips. They fail the copy-and-paste task before document transfer begins and are recorded in the extension output channel and telemetry.
+
+### Keep document-only paste available when counting fails
+
+The wizard normally displays the secondary-index count. If the initial read fails, it reports that the count is unavailable instead of blocking the established document-copy flow. Choosing index copy retries the read in the task and fails there if it still cannot proceed.
+
+### Do not roll back indexes on cancellation
+
+Cancellation stops before the next index and then stops the task before document transfer. Indexes already created remain on the target; the output channel and telemetry report this partial state. Automatic rollback was rejected because it could remove an index that another actor created concurrently.
 
 ### Keep the completion pause presentation-only
 

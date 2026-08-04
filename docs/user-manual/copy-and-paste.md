@@ -30,6 +30,8 @@ The copy-and-paste process is designed to be efficient for smaller collections b
 
 Optionally, the extension can also copy secondary indexes. Indexes are created before document streaming begins. Equivalent indexes already on the target are skipped, while a source index whose name is already used by a different definition receives a suffix. The built-in `_id` index is not copied.
 
+If the extension cannot read the index count while opening the wizard, it displays the count as unavailable and retries only if you choose to copy indexes. Cancelling during index creation stops before the next index; indexes already created remain on the target.
+
 This method avoids loading the entire collection into memory at once, making it suitable for collections that are moderately sized.
 
 ## Important Considerations

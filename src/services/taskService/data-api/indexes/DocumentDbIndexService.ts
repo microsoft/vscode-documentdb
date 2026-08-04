@@ -19,6 +19,7 @@ export interface IndexCopyResult {
     createdCount: number;
     skippedCount: number;
     renamedCount: number;
+    cancelled: boolean;
 }
 
 export interface CopyIndexesOptions {
@@ -61,6 +62,7 @@ export class DocumentDbIndexService {
             createdCount: 0,
             skippedCount: 0,
             renamedCount: 0,
+            cancelled: false,
         };
 
         ext.outputChannel.trace(
@@ -69,6 +71,7 @@ export class DocumentDbIndexService {
 
         for (const sourceIndex of sourceIndexes) {
             if (options.signal?.aborted) {
+                result.cancelled = true;
                 break;
             }
 
@@ -89,7 +92,11 @@ export class DocumentDbIndexService {
             if (targetName !== sourceIndex.name) {
                 result.renamedCount++;
                 ext.outputChannel.debug(
-                    vscode.l10n.t('[IndexCopy] Renaming index "{0}" to "{1}" to avoid a collision.', sourceIndex.name, targetName),
+                    vscode.l10n.t(
+                        '[IndexCopy] Renaming index "{0}" to "{1}" to avoid a collision.',
+                        sourceIndex.name,
+                        targetName,
+                    ),
                 );
             }
 
@@ -114,6 +121,7 @@ export class DocumentDbIndexService {
             });
         }
 
+        result.cancelled = result.cancelled || options.signal?.aborted === true;
         return result;
     }
 
@@ -129,10 +137,12 @@ export class DocumentDbIndexService {
     }
 
     private toIndexDefinition(index: IndexDescriptionInfo): IndexDefinition {
-        const { key, name, v: _version, ns: _namespace, ...options } = index;
+        const options = Object.fromEntries(
+            Object.entries(index).filter(([property]) => !['key', 'name', 'v', 'ns'].includes(property)),
+        ) as CreateIndexesOptions;
         return {
-            key,
-            name: name ?? this.getGeneratedName(key),
+            key: index.key,
+            name: index.name ?? this.getGeneratedName(index.key),
             options,
         };
     }
@@ -144,7 +154,7 @@ export class DocumentDbIndexService {
 
     private getDefinitionSignature(index: IndexDefinition): string {
         return JSON.stringify({
-            key: Object.entries(index.key),
+            key: this.getKeyEntries(index.key),
             options: this.sortObject(index.options),
         });
     }
@@ -181,7 +191,12 @@ export class DocumentDbIndexService {
     }
 
     private getGeneratedName(key: IndexSpecification): string {
-        const entries = key instanceof Map ? [...key.entries()] : Object.entries(key);
-        return entries.map(([field, direction]) => `${field}_${String(direction)}`).join('_');
+        return this.getKeyEntries(key)
+            .map(([field, direction]) => `${field}_${String(direction)}`)
+            .join('_');
+    }
+
+    private getKeyEntries(key: IndexSpecification): [string, unknown][] {
+        return key instanceof Map ? [...key.entries()] : Object.entries(key);
     }
 }

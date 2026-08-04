@@ -29,6 +29,7 @@ jest.mock('../../../../extensionVariables', () => ({
             error: jest.fn(),
             trace: jest.fn(),
             debug: jest.fn(),
+            warn: jest.fn(),
         },
     },
 }));
@@ -75,7 +76,7 @@ describe('CopyPasteCollectionTask index phase', () => {
         const sourceIndexes = {
             copyIndexesTo: jest.fn().mockImplementation(async () => {
                 calls.push('indexes');
-                return { sourceIndexCount: 1, createdCount: 1, skippedCount: 0, renamedCount: 0 };
+                return { sourceIndexCount: 1, createdCount: 1, skippedCount: 0, renamedCount: 0, cancelled: false };
             }),
         } as unknown as DocumentDbIndexService;
         const reader = {
@@ -124,5 +125,29 @@ describe('CopyPasteCollectionTask index phase', () => {
         );
         expect(reader.streamDocuments).not.toHaveBeenCalled();
         expect(context.telemetry.properties.indexCopyFailed).toBe('true');
+    });
+
+    it('copies indexes when the source collection is empty', async () => {
+        const sourceIndexes = {
+            copyIndexesTo: jest.fn().mockResolvedValue({
+                sourceIndexCount: 1,
+                createdCount: 1,
+                skippedCount: 0,
+                renamedCount: 0,
+                cancelled: false,
+            }),
+        } as unknown as DocumentDbIndexService;
+        const reader = { streamDocuments: jest.fn() } as unknown as DocumentReader;
+        const writer = { streamDocuments: jest.fn() } as unknown as StreamingDocumentWriter;
+        const task = new TestCopyPasteCollectionTask(config, reader, writer, {
+            source: sourceIndexes,
+            target: {} as DocumentDbIndexService,
+            presentationDelayMs: 0,
+        });
+
+        await task.runWorkForTest(new AbortController().signal, createContext());
+
+        expect(sourceIndexes.copyIndexesTo).toHaveBeenCalled();
+        expect(reader.streamDocuments).not.toHaveBeenCalled();
     });
 });

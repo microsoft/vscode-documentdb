@@ -8,10 +8,7 @@ import * as vscode from 'vscode';
 import { ClustersClient } from '../../../../documentdb/ClustersClient';
 import { CredentialCache } from '../../../../documentdb/CredentialCache';
 import { ext } from '../../../../extensionVariables';
-import {
-    DocumentDbIndexService,
-    type IndexCopyResult,
-} from '../../data-api/indexes/DocumentDbIndexService';
+import { type DocumentDbIndexService, type IndexCopyResult } from '../../data-api/indexes/DocumentDbIndexService';
 import { type DocumentReader } from '../../data-api/types';
 import { type StreamingDocumentWriter, StreamingWriterError } from '../../data-api/writers/StreamingDocumentWriter';
 import { Task } from '../../taskService';
@@ -420,16 +417,26 @@ export class CopyPasteCollectionTask extends Task implements ResourceTrackingTas
             context.telemetry.measurements.createdIndexCount = result.createdCount;
             context.telemetry.measurements.skippedIndexCount = result.skippedCount;
             context.telemetry.measurements.renamedIndexCount = result.renamedCount;
+            context.telemetry.properties.indexCopyCancelled = result.cancelled ? 'true' : 'false';
         }
 
-        ext.outputChannel.trace(
-            vscode.l10n.t(
-                '[CopyPasteTask] Index copy completed: {0} created, {1} skipped, {2} renamed.',
-                result.createdCount.toString(),
-                result.skippedCount.toString(),
-                result.renamedCount.toString(),
-            ),
-        );
+        if (result.cancelled) {
+            ext.outputChannel.warn(
+                vscode.l10n.t(
+                    '[CopyPasteTask] Index copy was cancelled after {0} indexes were created. Created indexes remain on the target.',
+                    result.createdCount.toString(),
+                ),
+            );
+        } else {
+            ext.outputChannel.trace(
+                vscode.l10n.t(
+                    '[CopyPasteTask] Index copy completed: {0} created, {1} skipped, {2} renamed.',
+                    result.createdCount.toString(),
+                    result.skippedCount.toString(),
+                    result.renamedCount.toString(),
+                ),
+            );
+        }
 
         if (result.createdCount > 0 && !signal.aborted) {
             this.updateProgress(

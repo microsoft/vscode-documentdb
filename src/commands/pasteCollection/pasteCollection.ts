@@ -93,7 +93,7 @@ export async function pasteCollection(
         : undefined;
 
     let sourceCollectionSize: number | undefined = undefined;
-    let sourceIndexCount = 0;
+    let sourceIndexCount: number | undefined;
     try {
         const sourceClient = await ClustersClient.getClient(sourceNode.cluster.clusterId);
         sourceCollectionSize = await sourceClient.estimateDocumentCount(
@@ -116,9 +116,6 @@ export async function pasteCollection(
     } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
         context.telemetry.properties.sourceIndexCountError = errorMessage;
-        throw new Error(l10n.t('Failed to read indexes from the source collection: {0}', errorMessage), {
-            cause: error,
-        });
     }
 
     // Create wizard context

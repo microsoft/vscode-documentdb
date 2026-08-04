@@ -58,7 +58,7 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
             ' • ' +
                 l10n.t('Copy Indexes: {yesNoValue} ({indexCount} available)', {
                     yesNoValue: indexesSetting,
-                    indexCount: context.sourceIndexCount.toLocaleString(),
+                    indexCount: context.sourceIndexCount?.toLocaleString() ?? l10n.t('count unavailable'),
                 }),
             '',
             warningText,
@@ -85,7 +85,9 @@ export class ConfirmOperationStep extends AzureWizardPromptStep<PasteCollectionW
         context.telemetry.properties.operationType = context.isTargetExistingCollection ? 'merge' : 'paste';
         context.telemetry.properties.conflictResolutionStrategy = context.conflictResolutionStrategy;
         context.telemetry.properties.copyIndexesEnabled = context.copyIndexes ? 'true' : 'false';
-        context.telemetry.measurements.sourceIndexCount = context.sourceIndexCount;
+        if (context.sourceIndexCount !== undefined) {
+            context.telemetry.measurements.sourceIndexCount = context.sourceIndexCount;
+        }
 
         // Record measurements for operation scope
         if (context.sourceCollectionSize) {
