@@ -120,8 +120,15 @@ export const TopologyCard = ({ topology, metadataShape }: TopologyCardProps): JS
                 </div>
             ) : (
                 <ul className="topologyServers">
-                    {topology.servers.map((server) => (
-                        <li key={server.address} className="topologyServer">
+                    {/*
+                     * Keyed by position as well as address. A server is free to advertise the
+                     * same host twice — `hello.hosts` is not promised to be a set, and a
+                     * misconfigured replica set can report two members under one name — and a
+                     * bare address key made React drop or duplicate rows for exactly the
+                     * cluster whose topology most needs reading.
+                     */}
+                    {topology.servers.map((server, index) => (
+                        <li key={`${index}:${server.address}`} className="topologyServer">
                             <span className="topologyServerAddress" title={server.address}>
                                 {server.address}
                             </span>
@@ -164,8 +171,8 @@ export const TopologyCard = ({ topology, metadataShape }: TopologyCardProps): JS
                 <>
                     <div className="topologySectionLabel">{l10n.t('Shards')}</div>
                     <ul className="topologyServers">
-                        {topology.shards.map((shard) => (
-                            <li key={shard.name} className="topologyServer">
+                        {topology.shards.map((shard, index) => (
+                            <li key={`${index}:${shard.name}`} className="topologyServer">
                                 <span className="topologyServerAddress" title={shard.host}>
                                     {shard.name}
                                 </span>

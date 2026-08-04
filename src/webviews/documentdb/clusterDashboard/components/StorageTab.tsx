@@ -20,7 +20,7 @@ import {
 } from '@fluentui/react-components';
 import { ArrowClockwiseRegular, ChevronDownRegular, ChevronRightRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
-import { Fragment, useMemo, useState, type JSX } from 'react';
+import { Fragment, useMemo, type JSX } from 'react';
 
 import { type ClusterDatabaseStorage, type ClusterStorageStats } from '../../../../documentdb/utils/getClusterHealth';
 import { formatCount } from '../../collectionView/components/queryInsightsTab/components/metricsRow';
@@ -28,18 +28,35 @@ import { formatBytes } from '../formatUtils';
 import { CollectionsPanel } from './CollectionsPanel';
 import { RelativeSize } from './RelativeSize';
 
+/** Columns the table can be ordered by. */
+export type SortColumn = 'name' | 'sizeOnDiskBytes' | 'dataSizeBytes' | 'indexSizeBytes' | 'collections' | 'objects';
+
+export interface SortState {
+    column: SortColumn;
+    direction: 'ascending' | 'descending';
+}
+
+/**
+ * How the reader has arranged the list: the order, the filter, and which databases they
+ * opened.
+ *
+ * Owned by the dashboard rather than this component because switching to Operations and back
+ * unmounts the tab — which discarded the sort, the filter text, and every expanded row. The
+ * Collection View's index list hoists the same three pieces of state to its parent for the
+ * same reason (there, a manual refresh swaps the table for a skeleton).
+ */
+export interface StorageTabViewState {
+    sort: SortState;
+    filterText: string;
+    expanded: ReadonlySet<string>;
+}
+
 export interface StorageTabProps {
     storageStats: ClusterStorageStats | null;
     isRefreshing: boolean;
     onRefresh: () => void;
-}
-
-/** Columns the table can be ordered by. */
-type SortColumn = 'name' | 'sizeOnDiskBytes' | 'dataSizeBytes' | 'indexSizeBytes' | 'collections' | 'objects';
-
-interface SortState {
-    column: SortColumn;
-    direction: 'ascending' | 'descending';
+    viewState: StorageTabViewState;
+    onViewStateChange: (next: StorageTabViewState) => void;
 }
 
 /**
@@ -50,6 +67,13 @@ interface SortState {
  * them read every row to find it.
  */
 const DEFAULT_SORT: SortState = { column: 'sizeOnDiskBytes', direction: 'descending' };
+
+/** The arrangement a freshly-opened dashboard starts from. */
+export const DEFAULT_STORAGE_VIEW_STATE: StorageTabViewState = {
+    sort: DEFAULT_SORT,
+    filterText: '',
+    expanded: new Set<string>(),
+};
 
 /** Numeric columns sort largest-first on the first click; the name column sorts A→Z. */
 function defaultDirectionFor(column: SortColumn): SortState['direction'] {
@@ -121,15 +145,17 @@ function SortableHeader({
     );
 }
 
-export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTabProps): JSX.Element => {
-    const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
-    const [filterText, setFilterText] = useState('');
-    /**
-     * Names of the databases whose collection list is open. Held here rather than in the row
-     * so a re-sort, a filter change, or a storage refresh cannot collapse what the reader
-     * opened.
-     */
-    const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+export const StorageTab = ({
+    storageStats,
+    isRefreshing,
+    onRefresh,
+    viewState,
+    onViewStateChange,
+}: StorageTabProps): JSX.Element => {
+    const { sort, filterText, expanded } = viewState;
+
+    const setSort = (next: SortState): void => onViewStateChange({ ...viewState, sort: next });
+    const setFilterText = (next: string): void => onViewStateChange({ ...viewState, filterText: next });
 
     const databases = useMemo(() => {
         if (storageStats === null) {
@@ -154,20 +180,19 @@ export const StorageTab = ({ storageStats, isRefreshing, onRefresh }: StorageTab
     }
 
     const toggleSort = (column: SortColumn): void =>
-        setSort((current) =>
-            current.column === column
-                ? { column, direction: current.direction === 'ascending' ? 'descending' : 'ascending' }
+        setSort(
+            sort.column === column
+                ? { column, direction: sort.direction === 'ascending' ? 'descending' : 'ascending' }
                 : { column, direction: defaultDirectionFor(column) },
         );
 
-    const toggleExpanded = (name: string): void =>
-        setExpanded((current) => {
-            const next = new Set(current);
-            if (!next.delete(name)) {
-                next.add(name);
-            }
-            return next;
-        });
+    const toggleExpanded = (name: string): void => {
+        const next = new Set(expanded);
+        if (!next.delete(name)) {
+            next.add(name);
+        }
+        onViewStateChange({ ...viewState, expanded: next });
+    };
 
     // Scaled against the largest *visible* database so the bars stay meaningful while filtered.
     const largestDatabaseBytes = databases.reduce(

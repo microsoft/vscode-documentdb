@@ -26,7 +26,7 @@ import { DashboardFeedback } from './components/DashboardFeedback';
 import { DashboardHeader, type ConnectionState } from './components/DashboardHeader';
 import { OperationsTab } from './components/OperationsTab';
 import { StatusStrip } from './components/StatusStrip';
-import { StorageTab } from './components/StorageTab';
+import { DEFAULT_STORAGE_VIEW_STATE, StorageTab, type StorageTabViewState } from './components/StorageTab';
 import { TopologyCard } from './components/TopologyCard';
 
 type DashboardTab = 'data' | 'operations' | 'activity';
@@ -62,6 +62,14 @@ export const ClusterDashboard = (): JSX.Element => {
     // The inventory is the landing view: the dashboard is a map of the cluster's data
     // first, and a monitoring surface only where the server can actually support one.
     const [selectedTab, setSelectedTab] = useState<DashboardTab>('data');
+    /**
+     * How the reader has arranged the Data tab — order, filter, expanded rows.
+     *
+     * Held here rather than inside the tab because selecting Operations unmounts it, which
+     * silently discarded all three. Glancing at the running operations and coming back
+     * should not undo the arrangement the reader built to find something.
+     */
+    const [storageViewState, setStorageViewState] = useState<StorageTabViewState>(DEFAULT_STORAGE_VIEW_STATE);
 
     /**
      * Guards every asynchronous state write. The polling closures outlive a single render,
@@ -321,6 +329,8 @@ export const ClusterDashboard = (): JSX.Element => {
                                 storageStats={storageStats}
                                 isRefreshing={isRefreshingStorage}
                                 onRefresh={() => void loadStorageStats()}
+                                viewState={storageViewState}
+                                onViewStateChange={setStorageViewState}
                             />
                         )}
                         {effectiveTab === 'operations' && (
