@@ -11,7 +11,6 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import {
     getDockerExecutionTargetKey,
-    getDockerLastCheckedAtMs,
     getDockerReadinessPresentation,
     isDockerArchitectureCompatible,
 } from './dockerReadinessPresentation';
@@ -256,12 +255,117 @@ describe('getDockerReadinessPresentation', () => {
             recoveryNote: undefined,
             guide: 'dockerTroubleshooting',
             startLabel: undefined,
+            detail: [
+                { kind: 'provider', provider: 'unknown', version: undefined },
+                { kind: 'executionTarget', target: 'local' },
+            ],
             showInstall: false,
             showStartDockerProvider: false,
             showCopyCommand: false,
             showContinueAnyway: false,
             showRetry: false,
             showViewOutput: false,
+        });
+    });
+});
+
+describe('getDockerReadinessPresentation detail line', () => {
+    it('proves which Docker was found on the success path', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({
+                    outcome: 'ready',
+                    provider: 'dockerEngine',
+                    cliVersion: '27.5.1',
+                    osType: 'linux',
+                    daemonArchitecture: 'amd64',
+                    executionTarget: 'wsl',
+                }),
+            ).detail,
+        ).toEqual([
+            { kind: 'provider', provider: 'dockerEngine', version: '27.5.1' },
+            { kind: 'platform', osType: 'linux', architecture: 'amd64' },
+            { kind: 'executionTarget', target: 'wsl' },
+        ]);
+    });
+
+    it('omits an unknown platform rather than emitting a placeholder', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({ outcome: 'ready', provider: 'dockerDesktop', cliVersion: '27.5.1' }),
+            ).detail,
+        ).toEqual([
+            { kind: 'provider', provider: 'dockerDesktop', version: '27.5.1' },
+            { kind: 'executionTarget', target: 'local' },
+        ]);
+    });
+
+    it('keeps a partially-known platform segment', () => {
+        expect(
+            getDockerReadinessPresentation(readiness({ outcome: 'ready', daemonArchitecture: 'arm64' })).detail,
+        ).toContainEqual({ kind: 'platform', osType: undefined, architecture: 'arm64' });
+    });
+
+    it('reports a missing CLI as the whole story', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({ failureKind: 'cliMissing', cliInstalled: false, cliVersion: undefined }),
+            ).detail,
+        ).toEqual([{ kind: 'failure', failure: 'noCli' }]);
+    });
+
+    it('distinguishes a found CLI with a denied daemon from a missing CLI', () => {
+        expect(
+            getDockerReadinessPresentation(readiness({ failureKind: 'permissionDenied', cliVersion: '27.5.1' })).detail,
+        ).toEqual([
+            { kind: 'cli', version: '27.5.1' },
+            { kind: 'failure', failure: 'accessDenied' },
+        ]);
+    });
+
+    it('states the established provider before an unreachable daemon', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({ failureKind: 'daemonUnavailable', provider: 'dockerDesktop', cliVersion: '27.5.1' }),
+            ).detail,
+        ).toEqual([
+            { kind: 'cli', version: '27.5.1' },
+            { kind: 'provider', provider: 'dockerDesktop' },
+            { kind: 'failure', failure: 'notRunning' },
+        ]);
+    });
+
+    it('names the daemon explicitly when no provider was identified', () => {
+        expect(getDockerReadinessPresentation(readiness({ failureKind: 'daemonUnavailable' })).detail).toEqual([
+            { kind: 'cli', version: undefined },
+            { kind: 'failure', failure: 'daemonNotRunning' },
+        ]);
+    });
+
+    it('carries the WSL integration refinement into the failure segment', () => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({ failureKind: 'daemonUnavailable', environment: 'wsl', provider: 'dockerDesktop' }),
+            ).detail,
+        ).toContainEqual({ kind: 'failure', failure: 'notAvailableInWsl' });
+    });
+
+    it.each([
+        [
+            'probeTimedOut',
+            { outcome: 'indeterminate' as const, failureKind: 'probeTimedOut' as const },
+            'checkTimedOut',
+        ],
+        ['unknown', { outcome: 'indeterminate' as const, failureKind: 'unknown' as const }, 'daemonUnreachable'],
+        ['contextUnavailable', { failureKind: 'contextUnavailable' as const }, 'contextUnavailable'],
+        ['endpointUnreachable', { failureKind: 'endpointUnreachable' as const }, 'endpointUnreachable'],
+        ['windowsContainers', { failureKind: 'windowsContainers' as const }, 'windowsContainers'],
+        ['unsupportedHost', { failureKind: 'unsupportedHost' as const }, 'unsupportedHost'],
+        ['daemonStarting', { failureKind: 'daemonStarting' as const }, 'daemonStarting'],
+    ])('ends the %s line with its failure fact', (_name, overrides, failure) => {
+        expect(getDockerReadinessPresentation(readiness(overrides)).detail.at(-1)).toEqual({
+            kind: 'failure',
+            failure,
         });
     });
 });
@@ -273,24 +377,6 @@ describe('getDockerExecutionTargetKey', () => {
             expect(getDockerExecutionTargetKey(target)).toBe(target);
         },
     );
-});
-
-describe('getDockerLastCheckedAtMs', () => {
-    it('uses the provider record time for remembered evidence', () => {
-        expect(
-            getDockerLastCheckedAtMs(
-                readiness({
-                    checkedAtMs: 2_000,
-                    providerEvidence: 'rememberedProvider',
-                    providerRecordedAtMs: 500,
-                }),
-            ),
-        ).toBe(500);
-    });
-
-    it('uses the current check time for live evidence', () => {
-        expect(getDockerLastCheckedAtMs(readiness({ checkedAtMs: 2_000, providerEvidence: 'liveDaemon' }))).toBe(2_000);
-    });
 });
 
 describe('isDockerArchitectureCompatible', () => {
