@@ -13,6 +13,7 @@ import {
     GenericMetric,
     MetricsRow,
 } from '../../collectionView/components/queryInsightsTab/components/metricsRow';
+import { PLACEHOLDER } from '../clusterFacts';
 import { formatBytes } from '../formatUtils';
 
 export interface StatusStripProps {
@@ -31,7 +32,15 @@ export interface StatusStripProps {
  * "not reported" placeholder.
  */
 export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => {
-    const NOT_REPORTED = l10n.t('Not reported by this server');
+    /**
+     * What a tile shows when the server did not report the figure.
+     *
+     * The em dash, not a sentence: these values render at 28px, so "Not reported by this
+     * server" was truncated to "Not reported…" in every tile — larger, louder, and less
+     * informative than the mark the tables already use for the same fact. The tile's tooltip
+     * carries the explanation.
+     */
+    const NOT_REPORTED = PLACEHOLDER;
 
     /** Sums a per-database figure, treating "no database reported it" as null. */
     const sumAcrossDatabases = (read: (db: ClusterStorageStats['databases'][number]) => number | null) =>
@@ -50,12 +59,21 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
     const totalIndexes = sumAcrossDatabases((database) => database.indexes);
     const totalIndexBytes = sumAcrossDatabases((database) => database.indexSizeBytes);
 
+    // `undefined` while loading, `null` when the server answered nothing — the two states the
+    // metric cards distinguish, and the reason these are not collapsed into a string here.
+    const storageUsed =
+        storageStats === null
+            ? undefined
+            : storageStats.totalSizeBytes === null
+              ? null
+              : formatBytes(storageStats.totalSizeBytes);
+
     const databaseSummary =
         storageStats === null
             ? undefined
             : l10n.t('{databases} / {collections}', {
                   databases: String(storageStats.databases.length),
-                  collections: totalCollections === null ? '—' : String(totalCollections),
+                  collections: totalCollections === null ? PLACEHOLDER : String(totalCollections),
               });
 
     // Same `a / b` shape as the databases tile beside it: the label names the two figures in
@@ -65,7 +83,7 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
         storageStats === null
             ? undefined
             : totalIndexes === null
-              ? NOT_REPORTED
+              ? null
               : l10n.t('{count} / {size}', {
                     count: String(totalIndexes),
                     size: formatBytes(totalIndexBytes),
@@ -77,11 +95,10 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
                 <div className="statusTile">
                     <GenericMetric
                         label={l10n.t('Storage Used')}
-                        value={
-                            storageStats === null ? undefined : formatBytes(storageStats.totalSizeBytes, NOT_REPORTED)
-                        }
+                        value={storageUsed}
+                        nullValuePlaceholder={NOT_REPORTED}
                         tooltipExplanation={l10n.t(
-                            'Total size on disk reported for all user databases. This is the data footprint, not the provisioned disk.',
+                            'Total size on disk reported for all user databases. This is the data footprint, not the provisioned disk. A dash means this server did not report it.',
                         )}
                     />
                 </div>
@@ -91,7 +108,9 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
                         label={l10n.t('Documents')}
                         value={totalDocuments}
                         nullValuePlaceholder={NOT_REPORTED}
-                        tooltipExplanation={l10n.t('Total documents across all user databases.')}
+                        tooltipExplanation={l10n.t(
+                            'Total documents across all user databases. A dash means this server did not report it.',
+                        )}
                     />
                 </div>
 
@@ -99,6 +118,7 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
                     <GenericMetric
                         label={l10n.t('Databases / Collections')}
                         value={databaseSummary}
+                        nullValuePlaceholder={NOT_REPORTED}
                         tooltipExplanation={l10n.t('Number of user databases and the collections they contain.')}
                     />
                 </div>
@@ -107,8 +127,9 @@ export const StatusStrip = ({ storageStats }: StatusStripProps): JSX.Element => 
                     <GenericMetric
                         label={l10n.t('Indexes / Size')}
                         value={indexSummary}
+                        nullValuePlaceholder={NOT_REPORTED}
                         tooltipExplanation={l10n.t(
-                            'Number of indexes across all user databases, and their total size.',
+                            'Number of indexes across all user databases, and their total size. A dash means this server did not report it.',
                         )}
                     />
                 </div>

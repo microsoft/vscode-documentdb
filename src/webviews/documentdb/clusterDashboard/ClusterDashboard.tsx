@@ -19,6 +19,7 @@ import { useTrpcClient } from '../../_integration/useTrpcClient';
 import './clusterDashboard.scss';
 import { type ClusterDashboardWebviewConfigurationType } from './clusterDashboardController';
 import { type ClusterDashboardInfo } from './clusterDashboardRouter';
+import { describeTopology } from './clusterFacts';
 import { ActivityTab } from './components/ActivityTab';
 import { ClusterFactsCard } from './components/ClusterFactsCard';
 import { DashboardFeedback } from './components/DashboardFeedback';
@@ -336,7 +337,10 @@ export const ClusterDashboard = (): JSX.Element => {
                             latestSample={latestSample}
                             azure={configuration.azure}
                         />
-                        <TopologyCard topology={topology} />
+                        <TopologyCard
+                            topology={topology}
+                            metadataShape={clusterInfo === null ? undefined : describeTopology(clusterInfo.metadata)}
+                        />
                         {/*
                          * Last in the column, like Query Insights': the reader is asked what
                          * they think only after everything there is to look at.

@@ -8,15 +8,26 @@ import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 
 import { type ClusterHostFacts, type ClusterTopology } from '../../../../documentdb/utils/getClusterHealth';
+import { PLACEHOLDER } from '../clusterFacts';
 import { formatUptime } from '../formatUtils';
 
 export interface TopologyCardProps {
     /** `null` while the one-shot probe is in flight. */
     topology: ClusterTopology | null;
+    /**
+     * The shape read from the one-shot cluster metadata, used only when the probe itself
+     * could not determine one.
+     *
+     * This card is the single owner of "what shape is this cluster": the facts card used to
+     * state it too, from this very string, and the two disagreed whenever the probe and the
+     * metadata read `hello` differently. The fallback keeps that reading available without
+     * putting a second, competing answer on screen.
+     */
+    metadataShape?: string;
 }
 
 /** One-line summary of what kind of deployment answered, e.g. `Replica set · rs0`. */
-function describeKind(topology: ClusterTopology): string {
+function describeKind(topology: ClusterTopology, metadataShape: string | undefined): string {
     switch (topology.kind) {
         case 'sharded':
             return l10n.t('Sharded cluster');
@@ -27,7 +38,9 @@ function describeKind(topology: ClusterTopology): string {
         case 'standalone':
             return l10n.t('Standalone server');
         default:
-            return l10n.t('Not reported by this server');
+            return metadataShape !== undefined && metadataShape !== PLACEHOLDER
+                ? metadataShape
+                : l10n.t('Not reported by this server');
     }
 }
 
@@ -67,7 +80,7 @@ function roleAppearance(role: string): 'brand' | 'informative' {
  * never done is inventing structure the server did not report — an empty card is the correct
  * answer for a platform that hides its topology.
  */
-export const TopologyCard = ({ topology }: TopologyCardProps): JSX.Element => {
+export const TopologyCard = ({ topology, metadataShape }: TopologyCardProps): JSX.Element => {
     if (topology === null) {
         return (
             <Card className="summaryCard topologyCard">
@@ -99,7 +112,7 @@ export const TopologyCard = ({ topology }: TopologyCardProps): JSX.Element => {
                 </Badge>
             </div>
 
-            <div className="topologyKind">{describeKind(topology)}</div>
+            <div className="topologyKind">{describeKind(topology, metadataShape)}</div>
 
             {topology.servers.length === 0 ? (
                 <div className="topologyEmpty">

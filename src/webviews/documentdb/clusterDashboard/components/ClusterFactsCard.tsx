@@ -13,14 +13,7 @@ import { regionToDisplayName } from '../../../../utils/regionToDisplayName';
 import { GenericCell, SummaryCard } from '../../collectionView/components/queryInsightsTab/components/summaryCard';
 import { type ClusterDashboardAzureInfo } from '../clusterDashboardController';
 import { type ClusterDashboardInfo } from '../clusterDashboardRouter';
-import {
-    describeCompute,
-    describeProduct,
-    describeTopology,
-    extractHostName,
-    formatEngineVersions,
-    PLACEHOLDER,
-} from '../clusterFacts';
+import { describeCompute, describeProduct, extractHostName, formatEngineVersions, PLACEHOLDER } from '../clusterFacts';
 import { formatUptime } from '../formatUtils';
 
 export interface ClusterFactsCardProps {
@@ -99,12 +92,14 @@ export const ClusterFactsCard = ({ clusterInfo, latestSample, azure }: ClusterFa
                 <GenericCell key={fact.label} label={fact.label} value={fact.value} />
             ))}
             {/*
-             * `topology_type` is `hello.msg`, which only mongos sets ('isdbgrid'); every
-             * standalone, emulator, and replica-set primary would render the literal word
-             * 'unknown', and a mongos would render a raw wire token. Report the server count
-             * instead, which is meaningful everywhere.
+             * No Topology row here. The card below owns that question and answers it from a
+             * live probe that can name the members; this card could only restate a count
+             * derived from the one-shot metadata. Two derivations of one fact, taken at
+             * different moments, disagree — a single-member reply read as "Replica set
+             * (1 server)" here while the probe called it "Standalone server" there. The
+             * Topology card falls back to this metadata reading when its own probe comes
+             * back empty, so nothing is lost by removing the row.
              */}
-            <GenericCell label={l10n.t('Topology')} value={orLoading(describeTopology(metadata))} />
             {/*
              * Kept even when empty, unlike the optional rows above: `uptimeSeconds` comes
              * from the live sample rather than the one-shot metadata, so it can arrive on a

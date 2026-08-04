@@ -84,6 +84,20 @@
         gap: 8px;
     }
 
+    // On a very narrow panel the badges are `flex: 0 0 auto` and take the row, leaving the
+    // cluster name a stub ("product…"). Below this width they move to their own line so the
+    // name — the thing the reader came for — gets the full width instead.
+    @media (max-width: 560px) {
+        .dashboardHeader {
+            flex-wrap: wrap;
+        }
+
+        .dashboardHeaderBadges {
+            flex: 1 0 100%;
+            justify-content: flex-start;
+        }
+    }
+
     .dashboardHeaderLatency {
         font-size: var(--fontSizeBase200);
         color: var(--colorNeutralForeground3);
