@@ -8,6 +8,7 @@ import {
     AccordionHeader,
     AccordionItem,
     AccordionPanel,
+    Badge,
     Button,
     Field,
     Input,
@@ -32,6 +33,7 @@ import {
     ErrorCircleFilled,
     InfoRegular,
     RocketRegular,
+    WarningRegular,
 } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
@@ -128,10 +130,16 @@ const useStyles = makeStyles({
         display: 'flex',
         alignItems: 'flex-start',
         gap: '8px',
-        maxWidth: '760px',
         color: tokens.colorNeutralForeground2,
     },
-    footerNoteIcon: { color: tokens.colorNeutralForeground3, fontSize: '16px', flexShrink: 0, marginTop: '2px' },
+    // Block layout drops the inline descender space, so the glyph shares the text's first line box.
+    footerNoteIcon: {
+        color: tokens.colorNeutralForeground3,
+        display: 'block',
+        fontSize: '16px',
+        height: tokens.lineHeightBase200,
+        flexShrink: 0,
+    },
     footerElevated: {
         borderTopColor: tokens.colorNeutralStroke2,
         boxShadow: '0 -2px 6px rgba(0, 0, 0, 0.08)',
@@ -139,17 +147,8 @@ const useStyles = makeStyles({
     introCopy: { display: 'flex', flexDirection: 'column', gap: '8px' },
     planSection: { display: 'flex', flexDirection: 'column', gap: '12px' },
     planList: { display: 'flex', flexDirection: 'column', gap: '2px', margin: 0, padding: 0, listStyle: 'none' },
-    planItem: { display: 'grid', gridTemplateColumns: '22px minmax(0, 1fr)', gap: '0 10px', padding: '7px 0' },
-    planIndex: {
-        display: 'grid',
-        placeItems: 'center',
-        width: '20px',
-        height: '20px',
-        borderRadius: '50%',
-        backgroundColor: tokens.colorNeutralBackground4,
-        color: tokens.colorNeutralForeground2,
-        fontSize: '11px',
-    },
+    planItem: { display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', gap: '0 10px', padding: '7px 0' },
+    planBadge: { justifySelf: 'start', alignSelf: 'start' },
     planCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
     settingsTable: {
         display: 'grid',
@@ -217,8 +216,20 @@ const useStyles = makeStyles({
     stagePending: { color: tokens.colorNeutralForeground4, fontSize: '18px' },
     dockerStatus: { display: 'flex', flexDirection: 'column', gap: '10px' },
     messageBody: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '4px' },
-    recoveryCommandLine: { overflowWrap: 'anywhere' },
+    recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    // Sits inside the error bar, so it reads as a neutral surface outlined in the danger hue
+    // rather than a second alert nested inside the first.
+    recoveryCommandLine: {
+        display: 'block',
+        padding: '6px 8px',
+        borderRadius: tokens.borderRadiusSmall,
+        backgroundColor: tokens.colorNeutralBackground1,
+        border: `1px solid ${tokens.colorStatusDangerBorder1}`,
+        fontFamily: tokens.fontFamilyMonospace,
+        fontSize: tokens.fontSizeBase300,
+        color: tokens.colorNeutralForeground1,
+        overflowWrap: 'anywhere',
+    },
     waitingStatus: { display: 'flex', alignItems: 'center', gap: '8px' },
     dockerAccordionHeader: { minHeight: '30px' },
     dockerAccordionPanel: { paddingTop: '4px' },
@@ -381,32 +392,32 @@ const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
 };
 
 const DOCKER_GUIDES: Readonly<Record<DockerGuideKey, { readonly label: string; readonly href: string }>> = {
-    install: { label: l10n.t('Install Docker'), href: 'https://docs.docker.com/engine/install/' },
+    install: { label: l10n.t('Open Docker install guide'), href: 'https://docs.docker.com/engine/install/' },
     linuxPostInstall: {
-        label: l10n.t('Linux setup guide'),
+        label: l10n.t('Open Linux setup guide'),
         href: 'https://docs.docker.com/engine/install/linux-postinstall/',
     },
     dockerTroubleshooting: {
-        label: l10n.t('Docker troubleshooting'),
+        label: l10n.t('Open Docker troubleshooting guide'),
         href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
     },
     dockerContexts: {
-        label: l10n.t('Docker context guide'),
+        label: l10n.t('Open Docker context guide'),
         href: 'https://docs.docker.com/engine/manage-resources/contexts/',
     },
     wslIntegration: {
-        label: l10n.t('WSL integration guide'),
+        label: l10n.t('Open WSL integration guide'),
         href: 'https://docs.docker.com/desktop/features/wsl/',
     },
     remoteDocker: {
-        label: l10n.t('Remote Docker guide'),
+        label: l10n.t('Open remote Docker guide'),
         href: 'https://docs.docker.com/engine/security/protect-access/',
     },
     linuxContainers: {
-        label: l10n.t('Linux containers guide'),
+        label: l10n.t('Open Linux containers guide'),
         href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
     },
-    learnMore: { label: l10n.t('Learn more'), href: 'https://docs.docker.com/engine/install/' },
+    learnMore: { label: l10n.t('Open Docker documentation'), href: 'https://docs.docker.com/engine/install/' },
 };
 
 const DOCKER_START_LABELS: Readonly<Record<DockerStartLabelKey, string>> = {
@@ -1322,9 +1333,15 @@ export const LocalQuickStart = (): JSX.Element => {
                 <ol className={styles.planList}>
                     {PLAN_ITEMS.map((item, index) => (
                         <li className={styles.planItem} key={item.label}>
-                            <span aria-hidden className={styles.planIndex}>
+                            <Badge
+                                aria-hidden
+                                appearance="tint"
+                                color="informative"
+                                shape="circular"
+                                className={styles.planBadge}
+                            >
                                 {index + 1}
-                            </span>
+                            </Badge>
                             <div className={styles.planCopy}>
                                 <Text>{item.label}</Text>
                                 <Text size={200} className={styles.muted}>
@@ -1493,7 +1510,7 @@ export const LocalQuickStart = (): JSX.Element => {
 
     const dockerStatusBlock = dockerProblem && dockerPresentation && (
         <div className={styles.dockerStatus}>
-            <MessageBar intent="error" layout="multiline">
+            <MessageBar intent="error" layout="multiline" icon={<ErrorCircleFilled />}>
                 <MessageBarBody className={styles.messageBody}>
                     <div>
                         <MessageBarTitle>
@@ -1509,22 +1526,15 @@ export const LocalQuickStart = (): JSX.Element => {
                         <div className={styles.recoveryCommand}>
                             <code className={styles.recoveryCommandLine}>{recoveryCommand.commandLine}</code>
                             {dockerPresentation.recoveryNote && (
-                                <Text size={200} className={styles.muted}>
-                                    {DOCKER_RECOVERY_NOTES[dockerPresentation.recoveryNote]}
-                                </Text>
+                                <Text>{DOCKER_RECOVERY_NOTES[dockerPresentation.recoveryNote]}</Text>
                             )}
                         </div>
                     )}
                     {startingDocker && (
                         <div className={styles.waitingStatus}>
                             <Spinner size="extra-tiny" aria-hidden />
-                            <Text size={200}>{l10n.t('Waiting {0}', formatElapsed(dockerWaitElapsedMs))}</Text>
+                            <Text>{l10n.t('Waiting {0}', formatElapsed(dockerWaitElapsedMs))}</Text>
                         </div>
-                    )}
-                    {!dockerPresentation.showInstall && (
-                        <Link onClick={() => handleOpenGuide(DOCKER_GUIDES[dockerPresentation.guide].href)}>
-                            {DOCKER_GUIDES[dockerPresentation.guide].label}
-                        </Link>
                     )}
                 </MessageBarBody>
                 <MessageBarActions>
@@ -1548,6 +1558,14 @@ export const LocalQuickStart = (): JSX.Element => {
                     {recoveryCommand && (
                         <Button appearance="secondary" onClick={() => handleCopyRecoveryCommand(recoveryCommand.id)}>
                             {l10n.t('Copy command')}
+                        </Button>
+                    )}
+                    {!dockerPresentation.showInstall && (
+                        <Button
+                            appearance="secondary"
+                            onClick={() => handleOpenGuide(DOCKER_GUIDES[dockerPresentation.guide].href)}
+                        >
+                            {DOCKER_GUIDES[dockerPresentation.guide].label}
                         </Button>
                     )}
                     {dockerPresentation.showContinueAnyway && (
@@ -1660,7 +1678,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 ))}
             </div>
             {checkReadiness?.platformSupported === false && (
-                <MessageBar intent="warning">
+                <MessageBar intent="warning" icon={<WarningRegular />}>
                     <MessageBarBody>
                         {l10n.t('DocumentDB Local images are published for x64 and arm64 only.')}
                     </MessageBarBody>
@@ -1677,7 +1695,11 @@ export const LocalQuickStart = (): JSX.Element => {
                 </MessageBar>
             )}
             {phase === 'failed' && !dockerProblem && !canContinueSetup && (
-                <MessageBar intent={timedOut ? 'warning' : 'error'} layout="multiline">
+                <MessageBar
+                    intent={timedOut ? 'warning' : 'error'}
+                    layout="multiline"
+                    icon={timedOut ? <WarningRegular /> : <ErrorCircleFilled />}
+                >
                     <MessageBarBody>
                         {timedOut
                             ? (errorMessage ??

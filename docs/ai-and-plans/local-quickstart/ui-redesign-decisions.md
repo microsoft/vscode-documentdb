@@ -272,7 +272,7 @@ The Introduction sub-heading is `What will happen in the Set up step`, not `What
 
 ### The expectation note lives in the footer
 
-The pre-launch note moved out of the Configure page body and into the footer, directly above the primary button, capped at the same `760px` column so it aligns with the page content. It is no longer page content that can scroll away from the button it describes — it is part of the commit point. This deliberately increases footer height.
+The pre-launch note moved out of the Configure page body and into the footer, directly above the primary button. It is no longer page content that can scroll away from the button it describes — it is part of the commit point. This deliberately increases footer height. The note runs the full footer width rather than being capped to the content column, and its info icon shares the text's first line box so the two align exactly.
 
 The same mechanism now labels the failure page: above `Retry setup` the footer says that retrying runs every step again from the beginning. The full-restart semantics of the big button were previously implicit in the word "Retry"; now they are stated.
 
@@ -297,6 +297,20 @@ When a recheck passes, the check stage flips to done with its ready evidence lin
 ### `More details` was too generic
 
 The accordion is now `What the Docker check found`. It holds the detected problem, CLI, daemon, provider, platform, endpoint, and execution target — all facts from one check. The old title told the reader there was more without saying more about what.
+
+### The error bar follows the Atlas treatment
+
+The Docker error `MessageBar` takes an explicit `icon={<ErrorCircleFilled />}` and warning bars take `<WarningRegular />`, matching `AtlasCredentialsView`. Success bars keep the Fluent default, as Atlas does.
+
+Inside the bar:
+
+- The recovery command is a real code chip — neutral surface, `colorStatusDangerBorder1` outline, `fontFamilyMonospace`. Previously it inherited a flat grey `code` background that punched a neutral block through the error tint; a danger-tinted fill was tried and read as a second alert nested inside the first.
+- Supplementary notes such as `Group membership applies to new login sessions only.` render at the default text size. They were `size={200}` and muted, which stacked a third type size into a bar that already has a title and body.
+- The documentation link became an action button with a full label — `Open Linux setup guide` rather than `Linux setup guide` — so every control in the bar is a button and every label says what it does.
+
+### The plan list uses Fluent primitives
+
+The step numbers are Fluent `Badge` (`shape="circular"`, `appearance="tint"`) instead of a hand-rolled CSS circle. The list stays a semantic `<ol>` laid out with `makeStyles`: Fluent v9 has no stable list primitive (only `@fluentui/react-list-preview`, which this repo does not depend on), and the Atlas view lays its own lists out the same way.
 
 ### What still needs to be remembered, and what does not
 
