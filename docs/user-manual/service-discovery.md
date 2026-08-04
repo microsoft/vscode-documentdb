@@ -28,6 +28,7 @@ Currently, the following service discovery plugins are available:
 - **[Azure VMs (DocumentDB)](./service-discovery-azure-vms)**
 - **[Kubernetes](./service-discovery-kubernetes)**
   - [Kubernetes getting started and test lab](./service-discovery-kubernetes-getting-started)
+- **[MongoDB Atlas](./service-discovery-mongodb-atlas)**
 
 See each plugin guide for provider-specific setup, filtering, credential handling, and troubleshooting steps.
 
