@@ -25,11 +25,10 @@ import {
     TableBody,
     TableCell,
     TableCellLayout,
-    TableHeader,
-    TableHeaderCell,
     TableRow,
     Text,
     tokens,
+    Tooltip,
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
@@ -44,14 +43,20 @@ import {
     RocketRegular,
     WarningRegular,
 } from '@fluentui/react-icons';
+import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
 import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     type AdvancedQuickStartOptions,
+    type DockerEndpointKind,
     type DockerEndpointProbe,
     type DockerFailureKind,
+    type DockerHostEnvironment,
+    type DockerPermissionDetail,
     type DockerProvider,
+    type DockerProviderEvidence,
     type DockerReadiness,
+    type DockerReadinessOutcome,
     type DockerRecoveryCommand,
     type DockerStatusResult,
     PROVISION_STAGES,
@@ -72,6 +77,7 @@ import {
     type DockerDetailSegment,
     type DockerGuidanceKey,
     type DockerGuideKey,
+    type DockerReadinessPresentation,
     type DockerReadinessPresentationState,
     type DockerRecoveryNoteKey,
     type DockerStartLabelKey,
@@ -118,6 +124,9 @@ const useStyles = makeStyles({
     muted: { color: tokens.colorNeutralForeground2 },
     section: { display: 'flex', flexDirection: 'column', gap: '12px' },
     sectionHeader: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    // A heading belongs to what follows it, so it keeps more air above than below: the section's
+    // own 12px gap plus this 8px sits above the heading, and 8px separates it from its content.
+    subsection: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' },
     // Navigation footer: the note that sets expectations for the primary action sits directly
     // above it, then primary first and secondary after. The elevation only appears while the
     // content actually overflows, so a short page keeps a flat, quiet footer.
@@ -153,32 +162,43 @@ const useStyles = makeStyles({
         borderTopColor: tokens.colorNeutralStroke2,
         boxShadow: '0 -2px 6px rgba(0, 0, 0, 0.08)',
     },
-    introCopy: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    planSection: { display: 'flex', flexDirection: 'column', gap: '12px' },
     planList: { display: 'flex', flexDirection: 'column', gap: '2px', margin: 0, padding: 0, listStyle: 'none' },
     planItem: { display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', gap: '0 10px', padding: '7px 0' },
-    planBadge: { justifySelf: 'start', alignSelf: 'start' },
+    // Centred against the whole entry, not just its first line, so the number reads as belonging
+    // to the title and its explanation together.
+    planBadge: { justifySelf: 'start', alignSelf: 'center' },
     planCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
-    settingsColSetting: { width: '140px' },
-    // Auto layout sizes this column from its content; `nowrap` plus non-shrinking children keep a
-    // two-word action label on one line instead of collapsing the cell.
-    settingActionCell: {
-        justifyContent: 'flex-start',
-        whiteSpace: 'nowrap',
-        '> *': { flexShrink: 0 },
+    // Fluent's Table is `table-layout: fixed`, so every column that must not take the leftover
+    // space needs an explicit width. The value column is the only one left unsized.
+    settingsColLabel: { width: '140px', '@media (max-width: 560px)': { width: '96px' } },
+    settingsColActions: { width: '72px' },
+    settingValueCell: { minWidth: 0, overflowWrap: 'anywhere' },
+    // Right-aligned with flex, never `text-align`: Fluent's Switch positions its thumb as an
+    // inline element, so an inherited `text-align: right` pushes the thumb out of its track.
+    settingAction: { display: 'flex', justifyContent: 'flex-end' },
+    // The editor row is always present so its content can animate in and out; collapsed, it
+    // contributes no height, so the settings list never carries an empty band.
+    editorRow: { borderBottom: 'none' },
+    editorCell: { display: 'table-cell', height: 'auto', padding: 0 },
+    // The separator rides with the collapsing content, so it disappears along with it.
+    editorBody: {
+        padding: '10px 12px 14px 148px',
+        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+        '@media (max-width: 560px)': { paddingLeft: '12px' },
     },
-    settingValue: { minWidth: 0 },
-    editFieldsCell: { backgroundColor: tokens.colorNeutralBackground2 },
-    // `start` keeps a field whose validation message appeared from stretching its sibling's input.
+    // `flex-start` keeps a field whose validation message appeared from stretching its sibling's
+    // input; the flexible basis lets a lone field fill the row and a pair split it.
     editFields: {
-        display: 'grid',
-        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
-        alignItems: 'start',
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'flex-start',
         gap: '12px',
-        '@media (max-width: 560px)': { gridTemplateColumns: '1fr' },
+        '> *': { flexGrow: 1, flexBasis: '200px', minWidth: 0 },
+        // A native input's default intrinsic width would otherwise hold the row open, and the
+        // whole page with it, once the panel is narrower than about 300px.
+        '& .fui-Input': { minWidth: 0 },
+        '& .fui-Input > input': { minWidth: 0 },
     },
-    editFieldWithReset: { display: 'flex', alignItems: 'flex-end', gap: '6px' },
-    editFieldInput: { flexGrow: 1, minWidth: 0 },
     imagePath: { overflowWrap: 'anywhere' },
     stageList: {
         display: 'flex',
@@ -193,6 +213,17 @@ const useStyles = makeStyles({
     stageCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0, alignItems: 'flex-start' },
     // The re-check sits on the evidence line, so it has to drop to that line's type scale.
     stageInlineLink: { fontSize: tokens.fontSizeBase200, lineHeight: tokens.lineHeightBase200 },
+    // Keeps the in-flight spinner on the evidence line rather than starting a block of its own.
+    stageInlineSpinner: {
+        display: 'inline-flex',
+        verticalAlign: 'text-bottom',
+        gap: '6px',
+        '& .fui-Spinner__label': {
+            fontSize: tokens.fontSizeBase200,
+            lineHeight: tokens.lineHeightBase200,
+            color: tokens.colorNeutralForeground2,
+        },
+    },
     stageDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '18px' },
     stageError: { color: tokens.colorPaletteRedForeground1, fontSize: '18px' },
     stagePending: { color: tokens.colorNeutralForeground4, fontSize: '18px' },
@@ -227,6 +258,7 @@ const useStyles = makeStyles({
     dockerAccordionHeader: { minHeight: '30px' },
     accordionHeaderBrand: { color: tokens.colorBrandForeground1 },
     dockerAccordionPanel: { paddingTop: '4px' },
+    dockerDetailsIntro: { display: 'block', paddingBottom: '8px', color: tokens.colorNeutralForeground2 },
     dockerDetails: {
         display: 'grid',
         gridTemplateColumns: '150px minmax(0, 1fr)',
@@ -241,11 +273,17 @@ const useStyles = makeStyles({
         borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     },
     dockerDetailValue: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px',
         margin: 0,
         padding: '9px 0',
         overflowWrap: 'anywhere',
         borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
     },
+    // How the fact above was established — the part that is worth the extra room behind a
+    // collapsed panel.
+    dockerDetailNote: { color: tokens.colorNeutralForeground3 },
     lastCheckedRow: {
         display: 'flex',
         alignItems: 'center',
@@ -280,6 +318,17 @@ const STAGE_LABELS: Record<ProvisionStage, string> = {
 interface PlanItem {
     readonly label: string;
     readonly detail: string;
+}
+
+/** One row of the Configure step: a read-only summary line plus the editor it reveals. */
+interface SettingItem {
+    readonly key: string;
+    readonly label: string;
+    readonly value: ReactNode;
+    readonly action?: ReactNode;
+    /** Built whenever the setting is editable at all, so it survives its own exit motion. */
+    readonly editor?: ReactNode;
+    readonly editorOpen?: boolean;
 }
 
 /** Mirrors the wizard's own sequence, so the user recognizes it again on the Set up page. */
@@ -332,17 +381,59 @@ const DOCKER_FAILURE_LABELS: Readonly<Record<DockerFailureKind, string>> = {
     unknown: l10n.t('Unknown Docker problem'),
 };
 
-const DOCKER_ENDPOINT_SOURCE_LABELS: Readonly<Record<DockerEndpointProbe['source'], string>> = {
-    dockerHostEnv: l10n.t('DOCKER_HOST environment variable'),
-    dockerContextEnv: l10n.t('DOCKER_CONTEXT environment variable'),
-    currentContext: l10n.t('Current Docker context'),
-    platformDefault: l10n.t('Platform default'),
-};
-
 const DOCKER_PROVIDER_LABELS: Readonly<Record<DockerProvider, string>> = {
     dockerDesktop: l10n.t('Docker Desktop'),
     dockerEngine: l10n.t('Docker Engine'),
     unknown: l10n.t('Unknown'),
+};
+
+const DOCKER_OUTCOME_VALUES: Readonly<Record<DockerReadinessOutcome, string>> = {
+    ready: l10n.t('Docker is ready'),
+    diagnosed: l10n.t('A specific problem was identified'),
+    indeterminate: l10n.t('No clear answer'),
+};
+
+const DOCKER_ENDPOINT_KIND_VALUES: Readonly<Record<DockerEndpointKind, string>> = {
+    unixSocket: l10n.t('Unix socket'),
+    namedPipe: l10n.t('Windows named pipe'),
+    tcp: l10n.t('TCP address'),
+    ssh: l10n.t('SSH tunnel'),
+    unknown: l10n.t('Could not be resolved'),
+};
+
+/** How the endpoint the check dialled was chosen. */
+const DOCKER_ENDPOINT_SOURCE_NOTES: Readonly<Record<DockerEndpointProbe['source'], string>> = {
+    dockerHostEnv: l10n.t('Taken from the DOCKER_HOST environment variable, which overrides everything else.'),
+    dockerContextEnv: l10n.t('Taken from the DOCKER_CONTEXT environment variable.'),
+    currentContext: l10n.t('Taken from the Docker context that is currently active.'),
+    platformDefault: l10n.t('No override was set, so the default location for this platform was used.'),
+};
+
+/** How the provider above was identified — strongest evidence first. */
+const DOCKER_PROVIDER_EVIDENCE_NOTES: Readonly<Record<DockerProviderEvidence, string>> = {
+    liveDaemon: l10n.t('Read from the daemon that answered the check.'),
+    activeContext: l10n.t('Inferred from the Docker context that is currently active.'),
+    installedApplication: l10n.t('Inferred from the Docker application installed on this machine.'),
+    rememberedProvider: l10n.t('Remembered from the last check on this machine that did reach a daemon.'),
+    none: l10n.t('Nothing identified it: the check reached neither a daemon nor a usable context.'),
+};
+
+const DOCKER_HOST_ENVIRONMENT_VALUES: Readonly<Record<DockerHostEnvironment, string>> = {
+    windows: l10n.t('Windows'),
+    macos: l10n.t('macOS'),
+    linux: l10n.t('Linux'),
+    wsl: l10n.t('Windows Subsystem for Linux'),
+    ssh: l10n.t('Remote SSH host'),
+    devContainer: l10n.t('Dev container'),
+    codespaces: l10n.t('GitHub Codespaces'),
+    otherRemote: l10n.t('Remote extension host'),
+    unsupported: l10n.t('Unsupported platform'),
+};
+
+const DOCKER_PERMISSION_DETAIL_VALUES: Readonly<Record<DockerPermissionDetail, string>> = {
+    notInGroup: l10n.t('Your user is not a member of the docker group'),
+    pendingSessionRestart: l10n.t('Your user is in the docker group, but this session predates the change'),
+    unknown: l10n.t('Denied for a reason the check could not narrow down'),
 };
 
 const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
@@ -537,6 +628,124 @@ function formatElapsed(elapsedMs: number): string {
     return `${minutes}:${seconds}`;
 }
 
+interface DockerDetailRow {
+    readonly label: string;
+    readonly value: string;
+    /** How the value above was established, or why it could not be. */
+    readonly note?: string;
+}
+
+/**
+ * Full report of the Docker readiness check, for the collapsed "What the Docker check found"
+ * panel. Every fact carries how it was established, because the panel's job is to show the user
+ * what was actually probed rather than to be scanned quickly.
+ */
+function buildDockerDetailRows(
+    readiness: DockerReadiness,
+    daemonState: DockerReadinessPresentationState,
+    now: number,
+): readonly DockerDetailRow[] {
+    const rows: DockerDetailRow[] = [
+        {
+            label: l10n.t('Check result'),
+            value: DOCKER_OUTCOME_VALUES[readiness.outcome],
+            note:
+                readiness.outcome === 'indeterminate'
+                    ? l10n.t('Docker answered too vaguely to name a cause, so setup can still be attempted.')
+                    : undefined,
+        },
+    ];
+
+    if (readiness.outcome !== 'ready') {
+        rows.push({
+            label: l10n.t('Detected problem'),
+            value: DOCKER_FAILURE_LABELS[readiness.failureKind ?? 'unknown'],
+        });
+    }
+
+    rows.push({
+        label: l10n.t('Docker CLI'),
+        value: readiness.cliInstalled
+            ? readiness.cliVersion
+                ? l10n.t('Found, version {0}', readiness.cliVersion)
+                : l10n.t('Found, version not reported')
+            : l10n.t('Not found'),
+        note: readiness.cliInstalled
+            ? l10n.t('The docker command was located and run to read its version.')
+            : l10n.t('The docker command is not on PATH, so no further probe could run.'),
+    });
+
+    rows.push({
+        label: l10n.t('Docker daemon'),
+        value: DOCKER_DAEMON_VALUES[daemonState],
+        note: readiness.daemonReachable
+            ? l10n.t('The daemon answered, so everything below was reported by Docker itself.')
+            : l10n.t('The daemon did not answer, so anything only Docker can report is still unknown.'),
+    });
+
+    rows.push({
+        label: l10n.t('Docker endpoint'),
+        value: DOCKER_ENDPOINT_KIND_VALUES[readiness.endpointKind],
+        note: readiness.endpointSource
+            ? DOCKER_ENDPOINT_SOURCE_NOTES[readiness.endpointSource]
+            : l10n.t('No endpoint could be resolved, so the check had nothing to dial.'),
+    });
+
+    if (readiness.permissionDetail) {
+        rows.push({
+            label: l10n.t('Socket access'),
+            value: DOCKER_PERMISSION_DETAIL_VALUES[readiness.permissionDetail],
+            note: l10n.t('Checked by comparing the Docker socket owner group against your user and this process.'),
+        });
+    }
+
+    rows.push({
+        label: l10n.t('Provider'),
+        value: DOCKER_PROVIDER_LABELS[readiness.provider],
+        note: DOCKER_PROVIDER_EVIDENCE_NOTES[readiness.providerEvidence],
+    });
+
+    const daemonOs = readiness.osType ? DOCKER_DETAIL_OS_LABELS[readiness.osType] : undefined;
+    const daemonPlatform =
+        daemonOs && readiness.daemonArchitecture
+            ? l10n.t('{0} {1}', daemonOs, readiness.daemonArchitecture)
+            : (daemonOs ?? readiness.daemonArchitecture);
+    rows.push({
+        label: l10n.t('Containers run on'),
+        value: daemonPlatform ?? l10n.t('Not reported yet'),
+        note: daemonPlatform
+            ? l10n.t('The operating system and CPU architecture the daemon builds and runs containers for.')
+            : l10n.t('Docker reports this only once a connection succeeds, so it stays unknown until then.'),
+    });
+
+    rows.push({
+        label: l10n.t('This machine'),
+        value: readiness.arch
+            ? l10n.t('{0}, {1}', DOCKER_HOST_ENVIRONMENT_VALUES[readiness.environment], readiness.arch)
+            : DOCKER_HOST_ENVIRONMENT_VALUES[readiness.environment],
+        note:
+            readiness.platformSupported === false
+                ? l10n.t('DocumentDB Local images are published for x64 and arm64 only.')
+                : l10n.t('Where VS Code is running the extension, detected before Docker was contacted.'),
+    });
+
+    rows.push({
+        label: l10n.t('Container host'),
+        value: EXECUTION_TARGET_VALUES[getDockerExecutionTargetKey(readiness.executionTarget)],
+        note: l10n.t('The container is created here, so localhost refers to this environment.'),
+    });
+
+    rows.push({
+        label: l10n.t('Check run'),
+        value: formatLastChecked(readiness.checkedAtMs, now),
+        note: readiness.diagnosticFingerprint
+            ? l10n.t('Diagnostic reference {0} — quote it when reporting this.', readiness.diagnosticFingerprint)
+            : undefined,
+    });
+
+    return rows;
+}
+
 function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
     return {
         checking: 'pending',
@@ -561,9 +770,11 @@ interface StageRowProps {
     readonly meta?: string;
     /** Inline control on the evidence line, e.g. re-running just this stage's check. */
     readonly action?: ReactNode;
+    /** Holds the evidence line's space from the first render, so the row never grows later. */
+    readonly reserveDetail?: boolean;
 }
 
-const StageRow = ({ label, status, detail, meta, action }: StageRowProps): JSX.Element => {
+const StageRow = ({ label, status, detail, meta, action, reserveDetail }: StageRowProps): JSX.Element => {
     const styles = useStyles();
     let icon: JSX.Element;
     let statusText: string;
@@ -583,6 +794,7 @@ const StageRow = ({ label, status, detail, meta, action }: StageRowProps): JSX.E
     }
 
     const evidence = detail && meta ? l10n.t('{0} · {1}', detail, meta) : (detail ?? meta);
+    const hasEvidence = Boolean(evidence || action);
 
     // The row is not aria-labelled: an inline action lives on the evidence line, and a row-level
     // label would leave it unreachable. The status is voiced by a visually-hidden span instead.
@@ -594,11 +806,17 @@ const StageRow = ({ label, status, detail, meta, action }: StageRowProps): JSX.E
                     {label}
                     <span className={styles.srOnly}>{l10n.t(', {0}', statusText)}</span>
                 </Text>
-                {(evidence || action) && (
+                {(hasEvidence || reserveDetail) && (
                     <Text size={200} className={styles.muted}>
-                        {evidence}
-                        {evidence && action ? ' · ' : ''}
-                        {action}
+                        {hasEvidence ? (
+                            <>
+                                {evidence}
+                                {evidence && action ? ' · ' : ''}
+                                {action}
+                            </>
+                        ) : (
+                            <span aria-hidden>{'\u00a0'}</span>
+                        )}
                     </Text>
                 )}
             </div>
@@ -660,6 +878,9 @@ export const LocalQuickStart = (): JSX.Element => {
     // a setState updater (which React may invoke more than once).
     const checkReadinessRef = useRef<DockerReadiness | undefined>(undefined);
     const dockerPollAbortRef = useRef<AbortController | null>(null);
+    const lastDockerProblemRef = useRef<
+        { readonly problem: DockerReadiness; readonly presentation: DockerReadinessPresentation } | undefined
+    >(undefined);
     const dockerWaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     // Current settings, synced from the fields below so handleStart (and Retry) always read the
@@ -876,6 +1097,13 @@ export const LocalQuickStart = (): JSX.Element => {
         ): void => {
             // Cancel any prior in-flight subscription so a fast double-click can't leak
             // an uncancellable stream (mirrors the Query Insights pattern).
+            //
+            // FOLLOW-UP (retry stability): this unsubscribe is not awaited before the new
+            // subscription goes out, so the previous run may still be unwinding on the host when
+            // the next one arrives and trips its "Setup is already in progress." guard. The
+            // service now buffers every terminal event until that guard is clear, which fixed the
+            // case we hit (Retry working only on every second click), but the race itself is still
+            // here and wants an explicit "wait for the old stream to end" handshake.
             subscriptionRef.current?.unsubscribe();
             subscriptionRef.current = null;
             // Supersede any prior stream: its in-flight callbacks will see a newer generation and no-op.
@@ -1227,8 +1455,14 @@ export const LocalQuickStart = (): JSX.Element => {
               (checkStageFailed && checkReadiness && checkReadiness.outcome !== 'ready' ? checkReadiness : undefined))
             : undefined;
     const dockerPresentation = dockerProblem ? getDockerReadinessPresentation(dockerProblem) : undefined;
-    const dockerPresentationState = startingDocker ? 'starting' : (dockerPresentation?.state ?? 'notAccessible');
-    const recoveryCommand = dockerPresentation?.showCopyCommand ? dockerProblem?.recoveryCommand : undefined;
+    // Held so the block keeps its content while it collapses away, instead of blanking first and
+    // then closing an empty gap.
+    if (dockerProblem && dockerPresentation) {
+        lastDockerProblemRef.current = { problem: dockerProblem, presentation: dockerPresentation };
+    }
+    const shownDocker = lastDockerProblemRef.current;
+    const dockerPresentationState = startingDocker ? 'starting' : (shownDocker?.presentation.state ?? 'notAccessible');
+    const recoveryCommand = shownDocker?.presentation.showCopyCommand ? shownDocker.problem.recoveryCommand : undefined;
     // A Docker-only re-check cleared the blocker. When that blocker was the check stage itself,
     // nothing has run yet, so the run can simply go ahead; a later stage's failure still stands.
     const dockerRecovered =
@@ -1322,28 +1556,21 @@ export const LocalQuickStart = (): JSX.Element => {
                 <Text id="quickstart-introduction-heading" as="h2" size={500} weight="semibold">
                     {l10n.t('Develop and test locally')}
                 </Text>
-            </div>
-            <div className={styles.introCopy}>
-                <Text>
+                <Text className={styles.muted}>
                     {l10n.t(
                         'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for development and testing on your machine.',
                     )}
                 </Text>
             </div>
-            <div className={styles.planSection}>
+            <div className={styles.subsection}>
                 <Text as="h3" size={400} weight="semibold">
                     {l10n.t('What will happen in the Set up step')}
                 </Text>
                 <ol className={styles.planList}>
                     {PLAN_ITEMS.map((item, index) => (
                         <li className={styles.planItem} key={item.label}>
-                            <CounterBadge
-                                aria-hidden
-                                appearance="filled"
-                                color="informative"
-                                count={index + 1}
-                                className={styles.planBadge}
-                            />
+                            {/* Fluent's own default: filled, brand, circular. No colour override. */}
+                            <CounterBadge aria-hidden count={index + 1} className={styles.planBadge} />
                             <div className={styles.planCopy}>
                                 <Text>{item.label}</Text>
                                 <Text size={200} className={styles.muted}>
@@ -1357,28 +1584,12 @@ export const LocalQuickStart = (): JSX.Element => {
         </section>
     );
 
-    const settingRow = (label: string, value: ReactNode, action?: ReactNode): JSX.Element => (
-        <TableRow>
-            <TableCell>{label}</TableCell>
-            <TableCell className={styles.settingValue}>
-                {/* Not truncated: the image row is meant to show the full official reference. */}
-                <TableCellLayout>{value}</TableCellLayout>
-            </TableCell>
-            <TableCell className={styles.settingActionCell}>{action}</TableCell>
-        </TableRow>
-    );
-
-    const editorRow = (children: ReactNode): JSX.Element => (
-        <TableRow>
-            <TableCell colSpan={3} className={styles.editFieldsCell}>
-                <div className={styles.editFields}>{children}</div>
-            </TableCell>
-        </TableRow>
-    );
-
+    // Reset lives in the input's own trailing slot, so it stays on the line it resets instead of
+    // drifting down beside the field's hint.
     const resetButton = (label: string, onReset: () => void, disabled: boolean): JSX.Element => (
         <Button
-            appearance="secondary"
+            appearance="subtle"
+            size="small"
             icon={<ArrowResetRegular />}
             aria-label={label}
             title={label}
@@ -1386,6 +1597,147 @@ export const LocalQuickStart = (): JSX.Element => {
             onClick={onReset}
         />
     );
+
+    // Icon-only row action. `relationship="label"` promotes the tooltip text to the button's
+    // accessible name, so dropping the visible label costs assistive tech nothing.
+    const rowAction = (label: string, expanded: boolean, onToggle: () => void): JSX.Element => (
+        <Tooltip content={label} relationship="label" withArrow>
+            <Button
+                appearance="subtle"
+                size="small"
+                icon={<EditRegular />}
+                aria-expanded={expanded}
+                onClick={onToggle}
+            />
+        </Tooltip>
+    );
+
+    const settingItems: readonly SettingItem[] = [
+        {
+            key: 'address',
+            label: l10n.t('Address'),
+            value: l10n.t('localhost:{0}', effectivePort),
+            action: rowAction(
+                editingPort ? l10n.t('Hide the port setting') : l10n.t('Change the port'),
+                editingPort,
+                () => setEditingPort((value) => !value),
+            ),
+            editorOpen: editingPort,
+            editor: (
+                <Field
+                    label={l10n.t('Port')}
+                    hint={l10n.t('The host is always localhost.')}
+                    validationState={advValidation?.field === 'port' ? 'error' : 'none'}
+                    validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
+                >
+                    <Input
+                        type="number"
+                        value={advPort}
+                        onChange={(_event, data) => setAdvPort(data.value)}
+                        contentAfter={resetButton(
+                            l10n.t('Reset port to {0}', String(QUICK_START_PORT)),
+                            () => setAdvPort(String(QUICK_START_PORT)),
+                            advPort === String(QUICK_START_PORT),
+                        )}
+                    />
+                </Field>
+            ),
+        },
+        {
+            key: 'image',
+            label: l10n.t('Image'),
+            value: isRecreate ? (
+                l10n.t('Kept from the existing instance')
+            ) : (
+                <code className={styles.imagePath}>{effectiveImage}</code>
+            ),
+            action: isRecreate
+                ? undefined
+                : rowAction(
+                      editingImage ? l10n.t('Hide the image tag setting') : l10n.t('Change the image tag'),
+                      editingImage,
+                      () => setEditingImage((value) => !value),
+                  ),
+            editorOpen: editingImage && !isRecreate,
+            editor: isRecreate ? undefined : (
+                <Field
+                    label={l10n.t('Image tag')}
+                    hint={l10n.t('The official image repository is fixed.')}
+                    validationState={advValidation?.field === 'tag' ? 'error' : 'none'}
+                    validationMessage={advValidation?.field === 'tag' ? advValidation.message : undefined}
+                >
+                    <Input
+                        value={advTag}
+                        maxLength={128}
+                        onChange={(_event, data) => setAdvTag(data.value)}
+                        contentAfter={resetButton(
+                            l10n.t('Reset image tag to {0}', QUICK_START_DEFAULT_TAG),
+                            () => setAdvTag(QUICK_START_DEFAULT_TAG),
+                            advTag === QUICK_START_DEFAULT_TAG,
+                        )}
+                    />
+                </Field>
+            ),
+        },
+        {
+            key: 'credentials',
+            label: l10n.t('Credentials'),
+            value: isRecreate
+                ? l10n.t('Reused from the existing instance')
+                : useCustomCredentials
+                  ? l10n.t('Your own username and password')
+                  : l10n.t('Generated automatically'),
+            action: isRecreate
+                ? undefined
+                : rowAction(
+                      useCustomCredentials ? l10n.t('Use generated credentials') : l10n.t('Set your own credentials'),
+                      useCustomCredentials,
+                      () => setCustomCredentials((value) => !value),
+                  ),
+            editorOpen: useCustomCredentials,
+            editor: isRecreate ? undefined : (
+                <>
+                    <Field
+                        label={l10n.t('Username')}
+                        validationState={advValidation?.field === 'username' ? 'error' : 'none'}
+                        validationMessage={advValidation?.field === 'username' ? advValidation.message : undefined}
+                    >
+                        <Input
+                            value={advUser}
+                            maxLength={128}
+                            placeholder={l10n.t('Enter a username')}
+                            onChange={(_event, data) => setAdvUser(data.value)}
+                        />
+                    </Field>
+                    <Field
+                        label={l10n.t('Password')}
+                        validationState={advValidation?.field === 'password' ? 'error' : 'none'}
+                        validationMessage={advValidation?.field === 'password' ? advValidation.message : undefined}
+                    >
+                        <Input
+                            type="password"
+                            value={advPass}
+                            maxLength={256}
+                            placeholder={l10n.t('Enter a password')}
+                            onChange={(_event, data) => setAdvPass(data.value)}
+                        />
+                    </Field>
+                </>
+            ),
+        },
+        {
+            key: 'sampleData',
+            label: l10n.t('Sample data'),
+            value: advLoadSampleData ? l10n.t('Included') : l10n.t('Not included'),
+            action: (
+                <Switch
+                    checked={advLoadSampleData}
+                    aria-label={l10n.t('Include sample data')}
+                    onChange={(_event, data) => setAdvLoadSampleData(data.checked)}
+                />
+            ),
+        },
+    ];
 
     const configure = (
         <section className={styles.section} aria-labelledby="quickstart-configure-heading">
@@ -1399,158 +1751,41 @@ export const LocalQuickStart = (): JSX.Element => {
             </div>
             <Table size="small" aria-label={l10n.t('Setup settings')}>
                 <colgroup>
-                    <col className={styles.settingsColSetting} />
+                    <col className={styles.settingsColLabel} />
                     <col />
-                    <col />
+                    <col className={styles.settingsColActions} />
                 </colgroup>
-                <TableHeader>
-                    <TableRow>
-                        <TableHeaderCell>{l10n.t('Setting')}</TableHeaderCell>
-                        <TableHeaderCell>{l10n.t('Value')}</TableHeaderCell>
-                        <TableHeaderCell className={styles.settingActionCell}>{l10n.t('Actions')}</TableHeaderCell>
-                    </TableRow>
-                </TableHeader>
                 <TableBody>
-                    {settingRow(
-                        l10n.t('Address'),
-                        l10n.t('localhost:{0}', effectivePort),
-                        <Button
-                            appearance="secondary"
-                            size="small"
-                            icon={<EditRegular />}
-                            aria-expanded={editingPort}
-                            onClick={() => setEditingPort((value) => !value)}
-                        >
-                            {l10n.t('Edit port')}
-                        </Button>,
-                    )}
-                    {editingPort &&
-                        editorRow(
-                            <div className={styles.editFieldWithReset}>
-                                <Field
-                                    className={styles.editFieldInput}
-                                    label={l10n.t('Port')}
-                                    hint={l10n.t('The host is always localhost.')}
-                                    validationState={advValidation?.field === 'port' ? 'error' : 'none'}
-                                    validationMessage={
-                                        advValidation?.field === 'port' ? advValidation.message : undefined
-                                    }
+                    {settingItems.map((item) => (
+                        <Fragment key={item.key}>
+                            <TableRow>
+                                <TableCell>
+                                    <TableCellLayout appearance="primary">{item.label}</TableCellLayout>
+                                </TableCell>
+                                <TableCell className={styles.settingValueCell}>{item.value}</TableCell>
+                                <TableCell>
+                                    <div className={styles.settingAction}>{item.action}</div>
+                                </TableCell>
+                            </TableRow>
+                            {item.editor && (
+                                <TableRow
+                                    className={styles.editorRow}
+                                    // Collapsed the row is empty and 0px tall; every toggle that
+                                    // closes it lives outside it, so nothing focusable is hidden.
+                                    aria-hidden={item.editorOpen !== true}
                                 >
-                                    <Input
-                                        type="number"
-                                        value={advPort}
-                                        onChange={(_event, data) => setAdvPort(data.value)}
-                                    />
-                                </Field>
-                                {resetButton(
-                                    l10n.t('Reset port to {0}', String(QUICK_START_PORT)),
-                                    () => setAdvPort(String(QUICK_START_PORT)),
-                                    advPort === String(QUICK_START_PORT),
-                                )}
-                            </div>,
-                        )}
-                    {settingRow(
-                        l10n.t('Image'),
-                        isRecreate ? (
-                            l10n.t('Kept from the existing instance')
-                        ) : (
-                            <code className={styles.imagePath}>{effectiveImage}</code>
-                        ),
-                        isRecreate ? undefined : (
-                            <Button
-                                appearance="secondary"
-                                size="small"
-                                icon={<EditRegular />}
-                                aria-expanded={editingImage}
-                                aria-label={l10n.t('Edit image tag')}
-                                onClick={() => setEditingImage((value) => !value)}
-                            >
-                                {l10n.t('Edit')}
-                            </Button>
-                        ),
-                    )}
-                    {editingImage &&
-                        !isRecreate &&
-                        editorRow(
-                            <div className={styles.editFieldWithReset}>
-                                <Field
-                                    className={styles.editFieldInput}
-                                    label={l10n.t('Image tag')}
-                                    hint={l10n.t('The official image repository is fixed.')}
-                                    validationState={advValidation?.field === 'tag' ? 'error' : 'none'}
-                                    validationMessage={
-                                        advValidation?.field === 'tag' ? advValidation.message : undefined
-                                    }
-                                >
-                                    <Input
-                                        value={advTag}
-                                        maxLength={128}
-                                        onChange={(_event, data) => setAdvTag(data.value)}
-                                    />
-                                </Field>
-                                {resetButton(
-                                    l10n.t('Reset image tag to {0}', QUICK_START_DEFAULT_TAG),
-                                    () => setAdvTag(QUICK_START_DEFAULT_TAG),
-                                    advTag === QUICK_START_DEFAULT_TAG,
-                                )}
-                            </div>,
-                        )}
-                    {settingRow(
-                        l10n.t('Credentials'),
-                        isRecreate
-                            ? l10n.t('Reused from the existing instance')
-                            : useCustomCredentials
-                              ? l10n.t('Custom credentials, stored securely')
-                              : l10n.t('Generated automatically, stored securely'),
-                        isRecreate ? undefined : (
-                            <Button appearance="secondary" size="small" onClick={() => setCustomCredentials((v) => !v)}>
-                                {useCustomCredentials ? l10n.t('Use generated') : l10n.t('Use custom')}
-                            </Button>
-                        ),
-                    )}
-                    {useCustomCredentials &&
-                        editorRow(
-                            <>
-                                <Field
-                                    label={l10n.t('Username')}
-                                    validationState={advValidation?.field === 'username' ? 'error' : 'none'}
-                                    validationMessage={
-                                        advValidation?.field === 'username' ? advValidation.message : undefined
-                                    }
-                                >
-                                    <Input
-                                        value={advUser}
-                                        maxLength={128}
-                                        placeholder={l10n.t('Enter a username')}
-                                        onChange={(_event, data) => setAdvUser(data.value)}
-                                    />
-                                </Field>
-                                <Field
-                                    label={l10n.t('Password')}
-                                    validationState={advValidation?.field === 'password' ? 'error' : 'none'}
-                                    validationMessage={
-                                        advValidation?.field === 'password' ? advValidation.message : undefined
-                                    }
-                                >
-                                    <Input
-                                        type="password"
-                                        value={advPass}
-                                        maxLength={256}
-                                        placeholder={l10n.t('Enter a password')}
-                                        onChange={(_event, data) => setAdvPass(data.value)}
-                                    />
-                                </Field>
-                            </>,
-                        )}
-                    {settingRow(
-                        l10n.t('Sample data'),
-                        advLoadSampleData ? l10n.t('Included') : l10n.t('Not included'),
-                        <Switch
-                            checked={advLoadSampleData}
-                            aria-label={l10n.t('Include sample data')}
-                            onChange={(_event, data) => setAdvLoadSampleData(data.checked)}
-                        />,
-                    )}
+                                    <TableCell colSpan={3} className={styles.editorCell}>
+                                        {/* No `appear`: an editor left open across a step change opens instantly. */}
+                                        <Collapse visible={item.editorOpen === true} unmountOnExit>
+                                            <div className={styles.editorBody}>
+                                                <div className={styles.editFields}>{item.editor}</div>
+                                            </div>
+                                        </Collapse>
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </Fragment>
+                    ))}
                 </TableBody>
             </Table>
             {isRecreate && (
@@ -1563,136 +1798,138 @@ export const LocalQuickStart = (): JSX.Element => {
         </section>
     );
 
-    const dockerStatusBlock = dockerProblem && dockerPresentation && (
+    // The wrapper is unconditional: a Collapse that mounts already visible skips its enter
+    // motion, so it has to exist (hidden) before the failure arrives.
+    const dockerStatusBlock = (
         <div className={styles.dockerStatus}>
-            <MessageBar intent="error" layout="multiline" icon={<ErrorCircleFilled />}>
-                <MessageBarBody className={styles.messageBody}>
-                    <div>
-                        <MessageBarTitle>
-                            {DOCKER_FAILURE_LABELS[dockerProblem.failureKind ?? 'unknown']}
-                        </MessageBarTitle>{' '}
-                        {
-                            DOCKER_GUIDANCE[
-                                startingDocker ? 'daemonStarting' : (dockerPresentation.guidance ?? 'notAccessible')
-                            ]
-                        }
-                    </div>
-                    {recoveryCommand && (
-                        <div className={styles.recoveryCommand}>
-                            {/* Copy sits in the block it copies, where the command is being read. */}
-                            <div className={styles.recoveryCommandBlock}>
-                                <code className={styles.recoveryCommandLine}>{recoveryCommand.commandLine}</code>
+            {shownDocker && (
+                <>
+                    <MessageBar intent="error" layout="multiline" icon={<ErrorCircleFilled />}>
+                        <MessageBarBody className={styles.messageBody}>
+                            <div>
+                                <MessageBarTitle>
+                                    {DOCKER_FAILURE_LABELS[shownDocker.problem.failureKind ?? 'unknown']}
+                                </MessageBarTitle>{' '}
+                                {
+                                    DOCKER_GUIDANCE[
+                                        startingDocker
+                                            ? 'daemonStarting'
+                                            : (shownDocker.presentation.guidance ?? 'notAccessible')
+                                    ]
+                                }
+                            </div>
+                            {recoveryCommand && (
+                                <div className={styles.recoveryCommand}>
+                                    {/* Copy sits in the block it copies, where the command is being read. */}
+                                    <div className={styles.recoveryCommandBlock}>
+                                        <code className={styles.recoveryCommandLine}>
+                                            {recoveryCommand.commandLine}
+                                        </code>
+                                        <Button
+                                            appearance="secondary"
+                                            size="small"
+                                            className={styles.recoveryCommandCopy}
+                                            icon={<CopyRegular />}
+                                            onClick={() => handleCopyRecoveryCommand(recoveryCommand.id)}
+                                        >
+                                            {l10n.t('Copy')}
+                                        </Button>
+                                    </div>
+                                    {shownDocker.presentation.recoveryNote && (
+                                        <Text>{DOCKER_RECOVERY_NOTES[shownDocker.presentation.recoveryNote]}</Text>
+                                    )}
+                                </div>
+                            )}
+                            {startingDocker && (
+                                <div className={styles.waitingStatus}>
+                                    <Spinner size="extra-tiny" aria-hidden />
+                                    <Text>{l10n.t('Waiting {0}', formatElapsed(dockerWaitElapsedMs))}</Text>
+                                </div>
+                            )}
+                        </MessageBarBody>
+                        <MessageBarActions>
+                            {shownDocker.presentation.showInstall && (
+                                <Button appearance="secondary" onClick={handleInstallDocker}>
+                                    {l10n.t('Install Docker')}
+                                </Button>
+                            )}
+                            {startingDocker ? (
+                                <Button appearance="secondary" onClick={handleStopWaiting}>
+                                    {l10n.t('Stop waiting')}
+                                </Button>
+                            ) : (
+                                shownDocker.presentation.showStartDockerProvider &&
+                                shownDocker.presentation.startLabel && (
+                                    <Button appearance="secondary" onClick={handleStartDocker}>
+                                        {DOCKER_START_LABELS[shownDocker.presentation.startLabel]}
+                                    </Button>
+                                )
+                            )}
+                            {!shownDocker.presentation.showInstall && (
                                 <Button
                                     appearance="secondary"
-                                    size="small"
-                                    className={styles.recoveryCommandCopy}
-                                    icon={<CopyRegular />}
-                                    onClick={() => handleCopyRecoveryCommand(recoveryCommand.id)}
+                                    onClick={() => handleOpenGuide(DOCKER_GUIDES[shownDocker.presentation.guide].href)}
                                 >
-                                    {l10n.t('Copy')}
+                                    {DOCKER_GUIDES[shownDocker.presentation.guide].label}
                                 </Button>
-                            </div>
-                            {dockerPresentation.recoveryNote && (
-                                <Text>{DOCKER_RECOVERY_NOTES[dockerPresentation.recoveryNote]}</Text>
                             )}
-                        </div>
-                    )}
-                    {startingDocker && (
-                        <div className={styles.waitingStatus}>
-                            <Spinner size="extra-tiny" aria-hidden />
-                            <Text>{l10n.t('Waiting {0}', formatElapsed(dockerWaitElapsedMs))}</Text>
-                        </div>
-                    )}
-                </MessageBarBody>
-                <MessageBarActions>
-                    {dockerPresentation.showInstall && (
-                        <Button appearance="secondary" onClick={handleInstallDocker}>
-                            {l10n.t('Install Docker')}
-                        </Button>
-                    )}
-                    {startingDocker ? (
-                        <Button appearance="secondary" onClick={handleStopWaiting}>
-                            {l10n.t('Stop waiting')}
-                        </Button>
-                    ) : (
-                        dockerPresentation.showStartDockerProvider &&
-                        dockerPresentation.startLabel && (
-                            <Button appearance="secondary" onClick={handleStartDocker}>
-                                {DOCKER_START_LABELS[dockerPresentation.startLabel]}
-                            </Button>
-                        )
-                    )}
-                    {!dockerPresentation.showInstall && (
-                        <Button
-                            appearance="secondary"
-                            onClick={() => handleOpenGuide(DOCKER_GUIDES[dockerPresentation.guide].href)}
-                        >
-                            {DOCKER_GUIDES[dockerPresentation.guide].label}
-                        </Button>
-                    )}
-                    {dockerPresentation.showContinueAnyway && (
-                        <Button appearance="secondary" onClick={handleContinueAnyway}>
-                            {l10n.t('Continue anyway')}
-                        </Button>
-                    )}
-                    {dockerPresentation.showViewOutput && (
-                        <Button appearance="secondary" onClick={handleViewOutput}>
-                            {l10n.t('View setup log')}
-                        </Button>
-                    )}
-                </MessageBarActions>
-            </MessageBar>
-            <Accordion collapsible>
-                <AccordionItem value="docker-details">
-                    <AccordionHeader className={styles.dockerAccordionHeader}>
-                        <Text weight="semibold" className={styles.accordionHeaderBrand}>
-                            {l10n.t('What the Docker check found')}
-                        </Text>
-                    </AccordionHeader>
-                    <AccordionPanel className={styles.dockerAccordionPanel}>
-                        <dl className={styles.dockerDetails}>
-                            {(
-                                [
-                                    [
-                                        l10n.t('Detected problem'),
-                                        DOCKER_FAILURE_LABELS[dockerProblem.failureKind ?? 'unknown'],
-                                    ],
-                                    [
-                                        l10n.t('Docker CLI'),
-                                        dockerProblem.cliInstalled
-                                            ? (dockerProblem.cliVersion ?? l10n.t('Found'))
-                                            : l10n.t('Not found'),
-                                    ],
-                                    [l10n.t('Docker daemon'), DOCKER_DAEMON_VALUES[dockerPresentationState]],
-                                    [l10n.t('Provider'), DOCKER_PROVIDER_LABELS[dockerProblem.provider]],
-                                    [l10n.t('Platform'), dockerProblem.daemonArchitecture ?? l10n.t('Unknown')],
-                                    [
-                                        l10n.t('Docker endpoint'),
-                                        dockerProblem.endpointSource
-                                            ? DOCKER_ENDPOINT_SOURCE_LABELS[dockerProblem.endpointSource]
-                                            : l10n.t('Unknown'),
-                                    ],
-                                    [
-                                        l10n.t('Runs on'),
-                                        EXECUTION_TARGET_VALUES[
-                                            getDockerExecutionTargetKey(dockerProblem.executionTarget)
-                                        ],
-                                    ],
-                                ] as const
-                            ).map(([label, value]) => (
-                                <Fragment key={label}>
-                                    <dt className={styles.dockerDetailLabel}>{label}</dt>
-                                    <dd className={styles.dockerDetailValue}>{value}</dd>
-                                </Fragment>
-                            ))}
-                        </dl>
-                    </AccordionPanel>
-                </AccordionItem>
-            </Accordion>
+                            {shownDocker.presentation.showContinueAnyway && (
+                                <Button appearance="secondary" onClick={handleContinueAnyway}>
+                                    {l10n.t('Continue anyway')}
+                                </Button>
+                            )}
+                            {shownDocker.presentation.showViewOutput && (
+                                <Button appearance="secondary" onClick={handleViewOutput}>
+                                    {l10n.t('View setup log')}
+                                </Button>
+                            )}
+                        </MessageBarActions>
+                    </MessageBar>
+                    <Accordion collapsible>
+                        <AccordionItem value="docker-details">
+                            <AccordionHeader className={styles.dockerAccordionHeader}>
+                                <Text weight="semibold" className={styles.accordionHeaderBrand}>
+                                    {l10n.t('What the Docker check found')}
+                                </Text>
+                            </AccordionHeader>
+                            <AccordionPanel className={styles.dockerAccordionPanel}>
+                                <Text size={200} className={styles.dockerDetailsIntro}>
+                                    {l10n.t(
+                                        'Everything the readiness check established, in the order it was established.',
+                                    )}
+                                </Text>
+                                <dl className={styles.dockerDetails}>
+                                    {buildDockerDetailRows(
+                                        shownDocker.problem,
+                                        dockerPresentationState,
+                                        relativeTimeNow,
+                                    ).map((row) => (
+                                        <Fragment key={row.label}>
+                                            <dt className={styles.dockerDetailLabel}>{row.label}</dt>
+                                            <dd className={styles.dockerDetailValue}>
+                                                <span>{row.value}</span>
+                                                {row.note && (
+                                                    <Text size={200} className={styles.dockerDetailNote}>
+                                                        {row.note}
+                                                    </Text>
+                                                )}
+                                            </dd>
+                                        </Fragment>
+                                    ))}
+                                </dl>
+                            </AccordionPanel>
+                        </AccordionItem>
+                    </Accordion>
+                </>
+            )}
         </div>
     );
 
-    const setupHeading = isProvisioning ? l10n.t('Setting up DocumentDB Local') : l10n.t('Setup did not finish');
+    const setupHeading = isProvisioning
+        ? l10n.t('Setting up DocumentDB Local')
+        : canContinueSetup
+          ? l10n.t('Ready to set up')
+          : l10n.t('Setup did not finish');
     const setupSubtitle = isProvisioning
         ? l10n.t('This can take a few minutes. Elapsed time: {0}', formatElapsed(elapsedMs))
         : canContinueSetup
@@ -1708,7 +1945,14 @@ export const LocalQuickStart = (): JSX.Element => {
             return undefined;
         }
         if (checkingDockerAgain) {
-            return l10n.t('Checking…');
+            return (
+                <Spinner
+                    size="extra-tiny"
+                    className={styles.stageInlineSpinner}
+                    labelPosition="after"
+                    label={l10n.t('Checking…')}
+                />
+            );
         }
         return (
             <Link className={styles.stageInlineLink} onClick={handleCheckDockerAgain}>
@@ -1740,48 +1984,58 @@ export const LocalQuickStart = (): JSX.Element => {
                         detail={stageDetailFor(stage)}
                         meta={stageMetaFor(stage)}
                         action={stageActionFor(stage)}
+                        reserveDetail={stage === 'checking'}
                     />
                 ))}
             </div>
-            {checkReadiness?.platformSupported === false && (
-                <MessageBar intent="warning" icon={<WarningRegular />}>
-                    <MessageBarBody>
-                        {l10n.t('DocumentDB Local images are published for x64 and arm64 only.')}
-                    </MessageBarBody>
-                </MessageBar>
-            )}
-            {dockerRecovered && (
-                <MessageBar intent="success">
-                    <MessageBarBody>
-                        <MessageBarTitle>{l10n.t('Docker is ready')}</MessageBarTitle>{' '}
-                        {canContinueSetup
-                            ? l10n.t('The setup steps have not run yet.')
-                            : l10n.t('The earlier failure is still shown below.')}
-                    </MessageBarBody>
-                </MessageBar>
-            )}
-            {phase === 'failed' && !dockerProblem && !canContinueSetup && (
-                <MessageBar
-                    intent={timedOut ? 'warning' : 'error'}
-                    layout="multiline"
-                    icon={timedOut ? <WarningRegular /> : <ErrorCircleFilled />}
-                >
-                    <MessageBarBody>
-                        {timedOut
-                            ? (errorMessage ??
-                              l10n.t(
-                                  'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing. Keep waiting, view the logs, or start over.',
-                              ))
-                            : (errorMessage ?? l10n.t('Setup failed.'))}
-                    </MessageBarBody>
-                    <MessageBarActions>
-                        <Button appearance="secondary" onClick={handleViewOutput}>
-                            {l10n.t('View setup log')}
-                        </Button>
-                    </MessageBarActions>
-                </MessageBar>
-            )}
-            {dockerStatusBlock}
+            {/* Everything below arrives while the step is already on screen, so it expands into
+                place. None of these carry `appear`: a state restored at mount renders instantly. */}
+            <Collapse visible={checkReadiness?.platformSupported === false} unmountOnExit>
+                <div>
+                    <MessageBar intent="warning" icon={<WarningRegular />}>
+                        <MessageBarBody>
+                            {l10n.t('DocumentDB Local images are published for x64 and arm64 only.')}
+                        </MessageBarBody>
+                    </MessageBar>
+                </div>
+            </Collapse>
+            {/* Only when a later failure still stands: otherwise the heading already says it. */}
+            <Collapse visible={dockerRecovered && !canContinueSetup} unmountOnExit>
+                <div>
+                    <MessageBar intent="success">
+                        <MessageBarBody>
+                            <MessageBarTitle>{l10n.t('Docker is ready')}</MessageBarTitle>{' '}
+                            {l10n.t('The earlier failure is still shown below.')}
+                        </MessageBarBody>
+                    </MessageBar>
+                </div>
+            </Collapse>
+            <Collapse visible={phase === 'failed' && !dockerProblem && !canContinueSetup} unmountOnExit>
+                <div>
+                    <MessageBar
+                        intent={timedOut ? 'warning' : 'error'}
+                        layout="multiline"
+                        icon={timedOut ? <WarningRegular /> : <ErrorCircleFilled />}
+                    >
+                        <MessageBarBody>
+                            {timedOut
+                                ? (errorMessage ??
+                                  l10n.t(
+                                      'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing. Keep waiting, view the logs, or start over.',
+                                  ))
+                                : (errorMessage ?? l10n.t('Setup failed.'))}
+                        </MessageBarBody>
+                        <MessageBarActions>
+                            <Button appearance="secondary" onClick={handleViewOutput}>
+                                {l10n.t('View setup log')}
+                            </Button>
+                        </MessageBarActions>
+                    </MessageBar>
+                </div>
+            </Collapse>
+            <Collapse visible={dockerProblem !== undefined} unmountOnExit>
+                {dockerStatusBlock}
+            </Collapse>{' '}
             {isProvisioning && <Link onClick={handleViewOutput}>{l10n.t('View setup log')}</Link>}
         </section>
     );
@@ -1801,6 +2055,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         label={STAGE_LABELS[stage]}
                         status="done"
                         detail={stage === 'checking' ? checkStageDetail : undefined}
+                        reserveDetail={stage === 'checking'}
                     />
                 ))}
             </div>
@@ -1855,7 +2110,9 @@ export const LocalQuickStart = (): JSX.Element => {
     if (phase === 'introduction') {
         primaryLabel = l10n.t('Continue');
         onPrimary = () => setPhase('configure');
-        footerNote = l10n.t('Nothing is downloaded or created on your machine until you choose to start.');
+        footerNote = l10n.t(
+            'Nothing is downloaded or created on your machine until you choose to start in the Configure step.',
+        );
         secondaryActions = (
             <Button appearance="secondary" onClick={handleClose}>
                 {l10n.t('Cancel')}

@@ -282,13 +282,13 @@ The single-surface rule held, but one action was doing three jobs. `Check again`
 
 The three scopes are now separate and each is named for what it does:
 
-| Scope           | Control                                                | Effect                                                   |
-| --------------- | ------------------------------------------------------ | -------------------------------------------------------- |
-| One stage       | `Check Docker again` link inside the failed stage row  | Re-runs only the Docker check. Never starts provisioning. |
-| Continue        | Footer primary, relabelled `Continue setup`            | Runs setup once the check stage is no longer failing.     |
-| Everything      | Footer primary, `Retry setup`                          | Runs the whole process again, for users who do not want to reason about scope. |
+| Scope      | Control                                               | Effect                                                                         |
+| ---------- | ----------------------------------------------------- | ------------------------------------------------------------------------------ |
+| One stage  | `Check Docker again` link inside the failed stage row | Re-runs only the Docker check. Never starts provisioning.                      |
+| Continue   | Footer primary, relabelled `Continue setup`           | Runs setup once the check stage is no longer failing.                          |
+| Everything | Footer primary, `Retry setup`                         | Runs the whole process again, for users who do not want to reason about scope. |
 
-The recheck link lives in the stage row because that is the stage it re-runs — the same "one fact, one home" principle that put Docker on a single surface. It is deliberately **not** duplicated into the error `MessageBar`: two controls a few pixels apart with identical behaviour is the ambiguity we just removed. The `MessageBar` keeps the actions that *change* something (`Install Docker`, `Start Docker`, `Copy command`, `Continue anyway`, `View Docker output`).
+The recheck link lives in the stage row because that is the stage it re-runs — the same "one fact, one home" principle that put Docker on a single surface. It is deliberately **not** duplicated into the error `MessageBar`: two controls a few pixels apart with identical behaviour is the ambiguity we just removed. The `MessageBar` keeps the actions that _change_ something (`Install Docker`, `Start Docker`, `Copy command`, `Continue anyway`, `View Docker output`).
 
 `Start Docker` followed by successful polling now resolves the same way as a manual recheck: the blocker clears in place and the user chooses when to continue. Nothing auto-starts a run the user did not ask for.
 
@@ -334,3 +334,32 @@ Two different memories were in play; only one of them belonged in the UI.
 - **None** stays viable in E, where the Introduction plan was verified in front of the user moments earlier.
 
 **Decision:** the **note above the footer**, with concept F. See _Selected design_ at the top of this document.
+
+## Known follow-ups
+
+Deferred deliberately — recorded here so they are not rediscovered as new bugs.
+
+### Retry setup is not fully race-free yet
+
+`Retry setup` used to work only on every second click. `QuickStartService.provision` reports every
+terminal failure by buffering it into `terminalEvent`, letting `finally` clear the `provisioning`
+guard, and yielding it afterwards — but the Docker-readiness failure yielded in place, from inside
+the `try`. The generator then sat suspended at that `yield` with `provisioning` still set, while the
+webview already showed the failure and re-enabled the button. The next click unsubscribed the old
+stream and immediately subscribed a new one, which reached the guard before the old generator had
+unwound, and came back with `Setup is already in progress.`. The click after that worked, because by
+then the unwind had completed.
+
+Fixed by routing the readiness failure through the same buffered path (a typed `DockerNotReadyError`
+caught by the existing `catch`), with a regression test in `QuickStartService.test.ts`.
+
+**Still open:** `runStream` in `LocalQuickStart.tsx` does not await the unsubscribe before sending
+the next subscription. Nothing exercises that window today, but the ordering is luck, not design. It
+should become an explicit handshake that waits for the previous stream to end.
+
+### The error row in the tree is surprising
+
+When the wizard fails, `LocalQuickStartItem` adds a row under `DocumentDB Local - Quick Start`
+carrying the raw error message. It is useful when the failure happened without the wizard being
+open, and confusing when the user just closed the wizard that reported the same error. Decide
+whether that row belongs at all, and if it does, what it should say.
