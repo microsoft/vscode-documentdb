@@ -132,6 +132,18 @@ class ReadinessTimeoutError extends Error {
 }
 
 /**
+ * Docker was not usable at the `checking` stage. Thrown rather than yielded in place so the
+ * failure leaves through the same buffered path as every other terminal failure, and the webview
+ * only learns about it once `finally` has cleared the `provisioning` guard.
+ */
+class DockerNotReadyError extends Error {
+    constructor(message: string) {
+        super(message);
+        this.name = 'DockerNotReadyError';
+    }
+}
+
+/**
  * Everything a "Wait longer" resume needs to finish adopting a container whose database was
  * still initializing when the initial readiness window elapsed. Retained across the timeout
  * (the container is kept running) and cleared on success / discard / a new provision.
@@ -417,12 +429,11 @@ export class QuickStartServiceImpl {
             const continueAfterIndeterminateReadiness =
                 options?.continueAnyway === true && readiness.outcome === 'indeterminate';
             if ((!readiness.cliInstalled || !readiness.daemonReachable) && !continueAfterIndeterminateReadiness) {
-                const message = !readiness.cliInstalled
-                    ? 'Docker CLI was not found on your PATH. Install Docker and retry.'
-                    : 'Docker is installed but the daemon is not reachable. Start Docker and retry.';
-                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
-                yield stageEvent('checking', 'error', message, message);
-                return;
+                throw new DockerNotReadyError(
+                    !readiness.cliInstalled
+                        ? 'Docker CLI was not found on your PATH. Install Docker and retry.'
+                        : 'Docker is installed but the daemon is not reachable. Start Docker and retry.',
+                );
             }
 
             // Remove a pre-existing managed container so the run starts clean (it is labelled as
@@ -589,7 +600,11 @@ export class QuickStartServiceImpl {
                 !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
             let message = aborted ? 'Setup was cancelled.' : errMessage(error);
-            if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
+            if (!aborted && error instanceof DockerNotReadyError) {
+                this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
+                this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
+                terminalEvent = stageEvent('checking', 'error', message, message);
+            } else if (!aborted && error instanceof ReadinessTimeoutError && containerCreated && containerId) {
                 // The container is running but the database did not accept connections within the
                 // window — it may still be initializing. KEEP it running (finally skips teardown)
                 // and surface the on-timeout actions (§9.1); the retained pendingReadiness lets a

@@ -6,6 +6,7 @@
 import {
     type DockerExecutionTarget,
     type DockerFailureKind,
+    type DockerProvider,
     type DockerReadiness,
     type DockerStartAction,
 } from '../../../services/localQuickStart/quickStartTypes';
@@ -63,12 +64,45 @@ export type DockerStartLabelKey = 'startDockerDesktop' | 'startDocker';
 
 export type DockerExecutionTargetKey = 'local' | 'wsl' | 'ssh' | 'devContainer' | 'codespaces' | 'otherRemote';
 
+/** Terminal fact of a failed readiness check, phrased to follow the facts that were established. */
+export type DockerDetailFailureKey =
+    | 'noCli'
+    | 'accessDenied'
+    | 'notRunning'
+    | 'daemonNotRunning'
+    | 'daemonStarting'
+    | 'notAvailableInWsl'
+    | 'endpointUnreachable'
+    | 'contextUnavailable'
+    | 'checkTimedOut'
+    | 'unsupportedHost'
+    | 'windowsContainers'
+    | 'daemonUnreachable';
+
+/**
+ * One `·`-separated piece of a stage detail line. Segments carry semantic values only — the view
+ * localizes them — and a segment is emitted only when the readiness result actually established
+ * the fact behind it, so a line never contains a placeholder.
+ */
+export type DockerDetailSegment =
+    | { readonly kind: 'provider'; readonly provider: DockerProvider; readonly version?: string }
+    | { readonly kind: 'cli'; readonly version?: string }
+    | { readonly kind: 'platform'; readonly osType?: 'linux' | 'windows'; readonly architecture?: string }
+    | { readonly kind: 'executionTarget'; readonly target: DockerExecutionTargetKey }
+    | { readonly kind: 'failure'; readonly failure: DockerDetailFailureKey };
+
 export interface DockerReadinessPresentation {
     readonly state: DockerReadinessPresentationState;
     readonly guidance?: DockerGuidanceKey;
     readonly recoveryNote?: DockerRecoveryNoteKey;
     readonly guide: DockerGuideKey;
     readonly startLabel?: DockerStartLabelKey;
+    /**
+     * Evidence line shown under the setup stage label. On success it proves which Docker was
+     * found (provider, version, platform, where it runs); on failure it states the facts that
+     * were established before the failure point, then the failure itself.
+     */
+    readonly detail: readonly DockerDetailSegment[];
     readonly showInstall: boolean;
     readonly showStartDockerProvider: boolean;
     readonly showCopyCommand: boolean;
@@ -280,11 +314,78 @@ export function getDockerExecutionTargetKey(target: DockerExecutionTarget): Dock
     }
 }
 
-export function getDockerLastCheckedAtMs(readiness: DockerReadiness): number {
-    if (readiness.providerEvidence === 'rememberedProvider' && readiness.providerRecordedAtMs !== undefined) {
-        return readiness.providerRecordedAtMs;
+function getDetailFailureKey(state: DockerReadinessPresentationState): DockerDetailFailureKey {
+    switch (state) {
+        case 'cliMissing':
+            return 'noCli';
+        case 'accessDenied':
+        case 'accessDeniedPendingRestart':
+            return 'accessDenied';
+        // The provider name is already an earlier segment, so this reads "Docker Desktop · not running".
+        case 'dockerDesktopNotRunning':
+            return 'notRunning';
+        case 'notRunning':
+            return 'daemonNotRunning';
+        case 'starting':
+            return 'daemonStarting';
+        case 'notAccessibleFromWsl':
+            return 'notAvailableInWsl';
+        case 'endpointUnreachable':
+            return 'endpointUnreachable';
+        case 'contextUnavailable':
+            return 'contextUnavailable';
+        case 'checkTimedOut':
+            return 'checkTimedOut';
+        case 'unsupported':
+            return 'unsupportedHost';
+        case 'windowsContainers':
+            return 'windowsContainers';
+        case 'ready':
+        case 'notAccessible':
+            return 'daemonUnreachable';
     }
-    return readiness.checkedAtMs;
+}
+
+function getPlatformSegment(readiness: DockerReadiness): DockerDetailSegment | undefined {
+    if (!readiness.osType && !readiness.daemonArchitecture) {
+        return undefined;
+    }
+    return { kind: 'platform', osType: readiness.osType, architecture: readiness.daemonArchitecture };
+}
+
+function composeDetail(
+    readiness: DockerReadiness,
+    state: DockerReadinessPresentationState,
+): readonly DockerDetailSegment[] {
+    const segments: DockerDetailSegment[] = [];
+
+    if (state === 'ready') {
+        segments.push({ kind: 'provider', provider: readiness.provider, version: readiness.cliVersion });
+        const platform = getPlatformSegment(readiness);
+        if (platform) {
+            segments.push(platform);
+        }
+        segments.push({ kind: 'executionTarget', target: getDockerExecutionTargetKey(readiness.executionTarget) });
+        return segments;
+    }
+
+    // "No CLI" is a different problem from "CLI found, daemon unreachable", and it is the whole
+    // story: nothing downstream of the CLI was ever established, so nothing else can be claimed.
+    if (!readiness.cliInstalled) {
+        return [{ kind: 'failure', failure: 'noCli' }];
+    }
+
+    // The CLI version is not the provider's version, so on a failure the two are separate facts.
+    segments.push({ kind: 'cli', version: readiness.cliVersion });
+    if (readiness.provider !== 'unknown') {
+        segments.push({ kind: 'provider', provider: readiness.provider });
+    }
+    const platform = getPlatformSegment(readiness);
+    if (platform) {
+        segments.push(platform);
+    }
+    segments.push({ kind: 'failure', failure: getDetailFailureKey(state) });
+    return segments;
 }
 
 function getRecoveryNote(readiness: DockerReadiness): DockerRecoveryNoteKey | undefined {
@@ -310,6 +411,7 @@ export function getDockerReadinessPresentation(readiness: DockerReadiness): Dock
             recoveryNote: undefined,
             guide: 'dockerTroubleshooting',
             startLabel: undefined,
+            detail: composeDetail(readiness, 'ready'),
             showInstall: false,
             showStartDockerProvider: false,
             showCopyCommand: false,
@@ -332,6 +434,7 @@ export function getDockerReadinessPresentation(readiness: DockerReadiness): Dock
         recoveryNote: getRecoveryNote(readiness),
         guide: getGuide(readiness),
         startLabel,
+        detail: composeDetail(readiness, state),
         showInstall: state === 'cliMissing',
         showStartDockerProvider: startLabel !== undefined,
         showCopyCommand: readiness.recoveryCommand !== undefined,

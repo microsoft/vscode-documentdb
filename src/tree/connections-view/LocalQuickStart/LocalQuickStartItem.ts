@@ -55,7 +55,7 @@ class QuickStartClusterItem extends DocumentDBClusterItem {
  * (even with zero saved connections — handled in ConnectionsBranchDataProvider).
  *
  * - No managed instance → a rocket empty-state row that opens the Quick Start
- *   webview, plus a "Learn more…" link.
+ *   webview.
  * - A managed instance → the inline cluster (Running, expand to browse) or a
  *   state row (Stopped/Starting/Stopping/Missing/Error) carrying lifecycle menus.
  */
@@ -195,25 +195,19 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
             ];
         }
 
-        // NotInstalled (no metadata) → empty-state rocket + learn more.
+        // NotInstalled (no metadata) → empty-state row that opens the Quick Start wizard.
         const children: TreeElement[] = [
             createGenericElementWithContext({
                 id: `${this.id}/start`,
                 contextValue: 'treeItem_quickStartAction',
-                label: l10n.t('Quick Start — Install & try DocumentDB locally'),
+                label: l10n.t('Click here to set up DocumentDB Local'),
                 iconPath: new vscode.ThemeIcon('rocket'),
                 commandId: 'vscode-documentdb.command.localQuickStart.open',
             }),
-            createGenericElementWithContext({
-                id: `${this.id}/learnMore`,
-                contextValue: 'treeItem_quickStartLearnMore',
-                label: l10n.t('Learn more…'),
-                iconPath: new vscode.ThemeIcon('link-external'),
-                commandId: 'vscode.open',
-                commandArgs: [vscode.Uri.parse('https://github.com/microsoft/documentdb')],
-            }),
         ];
 
+        // FOLLOW-UP: this row reports a wizard failure in the tree, which is surprising when the
+        // user never opened the wizard from here. Decide whether it belongs at all.
         if (status.state === InstanceState.Error && status.errorMessage) {
             children.push(
                 createGenericElementWithContext({

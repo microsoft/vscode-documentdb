@@ -953,6 +953,42 @@ describe('QuickStartService — WI-2e-1 provision RR4 volume-wipe gate', () => {
         },
     );
 
+    // The webview acts on the terminal event the moment it arrives (Retry becomes clickable), so
+    // the in-progress guard has to be clear by then. It was not for the Docker-readiness failure,
+    // which made every other Retry click bounce off "Setup is already in progress.".
+    it('clears the in-progress guard before reporting a Docker readiness failure', async () => {
+        ext.secretStorage = fakeSecretStorage({});
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+        const unavailable: DockerReadiness = {
+            outcome: 'diagnosed',
+            environment: 'linux',
+            endpointKind: 'unixSocket',
+            provider: 'dockerEngine',
+            providerEvidence: 'liveDaemon',
+            executionTarget: 'local',
+            failureKind: 'daemonUnavailable',
+            canContinueAnyway: false,
+            checkedAtMs: 1,
+            cliInstalled: true,
+            daemonReachable: false,
+        };
+        const service = new QuickStartServiceImpl(provisionRuntime({ readiness: unavailable }));
+        const retryEvents: StageEvent[] = [];
+
+        for await (const event of service.provision(new AbortController().signal)) {
+            if (event.status !== 'error') {
+                continue;
+            }
+            expect(event).toMatchObject({ stage: 'checking', status: 'error' });
+            for await (const retryEvent of service.provision(new AbortController().signal)) {
+                retryEvents.push(retryEvent);
+            }
+        }
+
+        expect(retryEvents[0]).toMatchObject({ stage: 'checking', status: 'active' });
+        expect(retryEvents.map((event) => event.message)).not.toContain('Setup is already in progress.');
+    });
+
     it('keeps an image failure on the provisioning path when Docker remains ready', async () => {
         ext.secretStorage = fakeSecretStorage({});
         ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;

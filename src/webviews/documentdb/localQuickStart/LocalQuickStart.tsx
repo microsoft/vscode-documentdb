@@ -8,36 +8,60 @@ import {
     AccordionHeader,
     AccordionItem,
     AccordionPanel,
-    Badge,
     Button,
-    Card,
-    Divider,
+    CounterBadge,
     Field,
     Input,
     Link,
     makeStyles,
+    mergeClasses,
+    MessageBar,
+    MessageBarActions,
+    MessageBarBody,
+    MessageBarTitle,
     Spinner,
     Switch,
+    Table,
+    TableBody,
+    TableCell,
+    TableCellLayout,
+    TableRow,
     Text,
     tokens,
+    Tooltip,
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
+    ArrowLeftRegular,
+    ArrowResetRegular,
     CheckmarkCircleFilled,
-    CircleRegular,
+    CircleHintFilled,
+    CopyRegular,
+    EditRegular,
     ErrorCircleFilled,
+    InfoRegular,
     RocketRegular,
+    WarningRegular,
 } from '@fluentui/react-icons';
+import { Collapse } from '@fluentui/react-motion-components-preview';
 import * as l10n from '@vscode/l10n';
-import { type JSX, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, type JSX, type ReactNode, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
     type AdvancedQuickStartOptions,
+    type DockerEndpointKind,
     type DockerEndpointProbe,
     type DockerFailureKind,
+    type DockerHostEnvironment,
+    type DockerPermissionDetail,
     type DockerProvider,
+    type DockerProviderEvidence,
+    type DockerReadiness,
+    type DockerReadinessOutcome,
+    type DockerRecoveryCommand,
     type DockerStatusResult,
     PROVISION_STAGES,
     type ProvisionStage,
+    QUICK_START_CONTAINER_NAME,
     QUICK_START_DEFAULT_TAG,
     QUICK_START_IMAGE,
     QUICK_START_IMAGE_REPOSITORY,
@@ -46,86 +70,228 @@ import {
 } from '../../../services/localQuickStart/quickStartTypes';
 import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility/Announcer';
+import { WizardBreadcrumb, type WizardStepMeta } from '../../components/wizard/WizardBreadcrumb';
 import { pollDockerReadiness } from './dockerReadinessPolling';
 import {
+    type DockerDetailFailureKey,
+    type DockerDetailSegment,
     type DockerGuidanceKey,
     type DockerGuideKey,
+    type DockerReadinessPresentation,
     type DockerReadinessPresentationState,
     type DockerRecoveryNoteKey,
     type DockerStartLabelKey,
     getDockerExecutionTargetKey,
-    getDockerLastCheckedAtMs,
     getDockerReadinessPresentation,
-    isDockerArchitectureCompatible,
 } from './dockerReadinessPresentation';
+import './localQuickStart.scss';
 
-type Phase = 'loading' | 'review' | 'dockerNotReady' | 'provisioning' | 'success' | 'failed';
+/**
+ * Wizard phases. `provisioning` and `failed` are both the "Set up" step: a setup failure — Docker
+ * problems included — is reported in place, beside the stage that failed, rather than on a screen
+ * of its own.
+ */
+type Phase = 'introduction' | 'configure' | 'provisioning' | 'failed' | 'success';
+type WizardStepId = 'introduction' | 'configure' | 'setup' | 'done';
 type StageStatus = 'pending' | 'active' | 'done' | 'error';
 
+function stepForPhase(phase: Phase): WizardStepId {
+    switch (phase) {
+        case 'introduction':
+            return 'introduction';
+        case 'configure':
+            return 'configure';
+        case 'provisioning':
+        case 'failed':
+            return 'setup';
+        case 'success':
+            return 'done';
+    }
+}
+
 const useStyles = makeStyles({
-    root: {
-        padding: '20px',
-        maxWidth: '880px',
-        margin: '0 auto',
+    root: { display: 'flex', flexDirection: 'column', height: '100vh', overflow: 'hidden' },
+    scrollArea: { flex: 1, minHeight: 0, overflowY: 'auto' },
+    content: {
         display: 'flex',
         flexDirection: 'column',
-        gap: '16px',
+        gap: '20px',
+        maxWidth: '760px',
+        padding: '24px',
     },
-    hero: { display: 'flex', alignItems: 'center', gap: '12px' },
-    heroIcon: { fontSize: '28px', color: tokens.colorBrandForeground1 },
-    cardGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(170px, 1fr))', gap: '12px' },
-    metricCard: { padding: '14px', display: 'flex', flexDirection: 'column', gap: '4px' },
-    metricLabel: { color: tokens.colorNeutralForeground3 },
-    summaryCard: { padding: '16px', display: 'flex', flexDirection: 'column', gap: '8px' },
-    summaryRow: { display: 'grid', gridTemplateColumns: '140px 1fr', gap: '8px' },
-    actions: { display: 'flex', gap: '8px', justifyContent: 'flex-end', marginTop: '8px' },
-    stageList: { display: 'flex', flexDirection: 'column', gap: '10px', padding: '16px' },
-    stageRow: { display: 'flex', alignItems: 'center', gap: '10px' },
-    stageIconDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '18px' },
-    stageIconError: { color: tokens.colorPaletteRedForeground1, fontSize: '18px' },
-    stageIconPending: { color: tokens.colorNeutralForeground4, fontSize: '18px' },
-    errorBox: {
-        padding: '12px',
-        borderRadius: tokens.borderRadiusMedium,
-        backgroundColor: tokens.colorStatusDangerBackground1,
-        color: tokens.colorStatusDangerForeground1,
-    },
-    successBox: {
-        padding: '12px',
-        borderRadius: tokens.borderRadiusMedium,
-        backgroundColor: tokens.colorStatusSuccessBackground1,
-        color: tokens.colorStatusSuccessForeground1,
-    },
-    nextSteps: { display: 'flex', flexDirection: 'column', gap: '4px', marginTop: '8px' },
-    advancedPanel: { display: 'flex', flexDirection: 'column', gap: '12px', paddingTop: '8px' },
-    advancedGrid: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '12px' },
-    muted: { color: tokens.colorNeutralForeground3 },
-    readinessFooter: {
+    hero: { display: 'flex', alignItems: 'center', gap: '16px' },
+    heroIcon: { color: tokens.colorBrandForeground1, fontSize: '56px', flexShrink: 0 },
+    muted: { color: tokens.colorNeutralForeground2 },
+    section: { display: 'flex', flexDirection: 'column', gap: '12px' },
+    sectionHeader: { display: 'flex', flexDirection: 'column', gap: '4px' },
+    // A heading belongs to what follows it, so it keeps more air above than below: the section's
+    // own 12px gap plus this 8px sits above the heading, and 8px separates it from its content.
+    subsection: { display: 'flex', flexDirection: 'column', gap: '8px', marginTop: '8px' },
+    // Navigation footer: the note that sets expectations for the primary action sits directly
+    // above it, then primary first and secondary after. The elevation only appears while the
+    // content actually overflows, so a short page keeps a flat, quiet footer.
+    footer: {
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
-        gap: '8px',
+        flexDirection: 'column',
+        alignItems: 'stretch',
+        gap: '12px',
+        flexShrink: 0,
+        padding: '16px 24px',
+        backgroundColor: tokens.colorNeutralBackground1,
+        borderTop: '1px solid transparent',
+        transitionProperty: 'box-shadow, border-top-color',
+        transitionDuration: tokens.durationNormal,
+        transitionTimingFunction: tokens.curveEasyEase,
     },
-    recoveryCommand: {
+    footerActions: { display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: '8px' },
+    footerNote: {
         display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'space-between',
-        flexWrap: 'wrap',
+        alignItems: 'flex-start',
         gap: '8px',
-        padding: '8px',
-        backgroundColor: tokens.colorNeutralBackground3,
-        borderRadius: tokens.borderRadiusSmall,
+        color: tokens.colorNeutralForeground2,
     },
-    recoveryCommandText: { display: 'flex', flexDirection: 'column', gap: '4px' },
-    targetNotice: {
-        padding: '10px',
-        backgroundColor: tokens.colorNeutralBackground3,
-        borderRadius: tokens.borderRadiusSmall,
+    // Block layout drops the inline descender space, so the glyph shares the text's first line box.
+    footerNoteIcon: {
+        color: tokens.colorNeutralForeground3,
+        display: 'block',
+        fontSize: '16px',
+        height: tokens.lineHeightBase200,
+        flexShrink: 0,
     },
+    footerElevated: {
+        borderTopColor: tokens.colorNeutralStroke2,
+        boxShadow: '0 -2px 6px rgba(0, 0, 0, 0.08)',
+    },
+    planList: { display: 'flex', flexDirection: 'column', gap: '2px', margin: 0, padding: 0, listStyle: 'none' },
+    planItem: { display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', gap: '0 10px', padding: '7px 0' },
+    // Centred against the whole entry, not just its first line, so the number reads as belonging
+    // to the title and its explanation together.
+    planBadge: { justifySelf: 'start', alignSelf: 'center' },
+    planCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
+    // Fluent's Table is `table-layout: fixed`, so every column that must not take the leftover
+    // space needs an explicit width. The value column is the only one left unsized.
+    settingsColLabel: { width: '140px', '@media (max-width: 560px)': { width: '96px' } },
+    settingsColActions: { width: '72px' },
+    settingValueCell: { minWidth: 0, overflowWrap: 'anywhere' },
+    // Right-aligned with flex, never `text-align`: Fluent's Switch positions its thumb as an
+    // inline element, so an inherited `text-align: right` pushes the thumb out of its track.
+    settingAction: { display: 'flex', justifyContent: 'flex-end' },
+    // The editor row is always present so its content can animate in and out; collapsed, it
+    // contributes no height, so the settings list never carries an empty band.
+    editorRow: { borderBottom: 'none' },
+    editorCell: { display: 'table-cell', height: 'auto', padding: 0 },
+    // The separator rides with the collapsing content, so it disappears along with it.
+    editorBody: {
+        padding: '10px 12px 14px 148px',
+        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+        '@media (max-width: 560px)': { paddingLeft: '12px' },
+    },
+    // `flex-start` keeps a field whose validation message appeared from stretching its sibling's
+    // input; the flexible basis lets a lone field fill the row and a pair split it.
+    editFields: {
+        display: 'flex',
+        flexWrap: 'wrap',
+        alignItems: 'flex-start',
+        gap: '12px',
+        '> *': { flexGrow: 1, flexBasis: '200px', minWidth: 0 },
+        // A native input's default intrinsic width would otherwise hold the row open, and the
+        // whole page with it, once the panel is narrower than about 300px.
+        '& .fui-Input': { minWidth: 0 },
+        '& .fui-Input > input': { minWidth: 0 },
+    },
+    imagePath: { overflowWrap: 'anywhere' },
+    stageList: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '12px',
+        padding: '16px',
+        border: `1px solid ${tokens.colorNeutralStroke2}`,
+        borderRadius: tokens.borderRadiusMedium,
+    },
+    stageRow: { display: 'flex', alignItems: 'flex-start', gap: '10px', minHeight: '20px' },
+    stageIcon: { width: '18px', height: '20px', flexShrink: 0, display: 'grid', placeItems: 'center' },
+    stageCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0, alignItems: 'flex-start' },
+    // The re-check sits on the evidence line, so it has to drop to that line's type scale.
+    stageInlineLink: { fontSize: tokens.fontSizeBase200, lineHeight: tokens.lineHeightBase200 },
+    // Keeps the in-flight spinner on the evidence line rather than starting a block of its own.
+    stageInlineSpinner: {
+        display: 'inline-flex',
+        verticalAlign: 'text-bottom',
+        gap: '6px',
+        '& .fui-Spinner__label': {
+            fontSize: tokens.fontSizeBase200,
+            lineHeight: tokens.lineHeightBase200,
+            color: tokens.colorNeutralForeground2,
+        },
+    },
+    stageDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '18px' },
+    stageError: { color: tokens.colorPaletteRedForeground1, fontSize: '18px' },
+    stagePending: { color: tokens.colorNeutralForeground4, fontSize: '18px' },
+    dockerStatus: { display: 'flex', flexDirection: 'column', gap: '10px' },
+    messageBody: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '8px' },
+    // Copy stays pinned top-right: a multi-line command must not push it down or wrap it away.
+    recoveryCommandBlock: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: '8px',
+        padding: '6px 6px 6px 8px',
+        borderRadius: tokens.borderRadiusSmall,
+        backgroundColor: tokens.colorNeutralBackground1,
+        border: `1px solid ${tokens.colorStatusDangerBorder1}`,
+    },
+    // Sits inside the error bar, so it reads as a neutral surface outlined in the danger hue
+    // rather than a second alert nested inside the first.
+    recoveryCommandLine: {
+        minWidth: 0,
+        // `pre-wrap` keeps the line breaks of a multi-line command instead of collapsing them.
+        whiteSpace: 'pre-wrap',
+        paddingTop: '3px',
+        fontFamily: tokens.fontFamilyMonospace,
+        fontSize: tokens.fontSizeBase300,
+        color: tokens.colorNeutralForeground1,
+        overflowWrap: 'anywhere',
+    },
+    recoveryCommandCopy: { flexShrink: 0 },
     waitingStatus: { display: 'flex', alignItems: 'center', gap: '8px' },
-    diagnosticList: { display: 'grid', gridTemplateColumns: 'max-content 1fr', gap: '4px 12px', margin: '8px 0' },
-    diagnosticValue: { margin: 0 },
+    dockerAccordionHeader: { minHeight: '30px' },
+    accordionHeaderBrand: { color: tokens.colorBrandForeground1 },
+    dockerAccordionPanel: { paddingTop: '4px' },
+    dockerDetailsIntro: { display: 'block', paddingBottom: '8px', color: tokens.colorNeutralForeground2 },
+    dockerDetails: {
+        display: 'grid',
+        gridTemplateColumns: '150px minmax(0, 1fr)',
+        margin: 0,
+        borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
+        '@media (max-width: 480px)': { gridTemplateColumns: '110px minmax(0, 1fr)' },
+    },
+    dockerDetailLabel: {
+        margin: 0,
+        padding: '9px 0',
+        color: tokens.colorNeutralForeground2,
+        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    dockerDetailValue: {
+        display: 'flex',
+        flexDirection: 'column',
+        gap: '2px',
+        margin: 0,
+        padding: '9px 0',
+        overflowWrap: 'anywhere',
+        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
+    },
+    // How the fact above was established — the part that is worth the extra room behind a
+    // collapsed panel.
+    dockerDetailNote: { color: tokens.colorNeutralForeground3 },
+    lastCheckedRow: {
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        flexWrap: 'wrap',
+        gap: '8px',
+    },
+    nextSteps: { display: 'flex', flexDirection: 'column', gap: '4px' },
     // Visually hidden but exposed to assistive tech (WCAG 4.1.3 status text).
     srOnly: {
         position: 'absolute',
@@ -148,6 +314,42 @@ const STAGE_LABELS: Record<ProvisionStage, string> = {
     done: l10n.t('Done'),
     error: l10n.t('Error'),
 };
+
+interface PlanItem {
+    readonly label: string;
+    readonly detail: string;
+}
+
+/** One row of the Configure step: a read-only summary line plus the editor it reveals. */
+interface SettingItem {
+    readonly key: string;
+    readonly label: string;
+    readonly value: ReactNode;
+    readonly action?: ReactNode;
+    /** Built whenever the setting is editable at all, so it survives its own exit motion. */
+    readonly editor?: ReactNode;
+    readonly editorOpen?: boolean;
+}
+
+/** Mirrors the wizard's own sequence, so the user recognizes it again on the Set up page. */
+const PLAN_ITEMS: readonly PlanItem[] = [
+    {
+        label: l10n.t('Verify your Docker setup'),
+        detail: l10n.t('Confirms Docker is installed and can run containers on this machine.'),
+    },
+    {
+        label: l10n.t('Download the official image'),
+        detail: l10n.t('Downloaded once, then reused for later setups.'),
+    },
+    {
+        label: l10n.t('Create and start the container'),
+        detail: l10n.t('One container named {0}, using the settings you choose.', QUICK_START_CONTAINER_NAME),
+    },
+    {
+        label: l10n.t('Save the connection'),
+        detail: l10n.t('The connection appears in the Connections view, ready to open.'),
+    },
+];
 
 const DOCKER_DAEMON_VALUES: Readonly<Record<DockerReadinessPresentationState, string>> = {
     ready: l10n.t('Reachable'),
@@ -179,17 +381,59 @@ const DOCKER_FAILURE_LABELS: Readonly<Record<DockerFailureKind, string>> = {
     unknown: l10n.t('Unknown Docker problem'),
 };
 
-const DOCKER_ENDPOINT_SOURCE_LABELS: Readonly<Record<DockerEndpointProbe['source'], string>> = {
-    dockerHostEnv: l10n.t('DOCKER_HOST environment variable'),
-    dockerContextEnv: l10n.t('DOCKER_CONTEXT environment variable'),
-    currentContext: l10n.t('Current Docker context'),
-    platformDefault: l10n.t('Platform default'),
-};
-
 const DOCKER_PROVIDER_LABELS: Readonly<Record<DockerProvider, string>> = {
     dockerDesktop: l10n.t('Docker Desktop'),
     dockerEngine: l10n.t('Docker Engine'),
     unknown: l10n.t('Unknown'),
+};
+
+const DOCKER_OUTCOME_VALUES: Readonly<Record<DockerReadinessOutcome, string>> = {
+    ready: l10n.t('Docker is ready'),
+    diagnosed: l10n.t('A specific problem was identified'),
+    indeterminate: l10n.t('No clear answer'),
+};
+
+const DOCKER_ENDPOINT_KIND_VALUES: Readonly<Record<DockerEndpointKind, string>> = {
+    unixSocket: l10n.t('Unix socket'),
+    namedPipe: l10n.t('Windows named pipe'),
+    tcp: l10n.t('TCP address'),
+    ssh: l10n.t('SSH tunnel'),
+    unknown: l10n.t('Could not be resolved'),
+};
+
+/** How the endpoint the check dialled was chosen. */
+const DOCKER_ENDPOINT_SOURCE_NOTES: Readonly<Record<DockerEndpointProbe['source'], string>> = {
+    dockerHostEnv: l10n.t('Taken from the DOCKER_HOST environment variable, which overrides everything else.'),
+    dockerContextEnv: l10n.t('Taken from the DOCKER_CONTEXT environment variable.'),
+    currentContext: l10n.t('Taken from the Docker context that is currently active.'),
+    platformDefault: l10n.t('No override was set, so the default location for this platform was used.'),
+};
+
+/** How the provider above was identified — strongest evidence first. */
+const DOCKER_PROVIDER_EVIDENCE_NOTES: Readonly<Record<DockerProviderEvidence, string>> = {
+    liveDaemon: l10n.t('Read from the daemon that answered the check.'),
+    activeContext: l10n.t('Inferred from the Docker context that is currently active.'),
+    installedApplication: l10n.t('Inferred from the Docker application installed on this machine.'),
+    rememberedProvider: l10n.t('Remembered from the last check on this machine that did reach a daemon.'),
+    none: l10n.t('Nothing identified it: the check reached neither a daemon nor a usable context.'),
+};
+
+const DOCKER_HOST_ENVIRONMENT_VALUES: Readonly<Record<DockerHostEnvironment, string>> = {
+    windows: l10n.t('Windows'),
+    macos: l10n.t('macOS'),
+    linux: l10n.t('Linux'),
+    wsl: l10n.t('Windows Subsystem for Linux'),
+    ssh: l10n.t('Remote SSH host'),
+    devContainer: l10n.t('Dev container'),
+    codespaces: l10n.t('GitHub Codespaces'),
+    otherRemote: l10n.t('Remote extension host'),
+    unsupported: l10n.t('Unsupported platform'),
+};
+
+const DOCKER_PERMISSION_DETAIL_VALUES: Readonly<Record<DockerPermissionDetail, string>> = {
+    notInGroup: l10n.t('Your user is not a member of the docker group'),
+    pendingSessionRestart: l10n.t('Your user is in the docker group, but this session predates the change'),
+    unknown: l10n.t('Denied for a reason the check could not narrow down'),
 };
 
 const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
@@ -233,32 +477,32 @@ const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
 };
 
 const DOCKER_GUIDES: Readonly<Record<DockerGuideKey, { readonly label: string; readonly href: string }>> = {
-    install: { label: l10n.t('Install Docker'), href: 'https://docs.docker.com/engine/install/' },
+    install: { label: l10n.t('Open Docker install guide'), href: 'https://docs.docker.com/engine/install/' },
     linuxPostInstall: {
-        label: l10n.t('Linux setup guide'),
+        label: l10n.t('Open Linux setup guide'),
         href: 'https://docs.docker.com/engine/install/linux-postinstall/',
     },
     dockerTroubleshooting: {
-        label: l10n.t('Docker troubleshooting'),
+        label: l10n.t('Open Docker troubleshooting guide'),
         href: 'https://docs.docker.com/engine/daemon/troubleshoot/',
     },
     dockerContexts: {
-        label: l10n.t('Docker context guide'),
+        label: l10n.t('Open Docker context guide'),
         href: 'https://docs.docker.com/engine/manage-resources/contexts/',
     },
     wslIntegration: {
-        label: l10n.t('WSL integration guide'),
+        label: l10n.t('Open WSL integration guide'),
         href: 'https://docs.docker.com/desktop/features/wsl/',
     },
     remoteDocker: {
-        label: l10n.t('Remote Docker guide'),
+        label: l10n.t('Open remote Docker guide'),
         href: 'https://docs.docker.com/engine/security/protect-access/',
     },
     linuxContainers: {
-        label: l10n.t('Linux containers guide'),
+        label: l10n.t('Open Linux containers guide'),
         href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
     },
-    learnMore: { label: l10n.t('Learn more'), href: 'https://docs.docker.com/engine/install/' },
+    learnMore: { label: l10n.t('Open Docker documentation'), href: 'https://docs.docker.com/engine/install/' },
 };
 
 const DOCKER_START_LABELS: Readonly<Record<DockerStartLabelKey, string>> = {
@@ -275,20 +519,6 @@ const EXECUTION_TARGET_VALUES: Readonly<Record<ReturnType<typeof getDockerExecut
     otherRemote: l10n.t('This remote extension host (Docker)'),
 };
 
-const EXECUTION_TARGET_NOTICES: Readonly<Partial<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>>> = {
-    wsl: l10n.t('Docker and DocumentDB Local will run in WSL, where this extension is running.'),
-    ssh: l10n.t('Docker and DocumentDB Local will run on the remote SSH host. localhost refers to that remote host.'),
-    devContainer: l10n.t(
-        'Docker and DocumentDB Local will run in the dev-container environment. localhost refers to the extension host.',
-    ),
-    codespaces: l10n.t(
-        'Docker and DocumentDB Local will run in Codespaces. localhost refers to the Codespaces extension host.',
-    ),
-    otherRemote: l10n.t(
-        'Docker and DocumentDB Local will run on the remote extension host. localhost refers to that host.',
-    ),
-};
-
 const DOCKER_RECOVERY_NOTES: Readonly<Record<DockerRecoveryNoteKey, string>> = {
     groupMembershipNewSession: l10n.t('Group membership applies to new login sessions only.'),
     restartWslDistribution: l10n.t(
@@ -296,6 +526,72 @@ const DOCKER_RECOVERY_NOTES: Readonly<Record<DockerRecoveryNoteKey, string>> = {
     ),
     runsDockerService: l10n.t('Runs the system Docker service.'),
 };
+
+/** Provider names for the stage detail line; an unidentified provider is still "Docker". */
+const DOCKER_DETAIL_PROVIDER_LABELS: Readonly<Record<DockerProvider, string>> = {
+    dockerDesktop: l10n.t('Docker Desktop'),
+    dockerEngine: l10n.t('Docker Engine'),
+    unknown: l10n.t('Docker'),
+};
+
+const DOCKER_DETAIL_OS_LABELS: Readonly<Record<'linux' | 'windows', string>> = {
+    linux: l10n.t('Linux'),
+    windows: l10n.t('Windows'),
+};
+
+const DOCKER_DETAIL_TARGET_LABELS: Readonly<Record<ReturnType<typeof getDockerExecutionTargetKey>, string>> = {
+    local: l10n.t('runs on this machine'),
+    wsl: l10n.t('runs in this WSL environment'),
+    ssh: l10n.t('runs on the remote SSH host'),
+    devContainer: l10n.t('runs in this dev container'),
+    codespaces: l10n.t('runs in this Codespace'),
+    otherRemote: l10n.t('runs on the remote extension host'),
+};
+
+const DOCKER_DETAIL_FAILURE_LABELS: Readonly<Record<DockerDetailFailureKey, string>> = {
+    noCli: l10n.t('no Docker CLI found'),
+    accessDenied: l10n.t('access denied'),
+    notRunning: l10n.t('not running'),
+    daemonNotRunning: l10n.t('daemon not running'),
+    daemonStarting: l10n.t('daemon starting'),
+    notAvailableInWsl: l10n.t('not available in this WSL distribution'),
+    endpointUnreachable: l10n.t('endpoint unreachable'),
+    contextUnavailable: l10n.t('context unavailable'),
+    checkTimedOut: l10n.t('check timed out'),
+    unsupportedHost: l10n.t('unsupported host'),
+    windowsContainers: l10n.t('Windows containers enabled'),
+    daemonUnreachable: l10n.t('daemon unreachable'),
+};
+
+function formatDockerDetailSegment(segment: DockerDetailSegment): string | undefined {
+    switch (segment.kind) {
+        case 'provider': {
+            const name = DOCKER_DETAIL_PROVIDER_LABELS[segment.provider];
+            return segment.version ? l10n.t('{0} {1}', name, segment.version) : name;
+        }
+        case 'cli':
+            return segment.version ? l10n.t('Docker CLI {0} found', segment.version) : l10n.t('Docker CLI found');
+        case 'platform': {
+            const osName = segment.osType ? DOCKER_DETAIL_OS_LABELS[segment.osType] : undefined;
+            if (osName && segment.architecture) {
+                return l10n.t('{0} {1}', osName, segment.architecture);
+            }
+            return osName ?? segment.architecture;
+        }
+        case 'executionTarget':
+            return DOCKER_DETAIL_TARGET_LABELS[segment.target];
+        case 'failure':
+            return DOCKER_DETAIL_FAILURE_LABELS[segment.failure];
+    }
+}
+
+/** Joins the composed evidence segments; a segment whose underlying fact is unknown is dropped. */
+function formatDockerDetail(segments: readonly DockerDetailSegment[]): string | undefined {
+    const parts = segments
+        .map(formatDockerDetailSegment)
+        .filter((part): part is string => part !== undefined && part.length > 0);
+    return parts.length > 0 ? parts.join(' · ') : undefined;
+}
 
 function formatLastChecked(checkedAtMs: number | undefined, now: number): string {
     if (checkedAtMs === undefined) {
@@ -332,6 +628,124 @@ function formatElapsed(elapsedMs: number): string {
     return `${minutes}:${seconds}`;
 }
 
+interface DockerDetailRow {
+    readonly label: string;
+    readonly value: string;
+    /** How the value above was established, or why it could not be. */
+    readonly note?: string;
+}
+
+/**
+ * Full report of the Docker readiness check, for the collapsed "What the Docker check found"
+ * panel. Every fact carries how it was established, because the panel's job is to show the user
+ * what was actually probed rather than to be scanned quickly.
+ */
+function buildDockerDetailRows(
+    readiness: DockerReadiness,
+    daemonState: DockerReadinessPresentationState,
+    now: number,
+): readonly DockerDetailRow[] {
+    const rows: DockerDetailRow[] = [
+        {
+            label: l10n.t('Check result'),
+            value: DOCKER_OUTCOME_VALUES[readiness.outcome],
+            note:
+                readiness.outcome === 'indeterminate'
+                    ? l10n.t('Docker answered too vaguely to name a cause, so setup can still be attempted.')
+                    : undefined,
+        },
+    ];
+
+    if (readiness.outcome !== 'ready') {
+        rows.push({
+            label: l10n.t('Detected problem'),
+            value: DOCKER_FAILURE_LABELS[readiness.failureKind ?? 'unknown'],
+        });
+    }
+
+    rows.push({
+        label: l10n.t('Docker CLI'),
+        value: readiness.cliInstalled
+            ? readiness.cliVersion
+                ? l10n.t('Found, version {0}', readiness.cliVersion)
+                : l10n.t('Found, version not reported')
+            : l10n.t('Not found'),
+        note: readiness.cliInstalled
+            ? l10n.t('The docker command was located and run to read its version.')
+            : l10n.t('The docker command is not on PATH, so no further probe could run.'),
+    });
+
+    rows.push({
+        label: l10n.t('Docker daemon'),
+        value: DOCKER_DAEMON_VALUES[daemonState],
+        note: readiness.daemonReachable
+            ? l10n.t('The daemon answered, so everything below was reported by Docker itself.')
+            : l10n.t('The daemon did not answer, so anything only Docker can report is still unknown.'),
+    });
+
+    rows.push({
+        label: l10n.t('Docker endpoint'),
+        value: DOCKER_ENDPOINT_KIND_VALUES[readiness.endpointKind],
+        note: readiness.endpointSource
+            ? DOCKER_ENDPOINT_SOURCE_NOTES[readiness.endpointSource]
+            : l10n.t('No endpoint could be resolved, so the check had nothing to dial.'),
+    });
+
+    if (readiness.permissionDetail) {
+        rows.push({
+            label: l10n.t('Socket access'),
+            value: DOCKER_PERMISSION_DETAIL_VALUES[readiness.permissionDetail],
+            note: l10n.t('Checked by comparing the Docker socket owner group against your user and this process.'),
+        });
+    }
+
+    rows.push({
+        label: l10n.t('Provider'),
+        value: DOCKER_PROVIDER_LABELS[readiness.provider],
+        note: DOCKER_PROVIDER_EVIDENCE_NOTES[readiness.providerEvidence],
+    });
+
+    const daemonOs = readiness.osType ? DOCKER_DETAIL_OS_LABELS[readiness.osType] : undefined;
+    const daemonPlatform =
+        daemonOs && readiness.daemonArchitecture
+            ? l10n.t('{0} {1}', daemonOs, readiness.daemonArchitecture)
+            : (daemonOs ?? readiness.daemonArchitecture);
+    rows.push({
+        label: l10n.t('Containers run on'),
+        value: daemonPlatform ?? l10n.t('Not reported yet'),
+        note: daemonPlatform
+            ? l10n.t('The operating system and CPU architecture the daemon builds and runs containers for.')
+            : l10n.t('Docker reports this only once a connection succeeds, so it stays unknown until then.'),
+    });
+
+    rows.push({
+        label: l10n.t('This machine'),
+        value: readiness.arch
+            ? l10n.t('{0}, {1}', DOCKER_HOST_ENVIRONMENT_VALUES[readiness.environment], readiness.arch)
+            : DOCKER_HOST_ENVIRONMENT_VALUES[readiness.environment],
+        note:
+            readiness.platformSupported === false
+                ? l10n.t('DocumentDB Local images are published for x64 and arm64 only.')
+                : l10n.t('Where VS Code is running the extension, detected before Docker was contacted.'),
+    });
+
+    rows.push({
+        label: l10n.t('Container host'),
+        value: EXECUTION_TARGET_VALUES[getDockerExecutionTargetKey(readiness.executionTarget)],
+        note: l10n.t('The container is created here, so localhost refers to this environment.'),
+    });
+
+    rows.push({
+        label: l10n.t('Check run'),
+        value: formatLastChecked(readiness.checkedAtMs, now),
+        note: readiness.diagnosticFingerprint
+            ? l10n.t('Diagnostic reference {0} — quote it when reporting this.', readiness.diagnosticFingerprint)
+            : undefined,
+    });
+
+    return rows;
+}
+
 function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
     return {
         checking: 'pending',
@@ -344,18 +758,69 @@ function emptyStageStatus(): Record<ProvisionStage, StageStatus> {
     };
 }
 
-const MetricCard = ({ label, value, badge }: { label: string; value: string; badge?: JSX.Element }): JSX.Element => {
+interface StageRowProps {
+    readonly label: string;
+    readonly status: StageStatus;
+    /**
+     * Evidence about what was actually observed, kept after the stage settles so the list reads
+     * as a receipt rather than a transient log.
+     */
+    readonly detail?: string;
+    /** Appended to the evidence line, e.g. when the evidence was gathered. */
+    readonly meta?: string;
+    /** Inline control on the evidence line, e.g. re-running just this stage's check. */
+    readonly action?: ReactNode;
+    /** Holds the evidence line's space from the first render, so the row never grows later. */
+    readonly reserveDetail?: boolean;
+}
+
+const StageRow = ({ label, status, detail, meta, action, reserveDetail }: StageRowProps): JSX.Element => {
     const styles = useStyles();
+    let icon: JSX.Element;
+    let statusText: string;
+
+    if (status === 'done') {
+        icon = <CheckmarkCircleFilled aria-hidden className={styles.stageDone} />;
+        statusText = l10n.t('done');
+    } else if (status === 'error') {
+        icon = <ErrorCircleFilled aria-hidden className={styles.stageError} />;
+        statusText = l10n.t('failed');
+    } else if (status === 'active') {
+        icon = <Spinner size="extra-tiny" aria-hidden />;
+        statusText = l10n.t('in progress');
+    } else {
+        icon = <CircleHintFilled aria-hidden className={styles.stagePending} />;
+        statusText = l10n.t('pending');
+    }
+
+    const evidence = detail && meta ? l10n.t('{0} · {1}', detail, meta) : (detail ?? meta);
+    const hasEvidence = Boolean(evidence || action);
+
+    // The row is not aria-labelled: an inline action lives on the evidence line, and a row-level
+    // label would leave it unreachable. The status is voiced by a visually-hidden span instead.
     return (
-        <Card className={styles.metricCard}>
-            <Text size={200} className={styles.metricLabel}>
-                {label}
-            </Text>
-            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                {badge}
-                <Text weight="semibold">{value}</Text>
+        <div className={styles.stageRow} role="listitem">
+            <span className={styles.stageIcon}>{icon}</span>
+            <div className={styles.stageCopy}>
+                <Text className={status === 'pending' ? styles.muted : undefined}>
+                    {label}
+                    <span className={styles.srOnly}>{l10n.t(', {0}', statusText)}</span>
+                </Text>
+                {(hasEvidence || reserveDetail) && (
+                    <Text size={200} className={styles.muted}>
+                        {hasEvidence ? (
+                            <>
+                                {evidence}
+                                {evidence && action ? ' · ' : ''}
+                                {action}
+                            </>
+                        ) : (
+                            <span aria-hidden>{'\u00a0'}</span>
+                        )}
+                    </Text>
+                )}
             </div>
-        </Card>
+        </div>
     );
 };
 
@@ -363,62 +828,80 @@ export const LocalQuickStart = (): JSX.Element => {
     const styles = useStyles();
     const trpcClient = useTrpcClient();
 
-    const [phase, setPhase] = useState<Phase>('loading');
-    const [docker, setDocker] = useState<DockerStatusResult | undefined>(undefined);
+    const [phase, setPhase] = useState<Phase>('introduction');
+    /**
+     * Readiness backing the `Checking Docker` stage: its detail line in both directions, and its
+     * remediation when that stage failed. Loaded in the background while the user reads the
+     * Introduction — nothing about it is rendered before the Set up step.
+     */
+    const [checkReadiness, setCheckReadiness] = useState<DockerReadiness | undefined>(undefined);
+    /** A Docker problem reported by a later stage (pull / run), backing that stage's remediation. */
+    const [stageDockerFailure, setStageDockerFailure] = useState<DockerReadiness | undefined>(undefined);
+    const [willReuse, setWillReuse] = useState(false);
     const [stageStatus, setStageStatus] = useState<Record<ProvisionStage, StageStatus>>(emptyStageStatus);
     const [errorMessage, setErrorMessage] = useState<string | undefined>(undefined);
     const [successMessage, setSuccessMessage] = useState<string | undefined>(undefined);
     const [boundPort, setBoundPort] = useState<number | undefined>(undefined);
     const [elapsedMs, setElapsedMs] = useState(0);
     const [startingDocker, setStartingDocker] = useState(false);
+    const [checkingDockerAgain, setCheckingDockerAgain] = useState(false);
     const [dockerWaitElapsedMs, setDockerWaitElapsedMs] = useState(0);
     const [relativeTimeNow, setRelativeTimeNow] = useState(0);
     const [dockerActionMessage, setDockerActionMessage] = useState<string | undefined>(undefined);
     const [copyAnnouncementKey, setCopyAnnouncementKey] = useState(0);
+    const [dockerRecoveredKey, setDockerRecoveredKey] = useState(0);
     // True when the terminal failure was a readiness timeout (the container was left running),
-    // so the failed view offers Wait longer / View logs / Start over instead of just Retry (§9.1).
+    // so the failed view offers Wait longer / Start over instead of just Retry (§9.1).
     const [timedOut, setTimedOut] = useState(false);
 
-    // Advanced overrides (P1-4). Empty fields fall back to the zero-decision defaults.
-    const [advPort, setAdvPort] = useState('');
+    // Settings (P1-4). The port and tag fields carry the real defaults rather than placeholder
+    // text, so what the user sees in the box is what will be used.
+    const [advPort, setAdvPort] = useState(String(QUICK_START_PORT));
     const [advUser, setAdvUser] = useState('');
     const [advPass, setAdvPass] = useState('');
-    const [advTag, setAdvTag] = useState('');
+    const [advTag, setAdvTag] = useState(QUICK_START_DEFAULT_TAG);
     const [advLoadSampleData, setAdvLoadSampleData] = useState(true);
+    const [editingPort, setEditingPort] = useState(false);
+    const [editingImage, setEditingImage] = useState(false);
+    const [customCredentials, setCustomCredentials] = useState(false);
 
     // The service reuses an existing instance (keeping its data volume) whenever stored
     // credentials exist, ignoring any custom credentials / image tag. `willReuse` reflects
     // that exact decision (the same predicate the service uses), so we hide those fields and
-    // relabel the summary whenever — and only when — the service will actually reuse. (A
-    // Missing badge always implies stored creds, so `willReuse` already subsumes it.)
-    const isRecreate = docker?.willReuse === true;
+    // relabel the settings whenever — and only when — the service will actually reuse.
+    const isRecreate = willReuse;
+    const useCustomCredentials = customCredentials && !isRecreate;
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const readinessAbortRef = useRef<AbortController | null>(null);
+    // Mirrors `checkReadiness` so the stage-event handler can test it without reading state inside
+    // a setState updater (which React may invoke more than once).
+    const checkReadinessRef = useRef<DockerReadiness | undefined>(undefined);
     const dockerPollAbortRef = useRef<AbortController | null>(null);
+    const lastDockerProblemRef = useRef<
+        { readonly problem: DockerReadiness; readonly presentation: DockerReadinessPresentation } | undefined
+    >(undefined);
     const dockerWaitTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
     const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-    // Current Advanced options, synced from the fields below so handleStart (and Retry)
-    // always read the latest without re-binding the provisioning subscription.
+    // Current settings, synced from the fields below so handleStart (and Retry) always read the
+    // latest without re-binding the provisioning subscription.
     const advancedRef = useRef<AdvancedQuickStartOptions | undefined>(undefined);
-    // Focused when provisioning ends so keyboard/screen-reader users land on the primary
-    // result action instead of being stranded on the now-unmounted Cancel button (WCAG 2.4.3).
-    const resultActionRef = useRef<HTMLButtonElement>(null);
-    // Focused while provisioning so a keyboard user isn't stranded on <body> after Start/Retry/
-    // Wait longer unmounts the button they clicked (WCAG 2.4.3).
+    // Focused when provisioning ends so keyboard/screen-reader users land on the primary result
+    // action instead of being stranded on the now-unmounted Cancel button (WCAG 2.4.3).
+    const primaryButtonRef = useRef<HTMLButtonElement>(null);
     const cancelButtonRef = useRef<HTMLButtonElement>(null);
     // True while the in-flight stream is a "Wait longer" resume, so Cancel returns to the
-    // timed-out actions view (container is kept) rather than the fresh setup form.
+    // timed-out actions view (container is kept) rather than the settings page.
     const isWaitLongerRef = useRef(false);
     // Monotonic id for the current provisioning/resume stream. Callbacks capture it and ignore
     // any invocation from a superseded/cancelled stream, so a late/flushed event can't overwrite
-    // state after Cancel / Start over / a new Start (gpt-5.5 defense-in-depth).
+    // state after Cancel / Start over / a new Start.
     const streamGenerationRef = useRef(0);
 
-    // Validate the Advanced fields client-side, mirroring the router's zod schema so a valid
-    // form never dead-ends on a server rejection. Returns the offending field (for a per-field
-    // error state, a11y §3.3.1) plus the message. Credential/image checks are skipped while
-    // reusing an existing instance, since those inputs are hidden and their values are ignored.
+    // Validate the settings client-side, mirroring the router's zod schema so a valid form never
+    // dead-ends on a server rejection. Returns the offending field (for a per-field error state,
+    // a11y §3.3.1) plus the message. Credential/image checks are skipped while reusing an existing
+    // instance, since those inputs are hidden and their values are ignored.
     // eslint-disable-next-line no-control-regex
     const credForbidden = /[\u0000-\u001f\u007f]/;
     const advValidation = ((): { field: 'port' | 'username' | 'password' | 'tag'; message: string } | undefined => {
@@ -431,7 +914,7 @@ export const LocalQuickStart = (): JSX.Element => {
             const pass = advPass.trim();
             const hasUser = user.length > 0;
             const hasPass = pass.length > 0;
-            if (hasUser !== hasPass) {
+            if (useCustomCredentials && hasUser !== hasPass) {
                 return {
                     field: hasUser ? 'password' : 'username',
                     message: l10n.t('Enter both a username and a password, or leave both blank to auto-generate.'),
@@ -462,91 +945,128 @@ export const LocalQuickStart = (): JSX.Element => {
     const advError = advValidation?.message;
 
     useEffect(() => {
-        // Sync the Advanced fields into a ref (repo stale-closure pattern) so the provisioning
+        // Sync the settings into a ref (repo stale-closure pattern) so the provisioning
         // subscription reads current values. Skip building options while invalid.
         if (advError) {
             advancedRef.current = undefined;
             return;
         }
         const opts: AdvancedQuickStartOptions = {};
-        if (advPort.trim()) opts.port = Number(advPort.trim());
+        // Only an actual change is sent. An explicit port is honored exactly (a conflict errors),
+        // while omitting it lets the service fall back to a free port in the band — so echoing the
+        // default back would silently remove that fallback.
+        if (advPort.trim() && advPort.trim() !== String(QUICK_START_PORT)) opts.port = Number(advPort.trim());
         // Credentials and image tag are ignored by the service when reusing an existing
         // instance, so don't send them (the fields are hidden in that case anyway). Send the
         // trimmed credentials so what we transmit is exactly what the service stores/encodes.
         if (!isRecreate) {
-            if (advUser.trim()) opts.username = advUser.trim();
-            if (advPass.trim()) opts.password = advPass.trim();
-            if (advTag.trim()) opts.imageTag = advTag.trim();
+            if (useCustomCredentials && advUser.trim()) opts.username = advUser.trim();
+            if (useCustomCredentials && advPass.trim()) opts.password = advPass.trim();
+            if (advTag.trim() && advTag.trim() !== QUICK_START_DEFAULT_TAG) opts.imageTag = advTag.trim();
         }
         if (!advLoadSampleData) opts.loadSampleData = false;
         advancedRef.current = Object.keys(opts).length > 0 ? opts : undefined;
-    }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate]);
+    }, [advPort, advUser, advPass, advTag, advLoadSampleData, advError, isRecreate, useCustomCredentials]);
 
+    const step = stepForPhase(phase);
+    const isProvisioning = phase === 'provisioning';
+
+    // On step change, move focus to the new step's heading so screen-reader and keyboard users land
+    // on the fresh content instead of focus falling back to <body>. Skipped on the initial render.
+    // Within the Set up step the footer swaps its buttons instead, so focus follows them there.
+    const contentRef = useRef<HTMLDivElement>(null);
+    const isInitialRender = useRef(true);
+    const previousStepRef = useRef<WizardStepId>(step);
     useEffect(() => {
-        // Keep keyboard/screen-reader focus in the current content across phase changes (WCAG
-        // 2.4.3): on a terminal phase focus the primary result action; while provisioning focus
-        // Cancel — otherwise focus would fall to <body> when the button the user clicked unmounts.
-        if (phase === 'success' || phase === 'failed') {
-            resultActionRef.current?.focus();
-        } else if (phase === 'provisioning') {
-            cancelButtonRef.current?.focus();
-        }
-    }, [phase]);
-
-    // Human-readable message for the current in-flight stage, mirrored into a polite live
-    // region so screen-reader users hear provisioning progress (WCAG 4.1.3). Suppressed once
-    // any stage has errored so a stale "…" utterance can't precede the failure announcement.
-    const activeStage = PROVISION_STAGES.find((s) => stageStatus[s] === 'active');
-    const anyStageErrored = PROVISION_STAGES.some((s) => stageStatus[s] === 'error');
-    const provisioningStatusMessage = activeStage && !anyStageErrored ? l10n.t('{0}…', STAGE_LABELS[activeStage]) : '';
-
-    const applyDockerStatus = useCallback((result: DockerStatusResult): void => {
-        setDocker(result);
-        setRelativeTimeNow(Date.now());
-        const ready = result.readiness.outcome === 'ready';
-        if (ready && result.status.canResumeReadiness) {
-            setStageStatus({
-                checking: 'done',
-                pulling: 'done',
-                creating: 'done',
-                starting: 'done',
-                waiting: 'error',
-                done: 'pending',
-                error: 'pending',
-            });
-            setTimedOut(true);
-            setPhase('failed');
+        if (isInitialRender.current) {
+            isInitialRender.current = false;
+            previousStepRef.current = step;
             return;
         }
-        setPhase(ready ? 'review' : 'dockerNotReady');
+        if (previousStepRef.current !== step) {
+            previousStepRef.current = step;
+            const heading = contentRef.current?.querySelector<HTMLElement>('h2');
+            if (heading) {
+                heading.tabIndex = -1;
+                heading.focus();
+            }
+            return;
+        }
+        if (step === 'setup') {
+            // Provisioning started or ended without leaving the step: the button the user clicked
+            // has unmounted, so move focus to the control that replaced it (WCAG 2.4.3).
+            if (isProvisioning) {
+                cancelButtonRef.current?.focus();
+            } else {
+                primaryButtonRef.current?.focus();
+            }
+        }
+    }, [step, isProvisioning]);
+
+    // Keep the footer's elevation in sync with whether the content actually overflows.
+    const scrollAreaRef = useRef<HTMLDivElement>(null);
+    const footerRef = useRef<HTMLDivElement>(null);
+    const [footerElevated, setFooterElevated] = useState(false);
+    const updateFooterElevation = useCallback((): void => {
+        const scrollArea = scrollAreaRef.current;
+        if (scrollArea) {
+            setFooterElevated(scrollArea.scrollTop + scrollArea.clientHeight < scrollArea.scrollHeight - 1);
+        }
+    }, []);
+    useEffect(() => {
+        const scrollArea = scrollAreaRef.current;
+        const content = contentRef.current;
+        const footer = footerRef.current;
+        if (!scrollArea || !content || !footer) {
+            return;
+        }
+        const observer = new ResizeObserver(updateFooterElevation);
+        observer.observe(scrollArea);
+        observer.observe(content);
+        observer.observe(footer);
+        return () => observer.disconnect();
+    }, [updateFooterElevation, phase]);
+
+    const applyReadiness = useCallback((readiness: DockerReadiness): void => {
+        checkReadinessRef.current = readiness;
+        setCheckReadiness(readiness);
+        setRelativeTimeNow(Date.now());
     }, []);
 
-    const loadDockerStatus = useCallback(
-        (forceRefresh = false, resetProviderMemory = false): void => {
+    /**
+     * Refresh the Docker facts backing the `Checking Docker` stage. The host memoizes readiness
+     * briefly, so a call made right after that stage settles returns exactly the result the
+     * service acted on rather than probing Docker a second time.
+     */
+    const syncDockerStatus = useCallback(
+        async (request?: {
+            readonly forceRefresh: boolean;
+            readonly resetProviderMemory?: boolean;
+        }): Promise<DockerStatusResult | undefined> => {
             readinessAbortRef.current?.abort();
             const abortController = new AbortController();
             readinessAbortRef.current = abortController;
-            setPhase('loading');
-            void trpcClient.localQuickStart.getDockerStatus
-                .query(forceRefresh ? { forceRefresh: true, resetProviderMemory } : undefined, {
+            try {
+                const result = await trpcClient.localQuickStart.getDockerStatus.query(request, {
                     signal: abortController.signal,
-                })
-                .then((result) => {
-                    if (abortController.signal.aborted) return;
-                    applyDockerStatus(result);
-                })
-                .catch((error: unknown) => {
-                    if (abortController.signal.aborted) return;
-                    setErrorMessage(error instanceof Error ? error.message : String(error));
-                    setPhase('dockerNotReady');
-                })
-                .finally(() => {
-                    if (readinessAbortRef.current === abortController) {
-                        readinessAbortRef.current = null;
-                    }
                 });
+                if (abortController.signal.aborted) {
+                    return undefined;
+                }
+                applyReadiness(result.readiness);
+                setWillReuse(result.willReuse);
+                return result;
+            } catch {
+                // Readiness never blocks the wizard: the authoritative check is the first setup
+                // stage, which reports its own failure in place.
+                return undefined;
+            } finally {
+                if (readinessAbortRef.current === abortController) {
+                    readinessAbortRef.current = null;
+                }
+            }
         },
-        [applyDockerStatus, trpcClient],
+        [applyReadiness, trpcClient],
     );
 
     const stopTimer = useCallback((): void => {
@@ -564,6 +1084,150 @@ export const LocalQuickStart = (): JSX.Element => {
             dockerWaitTimerRef.current = null;
         }
         setStartingDocker(false);
+    }, []);
+
+    const runStream = useCallback(
+        (
+            subscribe: (handlers: {
+                onData: (event: StageEvent) => void;
+                onError: (error: unknown) => void;
+                onComplete: () => void;
+            }) => { unsubscribe: () => void },
+            options?: { resetStages?: boolean },
+        ): void => {
+            // Cancel any prior in-flight subscription so a fast double-click can't leak
+            // an uncancellable stream (mirrors the Query Insights pattern).
+            //
+            // FOLLOW-UP (retry stability): this unsubscribe is not awaited before the new
+            // subscription goes out, so the previous run may still be unwinding on the host when
+            // the next one arrives and trips its "Setup is already in progress." guard. The
+            // service now buffers every terminal event until that guard is clear, which fixed the
+            // case we hit (Retry working only on every second click), but the race itself is still
+            // here and wants an explicit "wait for the old stream to end" handshake.
+            subscriptionRef.current?.unsubscribe();
+            subscriptionRef.current = null;
+            // Supersede any prior stream: its in-flight callbacks will see a newer generation and no-op.
+            const myGeneration = ++streamGenerationRef.current;
+
+            // "Wait longer" resumes at the waiting stage, so keep the earlier stages' done state
+            // rather than resetting the whole list to pending.
+            if (options?.resetStages !== false) {
+                setStageStatus(emptyStageStatus());
+            }
+            setErrorMessage(undefined);
+            setSuccessMessage(undefined);
+            setStageDockerFailure(undefined);
+            setDockerActionMessage(undefined);
+            setDockerRecoveredKey(0);
+            setTimedOut(false);
+            setElapsedMs(0);
+            setPhase('provisioning');
+
+            const startedAt = Date.now();
+            timerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
+
+            let settled = false;
+            const subscription = subscribe({
+                onData(event: StageEvent) {
+                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    if (event.stage === 'done' && event.status === 'done') {
+                        settled = true;
+                        stopTimer();
+                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                        setSuccessMessage(event.message);
+                        setBoundPort(event.boundPort);
+                        setPhase('success');
+                    } else if (event.status === 'error') {
+                        settled = true;
+                        stopTimer();
+                        // Also flip the still-active real stage to 'error' so its row shows the error
+                        // icon + "failed" status instead of a stuck spinner / "in progress" that would
+                        // contradict the failure message for sighted and screen-reader users alike.
+                        setStageStatus((prev) => {
+                            const next = { ...prev, [event.stage]: event.status };
+                            const active = PROVISION_STAGES.find((s) => prev[s] === 'active');
+                            if (active) next[active] = 'error';
+                            return next;
+                        });
+                        setErrorMessage(event.error ?? event.message ?? l10n.t('Setup failed.'));
+                        setTimedOut(event.timedOut === true);
+                        if (event.dockerReadiness) {
+                            // Docker became unusable mid-run: the remediation belongs beside the
+                            // stage that hit it, not on a screen of its own.
+                            setStageDockerFailure(event.dockerReadiness);
+                            setRelativeTimeNow(Date.now());
+                        } else if (event.stage === 'checking') {
+                            // The check stage does not carry its readiness, so pull the classification
+                            // the host just computed to drive the detail line and the remediation.
+                            void syncDockerStatus();
+                        }
+                        setPhase('failed');
+                    } else {
+                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
+                        if (
+                            event.stage === 'checking' &&
+                            event.status === 'done' &&
+                            checkReadinessRef.current?.outcome !== 'ready'
+                        ) {
+                            // Prove which Docker was accepted, even when the background load ran
+                            // before the user installed, started, or fixed Docker.
+                            void syncDockerStatus();
+                        }
+                    }
+                },
+                onError(error: unknown) {
+                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    settled = true;
+                    stopTimer();
+                    setErrorMessage(error instanceof Error ? error.message : String(error));
+                    setTimedOut(false);
+                    setPhase('failed');
+                    if (subscriptionRef.current === subscription) {
+                        subscriptionRef.current = null;
+                    }
+                },
+                onComplete() {
+                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
+                    // The stream ended without a terminal stage event (e.g. the service was already
+                    // busy and returned early) — recover to the settings page rather than hang on
+                    // 'provisioning' with a runaway timer.
+                    if (!settled) {
+                        stopTimer();
+                        setPhase('configure');
+                    }
+                    if (subscriptionRef.current === subscription) {
+                        subscriptionRef.current = null;
+                    }
+                },
+            });
+            subscriptionRef.current = subscription;
+        },
+        [stopTimer, syncDockerStatus],
+    );
+
+    const startProvisioning = useCallback(
+        (continueAnyway: boolean): void => {
+            isWaitLongerRef.current = false;
+            const options = continueAnyway
+                ? { ...(advancedRef.current ?? {}), continueAnyway: true }
+                : advancedRef.current;
+            runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(options, handlers));
+        },
+        [trpcClient, runStream],
+    );
+
+    const handleStart = useCallback((): void => startProvisioning(false), [startProvisioning]);
+
+    const handleContinueAnyway = useCallback((): void => startProvisioning(true), [startProvisioning]);
+
+    // Docker recovered after an explicit remediation action. Setup is NOT resumed automatically:
+    // the user re-checked Docker, not the whole run, so the stage list simply records that the
+    // blocker cleared and the footer offers the forward step.
+    const applyDockerRecovery = useCallback((): void => {
+        setStageDockerFailure(undefined);
+        setDockerRecoveredKey((current) => current + 1);
+        // Only the check stage can be cleared in place; nothing ran after it.
+        setStageStatus((prev) => (prev.checking === 'error' ? { ...prev, checking: 'done' } : prev));
     }, []);
 
     const handleStopWaiting = useCallback((): void => {
@@ -599,14 +1263,14 @@ export const LocalQuickStart = (): JSX.Element => {
                         ),
                     onResult: (result) => {
                         latestResult = result;
-                        setDocker(result);
-                        setRelativeTimeNow(Date.now());
+                        applyReadiness(result.readiness);
+                        setWillReuse(result.willReuse);
                     },
                 });
                 if (abortController.signal.aborted) return;
                 stopDockerWait();
                 if (outcome === 'ready' && latestResult) {
-                    applyDockerStatus(latestResult);
+                    applyDockerRecovery();
                 } else if (outcome === 'deadline') {
                     setDockerActionMessage(l10n.t('Docker did not become ready before the wait timed out.'));
                 }
@@ -616,11 +1280,40 @@ export const LocalQuickStart = (): JSX.Element => {
                 stopDockerWait();
                 setDockerActionMessage(l10n.t('The Docker readiness check failed.'));
             });
-    }, [applyDockerStatus, stopDockerWait, trpcClient]);
+    }, [applyDockerRecovery, applyReadiness, stopDockerWait, trpcClient]);
+
+    // Re-run only the Docker check, after the user follows the guidance. It never starts or resumes
+    // provisioning: a pass clears the blocker in place, a fresh failure updates the evidence.
+    const handleCheckDockerAgain = useCallback((): void => {
+        setDockerActionMessage(undefined);
+        setCheckingDockerAgain(true);
+        void syncDockerStatus({ forceRefresh: true, resetProviderMemory: true }).then((result) => {
+            setCheckingDockerAgain(false);
+            if (result?.readiness.outcome === 'ready') {
+                applyDockerRecovery();
+            }
+        });
+    }, [applyDockerRecovery, syncDockerStatus]);
 
     useEffect(() => {
-        // eslint-disable-next-line react-hooks/set-state-in-effect -- initial async readiness load owns the loading phase
-        loadDockerStatus();
+        // Load the instance facts the settings page needs (and rehydrate a resumable readiness
+        // timeout) while the user reads the Introduction. Nothing about this check is shown before
+        // the Set up step, and a failure here never blocks the wizard.
+        void syncDockerStatus().then((result) => {
+            if (result?.readiness.outcome === 'ready' && result.status.canResumeReadiness) {
+                setStageStatus({
+                    checking: 'done',
+                    pulling: 'done',
+                    creating: 'done',
+                    starting: 'done',
+                    waiting: 'error',
+                    done: 'pending',
+                    error: 'pending',
+                });
+                setTimedOut(true);
+                setPhase('failed');
+            }
+        });
         return () => {
             readinessAbortRef.current?.abort();
             dockerPollAbortRef.current?.abort();
@@ -628,123 +1321,12 @@ export const LocalQuickStart = (): JSX.Element => {
             if (timerRef.current) clearInterval(timerRef.current);
             if (dockerWaitTimerRef.current) clearInterval(dockerWaitTimerRef.current);
         };
-    }, [loadDockerStatus]);
+    }, [syncDockerStatus]);
 
     useEffect(() => {
         const relativeTimeTimer = setInterval(() => setRelativeTimeNow(Date.now()), 30_000);
         return () => clearInterval(relativeTimeTimer);
     }, []);
-
-    const runStream = useCallback(
-        (
-            subscribe: (handlers: {
-                onData: (event: StageEvent) => void;
-                onError: (error: unknown) => void;
-                onComplete: () => void;
-            }) => { unsubscribe: () => void },
-            options?: { resetStages?: boolean },
-        ): void => {
-            // Cancel any prior in-flight subscription so a fast double-click can't leak
-            // an uncancellable stream (mirrors the Query Insights pattern).
-            subscriptionRef.current?.unsubscribe();
-            subscriptionRef.current = null;
-            // Supersede any prior stream: its in-flight callbacks will see a newer generation and no-op.
-            const myGeneration = ++streamGenerationRef.current;
-
-            // "Wait longer" resumes at the waiting stage, so keep the earlier stages' done state
-            // rather than resetting the whole list to pending.
-            if (options?.resetStages !== false) {
-                setStageStatus(emptyStageStatus());
-            }
-            setErrorMessage(undefined);
-            setSuccessMessage(undefined);
-            setTimedOut(false);
-            setElapsedMs(0);
-            setPhase('provisioning');
-
-            const startedAt = Date.now();
-            timerRef.current = setInterval(() => setElapsedMs(Date.now() - startedAt), 250);
-
-            let settled = false;
-            const subscription = subscribe({
-                onData(event: StageEvent) {
-                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
-                    if (event.stage === 'done' && event.status === 'done') {
-                        settled = true;
-                        stopTimer();
-                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
-                        setSuccessMessage(event.message);
-                        setBoundPort(event.boundPort);
-                        setPhase('success');
-                    } else if (event.status === 'error') {
-                        settled = true;
-                        stopTimer();
-                        // Also flip the still-active real stage to 'error' so its row shows the error
-                        // icon + "failed" status instead of a stuck spinner / "in progress" that would
-                        // contradict the failure message for sighted and screen-reader users alike.
-                        setStageStatus((prev) => {
-                            const next = { ...prev, [event.stage]: event.status };
-                            const active = PROVISION_STAGES.find((s) => prev[s] === 'active');
-                            if (active) next[active] = 'error';
-                            return next;
-                        });
-                        setErrorMessage(event.error ?? event.message ?? l10n.t('Setup failed.'));
-                        setTimedOut(event.timedOut === true);
-                        const dockerReadiness = event.dockerReadiness;
-                        if (dockerReadiness) {
-                            setDocker((current) => (current ? { ...current, readiness: dockerReadiness } : current));
-                            setPhase('dockerNotReady');
-                            return;
-                        }
-                        setPhase('failed');
-                    } else {
-                        setStageStatus((prev) => ({ ...prev, [event.stage]: event.status }));
-                    }
-                },
-                onError(error: unknown) {
-                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
-                    settled = true;
-                    stopTimer();
-                    setErrorMessage(error instanceof Error ? error.message : String(error));
-                    setTimedOut(false);
-                    setPhase('failed');
-                    if (subscriptionRef.current === subscription) {
-                        subscriptionRef.current = null;
-                    }
-                },
-                onComplete() {
-                    if (myGeneration !== streamGenerationRef.current) return; // superseded/cancelled stream
-                    // The stream ended without a terminal stage event (e.g. the service
-                    // was already busy and returned early) — recover to review rather
-                    // than hang on 'provisioning' with a runaway timer.
-                    if (!settled) {
-                        stopTimer();
-                        setPhase('review');
-                    }
-                    if (subscriptionRef.current === subscription) {
-                        subscriptionRef.current = null;
-                    }
-                },
-            });
-            subscriptionRef.current = subscription;
-        },
-        [stopTimer],
-    );
-
-    const startProvisioning = useCallback(
-        (continueAnyway: boolean): void => {
-            isWaitLongerRef.current = false;
-            const options = continueAnyway
-                ? { ...(advancedRef.current ?? {}), continueAnyway: true }
-                : advancedRef.current;
-            runStream((handlers) => trpcClient.localQuickStart.startQuickStart.subscribe(options, handlers));
-        },
-        [trpcClient, runStream],
-    );
-
-    const handleStart = useCallback((): void => startProvisioning(false), [startProvisioning]);
-
-    const handleContinueAnyway = useCallback((): void => startProvisioning(true), [startProvisioning]);
 
     // "Wait longer" (§9.1): re-probe the container the service kept running after a readiness
     // timeout, keeping the already-completed stages visible. Optimistically flip the waiting row
@@ -758,7 +1340,7 @@ export const LocalQuickStart = (): JSX.Element => {
     }, [trpcClient, runStream]);
 
     // "Start over" (§9.1): discard the timed-out container (a fresh attempt's volume is wiped) and
-    // return to the review form. If the discard no-ops because a just-cancelled resume is still
+    // return to the settings page. If the discard no-ops because a just-cancelled resume is still
     // unwinding, keep the timed-out actions (the container is intact) so nothing is stranded.
     const handleStartOver = useCallback((): void => {
         subscriptionRef.current?.unsubscribe();
@@ -773,7 +1355,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     setTimedOut(false);
                     setErrorMessage(undefined);
                     setStageStatus(emptyStageStatus());
-                    setPhase('review');
+                    setPhase('configure');
                 } else {
                     setTimedOut(true);
                     setPhase('failed');
@@ -796,24 +1378,25 @@ export const LocalQuickStart = (): JSX.Element => {
         stopTimer();
         if (isWaitLongerRef.current) {
             // Cancelling a "Wait longer" resume leaves the container running, so return to the
-            // timed-out actions (Wait longer / Start over) rather than the fresh setup form.
+            // timed-out actions (Wait longer / Start over) rather than the settings page.
             isWaitLongerRef.current = false;
             setTimedOut(true);
             setPhase('failed');
         } else {
             setTimedOut(false);
-            setPhase('review');
+            setPhase('configure');
         }
     }, [stopTimer]);
 
-    // From the failed phase, return to the review form (Advanced field state is preserved) so
-    // the user can correct a bad option (e.g. a busy explicit port) and retry — design feedback.
-    const handleBackToReview = useCallback((): void => {
+    // From a failure, return to the settings page (field state is preserved) so the user can
+    // correct a bad option (e.g. a busy explicit port) and retry — design feedback.
+    const handleBackToConfigure = useCallback((): void => {
         isWaitLongerRef.current = false;
+        stopDockerWait();
         setErrorMessage(undefined);
         setTimedOut(false);
-        setPhase('review');
-    }, []);
+        setPhase('configure');
+    }, [stopDockerWait]);
 
     const handleViewOutput = useCallback((): void => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
@@ -823,14 +1406,22 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.common.openUrl.mutate({ url: DOCKER_GUIDES.install.href }).catch(() => undefined);
     }, [trpcClient]);
 
-    const handleCopyRecoveryCommand = useCallback((): void => {
-        const recoveryCommand = docker?.readiness.recoveryCommand;
-        if (!recoveryCommand) return;
-        void trpcClient.localQuickStart.copyRecoveryCommand
-            .mutate(recoveryCommand.id)
-            .then(() => setCopyAnnouncementKey((current) => current + 1))
-            .catch(() => undefined);
-    }, [docker, trpcClient]);
+    const handleOpenGuide = useCallback(
+        (url: string): void => {
+            void trpcClient.common.openUrl.mutate({ url }).catch(() => undefined);
+        },
+        [trpcClient],
+    );
+
+    const handleCopyRecoveryCommand = useCallback(
+        (id: DockerRecoveryCommand['id']): void => {
+            void trpcClient.localQuickStart.copyRecoveryCommand
+                .mutate(id)
+                .then(() => setCopyAnnouncementKey((current) => current + 1))
+                .catch(() => undefined);
+        },
+        [trpcClient],
+    );
 
     const handleOpenConnection = useCallback((): void => {
         // Reveal the connection in the Connections view but KEEP this panel open —
@@ -842,579 +1433,826 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.copyConnectionString.mutate().catch(() => undefined);
     }, [trpcClient]);
 
-    const renderReadinessFooter = (): JSX.Element => (
-        <div className={styles.readinessFooter}>
-            <Text size={200} className={styles.muted} role="status" aria-live="polite">
-                {formatLastChecked(docker ? getDockerLastCheckedAtMs(docker.readiness) : undefined, relativeTimeNow)}
-            </Text>
-            <Button
-                appearance="subtle"
-                size="small"
-                icon={<ArrowClockwiseRegular />}
-                onClick={() => loadDockerStatus(true, true)}
-            >
-                {l10n.t('Refresh')}
-            </Button>
-        </div>
-    );
-
-    const renderReviewCards = (): JSX.Element => {
-        const ready = docker?.readiness.outcome === 'ready';
-        const platformCompatible = docker ? isDockerArchitectureCompatible(docker.readiness) : false;
-        const effectivePort = advPort.trim() && !advError ? advPort.trim() : String(QUICK_START_PORT);
-        return (
-            <>
-                <div className={styles.cardGrid}>
-                    <MetricCard
-                        label={l10n.t('Docker')}
-                        value={ready ? l10n.t('Ready') : l10n.t('Not ready')}
-                        badge={
-                            <Badge appearance="filled" color={ready ? 'success' : 'danger'} size="small" aria-hidden>
-                                {ready ? '✓' : '!'}
-                            </Badge>
-                        }
-                    />
-                    <MetricCard label={l10n.t('Port')} value={effectivePort} />
-                    <MetricCard
-                        label={l10n.t('Platform')}
-                        value={docker?.readiness.daemonArchitecture ?? l10n.t('Unknown until Docker is reachable')}
-                        badge={
-                            <Badge
-                                appearance="filled"
-                                color={platformCompatible ? 'success' : 'warning'}
-                                size="small"
-                                aria-hidden
-                            >
-                                {platformCompatible ? '✓' : '!'}
-                            </Badge>
-                        }
-                    />
-                    <MetricCard label={l10n.t('Data')} value={l10n.t('Persistent volume')} />
-                    <MetricCard label={l10n.t('Security')} value={l10n.t('TLS · self-signed')} />
-                </div>
-                {docker?.readiness.platformSupported === false && (
-                    <Text size={200} className={styles.muted}>
-                        {l10n.t('DocumentDB Local images are published for x64 and arm64 only.')}
-                    </Text>
-                )}
-            </>
-        );
-    };
-
-    const renderSummary = (): JSX.Element => {
-        const effectiveImage =
-            !isRecreate && advTag.trim() ? `${QUICK_START_IMAGE_REPOSITORY}:${advTag.trim()}` : QUICK_START_IMAGE;
-        const customCreds = !isRecreate && advUser.trim().length > 0 && advPass.trim().length > 0;
-        const customPort = advPort.trim().length > 0 && !advError;
-        const targetKey = getDockerExecutionTargetKey(docker?.readiness.executionTarget ?? 'local');
-        const targetNotice = EXECUTION_TARGET_NOTICES[targetKey];
-        return (
-            <Card className={styles.summaryCard}>
-                <Text weight="semibold">{l10n.t("What we'll do")}</Text>
-                <Divider />
-                <div className={styles.summaryRow}>
-                    <Text className={styles.muted}>{l10n.t('Image')}</Text>
-                    <Text>{isRecreate ? l10n.t('Kept from the existing instance') : effectiveImage}</Text>
-                </div>
-                <div className={styles.summaryRow}>
-                    <Text className={styles.muted}>{l10n.t('Port')}</Text>
-                    <Text>{customPort ? advPort.trim() : l10n.t('{0} (auto)', String(QUICK_START_PORT))}</Text>
-                </div>
-                <div className={styles.summaryRow}>
-                    <Text className={styles.muted}>{l10n.t('Runs on')}</Text>
-                    <Text>{EXECUTION_TARGET_VALUES[targetKey]}</Text>
-                </div>
-                <div className={styles.summaryRow}>
-                    <Text className={styles.muted}>{l10n.t('Credentials')}</Text>
-                    <Text>
-                        {isRecreate
-                            ? l10n.t('Reused from the existing instance')
-                            : customCreds
-                              ? l10n.t('Custom, stored securely')
-                              : l10n.t('Auto-generated, stored securely')}
-                    </Text>
-                </div>
-                <div className={styles.summaryRow}>
-                    <Text className={styles.muted}>{l10n.t('Lifetime')}</Text>
-                    <Text>{l10n.t('Keeps running after VS Code closes')}</Text>
-                </div>
-                {targetNotice && (
-                    <Text size={200} className={styles.targetNotice}>
-                        {targetNotice}
-                    </Text>
-                )}
-            </Card>
-        );
-    };
-
-    const renderAdvanced = (): JSX.Element => (
-        <Accordion collapsible>
-            <AccordionItem value="advanced">
-                <AccordionHeader>{l10n.t('Advanced (optional)')}</AccordionHeader>
-                <AccordionPanel>
-                    <div className={styles.advancedPanel}>
-                        <Text size={200} className={styles.muted}>
-                            {l10n.t('Leave any field blank to keep the automatic default.')}
-                        </Text>
-                        <div className={styles.advancedGrid}>
-                            <Field
-                                label={l10n.t('Port')}
-                                hint={l10n.t('Default {0}', String(QUICK_START_PORT))}
-                                validationState={advValidation?.field === 'port' ? 'error' : 'none'}
-                                validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
-                            >
-                                <Input
-                                    type="number"
-                                    value={advPort}
-                                    placeholder={String(QUICK_START_PORT)}
-                                    onChange={(_e, d) => setAdvPort(d.value)}
-                                />
-                            </Field>
-                            {!isRecreate && (
-                                <Field
-                                    label={l10n.t('Image tag')}
-                                    hint={l10n.t('Default “{0}”', QUICK_START_DEFAULT_TAG)}
-                                    validationState={advValidation?.field === 'tag' ? 'error' : 'none'}
-                                    validationMessage={
-                                        advValidation?.field === 'tag' ? advValidation.message : undefined
-                                    }
-                                >
-                                    <Input
-                                        value={advTag}
-                                        maxLength={128}
-                                        placeholder={QUICK_START_DEFAULT_TAG}
-                                        onChange={(_e, d) => setAdvTag(d.value)}
-                                    />
-                                </Field>
-                            )}
-                            {!isRecreate && (
-                                <Field
-                                    label={l10n.t('Username')}
-                                    hint={l10n.t('Default: auto-generated')}
-                                    validationState={advValidation?.field === 'username' ? 'error' : 'none'}
-                                    validationMessage={
-                                        advValidation?.field === 'username' ? advValidation.message : undefined
-                                    }
-                                >
-                                    <Input
-                                        value={advUser}
-                                        maxLength={128}
-                                        placeholder={l10n.t('auto')}
-                                        onChange={(_e, d) => setAdvUser(d.value)}
-                                    />
-                                </Field>
-                            )}
-                            {!isRecreate && (
-                                <Field
-                                    label={l10n.t('Password')}
-                                    hint={l10n.t('Default: auto-generated')}
-                                    validationState={advValidation?.field === 'password' ? 'error' : 'none'}
-                                    validationMessage={
-                                        advValidation?.field === 'password' ? advValidation.message : undefined
-                                    }
-                                >
-                                    <Input
-                                        type="password"
-                                        value={advPass}
-                                        maxLength={256}
-                                        placeholder={l10n.t('auto')}
-                                        onChange={(_e, d) => setAdvPass(d.value)}
-                                    />
-                                </Field>
-                            )}
-                        </div>
-                        {isRecreate && (
-                            <Text size={200} className={styles.muted}>
-                                {l10n.t(
-                                    'Recreating reuses the existing data volume, so the original credentials and image are kept.',
-                                )}
-                            </Text>
-                        )}
-                        <Switch
-                            checked={advLoadSampleData}
-                            label={l10n.t('Load sample data')}
-                            onChange={(_e, d) => setAdvLoadSampleData(d.checked)}
-                        />
-                    </div>
-                </AccordionPanel>
-            </AccordionItem>
-        </Accordion>
-    );
-
-    const renderStageRow = (stage: ProvisionStage): JSX.Element => {
-        const status = stageStatus[stage];
-        let icon: JSX.Element;
-        let statusText: string;
-        if (status === 'done') {
-            icon = <CheckmarkCircleFilled aria-hidden className={styles.stageIconDone} />;
-            statusText = l10n.t('done');
-        } else if (status === 'error') {
-            icon = <ErrorCircleFilled aria-hidden className={styles.stageIconError} />;
-            statusText = l10n.t('failed');
-        } else if (status === 'active') {
-            icon = <Spinner size="tiny" aria-hidden />;
-            statusText = l10n.t('in progress');
-        } else {
-            icon = <CircleRegular aria-hidden className={styles.stageIconPending} />;
-            statusText = l10n.t('pending');
+    const goToStep = useCallback((id: string): void => {
+        if (id === 'introduction') {
+            setErrorMessage(undefined);
+            setPhase('introduction');
+        } else if (id === 'configure') {
+            setErrorMessage(undefined);
+            setPhase('configure');
         }
-        return (
-            <div
-                key={stage}
-                role="listitem"
-                className={styles.stageRow}
-                // Row-level label reads naturally on every screen reader (e.g. "Pulling official
-                // image, done"); the icon and visible text are decorative duplicates (WCAG 1.1.1).
-                aria-label={`${STAGE_LABELS[stage]}, ${statusText}`}
-            >
-                {icon}
-                <Text aria-hidden className={status === 'pending' ? styles.muted : undefined}>
-                    {STAGE_LABELS[stage]}
-                </Text>
-            </div>
-        );
+    }, []);
+
+    // ---- derived setup state --------------------------------------------------------------
+
+    const failedStage = PROVISION_STAGES.find((stage) => stageStatus[stage] === 'error');
+    const checkStageFailed = phase === 'failed' && failedStage === 'checking';
+    // A Docker problem has exactly one home: the stage that hit it. A stale background readiness
+    // never renders remediation, so this is only ever the readiness behind the current failure.
+    const dockerProblem: DockerReadiness | undefined =
+        phase === 'failed'
+            ? (stageDockerFailure ??
+              (checkStageFailed && checkReadiness && checkReadiness.outcome !== 'ready' ? checkReadiness : undefined))
+            : undefined;
+    const dockerPresentation = dockerProblem ? getDockerReadinessPresentation(dockerProblem) : undefined;
+    // Held so the block keeps its content while it collapses away, instead of blanking first and
+    // then closing an empty gap.
+    if (dockerProblem && dockerPresentation) {
+        lastDockerProblemRef.current = { problem: dockerProblem, presentation: dockerPresentation };
+    }
+    const shownDocker = lastDockerProblemRef.current;
+    const dockerPresentationState = startingDocker ? 'starting' : (shownDocker?.presentation.state ?? 'notAccessible');
+    const recoveryCommand = shownDocker?.presentation.showCopyCommand ? shownDocker.problem.recoveryCommand : undefined;
+    // A Docker-only re-check cleared the blocker. When that blocker was the check stage itself,
+    // nothing has run yet, so the run can simply go ahead; a later stage's failure still stands.
+    const dockerRecovered =
+        phase === 'failed' && dockerRecoveredKey > 0 && !dockerProblem && checkReadiness?.outcome === 'ready';
+    const canContinueSetup = dockerRecovered && failedStage === undefined;
+
+    const checkStageDetail = useMemo((): string | undefined => {
+        const status = stageStatus.checking;
+        if (status === 'active') {
+            return l10n.t('Checking…');
+        }
+        if (status === 'pending' || !checkReadiness) {
+            return undefined;
+        }
+        // While a refresh is in flight the cached facts can disagree with the row: say nothing
+        // rather than describe a Docker the stage did not actually accept (or reject).
+        if ((status === 'done') !== (checkReadiness.outcome === 'ready')) {
+            return undefined;
+        }
+        return formatDockerDetail(getDockerReadinessPresentation(checkReadiness).detail);
+    }, [checkReadiness, stageStatus]);
+
+    const stageDetailFor = (stage: ProvisionStage): string | undefined => {
+        if (stage === 'checking') {
+            return checkStageDetail;
+        }
+        if (stage === failedStage && stageDockerFailure) {
+            return formatDockerDetail(getDockerReadinessPresentation(stageDockerFailure).detail);
+        }
+        return undefined;
     };
 
-    const elapsedLabel = (): string => {
-        const total = Math.floor(elapsedMs / 1000);
-        const mm = String(Math.floor(total / 60)).padStart(2, '0');
-        const ss = String(total % 60).padStart(2, '0');
-        return `${mm}:${ss}`;
-    };
+    // Human-readable message for the current in-flight stage, mirrored into a polite live
+    // region so screen-reader users hear provisioning progress (WCAG 4.1.3). Suppressed once
+    // any stage has errored so a stale "…" utterance can't precede the failure announcement.
+    const activeStage = PROVISION_STAGES.find((stage) => stageStatus[stage] === 'active');
+    const provisioningStatusMessage = activeStage && !failedStage ? l10n.t('{0}…', STAGE_LABELS[activeStage]) : '';
 
-    const hero = (title: string, subtitle: string): JSX.Element => (
+    const effectivePort = advPort.trim() && advValidation?.field !== 'port' ? advPort.trim() : String(QUICK_START_PORT);
+    const effectiveImage =
+        !isRecreate && advTag.trim() && advValidation?.field !== 'tag'
+            ? `${QUICK_START_IMAGE_REPOSITORY}:${advTag.trim()}`
+            : QUICK_START_IMAGE;
+
+    // ---- chrome ---------------------------------------------------------------------------
+
+    const hero = (
         <div className={styles.hero}>
             <RocketRegular aria-hidden className={styles.heroIcon} />
             <div>
-                <Text as="h2" size={600} weight="semibold">
-                    {title}
+                <Text as="h1" size={700} weight="semibold">
+                    {l10n.t('DocumentDB Local')}
                 </Text>
-                {subtitle && (
-                    <div>
-                        <Text className={styles.muted}>{subtitle}</Text>
-                    </div>
-                )}
+                <div>
+                    <Text className={styles.muted}>
+                        {l10n.t('Set up DocumentDB locally for development and testing with Docker.')}
+                    </Text>
+                </div>
             </div>
         </div>
     );
 
-    if (phase === 'loading') {
-        return (
-            <div className={styles.root}>
-                <Spinner label={l10n.t('Checking Docker…')} />
-            </div>
-        );
-    }
+    const steps: readonly { readonly id: WizardStepId; readonly label: string }[] = [
+        { id: 'introduction', label: l10n.t('Introduction') },
+        { id: 'configure', label: l10n.t('Configure') },
+        { id: 'setup', label: l10n.t('Set up') },
+        { id: 'done', label: l10n.t('Done') },
+    ];
+    const currentStepIndex = steps.findIndex((entry) => entry.id === step);
+    // Locked while work is in flight and once the connection is saved; a failure unlocks the
+    // earlier steps so the user can change a setting and try again.
+    const stepsLocked = isProvisioning || phase === 'success';
+    const stepItems: readonly WizardStepMeta[] = steps.map((entry, index) => ({
+        id: entry.id,
+        label: entry.label,
+        isCurrent: index === currentStepIndex,
+        // "Introduction" opens pre-satisfied — there is nothing on it to complete — so it carries a
+        // check from the start, mirroring the Atlas view's first step.
+        isCompleted:
+            entry.id === 'introduction' ||
+            index < currentStepIndex ||
+            (entry.id === 'done' && index === currentStepIndex),
+        canNavigate: index < currentStepIndex && !stepsLocked,
+    }));
 
-    if (phase === 'dockerNotReady') {
-        const r = docker?.readiness;
-        const cliOk = !!r?.cliInstalled;
-        const presentation = r ? getDockerReadinessPresentation(r) : undefined;
-        const presentationState = startingDocker ? 'starting' : (presentation?.state ?? 'notAccessible');
-        const guidance =
-            DOCKER_GUIDANCE[startingDocker ? 'daemonStarting' : (presentation?.guidance ?? 'notAccessible')];
-        const recoveryNote = presentation?.recoveryNote ? DOCKER_RECOVERY_NOTES[presentation.recoveryNote] : undefined;
-        const platformKnown = r?.daemonArchitecture !== undefined;
-        const platformCompatible = r ? isDockerArchitectureCompatible(r) : false;
-        const statusBadge = (ok: boolean, notOkColor: 'danger' | 'warning'): JSX.Element => (
-            <Badge appearance="filled" color={ok ? 'success' : notOkColor} size="small" aria-hidden>
-                {ok ? '✓' : '!'}
-            </Badge>
-        );
-        return (
-            <div className={styles.root}>
-                <Announcer
-                    when={phase === 'dockerNotReady'}
-                    message={l10n.t('Docker is not ready. {0}', guidance)}
-                    politeness="assertive"
-                />
-                <Announcer when={startingDocker} message={l10n.t('Waiting for Docker to start.')} politeness="polite" />
-                <Announcer
-                    key={copyAnnouncementKey}
-                    when={copyAnnouncementKey > 0}
-                    message={l10n.t('Recovery command copied.')}
-                    politeness="polite"
-                />
-                <Announcer
-                    when={dockerActionMessage !== undefined}
-                    message={dockerActionMessage ?? ''}
-                    politeness="assertive"
-                />
-                {hero(
-                    l10n.t('DocumentDB Local'),
-                    l10n.t(
-                        'Docker is required to run DocumentDB locally. The extension does not install Docker for you.',
-                    ),
-                )}
-                <div className={styles.cardGrid}>
-                    <MetricCard
-                        label={l10n.t('Docker CLI')}
-                        value={cliOk ? (r?.cliVersion ?? l10n.t('Found')) : l10n.t('Not found')}
-                        badge={statusBadge(cliOk, 'danger')}
-                    />
-                    <MetricCard
-                        label={l10n.t('Docker daemon')}
-                        value={DOCKER_DAEMON_VALUES[presentationState]}
-                        badge={statusBadge(false, startingDocker ? 'warning' : 'danger')}
-                    />
-                    <MetricCard
-                        label={l10n.t('Platform')}
-                        value={r?.daemonArchitecture ?? l10n.t('Unknown until Docker is reachable')}
-                        badge={statusBadge(platformKnown && platformCompatible, 'warning')}
-                    />
-                </div>
-                {r?.platformSupported === false && (
-                    <Text size={200} className={styles.muted}>
-                        {l10n.t('DocumentDB Local images are published for x64 and arm64 only.')}
-                    </Text>
-                )}
-                <Card className={styles.summaryCard}>
-                    <Text weight="semibold">{l10n.t('How to fix')}</Text>
-                    <Divider />
-                    <Text size={200}>{guidance}</Text>
-                    {startingDocker && (
-                        <div className={styles.waitingStatus}>
-                            <Spinner size="tiny" aria-hidden />
-                            <Text size={200}>{l10n.t('Waiting {0}', formatElapsed(dockerWaitElapsedMs))}</Text>
-                        </div>
+    // ---- pages ----------------------------------------------------------------------------
+
+    const introduction = (
+        <section className={styles.section} aria-labelledby="quickstart-introduction-heading">
+            <div className={styles.sectionHeader}>
+                <Text id="quickstart-introduction-heading" as="h2" size={500} weight="semibold">
+                    {l10n.t('Develop and test locally')}
+                </Text>
+                <Text className={styles.muted}>
+                    {l10n.t(
+                        'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for development and testing on your machine.',
                     )}
-                    {presentation?.showCopyCommand && r?.recoveryCommand && (
-                        <div className={styles.recoveryCommand}>
-                            <div className={styles.recoveryCommandText}>
-                                <code>{r.recoveryCommand.commandLine}</code>
-                                {recoveryNote && (
-                                    <Text size={200} className={styles.muted}>
-                                        {recoveryNote}
-                                    </Text>
-                                )}
+                </Text>
+            </div>
+            <div className={styles.subsection}>
+                <Text as="h3" size={400} weight="semibold">
+                    {l10n.t('What will happen in the Set up step')}
+                </Text>
+                <ol className={styles.planList}>
+                    {PLAN_ITEMS.map((item, index) => (
+                        <li className={styles.planItem} key={item.label}>
+                            {/* Fluent's own default: filled, brand, circular. No colour override. */}
+                            <CounterBadge aria-hidden count={index + 1} className={styles.planBadge} />
+                            <div className={styles.planCopy}>
+                                <Text>{item.label}</Text>
+                                <Text size={200} className={styles.muted}>
+                                    {item.detail}
+                                </Text>
                             </div>
-                            <Button size="small" onClick={handleCopyRecoveryCommand}>
-                                {l10n.t('Copy command')}
-                            </Button>
-                        </div>
-                    )}
-                    {r?.failureKind && (
-                        <details>
-                            <summary>{l10n.t('Show details')}</summary>
-                            <dl className={styles.diagnosticList}>
-                                <dt>{l10n.t('Detected problem')}</dt>
-                                <dd className={styles.diagnosticValue}>{DOCKER_FAILURE_LABELS[r.failureKind]}</dd>
-                                <dt>{l10n.t('Docker endpoint')}</dt>
-                                <dd className={styles.diagnosticValue}>
-                                    {r.endpointSource
-                                        ? DOCKER_ENDPOINT_SOURCE_LABELS[r.endpointSource]
-                                        : l10n.t('Unknown')}
-                                </dd>
-                                <dt>{l10n.t('Provider')}</dt>
-                                <dd className={styles.diagnosticValue}>{DOCKER_PROVIDER_LABELS[r.provider]}</dd>
-                            </dl>
-                            <Button appearance="transparent" size="small" onClick={handleViewOutput}>
-                                {l10n.t('View Docker output')}
-                            </Button>
-                        </details>
-                    )}
-                    <div className={styles.actions}>
-                        {presentation && !presentation.showInstall && (
-                            <Link href={DOCKER_GUIDES[presentation.guide].href}>
-                                {DOCKER_GUIDES[presentation.guide].label}
-                            </Link>
-                        )}
-                    </div>
-                </Card>
-                <div className={styles.actions}>
-                    {presentation?.showInstall && (
-                        <Button appearance="primary" onClick={handleInstallDocker}>
-                            {l10n.t('Install Docker')}
-                        </Button>
-                    )}
-                    {presentation?.showViewOutput && (
-                        <Button appearance="secondary" onClick={handleViewOutput}>
-                            {l10n.t('View Docker output')}
-                        </Button>
-                    )}
-                    {presentation?.showContinueAnyway && (
-                        <Button appearance="secondary" onClick={handleContinueAnyway}>
-                            {l10n.t('Continue anyway')}
-                        </Button>
-                    )}
-                    {startingDocker ? (
-                        <Button appearance="secondary" onClick={handleStopWaiting}>
-                            {l10n.t('Stop waiting')}
-                        </Button>
-                    ) : presentation?.showStartDockerProvider && presentation.startLabel ? (
-                        <Button appearance="primary" onClick={handleStartDocker}>
-                            {DOCKER_START_LABELS[presentation.startLabel]}
-                        </Button>
-                    ) : null}
-                    {!startingDocker && presentation?.showRetry && (
-                        <Button
-                            appearance="primary"
-                            icon={<ArrowClockwiseRegular />}
-                            onClick={() => loadDockerStatus(true)}
-                        >
-                            {l10n.t('Retry')}
-                        </Button>
-                    )}
-                </div>
-                {renderReadinessFooter()}
+                        </li>
+                    ))}
+                </ol>
             </div>
-        );
-    }
+        </section>
+    );
 
-    if (phase === 'provisioning' || phase === 'success' || phase === 'failed') {
-        return (
-            <div className={styles.root}>
-                <Announcer
-                    when={phase === 'success'}
-                    message={l10n.t('DocumentDB Local is ready. Next steps are shown below.')}
-                />
-                <Announcer
-                    when={phase === 'failed'}
-                    message={
-                        timedOut
-                            ? (errorMessage ??
-                              l10n.t('DocumentDB is still initializing. Keep waiting, view the logs, or start over.'))
-                            : l10n.t('Setup failed. {0}', errorMessage ?? l10n.t('See the details below.'))
-                    }
-                    politeness="polite"
-                />
-                {/* Streams the current provisioning stage to screen readers (WCAG 4.1.3). */}
-                <div role="status" aria-live="polite" aria-atomic="true" className={styles.srOnly}>
-                    {phase === 'provisioning' ? provisioningStatusMessage : ''}
-                </div>
-                {hero(
-                    l10n.t('DocumentDB Local'),
-                    phase === 'provisioning' ? l10n.t('Setting up… {0}', elapsedLabel()) : '',
-                )}
+    // Reset lives in the input's own trailing slot, so it stays on the line it resets instead of
+    // drifting down beside the field's hint.
+    const resetButton = (label: string, onReset: () => void, disabled: boolean): JSX.Element => (
+        <Button
+            appearance="subtle"
+            size="small"
+            icon={<ArrowResetRegular />}
+            aria-label={label}
+            title={label}
+            disabled={disabled}
+            onClick={onReset}
+        />
+    );
 
-                {phase === 'success' && (
-                    <div className={styles.successBox}>
-                        <Text weight="semibold">{successMessage ?? l10n.t('DocumentDB Local is running.')}</Text>
-                        <div className={styles.nextSteps}>
-                            <Text size={200} weight="semibold">
-                                {l10n.t('Next steps')}
-                            </Text>
-                            <Text size={200}>
-                                {l10n.t(
-                                    '• Open Connection: browse your databases in the Connections view, under “DocumentDB Local”.',
-                                )}
-                            </Text>
-                            <Text size={200}>
-                                {docker?.readiness.executionTarget === 'local'
-                                    ? l10n.t(
-                                          '• Copy Connection String: use it from a Query Playground, your app, or mongosh (localhost:{0}).',
-                                          String(boundPort ?? QUICK_START_PORT),
-                                      )
-                                    : l10n.t(
-                                          '• Copy Connection String: localhost:{0} is reachable from tools running on the extension host.',
-                                          String(boundPort ?? QUICK_START_PORT),
-                                      )}
-                            </Text>
-                            <Text size={200}>
-                                {l10n.t(
-                                    '• The container keeps running after VS Code closes. Manage it with Stop / Restart / Delete in the Connections view.',
-                                )}
-                            </Text>
-                        </div>
-                    </div>
-                )}
+    // Icon-only row action. `relationship="label"` promotes the tooltip text to the button's
+    // accessible name, so dropping the visible label costs assistive tech nothing.
+    const rowAction = (label: string, expanded: boolean, onToggle: () => void): JSX.Element => (
+        <Tooltip content={label} relationship="label" withArrow>
+            <Button
+                appearance="subtle"
+                size="small"
+                icon={<EditRegular />}
+                aria-expanded={expanded}
+                onClick={onToggle}
+            />
+        </Tooltip>
+    );
 
-                <Card className={styles.stageList} role="list" aria-label={l10n.t('Setup progress')}>
-                    {PROVISION_STAGES.map(renderStageRow)}
-                </Card>
-
-                {phase === 'failed' && (
-                    <div className={styles.errorBox}>
-                        {timedOut ? (
-                            <Text>
-                                {errorMessage ??
-                                    l10n.t(
-                                        'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing. Keep waiting, view the logs, or start over.',
-                                    )}
-                            </Text>
-                        ) : (
-                            <Text>{errorMessage ?? l10n.t('Setup failed.')}</Text>
+    const settingItems: readonly SettingItem[] = [
+        {
+            key: 'address',
+            label: l10n.t('Address'),
+            value: l10n.t('localhost:{0}', effectivePort),
+            action: rowAction(
+                editingPort ? l10n.t('Hide the port setting') : l10n.t('Change the port'),
+                editingPort,
+                () => setEditingPort((value) => !value),
+            ),
+            editorOpen: editingPort,
+            editor: (
+                <Field
+                    label={l10n.t('Port')}
+                    hint={l10n.t('The host is always localhost.')}
+                    validationState={advValidation?.field === 'port' ? 'error' : 'none'}
+                    validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
+                >
+                    <Input
+                        type="number"
+                        value={advPort}
+                        onChange={(_event, data) => setAdvPort(data.value)}
+                        contentAfter={resetButton(
+                            l10n.t('Reset port to {0}', String(QUICK_START_PORT)),
+                            () => setAdvPort(String(QUICK_START_PORT)),
+                            advPort === String(QUICK_START_PORT),
                         )}
-                    </div>
-                )}
+                    />
+                </Field>
+            ),
+        },
+        {
+            key: 'image',
+            label: l10n.t('Image'),
+            value: isRecreate ? (
+                l10n.t('Kept from the existing instance')
+            ) : (
+                <code className={styles.imagePath}>{effectiveImage}</code>
+            ),
+            action: isRecreate
+                ? undefined
+                : rowAction(
+                      editingImage ? l10n.t('Hide the image tag setting') : l10n.t('Change the image tag'),
+                      editingImage,
+                      () => setEditingImage((value) => !value),
+                  ),
+            editorOpen: editingImage && !isRecreate,
+            editor: isRecreate ? undefined : (
+                <Field
+                    label={l10n.t('Image tag')}
+                    hint={l10n.t('The official image repository is fixed.')}
+                    validationState={advValidation?.field === 'tag' ? 'error' : 'none'}
+                    validationMessage={advValidation?.field === 'tag' ? advValidation.message : undefined}
+                >
+                    <Input
+                        value={advTag}
+                        maxLength={128}
+                        onChange={(_event, data) => setAdvTag(data.value)}
+                        contentAfter={resetButton(
+                            l10n.t('Reset image tag to {0}', QUICK_START_DEFAULT_TAG),
+                            () => setAdvTag(QUICK_START_DEFAULT_TAG),
+                            advTag === QUICK_START_DEFAULT_TAG,
+                        )}
+                    />
+                </Field>
+            ),
+        },
+        {
+            key: 'credentials',
+            label: l10n.t('Credentials'),
+            value: isRecreate
+                ? l10n.t('Reused from the existing instance')
+                : useCustomCredentials
+                  ? l10n.t('Your own username and password')
+                  : l10n.t('Generated automatically'),
+            action: isRecreate
+                ? undefined
+                : rowAction(
+                      useCustomCredentials ? l10n.t('Use generated credentials') : l10n.t('Set your own credentials'),
+                      useCustomCredentials,
+                      () => setCustomCredentials((value) => !value),
+                  ),
+            editorOpen: useCustomCredentials,
+            editor: isRecreate ? undefined : (
+                <>
+                    <Field
+                        label={l10n.t('Username')}
+                        validationState={advValidation?.field === 'username' ? 'error' : 'none'}
+                        validationMessage={advValidation?.field === 'username' ? advValidation.message : undefined}
+                    >
+                        <Input
+                            value={advUser}
+                            maxLength={128}
+                            placeholder={l10n.t('Enter a username')}
+                            onChange={(_event, data) => setAdvUser(data.value)}
+                        />
+                    </Field>
+                    <Field
+                        label={l10n.t('Password')}
+                        validationState={advValidation?.field === 'password' ? 'error' : 'none'}
+                        validationMessage={advValidation?.field === 'password' ? advValidation.message : undefined}
+                    >
+                        <Input
+                            type="password"
+                            value={advPass}
+                            maxLength={256}
+                            placeholder={l10n.t('Enter a password')}
+                            onChange={(_event, data) => setAdvPass(data.value)}
+                        />
+                    </Field>
+                </>
+            ),
+        },
+        {
+            key: 'sampleData',
+            label: l10n.t('Sample data'),
+            value: advLoadSampleData ? l10n.t('Included') : l10n.t('Not included'),
+            action: (
+                <Switch
+                    checked={advLoadSampleData}
+                    aria-label={l10n.t('Include sample data')}
+                    onChange={(_event, data) => setAdvLoadSampleData(data.checked)}
+                />
+            ),
+        },
+    ];
 
-                <div>
-                    <Link onClick={handleViewOutput}>{l10n.t('View Docker output')}</Link>
-                </div>
-
-                <div className={styles.actions}>
-                    {phase === 'provisioning' && (
-                        <Button appearance="secondary" ref={cancelButtonRef} onClick={handleCancel}>
-                            {l10n.t('Cancel')}
-                        </Button>
-                    )}
-                    {phase === 'success' && (
-                        <>
-                            <Button appearance="secondary" onClick={handleClose}>
-                                {l10n.t('Close')}
-                            </Button>
-                            <Button appearance="secondary" onClick={handleCopyConnString}>
-                                {l10n.t('Copy Connection String')}
-                            </Button>
-                            <Button appearance="primary" ref={resultActionRef} onClick={handleOpenConnection}>
-                                {l10n.t('Open Connection')}
-                            </Button>
-                        </>
-                    )}
-                    {phase === 'failed' && timedOut && (
-                        <>
-                            <Button appearance="secondary" onClick={handleStartOver}>
-                                {l10n.t('Start over')}
-                            </Button>
-                            <Button
-                                appearance="primary"
-                                ref={resultActionRef}
-                                icon={<ArrowClockwiseRegular />}
-                                onClick={handleWaitLonger}
-                            >
-                                {l10n.t('Wait longer')}
-                            </Button>
-                        </>
-                    )}
-                    {phase === 'failed' && !timedOut && (
-                        <>
-                            <Button appearance="secondary" onClick={handleBackToReview}>
-                                {l10n.t('Edit settings')}
-                            </Button>
-                            <Button
-                                appearance="primary"
-                                ref={resultActionRef}
-                                icon={<ArrowClockwiseRegular />}
-                                onClick={handleStart}
-                            >
-                                {l10n.t('Retry')}
-                            </Button>
-                        </>
-                    )}
-                </div>
+    const configure = (
+        <section className={styles.section} aria-labelledby="quickstart-configure-heading">
+            <div className={styles.sectionHeader}>
+                <Text id="quickstart-configure-heading" as="h2" size={500} weight="semibold">
+                    {l10n.t('Configure setup')}
+                </Text>
+                <Text className={styles.muted}>
+                    {l10n.t('These defaults work for most people. Change them only if you need to.')}
+                </Text>
             </div>
-        );
-    }
-
-    // phase === 'review'
-    return (
-        <div className={styles.root}>
-            {hero(
-                l10n.t('DocumentDB Local'),
-                l10n.t('Get a working local DocumentDB instance in one click. No terminal commands needed.'),
+            <Table size="small" aria-label={l10n.t('Setup settings')}>
+                <colgroup>
+                    <col className={styles.settingsColLabel} />
+                    <col />
+                    <col className={styles.settingsColActions} />
+                </colgroup>
+                <TableBody>
+                    {settingItems.map((item) => (
+                        <Fragment key={item.key}>
+                            <TableRow>
+                                <TableCell>
+                                    <TableCellLayout appearance="primary">{item.label}</TableCellLayout>
+                                </TableCell>
+                                <TableCell className={styles.settingValueCell}>{item.value}</TableCell>
+                                <TableCell>
+                                    <div className={styles.settingAction}>{item.action}</div>
+                                </TableCell>
+                            </TableRow>
+                            {item.editor && (
+                                <TableRow
+                                    className={styles.editorRow}
+                                    // Collapsed the row is empty and 0px tall; every toggle that
+                                    // closes it lives outside it, so nothing focusable is hidden.
+                                    aria-hidden={item.editorOpen !== true}
+                                >
+                                    <TableCell colSpan={3} className={styles.editorCell}>
+                                        {/* No `appear`: an editor left open across a step change opens instantly. */}
+                                        <Collapse visible={item.editorOpen === true} unmountOnExit>
+                                            <div className={styles.editorBody}>
+                                                <div className={styles.editFields}>{item.editor}</div>
+                                            </div>
+                                        </Collapse>
+                                    </TableCell>
+                                </TableRow>
+                            )}
+                        </Fragment>
+                    ))}
+                </TableBody>
+            </Table>
+            {isRecreate && (
+                <Text size={200} className={styles.muted}>
+                    {l10n.t(
+                        'Recreating reuses the existing data volume, so the original credentials and image are kept.',
+                    )}
+                </Text>
             )}
-            {renderReviewCards()}
-            {renderSummary()}
-            {renderAdvanced()}
-            {renderReadinessFooter()}
-            <div className={styles.actions}>
-                <Button appearance="secondary" onClick={handleClose}>
-                    {l10n.t('Cancel')}
-                </Button>
-                <Button appearance="primary" icon={<RocketRegular />} disabled={!!advError} onClick={handleStart}>
-                    {l10n.t('Start DocumentDB Local')}
-                </Button>
-            </div>
+        </section>
+    );
+
+    // The wrapper is unconditional: a Collapse that mounts already visible skips its enter
+    // motion, so it has to exist (hidden) before the failure arrives.
+    const dockerStatusBlock = (
+        <div className={styles.dockerStatus}>
+            {shownDocker && (
+                <>
+                    <MessageBar intent="error" layout="multiline" icon={<ErrorCircleFilled />}>
+                        <MessageBarBody className={styles.messageBody}>
+                            <div>
+                                <MessageBarTitle>
+                                    {DOCKER_FAILURE_LABELS[shownDocker.problem.failureKind ?? 'unknown']}
+                                </MessageBarTitle>{' '}
+                                {
+                                    DOCKER_GUIDANCE[
+                                        startingDocker
+                                            ? 'daemonStarting'
+                                            : (shownDocker.presentation.guidance ?? 'notAccessible')
+                                    ]
+                                }
+                            </div>
+                            {recoveryCommand && (
+                                <div className={styles.recoveryCommand}>
+                                    {/* Copy sits in the block it copies, where the command is being read. */}
+                                    <div className={styles.recoveryCommandBlock}>
+                                        <code className={styles.recoveryCommandLine}>
+                                            {recoveryCommand.commandLine}
+                                        </code>
+                                        <Button
+                                            appearance="secondary"
+                                            size="small"
+                                            className={styles.recoveryCommandCopy}
+                                            icon={<CopyRegular />}
+                                            onClick={() => handleCopyRecoveryCommand(recoveryCommand.id)}
+                                        >
+                                            {l10n.t('Copy')}
+                                        </Button>
+                                    </div>
+                                    {shownDocker.presentation.recoveryNote && (
+                                        <Text>{DOCKER_RECOVERY_NOTES[shownDocker.presentation.recoveryNote]}</Text>
+                                    )}
+                                </div>
+                            )}
+                            {startingDocker && (
+                                <div className={styles.waitingStatus}>
+                                    <Spinner size="extra-tiny" aria-hidden />
+                                    <Text>{l10n.t('Waiting {0}', formatElapsed(dockerWaitElapsedMs))}</Text>
+                                </div>
+                            )}
+                        </MessageBarBody>
+                        <MessageBarActions>
+                            {shownDocker.presentation.showInstall && (
+                                <Button appearance="secondary" onClick={handleInstallDocker}>
+                                    {l10n.t('Install Docker')}
+                                </Button>
+                            )}
+                            {startingDocker ? (
+                                <Button appearance="secondary" onClick={handleStopWaiting}>
+                                    {l10n.t('Stop waiting')}
+                                </Button>
+                            ) : (
+                                shownDocker.presentation.showStartDockerProvider &&
+                                shownDocker.presentation.startLabel && (
+                                    <Button appearance="secondary" onClick={handleStartDocker}>
+                                        {DOCKER_START_LABELS[shownDocker.presentation.startLabel]}
+                                    </Button>
+                                )
+                            )}
+                            {!shownDocker.presentation.showInstall && (
+                                <Button
+                                    appearance="secondary"
+                                    onClick={() => handleOpenGuide(DOCKER_GUIDES[shownDocker.presentation.guide].href)}
+                                >
+                                    {DOCKER_GUIDES[shownDocker.presentation.guide].label}
+                                </Button>
+                            )}
+                            {shownDocker.presentation.showContinueAnyway && (
+                                <Button appearance="secondary" onClick={handleContinueAnyway}>
+                                    {l10n.t('Continue anyway')}
+                                </Button>
+                            )}
+                            {shownDocker.presentation.showViewOutput && (
+                                <Button appearance="secondary" onClick={handleViewOutput}>
+                                    {l10n.t('View setup log')}
+                                </Button>
+                            )}
+                        </MessageBarActions>
+                    </MessageBar>
+                    <Accordion collapsible>
+                        <AccordionItem value="docker-details">
+                            <AccordionHeader className={styles.dockerAccordionHeader}>
+                                <Text weight="semibold" className={styles.accordionHeaderBrand}>
+                                    {l10n.t('What the Docker check found')}
+                                </Text>
+                            </AccordionHeader>
+                            <AccordionPanel className={styles.dockerAccordionPanel}>
+                                <Text size={200} className={styles.dockerDetailsIntro}>
+                                    {l10n.t(
+                                        'Everything the readiness check established, in the order it was established.',
+                                    )}
+                                </Text>
+                                <dl className={styles.dockerDetails}>
+                                    {buildDockerDetailRows(
+                                        shownDocker.problem,
+                                        dockerPresentationState,
+                                        relativeTimeNow,
+                                    ).map((row) => (
+                                        <Fragment key={row.label}>
+                                            <dt className={styles.dockerDetailLabel}>{row.label}</dt>
+                                            <dd className={styles.dockerDetailValue}>
+                                                <span>{row.value}</span>
+                                                {row.note && (
+                                                    <Text size={200} className={styles.dockerDetailNote}>
+                                                        {row.note}
+                                                    </Text>
+                                                )}
+                                            </dd>
+                                        </Fragment>
+                                    ))}
+                                </dl>
+                            </AccordionPanel>
+                        </AccordionItem>
+                    </Accordion>
+                </>
+            )}
         </div>
+    );
+
+    const setupHeading = isProvisioning
+        ? l10n.t('Setting up DocumentDB Local')
+        : canContinueSetup
+          ? l10n.t('Ready to set up')
+          : l10n.t('Setup did not finish');
+    const setupSubtitle = isProvisioning
+        ? l10n.t('This can take a few minutes. Elapsed time: {0}', formatElapsed(elapsedMs))
+        : canContinueSetup
+          ? l10n.t('Docker is ready now. Nothing has been created on your machine yet.')
+          : checkStageFailed
+            ? l10n.t('Setup stopped at the first stage. Nothing was created on your machine.')
+            : undefined;
+
+    // The Docker-only re-check lives on the stage that owns the check, so its scope is unambiguous
+    // next to the footer's full-run Retry. It shares the evidence line, and so its type scale.
+    const stageActionFor = (stage: ProvisionStage): ReactNode => {
+        if (stage !== 'checking' || !dockerProblem || !dockerPresentation?.showRetry || startingDocker) {
+            return undefined;
+        }
+        if (checkingDockerAgain) {
+            return (
+                <Spinner
+                    size="extra-tiny"
+                    className={styles.stageInlineSpinner}
+                    labelPosition="after"
+                    label={l10n.t('Checking…')}
+                />
+            );
+        }
+        return (
+            <Link className={styles.stageInlineLink} onClick={handleCheckDockerAgain}>
+                {l10n.t('Check Docker again')}
+            </Link>
+        );
+    };
+
+    // When the evidence was gathered belongs next to the evidence, not at the foot of the block.
+    const stageMetaFor = (stage: ProvisionStage): string | undefined =>
+        stage === 'checking' && dockerProblem
+            ? formatLastChecked(dockerProblem.checkedAtMs, relativeTimeNow)
+            : undefined;
+
+    const setup = (
+        <section className={styles.section} aria-labelledby="quickstart-setup-heading">
+            <div className={styles.sectionHeader}>
+                <Text id="quickstart-setup-heading" as="h2" size={500} weight="semibold">
+                    {setupHeading}
+                </Text>
+                {setupSubtitle && <Text className={styles.muted}>{setupSubtitle}</Text>}
+            </div>
+            <div className={styles.stageList} role="list" aria-label={l10n.t('Setup progress')}>
+                {PROVISION_STAGES.map((stage) => (
+                    <StageRow
+                        key={stage}
+                        label={STAGE_LABELS[stage]}
+                        status={stageStatus[stage]}
+                        detail={stageDetailFor(stage)}
+                        meta={stageMetaFor(stage)}
+                        action={stageActionFor(stage)}
+                        reserveDetail={stage === 'checking'}
+                    />
+                ))}
+            </div>
+            {/* Everything below arrives while the step is already on screen, so it expands into
+                place. None of these carry `appear`: a state restored at mount renders instantly. */}
+            <Collapse visible={checkReadiness?.platformSupported === false} unmountOnExit>
+                <div>
+                    <MessageBar intent="warning" icon={<WarningRegular />}>
+                        <MessageBarBody>
+                            {l10n.t('DocumentDB Local images are published for x64 and arm64 only.')}
+                        </MessageBarBody>
+                    </MessageBar>
+                </div>
+            </Collapse>
+            {/* Only when a later failure still stands: otherwise the heading already says it. */}
+            <Collapse visible={dockerRecovered && !canContinueSetup} unmountOnExit>
+                <div>
+                    <MessageBar intent="success">
+                        <MessageBarBody>
+                            <MessageBarTitle>{l10n.t('Docker is ready')}</MessageBarTitle>{' '}
+                            {l10n.t('The earlier failure is still shown below.')}
+                        </MessageBarBody>
+                    </MessageBar>
+                </div>
+            </Collapse>
+            <Collapse visible={phase === 'failed' && !dockerProblem && !canContinueSetup} unmountOnExit>
+                <div>
+                    <MessageBar
+                        intent={timedOut ? 'warning' : 'error'}
+                        layout="multiline"
+                        icon={timedOut ? <WarningRegular /> : <ErrorCircleFilled />}
+                    >
+                        <MessageBarBody>
+                            {timedOut
+                                ? (errorMessage ??
+                                  l10n.t(
+                                      'The container is running, but DocumentDB has not accepted connections yet. It may still be initializing. Keep waiting, view the logs, or start over.',
+                                  ))
+                                : (errorMessage ?? l10n.t('Setup failed.'))}
+                        </MessageBarBody>
+                        <MessageBarActions>
+                            <Button appearance="secondary" onClick={handleViewOutput}>
+                                {l10n.t('View setup log')}
+                            </Button>
+                        </MessageBarActions>
+                    </MessageBar>
+                </div>
+            </Collapse>
+            <Collapse visible={dockerProblem !== undefined} unmountOnExit>
+                {dockerStatusBlock}
+            </Collapse>{' '}
+            {isProvisioning && <Link onClick={handleViewOutput}>{l10n.t('View setup log')}</Link>}
+        </section>
+    );
+
+    const done = (
+        <section className={styles.section} aria-labelledby="quickstart-done-heading">
+            <div className={styles.sectionHeader}>
+                <Text id="quickstart-done-heading" as="h2" size={500} weight="semibold">
+                    {l10n.t('DocumentDB Local is ready')}
+                </Text>
+                {successMessage && <Text className={styles.muted}>{successMessage}</Text>}
+            </div>
+            <div className={styles.stageList} role="list" aria-label={l10n.t('Completed setup steps')}>
+                {PROVISION_STAGES.map((stage) => (
+                    <StageRow
+                        key={stage}
+                        label={STAGE_LABELS[stage]}
+                        status="done"
+                        detail={stage === 'checking' ? checkStageDetail : undefined}
+                        reserveDetail={stage === 'checking'}
+                    />
+                ))}
+            </div>
+            <MessageBar intent="success">
+                <MessageBarBody>
+                    <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>{' '}
+                    {l10n.t(
+                        'The connection is saved and ready to use at localhost:{0}.',
+                        String(boundPort ?? QUICK_START_PORT),
+                    )}
+                </MessageBarBody>
+            </MessageBar>
+            <div className={styles.nextSteps}>
+                <Text size={200} weight="semibold">
+                    {l10n.t('Next steps')}
+                </Text>
+                <Text size={200}>
+                    {l10n.t(
+                        '• Open Connection: browse your databases in the Connections view, under “DocumentDB Local”.',
+                    )}
+                </Text>
+                <Text size={200}>
+                    {checkReadiness === undefined || checkReadiness.executionTarget === 'local'
+                        ? l10n.t(
+                              '• Copy Connection String: use it from a Query Playground, your app, or mongosh (localhost:{0}).',
+                              String(boundPort ?? QUICK_START_PORT),
+                          )
+                        : l10n.t(
+                              '• Copy Connection String: localhost:{0} is reachable from tools running on the extension host.',
+                              String(boundPort ?? QUICK_START_PORT),
+                          )}
+                </Text>
+                <Text size={200}>
+                    {l10n.t(
+                        '• The container keeps running after VS Code closes. Manage it with Stop / Restart / Delete in the Connections view.',
+                    )}
+                </Text>
+            </div>
+        </section>
+    );
+
+    // ---- footer ---------------------------------------------------------------------------
+
+    let primaryLabel: string;
+    let primaryDisabled = false;
+    let primaryIcon: JSX.Element | undefined;
+    let onPrimary: () => void;
+    let secondaryActions: JSX.Element;
+    // Sits directly above the primary action and states what pressing it does to the machine.
+    let footerNote: string | undefined;
+
+    if (phase === 'introduction') {
+        primaryLabel = l10n.t('Continue');
+        onPrimary = () => setPhase('configure');
+        footerNote = l10n.t(
+            'Nothing is downloaded or created on your machine until you choose to start in the Configure step.',
+        );
+        secondaryActions = (
+            <Button appearance="secondary" onClick={handleClose}>
+                {l10n.t('Cancel')}
+            </Button>
+        );
+    } else if (phase === 'configure') {
+        primaryLabel = l10n.t('Start DocumentDB Local');
+        primaryDisabled = advError !== undefined;
+        primaryIcon = <RocketRegular />;
+        onPrimary = handleStart;
+        footerNote = l10n.t(
+            'Starting downloads the official image if needed, then creates and starts one container named {0}. Nothing else on your machine is changed.',
+            QUICK_START_CONTAINER_NAME,
+        );
+        secondaryActions = (
+            <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={() => setPhase('introduction')}>
+                {l10n.t('Back')}
+            </Button>
+        );
+    } else if (isProvisioning) {
+        primaryLabel = l10n.t('Setting up…');
+        primaryDisabled = true;
+        onPrimary = () => undefined;
+        secondaryActions = (
+            <Button appearance="secondary" ref={cancelButtonRef} onClick={handleCancel}>
+                {l10n.t('Cancel')}
+            </Button>
+        );
+    } else if (phase === 'failed' && timedOut) {
+        primaryLabel = l10n.t('Wait longer');
+        primaryIcon = <ArrowClockwiseRegular />;
+        onPrimary = handleWaitLonger;
+        secondaryActions = (
+            <Button appearance="secondary" onClick={handleStartOver}>
+                {l10n.t('Start over')}
+            </Button>
+        );
+    } else if (phase === 'failed') {
+        primaryLabel = canContinueSetup ? l10n.t('Continue setup') : l10n.t('Retry setup');
+        primaryIcon = canContinueSetup ? <RocketRegular /> : <ArrowClockwiseRegular />;
+        primaryDisabled = startingDocker || checkingDockerAgain;
+        onPrimary = handleStart;
+        footerNote = canContinueSetup
+            ? l10n.t(
+                  'Continuing runs every setup step from the beginning, starting with the Docker check. Nothing has been created on your machine yet.',
+              )
+            : l10n.t('Retrying runs every setup step again from the beginning, starting with the Docker check.');
+        secondaryActions = (
+            <Button appearance="secondary" icon={<ArrowLeftRegular />} onClick={handleBackToConfigure}>
+                {l10n.t('Back')}
+            </Button>
+        );
+    } else {
+        primaryLabel = l10n.t('Open Connection');
+        onPrimary = handleOpenConnection;
+        secondaryActions = (
+            <>
+                <Button appearance="secondary" onClick={handleCopyConnString}>
+                    {l10n.t('Copy Connection String')}
+                </Button>
+                <Button appearance="secondary" onClick={handleClose}>
+                    {l10n.t('Close')}
+                </Button>
+            </>
+        );
+    }
+
+    return (
+        <main className={styles.root}>
+            <div className={styles.scrollArea} ref={scrollAreaRef} onScroll={updateFooterElevation}>
+                <div ref={contentRef} className={styles.content}>
+                    <Announcer
+                        when={phase === 'configure'}
+                        message={l10n.t('Review the setup settings, then start DocumentDB Local.')}
+                    />
+                    <Announcer when={isProvisioning} message={l10n.t('Setting up DocumentDB Local.')} />
+                    <Announcer
+                        when={phase === 'success'}
+                        message={l10n.t('DocumentDB Local is ready. Next steps are shown below.')}
+                    />
+                    <Announcer
+                        when={phase === 'failed'}
+                        message={
+                            timedOut
+                                ? (errorMessage ??
+                                  l10n.t(
+                                      'DocumentDB is still initializing. Keep waiting, view the logs, or start over.',
+                                  ))
+                                : l10n.t('Setup did not finish. {0}', errorMessage ?? l10n.t('See the details below.'))
+                        }
+                        politeness="assertive"
+                    />
+                    <Announcer when={startingDocker} message={l10n.t('Waiting for Docker to start.')} />
+                    <Announcer
+                        key={`docker-recovered-${dockerRecoveredKey}`}
+                        when={dockerRecoveredKey > 0}
+                        message={l10n.t('Docker is ready. Setup has not run yet.')}
+                    />
+                    <Announcer
+                        key={`recovery-copied-${copyAnnouncementKey}`}
+                        when={copyAnnouncementKey > 0}
+                        message={l10n.t('Recovery command copied.')}
+                    />
+                    <Announcer
+                        when={dockerActionMessage !== undefined}
+                        message={dockerActionMessage ?? ''}
+                        politeness="assertive"
+                    />
+                    {/* Streams the current provisioning stage to screen readers (WCAG 4.1.3). */}
+                    <div role="status" aria-live="polite" aria-atomic="true" className={styles.srOnly}>
+                        {isProvisioning ? provisioningStatusMessage : ''}
+                    </div>
+                    {hero}
+                    <WizardBreadcrumb steps={stepItems} ariaLabel={l10n.t('Setup steps')} onNavigate={goToStep} />
+                    {phase === 'introduction' && introduction}
+                    {phase === 'configure' && configure}
+                    {(isProvisioning || phase === 'failed') && setup}
+                    {phase === 'success' && done}
+                </div>
+            </div>
+            <div ref={footerRef} className={mergeClasses(styles.footer, footerElevated && styles.footerElevated)}>
+                {footerNote && (
+                    <div className={styles.footerNote}>
+                        <InfoRegular aria-hidden className={styles.footerNoteIcon} />
+                        <Text size={200}>{footerNote}</Text>
+                    </div>
+                )}
+                <div className={styles.footerActions}>
+                    <Button
+                        appearance="primary"
+                        ref={primaryButtonRef}
+                        icon={primaryIcon}
+                        disabled={primaryDisabled}
+                        onClick={onPrimary}
+                    >
+                        {primaryLabel}
+                    </Button>
+                    {secondaryActions}
+                </div>
+            </div>
+        </main>
     );
 };
