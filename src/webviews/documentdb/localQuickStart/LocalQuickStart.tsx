@@ -8,8 +8,8 @@ import {
     AccordionHeader,
     AccordionItem,
     AccordionPanel,
-    Badge,
     Button,
+    CounterBadge,
     Field,
     Input,
     Link,
@@ -21,14 +21,23 @@ import {
     MessageBarTitle,
     Spinner,
     Switch,
+    Table,
+    TableBody,
+    TableCell,
+    TableCellLayout,
+    TableHeader,
+    TableHeaderCell,
+    TableRow,
     Text,
     tokens,
 } from '@fluentui/react-components';
 import {
     ArrowClockwiseRegular,
     ArrowLeftRegular,
+    ArrowResetRegular,
     CheckmarkCircleFilled,
     CircleHintFilled,
+    CopyRegular,
     EditRegular,
     ErrorCircleFilled,
     InfoRegular,
@@ -150,54 +159,26 @@ const useStyles = makeStyles({
     planItem: { display: 'grid', gridTemplateColumns: '24px minmax(0, 1fr)', gap: '0 10px', padding: '7px 0' },
     planBadge: { justifySelf: 'start', alignSelf: 'start' },
     planCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0 },
-    settingsTable: {
-        display: 'grid',
-        gridTemplateColumns: '112px minmax(0, 1fr) auto',
-        alignItems: 'center',
-        gap: '0 16px',
-        borderTop: `1px solid ${tokens.colorNeutralStroke2}`,
-        '@media (max-width: 560px)': { gridTemplateColumns: '96px minmax(0, 1fr)' },
+    settingsColSetting: { width: '140px' },
+    // Auto layout sizes this column from its content; `nowrap` plus non-shrinking children keep a
+    // two-word action label on one line instead of collapsing the cell.
+    settingActionCell: {
+        justifyContent: 'flex-start',
+        whiteSpace: 'nowrap',
+        '> *': { flexShrink: 0 },
     },
-    settingLabel: {
-        alignSelf: 'stretch',
-        display: 'flex',
-        alignItems: 'center',
-        padding: '12px 0',
-        color: tokens.colorNeutralForeground2,
-        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    },
-    settingValue: {
-        alignSelf: 'stretch',
-        display: 'flex',
-        alignItems: 'center',
-        minWidth: 0,
-        gap: '8px',
-        padding: '12px 0',
-        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-    },
-    settingAction: {
-        alignSelf: 'stretch',
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        padding: '8px 0',
-        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-        '@media (max-width: 560px)': {
-            gridColumn: '2',
-            justifyContent: 'flex-start',
-            paddingTop: 0,
-            paddingBottom: '10px',
-        },
-    },
+    settingValue: { minWidth: 0 },
+    editFieldsCell: { backgroundColor: tokens.colorNeutralBackground2 },
+    // `start` keeps a field whose validation message appeared from stretching its sibling's input.
     editFields: {
-        gridColumn: '2 / 4',
         display: 'grid',
         gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        alignItems: 'start',
         gap: '12px',
-        padding: '12px 0',
-        borderBottom: `1px solid ${tokens.colorNeutralStroke2}`,
-        '@media (max-width: 560px)': { gridColumn: '1 / 3', gridTemplateColumns: '1fr' },
+        '@media (max-width: 560px)': { gridTemplateColumns: '1fr' },
     },
+    editFieldWithReset: { display: 'flex', alignItems: 'flex-end', gap: '6px' },
+    editFieldInput: { flexGrow: 1, minWidth: 0 },
     imagePath: { overflowWrap: 'anywhere' },
     stageList: {
         display: 'flex',
@@ -210,28 +191,41 @@ const useStyles = makeStyles({
     stageRow: { display: 'flex', alignItems: 'flex-start', gap: '10px', minHeight: '20px' },
     stageIcon: { width: '18px', height: '20px', flexShrink: 0, display: 'grid', placeItems: 'center' },
     stageCopy: { display: 'flex', flexDirection: 'column', gap: '1px', minWidth: 0, alignItems: 'flex-start' },
-    stageAction: { marginTop: '3px' },
+    // The re-check sits on the evidence line, so it has to drop to that line's type scale.
+    stageInlineLink: { fontSize: tokens.fontSizeBase200, lineHeight: tokens.lineHeightBase200 },
     stageDone: { color: tokens.colorPaletteGreenForeground1, fontSize: '18px' },
     stageError: { color: tokens.colorPaletteRedForeground1, fontSize: '18px' },
     stagePending: { color: tokens.colorNeutralForeground4, fontSize: '18px' },
     dockerStatus: { display: 'flex', flexDirection: 'column', gap: '10px' },
     messageBody: { display: 'flex', flexDirection: 'column', gap: '8px' },
     recoveryCommand: { display: 'flex', flexDirection: 'column', gap: '8px' },
-    // Sits inside the error bar, so it reads as a neutral surface outlined in the danger hue
-    // rather than a second alert nested inside the first.
-    recoveryCommandLine: {
-        display: 'block',
-        padding: '6px 8px',
+    // Copy stays pinned top-right: a multi-line command must not push it down or wrap it away.
+    recoveryCommandBlock: {
+        display: 'flex',
+        alignItems: 'flex-start',
+        justifyContent: 'space-between',
+        gap: '8px',
+        padding: '6px 6px 6px 8px',
         borderRadius: tokens.borderRadiusSmall,
         backgroundColor: tokens.colorNeutralBackground1,
         border: `1px solid ${tokens.colorStatusDangerBorder1}`,
+    },
+    // Sits inside the error bar, so it reads as a neutral surface outlined in the danger hue
+    // rather than a second alert nested inside the first.
+    recoveryCommandLine: {
+        minWidth: 0,
+        // `pre-wrap` keeps the line breaks of a multi-line command instead of collapsing them.
+        whiteSpace: 'pre-wrap',
+        paddingTop: '3px',
         fontFamily: tokens.fontFamilyMonospace,
         fontSize: tokens.fontSizeBase300,
         color: tokens.colorNeutralForeground1,
         overflowWrap: 'anywhere',
     },
+    recoveryCommandCopy: { flexShrink: 0 },
     waitingStatus: { display: 'flex', alignItems: 'center', gap: '8px' },
     dockerAccordionHeader: { minHeight: '30px' },
+    accordionHeaderBrand: { color: tokens.colorBrandForeground1 },
     dockerAccordionPanel: { paddingTop: '4px' },
     dockerDetails: {
         display: 'grid',
@@ -563,11 +557,13 @@ interface StageRowProps {
      * as a receipt rather than a transient log.
      */
     readonly detail?: string;
-    /** Optional per-stage control, e.g. re-running just this stage's check after a failure. */
+    /** Appended to the evidence line, e.g. when the evidence was gathered. */
+    readonly meta?: string;
+    /** Inline control on the evidence line, e.g. re-running just this stage's check. */
     readonly action?: ReactNode;
 }
 
-const StageRow = ({ label, status, detail, action }: StageRowProps): JSX.Element => {
+const StageRow = ({ label, status, detail, meta, action }: StageRowProps): JSX.Element => {
     const styles = useStyles();
     let icon: JSX.Element;
     let statusText: string;
@@ -586,25 +582,25 @@ const StageRow = ({ label, status, detail, action }: StageRowProps): JSX.Element
         statusText = l10n.t('pending');
     }
 
-    // Row-level label reads naturally on every screen reader (e.g. "Pulling official image, done");
-    // the icon and visible text are decorative duplicates (WCAG 1.1.1).
-    const rowLabel = detail
-        ? l10n.t('{0}, {1}. {2}', label, statusText, detail)
-        : l10n.t('{0}, {1}', label, statusText);
+    const evidence = detail && meta ? l10n.t('{0} · {1}', detail, meta) : (detail ?? meta);
 
+    // The row is not aria-labelled: an inline action lives on the evidence line, and a row-level
+    // label would leave it unreachable. The status is voiced by a visually-hidden span instead.
     return (
-        <div className={styles.stageRow} role="listitem" aria-label={rowLabel}>
+        <div className={styles.stageRow} role="listitem">
             <span className={styles.stageIcon}>{icon}</span>
             <div className={styles.stageCopy}>
-                <Text aria-hidden className={status === 'pending' ? styles.muted : undefined}>
+                <Text className={status === 'pending' ? styles.muted : undefined}>
                     {label}
+                    <span className={styles.srOnly}>{l10n.t(', {0}', statusText)}</span>
                 </Text>
-                {detail && (
-                    <Text aria-hidden size={200} className={styles.muted}>
-                        {detail}
+                {(evidence || action) && (
+                    <Text size={200} className={styles.muted}>
+                        {evidence}
+                        {evidence && action ? ' · ' : ''}
+                        {action}
                     </Text>
                 )}
-                {action && <div className={styles.stageAction}>{action}</div>}
             </div>
         </div>
     );
@@ -640,11 +636,12 @@ export const LocalQuickStart = (): JSX.Element => {
     // so the failed view offers Wait longer / Start over instead of just Retry (§9.1).
     const [timedOut, setTimedOut] = useState(false);
 
-    // Settings (P1-4). Empty fields fall back to the zero-decision defaults.
-    const [advPort, setAdvPort] = useState('');
+    // Settings (P1-4). The port and tag fields carry the real defaults rather than placeholder
+    // text, so what the user sees in the box is what will be used.
+    const [advPort, setAdvPort] = useState(String(QUICK_START_PORT));
     const [advUser, setAdvUser] = useState('');
     const [advPass, setAdvPass] = useState('');
-    const [advTag, setAdvTag] = useState('');
+    const [advTag, setAdvTag] = useState(QUICK_START_DEFAULT_TAG);
     const [advLoadSampleData, setAdvLoadSampleData] = useState(true);
     const [editingPort, setEditingPort] = useState(false);
     const [editingImage, setEditingImage] = useState(false);
@@ -734,14 +731,17 @@ export const LocalQuickStart = (): JSX.Element => {
             return;
         }
         const opts: AdvancedQuickStartOptions = {};
-        if (advPort.trim()) opts.port = Number(advPort.trim());
+        // Only an actual change is sent. An explicit port is honored exactly (a conflict errors),
+        // while omitting it lets the service fall back to a free port in the band — so echoing the
+        // default back would silently remove that fallback.
+        if (advPort.trim() && advPort.trim() !== String(QUICK_START_PORT)) opts.port = Number(advPort.trim());
         // Credentials and image tag are ignored by the service when reusing an existing
         // instance, so don't send them (the fields are hidden in that case anyway). Send the
         // trimmed credentials so what we transmit is exactly what the service stores/encodes.
         if (!isRecreate) {
             if (useCustomCredentials && advUser.trim()) opts.username = advUser.trim();
             if (useCustomCredentials && advPass.trim()) opts.password = advPass.trim();
-            if (advTag.trim()) opts.imageTag = advTag.trim();
+            if (advTag.trim() && advTag.trim() !== QUICK_START_DEFAULT_TAG) opts.imageTag = advTag.trim();
         }
         if (!advLoadSampleData) opts.loadSampleData = false;
         advancedRef.current = Object.keys(opts).length > 0 ? opts : undefined;
@@ -1305,7 +1305,12 @@ export const LocalQuickStart = (): JSX.Element => {
         id: entry.id,
         label: entry.label,
         isCurrent: index === currentStepIndex,
-        isCompleted: index < currentStepIndex || (entry.id === 'done' && index === currentStepIndex),
+        // "Introduction" opens pre-satisfied — there is nothing on it to complete — so it carries a
+        // check from the start, mirroring the Atlas view's first step.
+        isCompleted:
+            entry.id === 'introduction' ||
+            index < currentStepIndex ||
+            (entry.id === 'done' && index === currentStepIndex),
         canNavigate: index < currentStepIndex && !stepsLocked,
     }));
 
@@ -1324,7 +1329,6 @@ export const LocalQuickStart = (): JSX.Element => {
                         'DocumentDB Local gives you an open-source, fully MongoDB-compatible database for development and testing on your machine.',
                     )}
                 </Text>
-                <Text>{l10n.t('Nothing is downloaded or created on your machine until you choose to start.')}</Text>
             </div>
             <div className={styles.planSection}>
                 <Text as="h3" size={400} weight="semibold">
@@ -1333,15 +1337,13 @@ export const LocalQuickStart = (): JSX.Element => {
                 <ol className={styles.planList}>
                     {PLAN_ITEMS.map((item, index) => (
                         <li className={styles.planItem} key={item.label}>
-                            <Badge
+                            <CounterBadge
                                 aria-hidden
-                                appearance="tint"
+                                appearance="filled"
                                 color="informative"
-                                shape="circular"
+                                count={index + 1}
                                 className={styles.planBadge}
-                            >
-                                {index + 1}
-                            </Badge>
+                            />
                             <div className={styles.planCopy}>
                                 <Text>{item.label}</Text>
                                 <Text size={200} className={styles.muted}>
@@ -1356,11 +1358,33 @@ export const LocalQuickStart = (): JSX.Element => {
     );
 
     const settingRow = (label: string, value: ReactNode, action?: ReactNode): JSX.Element => (
-        <>
-            <Text className={styles.settingLabel}>{label}</Text>
-            <div className={styles.settingValue}>{value}</div>
-            <div className={styles.settingAction}>{action}</div>
-        </>
+        <TableRow>
+            <TableCell>{label}</TableCell>
+            <TableCell className={styles.settingValue}>
+                {/* Not truncated: the image row is meant to show the full official reference. */}
+                <TableCellLayout>{value}</TableCellLayout>
+            </TableCell>
+            <TableCell className={styles.settingActionCell}>{action}</TableCell>
+        </TableRow>
+    );
+
+    const editorRow = (children: ReactNode): JSX.Element => (
+        <TableRow>
+            <TableCell colSpan={3} className={styles.editFieldsCell}>
+                <div className={styles.editFields}>{children}</div>
+            </TableCell>
+        </TableRow>
+    );
+
+    const resetButton = (label: string, onReset: () => void, disabled: boolean): JSX.Element => (
+        <Button
+            appearance="secondary"
+            icon={<ArrowResetRegular />}
+            aria-label={label}
+            title={label}
+            disabled={disabled}
+            onClick={onReset}
+        />
     );
 
     const configure = (
@@ -1373,131 +1397,162 @@ export const LocalQuickStart = (): JSX.Element => {
                     {l10n.t('These defaults work for most people. Change them only if you need to.')}
                 </Text>
             </div>
-            <div className={styles.settingsTable}>
-                {settingRow(
-                    l10n.t('Address'),
-                    <Text>{l10n.t('localhost:{0}', effectivePort)}</Text>,
-                    <Button
-                        appearance="subtle"
-                        size="small"
-                        icon={<EditRegular />}
-                        aria-expanded={editingPort}
-                        onClick={() => setEditingPort((value) => !value)}
-                    >
-                        {l10n.t('Edit port')}
-                    </Button>,
-                )}
-                {editingPort && (
-                    <div className={styles.editFields}>
-                        <Field
-                            label={l10n.t('Port')}
-                            hint={l10n.t('Host remains localhost. Default {0}.', String(QUICK_START_PORT))}
-                            validationState={advValidation?.field === 'port' ? 'error' : 'none'}
-                            validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
-                        >
-                            <Input
-                                type="number"
-                                value={advPort}
-                                placeholder={String(QUICK_START_PORT)}
-                                onChange={(_event, data) => setAdvPort(data.value)}
-                            />
-                        </Field>
-                    </div>
-                )}
-                {settingRow(
-                    l10n.t('Image'),
-                    isRecreate ? (
-                        <Text>{l10n.t('Kept from the existing instance')}</Text>
-                    ) : (
-                        <code className={styles.imagePath}>{effectiveImage}</code>
-                    ),
-                    isRecreate ? undefined : (
+            <Table size="small" aria-label={l10n.t('Setup settings')}>
+                <colgroup>
+                    <col className={styles.settingsColSetting} />
+                    <col />
+                    <col />
+                </colgroup>
+                <TableHeader>
+                    <TableRow>
+                        <TableHeaderCell>{l10n.t('Setting')}</TableHeaderCell>
+                        <TableHeaderCell>{l10n.t('Value')}</TableHeaderCell>
+                        <TableHeaderCell className={styles.settingActionCell}>{l10n.t('Actions')}</TableHeaderCell>
+                    </TableRow>
+                </TableHeader>
+                <TableBody>
+                    {settingRow(
+                        l10n.t('Address'),
+                        l10n.t('localhost:{0}', effectivePort),
                         <Button
-                            appearance="subtle"
+                            appearance="secondary"
                             size="small"
                             icon={<EditRegular />}
-                            aria-expanded={editingImage}
-                            aria-label={l10n.t('Edit image tag')}
-                            onClick={() => setEditingImage((value) => !value)}
+                            aria-expanded={editingPort}
+                            onClick={() => setEditingPort((value) => !value)}
                         >
-                            {l10n.t('Edit')}
-                        </Button>
-                    ),
-                )}
-                {editingImage && !isRecreate && (
-                    <div className={styles.editFields}>
-                        <Field
-                            label={l10n.t('Image tag')}
-                            hint={l10n.t(
-                                'The official image repository is fixed. Default “{0}”.',
-                                QUICK_START_DEFAULT_TAG,
-                            )}
-                            validationState={advValidation?.field === 'tag' ? 'error' : 'none'}
-                            validationMessage={advValidation?.field === 'tag' ? advValidation.message : undefined}
-                        >
-                            <Input
-                                value={advTag}
-                                maxLength={128}
-                                placeholder={QUICK_START_DEFAULT_TAG}
-                                onChange={(_event, data) => setAdvTag(data.value)}
-                            />
-                        </Field>
-                    </div>
-                )}
-                {settingRow(
-                    l10n.t('Credentials'),
-                    <Text>
-                        {isRecreate
+                            {l10n.t('Edit port')}
+                        </Button>,
+                    )}
+                    {editingPort &&
+                        editorRow(
+                            <div className={styles.editFieldWithReset}>
+                                <Field
+                                    className={styles.editFieldInput}
+                                    label={l10n.t('Port')}
+                                    hint={l10n.t('The host is always localhost.')}
+                                    validationState={advValidation?.field === 'port' ? 'error' : 'none'}
+                                    validationMessage={
+                                        advValidation?.field === 'port' ? advValidation.message : undefined
+                                    }
+                                >
+                                    <Input
+                                        type="number"
+                                        value={advPort}
+                                        onChange={(_event, data) => setAdvPort(data.value)}
+                                    />
+                                </Field>
+                                {resetButton(
+                                    l10n.t('Reset port to {0}', String(QUICK_START_PORT)),
+                                    () => setAdvPort(String(QUICK_START_PORT)),
+                                    advPort === String(QUICK_START_PORT),
+                                )}
+                            </div>,
+                        )}
+                    {settingRow(
+                        l10n.t('Image'),
+                        isRecreate ? (
+                            l10n.t('Kept from the existing instance')
+                        ) : (
+                            <code className={styles.imagePath}>{effectiveImage}</code>
+                        ),
+                        isRecreate ? undefined : (
+                            <Button
+                                appearance="secondary"
+                                size="small"
+                                icon={<EditRegular />}
+                                aria-expanded={editingImage}
+                                aria-label={l10n.t('Edit image tag')}
+                                onClick={() => setEditingImage((value) => !value)}
+                            >
+                                {l10n.t('Edit')}
+                            </Button>
+                        ),
+                    )}
+                    {editingImage &&
+                        !isRecreate &&
+                        editorRow(
+                            <div className={styles.editFieldWithReset}>
+                                <Field
+                                    className={styles.editFieldInput}
+                                    label={l10n.t('Image tag')}
+                                    hint={l10n.t('The official image repository is fixed.')}
+                                    validationState={advValidation?.field === 'tag' ? 'error' : 'none'}
+                                    validationMessage={
+                                        advValidation?.field === 'tag' ? advValidation.message : undefined
+                                    }
+                                >
+                                    <Input
+                                        value={advTag}
+                                        maxLength={128}
+                                        onChange={(_event, data) => setAdvTag(data.value)}
+                                    />
+                                </Field>
+                                {resetButton(
+                                    l10n.t('Reset image tag to {0}', QUICK_START_DEFAULT_TAG),
+                                    () => setAdvTag(QUICK_START_DEFAULT_TAG),
+                                    advTag === QUICK_START_DEFAULT_TAG,
+                                )}
+                            </div>,
+                        )}
+                    {settingRow(
+                        l10n.t('Credentials'),
+                        isRecreate
                             ? l10n.t('Reused from the existing instance')
                             : useCustomCredentials
                               ? l10n.t('Custom credentials, stored securely')
-                              : l10n.t('Generated automatically, stored securely')}
-                    </Text>,
-                    isRecreate ? undefined : (
-                        <Button appearance="subtle" size="small" onClick={() => setCustomCredentials((v) => !v)}>
-                            {useCustomCredentials ? l10n.t('Use generated') : l10n.t('Use custom')}
-                        </Button>
-                    ),
-                )}
-                {useCustomCredentials && (
-                    <div className={styles.editFields}>
-                        <Field
-                            label={l10n.t('Username')}
-                            validationState={advValidation?.field === 'username' ? 'error' : 'none'}
-                            validationMessage={advValidation?.field === 'username' ? advValidation.message : undefined}
-                        >
-                            <Input
-                                value={advUser}
-                                maxLength={128}
-                                placeholder={l10n.t('Enter a username')}
-                                onChange={(_event, data) => setAdvUser(data.value)}
-                            />
-                        </Field>
-                        <Field
-                            label={l10n.t('Password')}
-                            validationState={advValidation?.field === 'password' ? 'error' : 'none'}
-                            validationMessage={advValidation?.field === 'password' ? advValidation.message : undefined}
-                        >
-                            <Input
-                                type="password"
-                                value={advPass}
-                                maxLength={256}
-                                placeholder={l10n.t('Enter a password')}
-                                onChange={(_event, data) => setAdvPass(data.value)}
-                            />
-                        </Field>
-                    </div>
-                )}
-                {settingRow(
-                    l10n.t('Sample data'),
-                    <Text>{advLoadSampleData ? l10n.t('Included') : l10n.t('Not included')}</Text>,
-                    <Switch
-                        checked={advLoadSampleData}
-                        aria-label={l10n.t('Include sample data')}
-                        onChange={(_event, data) => setAdvLoadSampleData(data.checked)}
-                    />,
-                )}
-            </div>
+                              : l10n.t('Generated automatically, stored securely'),
+                        isRecreate ? undefined : (
+                            <Button appearance="secondary" size="small" onClick={() => setCustomCredentials((v) => !v)}>
+                                {useCustomCredentials ? l10n.t('Use generated') : l10n.t('Use custom')}
+                            </Button>
+                        ),
+                    )}
+                    {useCustomCredentials &&
+                        editorRow(
+                            <>
+                                <Field
+                                    label={l10n.t('Username')}
+                                    validationState={advValidation?.field === 'username' ? 'error' : 'none'}
+                                    validationMessage={
+                                        advValidation?.field === 'username' ? advValidation.message : undefined
+                                    }
+                                >
+                                    <Input
+                                        value={advUser}
+                                        maxLength={128}
+                                        placeholder={l10n.t('Enter a username')}
+                                        onChange={(_event, data) => setAdvUser(data.value)}
+                                    />
+                                </Field>
+                                <Field
+                                    label={l10n.t('Password')}
+                                    validationState={advValidation?.field === 'password' ? 'error' : 'none'}
+                                    validationMessage={
+                                        advValidation?.field === 'password' ? advValidation.message : undefined
+                                    }
+                                >
+                                    <Input
+                                        type="password"
+                                        value={advPass}
+                                        maxLength={256}
+                                        placeholder={l10n.t('Enter a password')}
+                                        onChange={(_event, data) => setAdvPass(data.value)}
+                                    />
+                                </Field>
+                            </>,
+                        )}
+                    {settingRow(
+                        l10n.t('Sample data'),
+                        advLoadSampleData ? l10n.t('Included') : l10n.t('Not included'),
+                        <Switch
+                            checked={advLoadSampleData}
+                            aria-label={l10n.t('Include sample data')}
+                            onChange={(_event, data) => setAdvLoadSampleData(data.checked)}
+                        />,
+                    )}
+                </TableBody>
+            </Table>
             {isRecreate && (
                 <Text size={200} className={styles.muted}>
                     {l10n.t(
@@ -1524,7 +1579,19 @@ export const LocalQuickStart = (): JSX.Element => {
                     </div>
                     {recoveryCommand && (
                         <div className={styles.recoveryCommand}>
-                            <code className={styles.recoveryCommandLine}>{recoveryCommand.commandLine}</code>
+                            {/* Copy sits in the block it copies, where the command is being read. */}
+                            <div className={styles.recoveryCommandBlock}>
+                                <code className={styles.recoveryCommandLine}>{recoveryCommand.commandLine}</code>
+                                <Button
+                                    appearance="secondary"
+                                    size="small"
+                                    className={styles.recoveryCommandCopy}
+                                    icon={<CopyRegular />}
+                                    onClick={() => handleCopyRecoveryCommand(recoveryCommand.id)}
+                                >
+                                    {l10n.t('Copy')}
+                                </Button>
+                            </div>
                             {dockerPresentation.recoveryNote && (
                                 <Text>{DOCKER_RECOVERY_NOTES[dockerPresentation.recoveryNote]}</Text>
                             )}
@@ -1555,11 +1622,6 @@ export const LocalQuickStart = (): JSX.Element => {
                             </Button>
                         )
                     )}
-                    {recoveryCommand && (
-                        <Button appearance="secondary" onClick={() => handleCopyRecoveryCommand(recoveryCommand.id)}>
-                            {l10n.t('Copy command')}
-                        </Button>
-                    )}
                     {!dockerPresentation.showInstall && (
                         <Button
                             appearance="secondary"
@@ -1575,7 +1637,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     )}
                     {dockerPresentation.showViewOutput && (
                         <Button appearance="secondary" onClick={handleViewOutput}>
-                            {l10n.t('View Docker output')}
+                            {l10n.t('View setup log')}
                         </Button>
                     )}
                 </MessageBarActions>
@@ -1583,7 +1645,9 @@ export const LocalQuickStart = (): JSX.Element => {
             <Accordion collapsible>
                 <AccordionItem value="docker-details">
                     <AccordionHeader className={styles.dockerAccordionHeader}>
-                        {l10n.t('What the Docker check found')}
+                        <Text weight="semibold" className={styles.accordionHeaderBrand}>
+                            {l10n.t('What the Docker check found')}
+                        </Text>
                     </AccordionHeader>
                     <AccordionPanel className={styles.dockerAccordionPanel}>
                         <dl className={styles.dockerDetails}>
@@ -1625,11 +1689,6 @@ export const LocalQuickStart = (): JSX.Element => {
                     </AccordionPanel>
                 </AccordionItem>
             </Accordion>
-            <div className={styles.lastCheckedRow}>
-                <Text size={200} className={styles.muted} role="status" aria-live="polite">
-                    {formatLastChecked(dockerProblem.checkedAtMs, relativeTimeNow)}
-                </Text>
-            </div>
         </div>
     );
 
@@ -1643,20 +1702,26 @@ export const LocalQuickStart = (): JSX.Element => {
             : undefined;
 
     // The Docker-only re-check lives on the stage that owns the check, so its scope is unambiguous
-    // next to the footer's full-run Retry.
+    // next to the footer's full-run Retry. It shares the evidence line, and so its type scale.
     const stageActionFor = (stage: ProvisionStage): ReactNode => {
         if (stage !== 'checking' || !dockerProblem || !dockerPresentation?.showRetry || startingDocker) {
             return undefined;
         }
         if (checkingDockerAgain) {
-            return (
-                <Text size={200} className={styles.muted}>
-                    {l10n.t('Checking…')}
-                </Text>
-            );
+            return l10n.t('Checking…');
         }
-        return <Link onClick={handleCheckDockerAgain}>{l10n.t('Check Docker again')}</Link>;
+        return (
+            <Link className={styles.stageInlineLink} onClick={handleCheckDockerAgain}>
+                {l10n.t('Check Docker again')}
+            </Link>
+        );
     };
+
+    // When the evidence was gathered belongs next to the evidence, not at the foot of the block.
+    const stageMetaFor = (stage: ProvisionStage): string | undefined =>
+        stage === 'checking' && dockerProblem
+            ? formatLastChecked(dockerProblem.checkedAtMs, relativeTimeNow)
+            : undefined;
 
     const setup = (
         <section className={styles.section} aria-labelledby="quickstart-setup-heading">
@@ -1673,6 +1738,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         label={STAGE_LABELS[stage]}
                         status={stageStatus[stage]}
                         detail={stageDetailFor(stage)}
+                        meta={stageMetaFor(stage)}
                         action={stageActionFor(stage)}
                     />
                 ))}
@@ -1710,13 +1776,13 @@ export const LocalQuickStart = (): JSX.Element => {
                     </MessageBarBody>
                     <MessageBarActions>
                         <Button appearance="secondary" onClick={handleViewOutput}>
-                            {l10n.t('View Docker output')}
+                            {l10n.t('View setup log')}
                         </Button>
                     </MessageBarActions>
                 </MessageBar>
             )}
             {dockerStatusBlock}
-            {isProvisioning && <Link onClick={handleViewOutput}>{l10n.t('View Docker output')}</Link>}
+            {isProvisioning && <Link onClick={handleViewOutput}>{l10n.t('View setup log')}</Link>}
         </section>
     );
 
@@ -1789,6 +1855,7 @@ export const LocalQuickStart = (): JSX.Element => {
     if (phase === 'introduction') {
         primaryLabel = l10n.t('Continue');
         onPrimary = () => setPhase('configure');
+        footerNote = l10n.t('Nothing is downloaded or created on your machine until you choose to start.');
         secondaryActions = (
             <Button appearance="secondary" onClick={handleClose}>
                 {l10n.t('Cancel')}
