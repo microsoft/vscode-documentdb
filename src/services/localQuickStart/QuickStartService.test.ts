@@ -380,6 +380,41 @@ describe('QuickStartService — WI-2d registry-driven reconcile (multi-instance)
         info.mockRestore();
     });
 
+    it('refreshLiveState() fires the status change only on the TRANSITION into Missing (H1)', async () => {
+        ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
+        ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;
+
+        const inspect: Record<string, unknown> = {
+            c1: inspectItem('c1', { running: true, port: 10260, image: 'img:1' }),
+        };
+        const service = new QuickStartServiceImpl(
+            mockRuntime({
+                listByLabel: jest
+                    .fn()
+                    .mockResolvedValue([{ id: 'c1', labels: { [QUICK_START_ALIAS_LABEL_KEY]: DEFAULT_ALIAS } }]),
+                inspectContainer: jest.fn((id: string) =>
+                    Promise.resolve(inspect[id]),
+                ) as unknown as IContainerRuntime['inspectContainer'],
+            }),
+        );
+
+        await service.reconcile();
+
+        // The container is removed outside VS Code; the tree then re-renders repeatedly.
+        delete inspect.c1;
+        let fired = 0;
+        service.onDidChangeStatus(() => fired++);
+
+        await service.refreshLiveState();
+        await service.refreshLiveState();
+        await service.refreshLiveState();
+
+        // Pre-fix this fired once per call, and each fire re-entered getChildren() → refreshLiveState()
+        // → a self-sustaining `docker inspect` loop for as long as the view was visible.
+        expect(fired).toBe(1);
+        expect(service.getStatus().missing).toBe(true);
+    });
+
     it('deleteContainer() refuses to remove a container that is not ours, even when surfaced as Missing (#9)', async () => {
         ext.secretStorage = fakeSecretStorage({ [secretKey(DEFAULT_ALIAS)]: CONN_1 });
         ext.context = { globalState: fakeMemento() } as unknown as vscode.ExtensionContext;

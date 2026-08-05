@@ -1391,9 +1391,14 @@ export class QuickStartServiceImpl {
                     continue;
                 }
                 if (!inspected) {
-                    // Container is gone — keep metadata so the user can recreate.
-                    entry.missing = true;
-                    this.statusEmitter.fire();
+                    // Container is gone — keep metadata so the user can recreate. Fire only on the
+                    // TRANSITION into `missing` (like every sibling branch below): the tree renders
+                    // this node expanded, so an unconditional fire would re-enter getChildren() →
+                    // refreshLiveState() → fire() and spin a `docker inspect` loop forever.
+                    if (!entry.missing) {
+                        entry.missing = true;
+                        this.statusEmitter.fire();
+                    }
                     continue;
                 }
                 const nextState = isRunning(inspected) ? InstanceState.Running : InstanceState.Stopped;
