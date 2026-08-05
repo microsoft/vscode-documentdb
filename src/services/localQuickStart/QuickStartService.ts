@@ -353,7 +353,8 @@ export class QuickStartServiceImpl {
      */
     public async *provision(signal: AbortSignal, options?: AdvancedQuickStartOptions): AsyncGenerator<StageEvent> {
         if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
-            yield stageEvent('error', 'error', 'Setup is already in progress.', 'Setup is already in progress.');
+            const message = l10n.t('Setup is already in progress.');
+            yield stageEvent('error', 'error', message, message);
             return;
         }
         this.stateFor(DEFAULT_ALIAS).provisioning = true;
@@ -431,8 +432,8 @@ export class QuickStartServiceImpl {
             if ((!readiness.cliInstalled || !readiness.daemonReachable) && !continueAfterIndeterminateReadiness) {
                 throw new DockerNotReadyError(
                     !readiness.cliInstalled
-                        ? 'Docker CLI was not found on your PATH. Install Docker and retry.'
-                        : 'Docker is installed but the daemon is not reachable. Start Docker and retry.',
+                        ? l10n.t('Docker CLI was not found on your PATH. Install Docker and retry.')
+                        : l10n.t('Docker is installed but the daemon is not reachable. Start Docker and retry.'),
                 );
             }
 
@@ -478,7 +479,10 @@ export class QuickStartServiceImpl {
             let portFallbackNote: string | undefined;
             if (explicitPort !== undefined) {
                 if (!(await this.runtime.isPortFree(explicitPort))) {
-                    const message = `Port ${explicitPort} is already in use. Choose a different port or free it, then retry.`;
+                    const message = l10n.t(
+                        'Port {0} is already in use. Choose a different port or free it, then retry.',
+                        String(explicitPort),
+                    );
                     this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                     yield stageEvent('checking', 'error', message, message);
                     return;
@@ -489,7 +493,13 @@ export class QuickStartServiceImpl {
                 const available = await this.runtime.findAvailablePort(QUICK_START_PORT);
                 this.throwIfAborted(signal);
                 if (available === undefined) {
-                    const message = `Ports ${QUICK_START_PORT}-${QUICK_START_PORT_BAND_END - 1} are all in use. Free one and retry.`;
+                    // Do NOT claim the whole band was checked: the search samples a handful of ports
+                    // out of it, so "all in use" would be a false statement (#852 / #854).
+                    const message = l10n.t(
+                        'No free port was found in the range {0}-{1}. Free one, or set an explicit port under Advanced, then retry.',
+                        String(QUICK_START_PORT),
+                        String(QUICK_START_PORT_BAND_END - 1),
+                    );
                     this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
                     yield stageEvent('checking', 'error', message, message);
                     return;
@@ -590,7 +600,7 @@ export class QuickStartServiceImpl {
             yield stageEvent(
                 'done',
                 'done',
-                `DocumentDB Local is running on localhost:${boundPort}.`,
+                l10n.t('DocumentDB Local is running on localhost:{0}.', String(boundPort)),
                 undefined,
                 boundPort,
             );
@@ -599,7 +609,7 @@ export class QuickStartServiceImpl {
             const dockerReadiness =
                 !aborted && activeDockerStage ? await this.getProvisioningDockerReadiness() : undefined;
             provisioningDockerFailureKind = dockerReadiness?.failureKind;
-            let message = aborted ? 'Setup was cancelled.' : errMessage(error);
+            let message = aborted ? l10n.t('Setup was cancelled.') : errMessage(error);
             if (!aborted && error instanceof DockerNotReadyError) {
                 this.stateFor(DEFAULT_ALIAS).pendingReadiness = undefined;
                 this.setStatus(DEFAULT_ALIAS, InstanceState.Error, undefined, message);
@@ -771,7 +781,8 @@ export class QuickStartServiceImpl {
     public async *resumeReadiness(signal: AbortSignal): AsyncGenerator<StageEvent> {
         const pending = this.stateFor(DEFAULT_ALIAS).pendingReadiness;
         if (!pending) {
-            yield stageEvent('error', 'error', 'There is nothing to resume.', 'There is nothing to resume.');
+            const nothingToResume = l10n.t('There is nothing to resume.');
+            yield stageEvent('error', 'error', nothingToResume, nothingToResume);
             return;
         }
         if (this.stateFor(DEFAULT_ALIAS).provisioning || this.stateFor(DEFAULT_ALIAS).lifecycleBusy) {
@@ -779,14 +790,11 @@ export class QuickStartServiceImpl {
             // observe). Carry the timed-out affordance so the webview keeps the Wait longer / Start
             // over view instead of flipping to the generic error (opus-4.8) — the container and
             // `pendingReadiness` are still retained.
-            yield stageEvent(
-                'error',
-                'error',
-                'A setup operation is already in progress.',
-                'in progress',
-                undefined,
-                true,
-            );
+            // `error` is what the webview renders (it takes precedence over `message`), so it must
+            // carry the same localized sentence — a bare "in progress" marker reached the message
+            // bar verbatim and untranslated (#852).
+            const alreadyRunning = l10n.t('A setup operation is already in progress.');
+            yield stageEvent('error', 'error', alreadyRunning, alreadyRunning, undefined, true);
             return;
         }
         this.stateFor(DEFAULT_ALIAS).provisioning = true;
@@ -1186,7 +1194,7 @@ export class QuickStartServiceImpl {
                     alias,
                     InstanceState.Error,
                     undefined,
-                    'The container started but exited shortly after. Check the Quick Start logs.',
+                    l10n.t('The container started but exited shortly after. Check the Quick Start logs.'),
                 );
             }
         });
@@ -1223,7 +1231,7 @@ export class QuickStartServiceImpl {
                     alias,
                     InstanceState.Error,
                     undefined,
-                    'The container restarted but exited shortly after. Check the Quick Start logs.',
+                    l10n.t('The container restarted but exited shortly after. Check the Quick Start logs.'),
                 );
             }
         });

@@ -22,18 +22,83 @@ import { copyStandardConnectionString } from '../copyConnectionString/copyConnec
  * ignored. The tree refreshes via `QuickStartService.onDidChangeStatus`.
  */
 
+/**
+ * Every command below acts on the single service-owned instance. When there is no instance to act
+ * on, returning quietly leaves the user with no feedback at all — the bug behind #851, where the
+ * commands were also listed in the Command Palette (now gated to `when: never` in package.json).
+ *
+ * The palette entries are the primary fix; this is the second line of defense, so that ANY route
+ * into a command with nothing to act on explains itself instead of doing nothing. Two states are
+ * distinguished:
+ *
+ *  - `CredentialsMissing` — a labelled container (or durable `ready` record) exists but its saved
+ *    credentials are gone. The service already detects and logs this; surface it and offer Delete,
+ *    which is the only way forward.
+ *  - anything else without metadata — no instance yet; offer the Quick Start wizard.
+ *
+ * Returns `true` when the caller may proceed (metadata is present).
+ */
+function ensureInstanceOrExplain(context: IActionContext): boolean {
+    const status = QuickStartService.getStatus();
+    if (status.metadata) {
+        return true;
+    }
+    context.telemetry.properties.noInstanceState = status.state;
+
+    if (status.state === InstanceState.CredentialsMissing) {
+        const deleteAction = l10n.t('Delete Container…');
+        void vscode.window
+            .showWarningMessage(
+                l10n.t(
+                    'Saved credentials for DocumentDB Local are missing, so this instance cannot be opened. Delete it and set it up again to start fresh (this erases its data).',
+                ),
+                deleteAction,
+            )
+            .then((choice) => {
+                if (choice === deleteAction) {
+                    return vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.delete');
+                }
+                return undefined;
+            });
+        return false;
+    }
+
+    const setUpAction = l10n.t('Set up DocumentDB Local');
+    void vscode.window
+        .showInformationMessage(
+            l10n.t('DocumentDB Local is not set up yet. Run Quick Start to create a local instance first.'),
+            setUpAction,
+        )
+        .then((choice) => {
+            if (choice === setUpAction) {
+                return vscode.commands.executeCommand('vscode-documentdb.command.localQuickStart.open');
+            }
+            return undefined;
+        });
+    return false;
+}
+
 export async function startQuickStartInstance(context: IActionContext): Promise<void> {
     context.telemetry.properties.action = 'start';
+    if (!ensureInstanceOrExplain(context)) {
+        return;
+    }
     await QuickStartService.start();
 }
 
 export async function stopQuickStartInstance(context: IActionContext): Promise<void> {
     context.telemetry.properties.action = 'stop';
+    if (!ensureInstanceOrExplain(context)) {
+        return;
+    }
     await QuickStartService.stop();
 }
 
 export async function restartQuickStartInstance(context: IActionContext): Promise<void> {
     context.telemetry.properties.action = 'restart';
+    if (!ensureInstanceOrExplain(context)) {
+        return;
+    }
     await QuickStartService.restart();
 }
 
@@ -98,6 +163,9 @@ export function buildQuickStartCopyCredentials(
 }
 
 export async function copyQuickStartConnectionString(context: IActionContext): Promise<void> {
+    if (!ensureInstanceOrExplain(context)) {
+        return;
+    }
     const metadata = QuickStartService.getStatus().metadata;
     if (!metadata) {
         return;
@@ -114,7 +182,10 @@ export async function copyQuickStartConnectionString(context: IActionContext): P
     await copyStandardConnectionString(context, credentials, true, false);
 }
 
-export function copyQuickStartPassword(_context: IActionContext): void {
+export function copyQuickStartPassword(context: IActionContext): void {
+    if (!ensureInstanceOrExplain(context)) {
+        return;
+    }
     const metadata = QuickStartService.getStatus().metadata;
     if (!metadata) {
         return;
@@ -126,6 +197,12 @@ export function copyQuickStartPassword(_context: IActionContext): void {
         password = '';
     }
     if (!password) {
+        // The instance exists but its stored connection string carries no password (e.g. it was
+        // rewritten outside the extension). Say so rather than leaving the clipboard untouched
+        // with no explanation (#851).
+        void vscode.window.showWarningMessage(
+            l10n.t('No password is stored for the DocumentDB Local instance, so there is nothing to copy.'),
+        );
         return;
     }
     void vscode.env.clipboard.writeText(password);
@@ -146,6 +223,12 @@ export function viewQuickStartLogs(_context: IActionContext): void {
     // masking the password (D14) in case the image ever echoes it.
     const metadata = QuickStartService.getStatus().metadata;
     if (!metadata) {
+        // The channel is now in front of the user, so state there why no container logs follow
+        // rather than leaving them staring at unrelated output (#851). A notification would be
+        // redundant on top of the surface we just revealed.
+        channel.appendLine(
+            l10n.t('There is no DocumentDB Local container to follow. Run Quick Start to create one.'),
+        );
         return;
     }
     // Cancel any prior follow before starting a new one (see activeLogFollow).

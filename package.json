@@ -1246,6 +1246,35 @@
           "when": "never"
         },
         {
+          "//": "[Local Quick Start] Lifecycle commands act on the managed instance selected in the Connections view. Invoked from the palette there is no instance in context, so they would silently do nothing — only `localQuickStart.open` belongs in the palette.",
+          "command": "vscode-documentdb.command.localQuickStart.start",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.stop",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.restart",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.delete",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.copyConnectionString",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.copyPassword",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.viewLogs",
+          "when": "never"
+        },
+        {
           "command": "vscode-documentdb.command.connectionsView.renameConnection",
           "when": "never"
         },
