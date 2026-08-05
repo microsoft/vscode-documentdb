@@ -29,12 +29,14 @@ export class ExecuteStep extends AzureWizardExecuteStep<UpdateCSWizardContext> {
         }
 
         try {
-            // Canonicalize the edited connection string: strip any TLS-bypass param and keep
-            // `emulatorConfiguration.disableEmulatorSecurity` as the single source of truth (§7).
-            // Recompute the exception host-gated against the EDITED hosts: honor a freshly-requested
-            // bypass OR preserve an existing exception, but ONLY while every host stays local/private.
-            // Editing to a public/mixed host therefore CLEARS allow-invalid so the public host
-            // validates certificates (it never stays latched from the old value).
+            // Canonicalize the edited connection string: when every host is local/private the
+            // TLS-bypass params are folded into `emulatorConfiguration.disableEmulatorSecurity`,
+            // the single source of truth (§7). Recompute the exception host-gated against the EDITED
+            // hosts: honor a freshly-requested bypass OR preserve an existing exception, but ONLY
+            // while every host stays local/private. Editing to a public/mixed host therefore CLEARS
+            // allow-invalid so the public host validates certificates (it never stays latched from
+            // the old value) — while leaving any bypass param the user wrote in the string itself
+            // untouched, since the stored flag would never be honored for that host anyway.
             const canonicalTls = canonicalizeTlsException(
                 nonNullValue(context.newConnectionString?.trim(), 'context.newConnectionString', 'ExecuteStep.ts'),
             );

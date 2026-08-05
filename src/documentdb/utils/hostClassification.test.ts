@@ -53,6 +53,18 @@ describe('hostClassification (TLS-exception gating, design §7.1)', () => {
             'fe80::1', // IPv6 link-local
             'febf::1', // IPv6 link-local upper boundary
             '[fe80::abcd]:10260',
+            '0:0:0:0:0:0:0:1', // fully-expanded ::1
+            '0000:0000:0000:0000:0000:0000:0000:0001', // zero-padded ::1
+            '[0:0:0:0:0:0:0:1]:10260',
+            '::', // unspecified address — targets the local machine
+            '0.0.0.0',
+            '::ffff:127.0.0.1', // IPv4-mapped loopback
+            '[::ffff:127.0.0.1]:10260',
+            '::ffff:10.0.0.5', // IPv4-mapped RFC1918
+            '::ffff:192.168.1.1',
+            '::127.0.0.1', // deprecated IPv4-compatible form
+            'fe80::1%eth0', // zone index
+            '0:0:0:0:0:0:0:0', // fully-expanded ::
         ])('%s → true', (host) => {
             expect(isLocalOrPrivateHost(host)).toBe(true);
         });
@@ -71,6 +83,11 @@ describe('hostClassification (TLS-exception gating, design §7.1)', () => {
             '11.0.0.1', // not 10/8
             'fec0::1', // just above fe80::/10 (not link-local)
             '2001:db8::1', // public IPv6
+            '2001:0db8:0000:0000:0000:0000:0000:0001', // fully-expanded public IPv6
+            '::ffff:8.8.8.8', // IPv4-mapped PUBLIC address must stay public
+            '::ffff:11.0.0.1',
+            'fe80:::1', // malformed — must not be classified as link-local
+            '::1::2', // malformed — two '::' groups
             '', // empty
             'example\u3002com', // U+3002 ideographic full stop — DNS resolves as public example.com
             'example\uFF0Ecom', // U+FF0E fullwidth full stop

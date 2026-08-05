@@ -19,27 +19,30 @@ describe('canonicalizeTlsException (TLS exception single-source-of-truth, design
         expect(result.connectionString).not.toContain('tlsAllowInvalidCertificates');
     });
 
-    it('does NOT honor allow-invalid for a public host, but still strips the bypass param', () => {
-        const result = canonicalizeTlsException('mongodb://prod.example.com/?tlsAllowInvalidCertificates=true');
+    it("does NOT adopt the exception for a public host, and leaves the user's param untouched", () => {
+        const input = 'mongodb://prod.example.com/?tlsAllowInvalidCertificates=true';
+        const result = canonicalizeTlsException(input);
         expect(result.disableEmulatorSecurity).toBe(false);
-        // The param is stripped so the driver can't silently disable validation for a public host.
-        expect(result.connectionString).not.toContain('tlsAllowInvalidCertificates');
+        // The stored flag is host-gated and would never be honored here, so stripping the param
+        // would leave a self-hosted server on a public DNS name with no way to express the
+        // exception at all. `resolveAllowInvalidCertificates` stays silent so the driver honors it.
+        expect(result.connectionString).toBe(input);
     });
 
-    it('does NOT honor allow-invalid for a Unicode-dot homograph of a public host', () => {
+    it('does NOT adopt the exception for a Unicode-dot homograph of a public host', () => {
         // `example。com` (U+3002) has no ASCII dot but DNS resolves it as the public example.com,
         // so it must NOT be treated as a single-word local host.
-        const result = canonicalizeTlsException('mongodb://example\u3002com/?tlsAllowInvalidCertificates=true');
+        const input = 'mongodb://example\u3002com/?tlsAllowInvalidCertificates=true';
+        const result = canonicalizeTlsException(input);
         expect(result.disableEmulatorSecurity).toBe(false);
-        expect(result.connectionString).not.toContain('tlsAllowInvalidCertificates');
+        expect(result.connectionString).toBe(input);
     });
 
-    it('does NOT honor allow-invalid for a mixed seed list (one public host)', () => {
-        const result = canonicalizeTlsException(
-            'mongodb://localhost:27017,prod.example.com:27017/?tlsAllowInvalidCertificates=true',
-        );
+    it('does NOT adopt the exception for a mixed seed list (one public host)', () => {
+        const input = 'mongodb://localhost:27017,prod.example.com:27017/?tlsAllowInvalidCertificates=true';
+        const result = canonicalizeTlsException(input);
         expect(result.disableEmulatorSecurity).toBe(false);
-        expect(result.connectionString).not.toContain('tlsAllowInvalidCertificates');
+        expect(result.connectionString).toBe(input);
     });
 
     it('strips alias bypass params (sslAllowInvalidCertificates, tlsInsecure)', () => {
@@ -62,18 +65,18 @@ describe('canonicalizeTlsException (TLS exception single-source-of-truth, design
         expect(b.connectionString.toLowerCase()).not.toContain('allowinvalidhostnames');
     });
 
-    it('does NOT honor a hostname-validation bypass for a public host, but still strips it', () => {
-        const result = canonicalizeTlsException('mongodb://prod.example.com/?tlsAllowInvalidHostnames=true');
+    it('does NOT adopt a hostname-validation bypass for a public host, and keeps the param', () => {
+        const input = 'mongodb://prod.example.com/?tlsAllowInvalidHostnames=true';
+        const result = canonicalizeTlsException(input);
         expect(result.disableEmulatorSecurity).toBe(false);
-        expect(result.connectionString.toLowerCase()).not.toContain('allowinvalidhostnames');
+        expect(result.connectionString).toBe(input);
     });
 
-    it('does NOT honor a hostname-validation bypass for a mixed seed list, but still strips it', () => {
-        const result = canonicalizeTlsException(
-            'mongodb://localhost:27017,prod.example.com:27017/?tlsAllowInvalidHostnames=true',
-        );
+    it('does NOT adopt a hostname-validation bypass for a mixed seed list, and keeps the param', () => {
+        const input = 'mongodb://localhost:27017,prod.example.com:27017/?tlsAllowInvalidHostnames=true';
+        const result = canonicalizeTlsException(input);
         expect(result.disableEmulatorSecurity).toBe(false);
-        expect(result.connectionString.toLowerCase()).not.toContain('allowinvalidhostnames');
+        expect(result.connectionString).toBe(input);
     });
 
     it('is case-insensitive on the hostname-validation bypass key', () => {
@@ -88,10 +91,11 @@ describe('canonicalizeTlsException (TLS exception single-source-of-truth, design
         expect(result.connectionString.toLowerCase()).not.toContain('rejectunauthorized');
     });
 
-    it('does NOT honor rejectUnauthorized=false for a public host, but still strips it', () => {
-        const result = canonicalizeTlsException('mongodb://prod.example.com/?rejectUnauthorized=false');
+    it('does NOT adopt rejectUnauthorized=false for a public host, and keeps the param', () => {
+        const input = 'mongodb://prod.example.com/?rejectUnauthorized=false';
+        const result = canonicalizeTlsException(input);
         expect(result.disableEmulatorSecurity).toBe(false);
-        expect(result.connectionString.toLowerCase()).not.toContain('rejectunauthorized');
+        expect(result.connectionString).toBe(input);
     });
 
     it('strips rejectUnauthorized=true without requesting a bypass (and validates)', () => {

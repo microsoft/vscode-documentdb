@@ -47,11 +47,13 @@ export class PromptConnectionStringStep extends AzureWizardPromptStep<NewConnect
 
         context.connectionString = parsedConnectionString.toString();
 
-        // TLS exception (§7): canonicalize any TLS-bypass URL param into the single source of
-        // truth (`context.disableEmulatorSecurity`) and strip it from the stored connection string.
-        // RESET the decision on every entry (so changing the connection string via Back-navigation
-        // re-evaluates it) — set true only for an all-local/private host that requested the bypass,
-        // otherwise clear it so the gated TLS step decides (or a public host validates).
+        // TLS exception (§7): for an all-local/private host, fold any TLS-bypass URL param into the
+        // single source of truth (`context.disableEmulatorSecurity`) and strip it from the stored
+        // connection string. RESET the decision on every entry (so changing the connection string via
+        // Back-navigation re-evaluates it) — set true only for an all-local/private host that requested
+        // the bypass, otherwise clear it so the gated TLS step decides (or a public host validates).
+        // A public/mixed host keeps its string verbatim: the stored flag is host-gated and would never
+        // be honored there, so stripping would delete the user's only way to express the exception.
         const canonicalTls = canonicalizeTlsException(context.connectionString);
         context.connectionString = canonicalTls.connectionString;
         context.disableEmulatorSecurity = canonicalTls.disableEmulatorSecurity ? true : undefined;
