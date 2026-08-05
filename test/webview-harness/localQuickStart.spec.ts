@@ -173,7 +173,7 @@ test.describe('Local Quick Start — success screen', () => {
 
         await expect(page.getByText('This instance is already in the Connections view')).toBeVisible();
         await expect(page.getByText('You do not need to create a connection for it')).toBeVisible();
-        await expect(page.getByText('The instance is already connected in the Connections view')).toBeVisible();
+        await expect(page.getByText('The connection already exists in the Connections view')).toBeVisible();
     });
 
     /**
@@ -188,6 +188,20 @@ test.describe('Local Quick Start — success screen', () => {
         await page.getByRole('button', { name: 'Copy connection string' }).click();
 
         await expect.poll(() => callsTo(page, 'localQuickStart.copyConnectionString')).toHaveLength(1);
+    });
+
+    /**
+     * The primary action has to reach the host. It used to land on a handler that only ran
+     * `connectionsView.focus`, which is invisible when that view is already active — the button
+     * looked dead. What the host does with the call is asserted in
+     * `src/tree/connections-view/LocalQuickStart/revealQuickStartInstance.test.ts`.
+     */
+    test('Open Connection asks the host to open the instance', async ({ page }) => {
+        await openScenario(page, 'success');
+
+        await page.getByRole('button', { name: 'Open Connection' }).click();
+
+        await expect.poll(() => callsTo(page, 'localQuickStart.openConnection')).toHaveLength(1);
     });
 
     /**
