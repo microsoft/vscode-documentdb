@@ -274,19 +274,35 @@
                 window.postMessage({ id, result, complete }, '*');
             };
 
+            /**
+             * Every host call the webview makes, in order, as `{path, input}`. The automated suite
+             * asserts against this — it is how "the install button opens the Docker Desktop page"
+             * is checked without actually leaving the page.
+             */
+            globalThis.__harnessCalls = [];
+
             const vscodeApi = {
                 postMessage(message) {
                     const { id, op } = message ?? {};
                     if (!id || !op) return;
                     const { type, path } = op;
                     if (type === 'subscription.stop' || type === 'abort') return;
+                    globalThis.__harnessCalls.push({ path, input: op.input ?? null });
 
                     if (path === 'localQuickStart.startQuickStart' || path === 'localQuickStart.waitLonger') {
                         const events = STAGE_STREAMS[scenario] ?? STAGE_STREAMS.provisioning;
                         // Spread the events over a few frames so the stage list animates as it does
-                        // in the real panel, then close the stream.
+                        // in the real panel.
                         events.forEach((event, index) => setTimeout(() => respond(id, event), 60 * (index + 1)));
-                        setTimeout(() => respond(id, undefined, true), 60 * (events.length + 1));
+                        // Only close the stream once it has reached a terminal event. A stream that
+                        // ends without one means the service returned early, and the webview
+                        // correctly falls back to the settings page — which would silently undo a
+                        // mid-provision scenario.
+                        const last = events.at(-1);
+                        const terminal = last?.stage === 'done' || last?.status === 'error';
+                        if (terminal) {
+                            setTimeout(() => respond(id, undefined, true), 60 * (events.length + 1));
+                        }
                         return;
                     }
 
@@ -342,15 +358,23 @@
 
             const settle = () => new Promise((resolve) => setTimeout(resolve, 250));
 
+            /**
+             * `__harnessReady` flips once the wizard has reached the phase the scenario asked for,
+             * so the automated suite can wait on a signal instead of a sleep.
+             */
+            globalThis.__harnessReady = false;
+
             (async () => {
                 await settle();
-                if (scenario === 'introduction') return;
-                clickByText('Continue'); // introduction → configure
-                await settle();
-                if (scenario === 'configure') return;
-                clickByText('Start DocumentDB Local'); // configure → provisioning → stream
-                await settle();
-                await settle();
+                if (scenario !== 'introduction') {
+                    clickByText('Continue'); // introduction → configure
+                    await settle();
+                    if (scenario !== 'configure') {
+                        clickByText('Start DocumentDB Local'); // configure → provisioning → stream
+                        await settle();
+                        await settle();
+                    }
+                }
                 globalThis.__harnessReady = true;
             })();
         </script>
