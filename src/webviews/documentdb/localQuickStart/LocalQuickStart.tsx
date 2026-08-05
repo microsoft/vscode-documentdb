@@ -463,6 +463,12 @@ const DOCKER_PERMISSION_DETAIL_VALUES: Readonly<Record<DockerPermissionDetail, s
 
 const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
     installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
+    installDockerWindows: l10n.t(
+        'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted — reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
+    ),
+    installDockerMac: l10n.t(
+        'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
+    ),
     accessDeniedLinux: l10n.t(
         'Your user cannot access the Docker socket. Run this command, then sign out and sign back in.',
     ),
@@ -503,6 +509,14 @@ const DOCKER_GUIDANCE: Readonly<Record<DockerGuidanceKey, string>> = {
 
 const DOCKER_GUIDES: Readonly<Record<DockerGuideKey, { readonly label: string; readonly href: string }>> = {
     install: { label: l10n.t('Open Docker install guide'), href: 'https://docs.docker.com/engine/install/' },
+    installWindowsDesktop: {
+        label: l10n.t('Get Docker Desktop for Windows'),
+        href: 'https://docs.docker.com/desktop/setup/install/windows-install/',
+    },
+    installMacDesktop: {
+        label: l10n.t('Get Docker Desktop for Mac'),
+        href: 'https://docs.docker.com/desktop/setup/install/mac-install/',
+    },
     linuxPostInstall: {
         label: l10n.t('Open Linux setup guide'),
         href: 'https://docs.docker.com/engine/install/linux-postinstall/',
@@ -1443,10 +1457,6 @@ export const LocalQuickStart = (): JSX.Element => {
         void trpcClient.localQuickStart.showOutput.mutate().catch(() => undefined);
     }, [trpcClient]);
 
-    const handleInstallDocker = useCallback((): void => {
-        void trpcClient.common.openUrl.mutate({ url: DOCKER_GUIDES.install.href }).catch(() => undefined);
-    }, [trpcClient]);
-
     const handleOpenGuide = useCallback(
         (url: string): void => {
             void trpcClient.common.openUrl.mutate({ url }).catch(() => undefined);
@@ -1890,8 +1900,14 @@ export const LocalQuickStart = (): JSX.Element => {
                         </MessageBarBody>
                         <MessageBarActions>
                             {shownDocker.presentation.showInstall && (
-                                <Button appearance="secondary" onClick={handleInstallDocker}>
-                                    {l10n.t('Install Docker')}
+                                // Route the install CTA through the guide the host resolved for
+                                // THIS platform. It used to hardcode the Docker Engine page, so
+                                // Windows and macOS users were sent to a Linux-only install (#856).
+                                <Button
+                                    appearance="secondary"
+                                    onClick={() => handleOpenGuide(DOCKER_GUIDES[shownDocker.presentation.guide].href)}
+                                >
+                                    {DOCKER_GUIDES[shownDocker.presentation.guide].label}
                                 </Button>
                             )}
                             {startingDocker ? (

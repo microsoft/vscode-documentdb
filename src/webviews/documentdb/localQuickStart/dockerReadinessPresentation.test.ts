@@ -92,6 +92,32 @@ describe('getDockerReadinessPresentation', () => {
         expect(getDockerReadinessPresentation(readiness({ failureKind: 'daemonUnavailable' })).showInstall).toBe(false);
     });
 
+    // #856: Docker Desktop is the supported Docker on Windows and macOS, so the Engine guide —
+    // which documents a Linux-only install — is the wrong destination there.
+    // #855: and a VS Code that was already running keeps its old PATH, so the install alone leaves
+    // Docker undetected; the guidance has to say to restart VS Code.
+    it.each([
+        ['windows' as const, 'installWindowsDesktop', 'installDockerWindows'],
+        ['macos' as const, 'installMacDesktop', 'installDockerMac'],
+    ])('points a missing CLI on %s at Docker Desktop and asks for a VS Code restart', (environment, guide, guidance) => {
+        expect(
+            getDockerReadinessPresentation(
+                readiness({ environment, failureKind: 'cliMissing', cliInstalled: false }),
+            ),
+        ).toMatchObject({ showInstall: true, guide, guidance });
+    });
+
+    it.each(['linux' as const, 'wsl' as const, 'devContainer' as const])(
+        'keeps the Docker Engine install guide on %s',
+        (environment) => {
+            expect(
+                getDockerReadinessPresentation(
+                    readiness({ environment, failureKind: 'cliMissing', cliInstalled: false }),
+                ),
+            ).toMatchObject({ guide: 'install', guidance: 'installDocker' });
+        },
+    );
+
     it('offers Continue anyway only for an indeterminate result', () => {
         expect(
             getDockerReadinessPresentation(
