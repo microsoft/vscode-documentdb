@@ -2119,9 +2119,13 @@ export const LocalQuickStart = (): JSX.Element => {
             <MessageBar intent="success">
                 <MessageBarBody>
                     <MessageBarTitle>{l10n.t('All set')}</MessageBarTitle>{' '}
+                    {/*
+                     * Say plainly that the connection already exists. Without this, the copy
+                     * action next to it read as "now go and create the connection", and a
+                     * bug-bash user did exactly that, ending up with a duplicate (#857).
+                     */}
                     {l10n.t(
-                        'The connection is saved and ready to use at localhost:{0}.',
-                        String(boundPort ?? QUICK_START_PORT),
+                        'This instance is already in the Connections view as “DocumentDB Local”. You do not need to create a connection for it.',
                     )}
                 </MessageBarBody>
             </MessageBar>
@@ -2134,16 +2138,23 @@ export const LocalQuickStart = (): JSX.Element => {
                         '• Open Connection: browse your databases in the Connections view, under “DocumentDB Local”.',
                     )}
                 </Text>
+                {/*
+                 * Offering "Copy Connection String" beside "Open Connection" read as the next
+                 * REQUIRED step, and a bug-bash user duplicated the connection by hand because of
+                 * it (#857). It is optional and only for clients outside VS Code, so it is stated
+                 * that way here and no longer competes with the primary action in the footer.
+                 */}
                 <Text size={200}>
                     {checkReadiness === undefined || checkReadiness.executionTarget === 'local'
                         ? l10n.t(
-                              '• Copy Connection String: use it from a Query Playground, your app, or mongosh (localhost:{0}).',
+                              '• Optional — to reach this instance from a tool outside VS Code, such as mongosh or your own app, copy its connection string (localhost:{0}).',
                               String(boundPort ?? QUICK_START_PORT),
                           )
                         : l10n.t(
-                              '• Copy Connection String: localhost:{0} is reachable from tools running on the extension host.',
+                              '• Optional — to reach this instance from a tool outside VS Code, copy its connection string. localhost:{0} resolves from the extension host.',
                               String(boundPort ?? QUICK_START_PORT),
-                          )}
+                          )}{' '}
+                    <Link onClick={handleCopyConnString}>{l10n.t('Copy connection string')}</Link>
                 </Text>
                 <Text size={200}>
                     {l10n.t(
@@ -2225,15 +2236,16 @@ export const LocalQuickStart = (): JSX.Element => {
     } else {
         primaryLabel = l10n.t('Open Connection');
         onPrimary = handleOpenConnection;
+        footerNote = l10n.t(
+            'The instance is already connected in the Connections view. Opening it just takes you there.',
+        );
+        // No Copy Connection String here: in the footer it read as a second required setup step
+        // (#857). The optional copy lives inline in Next steps, labelled as being for clients
+        // outside VS Code.
         secondaryActions = (
-            <>
-                <Button appearance="secondary" onClick={handleCopyConnString}>
-                    {l10n.t('Copy Connection String')}
-                </Button>
-                <Button appearance="secondary" onClick={handleClose}>
-                    {l10n.t('Close')}
-                </Button>
-            </>
+            <Button appearance="secondary" onClick={handleClose}>
+                {l10n.t('Close')}
+            </Button>
         );
     }
 
