@@ -39,7 +39,12 @@ import {
     type IContainerRuntime,
     isRunning,
 } from './ContainerRuntime';
-import { composeConnectionString, generateCredentials, type GeneratedCredentials } from './quickStartCredentials';
+import {
+    composeConnectionString,
+    generateCredentials,
+    type GeneratedCredentials,
+    secretVariants,
+} from './quickStartCredentials';
 import {
     DEFAULT_INSTANCE_DISPLAY_NAME,
     isProvisioningLeaseFresh,
@@ -376,7 +381,7 @@ export class QuickStartServiceImpl {
         const reusable = await this.getReusableCredentials(alias);
         const reusing = reusable !== undefined;
         const credentials = reusable ?? resolveProvisionCredentials(options);
-        const secrets: string[] = [credentials.password];
+        const secrets: string[] = secretVariants(credentials.password);
 
         // Advanced overrides (P1-4). When reusing an existing instance we keep its data volume,
         // so custom credentials AND a custom image tag are intentionally IGNORED: the stored
@@ -726,7 +731,7 @@ export class QuickStartServiceImpl {
         // sample data", default on) and not already present (idempotent, so recreating onto an
         // existing volume doesn't re-run the init and hit duplicate keys). Best-effort.
         if (pending.sampleDataRequested && !(await this.sampleDataExists(pending.connectionString))) {
-            await this.seedSampleData(pending.containerId, [pending.password], token);
+            await this.seedSampleData(pending.containerId, secretVariants(pending.password), token);
         }
         this.throwIfAborted(signal);
         await ext.secretStorage.store(secretKey(pending.alias), pending.connectionString);
@@ -805,7 +810,7 @@ export class QuickStartServiceImpl {
             yield stageEvent('waiting', 'active', 'Waiting for DocumentDB to accept connections…');
             // Stream the container's logs during THIS wait so "View Docker output" shows the live
             // startup rather than only the stale first-attempt output (opus-4.8).
-            void this.runtime.followLogs(pending.containerId, [pending.password], cts.token);
+            void this.runtime.followLogs(pending.containerId, secretVariants(pending.password), cts.token);
             await this.waitForReadiness(pending.connectionString, signal);
             this.throwIfAborted(signal);
             await this.finalizeReadyInstance(pending, cts.token, signal);
@@ -1635,3 +1640,37 @@ export class QuickStartServiceImpl {
 
 /** Singleton Quick Start service. */
 export const QuickStartService = new QuickStartServiceImpl();
+
+/** A stale env file is one older than this; younger ones may belong to a live provision. */
+const ENV_FILE_STALE_AFTER_MS = 60 * 60 * 1000;
+
+/**
+ * Best-effort activation sweep of `documentdb-quickstart-*.env` files left in `os.tmpdir()`
+ * (L9). `provision()` deletes its env file in a `finally`, but an extension host killed between
+ * the write and that `finally` leaves a plaintext password on disk. Only files older than
+ * {@link ENV_FILE_STALE_AFTER_MS} are removed, so a provision running in another window — whose
+ * image pull can take a while — never has its env file deleted underneath it.
+ */
+export async function sweepStaleQuickStartEnvFiles(): Promise<void> {
+    try {
+        const dir = os.tmpdir();
+        const entries = await fs.readdir(dir);
+        const cutoff = Date.now() - ENV_FILE_STALE_AFTER_MS;
+        for (const entry of entries) {
+            if (!/^documentdb-quickstart-[0-9a-f]{16}\.env$/.test(entry)) {
+                continue;
+            }
+            const filePath = path.join(dir, entry);
+            try {
+                const stats = await fs.stat(filePath);
+                if (stats.mtimeMs < cutoff) {
+                    await fs.unlink(filePath);
+                }
+            } catch {
+                // Raced with another window's cleanup, or not ours to delete — skip it.
+            }
+        }
+    } catch {
+        // Never let a tmpdir hiccup affect activation.
+    }
+}

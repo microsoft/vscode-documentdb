@@ -26,6 +26,13 @@ export function maskSecrets(text: string, secrets: ReadonlyArray<string>): strin
 }
 
 /**
+ * Emit a forced (newline-less) chunk once the buffer reaches this size, so a container that streams
+ * a very long line — a progress bar using `\r`, a binary blob, a runaway single-line log — cannot
+ * grow the buffer without bound while `docker logs -f` keeps running.
+ */
+const MAX_BUFFERED_CHARS = 16 * 1024;
+
+/**
  * Accumulates raw stream chunks, emits one masked line at a time on each
  * newline, and masks any trailing partial line on {@link flush}. Buffering by
  * line guarantees a secret split across two chunks is still fully visible to
@@ -33,11 +40,15 @@ export function maskSecrets(text: string, secrets: ReadonlyArray<string>): strin
  */
 export class MaskingLineBuffer {
     private buffer = '';
+    /** Longest secret; a forced flush must retain at least this much so it cannot split a secret. */
+    private readonly maxSecretLength: number;
 
     constructor(
         private readonly emit: (line: string) => void,
         private readonly secrets: ReadonlyArray<string>,
-    ) {}
+    ) {
+        this.maxSecretLength = secrets.reduce((longest, secret) => Math.max(longest, secret.length), 0);
+    }
 
     public push(chunk: string): void {
         this.buffer += chunk;
@@ -46,6 +57,16 @@ export class MaskingLineBuffer {
             const line = this.buffer.slice(0, newlineIndex).replace(/\r$/, '');
             this.buffer = this.buffer.slice(newlineIndex + 1);
             this.emit(maskSecrets(line, this.secrets));
+        }
+        // No newline in sight: emit what we have, but keep a tail at least as long as the longest
+        // secret so a secret straddling the cut is still whole on the next pass and gets masked.
+        if (this.buffer.length > MAX_BUFFERED_CHARS) {
+            const keep = Math.max(this.maxSecretLength, 1);
+            const cut = this.buffer.length - keep;
+            if (cut > 0) {
+                this.emit(maskSecrets(this.buffer.slice(0, cut), this.secrets));
+                this.buffer = this.buffer.slice(cut);
+            }
         }
     }
 

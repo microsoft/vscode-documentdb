@@ -670,6 +670,7 @@
   "Docker is ready. Setup has not run yet.": "Docker is ready. Setup has not run yet.",
   "Docker must be available in the remote environment where this extension is running.": "Docker must be available in the remote environment where this extension is running.",
   "Docker reports this only once a connection succeeds, so it stays unknown until then.": "Docker reports this only once a connection succeeds, so it stays unknown until then.",
+  "Docker started, but it is not usable yet — see the details below.": "Docker started, but it is not usable yet — see the details below.",
   "Document actions": "Document actions",
   "Document already exists (skipped)": "Document already exists (skipped)",
   "Document Editor: Edit the document in JSON format": "Document Editor: Edit the document in JSON format",

@@ -62,3 +62,24 @@ export function composeConnectionString(username: string, password: string, port
     cs.password = password;
     return cs.toString();
 }
+
+/**
+ * Every textual form a secret can take in the output channel, for {@link maskSecrets}.
+ *
+ * Auto-generated passwords use the URL-safe alphabet, so their raw and percent-encoded forms are
+ * identical. A **custom** Advanced password may contain `@ : / % #`, which
+ * {@link composeConnectionString} percent-encodes — so if a connection string ever reaches the
+ * channel (a driver error echo, a future diagnostic), only the encoded form would appear and the
+ * raw-string masker would miss it.
+ */
+export function secretVariants(...secrets: ReadonlyArray<string>): string[] {
+    const variants = new Set<string>();
+    for (const secret of secrets) {
+        if (!secret) {
+            continue;
+        }
+        variants.add(secret);
+        variants.add(encodeURIComponent(secret));
+    }
+    return [...variants];
+}

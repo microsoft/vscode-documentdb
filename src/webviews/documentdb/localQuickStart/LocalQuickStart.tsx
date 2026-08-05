@@ -1314,6 +1314,11 @@ export const LocalQuickStart = (): JSX.Element => {
                     applyDockerRecovery();
                 } else if (outcome === 'deadline') {
                     setDockerActionMessage(l10n.t('Docker did not become ready before the wait timed out.'));
+                } else if (outcome === 'stopped') {
+                    // Docker answered, but with a non-transient problem (e.g. permission denied). The
+                    // readiness card below already updated via onResult; announce the transition too,
+                    // otherwise the spinner just disappears and the Announcer says nothing.
+                    setDockerActionMessage(l10n.t('Docker started, but it is not usable yet — see the details below.'));
                 }
             })
             .catch(() => {

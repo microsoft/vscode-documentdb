@@ -51,6 +51,7 @@ import {
     copyQuickStartConnectionString,
     copyQuickStartPassword,
     deleteQuickStartInstance,
+    disposeQuickStartLogFollow,
     restartQuickStartInstance,
     startQuickStartInstance,
     stopQuickStartInstance,
@@ -108,7 +109,7 @@ import {
     getQuickStartOutputChannel,
 } from '../services/localQuickStart/ContainerRuntime';
 import { migrateLegacyQuickStartKeys } from '../services/localQuickStart/quickStartRegistry';
-import { QuickStartService } from '../services/localQuickStart/QuickStartService';
+import { QuickStartService, sweepStaleQuickStartEnvFiles } from '../services/localQuickStart/QuickStartService';
 import { maybeShowReleaseNotesNotification } from '../services/releaseNotesNotification';
 import { DemoTask } from '../services/taskService/tasks/DemoTask';
 import { TaskService } from '../services/taskService/taskService';
@@ -280,6 +281,7 @@ export class ClustersExtension implements vscode.Disposable {
                 // Reconcile detects a still-running container after a window reload.
                 ext.context.subscriptions.push(QuickStartService);
                 ext.context.subscriptions.push({ dispose: disposeQuickStartOutputChannel });
+                ext.context.subscriptions.push({ dispose: disposeQuickStartLogFollow });
                 ext.context.subscriptions.push(
                     QuickStartService.onDidChangeStatus(() => {
                         ext.connectionsBranchDataProvider?.refresh();
@@ -297,6 +299,8 @@ export class ClustersExtension implements vscode.Disposable {
                     },
                 );
                 void QuickStartService.reconcile();
+                // Self-heal after a crash that skipped provision()'s env-file cleanup (L9).
+                void sweepStaleQuickStartEnvFiles();
 
                 // One-time migration of legacy emulator connections into a regular
                 // "Local Connections (Legacy)" folder (design §4). Non-blocking.

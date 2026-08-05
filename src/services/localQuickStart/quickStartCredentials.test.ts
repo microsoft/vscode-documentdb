@@ -4,7 +4,7 @@
  *--------------------------------------------------------------------------------------------*/
 
 import { DocumentDBConnectionString } from '../../documentdb/utils/DocumentDBConnectionString';
-import { composeConnectionString, generateCredentials, generateToken } from './quickStartCredentials';
+import { composeConnectionString, generateCredentials, generateToken, secretVariants } from './quickStartCredentials';
 
 const ALNUM = /^[A-Za-z0-9]+$/;
 
@@ -65,6 +65,24 @@ describe('quickStartCredentials (Quick Start D6)', () => {
             const parsed = new DocumentDBConnectionString(composeConnectionString(username, password));
             expect(parsed.username).toBe(username);
             expect(parsed.password).toBe(password);
+        });
+    });
+
+    describe('secretVariants', () => {
+        it('adds the percent-encoded form of a custom password (L6)', () => {
+            const password = 'p@ss:w/rd#';
+            const variants = secretVariants(password);
+            expect(variants).toContain(password);
+            expect(variants).toContain(encodeURIComponent(password));
+        });
+
+        it('emits a URL-safe password only once (raw === encoded)', () => {
+            const { password } = generateCredentials();
+            expect(secretVariants(password)).toEqual([password]);
+        });
+
+        it('skips empty secrets', () => {
+            expect(secretVariants('', undefined as unknown as string)).toEqual([]);
         });
     });
 });

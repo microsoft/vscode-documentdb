@@ -1342,6 +1342,34 @@
           "when": "never"
         },
         {
+          "command": "vscode-documentdb.command.localQuickStart.start",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.stop",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.restart",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.delete",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.copyConnectionString",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.copyPassword",
+          "when": "never"
+        },
+        {
+          "command": "vscode-documentdb.command.localQuickStart.viewLogs",
+          "when": "never"
+        },
+        {
           "command": "vscode-documentdb.command.azureResourcesView.addConnectionToConnectionsView",
           "when": "never"
         },
