@@ -23,6 +23,7 @@ import {
     refreshParentInConnectionsView,
     withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
+import { revealQuickStartInstance } from '../../tree/connections-view/LocalQuickStart/revealQuickStartInstance';
 import { UserFacingError } from '../../utils/commandErrorHandling';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
 import { type EmulatorConfiguration } from '../../utils/emulatorConfiguration';
@@ -30,9 +31,6 @@ import { nonNullValue } from '../../utils/nonNull';
 import { generateDocumentDBStorageId } from '../../utils/storageUtils';
 import { findQuickStartInstanceForHosts, normalizeEndpointList } from './localEndpoint';
 import { NewEmulatorConnectionMode, type NewLocalConnectionWizardContext } from './NewLocalConnectionWizardContext';
-
-/** Tree path of the Quick Start managed-instance row in the Connections view. */
-const QUICK_START_INSTANCE_TREE_PATH = 'connectionsView/localQuickStart/instance';
 
 export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizardContext> {
     public priority: number = 100;
@@ -104,11 +102,9 @@ export class ExecuteStep extends AzureWizardExecuteStep<NewLocalConnectionWizard
                 choice === addAnyway ? 'addAnyway' : choice === openExisting ? 'openExisting' : 'cancel';
             if (choice !== addAnyway) {
                 if (choice === openExisting) {
-                    await focusAndRevealInConnectionsView(context, QUICK_START_INSTANCE_TREE_PATH, {
-                        select: true,
-                        focus: true,
-                        expand: false,
-                    });
+                    // Same navigation the success screen's "Open Connection" performs, so both
+                    // routes to the instance land the user in the same place.
+                    await revealQuickStartInstance(context);
                 }
                 // Dismissing the dialog cancels the wizard rather than creating the duplicate it
                 // just warned about.

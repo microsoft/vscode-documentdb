@@ -2237,7 +2237,7 @@ export const LocalQuickStart = (): JSX.Element => {
         primaryLabel = l10n.t('Open Connection');
         onPrimary = handleOpenConnection;
         footerNote = l10n.t(
-            'The instance is already connected in the Connections view. Opening it just takes you there.',
+            'The connection already exists in the Connections view. Opening it selects and expands it there.',
         );
         // No Copy Connection String here: in the footer it read as a second required setup step
         // (#857). The optional copy lives inline in Next steps, labelled as being for clients
