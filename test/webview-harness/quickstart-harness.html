@@ -1,0 +1,358 @@
+<!doctype html>
+<html lang="en" class="theme-dark">
+    <head>
+        <meta charset="utf-8" />
+        <title>Local Quick Start — visual harness</title>
+        <style>
+            /* A representative slice of VS Code's Dark Modern / Light Modern token set. The webview's
+               adaptive theme reads these `--vscode-*` variables, so without them Fluent renders with
+               empty colors and the screenshots would not reflect the real panel. */
+            :root {
+                --vscode-font-family: -apple-system, BlinkMacSystemFont, 'Segoe WPC', 'Segoe UI', system-ui, sans-serif;
+                --vscode-font-size: 13px;
+            }
+            html.theme-dark {
+                --vscode-editor-background: #1f1f1f;
+                --vscode-editor-foreground: #cccccc;
+                --vscode-foreground: #cccccc;
+                --vscode-descriptionForeground: #9d9d9d;
+                --vscode-disabledForeground: #6c6c6c;
+                --vscode-editorWidget-background: #202020;
+                --vscode-editorWidget-border: #454545;
+                --vscode-widget-border: #313131;
+                --vscode-panel-border: #2b2b2b;
+                --vscode-sideBar-background: #181818;
+                --vscode-input-background: #313131;
+                --vscode-input-foreground: #cccccc;
+                --vscode-input-border: #3c3c3c;
+                --vscode-button-background: #0078d4;
+                --vscode-button-foreground: #ffffff;
+                --vscode-button-hoverBackground: #026ec1;
+                --vscode-button-secondaryBackground: #313131;
+                --vscode-button-secondaryForeground: #cccccc;
+                --vscode-list-hoverBackground: #2a2d2e;
+                --vscode-list-activeSelectionBackground: #04395e;
+                --vscode-list-inactiveSelectionBackground: #37373d;
+                --vscode-list-inactiveSelectionForeground: #cccccc;
+                --vscode-list-errorForeground: #f88070;
+                --vscode-list-warningForeground: #cca700;
+                --vscode-toolbar-hoverBackground: #383b3d;
+                --vscode-toolbar-activeBackground: #4c4f51;
+                --vscode-tree-tableOddRowsBackground: #1f1f1f;
+                --vscode-textLink-foreground: #4daafc;
+                --vscode-textLink-activeForeground: #4daafc;
+                --vscode-focusBorder: #0078d4;
+                --vscode-errorForeground: #f85149;
+                --vscode-charts-green: #89d185;
+                --vscode-charts-red: #f14c4c;
+                --vscode-charts-yellow: #cca700;
+                --vscode-charts-blue: #3794ff;
+                --vscode-inputValidation-errorBackground: #5a1d1d;
+                --vscode-inputValidation-errorBorder: #be1100;
+                --vscode-textCodeBlock-background: #2b2b2b;
+                color-scheme: dark;
+            }
+            html.theme-light {
+                --vscode-editor-background: #ffffff;
+                --vscode-editor-foreground: #3b3b3b;
+                --vscode-foreground: #3b3b3b;
+                --vscode-descriptionForeground: #5f5f5f;
+                --vscode-disabledForeground: #a0a0a0;
+                --vscode-editorWidget-background: #f8f8f8;
+                --vscode-editorWidget-border: #c8c8c8;
+                --vscode-widget-border: #e5e5e5;
+                --vscode-panel-border: #e5e5e5;
+                --vscode-sideBar-background: #f8f8f8;
+                --vscode-input-background: #ffffff;
+                --vscode-input-foreground: #3b3b3b;
+                --vscode-input-border: #cecece;
+                --vscode-button-background: #005fb8;
+                --vscode-button-foreground: #ffffff;
+                --vscode-button-hoverBackground: #0258a8;
+                --vscode-button-secondaryBackground: #e5e5e5;
+                --vscode-button-secondaryForeground: #3b3b3b;
+                --vscode-list-hoverBackground: #f2f2f2;
+                --vscode-list-activeSelectionBackground: #e4e6f1;
+                --vscode-list-inactiveSelectionBackground: #e4e6f1;
+                --vscode-list-inactiveSelectionForeground: #3b3b3b;
+                --vscode-list-errorForeground: #b01011;
+                --vscode-list-warningForeground: #855f00;
+                --vscode-toolbar-hoverBackground: #dddddd;
+                --vscode-toolbar-activeBackground: #cccccc;
+                --vscode-tree-tableOddRowsBackground: #f8f8f8;
+                --vscode-textLink-foreground: #005fb8;
+                --vscode-textLink-activeForeground: #005fb8;
+                --vscode-focusBorder: #005fb8;
+                --vscode-errorForeground: #f85149;
+                --vscode-charts-green: #388a34;
+                --vscode-charts-red: #a1260d;
+                --vscode-charts-yellow: #855f00;
+                --vscode-charts-blue: #1a85ff;
+                --vscode-inputValidation-errorBackground: #f2dede;
+                --vscode-inputValidation-errorBorder: #be1100;
+                --vscode-textCodeBlock-background: #f2f2f2;
+                color-scheme: light;
+            }
+            html,
+            body {
+                margin: 0;
+                padding: 0;
+                height: 100%;
+                background: var(--vscode-editor-background);
+                color: var(--vscode-editor-foreground);
+                font-family: var(--vscode-font-family);
+                font-size: var(--vscode-font-size);
+            }
+            /* The real panel gives the webview the full viewport; mirror that. */
+            #root {
+                height: 100vh;
+            }
+            #harness-banner {
+                position: fixed;
+                right: 8px;
+                bottom: 8px;
+                z-index: 9999;
+                padding: 2px 8px;
+                border-radius: 4px;
+                font: 11px/1.6 var(--vscode-font-family);
+                background: var(--vscode-editorWidget-background);
+                border: 1px solid var(--vscode-editorWidget-border);
+                color: var(--vscode-descriptionForeground);
+                opacity: 0.85;
+            }
+        </style>
+    </head>
+    <body data-vscode-theme-kind="vscode-dark">
+        <div id="root"></div>
+        <div id="harness-banner"></div>
+        <script type="module">
+            /*
+             * Standalone visual harness for the Local Quick Start webview.
+             *
+             * It stands in for the extension host: `acquireVsCodeApi()` is stubbed, and the tRPC
+             * wire protocol (`{id, op:{type,path,input}}` in, `{id, result}` back over the window
+             * message bus) is answered with canned data chosen by `?scenario=`. Nothing here talks
+             * to Docker — the point is to see what the panel actually renders in each state.
+             */
+            const params = new URLSearchParams(location.search);
+            const scenario = params.get('scenario') ?? 'introduction';
+            const themeKind = params.get('theme') === 'light' ? 'vscode-light' : 'vscode-dark';
+            // `themeGenerator` samples the `--vscode-*` variables off documentElement, while the
+            // theme KIND is read off body — so the palette lives on <html> and the kind on <body>.
+            document.documentElement.className = themeKind === 'vscode-light' ? 'theme-light' : 'theme-dark';
+            document.body.setAttribute('data-vscode-theme-kind', themeKind);
+            document.getElementById('harness-banner').textContent = `harness · ${scenario} · ${themeKind}`;
+
+            const READY_READINESS = {
+                outcome: 'ready',
+                environment: 'windows',
+                endpointKind: 'namedPipe',
+                endpointSource: 'platformDefault',
+                provider: 'dockerDesktop',
+                providerEvidence: 'liveDaemon',
+                executionTarget: 'local',
+                checkedAtMs: 1,
+                cliInstalled: true,
+                cliVersion: '28.1.1',
+                osType: 'linux',
+                daemonArchitecture: 'x86_64',
+                arch: 'x64',
+                platformSupported: true,
+                canContinueAnyway: false,
+                daemonReachable: true,
+            };
+
+            /** Windows with no Docker CLI — the state #855 and #856 are about. */
+            const CLI_MISSING_WINDOWS = {
+                outcome: 'diagnosed',
+                environment: 'windows',
+                endpointKind: 'namedPipe',
+                endpointSource: 'platformDefault',
+                provider: 'unknown',
+                providerEvidence: 'none',
+                executionTarget: 'local',
+                failureKind: 'cliMissing',
+                checkedAtMs: 1,
+                cliInstalled: false,
+                arch: 'x64',
+                platformSupported: true,
+                canContinueAnyway: false,
+                daemonReachable: false,
+            };
+
+            const CLI_MISSING_LINUX = { ...CLI_MISSING_WINDOWS, environment: 'linux', endpointKind: 'unixSocket' };
+            const CLI_MISSING_MAC = { ...CLI_MISSING_WINDOWS, environment: 'macos', endpointKind: 'unixSocket' };
+
+            const READINESS_BY_SCENARIO = {
+                'docker-missing-windows': CLI_MISSING_WINDOWS,
+                'docker-missing-mac': CLI_MISSING_MAC,
+                'docker-missing-linux': CLI_MISSING_LINUX,
+            };
+
+            const readiness = READINESS_BY_SCENARIO[scenario] ?? READY_READINESS;
+
+            const dockerStatus = {
+                readiness,
+                status: { state: 'NotInstalled' },
+                busy: false,
+                willReuse: false,
+            };
+
+            /**
+             * Stage streams per scenario. `startQuickStart` is a tRPC subscription, so each event is
+             * delivered as its own response message with the same operation id, and the stream is
+             * closed with `complete`.
+             */
+            const DOCKER_MISSING_STREAM = [
+                {
+                    stage: 'checking',
+                    status: 'error',
+                    message: 'Docker CLI was not found on your PATH. Install Docker and retry.',
+                    error: 'Docker CLI was not found on your PATH. Install Docker and retry.',
+                    dockerReadiness: readiness,
+                },
+            ];
+
+            const STAGE_STREAMS = {
+                'docker-missing-windows': DOCKER_MISSING_STREAM,
+                'docker-missing-mac': DOCKER_MISSING_STREAM,
+                'docker-missing-linux': DOCKER_MISSING_STREAM,
+                provisioning: [
+                    { stage: 'checking', status: 'done' },
+                    { stage: 'pulling', status: 'active' },
+                ],
+                success: [
+                    { stage: 'checking', status: 'done' },
+                    { stage: 'pulling', status: 'done' },
+                    { stage: 'creating', status: 'done' },
+                    { stage: 'starting', status: 'done' },
+                    { stage: 'waiting', status: 'done' },
+                    {
+                        stage: 'done',
+                        status: 'done',
+                        message: 'DocumentDB Local is running on localhost:10260.',
+                        boundPort: 10260,
+                    },
+                ],
+                'success-relocated-port': [
+                    { stage: 'checking', status: 'done' },
+                    { stage: 'pulling', status: 'done' },
+                    { stage: 'creating', status: 'done' },
+                    { stage: 'starting', status: 'done' },
+                    { stage: 'waiting', status: 'done' },
+                    {
+                        stage: 'done',
+                        status: 'done',
+                        message: 'DocumentDB Local is running on localhost:61146.',
+                        boundPort: 61146,
+                    },
+                ],
+                'failed-port-in-use': [
+                    {
+                        stage: 'checking',
+                        status: 'error',
+                        message: 'Port 12345 is already in use. Choose a different port or free it, then retry.',
+                        error: 'Port 12345 is already in use. Choose a different port or free it, then retry.',
+                    },
+                ],
+                'failed-timeout': [
+                    { stage: 'checking', status: 'done' },
+                    { stage: 'pulling', status: 'done' },
+                    { stage: 'creating', status: 'done' },
+                    { stage: 'starting', status: 'done' },
+                    {
+                        stage: 'waiting',
+                        status: 'error',
+                        message: 'DocumentDB did not accept connections in time. It may still be initializing.',
+                        error: 'DocumentDB did not accept connections in time. It may still be initializing.',
+                        timedOut: true,
+                    },
+                ],
+            };
+
+            const respond = (id, result, complete) => {
+                window.postMessage({ id, result, complete }, '*');
+            };
+
+            const vscodeApi = {
+                postMessage(message) {
+                    const { id, op } = message ?? {};
+                    if (!id || !op) return;
+                    const { type, path } = op;
+                    if (type === 'subscription.stop' || type === 'abort') return;
+
+                    if (path === 'localQuickStart.startQuickStart' || path === 'localQuickStart.waitLonger') {
+                        const events = STAGE_STREAMS[scenario] ?? STAGE_STREAMS.provisioning;
+                        // Spread the events over a few frames so the stage list animates as it does
+                        // in the real panel, then close the stream.
+                        events.forEach((event, index) => setTimeout(() => respond(id, event), 60 * (index + 1)));
+                        setTimeout(() => respond(id, undefined, true), 60 * (events.length + 1));
+                        return;
+                    }
+
+                    switch (path) {
+                        case 'localQuickStart.getDockerStatus':
+                            respond(id, dockerStatus);
+                            return;
+                        case 'localQuickStart.getStatus':
+                            respond(id, dockerStatus.status);
+                            return;
+                        case 'localQuickStart.startDockerProvider':
+                            respond(id, 'notAvailable');
+                            return;
+                        case 'common.openUrl':
+                            // Prove which URL the CTA would open — this is the #856 assertion.
+                            console.log('[harness] openUrl', JSON.stringify(op.input));
+                            respond(id, undefined);
+                            return;
+                        case 'localQuickStart.copyConnectionString':
+                            console.log('[harness] copyConnectionString invoked');
+                            respond(id, undefined);
+                            return;
+                        case 'localQuickStart.openConnection':
+                            console.log('[harness] openConnection invoked');
+                            respond(id, undefined);
+                            return;
+                        default:
+                            console.log('[harness] unhandled', path, JSON.stringify(op.input ?? null));
+                            respond(id, undefined);
+                    }
+                },
+                getState: () => undefined,
+                setState: (state) => state,
+            };
+
+            globalThis.acquireVsCodeApi = () => vscodeApi;
+            globalThis.l10n_bundle = {};
+
+            const { render } = await import('./views.js');
+            render('localQuickStart', vscodeApi);
+
+            /**
+             * Drive the wizard to the requested phase. The component owns its phase state, so the
+             * harness advances it the way a user would — by clicking the footer's primary action.
+             */
+            const clickByText = (text) => {
+                const target = [...document.querySelectorAll('button')].find(
+                    (button) => button.textContent.trim() === text,
+                );
+                target?.click();
+                return Boolean(target);
+            };
+
+            const settle = () => new Promise((resolve) => setTimeout(resolve, 250));
+
+            (async () => {
+                await settle();
+                if (scenario === 'introduction') return;
+                clickByText('Continue'); // introduction → configure
+                await settle();
+                if (scenario === 'configure') return;
+                clickByText('Start DocumentDB Local'); // configure → provisioning → stream
+                await settle();
+                await settle();
+                globalThis.__harnessReady = true;
+            })();
+        </script>
+    </body>
+</html>
