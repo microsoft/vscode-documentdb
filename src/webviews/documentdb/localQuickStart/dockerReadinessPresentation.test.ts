@@ -99,13 +99,16 @@ describe('getDockerReadinessPresentation', () => {
     it.each([
         ['windows' as const, 'installWindowsDesktop', 'installDockerWindows'],
         ['macos' as const, 'installMacDesktop', 'installDockerMac'],
-    ])('points a missing CLI on %s at Docker Desktop and asks for a VS Code restart', (environment, guide, guidance) => {
-        expect(
-            getDockerReadinessPresentation(
-                readiness({ environment, failureKind: 'cliMissing', cliInstalled: false }),
-            ),
-        ).toMatchObject({ showInstall: true, guide, guidance });
-    });
+    ])(
+        'points a missing CLI on %s at Docker Desktop and asks for a VS Code restart',
+        (environment, guide, guidance) => {
+            expect(
+                getDockerReadinessPresentation(
+                    readiness({ environment, failureKind: 'cliMissing', cliInstalled: false }),
+                ),
+            ).toMatchObject({ showInstall: true, guide, guidance });
+        },
+    );
 
     it.each(['linux' as const, 'wsl' as const, 'devContainer' as const])(
         'keeps the Docker Engine install guide on %s',
