@@ -21,7 +21,7 @@ import { ArrowTrendingSparkleRegular } from '@fluentui/react-icons';
 // import { CopyRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { useState } from 'react';
-import { type ImprovementCard as ImprovementCardConfig } from '../../../../types/queryInsights';
+import { type ImprovementCard as ImprovementCardConfig } from '../../../types/queryInsights';
 import './baseOptimizationCard.scss';
 
 export interface ImprovementCardProps {

@@ -36,9 +36,9 @@ import { CollapseRelaxed, Fade } from '@fluentui/react-motion-components-preview
 import { useConfiguration } from '@microsoft/vscode-ext-webview/react';
 import * as l10n from '@vscode/l10n';
 import { useCallback, useContext, useEffect, useMemo, useRef, useState, type JSX } from 'react';
-import { useTrpcClient } from '../../../../_integration/useTrpcClient';
-import { CollectionViewContext } from '../../collectionViewContext';
-import { type CollectionViewWebviewConfigurationType } from '../../collectionViewController';
+import { useTrpcClient } from '../../../_integration/useTrpcClient';
+import { CollectionViewContext } from '../collectionViewContext';
+import { type CollectionViewWebviewConfigurationType } from '../collectionViewController';
 import {
     applyStage3Event,
     cancelStage3,
@@ -49,10 +49,10 @@ import {
     stage2Succeeded,
     startStage1Load,
     startStage3Load,
-} from '../../queryInsightsReducer';
-import { createImprovementCardConfig } from '../../utils/createImprovementCard';
-import { extractErrorCode } from '../../utils/errorCodeExtractor';
-import { formatSelectivityForDisplay } from '../../utils/formatSelectivityForDisplay';
+} from '../queryInsightsReducer';
+import { createImprovementCardConfig } from '../utils/createImprovementCard';
+import { extractErrorCode } from '../utils/errorCodeExtractor';
+import { formatSelectivityForDisplay } from '../utils/formatSelectivityForDisplay';
 import { CardStack, FeedbackCard, FeedbackDialog, type CardStackItem } from './components';
 import { CountMetric } from './components/metricsRow/CountMetric';
 import { MetricsRow } from './components/metricsRow/MetricsRow';

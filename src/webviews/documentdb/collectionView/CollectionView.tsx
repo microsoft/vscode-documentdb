@@ -22,7 +22,6 @@ import {
 } from './collectionViewContext';
 import { type CollectionViewWebviewConfigurationType } from './collectionViewController';
 import { QueryEditor } from './components/queryEditor/QueryEditor';
-import { QueryInsightsMain } from './components/queryInsightsTab/QueryInsightsTab';
 import { DataViewPanelJSON } from './components/resultsTab/DataViewPanelJSON';
 import { DataViewPanelTable } from './components/resultsTab/DataViewPanelTable';
 import { DataViewPanelTree } from './components/resultsTab/DataViewPanelTree';
@@ -33,6 +32,7 @@ import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigatio
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
 import { IndexesTab } from './indexesTab/IndexesTab';
 import { stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
+import { QueryInsightsMain } from './queryInsightsTab/QueryInsightsTab';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 
 interface QueryResults {

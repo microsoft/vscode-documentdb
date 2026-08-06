@@ -6,8 +6,8 @@
 import { Button, Card, Spinner, Text, tokens } from '@fluentui/react-components';
 import * as l10n from '@vscode/l10n';
 import { type JSX, useEffect, useRef, useState } from 'react';
-import { Announcer } from '../../../../../../../components/accessibility';
-import { type QueryInsightsStage3Phase } from '../../../../../collectionViewContext';
+import { Announcer } from '../../../../../../components/accessibility';
+import { type QueryInsightsStage3Phase } from '../../../../collectionViewContext';
 
 /**
  * Flip locally to log each visible label transition to the WEBVIEW DevTools
