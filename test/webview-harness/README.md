@@ -68,6 +68,9 @@ silently undo a mid-provision scenario.
 
 ## Caveats
 
+- Both the harness and `npm run watch:views` read `dist/views.js` from disk. `watch:views` is
+  `webpack serve`, which builds in memory by default, so the config sets
+  `devServer.devMiddleware.writeToDisk`. Without it the harness silently renders a stale bundle.
 - The `--vscode-*` theme variables here are a representative slice of Dark Modern / Light Modern,
   not the live values from a VS Code window. Colors are close, not pixel-exact.
 - Relative times render oddly because the canned readiness uses `checkedAtMs: 1`.
