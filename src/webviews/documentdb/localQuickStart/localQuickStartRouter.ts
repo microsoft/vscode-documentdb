@@ -31,6 +31,7 @@ import { getDockerRecoveryCommandById } from '../../../services/localQuickStart/
 import {
     type AdvancedQuickStartOptions,
     type DockerStatusResult,
+    type InstanceStatusUpdate,
     type PortAvailability,
     type QuickStartStatus,
     type StageEvent,
@@ -225,6 +226,56 @@ export const localQuickStartRouter = router({
      * again from a clean slate.
      */
     discardTimedOut: publicProcedure.mutation(() => QuickStartService.discardTimedOutInstance()),
+
+    /**
+     * Push the managed instance's status to the panel whenever it changes (review N1).
+     *
+     * The panel used to read this once on open, so anything that changed the instance afterwards
+     * (a tree action, another VS Code window, a container removed in a terminal) left the Configure
+     * step's guard describing an instance that no longer existed.
+     *
+     * Deliberately cheap: it re-reads already-known state and never calls `isDockerReady()` or
+     * `refreshLiveState()`. The tree's background probe fires this event on a cooldown, so a
+     * Docker call here would put that cost on every panel too.
+     */
+    onInstanceChanged: publicProcedure.subscription(async function* ({
+        ctx,
+    }): AsyncGenerator<InstanceStatusUpdate, void, void> {
+        const myCtx = ctx as BaseRouterContext;
+        let wake: (() => void) | undefined;
+        // Start dirty so a panel that connects after a change still receives the current truth.
+        let dirty = true;
+        let lastStatusKey: string | undefined;
+
+        const subscription = QuickStartService.onDidChangeStatus(() => {
+            dirty = true;
+            wake?.();
+        });
+        const onAbort = (): void => wake?.();
+        myCtx.signal?.addEventListener('abort', onAbort);
+
+        try {
+            while (!myCtx.signal?.aborted) {
+                if (dirty) {
+                    dirty = false;
+                    const status = toWebviewStatus(QuickStartService.getStatus());
+                    const statusKey = JSON.stringify(status);
+                    // The status event also fires when nothing user-visible changed; skipping those
+                    // keeps the credential read below off the repeating path.
+                    if (statusKey !== lastStatusKey) {
+                        lastStatusKey = statusKey;
+                        yield { status, canReuseExistingData: await QuickStartService.canReuseExistingData() };
+                    }
+                    continue;
+                }
+                await new Promise<void>((resolve) => (wake = resolve));
+                wake = undefined;
+            }
+        } finally {
+            myCtx.signal?.removeEventListener('abort', onAbort);
+            subscription.dispose();
+        }
+    }),
 
     /**
      * Provision the managed instance, streaming stage transitions to the webview.

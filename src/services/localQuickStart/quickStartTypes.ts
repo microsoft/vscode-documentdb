@@ -386,5 +386,14 @@ export interface DockerStatusResult {
     readonly suggestedPort?: number;
 }
 
+/**
+ * Pushed to the webview whenever the managed instance's status changes, so the Configure step's
+ * guard describes the instance as it is now rather than as it was when the panel opened (review N1).
+ */
+export interface InstanceStatusUpdate {
+    readonly status: QuickStartStatus;
+    readonly canReuseExistingData: boolean;
+}
+
 /** Why a host port cannot be used, or `'available'` when it can (Configure-step validation, L3). */
 export type PortAvailability = 'available' | 'inUse' | 'takenByAnotherInstance';

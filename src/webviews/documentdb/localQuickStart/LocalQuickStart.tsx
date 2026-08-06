@@ -64,6 +64,7 @@ import {
     type DockerRecoveryCommand,
     type DockerStatusResult,
     InstanceState,
+    type InstanceStatusUpdate,
     type PortAvailability,
     PROVISION_STAGES,
     type ProvisionStage,
@@ -90,6 +91,7 @@ import {
     getDockerExecutionTargetKey,
     getDockerReadinessPresentation,
 } from './dockerReadinessPresentation';
+import { getExistingInstanceGuard, guardBlocksSetup } from './existingInstanceGuard';
 import './localQuickStart.scss';
 
 /**
@@ -813,7 +815,7 @@ function buildDockerDetailRows(
         label: l10n.t('Check run'),
         value: formatLastChecked(readiness.checkedAtMs, now),
         note: readiness.diagnosticFingerprint
-            ? l10n.t('Diagnostic reference {0} — quote it when reporting this.', readiness.diagnosticFingerprint)
+            ? l10n.t('Diagnostic reference {0}. Quote it when reporting this.', readiness.diagnosticFingerprint)
             : undefined,
     });
 
@@ -920,6 +922,13 @@ export const LocalQuickStart = (): JSX.Element => {
      */
     const [instanceState, setInstanceState] = useState<InstanceState | undefined>(undefined);
     /**
+     * True when the container was removed outside VS Code. This is NOT a separate
+     * {@link InstanceState}: the service reports such an instance as `Stopped` with `missing` set,
+     * so a guard that reads only the state would offer "Start" for a container that no longer
+     * exists — a button that cannot do anything.
+     */
+    const [instanceMissing, setInstanceMissing] = useState(false);
+    /**
      * The user's explicit recreate-vs-fresh choice (review M4). Nothing is inferred from
      * {@link canReuseExistingData} any more, which is what resolves N1 (a stale inferred value).
      */
@@ -967,19 +976,13 @@ export const LocalQuickStart = (): JSX.Element => {
     const useCustomCredentials = customCredentials && !isRecreate;
 
     /**
-     * Which existing-instance guard the Configure step shows, if any. `Missing` is deliberately not
-     * guarded: recreating is exactly what that state asks for.
+     * Which existing-instance guard the Configure step shows, if any. See
+     * {@link getExistingInstanceGuard} for why `missing` is checked before the state.
      */
-    const existingInstanceGuard: 'healthy' | 'stopped' | 'credentialsMissing' | undefined = forcedFresh
-        ? 'credentialsMissing'
-        : instanceState === InstanceState.Running
-          ? 'healthy'
-          : instanceState === InstanceState.Stopped
-            ? 'stopped'
-            : undefined;
+    const existingInstanceGuard = getExistingInstanceGuard({ state: instanceState, missing: instanceMissing });
     // A usable instance is never walked into a destructive recreate: the user is offered the action
     // they almost certainly meant (open it / start it) instead.
-    const startBlockedByGuard = existingInstanceGuard === 'healthy' || existingInstanceGuard === 'stopped';
+    const startBlockedByGuard = guardBlocksSetup(existingInstanceGuard);
 
     const subscriptionRef = useRef<{ unsubscribe: () => void } | null>(null);
     const readinessAbortRef = useRef<AbortController | null>(null);
@@ -1211,6 +1214,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 applyReadiness(result.readiness);
                 setCanReuseExistingData(result.canReuseExistingData);
                 setInstanceState(result.status.state);
+                setInstanceMissing(result.status.missing === true);
                 // Absent on polled calls (M6-b); keep the last suggestion in that case.
                 if (result.suggestedPort !== undefined) {
                     setSuggestedPort(result.suggestedPort);
@@ -1431,6 +1435,7 @@ export const LocalQuickStart = (): JSX.Element => {
                         applyReadiness(result.readiness);
                         setCanReuseExistingData(result.canReuseExistingData);
                         setInstanceState(result.status.state);
+                        setInstanceMissing(result.status.missing === true);
                     },
                 });
                 if (abortController.signal.aborted) return;
@@ -1443,7 +1448,7 @@ export const LocalQuickStart = (): JSX.Element => {
                     // Docker answered, but with a non-transient problem (e.g. permission denied). The
                     // readiness card below already updated via onResult; announce the transition too,
                     // otherwise the spinner just disappears and the Announcer says nothing.
-                    setDockerActionMessage(l10n.t('Docker started, but it is not usable yet — see the details below.'));
+                    setDockerActionMessage(l10n.t('Docker started, but it is not usable yet. See the details below.'));
                 }
             })
             .catch(() => {
@@ -1465,6 +1470,23 @@ export const LocalQuickStart = (): JSX.Element => {
             }
         });
     }, [applyDockerRecovery, syncDockerStatus]);
+
+    useEffect(() => {
+        // Keep the instance facts live for as long as the panel is open (review N1). Reading them
+        // once on mount left the Configure guard describing an instance that a tree action, another
+        // window, or a `docker rm` in a terminal had already changed underneath it.
+        const subscription = trpcClient.localQuickStart.onInstanceChanged.subscribe(undefined, {
+            onData(update: InstanceStatusUpdate) {
+                setInstanceState(update.status.state);
+                setInstanceMissing(update.status.missing === true);
+                setCanReuseExistingData(update.canReuseExistingData);
+            },
+            onError() {
+                // The mount-time query already seeded these; a dropped stream only stops updates.
+            },
+        });
+        return () => subscription.unsubscribe();
+    }, [trpcClient]);
 
     useEffect(() => {
         // Load the instance facts the settings page needs (and rehydrate a resumable readiness
@@ -1839,7 +1861,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 <Field
                     label={l10n.t('Port')}
                     hint={l10n.t(
-                        'The host is always localhost. This exact port is used — setup checks it here and never picks a different one later.',
+                        'The host is always localhost. This exact port is used. Setup checks it here and never picks a different one later.',
                     )}
                     validationState={advValidation?.field === 'port' ? 'error' : 'none'}
                     validationMessage={advValidation?.field === 'port' ? advValidation.message : undefined}
@@ -1969,14 +1991,26 @@ export const LocalQuickStart = (): JSX.Element => {
     const existingInstanceNotice = existingInstanceGuard && (
         <MessageBar intent={existingInstanceGuard === 'credentialsMissing' ? 'warning' : 'info'} layout="multiline">
             <MessageBarBody className={styles.messageBody}>
-                <MessageBarTitle>{l10n.t('DocumentDB Local already exists')}</MessageBarTitle>{' '}
-                {existingInstanceGuard === 'healthy'
-                    ? l10n.t('It is running and ready to use, so there is nothing to set up.')
-                    : existingInstanceGuard === 'stopped'
-                      ? l10n.t('It is stopped. Start it to use it again — setting up would replace it.')
-                      : l10n.t(
-                            'Its saved credentials are missing, so its data can no longer be opened. Setting up will delete the instance and its data, then create a new one.',
+                {existingInstanceGuard === 'healthy' ? (
+                    <>
+                        <MessageBarTitle>{l10n.t('DocumentDB Local is already running')}</MessageBarTitle>{' '}
+                        {l10n.t('There is nothing to set up. Open the connection to start using it.')}
+                    </>
+                ) : existingInstanceGuard === 'stopped' ? (
+                    <>
+                        <MessageBarTitle>{l10n.t('DocumentDB Local is already set up')}</MessageBarTitle>{' '}
+                        {l10n.t('It is stopped. Start it to use it again, with all your data.')}
+                    </>
+                ) : (
+                    <>
+                        <MessageBarTitle>
+                            {l10n.t('Saved credentials for DocumentDB Local are missing')}
+                        </MessageBarTitle>{' '}
+                        {l10n.t(
+                            'Its data can no longer be opened, so setting up will delete the instance and its data, then create a new one.',
                         )}
+                    </>
+                )}
             </MessageBarBody>
             <MessageBarActions>
                 {existingInstanceGuard === 'healthy' && (
@@ -1998,21 +2032,37 @@ export const LocalQuickStart = (): JSX.Element => {
         </MessageBar>
     );
 
+    /** Why setup is being offered for an instance the user already had (its container is gone). */
+    const missingInstanceNotice = instanceMissing && !forcedFresh && (
+        <MessageBar intent="info" layout="multiline">
+            <MessageBarBody className={styles.messageBody}>
+                <MessageBarTitle>{l10n.t('The DocumentDB Local container is gone')}</MessageBarTitle>{' '}
+                {l10n.t(
+                    'It was removed outside VS Code. Setting up creates it again. Choose what to do with the data it left behind.',
+                )}
+            </MessageBarBody>
+        </MessageBar>
+    );
+
     /**
      * The recreate-vs-fresh choice (review M4, I2-2). It sits above the settings table because it
      * decides what those settings mean: reusing keeps the instance's stored credentials and image,
      * so the credential/image rows are hidden. Per I2-Q4 there is NO extra confirmation dialog —
      * the destructive option states the data loss in its own label and is never pre-selected.
+     *
+     * Hidden whenever setup cannot run (a healthy or stopped instance): offering a choice next to a
+     * disabled primary action reads as a third, broken control.
      */
-    const dataChoiceBlock = canReuseExistingData && !forcedFresh && (
-        <RadioGroup
-            value={dataChoice}
-            aria-label={l10n.t('Existing data')}
-            onChange={(_event, data) => setDataChoice(data.value === 'fresh' ? 'fresh' : 'reuse')}
-        >
-            <Radio value="reuse" label={l10n.t('Use existing data — recreate the container and keep your documents')} />
-            <Radio value="fresh" label={l10n.t('Start fresh — erases all data in DocumentDB Local')} />
-        </RadioGroup>
+    const dataChoiceBlock = canReuseExistingData && !forcedFresh && !startBlockedByGuard && (
+        <Field label={l10n.t('DocumentDB Local already has data on this machine. What should setup do with it?')}>
+            <RadioGroup
+                value={dataChoice}
+                onChange={(_event, data) => setDataChoice(data.value === 'fresh' ? 'fresh' : 'reuse')}
+            >
+                <Radio value="reuse" label={l10n.t('Keep it and reuse the existing data')} />
+                <Radio value="fresh" label={l10n.t('Erase it and set up an empty DocumentDB Local')} />
+            </RadioGroup>
+        </Field>
     );
 
     const configure = (
@@ -2026,6 +2076,7 @@ export const LocalQuickStart = (): JSX.Element => {
                 </Text>
             </div>
             {existingInstanceNotice}
+            {missingInstanceNotice}
             {dataChoiceBlock}
             <Table size="small" aria-label={l10n.t('Setup settings')}>
                 <colgroup>

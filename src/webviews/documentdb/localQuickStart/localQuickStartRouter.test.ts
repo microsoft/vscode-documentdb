@@ -13,6 +13,10 @@ const mockRefreshLiveState = jest.fn();
 const mockCanReuseExistingData = jest.fn();
 const mockSuggestPort = jest.fn();
 
+/** Drives `QuickStartService.onDidChangeStatus` so a test can push status changes at the router. */
+const statusListeners = new Set<() => void>();
+const fireStatusChange = (): void => statusListeners.forEach((listener) => listener());
+
 jest.mock('vscode', () => ({
     commands: { executeCommand: jest.fn() },
     env: { clipboard: { writeText: jest.fn() } },
@@ -34,6 +38,10 @@ jest.mock('../../../services/localQuickStart/QuickStartService', () => ({
         canReuseExistingData: mockCanReuseExistingData,
         suggestPort: mockSuggestPort,
         checkPort: jest.fn(),
+        onDidChangeStatus: (listener: () => void) => {
+            statusListeners.add(listener);
+            return { dispose: () => statusListeners.delete(listener) };
+        },
     },
 }));
 
@@ -131,5 +139,74 @@ describe('localQuickStartRouter', () => {
 
         await expect(caller.startDockerProvider()).resolves.toBe('failed');
         expect(context.actionContext.telemetry.properties.dockerLaunchResult).toBe('failed');
+    });
+
+    // Review N1: the panel used to read the instance's status once on open, so a container removed
+    // in a terminal (or a tree action, or another window) left its guard describing an instance
+    // that no longer existed.
+    describe('onInstanceChanged', () => {
+        beforeEach(() => {
+            // Earlier cases in this file call getDockerStatus, which probes Docker.
+            mockIsDockerReady.mockClear();
+            mockRefreshLiveState.mockClear();
+        });
+
+        afterEach(() => statusListeners.clear());
+
+        async function drain(count: number): Promise<unknown[]> {
+            const controller = new AbortController();
+            const context = { ...createContext(), signal: controller.signal };
+            const caller = createCallerFactory(localQuickStartRouter)(context);
+            const iterator = (await caller.onInstanceChanged()) as AsyncGenerator<unknown>;
+
+            const received: unknown[] = [];
+            for (let i = 0; i < count; i++) {
+                const next = iterator.next();
+                // The generator parks on the status event after its first snapshot; wake it.
+                await Promise.resolve();
+                fireStatusChange();
+                const result = await next;
+                if (result.done) break;
+                received.push(result.value);
+            }
+            controller.abort();
+            fireStatusChange();
+            await iterator.return(undefined).catch(() => undefined);
+            return received;
+        }
+
+        it('pushes an immediate snapshot so a panel opened after a change is never behind', async () => {
+            mockGetStatus.mockReturnValue({ state: 'Stopped', missing: true });
+            mockCanReuseExistingData.mockResolvedValue(true);
+
+            const [first] = await drain(1);
+
+            expect(first).toEqual({
+                status: expect.objectContaining({ state: 'Stopped', missing: true }),
+                canReuseExistingData: true,
+            });
+        });
+
+        it('pushes the new status when the instance changes', async () => {
+            mockGetStatus.mockReturnValueOnce({ state: 'Stopped', missing: false });
+            mockGetStatus.mockReturnValue({ state: 'Stopped', missing: true });
+            mockCanReuseExistingData.mockResolvedValue(true);
+
+            const received = (await drain(2)) as Array<{ status: { missing?: boolean } }>;
+
+            // The removal is what the guard needs: same state, different `missing`.
+            expect(received[0].status.missing).toBe(false);
+            expect(received[1].status.missing).toBe(true);
+        });
+
+        it('never calls Docker, because the tree fires this event on a cooldown', async () => {
+            mockGetStatus.mockReturnValue({ state: 'Running' });
+            mockCanReuseExistingData.mockResolvedValue(true);
+
+            await drain(1);
+
+            expect(mockIsDockerReady).not.toHaveBeenCalled();
+            expect(mockRefreshLiveState).not.toHaveBeenCalled();
+        });
     });
 });
