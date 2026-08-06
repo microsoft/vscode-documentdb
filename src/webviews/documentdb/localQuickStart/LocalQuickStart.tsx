@@ -496,7 +496,7 @@ function dockerGuidance(): Readonly<Record<DockerGuidanceKey, string>> {
     return {
         installDocker: l10n.t('Install Docker Engine or Docker Desktop, then reopen Quick Start.'),
         installDockerWindows: l10n.t(
-            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted — reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
+            'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Reloading the window is not enough. Start Docker Desktop and wait until it is ready, then check again.',
         ),
         installDockerMac: l10n.t(
             'Install Docker Desktop, then restart VS Code. A VS Code that was already running does not pick up the PATH the installer adds, so Docker stays undetected until it is restarted. Start Docker Desktop and wait until it is ready, then check again.',
@@ -2443,11 +2443,11 @@ export const LocalQuickStart = (): JSX.Element => {
                 <Text size={200}>
                     {checkReadiness === undefined || checkReadiness.executionTarget === 'local'
                         ? l10n.t(
-                              '• Optional — to reach this instance from a tool outside VS Code, such as mongosh or your own app, copy its connection string (localhost:{0}).',
+                              '• Optional: to reach this instance from a tool outside VS Code, such as mongosh or your own app, copy its connection string (localhost:{0}).',
                               String(boundPort ?? QUICK_START_PORT),
                           )
                         : l10n.t(
-                              '• Optional — to reach this instance from a tool outside VS Code, copy its connection string. localhost:{0} resolves from the extension host.',
+                              '• Optional: to reach this instance from a tool outside VS Code, copy its connection string. localhost:{0} resolves from the extension host.',
                               String(boundPort ?? QUICK_START_PORT),
                           )}{' '}
                     <Link onClick={handleCopyConnString}>{l10n.t('Copy connection string')}</Link>
