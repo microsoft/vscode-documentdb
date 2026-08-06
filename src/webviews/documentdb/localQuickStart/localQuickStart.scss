@@ -1,0 +1,11 @@
+/*---------------------------------------------------------------------------------------------
+ *  Copyright (c) Microsoft Corporation. All rights reserved.
+ *  Licensed under the MIT License. See License.txt in the project root for license information.
+ *--------------------------------------------------------------------------------------------*/
+
+/* VS Code injects `body { padding: 0 20px }` into every webview by default. This view owns its own
+ * insets (content wrapper + footer), so drop the platform gutter to let the footer's top border and
+ * shadow span edge-to-edge. Local-only until webview padding is unified across views. */
+body {
+    padding: 0;
+}

@@ -9,13 +9,14 @@ import * as vscode from 'vscode';
 import { CredentialCache } from '../../documentdb/CredentialCache';
 import { SchemaStore } from '../../documentdb/SchemaStore';
 import { ext } from '../../extensionVariables';
-import { ConnectionStorageService, ConnectionType } from '../../services/connectionStorageService';
+import { ConnectionStorageService } from '../../services/connectionStorageService';
 import { checkCanProceedAndInformUser } from '../../services/taskService/resourceUsageHelper';
 import {
     refreshParentInConnectionsView,
     withConnectionsViewProgress,
 } from '../../tree/connections-view/connectionsViewHelpers';
 import { DocumentDBClusterItem } from '../../tree/connections-view/DocumentDBClusterItem';
+import { resolveStorageZone } from '../../tree/connections-view/models/ConnectionClusterModel';
 import { type TreeElement } from '../../tree/TreeElement';
 import { getConfirmationAsInSettings } from '../../utils/dialogs/getConfirmation';
 import { showConfirmationAsInSettings } from '../../utils/dialogs/showConfirmation';
@@ -78,11 +79,7 @@ export async function removeConnection(
         for (const connection of connectionsToDelete) {
             try {
                 await ext.state.showDeleting(connection.id, async () => {
-                    if (connection.cluster.emulatorConfiguration?.isEmulator) {
-                        await ConnectionStorageService.delete(ConnectionType.Emulators, connection.storageId);
-                    } else {
-                        await ConnectionStorageService.delete(ConnectionType.Clusters, connection.storageId);
-                    }
+                    await ConnectionStorageService.delete(resolveStorageZone(connection.cluster), connection.storageId);
                 });
 
                 // delete cached credentials from memory using stable clusterId (not treeId)
