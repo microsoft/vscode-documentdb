@@ -160,6 +160,12 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
         }
 
         if (metadata && status.state === InstanceState.Running) {
+            // M7: the tree model's connection string is display-only (hosts, TLS badge). Credentials are
+            // resolved from QuickStartService at connect time, so the generated userinfo is stripped here.
+            const displayConnectionString = new DocumentDBConnectionString(metadata.connectionString);
+            displayConnectionString.username = '';
+            displayConnectionString.password = '';
+
             const model: TreeCluster<ConnectionClusterModel> = {
                 treeId: `${this.id}/instance`,
                 viewId: this.parentId,
@@ -172,7 +178,7 @@ export class LocalQuickStartItem implements TreeElement, TreeElementWithContextV
                 storageZone: StorageZone.Clusters,
                 name: l10n.t('DocumentDB Local'),
                 dbExperience: DocumentDBExperience,
-                connectionString: metadata.connectionString,
+                connectionString: displayConnectionString.toString(),
                 emulatorConfiguration: { isEmulator: true, disableEmulatorSecurity: true },
                 selectedAuthMethod: AuthMethodId.NativeAuth,
                 connectionUser: metadata.username,
