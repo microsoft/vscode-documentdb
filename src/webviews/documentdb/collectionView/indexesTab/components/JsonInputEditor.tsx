@@ -6,14 +6,14 @@
 // eslint-disable-next-line import/no-internal-modules
 import type * as monacoEditor from 'monaco-editor/esm/vs/editor/editor.api';
 import { useEffect, useId, useRef, type JSX } from 'react';
-import { MonacoAutoHeight } from '../../../components/MonacoAutoHeight';
-import { MonacoEditor } from '../../../components/MonacoEditor';
+import { MonacoAutoHeight } from '../../../../components/MonacoAutoHeight';
+import { MonacoEditor } from '../../../../components/MonacoEditor';
 import {
     buildEditorUri,
     EditorType,
     LANGUAGE_ID,
     registerDocumentDBQueryLanguage,
-} from '../../../query-language-support';
+} from '../../../../query-language-support';
 
 interface JsonInputEditorProps {
     /** Current text content of the editor. */

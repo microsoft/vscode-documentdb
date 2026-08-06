@@ -7,11 +7,7 @@ import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
 // Reuse the Query Insights metric-card kit so the Index dashboard shares the
 // exact same look, spacing, and responsive 1/2/4-column behaviour.
-import {
-    CountMetric,
-    GenericMetric,
-    MetricsRow,
-} from '../../collectionView/components/queryInsightsTab/components/metricsRow';
+import { CountMetric, GenericMetric, MetricsRow } from '../../components/queryInsightsTab/components/metricsRow';
 import { type IndexRow } from '../types';
 import { formatBytes, formatOps } from '../utils/format';
 

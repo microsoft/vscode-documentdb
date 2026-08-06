@@ -13,7 +13,6 @@ import { useTrpcClient } from '../../_integration/useTrpcClient';
 import { Announcer } from '../../components/accessibility';
 import { useSelectiveContextMenuPrevention } from '../../components/useSelectiveContextMenuPrevention';
 import { setCompletionContext } from '../../query-language-support';
-import { IndexesTab } from '../indexView/IndexesTab';
 import './collectionView.scss';
 import {
     CollectionViewContext,
@@ -32,6 +31,7 @@ import { ToolbarDocumentManipulation } from './components/toolbar/ToolbarDocumen
 import { ToolbarTableNavigation } from './components/toolbar/ToolbarTableNavigation';
 import { ToolbarViewNavigation } from './components/toolbar/ToolbarViewNavigation';
 import { ViewSwitcher } from './components/toolbar/ViewSwitcher';
+import { IndexesTab } from './indexesTab/IndexesTab';
 import { stage1Failed, stage1Succeeded, startStage1Load } from './queryInsightsReducer';
 import { extractErrorCode } from './utils/errorCodeExtractor';
 

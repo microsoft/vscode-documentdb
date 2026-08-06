@@ -6,7 +6,7 @@
 import { ParseMode, parse as parseShellBSON } from '@mongodb-js/shell-bson-parser';
 import * as l10n from '@vscode/l10n';
 import { z } from 'zod';
-import { type IndexSpecification } from '../../../documentdb/LlmEnhancedFeatureApis';
+import { type IndexSpecification } from '../../../../documentdb/LlmEnhancedFeatureApis';
 import {
     isVectorCreateIndexInput,
     type CreateIndexInput,

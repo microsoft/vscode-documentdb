@@ -7,7 +7,7 @@ import { Badge, Button, Card, Tooltip } from '@fluentui/react-components';
 import { EyeRegular } from '@fluentui/react-icons';
 import * as l10n from '@vscode/l10n';
 import { type JSX } from 'react';
-import { useTrpcClient } from '../../../../_integration/useTrpcClient';
+import { useTrpcClient } from '../../../../../_integration/useTrpcClient';
 import '../../../../components/focusableBadge/focusableBadge.scss';
 import { type IndexRow } from '../../types';
 import { formatDate, formatOps, formatShellJson } from '../../utils/format';
