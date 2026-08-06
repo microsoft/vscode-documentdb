@@ -17,17 +17,21 @@ and folded in — see **M7** and the thread tracker in [§6](#6-external-review-
 > **If you are an implementation agent, this section is your entry point.**
 > Implement **only** the ✅ TODO items. Everything marked 🛑 ON HOLD is blocked on a maintainer decision or on
 > another package — do not start it, do not "helpfully" fix it in passing, and do not refactor code it will touch.
+>
+> **UPDATE (2026-08-06): every cleared package has landed.** WP-1 … WP-5 are implemented and committed, each
+> with its own commit and an `IMPLEMENTED` note beside its finding in §3. Nothing in the ✅ column is outstanding.
+> The next step is the §9.2 discussion (and the §9.3 confirmation), which unblocks WP-6/7/8 and M7's thread reply.
 
-### ✅ Cleared for implementation (TODO)
+### ✅ Cleared for implementation (all landed 2026-08-05/06)
 
-| WP       | Title                                | Findings                   | Notes                                      |
-| -------- | ------------------------------------ | -------------------------- | ------------------------------------------ |
-| **WP-1** | Tree refresh correctness             | H1                         | Start here — unblocks WP-8 later           |
-| **WP-2** | TLS exception policy correction      | H2, L4                     | Ship as its own commit/PR                  |
-| **WP-3** | Provisioning durability & port model | H3, H4, L3, M5, L1, N5, N6 | Largest; do **3a** (port model) first      |
-| **WP-4** | Localization                         | M1, M2, N2                 | Run **after** WP-3a so strings settle once |
-| **WP-5** | Command surface & small fixes        | M3, L5, L6, L7, L8, L9     | Independent; can land any time             |
-| **WP-9** | Repository issues                    | —                          | ✅ Already done ([#864], [#865])           |
+| WP       | Title                                | Findings                   | Status                                                         |
+| -------- | ------------------------------------ | -------------------------- | -------------------------------------------------------------- |
+| **WP-1** | Tree refresh correctness             | H1                         | ✅ `fix(quickstart): fire the Missing status change only on…`  |
+| **WP-2** | TLS exception policy correction      | H2, L4                     | ✅ `fix(tls): keep a deliberate TLS bypass for public hosts`   |
+| **WP-3** | Provisioning durability & port model | H3, H4, L3, M5, L1, N5, N6 | ✅ `feat(quickstart): explicit port model and durable…`        |
+| **WP-4** | Localization                         | M1, M2, N2                 | ✅ `fix(quickstart): localize the webview lookups and…`        |
+| **WP-5** | Command surface & small fixes        | M3, L5, L6, L7, L8, L9     | ✅ `fix(quickstart): palette gating, log-follow disposal and…` |
+| **WP-9** | Repository issues                    | —                          | ✅ Already done ([#864], [#865])                               |
 
 [#864]: https://github.com/microsoft/vscode-documentdb/issues/864
 [#865]: https://github.com/microsoft/vscode-documentdb/issues/865
@@ -48,8 +52,8 @@ and folded in — see **M7** and the thread tracker in [§6](#6-external-review-
 | **N2** | Copy is approved verbatim from documentdb.io — only add a code comment saying so (part of WP-4) |
 | **N7** | Docs consolidation handled by a separate work item                                              |
 
-**Workflow:** WP-1…WP-5 go to implementation now. When they are done, the discussion resumes on §9.2 (and the
-§9.3 confirmation), then WP-6/7/8 are unblocked and M7's GitHub thread reply is finalized.
+**Workflow:** WP-1…WP-5 are done. The discussion now resumes on §9.2 (and the §9.3 confirmation), after which
+WP-6/7/8 are unblocked and M7's GitHub thread reply is finalized.
 
 ---
 
@@ -1131,11 +1135,11 @@ resolved by moving the instance's credentials into the storage layer (§9.1), th
 
 | WP       | Title                                | Findings                   | Status         | Blocked by   | Parallel-safe with |
 | -------- | ------------------------------------ | -------------------------- | -------------- | ------------ | ------------------ |
-| **WP-1** | Tree refresh correctness             | H1                         | ✅ **TODO**    | —            | all TODO packages  |
-| **WP-2** | TLS exception policy correction      | H2, L4                     | ✅ **TODO**    | —            | all TODO packages  |
-| **WP-3** | Provisioning durability & port model | H3, H4, L3, M5, L1, N5, N6 | ✅ **TODO**    | —            | WP-1, WP-2, WP-5   |
-| **WP-4** | Localization                         | M1, M2, N2                 | ✅ **TODO**    | WP-3a (soft) | WP-1, WP-2, WP-5   |
-| **WP-5** | Command surface & small fixes        | M3, L5, L6, L7, L8, L9     | ✅ **TODO**    | —            | all TODO packages  |
+| **WP-1** | Tree refresh correctness             | H1                         | ✅ **DONE**    | —            | all TODO packages  |
+| **WP-2** | TLS exception policy correction      | H2, L4                     | ✅ **DONE**    | —            | all TODO packages  |
+| **WP-3** | Provisioning durability & port model | H3, H4, L3, M5, L1, N5, N6 | ✅ **DONE**    | —            | WP-1, WP-2, WP-5   |
+| **WP-4** | Localization                         | M1, M2, N2                 | ✅ **DONE**    | WP-3a (soft) | WP-1, WP-2, WP-5   |
+| **WP-5** | Command surface & small fixes        | M3, L5, L6, L7, L8, L9     | ✅ **DONE**    | —            | all TODO packages  |
 | **WP-6** | Credential source of truth           | H5, M7                     | 🛑 **ON HOLD** | §9.2         | —                  |
 | **WP-7** | Recreate vs. fresh + state model     | M4, L2, N1, N3             | 🛑 **ON HOLD** | §9.2         | —                  |
 | **WP-8** | Tree render cost                     | M6                         | 🛑 **ON HOLD** | §9.3, WP-1   | —                  |
@@ -1457,15 +1461,15 @@ Both issues are already filed — no action required:
 ### 7.3 Suggested sequencing
 
 ```text
-NOW (cleared — give to implementation):
+DONE (landed 2026-08-05/06, one commit each):
     WP-1 ─┐
     WP-2 ─┤  independent, no design input
     WP-5 ─┘
-    WP-3 ──► WP-4          (WP-4 after WP-3a so the strings settle once)
+    WP-3 ──► WP-4          (WP-4 ran after WP-3a so the strings settled once)
 
-THEN (resume the discussion):
+NEXT (resume the discussion):
     §9.2 M4 decision ──► WP-6 (H5 record shape) ──► WP-7 ──► re-assess M7 ──► reply on the GitHub thread
-    §9.3 M6 confirmation ──► WP-8   (requires WP-1)
+    §9.3 M6 confirmation ──► WP-8   (WP-1 is already in place)
 ```
 
 ---
